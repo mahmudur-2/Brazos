@@ -188,7 +188,7 @@ export function PostJobScreen() {
           <Animated.View
             style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
           >
-            <Ionicons name="checkmark" size={56} color={colors.white} />
+            <Ionicons name="checkmark" size={56} color={colors.onPrimary} />
           </Animated.View>
           <Text style={styles.successText}>Job posted!</Text>
         </Animated.View>
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(248,250,252,0.97)',
+    backgroundColor: 'rgba(244,241,232,0.97)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.lg,

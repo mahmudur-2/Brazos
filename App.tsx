@@ -10,6 +10,7 @@ import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import type {
   HomeStackParamList,
+  MessagesStackParamList,
   MyJobsStackParamList,
   WorkStackParamList,
 } from './lib/navigation';
@@ -22,6 +23,8 @@ import { BrowseJobsScreen } from './screens/BrowseJobsScreen';
 import { JobDetailScreen } from './screens/JobDetailScreen';
 import { WorkerJobScreen } from './screens/WorkerJobScreen';
 import { MyJobsHubScreen } from './screens/MyJobsHubScreen';
+import { ChatScreen } from './screens/ChatScreen';
+import { MessagesInboxScreen } from './screens/MessagesInboxScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -30,12 +33,14 @@ const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MyJobsStack = createNativeStackNavigator<MyJobsStackParamList>();
+const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 
 // [active, inactive] icon per tab.
 const TAB_ICONS: Record<string, [IoniconName, IoniconName]> = {
   Home: ['home', 'home-outline'],
   Work: ['search', 'search-outline'],
   MyJobs: ['briefcase', 'briefcase-outline'],
+  Messages: ['chatbubbles', 'chatbubbles-outline'],
   Profile: ['person', 'person-outline'],
 };
 
@@ -64,7 +69,17 @@ function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="ClientJobDetail" component={ClientJobDetailScreen} />
       <MyJobsStack.Screen name="WorkerJob" component={WorkerJobScreen} />
       <MyJobsStack.Screen name="JobDetail" component={JobDetailScreen} />
+      <MyJobsStack.Screen name="Chat" component={ChatScreen} />
     </MyJobsStack.Navigator>
+  );
+}
+
+function MessagesStackNavigator() {
+  return (
+    <MessagesStack.Navigator screenOptions={{ headerShown: false }}>
+      <MessagesStack.Screen name="MessagesInbox" component={MessagesInboxScreen} />
+      <MessagesStack.Screen name="Chat" component={ChatScreen} />
+    </MessagesStack.Navigator>
   );
 }
 
@@ -94,6 +109,11 @@ function MainTabs() {
         name="MyJobs"
         component={MyJobsStackNavigator}
         options={{ tabBarLabel: 'My Jobs' }}
+      />
+      <Tab.Screen
+        name="Messages"
+        component={MessagesStackNavigator}
+        options={{ tabBarLabel: 'Messages' }}
       />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

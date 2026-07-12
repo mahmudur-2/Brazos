@@ -155,6 +155,14 @@ export function WorkerJobScreen() {
             <JobProgress status={job.status} />
           </Card>
 
+          {isWorker && (
+            <Button
+              title={`Message ${clientName}`}
+              variant="secondary"
+              onPress={() => navigation.navigate('Chat', { jobId: job.id })}
+            />
+          )}
+
           {!isWorker ? (
             <Card style={styles.noticeCard}>
               <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
@@ -186,7 +194,7 @@ export function WorkerJobScreen() {
                 <View style={styles.photoWrap}>
                   <Image source={{ uri: photo.uri }} style={styles.photo} />
                   <Pressable style={styles.photoRemove} onPress={() => setPhoto(null)}>
-                    <Ionicons name="close" size={18} color={colors.white} />
+                    <Ionicons name="close" size={18} color={colors.onPrimary} />
                   </Pressable>
                 </View>
               ) : (
@@ -346,7 +354,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(15,23,42,0.6)',
+    backgroundColor: 'rgba(31,46,34,0.6)',
     alignItems: 'center',
     justifyContent: 'center',
   },

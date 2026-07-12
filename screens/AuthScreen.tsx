@@ -12,6 +12,7 @@ import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
+import { colors, spacing } from '../lib/theme';
 
 type Mode = 'login' | 'signup';
 
@@ -130,7 +131,7 @@ export function AuthScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#f9fafb',
+    backgroundColor: colors.background,
   },
   flex: {
     flex: 1,
@@ -138,30 +139,30 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: spacing.xl,
   },
   title: {
     fontSize: 36,
     fontWeight: '800',
-    color: '#111827',
+    color: colors.text,
     textAlign: 'center',
   },
   subtitle: {
     fontSize: 16,
-    color: '#6b7280',
+    color: colors.textMuted,
     textAlign: 'center',
-    marginTop: 4,
-    marginBottom: 32,
+    marginTop: spacing.xs,
+    marginBottom: spacing.xl + spacing.xs,
   },
   form: {
-    gap: 16,
+    gap: spacing.lg,
   },
   switch: {
-    marginTop: 24,
+    marginTop: spacing.xl,
     alignItems: 'center',
   },
   switchText: {
-    color: '#3b82f6',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '500',
   },

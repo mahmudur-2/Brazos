@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 
 const BUCKET = 'job-photos';
 const AVATAR_BUCKET = 'avatars';
+const CHAT_BUCKET = 'chat-photos';
 
 async function uploadAsset(
   bucket: string,
@@ -43,4 +44,14 @@ export async function uploadJobPhoto(jobId: string, asset: ImagePickerAsset) {
   const rawExt = (asset.uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
   const ext = rawExt.length <= 4 ? rawExt : 'jpg';
   return uploadAsset(BUCKET, `${jobId}/${Date.now()}.${ext}`, asset);
+}
+
+/**
+ * Upload a chat photo for a job and return its public URL. Requires the
+ * public `chat-photos` bucket + storage policies (see phase8 SQL).
+ */
+export async function uploadChatPhoto(jobId: string, asset: ImagePickerAsset) {
+  const rawExt = (asset.uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
+  const ext = rawExt.length <= 4 ? rawExt : 'jpg';
+  return uploadAsset(CHAT_BUCKET, `${jobId}/${Date.now()}.${ext}`, asset);
 }

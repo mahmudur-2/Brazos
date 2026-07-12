@@ -41,7 +41,7 @@ export function Button({
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={isSecondary ? colors.primary : colors.white} />
+        <ActivityIndicator color={isSecondary ? colors.primary : colors.onPrimary} />
       ) : (
         <Text style={[styles.text, isSecondary && styles.secondaryText]}>{title}</Text>
       )}
@@ -61,9 +61,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   secondary: {
-    backgroundColor: 'transparent',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.border,
   },
   pressed: {
     opacity: 0.85,
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   text: {
-    color: colors.white,
+    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '700',
   },

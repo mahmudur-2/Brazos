@@ -162,7 +162,7 @@ export function ProfileScreen() {
             <Pressable onPress={pickAvatar} style={styles.avatarPress}>
               <Avatar name={fullName} uri={avatarUrl} size={84} />
               <View style={styles.avatarEdit}>
-                <Ionicons name="camera" size={16} color={colors.white} />
+                <Ionicons name="camera" size={16} color={colors.onPrimary} />
               </View>
             </Pressable>
             <Text style={styles.email}>{user?.email}</Text>

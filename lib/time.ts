@@ -15,3 +15,10 @@ export function formatTimeAgo(iso: string): string {
   if (weeks < 5) return `${weeks} w ago`;
   return new Date(iso).toLocaleDateString();
 }
+
+/** Clock time for a chat bubble, e.g. "3:45 PM". */
+export function formatClockTime(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+}

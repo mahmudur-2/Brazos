@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
+import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { BidWorkerCard } from '../components/BidWorkerCard';
 import { JobProgress } from '../components/JobProgress';
@@ -234,6 +235,16 @@ export function ClientJobDetailScreen() {
               </View>
             </Card>
 
+            {job.assigned_worker_id && (
+              <Button
+                title={`Message ${workerName}`}
+                variant="secondary"
+                onPress={() =>
+                  navigation.navigate('Chat', { jobId: job.id })
+                }
+              />
+            )}
+
             {job.status === 'completed' && job.completion_photo_url ? (
               <Card>
                 <Text style={styles.sectionTitle}>Done photo</Text>
@@ -272,7 +283,7 @@ export function ClientJobDetailScreen() {
           <Animated.View
             style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
           >
-            <Ionicons name="checkmark" size={56} color={colors.white} />
+            <Ionicons name="checkmark" size={56} color={colors.onPrimary} />
           </Animated.View>
           <Text style={styles.successTitle}>Bid accepted</Text>
           <Text style={styles.successSubtitle}>
@@ -428,7 +439,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(248,250,252,0.97)',
+    backgroundColor: 'rgba(244,241,232,0.97)',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,

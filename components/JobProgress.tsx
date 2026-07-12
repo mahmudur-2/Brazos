@@ -26,7 +26,7 @@ export function JobProgress({ status }: { status: string }) {
             <View style={styles.step}>
               <View style={[styles.dot, done && styles.dotDone]}>
                 {done ? (
-                  <Ionicons name="checkmark" size={14} color={colors.white} />
+                  <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
                 ) : (
                   <Text style={styles.dotNumber}>{index + 1}</Text>
                 )}

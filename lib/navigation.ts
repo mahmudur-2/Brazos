@@ -24,6 +24,21 @@ export type MyJobsStackParamList = {
   ClientJobDetail: { job: Job };
   WorkerJob: { jobId: string };
   JobDetail: { job: OpenJob };
+  Chat: { jobId: string };
 };
 
 export type MyJobsStackNavigation = NativeStackNavigationProp<MyJobsStackParamList>;
+
+// Screens stacked inside the Messages (inbox) tab.
+export type MessagesStackParamList = {
+  MessagesInbox: undefined;
+  Chat: { jobId: string };
+};
+
+export type MessagesStackNavigation = NativeStackNavigationProp<MessagesStackParamList>;
+
+// Chat is registered in both MyJobsStack and MessagesStack (reached from a job's
+// detail screen or from the inbox). It only needs its own route param shape and
+// goBack(), so its route/nav types are declared standalone rather than tied to
+// either parent stack's full param list.
+export type ChatRouteParamList = { Chat: { jobId: string } };

@@ -52,7 +52,7 @@ export function BidWorkerCard({
             <VerificationBadge status={worker?.verification_status} />
           </View>
           <View style={styles.proofRow}>
-            <Ionicons name="star" size={14} color="#F59E0B" />
+            <Ionicons name="star" size={14} color={colors.star} />
             <Text style={styles.proofStrong}>
               {ratingCount > 0 ? (worker?.rating_avg ?? 0).toFixed(1) : 'New'}
             </Text>
@@ -102,7 +102,7 @@ export function BidWorkerCard({
 const styles = StyleSheet.create({
   bestValueCard: {
     borderColor: colors.primary,
-    borderWidth: 1.5,
+    borderWidth: 2,
   },
   bestValueTag: {
     flexDirection: 'row',

@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   },
   segmentSelected: {
     backgroundColor: colors.surface,
-    shadowColor: '#0F172A',
+    shadowColor: colors.text,
     shadowOpacity: 0.08,
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },

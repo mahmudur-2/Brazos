@@ -26,7 +26,7 @@ export function Chip({ label, icon, selected = false, onPress }: ChipProps) {
         <Ionicons
           name={icon}
           size={16}
-          color={selected ? colors.white : colors.textMuted}
+          color={selected ? colors.onPrimary : colors.textMuted}
         />
       )}
       <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>
@@ -59,6 +59,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   labelSelected: {
-    color: colors.white,
+    color: colors.onPrimary,
   },
 });

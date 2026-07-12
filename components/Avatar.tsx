@@ -27,12 +27,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
   fallback: {
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   initials: {
-    color: colors.primary,
+    color: colors.onPrimary,
     fontWeight: '700',
   },
 });

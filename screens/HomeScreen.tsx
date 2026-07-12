@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import type { HomeStackNavigation } from '../lib/navigation';
+import { colors, spacing } from '../lib/theme';
 
 export function HomeScreen() {
   const { user } = useAuth();
@@ -34,27 +35,27 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.background,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 32,
-    gap: 32,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xxl,
+    gap: spacing.xxl,
   },
   header: {
-    gap: 6,
+    gap: spacing.xs + 2,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
+    color: colors.text,
   },
   subtitle: {
     fontSize: 15,
-    color: '#6b7280',
+    color: colors.textMuted,
   },
   actions: {
-    gap: 12,
+    gap: spacing.md,
   },
 });

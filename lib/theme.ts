@@ -1,34 +1,43 @@
 import { Platform, type ViewStyle } from 'react-native';
 
 /**
- * Brazos design system — "Uber meets Linear".
- * Confident blue primary, near-black text, generous spacing, soft shadows.
+ * Brazos design system — "Forest and earth".
+ * Deep forest green primary on a warm cream background, grounded and natural.
  */
 
 export const colors = {
-  primary: '#2563EB',
-  primaryDark: '#1D4ED8',
-  primarySoft: '#EFF4FF',
+  primary: '#1F4D3A',
+  primaryDark: '#173A2C',
+  primarySoft: '#E3EBE2',
+  // Cream content (text/icons) shown on a solid primary-filled surface —
+  // buttons, selected chips, own chat bubbles, progress dots, etc.
+  onPrimary: '#F4F1E8',
+  // Rating-star gold. Kept as an explicit token (not tied to status/primary)
+  // since gold stars are a near-universal convention independent of theme.
+  star: '#F59E0B',
 
-  text: '#0F172A',
-  textMuted: '#64748B',
-  textSubtle: '#94A3B8',
+  text: '#1F2E22',
+  textMuted: '#6B7566',
+  textSubtle: '#9AA38F',
 
-  background: '#F8FAFC',
+  background: '#F4F1E8',
   surface: '#FFFFFF',
-  border: '#E2E8F0',
+  border: '#DDD6C4',
 
-  // Status palette (text + background pairs)
-  success: '#15803D',
-  successBg: '#DCFCE7',
-  warning: '#B45309',
-  warningBg: '#FEF3C7',
-  danger: '#B91C1C',
-  dangerBg: '#FEE2E2',
-  info: '#1D4ED8',
-  infoBg: '#DBEAFE',
-  neutral: '#475569',
-  neutralBg: '#F1F5F9',
+  // Status palette (text + background pairs), warmed to sit naturally in the
+  // forest/earth palette. Kept clearly distinct from `primary` (which is a
+  // deep blue-green) so status badges still read at a glance — success leans
+  // olive/moss, danger leans terracotta, etc.
+  success: '#4C7A3D',
+  successBg: '#E6EDD9',
+  warning: '#9A5B1E',
+  warningBg: '#F3E3C4',
+  danger: '#A8432B',
+  dangerBg: '#F3DCD2',
+  info: '#3D6B6B',
+  infoBg: '#DCE8E6',
+  neutral: '#6B6255',
+  neutralBg: '#EDE7DA',
 
   white: '#FFFFFF',
 } as const;
@@ -59,23 +68,23 @@ export const typography = {
   caption: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
 } as const;
 
-/** Soft, premium shadows. Uses boxShadow on web to avoid deprecation warnings. */
+/** Soft, grounded shadows. Uses boxShadow on web to avoid deprecation warnings. */
 export const shadows: Record<'card' | 'raised', ViewStyle> = {
   card: Platform.select({
-    web: { boxShadow: '0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04)' },
+    web: { boxShadow: '0 1px 3px rgba(31,46,34,0.07), 0 1px 2px rgba(31,46,34,0.05)' },
     default: {
-      shadowColor: '#0F172A',
-      shadowOpacity: 0.06,
+      shadowColor: '#1F2E22',
+      shadowOpacity: 0.07,
       shadowRadius: 6,
       shadowOffset: { width: 0, height: 2 },
       elevation: 2,
     },
   }) as ViewStyle,
   raised: Platform.select({
-    web: { boxShadow: '0 8px 24px rgba(15,23,42,0.12)' },
+    web: { boxShadow: '0 8px 24px rgba(31,46,34,0.14)' },
     default: {
-      shadowColor: '#0F172A',
-      shadowOpacity: 0.12,
+      shadowColor: '#1F2E22',
+      shadowOpacity: 0.14,
       shadowRadius: 16,
       shadowOffset: { width: 0, height: 8 },
       elevation: 8,
