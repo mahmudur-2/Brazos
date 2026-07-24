@@ -28,6 +28,12 @@
         {
           "photosPermission": "Brazos needs access to your photos so you can add a photo of the finished work."
         }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow Brazos to use your location while using the app to show work near you on the map."
+        }
       ]
     ]
   }

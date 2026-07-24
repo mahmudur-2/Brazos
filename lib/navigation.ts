@@ -37,6 +37,17 @@ export type MessagesStackParamList = {
 
 export type MessagesStackNavigation = NativeStackNavigationProp<MessagesStackParamList>;
 
+// Screens stacked inside the Map tab. JobDetail is registered here too so a
+// hotspot drill-down can open a job (and let the worker bid) without leaving
+// the tab.
+export type MapStackParamList = {
+  MapMain: undefined;
+  CellJobs: { ilat: number; ilng: number; count: number };
+  JobDetail: { job: OpenJob };
+};
+
+export type MapStackNavigation = NativeStackNavigationProp<MapStackParamList>;
+
 // Chat is registered in both MyJobsStack and MessagesStack (reached from a job's
 // detail screen or from the inbox). It only needs its own route param shape and
 // goBack(), so its route/nav types are declared standalone rather than tied to

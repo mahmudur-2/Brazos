@@ -108,11 +108,20 @@ export function toOpenJob(row: any): OpenJob {
   };
 }
 
+// Explicit allowlist for the browsing feed (Find Work) — deliberately not
+// `select('*')`. jobs.lat/lng were removed from this table entirely (see
+// phase12 SQL) so there's nothing sensitive left to select here anyway, but
+// this keeps the query self-documenting and stops a future `select('*')`
+// from silently reopening this class of leak if a new sensitive column is
+// ever added to `jobs`.
+const OPEN_JOB_COLUMNS =
+  'id, client_id, title, description, category, location, budget_cents, status, created_at';
+
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {
   const { data, error } = await supabase
     .from('jobs')
-    .select('*')
+    .select(OPEN_JOB_COLUMNS)
     .eq('status', 'open')
     .order('created_at', { ascending: false });
 

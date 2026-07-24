@@ -10,6 +10,7 @@ import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import type {
   HomeStackParamList,
+  MapStackParamList,
   MessagesStackParamList,
   MyJobsStackParamList,
   WorkStackParamList,
@@ -25,6 +26,8 @@ import { WorkerJobScreen } from './screens/WorkerJobScreen';
 import { MyJobsHubScreen } from './screens/MyJobsHubScreen';
 import { ChatScreen } from './screens/ChatScreen';
 import { MessagesInboxScreen } from './screens/MessagesInboxScreen';
+import { MapScreen } from './screens/MapScreen';
+import { CellJobsScreen } from './screens/CellJobsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -34,11 +37,13 @@ const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MyJobsStack = createNativeStackNavigator<MyJobsStackParamList>();
 const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
+const MapStack = createNativeStackNavigator<MapStackParamList>();
 
 // [active, inactive] icon per tab.
 const TAB_ICONS: Record<string, [IoniconName, IoniconName]> = {
   Home: ['home', 'home-outline'],
   Work: ['search', 'search-outline'],
+  Map: ['map', 'map-outline'],
   MyJobs: ['briefcase', 'briefcase-outline'],
   Messages: ['chatbubbles', 'chatbubbles-outline'],
   Profile: ['person', 'person-outline'],
@@ -83,6 +88,16 @@ function MessagesStackNavigator() {
   );
 }
 
+function MapStackNavigator() {
+  return (
+    <MapStack.Navigator screenOptions={{ headerShown: false }}>
+      <MapStack.Screen name="MapMain" component={MapScreen} />
+      <MapStack.Screen name="CellJobs" component={CellJobsScreen} />
+      <MapStack.Screen name="JobDetail" component={JobDetailScreen} />
+    </MapStack.Navigator>
+  );
+}
+
 function MainTabs() {
   return (
     <Tab.Navigator
@@ -104,6 +119,11 @@ function MainTabs() {
         name="Work"
         component={WorkStackNavigator}
         options={{ tabBarLabel: 'Find Work' }}
+      />
+      <Tab.Screen
+        name="Map"
+        component={MapStackNavigator}
+        options={{ tabBarLabel: 'Map' }}
       />
       <Tab.Screen
         name="MyJobs"
