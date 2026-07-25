@@ -13,6 +13,10 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   accepted: { bg: colors.successBg, text: colors.success },
   rejected: { bg: colors.dangerBg, text: colors.danger },
   withdrawn: { bg: colors.neutralBg, text: colors.neutral },
+  // Report statuses (admin moderation queue). 'open' reuses the job status
+  // above, which reads correctly here too.
+  actioned: { bg: colors.dangerBg, text: colors.danger },
+  dismissed: { bg: colors.neutralBg, text: colors.neutral },
 };
 
 const DEFAULT_STYLE = { bg: colors.neutralBg, text: colors.neutral };

@@ -17,6 +17,9 @@ type BidWorkerCardProps = {
   accepting?: boolean;
   disabled?: boolean;
   onAccept: () => void;
+  /** True when this client has already had a job completed by this worker. */
+  canRehire?: boolean;
+  onHireAgain?: () => void;
 };
 
 export function BidWorkerCard({
@@ -26,6 +29,8 @@ export function BidWorkerCard({
   accepting = false,
   disabled = false,
   onAccept,
+  canRehire = false,
+  onHireAgain,
 }: BidWorkerCardProps) {
   const worker = bid.worker;
   const name = worker?.full_name ?? 'Worker';
@@ -71,6 +76,13 @@ export function BidWorkerCard({
         </View>
       </View>
 
+      {canRehire && (
+        <View style={styles.rehireTag}>
+          <Ionicons name="repeat" size={12} color={colors.success} />
+          <Text style={styles.rehireText}>Worked for you before</Text>
+        </View>
+      )}
+
       {bid.message ? (
         <Text style={styles.pitch} numberOfLines={3}>
           “{bid.message}”
@@ -95,6 +107,16 @@ export function BidWorkerCard({
           />
         ) : null}
       </View>
+
+      {canRehire && onHireAgain && !isAccepted && (
+        <Button
+          title="Hire Again"
+          variant="secondary"
+          onPress={onHireAgain}
+          disabled={disabled}
+          style={styles.rehireBtn}
+        />
+      )}
     </Card>
   );
 }
@@ -190,5 +212,24 @@ const styles = StyleSheet.create({
   acceptBtn: {
     paddingHorizontal: spacing.xl,
     minWidth: 120,
+  },
+  rehireTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.successBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    marginTop: spacing.md,
+  },
+  rehireText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.success,
+  },
+  rehireBtn: {
+    marginTop: spacing.md,
   },
 });

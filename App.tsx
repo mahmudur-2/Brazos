@@ -13,7 +13,7 @@ import type {
   MapStackParamList,
   MessagesStackParamList,
   MyJobsStackParamList,
-  WorkStackParamList,
+  ProfileStackParamList,
 } from './lib/navigation';
 import { colors } from './lib/theme';
 import { AuthScreen } from './screens/AuthScreen';
@@ -29,20 +29,20 @@ import { MessagesInboxScreen } from './screens/MessagesInboxScreen';
 import { MapScreen } from './screens/MapScreen';
 import { CellJobsScreen } from './screens/CellJobsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { AdminReportsScreen } from './screens/AdminReportsScreen';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 const Tab = createBottomTabNavigator();
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
-const WorkStack = createNativeStackNavigator<WorkStackParamList>();
 const MyJobsStack = createNativeStackNavigator<MyJobsStackParamList>();
 const MessagesStack = createNativeStackNavigator<MessagesStackParamList>();
 const MapStack = createNativeStackNavigator<MapStackParamList>();
+const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 
 // [active, inactive] icon per tab.
 const TAB_ICONS: Record<string, [IoniconName, IoniconName]> = {
   Home: ['home', 'home-outline'],
-  Work: ['search', 'search-outline'],
   Map: ['map', 'map-outline'],
   MyJobs: ['briefcase', 'briefcase-outline'],
   Messages: ['chatbubbles', 'chatbubbles-outline'],
@@ -54,16 +54,9 @@ function HomeStackNavigator() {
     <HomeStack.Navigator screenOptions={{ headerShown: false }}>
       <HomeStack.Screen name="HomeMain" component={HomeScreen} />
       <HomeStack.Screen name="PostJob" component={PostJobScreen} />
+      <HomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
+      <HomeStack.Screen name="JobDetail" component={JobDetailScreen} />
     </HomeStack.Navigator>
-  );
-}
-
-function WorkStackNavigator() {
-  return (
-    <WorkStack.Navigator screenOptions={{ headerShown: false }}>
-      <WorkStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
-      <WorkStack.Screen name="JobDetail" component={JobDetailScreen} />
-    </WorkStack.Navigator>
   );
 }
 
@@ -75,6 +68,7 @@ function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="WorkerJob" component={WorkerJobScreen} />
       <MyJobsStack.Screen name="JobDetail" component={JobDetailScreen} />
       <MyJobsStack.Screen name="Chat" component={ChatScreen} />
+      <MyJobsStack.Screen name="PostJob" component={PostJobScreen} />
     </MyJobsStack.Navigator>
   );
 }
@@ -84,7 +78,17 @@ function MessagesStackNavigator() {
     <MessagesStack.Navigator screenOptions={{ headerShown: false }}>
       <MessagesStack.Screen name="MessagesInbox" component={MessagesInboxScreen} />
       <MessagesStack.Screen name="Chat" component={ChatScreen} />
+      <MessagesStack.Screen name="PostJob" component={PostJobScreen} />
     </MessagesStack.Navigator>
+  );
+}
+
+function ProfileStackNavigator() {
+  return (
+    <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
+      <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      <ProfileStack.Screen name="AdminReports" component={AdminReportsScreen} />
+    </ProfileStack.Navigator>
   );
 }
 
@@ -116,11 +120,6 @@ function MainTabs() {
     >
       <Tab.Screen name="Home" component={HomeStackNavigator} />
       <Tab.Screen
-        name="Work"
-        component={WorkStackNavigator}
-        options={{ tabBarLabel: 'Find Work' }}
-      />
-      <Tab.Screen
         name="Map"
         component={MapStackNavigator}
         options={{ tabBarLabel: 'Map' }}
@@ -135,7 +134,7 @@ function MainTabs() {
         component={MessagesStackNavigator}
         options={{ tabBarLabel: 'Messages' }}
       />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Profile" component={ProfileStackNavigator} />
     </Tab.Navigator>
   );
 }

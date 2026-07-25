@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { fetchOpenJobs, toOpenJob, type OpenJob } from '../lib/jobs';
 import { supabase } from '../lib/supabase';
 
@@ -9,6 +9,15 @@ import { supabase } from '../lib/supabase';
  * if it isn't, the initial fetch + pull-to-refresh still work.
  */
 export function useOpenJobs() {
+  // Multiple screens can have this hook mounted at once (e.g. Home's preview
+  // list alongside a pushed browse screen — React Navigation doesn't unmount
+  // prior screens by default). Each instance needs its own channel name:
+  // a shared hardcoded name caused "cannot add postgres_changes callbacks...
+  // after subscribe()" once a second instance tried to .on() a channel the
+  // first instance had already subscribed. The .on() calls themselves were
+  // always correctly chained before .subscribe() — the bug was cross-instance
+  // name collision, not ordering.
+  const instanceId = useId();
   const [jobs, setJobs] = useState<OpenJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,7 +37,7 @@ export function useOpenJobs() {
 
   useEffect(() => {
     const channel = supabase
-      .channel('public:jobs:open')
+      .channel(`public:jobs:open:${instanceId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'jobs' },
@@ -65,7 +74,7 @@ export function useOpenJobs() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [instanceId]);
 
   return { jobs, loading, error, refresh };
 }

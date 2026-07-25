@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -26,12 +27,14 @@ import {
 import { createBid, fetchMyBidForJob, type Bid } from '../lib/bids';
 import { alertAsync } from '../lib/dialog';
 import { formatTimeAgo } from '../lib/time';
-import type { WorkStackNavigation, WorkStackParamList } from '../lib/navigation';
+import type { JobDetailRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 export function JobDetailScreen() {
-  const navigation = useNavigation<WorkStackNavigation>();
-  const { params } = useRoute<RouteProp<WorkStackParamList, 'JobDetail'>>();
+  // Registered in three different stacks (Home, MyJobs, Map) — like Chat, its
+  // nav/route types are standalone rather than tied to one parent stack.
+  const navigation = useNavigation();
+  const { params } = useRoute<RouteProp<JobDetailRouteParamList, 'JobDetail'>>();
   const { job } = params;
   const { user } = useAuth();
 
@@ -148,6 +151,19 @@ export function JobDetailScreen() {
             {job.description ? (
               <Text style={styles.description}>{job.description}</Text>
             ) : null}
+
+            {job.photos.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoRow}
+                style={styles.photoScroll}
+              >
+                {job.photos.map((url) => (
+                  <Image key={url} source={{ uri: url }} style={styles.photo} />
+                ))}
+              </ScrollView>
+            )}
           </Card>
 
           {isOwnJob ? (
@@ -262,6 +278,18 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 22,
     marginTop: spacing.md,
+  },
+  photoScroll: {
+    marginTop: spacing.md,
+  },
+  photoRow: {
+    gap: spacing.sm,
+  },
+  photo: {
+    width: 120,
+    height: 120,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutralBg,
   },
   noticeCard: {
     flexDirection: 'row',

@@ -8,6 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/Avatar';
@@ -19,21 +20,28 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
-import { alertAsync } from '../lib/dialog';
+import { alertAsync, confirmAsync } from '../lib/dialog';
 import { JOB_CATEGORIES, JOB_CATEGORY_ICONS, JOB_CATEGORY_LABELS } from '../lib/jobs';
 import { updateProfile } from '../lib/profiles';
 import { uploadAvatar } from '../lib/storage';
-import { colors, radius, spacing } from '../lib/theme';
+import type { ProfileStackNavigation } from '../lib/navigation';
+import { colors, spacing } from '../lib/theme';
 
 const LANGUAGE_OPTIONS = [
   { label: 'English', value: 'en' },
   { label: 'Español', value: 'es' },
 ];
 
+function languageLabel(value: string) {
+  return LANGUAGE_OPTIONS.find((o) => o.value === value)?.label ?? value;
+}
+
 export function ProfileScreen() {
+  const navigation = useNavigation<ProfileStackNavigation>();
   const { user, logout } = useAuth();
   const { profile, loading, setProfile } = useProfile();
 
+  const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [bio, setBio] = useState('');
@@ -47,15 +55,23 @@ export function ProfileScreen() {
 
   const loadedRef = useRef<string | null>(null);
 
+  // Loads the persisted profile into the editable draft fields — used both
+  // on first load and when Cancel discards any in-progress edits.
+  function loadDraftFromProfile() {
+    if (!profile) return;
+    setFullName(profile.full_name ?? '');
+    setPhone(profile.phone ?? '');
+    setBio(profile.bio ?? '');
+    setLanguage(profile.language ?? 'en');
+    setCategories(profile.categories ?? []);
+    setAvatarUrl(profile.avatar_url ?? null);
+    setPendingAsset(null);
+  }
+
   useEffect(() => {
     if (profile && loadedRef.current !== profile.id) {
       loadedRef.current = profile.id;
-      setFullName(profile.full_name ?? '');
-      setPhone(profile.phone ?? '');
-      setBio(profile.bio ?? '');
-      setLanguage(profile.language ?? 'en');
-      setCategories(profile.categories ?? []);
-      setAvatarUrl(profile.avatar_url ?? null);
+      loadDraftFromProfile();
     }
   }, [profile]);
 
@@ -76,6 +92,29 @@ export function ProfileScreen() {
       setPendingAsset(result.assets[0]);
       setAvatarUrl(result.assets[0].uri);
     }
+  }
+
+  async function handleCancel() {
+    const hasChanges =
+      fullName !== (profile?.full_name ?? '') ||
+      phone !== (profile?.phone ?? '') ||
+      bio !== (profile?.bio ?? '') ||
+      language !== (profile?.language ?? 'en') ||
+      JSON.stringify(categories) !== JSON.stringify(profile?.categories ?? []) ||
+      !!pendingAsset;
+
+    if (hasChanges) {
+      const ok = await confirmAsync({
+        title: 'Discard changes?',
+        message: 'Your edits will not be saved.',
+        confirmText: 'Discard',
+        cancelText: 'Keep editing',
+      });
+      if (!ok) return;
+    }
+
+    loadDraftFromProfile();
+    setIsEditing(false);
   }
 
   async function handleSave() {
@@ -129,6 +168,7 @@ export function ProfileScreen() {
     }
     if (data) setProfile(data);
     setPendingAsset(null);
+    setIsEditing(false);
     await alertAsync(
       'Saved',
       partial
@@ -138,15 +178,50 @@ export function ProfileScreen() {
   }
 
   async function handleLogout() {
+    // Deliberately two confirmations. Both put the destructive choice second
+    // and style it as destructive, so a stray tap lands on Cancel.
+    const first = await confirmAsync({
+      title: 'Log out?',
+      message: 'You can sign back in any time.',
+      confirmText: 'Log out',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!first) return;
+
+    const second = await confirmAsync({
+      title: 'Are you sure?',
+      message: "You'll need to sign back in.",
+      confirmText: 'Yes, log out',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!second) return;
+
     setLoggingOut(true);
     const { error } = await logout();
     setLoggingOut(false);
     if (error) await alertAsync('Logout failed', error.message);
   }
 
+  const selectedCategoryLabels = categories.map((c) => ({
+    key: c,
+    label: JOB_CATEGORY_LABELS[c as keyof typeof JOB_CATEGORY_LABELS] ?? c,
+    icon: JOB_CATEGORY_ICONS[c as keyof typeof JOB_CATEGORY_ICONS],
+  }));
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Profile" />
+      <ScreenHeader
+        title="Profile"
+        right={
+          !loading && !isEditing ? (
+            <Pressable onPress={() => setIsEditing(true)} hitSlop={8}>
+              <Text style={styles.editLink}>Edit Profile</Text>
+            </Pressable>
+          ) : undefined
+        }
+      />
 
       {loading ? (
         <View style={styles.center}>
@@ -159,71 +234,124 @@ export function ProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.avatarRow}>
-            <Pressable onPress={pickAvatar} style={styles.avatarPress}>
+            {isEditing ? (
+              <Pressable onPress={pickAvatar} style={styles.avatarPress}>
+                <Avatar name={fullName} uri={avatarUrl} size={84} />
+                <View style={styles.avatarEdit}>
+                  <Ionicons name="camera" size={16} color={colors.onPrimary} />
+                </View>
+              </Pressable>
+            ) : (
               <Avatar name={fullName} uri={avatarUrl} size={84} />
-              <View style={styles.avatarEdit}>
-                <Ionicons name="camera" size={16} color={colors.onPrimary} />
-              </View>
-            </Pressable>
+            )}
             <Text style={styles.email}>{user?.email}</Text>
             <Text style={styles.roleNote}>You can post jobs and find work.</Text>
           </View>
 
           <Card>
-            <View style={styles.form}>
-              <TextField
-                label="Full name"
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
-                placeholder="Carlos Reyes"
-              />
-              <TextField
-                label="Phone number"
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                placeholder="(555) 123-4567"
-              />
-
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Language</Text>
-                <SegmentedControl
-                  options={LANGUAGE_OPTIONS}
-                  value={language}
-                  onChange={setLanguage}
+            {isEditing ? (
+              <View style={styles.form}>
+                <TextField
+                  label="Full name"
+                  value={fullName}
+                  onChangeText={setFullName}
+                  autoCapitalize="words"
+                  placeholder="Carlos Reyes"
                 />
-              </View>
+                <TextField
+                  label="Phone number"
+                  value={phone}
+                  onChangeText={setPhone}
+                  keyboardType="phone-pad"
+                  placeholder="(555) 123-4567"
+                />
 
-              <TextField
-                label="Bio (optional)"
-                value={bio}
-                onChangeText={setBio}
-                placeholder="A sentence about the work you do…"
-                autoCapitalize="sentences"
-                multiline
-                numberOfLines={3}
-                style={styles.multiline}
-              />
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Language</Text>
+                  <SegmentedControl
+                    options={LANGUAGE_OPTIONS}
+                    value={language}
+                    onChange={setLanguage}
+                  />
+                </View>
 
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>Job categories (optional)</Text>
-                <View style={styles.chips}>
-                  {JOB_CATEGORIES.map((c) => (
-                    <Chip
-                      key={c}
-                      label={JOB_CATEGORY_LABELS[c]}
-                      icon={JOB_CATEGORY_ICONS[c]}
-                      selected={categories.includes(c)}
-                      onPress={() => toggleCategory(c)}
-                    />
-                  ))}
+                <TextField
+                  label="Bio (optional)"
+                  value={bio}
+                  onChangeText={setBio}
+                  placeholder="A sentence about the work you do…"
+                  autoCapitalize="sentences"
+                  multiline
+                  numberOfLines={3}
+                  style={styles.multiline}
+                />
+
+                <View style={styles.field}>
+                  <Text style={styles.fieldLabel}>Job categories (optional)</Text>
+                  <View style={styles.chips}>
+                    {JOB_CATEGORIES.map((c) => (
+                      <Chip
+                        key={c}
+                        label={JOB_CATEGORY_LABELS[c]}
+                        icon={JOB_CATEGORY_ICONS[c]}
+                        selected={categories.includes(c)}
+                        onPress={() => toggleCategory(c)}
+                      />
+                    ))}
+                  </View>
+                </View>
+
+                <View style={styles.editActions}>
+                  <Button title="Save Changes" onPress={handleSave} loading={saving} />
+                  <Button
+                    title="Cancel"
+                    variant="secondary"
+                    onPress={handleCancel}
+                    disabled={saving}
+                  />
                 </View>
               </View>
-
-              <Button title="Save changes" onPress={handleSave} loading={saving} />
-            </View>
+            ) : (
+              <View style={styles.readOnly}>
+                <View style={styles.readField}>
+                  <Text style={styles.fieldLabel}>Full name</Text>
+                  <Text style={styles.readValue}>{fullName || '—'}</Text>
+                </View>
+                <View style={styles.readField}>
+                  <Text style={styles.fieldLabel}>Phone number</Text>
+                  <Text style={styles.readValue}>{phone || '—'}</Text>
+                </View>
+                <View style={styles.readField}>
+                  <Text style={styles.fieldLabel}>Language</Text>
+                  <Text style={styles.readValue}>{languageLabel(language)}</Text>
+                </View>
+                <View style={styles.readField}>
+                  <Text style={styles.fieldLabel}>Bio</Text>
+                  <Text style={styles.readValue}>{bio || 'No bio yet'}</Text>
+                </View>
+                <View style={styles.readField}>
+                  <Text style={styles.fieldLabel}>Job categories</Text>
+                  {selectedCategoryLabels.length > 0 ? (
+                    <View style={styles.chips}>
+                      {selectedCategoryLabels.map((c) => (
+                        <Chip key={c.key} label={c.label} icon={c.icon} selected />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={styles.readValue}>No categories selected</Text>
+                  )}
+                </View>
+              </View>
+            )}
           </Card>
+
+          {profile?.is_admin && (
+            <Button
+              title="Review reports (admin)"
+              variant="secondary"
+              onPress={() => navigation.navigate('AdminReports')}
+            />
+          )}
 
           <Button
             title="Log out"
@@ -250,6 +378,11 @@ const styles = StyleSheet.create({
   content: {
     padding: spacing.lg,
     gap: spacing.lg,
+  },
+  editLink: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.primary,
   },
   avatarRow: {
     alignItems: 'center',
@@ -284,13 +417,23 @@ const styles = StyleSheet.create({
   form: {
     gap: spacing.lg,
   },
+  readOnly: {
+    gap: spacing.lg,
+  },
+  readField: {
+    gap: spacing.xs,
+  },
+  readValue: {
+    fontSize: 16,
+    color: colors.text,
+  },
   field: {
     gap: spacing.sm,
   },
   fieldLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.textMuted,
   },
   multiline: {
     height: 84,
@@ -301,5 +444,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  editActions: {
+    gap: spacing.md,
+    marginTop: spacing.xs,
   },
 });

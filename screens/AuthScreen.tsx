@@ -17,7 +17,7 @@ import { colors, spacing } from '../lib/theme';
 type Mode = 'login' | 'signup';
 
 export function AuthScreen() {
-  const { login, signUp } = useAuth();
+  const { login, signUp, bannedNotice } = useAuth();
   const [mode, setMode] = useState<Mode>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,6 +68,13 @@ export function AuthScreen() {
           <Text style={styles.subtitle}>
             {isLogin ? 'Welcome back' : 'Create your account'}
           </Text>
+
+          {bannedNotice && (
+            <Text style={styles.bannedNotice}>
+              This account has been suspended for violating the Brazos community
+              rules. Contact support if you think this is a mistake.
+            </Text>
+          )}
 
           <View style={styles.form}>
             {!isLogin && (
@@ -153,6 +160,16 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: spacing.xs,
     marginBottom: spacing.xl + spacing.xs,
+  },
+  bannedNotice: {
+    fontSize: 13,
+    color: colors.danger,
+    backgroundColor: colors.dangerBg,
+    borderRadius: 12,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   form: {
     gap: spacing.lg,

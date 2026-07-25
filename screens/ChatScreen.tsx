@@ -27,8 +27,10 @@ import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
 import { useJob } from '../hooks/useJob';
 import { useReactions } from '../hooks/useReactions';
+import { canRehireWorker } from '../lib/jobs';
 import { alertAsync } from '../lib/dialog';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
+import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
 import { CHAT_TEMPLATES, sendMessage } from '../lib/messages';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
@@ -60,6 +62,7 @@ export function ChatScreen() {
   );
 
   const [counterparty, setCounterparty] = useState<Profile | null>(null);
+  const [relation, setRelation] = useState<RelationState>(EMPTY_RELATION);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
@@ -90,6 +93,36 @@ export function ChatScreen() {
       active = false;
     };
   }, [counterpartyId]);
+
+  // Block state drives whether composing is possible at all. The database
+  // rejects the insert either way (phase13 messages policy) — this just keeps
+  // the app from offering an action that's guaranteed to fail.
+  useEffect(() => {
+    if (!user || !counterpartyId || counterpartyId === user.id) return;
+    let active = true;
+    fetchRelation(user.id, counterpartyId).then((r) => {
+      if (active) setRelation(r);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user, counterpartyId]);
+
+  const isBlocked = relation.blocking || relation.blockedBy;
+
+  // "Hire Again" only ever shows to the client side of a past completed job —
+  // a worker never sees it for their client.
+  const [canRehire, setCanRehire] = useState(false);
+  useEffect(() => {
+    if (!user || !counterpartyId || counterpartyId === user.id) return;
+    let active = true;
+    canRehireWorker(user.id, counterpartyId).then(({ data }) => {
+      if (active) setCanRehire(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user, counterpartyId]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -222,6 +255,21 @@ export function ChatScreen() {
         }
         subtitle={job?.title}
         onBack={() => navigation.goBack()}
+        right={
+          canRehire && counterparty ? (
+            <Pressable
+              onPress={() =>
+                (navigation as any).navigate('PostJob', {
+                  hireWorkerId: counterparty.id,
+                  hireWorkerName: counterparty.full_name ?? 'this worker',
+                })
+              }
+              hitSlop={8}
+            >
+              <Text style={styles.hireAgainLink}>Hire Again</Text>
+            </Pressable>
+          ) : undefined
+        }
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -268,52 +316,68 @@ export function ChatScreen() {
           />
         )}
 
-        {!isSelfConversation && (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.templatesRow}
-            contentContainerStyle={styles.templatesContent}
-            keyboardShouldPersistTaps="handled"
-          >
-            {CHAT_TEMPLATES.map((template) => (
-              <Pressable
-                key={template}
-                style={styles.templateChip}
-                onPress={() => handleTemplate(template)}
-                disabled={sending}
+        {isBlocked ? (
+          <View style={styles.blockedNotice}>
+            <Ionicons name="ban-outline" size={18} color={colors.danger} />
+            <Text style={styles.blockedText}>
+              {relation.blocking
+                ? "You've blocked this person. Unblock them from Messages to start talking again."
+                : "You can't reply to this conversation."}
+            </Text>
+          </View>
+        ) : (
+          <>
+            {!isSelfConversation && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.templatesRow}
+                contentContainerStyle={styles.templatesContent}
+                keyboardShouldPersistTaps="handled"
               >
-                <Text style={styles.templateText}>{template}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
+                {CHAT_TEMPLATES.map((template) => (
+                  <Pressable
+                    key={template}
+                    style={styles.templateChip}
+                    onPress={() => handleTemplate(template)}
+                    disabled={sending}
+                  >
+                    <Text style={styles.templateText}>{template}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
 
-        <View style={styles.inputRow}>
-          {Platform.OS !== 'web' && (
-            <Pressable onPress={pickFromCamera} style={styles.iconBtn} hitSlop={6}>
-              <Ionicons name="camera-outline" size={22} color={colors.primary} />
-            </Pressable>
-          )}
-          <Pressable onPress={pickFromLibrary} style={styles.iconBtn} hitSlop={6}>
-            <Ionicons name="image-outline" size={22} color={colors.primary} />
-          </Pressable>
-          <TextInput
-            style={styles.input}
-            value={text}
-            onChangeText={setText}
-            placeholder="Message…"
-            placeholderTextColor={colors.textSubtle}
-            multiline
-          />
-          <Pressable
-            onPress={handleSendText}
-            disabled={!text.trim() || sending}
-            style={[styles.sendBtn, (!text.trim() || sending) && styles.sendBtnDisabled]}
-          >
-            <Ionicons name="arrow-up" size={20} color={colors.onPrimary} />
-          </Pressable>
-        </View>
+            <View style={styles.inputRow}>
+              {Platform.OS !== 'web' && (
+                <Pressable onPress={pickFromCamera} style={styles.iconBtn} hitSlop={6}>
+                  <Ionicons name="camera-outline" size={22} color={colors.primary} />
+                </Pressable>
+              )}
+              <Pressable onPress={pickFromLibrary} style={styles.iconBtn} hitSlop={6}>
+                <Ionicons name="image-outline" size={22} color={colors.primary} />
+              </Pressable>
+              <TextInput
+                style={styles.input}
+                value={text}
+                onChangeText={setText}
+                placeholder="Message…"
+                placeholderTextColor={colors.textSubtle}
+                multiline
+              />
+              <Pressable
+                onPress={handleSendText}
+                disabled={!text.trim() || sending}
+                style={[
+                  styles.sendBtn,
+                  (!text.trim() || sending) && styles.sendBtnDisabled,
+                ]}
+              >
+                <Ionicons name="arrow-up" size={20} color={colors.onPrimary} />
+              </Pressable>
+            </View>
+          </>
+        )}
       </KeyboardAvoidingView>
 
       <ReactionPicker
@@ -434,6 +498,27 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: {
     opacity: 0.4,
+  },
+  blockedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.dangerBg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  blockedText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.danger,
+    lineHeight: 18,
+  },
+  hireAgainLink: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
   error: {
     color: colors.danger,

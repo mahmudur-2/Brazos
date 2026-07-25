@@ -6,33 +6,52 @@ import {
   type ViewStyle,
 } from 'react-native';
 import type { PropsWithChildren } from 'react';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import { colors, radius, shadows, spacing, type ColorPalette } from '../lib/theme';
 
 type CardProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
+  onLongPress?: () => void;
+  /** Overrides surface/border colors, e.g. for the Map tab's dark mode. Defaults to the light palette. */
+  palette?: ColorPalette;
 }>;
 
-export function Card({ children, style, onPress }: CardProps) {
-  if (onPress) {
+export function Card({
+  children,
+  style,
+  onPress,
+  onLongPress,
+  palette = colors,
+}: CardProps) {
+  const paletteStyle = {
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+  };
+
+  if (onPress || onLongPress) {
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [styles.card, pressed && styles.pressed, style]}
+        onLongPress={onLongPress}
+        delayLongPress={350}
+        style={({ pressed }) => [
+          styles.card,
+          paletteStyle,
+          pressed && styles.pressed,
+          style,
+        ]}
       >
         {children}
       </Pressable>
     );
   }
-  return <View style={[styles.card, style]}>{children}</View>;
+  return <View style={[styles.card, paletteStyle, style]}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.lg,
     ...shadows.card,
   },

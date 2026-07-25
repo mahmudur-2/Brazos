@@ -13,11 +13,11 @@ import { useState } from 'react';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useOpenJobs } from '../hooks/useOpenJobs';
-import type { WorkStackNavigation } from '../lib/navigation';
+import type { HomeStackNavigation } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
 
 export function BrowseJobsScreen() {
-  const navigation = useNavigation<WorkStackNavigation>();
+  const navigation = useNavigation<HomeStackNavigation>();
   const { jobs, loading, error, refresh } = useOpenJobs();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -36,6 +36,7 @@ export function BrowseJobsScreen() {
             ? `${jobs.length} open ${jobs.length === 1 ? 'job' : 'jobs'}`
             : undefined
         }
+        onBack={() => navigation.goBack()}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

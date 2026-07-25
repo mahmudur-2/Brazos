@@ -5,7 +5,7 @@ import {
   Text,
   type PressableProps,
 } from 'react-native';
-import { colors, radius } from '../lib/theme';
+import { colors, radius, type ColorPalette } from '../lib/theme';
 
 type ButtonProps = {
   title: string;
@@ -13,6 +13,8 @@ type ButtonProps = {
   loading?: boolean;
   disabled?: boolean;
   variant?: 'primary' | 'secondary';
+  /** Overrides fill/text colors, e.g. for the Map tab's dark mode. */
+  palette?: ColorPalette;
 } & Omit<PressableProps, 'onPress' | 'disabled'>;
 
 export function Button({
@@ -21,11 +23,17 @@ export function Button({
   loading = false,
   disabled = false,
   variant = 'primary',
+  palette = colors,
   style,
   ...rest
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const isSecondary = variant === 'secondary';
+
+  const fillStyle = isSecondary
+    ? { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border }
+    : { backgroundColor: palette.primary };
+  const textColor = isSecondary ? palette.primary : palette.onPrimary;
 
   return (
     <Pressable
@@ -33,7 +41,7 @@ export function Button({
       disabled={isDisabled}
       style={(state) => [
         styles.base,
-        isSecondary ? styles.secondary : styles.primary,
+        fillStyle,
         state.pressed && !isDisabled && styles.pressed,
         isDisabled && styles.disabled,
         typeof style === 'function' ? style(state) : style,
@@ -41,9 +49,9 @@ export function Button({
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={isSecondary ? colors.primary : colors.onPrimary} />
+        <ActivityIndicator color={textColor} />
       ) : (
-        <Text style={[styles.text, isSecondary && styles.secondaryText]}>{title}</Text>
+        <Text style={[styles.text, { color: textColor }]}>{title}</Text>
       )}
     </Pressable>
   );
@@ -57,14 +65,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 16,
   },
-  primary: {
-    backgroundColor: colors.primary,
-  },
-  secondary: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
   pressed: {
     opacity: 0.85,
   },
@@ -72,11 +72,7 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   text: {
-    color: colors.onPrimary,
     fontSize: 16,
     fontWeight: '700',
-  },
-  secondaryText: {
-    color: colors.primary,
   },
 });

@@ -52,7 +52,14 @@ export type Job = {
   assigned_worker_id: string | null;
   final_amount_cents: number | null;
   completion_photo_url: string | null;
+  /** Photos the client attached when posting (phase13). Max 5, may be empty. */
+  photos: string[];
 };
+
+/** `photos` is jsonb; tolerate null/legacy rows and non-array values. */
+function toPhotoArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
 
 /** Map a raw jobs row (+ optional bids(count) embed) to a Job. */
 export function mapJobRow(row: any): Job {
@@ -70,6 +77,7 @@ export function mapJobRow(row: any): Job {
     assigned_worker_id: row.assigned_worker_id ?? null,
     final_amount_cents: row.final_amount_cents ?? null,
     completion_photo_url: row.completion_photo_url ?? null,
+    photos: toPhotoArray(row.photos),
   };
 }
 
@@ -79,6 +87,20 @@ export type NewJobInput = {
   category: JobCategory;
   location: string;
   budgetCents: number | null;
+  /** Public URLs of photos attached to the posting (max 5, enforced in UI). */
+  photos?: string[];
+  /**
+   * Resolved GPS for the location, when the client used the "use my location"
+   * button. Stored in `job_locations` (jobs.lat/lng were removed in phase12),
+   * which is what feeds the hotspot map.
+   */
+  coords?: { lat: number; lng: number } | null;
+  /**
+   * Direct hire ("Hire Again"): skip open bidding and assign the job straight
+   * to this worker at the agreed price. When set, budgetCents is the agreed
+   * amount and the job is created already-assigned.
+   */
+  hireWorkerId?: string | null;
 };
 
 // Lightweight shape for the worker browse list (no bid count).
@@ -92,6 +114,7 @@ export type OpenJob = {
   budget_cents: number | null;
   status: string;
   created_at: string;
+  photos: string[];
 };
 
 export function toOpenJob(row: any): OpenJob {
@@ -105,6 +128,9 @@ export function toOpenJob(row: any): OpenJob {
     budget_cents: row.budget_cents ?? null,
     status: row.status,
     created_at: row.created_at,
+    // jobs_in_cell() (the map drill-down RPC) doesn't select photos, so this
+    // is absent there and correctly falls back to an empty list.
+    photos: toPhotoArray(row.photos),
   };
 }
 
@@ -115,7 +141,7 @@ export function toOpenJob(row: any): OpenJob {
 // from silently reopening this class of leak if a new sensitive column is
 // ever added to `jobs`.
 const OPEN_JOB_COLUMNS =
-  'id, client_id, title, description, category, location, budget_cents, status, created_at';
+  'id, client_id, title, description, category, location, budget_cents, status, created_at, photos';
 
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {
@@ -128,8 +154,14 @@ export async function fetchOpenJobs() {
   return { data: (data ?? []).map(toOpenJob), error };
 }
 
-/** Insert a new job owned by `clientId`, defaulting status to 'open'. */
+/**
+ * Insert a new job owned by `clientId`. Normally opens for bidding; when
+ * `hireWorkerId` is set it's created already assigned to that worker
+ * (direct hire), skipping the bidding round entirely.
+ */
 export async function createJob(clientId: string, input: NewJobInput) {
+  const isDirectHire = !!input.hireWorkerId;
+
   const { data, error } = await supabase
     .from('jobs')
     .insert({
@@ -139,12 +171,68 @@ export async function createJob(clientId: string, input: NewJobInput) {
       category: input.category,
       location: input.location,
       budget_cents: input.budgetCents,
-      status: 'open',
+      photos: input.photos ?? [],
+      status: isDirectHire ? 'assigned' : 'open',
+      ...(isDirectHire
+        ? {
+            assigned_worker_id: input.hireWorkerId,
+            final_amount_cents: input.budgetCents,
+          }
+        : {}),
     })
     .select()
     .single();
 
-  return { data: data as Job | null, error };
+  if (error || !data) return { data: null, error };
+
+  // Exact coordinates live in job_locations (never on `jobs` — see phase12),
+  // so this is a second write. A failure here only costs the map pin, so it's
+  // logged into the return value but doesn't fail the whole post.
+  let locationError: { message: string } | null = null;
+  if (input.coords) {
+    const { error: locErr } = await supabase.from('job_locations').insert({
+      job_id: (data as Job).id,
+      lat: input.coords.lat,
+      lng: input.coords.lng,
+    });
+    if (locErr) locationError = locErr;
+  }
+
+  return { data: data as Job, error: null, locationError };
+}
+
+/**
+ * Workers this client has previously hired who completed a job for them —
+ * the eligibility set for the "Hire Again" button. Client-scoped by
+ * definition: it only ever looks at jobs this user posted.
+ */
+export async function fetchRehirableWorkerIds(clientId: string) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('assigned_worker_id')
+    .eq('client_id', clientId)
+    .eq('status', 'completed')
+    .not('assigned_worker_id', 'is', null);
+
+  const ids = new Set(
+    (data ?? [])
+      .map((r: { assigned_worker_id: string | null }) => r.assigned_worker_id)
+      .filter((id): id is string => !!id)
+  );
+  return { data: ids, error };
+}
+
+/** Whether this client may "Hire Again" one specific worker. */
+export async function canRehireWorker(clientId: string, workerId: string) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('id')
+    .eq('client_id', clientId)
+    .eq('assigned_worker_id', workerId)
+    .eq('status', 'completed')
+    .limit(1);
+
+  return { data: (data ?? []).length > 0, error };
 }
 
 /**

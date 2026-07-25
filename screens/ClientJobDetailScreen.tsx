@@ -35,6 +35,7 @@ import {
   type BidWithWorker,
 } from '../lib/bids';
 import {
+  fetchRehirableWorkerIds,
   formatBidCount,
   formatBudget,
   JOB_CATEGORY_ICONS,
@@ -57,6 +58,7 @@ export function ClientJobDetailScreen() {
   const [showSuccess, setShowSuccess] = useState(false);
   const [acceptedName, setAcceptedName] = useState('');
   const [worker, setWorker] = useState<Profile | null>(null);
+  const [rehirable, setRehirable] = useState<Set<string>>(new Set());
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
@@ -74,6 +76,19 @@ export function ClientJobDetailScreen() {
       active = false;
     };
   }, [canAccept, job.assigned_worker_id]);
+  // "Hire Again" is client-scoped by definition: only workers who have already
+  // completed a job for *this* client. Workers never see this in reverse.
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    fetchRehirableWorkerIds(user.id).then(({ data }) => {
+      if (active) setRehirable(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   const sortedBids = useMemo(() => sortBids(bids, sort), [bids, sort]);
   const bestId = useMemo(() => bestValueBidId(bids), [bids]);
 
@@ -206,6 +221,16 @@ export function ClientJobDetailScreen() {
                     accepting={acceptingId === bid.id}
                     disabled={acceptingId !== null && acceptingId !== bid.id}
                     onAccept={() => confirmAccept(bid)}
+                    canRehire={!!bid.worker && rehirable.has(bid.worker.id)}
+                    onHireAgain={
+                      bid.worker
+                        ? () =>
+                            navigation.navigate('PostJob', {
+                              hireWorkerId: bid.worker!.id,
+                              hireWorkerName: bid.worker!.full_name ?? 'this worker',
+                            })
+                        : undefined
+                    }
                   />
                 ))}
               </View>

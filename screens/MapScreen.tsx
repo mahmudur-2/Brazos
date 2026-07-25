@@ -8,6 +8,7 @@ import { Card } from '../components/Card';
 import { HotspotMap } from '../components/HotspotMap';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useHotspots } from '../hooks/useHotspots';
+import { useThemeColors } from '../hooks/useThemeColors';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
   HOTSPOT_TIERS,
@@ -16,29 +17,44 @@ import {
   type HotspotCell,
 } from '../lib/hotspots';
 import type { MapStackNavigation } from '../lib/navigation';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import { radius, shadows, spacing } from '../lib/theme';
 
 export function MapScreen() {
   const navigation = useNavigation<MapStackNavigation>();
+  const { palette } = useThemeColors();
   const { cells, loading, error } = useHotspots();
   const [selected, setSelected] = useState<HotspotCell | null>(null);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Work Map" subtitle="Where the work is right now" />
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: palette.background }]}
+      edges={['top']}
+    >
+      <ScreenHeader title="Jobs Near You" palette={palette} />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? (
+        <Text
+          style={[
+            styles.error,
+            { color: palette.danger, backgroundColor: palette.dangerBg },
+          ]}
+        >
+          {error}
+        </Text>
+      ) : null}
 
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={styles.legend}
+        style={[styles.legend, { borderBottomColor: palette.border }]}
         contentContainerStyle={styles.legendContent}
       >
         {HOTSPOT_TIERS.map((t) => (
           <View key={t.key} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: t.stroke }]} />
-            <Text style={styles.legendLabel}>{t.label}</Text>
+            <Text style={[styles.legendLabel, { color: palette.textMuted }]}>
+              {t.label}
+            </Text>
           </View>
         ))}
       </ScrollView>
@@ -49,7 +65,7 @@ export function MapScreen() {
 
       {selected && (
         <View style={styles.sheet}>
-          <Card>
+          <Card palette={palette}>
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleWrap}>
                 <View
@@ -57,18 +73,20 @@ export function MapScreen() {
                     styles.sheetDot,
                     {
                       backgroundColor:
-                        tierForCount(selected.job_count)?.stroke ?? colors.border,
+                        tierForCount(selected.job_count)?.stroke ?? palette.border,
                     },
                   ]}
                 />
-                <Text style={styles.sheetTitle}>{selected.job_count} open jobs</Text>
+                <Text style={[styles.sheetTitle, { color: palette.text }]}>
+                  {selected.job_count} open jobs
+                </Text>
               </View>
               <Pressable onPress={() => setSelected(null)} hitSlop={8}>
-                <Ionicons name="close" size={20} color={colors.textMuted} />
+                <Ionicons name="close" size={20} color={palette.textMuted} />
               </Pressable>
             </View>
 
-            <Text style={styles.sheetCategories}>
+            <Text style={[styles.sheetCategories, { color: palette.textMuted }]}>
               {summarizeCategories(selected.categories, JOB_CATEGORY_LABELS)}
             </Text>
 
@@ -84,6 +102,7 @@ export function MapScreen() {
                 });
                 setSelected(null);
               }}
+              palette={palette}
               style={styles.sheetBtn}
             />
           </Card>
@@ -96,12 +115,10 @@ export function MapScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   legend: {
     flexGrow: 0,
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   legendContent: {
     paddingHorizontal: spacing.lg,
@@ -121,7 +138,6 @@ const styles = StyleSheet.create({
   legendLabel: {
     fontSize: 12,
     fontWeight: '600',
-    color: colors.textMuted,
   },
   mapWrap: {
     flex: 1,
@@ -151,19 +167,15 @@ const styles = StyleSheet.create({
   sheetTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: colors.text,
   },
   sheetCategories: {
     fontSize: 14,
-    color: colors.textMuted,
     marginTop: spacing.sm,
   },
   sheetBtn: {
     marginTop: spacing.lg,
   },
   error: {
-    color: colors.danger,
-    backgroundColor: colors.dangerBg,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     fontSize: 14,

@@ -55,3 +55,16 @@ export async function uploadChatPhoto(jobId: string, asset: ImagePickerAsset) {
   const ext = rawExt.length <= 4 ? rawExt : 'jpg';
   return uploadAsset(CHAT_BUCKET, `${jobId}/${Date.now()}.${ext}`, asset);
 }
+
+/**
+ * Upload a photo attached to a job posting. Reuses the same public
+ * `job-photos` bucket (and its existing policies) as the worker's completion
+ * photo — these are posted before the job row exists, so they're keyed by the
+ * poster's id plus a timestamp rather than by job id.
+ */
+export async function uploadJobAttachment(userId: string, asset: ImagePickerAsset) {
+  const rawExt = (asset.uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
+  const ext = rawExt.length <= 4 ? rawExt : 'jpg';
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return uploadAsset(BUCKET, `postings/${userId}/${unique}.${ext}`, asset);
+}

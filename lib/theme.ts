@@ -42,6 +42,49 @@ export const colors = {
   white: '#FFFFFF',
 } as const;
 
+// `colors` is `as const`, so `typeof colors` would lock every field to its
+// literal hex value — widen each to `string` so `darkColors` (and any other
+// palette) can hold different hex values with the same shape.
+export type ColorPalette = { [K in keyof typeof colors]: string };
+
+/**
+ * Dark-mode variant of the forest/earth palette, same shape as `colors`.
+ * Primary green is lifted in luminance versus the light palette — the light
+ * palette's deep `#1F4D3A` reads fine on cream but loses contrast against a
+ * near-black background, so dark mode uses a brighter forest green instead.
+ * Status colors keep their light-palette hue family (moss/ochre/terracotta/
+ * teal/taupe) but are brightened for legibility on dark surfaces, with dark,
+ * low-alpha-style "Bg" tints instead of the light palette's pale tints.
+ */
+export const darkColors: ColorPalette = {
+  primary: '#3E8863',
+  primaryDark: '#2E6B4C',
+  primarySoft: '#1E3328',
+  onPrimary: '#F4F1E8',
+  star: '#F59E0B',
+
+  text: '#F1EDE1',
+  textMuted: '#9CB09E',
+  textSubtle: '#6E8272',
+
+  background: '#10170F',
+  surface: '#1B2620',
+  border: '#2E3B33',
+
+  success: '#6FAE59',
+  successBg: '#1C2B18',
+  warning: '#D08A3E',
+  warningBg: '#2E2115',
+  danger: '#D97561',
+  dangerBg: '#301E19',
+  info: '#5FA3A3',
+  infoBg: '#1B2B2A',
+  neutral: '#A79D8B',
+  neutralBg: '#2A2620',
+
+  white: '#FFFFFF',
+} as const;
+
 export const spacing = {
   xs: 4,
   sm: 8,

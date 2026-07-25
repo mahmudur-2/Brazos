@@ -1,30 +1,41 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { colors, spacing } from '../lib/theme';
+import { colors, spacing, type ColorPalette } from '../lib/theme';
 
 type ScreenHeaderProps = {
   title: string;
   subtitle?: string;
   onBack?: () => void;
   right?: ReactNode;
+  /** Overrides title/subtitle/back-icon colors, e.g. for the Map tab's dark mode. */
+  palette?: ColorPalette;
 };
 
-export function ScreenHeader({ title, subtitle, onBack, right }: ScreenHeaderProps) {
+export function ScreenHeader({
+  title,
+  subtitle,
+  onBack,
+  right,
+  palette = colors,
+}: ScreenHeaderProps) {
   return (
     <View style={styles.container}>
       {onBack ? (
         <Pressable onPress={onBack} hitSlop={10} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={26} color={palette.text} />
         </Pressable>
       ) : null}
 
       <View style={styles.titles}>
-        <Text style={styles.title} numberOfLines={1}>
+        <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>
           {title}
         </Text>
         {subtitle ? (
-          <Text style={styles.subtitle} numberOfLines={1}>
+          <Text
+            style={[styles.subtitle, { color: palette.textMuted }]}
+            numberOfLines={1}
+          >
             {subtitle}
           </Text>
         ) : null}
@@ -52,11 +63,9 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
-    color: colors.text,
   },
   subtitle: {
     fontSize: 14,
-    color: colors.textMuted,
     marginTop: 2,
   },
   right: {

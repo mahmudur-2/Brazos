@@ -1,0 +1,189 @@
+import { supabase } from './supabase';
+
+// ---------------------------------------------------------------------------
+// Blocks, mutes and reports.
+//
+// Blocking is enforced in the database (see phase13 SQL): the messages INSERT
+// policy rejects a write when either party has blocked the other, so a blocked
+// user genuinely cannot send — the UI changes here are just so the app doesn't
+// present an action that would fail.
+// ---------------------------------------------------------------------------
+
+export type RelationState = {
+  /** This user has blocked the other party. */
+  blocking: boolean;
+  /** The other party has blocked this user. */
+  blockedBy: boolean;
+  /** This user has muted the other party. */
+  muted: boolean;
+};
+
+export const EMPTY_RELATION: RelationState = {
+  blocking: false,
+  blockedBy: false,
+  muted: false,
+};
+
+/** Block/mute state between the signed-in user and one other person. */
+export async function fetchRelation(
+  userId: string,
+  otherId: string
+): Promise<RelationState> {
+  const [blocksRes, mutesRes] = await Promise.all([
+    supabase
+      .from('blocks')
+      .select('blocker_id, blocked_id')
+      .or(
+        `and(blocker_id.eq.${userId},blocked_id.eq.${otherId}),` +
+          `and(blocker_id.eq.${otherId},blocked_id.eq.${userId})`
+      ),
+    supabase
+      .from('mutes')
+      .select('muted_id')
+      .eq('muter_id', userId)
+      .eq('muted_id', otherId),
+  ]);
+
+  const blocks = blocksRes.data ?? [];
+  return {
+    blocking: blocks.some((b) => b.blocker_id === userId),
+    blockedBy: blocks.some((b) => b.blocker_id === otherId),
+    muted: (mutesRes.data ?? []).length > 0,
+  };
+}
+
+/** Every user the signed-in user has blocked or muted (for the inbox list). */
+export async function fetchMyModerationLists(userId: string) {
+  const [blocksRes, mutesRes] = await Promise.all([
+    supabase.from('blocks').select('blocker_id, blocked_id').or(
+      `blocker_id.eq.${userId},blocked_id.eq.${userId}`
+    ),
+    supabase.from('mutes').select('muted_id').eq('muter_id', userId),
+  ]);
+
+  const blocking = new Set<string>();
+  const blockedBy = new Set<string>();
+  for (const b of blocksRes.data ?? []) {
+    if (b.blocker_id === userId) blocking.add(b.blocked_id);
+    else blockedBy.add(b.blocker_id);
+  }
+
+  return {
+    blocking,
+    blockedBy,
+    muted: new Set((mutesRes.data ?? []).map((m) => m.muted_id)),
+  };
+}
+
+export async function blockUser(userId: string, otherId: string) {
+  const { error } = await supabase
+    .from('blocks')
+    .insert({ blocker_id: userId, blocked_id: otherId });
+  return { error };
+}
+
+export async function unblockUser(userId: string, otherId: string) {
+  const { error } = await supabase
+    .from('blocks')
+    .delete()
+    .eq('blocker_id', userId)
+    .eq('blocked_id', otherId);
+  return { error };
+}
+
+export async function muteUser(userId: string, otherId: string) {
+  const { error } = await supabase
+    .from('mutes')
+    .insert({ muter_id: userId, muted_id: otherId });
+  return { error };
+}
+
+export async function unmuteUser(userId: string, otherId: string) {
+  const { error } = await supabase
+    .from('mutes')
+    .delete()
+    .eq('muter_id', userId)
+    .eq('muted_id', otherId);
+  return { error };
+}
+
+// ---------------------------------------------------------------------------
+// Reports
+// ---------------------------------------------------------------------------
+
+export const REPORT_REASONS = [
+  { value: 'no_show', label: 'No-show' },
+  { value: 'unsafe', label: 'Unsafe' },
+  { value: 'harassment', label: 'Harassment' },
+  { value: 'scam', label: 'Scam / non-payment' },
+  { value: 'other', label: 'Other' },
+] as const;
+
+export type ReportReason = (typeof REPORT_REASONS)[number]['value'];
+
+export async function createReport(params: {
+  reporterId: string;
+  reportedId: string;
+  jobId?: string | null;
+  reason: ReportReason;
+  description?: string;
+}) {
+  const { error } = await supabase.from('reports').insert({
+    reporter_id: params.reporterId,
+    reported_id: params.reportedId,
+    job_id: params.jobId ?? null,
+    reason: params.reason,
+    description: params.description?.trim() || null,
+  });
+  return { error };
+}
+
+// ---------------------------------------------------------------------------
+// Admin
+// ---------------------------------------------------------------------------
+
+export type AdminReport = {
+  id: string;
+  reporter_id: string;
+  reported_id: string;
+  reporter_name: string | null;
+  reported_name: string | null;
+  reported_banned: boolean;
+  job_id: string | null;
+  job_title: string | null;
+  reason: ReportReason;
+  description: string | null;
+  status: 'open' | 'actioned' | 'dismissed';
+  created_at: string;
+};
+
+export async function fetchAdminReports() {
+  const { data, error } = await supabase.rpc('admin_open_reports');
+  return { data: (data ?? []) as AdminReport[], error };
+}
+
+export async function banUser(targetId: string, reportId?: string | null) {
+  const { error } = await supabase.rpc('ban_user', {
+    p_target: targetId,
+    p_report_id: reportId ?? null,
+  });
+  return { error };
+}
+
+export async function unbanUser(targetId: string) {
+  const { error } = await supabase.rpc('unban_user', { p_target: targetId });
+  return { error };
+}
+
+export async function dismissReport(reportId: string) {
+  const { error } = await supabase
+    .from('reports')
+    .update({ status: 'dismissed' })
+    .eq('id', reportId);
+  return { error };
+}
+
+/** Reason value -> display label, for the admin queue. */
+export function reasonLabel(reason: string): string {
+  return REPORT_REASONS.find((r) => r.value === reason)?.label ?? reason;
+}

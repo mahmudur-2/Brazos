@@ -10,13 +10,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
+import { ReportDialog } from '../components/ReportDialog';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
 import { resolveOtherId } from '../lib/conversations';
+import { alertAsync, confirmAsync } from '../lib/dialog';
+import {
+  blockUser,
+  muteUser,
+  unblockUser,
+  unmuteUser,
+} from '../lib/moderation';
 import type { MessagesStackNavigation } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
+
+type SheetTarget = {
+  userId: string;
+  name: string;
+  jobId: string;
+  blocking: boolean;
+  muted: boolean;
+};
 
 export function MessagesInboxScreen() {
   const navigation = useNavigation<MessagesStackNavigation>();
@@ -26,11 +43,14 @@ export function MessagesInboxScreen() {
     readMap,
     profiles,
     lastMessageReactions,
+    moderation,
     loading,
     error,
     refresh,
   } = useConversations();
   const [refreshing, setRefreshing] = useState(false);
+  const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
+  const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -57,9 +77,6 @@ export function MessagesInboxScreen() {
     }
 
     return conversations.map((c) => {
-      // If the job has no assigned worker (or otherwise no resolvable second
-      // party — e.g. test data inserted directly), there's no one else in
-      // this thread either, so it's treated the same as messaging yourself.
       const otherId = resolveOtherId(c, user.id);
       const other = profiles[otherId];
       const isSelf = otherId === user.id;
@@ -70,7 +87,11 @@ export function MessagesInboxScreen() {
       const preview =
         reactionPrefix + (isImage ? 'Photo sent' : c.last_message_content || '…');
       const lastReadAt = readMap[c.job_id];
+      const isMuted = moderation.muted.has(otherId);
+      // Muted conversations still receive messages — they just don't raise the
+      // unread indicator (the only "badge" this app currently has).
       const unread =
+        !isMuted &&
         c.last_message_sender_id !== user.id &&
         (!lastReadAt || new Date(c.last_message_at) > new Date(lastReadAt));
 
@@ -79,21 +100,91 @@ export function MessagesInboxScreen() {
 
       return {
         jobId: c.job_id,
-        // Self-chats never show a job label; otherwise fall back to a
-        // neutral count when the same person has more than one job thread.
+        otherId,
+        isSelf,
         subtitle: isSelf
           ? null
           : jobCount > 1
           ? `${jobCount} jobs together`
           : c.job_title,
         name: isSelf ? `${baseName} (You)` : baseName,
+        rawName: baseName,
         avatarUrl: other?.avatar_url ?? null,
         preview,
         lastMessageAt: c.last_message_at,
         unread,
+        muted: isMuted,
+        blocking: moderation.blocking.has(otherId),
       };
     });
-  }, [conversations, profiles, readMap, user]);
+  }, [conversations, profiles, readMap, lastMessageReactions, moderation, user]);
+
+  async function toggleBlock(target: SheetTarget) {
+    if (!user) return;
+    setSheetTarget(null);
+
+    if (target.blocking) {
+      const { error } = await unblockUser(user.id, target.userId);
+      if (error) await alertAsync('Could not unblock', error.message);
+      await refresh();
+      return;
+    }
+
+    const ok = await confirmAsync({
+      title: `Block ${target.name}?`,
+      message:
+        "You won't be able to message each other on any job. You can undo this later.",
+      confirmText: 'Block',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    const { error } = await blockUser(user.id, target.userId);
+    if (error) await alertAsync('Could not block', error.message);
+    await refresh();
+  }
+
+  async function toggleMute(target: SheetTarget) {
+    if (!user) return;
+    setSheetTarget(null);
+    const { error } = target.muted
+      ? await unmuteUser(user.id, target.userId)
+      : await muteUser(user.id, target.userId);
+    if (error) {
+      await alertAsync(target.muted ? 'Could not unmute' : 'Could not mute', error.message);
+    }
+    await refresh();
+  }
+
+  const sheetItems: ActionSheetItem[] = sheetTarget
+    ? [
+        {
+          key: 'mute',
+          label: sheetTarget.muted ? 'Unmute' : 'Mute',
+          icon: sheetTarget.muted ? 'notifications' : 'notifications-off-outline',
+          onPress: () => toggleMute(sheetTarget),
+        },
+        {
+          key: 'block',
+          label: sheetTarget.blocking ? 'Unblock' : 'Block',
+          icon: sheetTarget.blocking ? 'lock-open-outline' : 'ban-outline',
+          destructive: !sheetTarget.blocking,
+          onPress: () => toggleBlock(sheetTarget),
+        },
+        {
+          key: 'report',
+          label: 'Report',
+          icon: 'flag-outline',
+          destructive: true,
+          onPress: () => {
+            const target = sheetTarget;
+            setSheetTarget(null);
+            setReportTarget(target);
+          },
+        },
+      ]
+    : [];
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -117,8 +208,20 @@ export function MessagesInboxScreen() {
               preview={item.preview}
               lastMessageAt={item.lastMessageAt}
               unread={item.unread}
-              onPress={() =>
-                navigation.navigate('Chat', { jobId: item.jobId })
+              muted={item.muted}
+              blocked={item.blocking}
+              onPress={() => navigation.navigate('Chat', { jobId: item.jobId })}
+              onLongPress={
+                item.isSelf
+                  ? undefined
+                  : () =>
+                      setSheetTarget({
+                        userId: item.otherId,
+                        name: item.rawName,
+                        jobId: item.jobId,
+                        blocking: item.blocking,
+                        muted: item.muted,
+                      })
               }
             />
           )}
@@ -140,6 +243,25 @@ export function MessagesInboxScreen() {
               </Text>
             </View>
           }
+        />
+      )}
+
+      <ActionSheet
+        visible={!!sheetTarget}
+        title={sheetTarget?.name}
+        subtitle="Manage this conversation"
+        items={sheetItems}
+        onClose={() => setSheetTarget(null)}
+      />
+
+      {user && reportTarget && (
+        <ReportDialog
+          visible
+          reporterId={user.id}
+          reportedId={reportTarget.userId}
+          reportedName={reportTarget.name}
+          jobId={reportTarget.jobId}
+          onClose={() => setReportTarget(null)}
         />
       )}
     </SafeAreaView>

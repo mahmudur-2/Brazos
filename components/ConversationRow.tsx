@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { Card } from './Card';
 import { colors, spacing } from '../lib/theme';
@@ -12,7 +13,10 @@ type ConversationRowProps = {
   preview: string;
   lastMessageAt: string;
   unread: boolean;
+  muted?: boolean;
+  blocked?: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
 };
 
 export function ConversationRow({
@@ -22,10 +26,13 @@ export function ConversationRow({
   preview,
   lastMessageAt,
   unread,
+  muted = false,
+  blocked = false,
   onPress,
+  onLongPress,
 }: ConversationRowProps) {
   return (
-    <Card onPress={onPress}>
+    <Card onPress={onPress} onLongPress={onLongPress}>
       <View style={styles.row}>
         <Avatar name={name} uri={avatarUrl} size={48} />
 
@@ -34,6 +41,16 @@ export function ConversationRow({
             <Text style={[styles.name, unread && styles.emphasis]} numberOfLines={1}>
               {name}
             </Text>
+            {blocked && (
+              <Ionicons name="ban-outline" size={14} color={colors.danger} />
+            )}
+            {muted && (
+              <Ionicons
+                name="notifications-off-outline"
+                size={14}
+                color={colors.textSubtle}
+              />
+            )}
             <Text style={styles.time}>{formatTimeAgo(lastMessageAt)}</Text>
           </View>
 

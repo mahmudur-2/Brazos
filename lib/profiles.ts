@@ -16,6 +16,10 @@ export type Profile = {
   language?: string | null;
   categories?: string[] | null;
   completion_rate?: number | null;
+  // Moderation (phase13). Optional so the app still works if the migration
+  // hasn't been run yet — both default to false/absent.
+  is_admin?: boolean | null;
+  banned?: boolean | null;
 };
 
 export type ProfileUpdate = {

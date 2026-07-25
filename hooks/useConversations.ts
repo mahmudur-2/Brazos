@@ -5,12 +5,25 @@ import {
   resolveOtherId,
   type Conversation,
 } from '../lib/conversations';
+import { fetchMyModerationLists } from '../lib/moderation';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
 import { fetchReactionsForMessages, type Reaction } from '../lib/reactions';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './useAuth';
 
 type CounterpartyInfo = Pick<Profile, 'id' | 'full_name' | 'avatar_url'>;
+
+type ModerationLists = {
+  blocking: Set<string>;
+  blockedBy: Set<string>;
+  muted: Set<string>;
+};
+
+const EMPTY_MODERATION: ModerationLists = {
+  blocking: new Set(),
+  blockedBy: new Set(),
+  muted: new Set(),
+};
 
 /**
  * Loads the signed-in user's conversation inbox: one row per job with a
@@ -27,6 +40,7 @@ export function useConversations() {
   const [lastMessageReactions, setLastMessageReactions] = useState<
     Record<string, Reaction[]>
   >({});
+  const [moderation, setModeration] = useState<ModerationLists>(EMPTY_MODERATION);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,10 +66,14 @@ export function useConversations() {
     setConversations(convRes.data);
 
     const otherIds = convRes.data.map((c) => resolveOtherId(c, user.id));
-    const [{ data: people }, { data: reactionRows }] = await Promise.all([
-      fetchProfilesByIds(otherIds),
-      fetchReactionsForMessages(convRes.data.map((c) => c.last_message_id)),
-    ]);
+    const [{ data: people }, { data: reactionRows }, moderationLists] =
+      await Promise.all([
+        fetchProfilesByIds(otherIds),
+        fetchReactionsForMessages(convRes.data.map((c) => c.last_message_id)),
+        fetchMyModerationLists(user.id),
+      ]);
+
+    setModeration(moderationLists);
 
     const map: Record<string, CounterpartyInfo> = {};
     for (const p of people) map[p.id] = p;
@@ -103,6 +121,7 @@ export function useConversations() {
     readMap,
     profiles,
     lastMessageReactions,
+    moderation,
     loading,
     error,
     refresh,
