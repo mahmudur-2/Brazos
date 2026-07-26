@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -17,17 +17,22 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import {
   createJob,
   dollarsToCents,
+  fetchJobById,
+  fetchJobLocation,
   JOB_CATEGORIES,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
+  updateJob,
   type JobCategory,
 } from '../lib/jobs';
+import { createJobRequest } from '../lib/jobRequests';
 import { alertAsync } from '../lib/dialog';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { uploadJobAttachment } from '../lib/storage';
@@ -44,11 +49,20 @@ export function PostJobScreen() {
   const { params } = useRoute<RouteProp<PostJobRouteParamList, 'PostJob'>>();
   const { user } = useAuth();
 
-  // "Hire Again" mode — the job is created already assigned to this worker,
-  // skipping open bidding entirely.
+  // "Hire Again" mode — sends a private request into the conversation these
+  // two already share. It does NOT create a job; the worker can accept,
+  // decline or counter first (phase18).
   const hireWorkerId = params?.hireWorkerId ?? null;
   const hireWorkerName = params?.hireWorkerName ?? 'this worker';
   const isHiring = !!hireWorkerId;
+
+  // Edit mode — reopens this same form pre-filled with an existing job's
+  // details instead of creating a new one. Only ever launched from
+  // ClientJobDetailScreen, which itself only shows the entry point while the
+  // job has zero bids.
+  const editJobId = params?.editJobId ?? null;
+  const isEditing = !!editJobId;
+  const [loadingJob, setLoadingJob] = useState(isEditing);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -61,9 +75,46 @@ export function PostJobScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!editJobId) return;
+    let active = true;
+
+    (async () => {
+      const [{ data: job, error }, { data: loc }] = await Promise.all([
+        fetchJobById(editJobId),
+        fetchJobLocation(editJobId),
+      ]);
+      if (!active) return;
+
+      if (error || !job) {
+        await alertAsync(
+          'Could not load job',
+          error?.message ?? 'This job may have been deleted.'
+        );
+        navigation.goBack();
+        return;
+      }
+
+      setTitle(job.title);
+      setDescription(job.description);
+      setCategory(job.category);
+      setLocation(job.location ?? '');
+      setBudget(job.budget_cents != null ? String(job.budget_cents / 100) : '');
+      setPhotos(job.photos);
+      if (loc) setCoords({ lat: loc.lat, lng: loc.lng });
+      setLoadingJob(false);
+    })();
+
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editJobId]);
 
   function playSuccessThenLeave() {
     setShowSuccess(true);
@@ -92,9 +143,16 @@ export function PostJobScreen() {
       setCoords(null);
       setBudget('');
       setPhotos([]);
-      // Return to Home, then jump to the My Jobs hub tab to see the new post.
-      navigation.goBack();
-      navigation.getParent()?.navigate('MyJobs' as never);
+      if (isEditing) {
+        // Pop back to the hub instead of goBack(): this screen was pushed
+        // from ClientJobDetailScreen, which only holds the pre-edit job as a
+        // route param and won't reflect the changes just saved.
+        navigation.navigate('MyJobsHub' as never);
+      } else {
+        // Return to Home, then jump to the My Jobs hub tab to see the new post.
+        navigation.goBack();
+        navigation.getParent()?.navigate('MyJobs' as never);
+      }
     }, 1200);
   }
 
@@ -154,38 +212,76 @@ export function PostJobScreen() {
       await alertAsync('Invalid budget', 'Budget must be a positive dollar amount.');
       return;
     }
-    // A direct hire has no bidding round to settle on a price, so the agreed
-    // amount is required here.
+    // A hire request opens with a proposed price, so an amount is required —
+    // it's the starting point for the negotiation, not a final figure.
     if (isHiring && budgetCents == null) {
       await alertAsync(
-        'Agreed price required',
-        `Enter the amount you and ${hireWorkerName} agreed on.`
+        'Price required',
+        `Enter the amount you'd like to offer ${hireWorkerName}. They can accept or counter.`
       );
       return;
     }
 
+    // Hire Again no longer creates a job. It sends a request into the
+    // conversation these two already have; a job only exists if the worker
+    // accepts (or they settle on a counter-offer). See phase18.
+    if (isHiring && !isEditing) {
+      setSubmitting(true);
+      const { error: requestError } = await createJobRequest({
+        workerId: hireWorkerId!,
+        title: title.trim(),
+        description: description.trim(),
+        category,
+        location: location.trim(),
+        amountCents: budgetCents!,
+        photos,
+        coords,
+        threadJobId: params?.threadJobId ?? null,
+      });
+      setSubmitting(false);
+
+      if (requestError) {
+        await alertAsync('Could not send request', requestError.message);
+        return;
+      }
+      playSuccessThenLeave();
+      return;
+    }
+
     setSubmitting(true);
-    const { error, locationError } = await createJob(user.id, {
-      title: title.trim(),
-      description: description.trim(),
-      category,
-      location: location.trim(),
-      budgetCents,
-      photos,
-      coords,
-      hireWorkerId,
-    });
+    const { error, locationError } = isEditing
+      ? await updateJob(editJobId!, {
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          location: location.trim(),
+          budgetCents,
+          photos,
+          coords,
+        })
+      : await createJob(user.id, {
+          title: title.trim(),
+          description: description.trim(),
+          category,
+          location: location.trim(),
+          budgetCents,
+          photos,
+          coords,
+          hireWorkerId,
+        });
     setSubmitting(false);
 
     if (error) {
-      await alertAsync('Could not post job', error.message);
+      await alertAsync(isEditing ? 'Could not save changes' : 'Could not post job', error.message);
       return;
     }
     if (locationError) {
-      // The job posted fine; only the map pin is missing.
+      // The job saved fine; only the map pin is missing. Include the real
+      // reason (already logged in createJob/updateJob) so it's actually
+      // diagnosable instead of just "something went wrong".
       await alertAsync(
-        'Posted, but without a map pin',
-        "Your job is live, but we couldn't save its location for the map."
+        'Saved, but without a map pin',
+        `Your job is live, but we couldn't save its location for the map: ${locationError.message}`
       );
     }
 
@@ -195,10 +291,15 @@ export function PostJobScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScreenHeader
-        title={isHiring ? 'Hire Again' : 'Post a Job'}
+        title={isEditing ? 'Edit Job' : isHiring ? 'Hire Again' : 'Post a Job'}
         onBack={() => navigation.goBack()}
       />
 
+      {loadingJob ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : (
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -212,7 +313,7 @@ export function PostJobScreen() {
             <View style={styles.hireBanner}>
               <Ionicons name="person-add-outline" size={18} color={colors.primary} />
               <Text style={styles.hireBannerText}>
-                This job goes straight to {hireWorkerName} — no bidding round.
+                {hireWorkerName} will get this as a request in your chat. They can accept, decline, or suggest a different price.
               </Text>
             </View>
           )}
@@ -248,7 +349,9 @@ export function PostJobScreen() {
             >
               {photos.map((url) => (
                 <View key={url} style={styles.photoWrap}>
-                  <Image source={{ uri: url }} style={styles.photo} />
+                  <Pressable onPress={() => setViewerUri(url)}>
+                    <Image source={{ uri: url }} style={styles.photo} />
+                  </Pressable>
                   <Pressable
                     style={styles.photoRemove}
                     onPress={() => removePhoto(url)}
@@ -319,7 +422,7 @@ export function PostJobScreen() {
           </View>
 
           <TextField
-            label={isHiring ? 'Agreed price ($)' : 'Budget ($) (Optional)'}
+            label={isHiring ? 'Your offer ($)' : 'Budget ($) (Optional)'}
             value={budget}
             onChangeText={setBudget}
             placeholder="e.g. 50"
@@ -327,13 +430,16 @@ export function PostJobScreen() {
           />
 
           <Button
-            title={isHiring ? `Hire ${hireWorkerName}` : 'Post job'}
+            // "Send Request", not "Hire" — the worker still has to agree, so a
+            // label implying the hire already happened would misdescribe it.
+            title={isEditing ? 'Save changes' : isHiring ? 'Send Request' : 'Post job'}
             onPress={handleSubmit}
             loading={submitting}
             style={styles.submit}
           />
         </ScrollView>
       </KeyboardAvoidingView>
+      )}
 
       {showSuccess && (
         <Animated.View style={[styles.successOverlay, { opacity: successOpacity }]}>
@@ -343,10 +449,16 @@ export function PostJobScreen() {
             <Ionicons name="checkmark" size={56} color={colors.onPrimary} />
           </Animated.View>
           <Text style={styles.successText}>
-            {isHiring ? 'Worker hired!' : 'Job posted!'}
+            {isEditing ? 'Job updated!' : isHiring ? 'Request sent!' : 'Job posted!'}
           </Text>
         </Animated.View>
       )}
+
+      <PhotoViewer
+        visible={!!viewerUri}
+        uri={viewerUri}
+        onClose={() => setViewerUri(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -358,6 +470,11 @@ const styles = StyleSheet.create({
   },
   flex: {
     flex: 1,
+  },
+  loadingWrap: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   content: {
     padding: spacing.lg,

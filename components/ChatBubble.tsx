@@ -1,8 +1,9 @@
 import { Pressable, Image, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from './Avatar';
+import { VoiceNote } from './VoiceNote';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 import { formatClockTime } from '../lib/time';
-import type { Message } from '../lib/messages';
+import { messagePreviewText, type Message } from '../lib/messages';
 import type { Reaction } from '../lib/reactions';
 
 type ChatBubbleProps = {
@@ -12,6 +13,13 @@ type ChatBubbleProps = {
   senderAvatarUrl?: string | null;
   reactions?: Reaction[];
   onLongPress?: () => void;
+  onPressImage?: (url: string) => void;
+  /** The quoted message, already resolved from the loaded thread. */
+  replyTo?: Message | null;
+  /** Display name for the quoted message's sender. */
+  replyToName?: string | null;
+  /** Long-press on the counterparty's avatar — opens it full-screen. */
+  onLongPressAvatar?: () => void;
 };
 
 export function ChatBubble({
@@ -21,6 +29,10 @@ export function ChatBubble({
   senderAvatarUrl,
   reactions = [],
   onLongPress,
+  onPressImage,
+  replyTo,
+  replyToName,
+  onLongPressAvatar,
 }: ChatBubbleProps) {
   return (
     <View
@@ -31,7 +43,13 @@ export function ChatBubble({
       ]}
     >
       {!isOwn && (
-        <Avatar name={senderName} uri={senderAvatarUrl} size={28} />
+        <Pressable
+          onLongPress={onLongPressAvatar}
+          delayLongPress={350}
+          disabled={!onLongPressAvatar}
+        >
+          <Avatar name={senderName} uri={senderAvatarUrl} size={28} />
+        </Pressable>
       )}
 
       <Pressable
@@ -40,8 +58,52 @@ export function ChatBubble({
         style={styles.bubbleWrap}
       >
         <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
+          {/* Quoted reply strip, WhatsApp-style: an accent rail, the original
+              sender's name, and a one-line summary of what's being replied to. */}
+          {replyTo && (
+            <View style={[styles.quote, isOwn ? styles.quoteOwn : styles.quoteOther]}>
+              <View
+                style={[styles.quoteBar, isOwn ? styles.quoteBarOwn : styles.quoteBarOther]}
+              />
+              <View style={styles.quoteBody}>
+                <Text
+                  style={[styles.quoteName, isOwn && styles.quoteNameOwn]}
+                  numberOfLines={1}
+                >
+                  {replyToName ?? 'Message'}
+                </Text>
+                <Text
+                  style={[styles.quoteText, isOwn && styles.quoteTextOwn]}
+                  numberOfLines={1}
+                >
+                  {messagePreviewText(replyTo)}
+                </Text>
+              </View>
+              {replyTo.image_url ? (
+                <Image source={{ uri: replyTo.image_url }} style={styles.quoteThumb} />
+              ) : null}
+            </View>
+          )}
+
           {message.image_url ? (
-            <Image source={{ uri: message.image_url }} style={styles.image} />
+            // onLongPress is forwarded here as well as on the wrapper: this
+            // inner Pressable claims the touch, so without it a long-press on
+            // a photo never reached the reaction picker the way it does on a
+            // text message.
+            <Pressable
+              onPress={() => onPressImage?.(message.image_url!)}
+              onLongPress={onLongPress}
+              delayLongPress={350}
+            >
+              <Image source={{ uri: message.image_url }} style={styles.image} />
+            </Pressable>
+          ) : null}
+          {message.audio_url ? (
+            <VoiceNote
+              url={message.audio_url}
+              durationMs={message.audio_duration_ms}
+              isOwn={isOwn}
+            />
           ) : null}
           {message.content ? (
             <Text style={[styles.text, isOwn && styles.textOwn]}>{message.content}</Text>
@@ -108,6 +170,57 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderBottomLeftRadius: 4,
+  },
+  quote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.xs + 2,
+    paddingRight: spacing.sm,
+    overflow: 'hidden',
+  },
+  quoteOwn: {
+    backgroundColor: 'rgba(244,241,232,0.16)',
+  },
+  quoteOther: {
+    backgroundColor: colors.primarySoft,
+  },
+  quoteBar: {
+    width: 3,
+    alignSelf: 'stretch',
+    borderRadius: 2,
+  },
+  quoteBarOwn: {
+    backgroundColor: colors.onPrimary,
+  },
+  quoteBarOther: {
+    backgroundColor: colors.primary,
+  },
+  quoteBody: {
+    flex: 1,
+    gap: 1,
+  },
+  quoteName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  quoteNameOwn: {
+    color: colors.onPrimary,
+  },
+  quoteText: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  quoteTextOwn: {
+    color: 'rgba(244,241,232,0.8)',
+  },
+  quoteThumb: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.sm,
+    backgroundColor: colors.border,
   },
   image: {
     width: 200,

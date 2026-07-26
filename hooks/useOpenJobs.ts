@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { fetchOpenJobs, toOpenJob, type OpenJob } from '../lib/jobs';
 import { supabase } from '../lib/supabase';
 
@@ -11,13 +11,22 @@ import { supabase } from '../lib/supabase';
 export function useOpenJobs() {
   // Multiple screens can have this hook mounted at once (e.g. Home's preview
   // list alongside a pushed browse screen — React Navigation doesn't unmount
-  // prior screens by default). Each instance needs its own channel name:
-  // a shared hardcoded name caused "cannot add postgres_changes callbacks...
-  // after subscribe()" once a second instance tried to .on() a channel the
-  // first instance had already subscribed. The .on() calls themselves were
-  // always correctly chained before .subscribe() — the bug was cross-instance
-  // name collision, not ordering.
+  // prior screens by default), so each instance needs its own channel name.
+  //
+  // That alone isn't enough, though: supabase.channel(topic) dedupes against
+  // the client's existing channels by topic string, and removeChannel() is
+  // async (it awaits channel.unsubscribe() before the old channel is spliced
+  // out). If this same instance unmounts and remounts quickly (tab switch,
+  // screen freeze/unfreeze), the new effect's .channel(sameTopic) call can
+  // land before the old channel finishes tearing down — supabase then hands
+  // back the OLD, already-subscribed channel object instead of a fresh one,
+  // and .on() on it throws "cannot add postgres_changes callbacks... after
+  // subscribe()". A per-instance id doesn't protect against that because
+  // it's the same instance both times. Suffixing with a per-effect-run
+  // counter guarantees every mount gets a brand-new topic, so the dedupe can
+  // never resurrect a still-tearing-down channel.
   const instanceId = useId();
+  const runRef = useRef(0);
   const [jobs, setJobs] = useState<OpenJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +46,7 @@ export function useOpenJobs() {
 
   useEffect(() => {
     const channel = supabase
-      .channel(`public:jobs:open:${instanceId}`)
+      .channel(`public:jobs:open:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'jobs' },

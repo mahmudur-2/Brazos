@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { OpenJob } from './jobs';
+import { toOpenJob } from './jobs';
 
 // Aggregated grid cell returned by the job_hotspots() RPC. Never contains
 // individual job coordinates — only the cell center + counts.
@@ -150,7 +150,11 @@ export async function fetchJobsInCell(ilat: number, ilng: number) {
     p_ilat: ilat,
     p_ilng: ilng,
   });
-  return { data: (data ?? []) as OpenJob[], error };
+  // jobs_in_cell() predates the phase13 photos column, so its rows don't
+  // carry `photos` at all — route through toOpenJob() (same as every other
+  // job-fetching path) so that and any other nullable/array field lands
+  // normalized instead of undefined.
+  return { data: (data ?? []).map(toOpenJob), error };
 }
 
 /** Human-readable category summary for a cell, e.g. "Cleaning · Handyman · +2". */

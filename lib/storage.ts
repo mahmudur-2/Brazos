@@ -4,6 +4,7 @@ import { supabase } from './supabase';
 const BUCKET = 'job-photos';
 const AVATAR_BUCKET = 'avatars';
 const CHAT_BUCKET = 'chat-photos';
+const CHAT_AUDIO_BUCKET = 'chat-audio';
 
 async function uploadAsset(
   bucket: string,
@@ -54,6 +55,40 @@ export async function uploadChatPhoto(jobId: string, asset: ImagePickerAsset) {
   const rawExt = (asset.uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
   const ext = rawExt.length <= 4 ? rawExt : 'jpg';
   return uploadAsset(CHAT_BUCKET, `${jobId}/${Date.now()}.${ext}`, asset);
+}
+
+/**
+ * Upload a recorded voice note for a job's chat and return its public URL.
+ * Requires the public `chat-audio` bucket + policies (see phase16 SQL).
+ *
+ * Takes a local file URI (from expo-audio's recorder) rather than an
+ * ImagePickerAsset, so it can't reuse uploadAsset above — but the
+ * fetch-to-ArrayBuffer approach is the same, and is what works across both
+ * native and web.
+ */
+export async function uploadChatAudio(
+  jobId: string,
+  fileUri: string,
+  extension = 'm4a'
+): Promise<{ url: string | null; error: Error | null }> {
+  try {
+    const response = await fetch(fileUri);
+    const arrayBuffer = await response.arrayBuffer();
+    const path = `${jobId}/${Date.now()}.${extension}`;
+
+    const { error } = await supabase.storage
+      .from(CHAT_AUDIO_BUCKET)
+      .upload(path, arrayBuffer, {
+        contentType: extension === 'm4a' ? 'audio/m4a' : `audio/${extension}`,
+        upsert: true,
+      });
+    if (error) return { url: null, error };
+
+    const { data } = supabase.storage.from(CHAT_AUDIO_BUCKET).getPublicUrl(path);
+    return { url: data.publicUrl, error: null };
+  } catch (e) {
+    return { url: null, error: e as Error };
+  }
 }
 
 /**

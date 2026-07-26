@@ -34,6 +34,12 @@
         {
           "locationWhenInUsePermission": "Allow Brazos to use your location while using the app to show work near you on the map."
         }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Brazos to use the microphone so you can send voice messages in chat."
+        }
       ]
     ]
   }

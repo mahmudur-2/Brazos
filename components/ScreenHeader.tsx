@@ -8,6 +8,9 @@ type ScreenHeaderProps = {
   subtitle?: string;
   onBack?: () => void;
   right?: ReactNode;
+  /** Makes the title/subtitle block tappable — e.g. chat's title opening the
+   *  counterparty's profile. Omitted, the block renders inert as before. */
+  onPressTitle?: () => void;
   /** Overrides title/subtitle/back-icon colors, e.g. for the Map tab's dark mode. */
   palette?: ColorPalette;
 };
@@ -17,8 +20,25 @@ export function ScreenHeader({
   subtitle,
   onBack,
   right,
+  onPressTitle,
   palette = colors,
 }: ScreenHeaderProps) {
+  const titles = (
+    <>
+      <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>
+        {title}
+      </Text>
+      {subtitle ? (
+        <Text
+          style={[styles.subtitle, { color: palette.textMuted }]}
+          numberOfLines={1}
+        >
+          {subtitle}
+        </Text>
+      ) : null}
+    </>
+  );
+
   return (
     <View style={styles.container}>
       {onBack ? (
@@ -27,19 +47,13 @@ export function ScreenHeader({
         </Pressable>
       ) : null}
 
-      <View style={styles.titles}>
-        <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>
-          {title}
-        </Text>
-        {subtitle ? (
-          <Text
-            style={[styles.subtitle, { color: palette.textMuted }]}
-            numberOfLines={1}
-          >
-            {subtitle}
-          </Text>
-        ) : null}
-      </View>
+      {onPressTitle ? (
+        <Pressable style={styles.titles} onPress={onPressTitle}>
+          {titles}
+        </Pressable>
+      ) : (
+        <View style={styles.titles}>{titles}</View>
+      )}
 
       {right ? <View style={styles.right}>{right}</View> : null}
     </View>

@@ -25,11 +25,25 @@ function formatStatus(status: string) {
   return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-export function StatusBadge({ status }: { status: string }) {
+type StatusBadgeProps = {
+  /** Drives the colour pair. */
+  status: string;
+  /**
+   * Overrides the displayed text while keeping `status`'s colour — used by
+   * the job detail screen's evolving stage badge, where the wording
+   * ("Bids Pending (3)") differs from the underlying status key. See
+   * lib/jobStage.ts.
+   */
+  label?: string;
+};
+
+export function StatusBadge({ status, label }: StatusBadgeProps) {
   const style = STATUS_STYLES[status] ?? DEFAULT_STYLE;
   return (
     <View style={[styles.badge, { backgroundColor: style.bg }]}>
-      <Text style={[styles.text, { color: style.text }]}>{formatStatus(status)}</Text>
+      <Text style={[styles.text, { color: style.text }]}>
+        {label ?? formatStatus(status)}
+      </Text>
     </View>
   );
 }

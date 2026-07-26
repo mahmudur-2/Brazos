@@ -106,6 +106,19 @@ export async function fetchBidsForJob(jobId: string) {
 }
 
 /**
+ * Bid count for a job, visible to any viewer — not just the poster or a
+ * bidder. A direct `select count(*) from bids` would silently undercount
+ * for a random browsing worker (bids SELECT RLS only grants a worker their
+ * own bid or the poster all bids on their job), so this goes through
+ * job_bid_count(), a count-only SECURITY DEFINER RPC (see phase15) that
+ * exposes nothing beyond the number itself.
+ */
+export async function fetchBidCount(jobId: string) {
+  const { data, error } = await supabase.rpc('job_bid_count', { p_job_id: jobId });
+  return { data: typeof data === 'number' ? data : 0, error };
+}
+
+/**
  * Accept a bid: assign the job to the worker and mark the bid accepted.
  * Two updates (no server-side transaction in Phase 1) — job first so the
  * assignment is the durable state if the second write fails.

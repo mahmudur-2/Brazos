@@ -4,6 +4,7 @@ import {
   Image,
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,10 +15,14 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { JobOwnerActions } from '../components/JobOwnerActions';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
+import { useBidCount } from '../hooks/useBidCount';
+import { jobStage } from '../lib/jobStage';
 import {
   dollarsToCents,
   formatBudget,
@@ -43,8 +48,11 @@ export function JobDetailScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [existingBid, setExistingBid] = useState<Bid | null>(null);
   const [checking, setChecking] = useState(true);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const isOwnJob = !!user && job.client_id === user.id;
+  const bidCount = useBidCount(job.id);
+  const stage = jobStage(job.status, bidCount, isOwnJob);
 
   useEffect(() => {
     let active = true;
@@ -115,6 +123,8 @@ export function JobDetailScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* One consolidated card: identity, the evolving stage badge, the
+              details, and (for an eligible poster) the manage actions. */}
           <Card>
             <View style={styles.jobHeader}>
               <View style={styles.iconCircle}>
@@ -130,7 +140,7 @@ export function JobDetailScreen() {
                 </Text>
                 <Text style={styles.time}>{formatTimeAgo(job.created_at)}</Text>
               </View>
-              <StatusBadge status={job.status} />
+              <StatusBadge status={stage.statusKey} label={stage.label} />
             </View>
 
             <Text style={styles.title}>{job.title}</Text>
@@ -152,7 +162,7 @@ export function JobDetailScreen() {
               <Text style={styles.description}>{job.description}</Text>
             ) : null}
 
-            {job.photos.length > 0 && (
+            {job.photos?.length > 0 && (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -160,9 +170,19 @@ export function JobDetailScreen() {
                 style={styles.photoScroll}
               >
                 {job.photos.map((url) => (
-                  <Image key={url} source={{ uri: url }} style={styles.photo} />
+                  <Pressable key={url} onPress={() => setViewerUri(url)}>
+                    <Image source={{ uri: url }} style={styles.photo} />
+                  </Pressable>
                 ))}
               </ScrollView>
+            )}
+
+            {isOwnJob && (
+              <JobOwnerActions
+                jobId={job.id}
+                posterId={job.client_id}
+                status={job.status}
+              />
             )}
           </Card>
 
@@ -214,6 +234,12 @@ export function JobDetailScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <PhotoViewer
+        visible={!!viewerUri}
+        uri={viewerUri}
+        onClose={() => setViewerUri(null)}
+      />
     </SafeAreaView>
   );
 }

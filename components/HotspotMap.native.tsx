@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import MapView, { Circle, Polygon, type MapStyleElement } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Button } from './Button';
+import { MapPinIcon } from './MapPinIcon';
 import { useThemeColors } from '../hooks/useThemeColors';
 import {
   cellPolygon,
@@ -94,7 +95,12 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   if (perm === 'loading') {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>
-        <ActivityIndicator size="large" color={palette.primary} />
+        <MapPinIcon size={80} />
+        <ActivityIndicator
+          size="small"
+          color={palette.primary}
+          style={styles.loadingSpinner}
+        />
       </View>
     );
   }
@@ -102,9 +108,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   if (perm === 'denied') {
     return (
       <View style={[styles.fallback, { backgroundColor: palette.background }]}>
-        <View style={[styles.fallbackIcon, { backgroundColor: palette.primarySoft }]}>
-          <Ionicons name="location-outline" size={32} color={palette.primary} />
-        </View>
+        <MapPinIcon size={88} />
         <Text style={[styles.fallbackTitle, { color: palette.text }]}>
           Location is off
         </Text>
@@ -223,13 +227,8 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.sm,
   },
-  fallbackIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
+  loadingSpinner: {
+    marginTop: spacing.md,
   },
   fallbackTitle: {
     fontSize: 18,

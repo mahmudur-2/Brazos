@@ -11,6 +11,9 @@ export type Conversation = {
   last_message_sender_id: string;
   last_message_content: string;
   last_message_image_url: string | null;
+  /** Voice note (phase16). Null until that migration runs, which the inbox
+   *  preview tolerates — it just falls through to the text/photo cases. */
+  last_message_audio_url: string | null;
   last_message_at: string;
 };
 

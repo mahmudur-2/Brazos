@@ -4,6 +4,7 @@ import {
   Animated,
   Image,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,7 +17,8 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { BidWorkerCard } from '../components/BidWorkerCard';
-import { JobProgress } from '../components/JobProgress';
+import { JobOwnerActions } from '../components/JobOwnerActions';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -34,7 +36,9 @@ import {
   type BidSort,
   type BidWithWorker,
 } from '../lib/bids';
+import { jobStage } from '../lib/jobStage';
 import {
+  completionPhotosOf,
   fetchRehirableWorkerIds,
   formatBidCount,
   formatBudget,
@@ -59,12 +63,16 @@ export function ClientJobDetailScreen() {
   const [acceptedName, setAcceptedName] = useState('');
   const [worker, setWorker] = useState<Profile | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
 
   const canAccept = job.status === 'open';
   const workerName = worker?.full_name ?? 'the worker';
+  // Always the poster's own view of their job, so isPoster is unconditionally
+  // true here — this is the one screen that legitimately shows "In Progress".
+  const stage = jobStage(job.status, bids.length, true);
 
   useEffect(() => {
     if (canAccept || !job.assigned_worker_id) return;
@@ -176,12 +184,14 @@ export function ClientJobDetailScreen() {
                 {job.location ? ` · ${job.location}` : ''}
               </Text>
             </View>
-            <StatusBadge status={job.status} />
+            <StatusBadge status={stage.statusKey} label={stage.label} />
           </View>
           <View style={styles.jobFooter}>
             <Text style={styles.budget}>{formatBudget(job.budget_cents)}</Text>
             <Text style={styles.bidCount}>{formatBidCount(bids.length)}</Text>
           </View>
+
+          <JobOwnerActions jobId={job.id} posterId={job.client_id} status={job.status} />
         </Card>
 
         {canAccept ? (
@@ -221,6 +231,15 @@ export function ClientJobDetailScreen() {
                     accepting={acceptingId === bid.id}
                     disabled={acceptingId !== null && acceptingId !== bid.id}
                     onAccept={() => confirmAccept(bid)}
+                    onViewProfile={
+                      bid.worker
+                        ? () =>
+                            navigation.navigate('WorkerProfile', {
+                              workerId: bid.worker!.id,
+                              workerName: bid.worker!.full_name ?? undefined,
+                            })
+                        : undefined
+                    }
                     canRehire={!!bid.worker && rehirable.has(bid.worker.id)}
                     onHireAgain={
                       bid.worker
@@ -239,12 +258,18 @@ export function ClientJobDetailScreen() {
         ) : (
           <>
             <Card>
-              <JobProgress status={job.status} />
-            </Card>
-
-            <Card>
               <Text style={styles.sectionTitle}>Assigned worker</Text>
-              <View style={styles.workerRow}>
+              <Pressable
+                style={styles.workerRow}
+                onPress={() =>
+                  job.assigned_worker_id &&
+                  navigation.navigate('WorkerProfile', {
+                    workerId: job.assigned_worker_id,
+                    workerName: worker?.full_name ?? undefined,
+                  })
+                }
+                disabled={!job.assigned_worker_id}
+              >
                 <Avatar name={worker?.full_name} uri={worker?.avatar_url} size={44} />
                 <View style={styles.workerText}>
                   <View style={styles.workerNameRow}>
@@ -257,7 +282,10 @@ export function ClientJobDetailScreen() {
                     {formatBudget(job.final_amount_cents ?? job.budget_cents)} agreed
                   </Text>
                 </View>
-              </View>
+                {job.assigned_worker_id && (
+                  <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+                )}
+              </Pressable>
             </Card>
 
             {job.assigned_worker_id && (
@@ -270,15 +298,47 @@ export function ClientJobDetailScreen() {
               />
             )}
 
-            {job.status === 'completed' && job.completion_photo_url ? (
+            {/* Before/after: the client's own posting photos next to what the
+                worker submitted on completion. Rendered as soon as the worker
+                marks the job done, so the client reviews the finished work
+                here rather than having to ask for it. */}
+            {(job.photos?.length > 0 || completionPhotosOf(job).length > 0) && (
               <Card>
-                <Text style={styles.sectionTitle}>Done photo</Text>
-                <Image
-                  source={{ uri: job.completion_photo_url }}
-                  style={styles.donePhoto}
-                />
+                {job.photos?.length > 0 && (
+                  <View style={styles.photoGroup}>
+                    <Text style={styles.photoGroupLabel}>Before · your photos</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.photoRow}
+                    >
+                      {job.photos.map((url) => (
+                        <Pressable key={url} onPress={() => setViewerUri(url)}>
+                          <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {completionPhotosOf(job).length > 0 && (
+                  <View style={styles.photoGroup}>
+                    <Text style={styles.photoGroupLabel}>After · finished work</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.photoRow}
+                    >
+                      {completionPhotosOf(job).map((url) => (
+                        <Pressable key={url} onPress={() => setViewerUri(url)}>
+                          <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
               </Card>
-            ) : null}
+            )}
 
             {job.status === 'completed' ? (
               user && job.assigned_worker_id ? (
@@ -316,6 +376,12 @@ export function ClientJobDetailScreen() {
           </Text>
         </Animated.View>
       )}
+
+      <PhotoViewer
+        visible={!!viewerUri}
+        uri={viewerUri}
+        onClose={() => setViewerUri(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -418,6 +484,26 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: radius.md,
     backgroundColor: colors.border,
+  },
+  photoGroup: {
+    gap: spacing.sm,
+  },
+  photoGroupLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+    marginTop: spacing.md,
+  },
+  photoRow: {
+    gap: spacing.sm,
+  },
+  beforeAfterPhoto: {
+    width: 150,
+    height: 150,
+    borderRadius: radius.md,
+    backgroundColor: colors.neutralBg,
   },
   loader: {
     marginTop: spacing.xl,

@@ -17,6 +17,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
 import { resolveOtherId } from '../lib/conversations';
+import { fetchMyPendingRequests } from '../lib/jobRequests';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import {
   blockUser,
@@ -51,11 +52,21 @@ export function MessagesInboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
+  // Threads with a hire request waiting on THIS user. There are no push
+  // notifications, so this list is the only thing that surfaces a new request
+  // or counter-offer.
+  const [pendingByThread, setPendingByThread] = useState<Set<string>>(new Set());
+
+  const loadPending = useCallback(async () => {
+    const { data } = await fetchMyPendingRequests();
+    setPendingByThread(new Set(data.map((r) => r.thread_job_id)));
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
       refresh();
-    }, [refresh])
+      loadPending();
+    }, [refresh, loadPending])
   );
 
   async function onRefresh() {
@@ -84,10 +95,17 @@ export function MessagesInboxScreen() {
       const reactionPrefix =
         reactions.length > 0 ? `${reactions.map((r) => r.emoji).join('')} ` : '';
       const isImage = !!c.last_message_image_url;
+      const isVoice = !!c.last_message_audio_url;
       const preview =
-        reactionPrefix + (isImage ? 'Photo sent' : c.last_message_content || '…');
+        reactionPrefix +
+        (isVoice
+          ? 'Voice message'
+          : isImage
+          ? 'Photo sent'
+          : c.last_message_content || '…');
       const lastReadAt = readMap[c.job_id];
       const isMuted = moderation.muted.has(otherId);
+      const awaitingRequest = pendingByThread.has(c.job_id);
       // Muted conversations still receive messages — they just don't raise the
       // unread indicator (the only "badge" this app currently has).
       const unread =
@@ -115,9 +133,18 @@ export function MessagesInboxScreen() {
         unread,
         muted: isMuted,
         blocking: moderation.blocking.has(otherId),
+        awaitingRequest,
       };
     });
-  }, [conversations, profiles, readMap, lastMessageReactions, moderation, user]);
+  }, [
+    conversations,
+    profiles,
+    readMap,
+    lastMessageReactions,
+    moderation,
+    user,
+    pendingByThread,
+  ]);
 
   async function toggleBlock(target: SheetTarget) {
     if (!user) return;
@@ -210,6 +237,7 @@ export function MessagesInboxScreen() {
               unread={item.unread}
               muted={item.muted}
               blocked={item.blocking}
+              awaitingRequest={item.awaitingRequest}
               onPress={() => navigation.navigate('Chat', { jobId: item.jobId })}
               onLongPress={
                 item.isSelf

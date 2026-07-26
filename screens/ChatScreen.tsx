@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Image,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,7 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
   useNavigation,
@@ -20,23 +22,45 @@ import {
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
+import { AmountPrompt } from '../components/AmountPrompt';
 import { ChatBubble } from '../components/ChatBubble';
+import { JobRequestCard } from '../components/JobRequestCard';
+import { PhotoViewer } from '../components/PhotoViewer';
+import { QuickReplies } from '../components/QuickReplies';
 import { ReactionPicker } from '../components/ReactionPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useChat } from '../hooks/useChat';
 import { useJob } from '../hooks/useJob';
 import { useReactions } from '../hooks/useReactions';
-import { canRehireWorker } from '../lib/jobs';
-import { alertAsync } from '../lib/dialog';
+import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
+import { canRehireWorker, formatBudget } from '../lib/jobs';
+import { alertAsync, confirmAsync } from '../lib/dialog';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
-import { CHAT_TEMPLATES, sendMessage } from '../lib/messages';
+import {
+  CHAT_TEMPLATES,
+  formatClipDuration,
+  messagePreviewText,
+  sendMessage,
+  type Message,
+} from '../lib/messages';
+import {
+  isOpenRequest,
+  respondToJobRequest,
+  type JobRequest,
+} from '../lib/jobRequests';
+import { useJobRequests } from '../hooks/useJobRequests';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
-import { uploadChatPhoto } from '../lib/storage';
+import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
+
+/** One size for every composer control (icons, input, send) so the row reads
+ *  as a single evenly-spaced strip rather than mixed heights. */
+const CONTROL_SIZE = 38;
 
 export function ChatScreen() {
   // Chat is nested in more than one tab's stack, so its nav/route types are
@@ -66,6 +90,88 @@ export function ChatScreen() {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  // Profile pictures open in the same viewer but without the share sheet, so
+  // they're tracked separately from ordinary chat photos.
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  // Long-press target for the message menu (React / Reply).
+  const [menuTarget, setMenuTarget] = useState<Message | null>(null);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [counterTarget, setCounterTarget] = useState<JobRequest | null>(null);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+
+  const { byId: requestsById, refresh: refreshRequests } = useJobRequests(params.jobId);
+
+  const recorder = useVoiceRecorder();
+  const insets = useSafeAreaInsets();
+  // The composer owns the bottom safe-area inset (SafeAreaView no longer
+  // applies it — see the `edges` prop above), but that inset must collapse
+  // while the keyboard is up or it becomes a gap above the keyboard.
+  const [keyboardUp, setKeyboardUp] = useState(false);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const show = Keyboard.addListener(showEvent, () => setKeyboardUp(true));
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardUp(false));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  async function handleMicPressIn() {
+    if (sending) return;
+    const started = await recorder.start();
+    if (!started && recorder.error) {
+      await alertAsync('Cannot record', recorder.error);
+      recorder.clearError();
+    }
+  }
+
+  async function handleMicPressOut() {
+    const clip = await recorder.stop();
+    if (!clip) {
+      // A sub-MIN_CLIP_MS clip is a mis-tap on the mic icon, so it's dropped
+      // without comment. A genuine recorder failure does get surfaced.
+      if (recorder.error) {
+        await alertAsync('Recording failed', recorder.error);
+        recorder.clearError();
+      }
+      return;
+    }
+    await sendVoiceNote(clip);
+  }
+
+  async function sendVoiceNote(clip: { uri: string; durationMs: number }) {
+    if (!user) return;
+    setSending(true);
+    const { url, error: uploadError } = await uploadChatAudio(params.jobId, clip.uri);
+    if (uploadError || !url) {
+      setSending(false);
+      await alertAsync(
+        'Could not send voice message',
+        uploadError?.message ??
+          'Upload failed. The chat-audio storage bucket may still need setting up.'
+      );
+      return;
+    }
+
+    const { data, error } = await sendMessage({
+      jobId: params.jobId,
+      senderId: user.id,
+      content: '',
+      audioUrl: url,
+      audioDurationMs: clip.durationMs,
+    });
+    setSending(false);
+
+    if (error) {
+      await alertAsync('Could not send voice message', error.message);
+      return;
+    }
+    if (data) addLocal(data);
+  }
 
   const listRef = useRef<FlatList>(null);
 
@@ -78,6 +184,24 @@ export function ChatScreen() {
   // job), or a job with no resolvable second party at all (no one assigned) —
   // either way there's no one else to message. No quick templates in that case.
   const isSelfConversation = !!user && counterpartyId === user.id;
+
+  // Messages by id, for resolving a reply's quoted original without a join —
+  // the quoted message is always in this same thread.
+  const messagesById = useMemo(() => {
+    const map: Record<string, Message> = {};
+    for (const m of messages) map[m.id] = m;
+    return map;
+  }, [messages]);
+
+  // Only the newest event message for each request stays interactive; earlier
+  // ones render as history. Messages arrive oldest-first, so the last one wins.
+  const latestMessageIdByRequest = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const m of messages) {
+      if (m.job_request_id) map[m.job_request_id] = m.id;
+    }
+    return map;
+  }, [messages]);
 
   const targetReactions = reactionTarget ? reactionsByMessage[reactionTarget] ?? [] : [];
   const myReactionEmoji =
@@ -133,20 +257,92 @@ export function ChatScreen() {
   async function handleSendText() {
     const content = text.trim();
     if (!content || !user || sending) return;
+    const quoted = replyTo;
     setText('');
+    setReplyTo(null);
     setSending(true);
     const { data, error } = await sendMessage({
       jobId: params.jobId,
       senderId: user.id,
       content,
+      replyToId: quoted?.id ?? null,
     });
     setSending(false);
     if (error) {
       await alertAsync('Could not send message', error.message);
+      // Restore the draft AND the reply target, so a failure doesn't silently
+      // turn a reply into a standalone message on the next attempt.
       setText(content);
+      setReplyTo(quoted);
       return;
     }
     if (data) addLocal(data);
+  }
+
+  async function respondToRequest(
+    request: JobRequest,
+    action: 'accept' | 'decline' | 'counter',
+    amountCents?: number
+  ) {
+    if (respondingId) return;
+    setRespondingId(request.id);
+    const { error } = await respondToJobRequest(request.id, action, amountCents);
+    setRespondingId(null);
+
+    if (error) {
+      await alertAsync('Could not update request', error.message);
+      // The RPC rejects stale turns, so resync rather than leaving the card
+      // showing actions that no longer apply.
+      await refreshRequests();
+      return;
+    }
+
+    await refreshRequests();
+    if (action === 'accept') {
+      await alertAsync(
+        'Request accepted',
+        'The job is now assigned and has moved into My Jobs.'
+      );
+    }
+  }
+
+  // Long-pressing a message offers both actions rather than jumping straight
+  // to the reaction picker, so Reply is reachable the same way on every
+  // message type — text, photo or voice.
+  const messageMenuItems: ActionSheetItem[] = menuTarget
+    ? [
+        {
+          key: 'react',
+          label: 'React',
+          icon: 'happy-outline',
+          onPress: () => {
+            const id = menuTarget.id;
+            setMenuTarget(null);
+            setReactionTarget(id);
+          },
+        },
+        {
+          key: 'reply',
+          label: 'Reply',
+          icon: 'arrow-undo-outline',
+          onPress: () => {
+            const target = menuTarget;
+            setMenuTarget(null);
+            setReplyTo(target);
+          },
+        },
+      ]
+    : [];
+
+  async function confirmDecline(request: JobRequest) {
+    const ok = await confirmAsync({
+      title: 'Decline this request?',
+      message: 'No job will be created. This cannot be undone.',
+      confirmText: 'Decline',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (ok) await respondToRequest(request, 'decline');
   }
 
   async function handleTemplate(template: string) {
@@ -244,7 +440,7 @@ export function ChatScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title={
           counterparty?.full_name
@@ -255,6 +451,20 @@ export function ChatScreen() {
         }
         subtitle={job?.title}
         onBack={() => navigation.goBack()}
+        // Tapping the title opens the other party's profile — including their
+        // Past Work gallery, which is the point of having one.
+        onPressTitle={
+          counterparty && !isSelfConversation
+            ? () =>
+                (navigation.navigate as (n: string, p?: object) => void)(
+                  'WorkerProfile',
+                  {
+                    workerId: counterparty.id,
+                    workerName: counterparty.full_name ?? undefined,
+                  }
+                )
+            : undefined
+        }
         right={
           canRehire && counterparty ? (
             <Pressable
@@ -262,6 +472,9 @@ export function ChatScreen() {
                 (navigation as any).navigate('PostJob', {
                   hireWorkerId: counterparty.id,
                   hireWorkerName: counterparty.full_name ?? 'this worker',
+                  // Post the request into THIS conversation rather than
+                  // letting the server pick a thread for us.
+                  threadJobId: params.jobId,
                 })
               }
               hitSlop={8}
@@ -274,10 +487,17 @@ export function ChatScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
+      {/* keyboardVerticalOffset is 0, not 90. With `behavior="padding"` RN
+          computes padding as (frameBottom - keyboardTop + offset), and this
+          view already ends at the screen bottom — so any non-zero offset is
+          added verbatim as dead space above the keyboard. The old 90 was the
+          gap that showed up whenever the keyboard opened. The header is a
+          sibling above this view, not an overlay, so nothing needs
+          compensating for. */}
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        keyboardVerticalOffset={0}
       >
         {loading ? (
           <View style={styles.center}>
@@ -286,18 +506,67 @@ export function ChatScreen() {
         ) : (
           <FlatList
             ref={listRef}
+            // flex:1 is load-bearing, not cosmetic. Without it this list sizes
+            // to its CONTENT inside the composer column, so once the keyboard
+            // shrinks that column the list overflows and shoves the quick-reply
+            // row past the bottom edge — the chips getting sliced in half.
+            // contentContainerStyle's flexGrow only affects the inner content
+            // view, so it does not bound the scroller itself.
+            style={styles.list}
             data={messages}
             keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <ChatBubble
-                message={item}
-                isOwn={item.sender_id === user?.id}
-                senderName={counterparty?.full_name}
-                senderAvatarUrl={counterparty?.avatar_url}
-                reactions={reactionsByMessage[item.id]}
-                onLongPress={() => setReactionTarget(item.id)}
-              />
-            )}
+            renderItem={({ item }) => {
+              // A hire-request event renders as a negotiation card instead of
+              // an ordinary bubble — same thread, no separate screen.
+              if (item.job_request_id) {
+                const request = requestsById[item.job_request_id];
+                const isOwn = item.sender_id === user?.id;
+                return (
+                  <View
+                    style={[
+                      styles.requestRow,
+                      isOwn ? styles.requestRowOwn : styles.requestRowOther,
+                    ]}
+                  >
+                    <JobRequestCard
+                      message={item}
+                      request={request}
+                      isLatest={latestMessageIdByRequest[item.job_request_id] === item.id}
+                      currentUserId={user?.id ?? ''}
+                      busy={respondingId === item.job_request_id}
+                      onAccept={() => request && respondToRequest(request, 'accept')}
+                      onDecline={() => request && confirmDecline(request)}
+                      onCounter={() => request && setCounterTarget(request)}
+                    />
+                  </View>
+                );
+              }
+
+              return (
+                <ChatBubble
+                  message={item}
+                  isOwn={item.sender_id === user?.id}
+                  senderName={counterparty?.full_name}
+                  senderAvatarUrl={counterparty?.avatar_url}
+                  reactions={reactionsByMessage[item.id]}
+                  onLongPress={() => setMenuTarget(item)}
+                  onPressImage={setViewerUri}
+                  replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
+                  replyToName={
+                    item.reply_to_id
+                      ? messagesById[item.reply_to_id]?.sender_id === user?.id
+                        ? 'You'
+                        : counterparty?.full_name ?? 'Them'
+                      : null
+                  }
+                  onLongPressAvatar={
+                    counterparty?.avatar_url
+                      ? () => setAvatarUri(counterparty.avatar_url!)
+                      : undefined
+                  }
+                />
+              );
+            }}
             contentContainerStyle={styles.messages}
             onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
             showsVerticalScrollIndicator={false}
@@ -327,50 +596,118 @@ export function ChatScreen() {
           </View>
         ) : (
           <>
-            {!isSelfConversation && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.templatesRow}
-                contentContainerStyle={styles.templatesContent}
-                keyboardShouldPersistTaps="handled"
-              >
-                {CHAT_TEMPLATES.map((template) => (
-                  <Pressable
-                    key={template}
-                    style={styles.templateChip}
-                    onPress={() => handleTemplate(template)}
-                    disabled={sending}
-                  >
-                    <Text style={styles.templateText}>{template}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
+            {!isSelfConversation && !replyTo && (
+              <QuickReplies onSelect={handleTemplate} disabled={sending} />
             )}
 
-            <View style={styles.inputRow}>
+            {/* Quoted-reply chip: what you're replying to, above the input,
+                with a way to back out — same as WhatsApp. */}
+            {replyTo && !recorder.isRecording && (
+              <View style={styles.replyBar}>
+                <View style={styles.replyAccent} />
+                <View style={styles.replyBody}>
+                  <Text style={styles.replyName} numberOfLines={1}>
+                    Replying to{' '}
+                    {replyTo.sender_id === user?.id
+                      ? 'yourself'
+                      : counterparty?.full_name ?? 'them'}
+                  </Text>
+                  <Text style={styles.replyText} numberOfLines={1}>
+                    {messagePreviewText(replyTo)}
+                  </Text>
+                </View>
+                {replyTo.image_url ? (
+                  <Image source={{ uri: replyTo.image_url }} style={styles.replyThumb} />
+                ) : null}
+                <Pressable
+                  onPress={() => setReplyTo(null)}
+                  hitSlop={10}
+                  accessibilityLabel="Cancel reply"
+                >
+                  <Ionicons name="close" size={18} color={colors.textMuted} />
+                </Pressable>
+              </View>
+            )}
+
+            {recorder.isRecording && (
+              <View style={styles.recordingBar}>
+                <View style={styles.recordingDot} />
+                <Text style={styles.recordingTime}>
+                  {formatClipDuration(recorder.durationMs)}
+                </Text>
+                <Text style={styles.recordingHint}>
+                  Release to send · slide off to cancel
+                </Text>
+              </View>
+            )}
+
+            {/* paddingBottom carries the home-indicator inset here rather than
+                on the SafeAreaView, so the composer's own surface colour runs
+                to the bottom of the screen instead of leaving a bare gap. It
+                drops to zero while the keyboard is up, since the inset area is
+                covered by the keyboard then. */}
+            <View
+              style={[
+                styles.inputRow,
+                { paddingBottom: spacing.sm + (keyboardUp ? 0 : insets.bottom) },
+              ]}
+            >
               {Platform.OS !== 'web' && (
-                <Pressable onPress={pickFromCamera} style={styles.iconBtn} hitSlop={6}>
+                <Pressable
+                  onPress={pickFromCamera}
+                  style={styles.iconBtn}
+                  hitSlop={6}
+                  disabled={recorder.isRecording}
+                >
                   <Ionicons name="camera-outline" size={22} color={colors.primary} />
                 </Pressable>
               )}
-              <Pressable onPress={pickFromLibrary} style={styles.iconBtn} hitSlop={6}>
+              <Pressable
+                onPress={pickFromLibrary}
+                style={styles.iconBtn}
+                hitSlop={6}
+                disabled={recorder.isRecording}
+              >
                 <Ionicons name="image-outline" size={22} color={colors.primary} />
               </Pressable>
-              <TextInput
-                style={styles.input}
-                value={text}
-                onChangeText={setText}
-                placeholder="Message…"
-                placeholderTextColor={colors.textSubtle}
-                multiline
-              />
+
+              {Platform.OS !== 'web' && (
+                <Pressable
+                  onPressIn={handleMicPressIn}
+                  onPressOut={handleMicPressOut}
+                  style={[styles.iconBtn, recorder.isRecording && styles.iconBtnActive]}
+                  hitSlop={6}
+                  disabled={sending}
+                  accessibilityLabel="Hold to record a voice message"
+                >
+                  <Ionicons
+                    name={recorder.isRecording ? 'stop' : 'mic-outline'}
+                    size={22}
+                    color={recorder.isRecording ? colors.onPrimary : colors.primary}
+                  />
+                </Pressable>
+              )}
+
+              {recorder.isRecording ? (
+                <Text style={styles.recordingFill}>Recording…</Text>
+              ) : (
+                <TextInput
+                  style={styles.input}
+                  value={text}
+                  onChangeText={setText}
+                  placeholder="Message…"
+                  placeholderTextColor={colors.textSubtle}
+                  multiline
+                />
+              )}
+
               <Pressable
                 onPress={handleSendText}
-                disabled={!text.trim() || sending}
+                disabled={!text.trim() || sending || recorder.isRecording}
                 style={[
                   styles.sendBtn,
-                  (!text.trim() || sending) && styles.sendBtnDisabled,
+                  (!text.trim() || sending || recorder.isRecording) &&
+                    styles.sendBtnDisabled,
                 ]}
               >
                 <Ionicons name="arrow-up" size={20} color={colors.onPrimary} />
@@ -386,6 +723,45 @@ export function ChatScreen() {
         onSelect={handleSelectReaction}
         onRemove={handleRemoveReaction}
         onClose={() => setReactionTarget(null)}
+      />
+
+      <PhotoViewer
+        visible={!!viewerUri}
+        uri={viewerUri}
+        onClose={() => setViewerUri(null)}
+      />
+
+      {/* Profile pictures: full-screen and zoomable, but no share sheet. */}
+      <PhotoViewer
+        visible={!!avatarUri}
+        uri={avatarUri}
+        onClose={() => setAvatarUri(null)}
+        allowShare={false}
+      />
+
+      <ActionSheet
+        visible={!!menuTarget}
+        title="Message"
+        items={messageMenuItems}
+        onClose={() => setMenuTarget(null)}
+      />
+
+      <AmountPrompt
+        visible={!!counterTarget}
+        title="Counter offer"
+        message={
+          counterTarget
+            ? `Currently ${formatBudget(counterTarget.amount_cents)}. Propose a different amount.`
+            : ''
+        }
+        initialCents={counterTarget?.amount_cents ?? null}
+        confirmText="Send counter"
+        onCancel={() => setCounterTarget(null)}
+        onSubmit={(cents) => {
+          const target = counterTarget;
+          setCounterTarget(null);
+          if (target) respondToRequest(target, 'counter', cents);
+        }}
       />
     </SafeAreaView>
   );
@@ -403,6 +779,9 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  list: {
+    flex: 1,
   },
   messages: {
     padding: spacing.lg,
@@ -436,62 +815,133 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     lineHeight: 20,
   },
-  templatesRow: {
-    flexGrow: 0,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  templatesContent: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  templateChip: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySoft,
-  },
-  templateText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.primary,
-  },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    // `center`, not `flex-end`: with flex-end the 36px icons sat flush to the
+    // bottom while the 40px-min input's text baseline sat higher, which read
+    // as the input floating up and to the right of the icons. Centring aligns
+    // every control on one axis regardless of how tall the input grows.
+    alignItems: 'center',
     gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
+    // Slightly tighter than the icons' own inset so the row's outer edges are
+    // optically even with the 36/40px round controls sitting inside it.
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
     backgroundColor: colors.surface,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: CONTROL_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  requestRow: {
+    flexDirection: 'row',
+    marginBottom: spacing.md,
+  },
+  requestRowOwn: {
+    justifyContent: 'flex-end',
+    paddingLeft: 24,
+  },
+  requestRowOther: {
+    justifyContent: 'flex-start',
+    paddingRight: 24,
+  },
+  replyBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.primarySoft,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  replyAccent: {
+    width: 3,
+    alignSelf: 'stretch',
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+  },
+  replyBody: {
+    flex: 1,
+    gap: 1,
+  },
+  replyName: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  replyText: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  replyThumb: {
+    width: 34,
+    height: 34,
+    borderRadius: radius.sm,
+    backgroundColor: colors.border,
+  },
+  iconBtnActive: {
+    backgroundColor: colors.danger,
+  },
+  recordingBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.dangerBg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  recordingDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.danger,
+  },
+  recordingTime: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.danger,
+    fontVariant: ['tabular-nums'],
+  },
+  recordingHint: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.danger,
+  },
+  recordingFill: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.textMuted,
+    paddingVertical: spacing.sm + 2,
+  },
   input: {
     flex: 1,
-    minHeight: 40,
+    // Matches the 38px control size either side of it, so the input's box and
+    // the round buttons share one height and one centre line.
+    minHeight: CONTROL_SIZE,
     maxHeight: 100,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    // Vertically centres the text within the 38px box on both platforms;
+    // paddingVertical alone left it sitting high next to the icons.
+    paddingTop: Platform.OS === 'ios' ? 10 : 8,
+    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
     fontSize: 15,
+    lineHeight: 19,
     color: colors.text,
     backgroundColor: colors.background,
   },
   sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: CONTROL_SIZE,
+    height: CONTROL_SIZE,
+    borderRadius: CONTROL_SIZE / 2,
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',

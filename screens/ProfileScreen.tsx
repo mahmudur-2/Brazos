@@ -15,6 +15,8 @@ import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
+import { PastWork } from '../components/PastWork';
+import { PortfolioPicker } from '../components/PortfolioPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
@@ -52,6 +54,9 @@ export function ProfileScreen() {
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [saving, setSaving] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  // Bumped after the picker adds an item, so PastWork refetches.
+  const [portfolioVersion, setPortfolioVersion] = useState(0);
 
   const loadedRef = useRef<string | null>(null);
 
@@ -345,6 +350,15 @@ export function ProfileScreen() {
             )}
           </Card>
 
+          {user && (
+            <PastWork
+              workerId={user.id}
+              editable
+              onManage={() => setPickerOpen(true)}
+              refreshToken={portfolioVersion}
+            />
+          )}
+
           {profile?.is_admin && (
             <Button
               title="Review reports (admin)"
@@ -360,6 +374,15 @@ export function ProfileScreen() {
             loading={loggingOut}
           />
         </ScrollView>
+      )}
+
+      {user && (
+        <PortfolioPicker
+          visible={pickerOpen}
+          workerId={user.id}
+          onClose={() => setPickerOpen(false)}
+          onAdded={() => setPortfolioVersion((v) => v + 1)}
+        />
       )}
     </SafeAreaView>
   );

@@ -8,6 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
+import { MapPinIcon } from './MapPinIcon';
 import { useThemeColors } from '../hooks/useThemeColors';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
@@ -28,7 +29,12 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>
-        <ActivityIndicator size="large" color={palette.primary} />
+        <MapPinIcon size={80} />
+        <ActivityIndicator
+          size="small"
+          color={palette.primary}
+          style={styles.loadingSpinner}
+        />
       </View>
     );
   }
@@ -36,9 +42,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   if (cells.length === 0) {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>
-        <View style={[styles.emptyIcon, { backgroundColor: palette.primarySoft }]}>
-          <Ionicons name="map-outline" size={32} color={palette.primary} />
-        </View>
+        <MapPinIcon size={88} />
         <Text style={[styles.emptyTitle, { color: palette.text }]}>No hotspots yet</Text>
         <Text style={[styles.emptyText, { color: palette.textMuted }]}>
           Hotspots appear here as more jobs are posted nearby.
@@ -103,13 +107,8 @@ const styles = StyleSheet.create({
     padding: spacing.xl,
     gap: spacing.sm,
   },
-  emptyIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.sm,
+  loadingSpinner: {
+    marginTop: spacing.md,
   },
   emptyTitle: {
     fontSize: 18,

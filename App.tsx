@@ -29,6 +29,7 @@ import { MessagesInboxScreen } from './screens/MessagesInboxScreen';
 import { MapScreen } from './screens/MapScreen';
 import { CellJobsScreen } from './screens/CellJobsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
+import { WorkerProfileScreen } from './screens/WorkerProfileScreen';
 import { AdminReportsScreen } from './screens/AdminReportsScreen';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -56,6 +57,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="PostJob" component={PostJobScreen} />
       <HomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
       <HomeStack.Screen name="JobDetail" component={JobDetailScreen} />
+      <HomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -69,6 +71,7 @@ function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="JobDetail" component={JobDetailScreen} />
       <MyJobsStack.Screen name="Chat" component={ChatScreen} />
       <MyJobsStack.Screen name="PostJob" component={PostJobScreen} />
+      <MyJobsStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
     </MyJobsStack.Navigator>
   );
 }
@@ -79,6 +82,7 @@ function MessagesStackNavigator() {
       <MessagesStack.Screen name="MessagesInbox" component={MessagesInboxScreen} />
       <MessagesStack.Screen name="Chat" component={ChatScreen} />
       <MessagesStack.Screen name="PostJob" component={PostJobScreen} />
+      <MessagesStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
     </MessagesStack.Navigator>
   );
 }
@@ -98,6 +102,8 @@ function MapStackNavigator() {
       <MapStack.Screen name="MapMain" component={MapScreen} />
       <MapStack.Screen name="CellJobs" component={CellJobsScreen} />
       <MapStack.Screen name="JobDetail" component={JobDetailScreen} />
+      <MapStack.Screen name="PostJob" component={PostJobScreen} />
+      <MapStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
     </MapStack.Navigator>
   );
 }

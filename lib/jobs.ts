@@ -54,6 +54,12 @@ export type Job = {
   completion_photo_url: string | null;
   /** Photos the client attached when posting (phase13). Max 5, may be empty. */
   photos: string[];
+  /**
+   * Photos the worker attached when marking the job complete (phase17).
+   * Use completionPhotosOf() rather than reading this directly — it folds in
+   * the legacy single completion_photo_url for jobs finished before phase17.
+   */
+  completion_photos: string[];
 };
 
 /** `photos` is jsonb; tolerate null/legacy rows and non-array values. */
@@ -78,7 +84,23 @@ export function mapJobRow(row: any): Job {
     final_amount_cents: row.final_amount_cents ?? null,
     completion_photo_url: row.completion_photo_url ?? null,
     photos: toPhotoArray(row.photos),
+    completion_photos: toPhotoArray(row.completion_photos),
   };
+}
+
+/**
+ * Every completion photo for a job, newest schema first. Jobs completed
+ * before phase17 only have the single completion_photo_url, so that is folded
+ * in when the array is empty — otherwise older finished jobs would appear to
+ * have lost their photo.
+ */
+export function completionPhotosOf(job: {
+  completion_photos?: string[] | null;
+  completion_photo_url?: string | null;
+}): string[] {
+  const list = job.completion_photos ?? [];
+  if (list.length > 0) return list;
+  return job.completion_photo_url ? [job.completion_photo_url] : [];
 }
 
 export type NewJobInput = {
@@ -195,10 +217,89 @@ export async function createJob(clientId: string, input: NewJobInput) {
       lat: input.coords.lat,
       lng: input.coords.lng,
     });
-    if (locErr) locationError = locErr;
+    if (locErr) {
+      // Surface the real cause (RLS denial, network error, etc.) instead of
+      // silently dropping it — the caller only sees a generic "no map pin"
+      // notice, so this is the only place the actual reason is visible.
+      console.error('[jobs] job_locations insert failed', locErr);
+      locationError = locErr;
+    }
   }
 
   return { data: data as Job, error: null, locationError };
+}
+
+/**
+ * Update a job's postable details (title/description/category/location/
+ * budget/photos). Only reachable from the UI while the job has zero bids
+ * (see ClientJobDetailScreen) — enforced there rather than in RLS because
+ * the existing jobs_update_own policy also has to keep working for
+ * acceptBid()/cancellation after bids exist, so it can't be narrowed to
+ * zero-bid-only without breaking those.
+ */
+export async function updateJob(jobId: string, input: NewJobInput) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .update({
+      title: input.title,
+      description: input.description,
+      category: input.category,
+      location: input.location,
+      budget_cents: input.budgetCents,
+      photos: input.photos ?? [],
+    })
+    .eq('id', jobId)
+    .select()
+    .single();
+
+  if (error || !data) return { data: null, error };
+
+  let locationError: { message: string } | null = null;
+  if (input.coords) {
+    const { error: locErr } = await supabase
+      .from('job_locations')
+      .upsert({ job_id: jobId, lat: input.coords.lat, lng: input.coords.lng });
+    if (locErr) {
+      console.error('[jobs] job_locations upsert failed', locErr);
+      locationError = locErr;
+    }
+  } else {
+    // Location text changed without re-pinning, so any previously saved
+    // coordinates no longer match it — drop them rather than leave a stale
+    // pin on the map.
+    const { error: delErr } = await supabase
+      .from('job_locations')
+      .delete()
+      .eq('job_id', jobId);
+    if (delErr) {
+      console.error('[jobs] job_locations delete (stale pin) failed', delErr);
+      locationError = delErr;
+    }
+  }
+
+  return { data: data as Job, error: null, locationError };
+}
+
+/**
+ * Delete a job entirely. job_locations is cleaned up automatically via its
+ * ON DELETE CASCADE foreign key back to jobs (see phase12) — no separate
+ * delete call needed here. RLS (phase14) only allows this while the job has
+ * zero bids; the UI additionally only ever shows the option in that state.
+ */
+export async function deleteJob(jobId: string) {
+  const { error } = await supabase.from('jobs').delete().eq('id', jobId);
+  return { error };
+}
+
+/** The exact coordinates saved for one job, if any (client/assigned worker only, per RLS). */
+export async function fetchJobLocation(jobId: string) {
+  const { data, error } = await supabase
+    .from('job_locations')
+    .select('lat, lng')
+    .eq('job_id', jobId)
+    .maybeSingle();
+
+  return { data: data as { lat: number; lng: number } | null, error };
 }
 
 /**
@@ -279,12 +380,19 @@ export async function fetchJobById(jobId: string) {
 export async function updateJobStatus(
   jobId: string,
   status: 'in_progress' | 'completed',
-  photoUrl?: string | null
+  photoUrls?: string[] | null
 ) {
   const patch: Record<string, unknown> = { status };
-  // Only touch completion_photo_url when we actually have one, so the update
-  // doesn't fail if that (migration-added) column isn't present yet.
-  if (photoUrl) patch.completion_photo_url = photoUrl;
+
+  // Only touch the photo columns when there's something to write, so the
+  // update doesn't fail if those (migration-added) columns aren't present yet.
+  if (photoUrls && photoUrls.length > 0) {
+    patch.completion_photos = photoUrls;
+    // Keep the legacy scalar in sync with the first photo so anything still
+    // reading completion_photo_url (older rows, external queries) sees a
+    // sensible value rather than null.
+    patch.completion_photo_url = photoUrls[0];
+  }
 
   const { error } = await supabase.from('jobs').update(patch).eq('id', jobId);
   return { error };

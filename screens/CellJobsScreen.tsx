@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -15,7 +15,10 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { fetchJobsInCell } from '../lib/hotspots';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
+import { supabase } from '../lib/supabase';
 import { colors, spacing } from '../lib/theme';
+
+const REFRESH_DEBOUNCE_MS = 1500;
 
 export function CellJobsScreen() {
   const navigation = useNavigation<MapStackNavigation>();
@@ -24,6 +27,10 @@ export function CellJobsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+
+  const instanceId = useId();
+  const runRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -37,6 +44,32 @@ export function CellJobsScreen() {
     setLoading(true);
     load();
   }, [load]);
+
+  // A job's title/category/photos/etc. can change (edit) or a job can leave
+  // this zone (deleted, or its status/location changed) while this list is
+  // open — without this, the drill-down would keep showing stale data until
+  // a manual pull-to-refresh. Debounced the same way useHotspots() is, since
+  // a burst of changes (e.g. several edits in a row) should only reload once.
+  useEffect(() => {
+    const scheduleReload = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(load, REFRESH_DEBOUNCE_MS);
+    };
+
+    const channel = supabase
+      .channel(`cell-jobs:${instanceId}:${runRef.current++}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'jobs' },
+        scheduleReload
+      )
+      .subscribe();
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [instanceId, load]);
 
   async function onRefresh() {
     setRefreshing(true);

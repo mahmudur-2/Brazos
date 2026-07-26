@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { Card } from './Card';
-import { colors, spacing } from '../lib/theme';
+import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 type ConversationRowProps = {
@@ -15,6 +15,8 @@ type ConversationRowProps = {
   unread: boolean;
   muted?: boolean;
   blocked?: boolean;
+  /** A hire request in this thread is waiting on this user's response. */
+  awaitingRequest?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
 };
@@ -28,11 +30,16 @@ export function ConversationRow({
   unread,
   muted = false,
   blocked = false,
+  awaitingRequest = false,
   onPress,
   onLongPress,
 }: ConversationRowProps) {
   return (
-    <Card onPress={onPress} onLongPress={onLongPress}>
+    <Card
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={awaitingRequest ? styles.awaitingCard : undefined}
+    >
       <View style={styles.row}>
         <Avatar name={name} uri={avatarUrl} size={48} />
 
@@ -54,7 +61,15 @@ export function ConversationRow({
             <Text style={styles.time}>{formatTimeAgo(lastMessageAt)}</Text>
           </View>
 
-          {subtitle ? (
+          {/* A waiting request outranks the job title here — it's the one
+              thing in this row that needs an answer, and with no push
+              notifications the inbox is the only place it can surface. */}
+          {awaitingRequest ? (
+            <View style={styles.requestPill}>
+              <Ionicons name="briefcase" size={11} color={colors.onPrimary} />
+              <Text style={styles.requestPillText}>Job request · needs your reply</Text>
+            </View>
+          ) : subtitle ? (
             <Text style={styles.jobTitle} numberOfLines={1}>
               {subtitle}
             </Text>
@@ -124,5 +139,25 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: 5,
     backgroundColor: colors.primary,
+  },
+  awaitingCard: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  requestPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.primary,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    marginTop: 2,
+  },
+  requestPillText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.onPrimary,
   },
 });

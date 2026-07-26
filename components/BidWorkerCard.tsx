@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
@@ -20,6 +20,8 @@ type BidWorkerCardProps = {
   /** True when this client has already had a job completed by this worker. */
   canRehire?: boolean;
   onHireAgain?: () => void;
+  /** Opens the worker's public profile (rating, bio, Past Work gallery). */
+  onViewProfile?: () => void;
 };
 
 export function BidWorkerCard({
@@ -31,6 +33,7 @@ export function BidWorkerCard({
   onAccept,
   canRehire = false,
   onHireAgain,
+  onViewProfile,
 }: BidWorkerCardProps) {
   const worker = bid.worker;
   const name = worker?.full_name ?? 'Worker';
@@ -47,7 +50,11 @@ export function BidWorkerCard({
         </View>
       )}
 
-      <View style={styles.headerRow}>
+      <Pressable
+        style={styles.headerRow}
+        onPress={onViewProfile}
+        disabled={!onViewProfile}
+      >
         <Avatar name={name} uri={worker?.avatar_url} size={48} />
         <View style={styles.headerText}>
           <View style={styles.nameRow}>
@@ -55,6 +62,9 @@ export function BidWorkerCard({
               {name}
             </Text>
             <VerificationBadge status={worker?.verification_status} />
+            {onViewProfile && (
+              <Ionicons name="chevron-forward" size={14} color={colors.textSubtle} />
+            )}
           </View>
           <View style={styles.proofRow}>
             <Ionicons name="star" size={14} color={colors.star} />
@@ -74,7 +84,7 @@ export function BidWorkerCard({
             )}
           </View>
         </View>
-      </View>
+      </Pressable>
 
       {canRehire && (
         <View style={styles.rehireTag}>

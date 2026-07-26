@@ -12,7 +12,10 @@ export type HomeStackParamList = {
    * creates the job already assigned to that worker instead of opening it for
    * bidding.
    */
-  PostJob: { hireWorkerId?: string; hireWorkerName?: string } | undefined;
+  PostJob:
+    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | undefined;
+  WorkerProfile: { workerId: string; workerName?: string };
   BrowseJobs: undefined;
   JobDetail: { job: OpenJob };
 };
@@ -28,7 +31,10 @@ export type MyJobsStackParamList = {
   JobDetail: { job: OpenJob };
   Chat: { jobId: string };
   // Registered here too so "Hire Again" on a bid card can open it in place.
-  PostJob: { hireWorkerId?: string; hireWorkerName?: string } | undefined;
+  PostJob:
+    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | undefined;
+  WorkerProfile: { workerId: string; workerName?: string };
 };
 
 export type MyJobsStackNavigation = NativeStackNavigationProp<MyJobsStackParamList>;
@@ -38,7 +44,10 @@ export type MessagesStackParamList = {
   MessagesInbox: undefined;
   Chat: { jobId: string };
   // "Hire Again" from a past conversation.
-  PostJob: { hireWorkerId?: string; hireWorkerName?: string } | undefined;
+  PostJob:
+    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | undefined;
+  WorkerProfile: { workerId: string; workerName?: string };
 };
 
 export type MessagesStackNavigation = NativeStackNavigationProp<MessagesStackParamList>;
@@ -50,6 +59,12 @@ export type MapStackParamList = {
   MapMain: undefined;
   CellJobs: { ilat: number; ilng: number; count: number };
   JobDetail: { job: OpenJob };
+  // Registered so "Edit job" works when a job's own poster reaches its
+  // detail screen via a Map/zone drill-down, not just from My Jobs.
+  PostJob:
+    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | undefined;
+  WorkerProfile: { workerId: string; workerName?: string };
 };
 
 export type MapStackNavigation = NativeStackNavigationProp<MapStackParamList>;
@@ -76,6 +91,15 @@ export type JobDetailRouteParamList = { JobDetail: { job: OpenJob } };
 // PostJob is registered in HomeStack, MyJobsStack and MessagesStack (posting
 // normally, plus "Hire Again" from a bid card or a past conversation). Same
 // standalone-type treatment as Chat/JobDetail.
+// WorkerProfile is registered in every stack that can surface another user
+// (a bid card, a chat counterparty), so like Chat/JobDetail/PostJob it gets a
+// standalone route-param type rather than being tied to one parent stack.
+export type WorkerProfileRouteParamList = {
+  WorkerProfile: { workerId: string; workerName?: string };
+};
+
 export type PostJobRouteParamList = {
-  PostJob: { hireWorkerId?: string; hireWorkerName?: string } | undefined;
+  PostJob:
+    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | undefined;
 };

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { fetchHotspots, type HotspotCell } from '../lib/hotspots';
 import { supabase } from '../lib/supabase';
 
@@ -19,6 +19,12 @@ export function useHotspots() {
   const [error, setError] = useState<string | null>(null);
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // See useOpenJobs.ts for why the channel topic needs both a per-instance id
+  // and a per-effect-run counter: supabase.channel() dedupes by topic string,
+  // and removeChannel() tears down asynchronously, so a fast remount can
+  // otherwise hand back a still-subscribing channel and throw on .on().
+  const instanceId = useId();
+  const runRef = useRef(0);
 
   const refresh = useCallback(async () => {
     const { data, error } = await fetchHotspots();
@@ -42,7 +48,7 @@ export function useHotspots() {
     };
 
     const channel = supabase
-      .channel('hotspots:jobs')
+      .channel(`hotspots:jobs:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'jobs' },
@@ -54,7 +60,7 @@ export function useHotspots() {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [refresh]);
+  }, [refresh, instanceId]);
 
   return { cells, loading, error, refresh };
 }
