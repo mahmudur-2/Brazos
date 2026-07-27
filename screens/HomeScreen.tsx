@@ -33,8 +33,12 @@ export function HomeScreen() {
         <HomeGreeting firstName={firstName} />
 
         <View style={styles.actions}>
-          <Button title="Post a Job" onPress={() => navigation.navigate('PostJob')} />
-          <Button title="Find Work" variant="secondary" onPress={goToFindWork} />
+          <Button
+            title="Post a Job"
+            size="lg"
+            onPress={() => navigation.navigate('PostJob')}
+          />
+          <Button title="Find Work" variant="secondary" size="lg" onPress={goToFindWork} />
         </View>
 
         <View style={styles.previewSection}>
@@ -73,10 +77,13 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
-    gap: spacing.xxl,
+    // Bigger buttons get more surrounding room too, pushing the preview
+    // section further down — a single shared gap keeps it even between
+    // every section rather than hand-tuning each one separately.
+    gap: spacing.xxl + spacing.lg,
   },
   actions: {
-    gap: spacing.md,
+    gap: spacing.lg,
   },
   previewSection: {
     flex: 1,
