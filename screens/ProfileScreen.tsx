@@ -418,6 +418,36 @@ export function ProfileScreen() {
             />
           )}
 
+          <Card>
+            <Text style={styles.settingsTitle}>Settings</Text>
+            <Pressable
+              style={styles.settingsRow}
+              onPress={() => navigation.navigate('NotificationSettings')}
+            >
+              <Ionicons name="notifications-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Notifications</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('LegalDocument', { document: 'terms' })}
+            >
+              <Ionicons name="document-text-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Terms of Service</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('LegalDocument', { document: 'privacy' })}
+            >
+              <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Privacy Policy</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+          </Card>
+
           {profile?.is_admin && (
             <Button
               title="Review reports (admin)"
@@ -637,5 +667,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: colors.textMuted,
+  },
+  settingsTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  settingsRowDivider: {
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  settingsLabel: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.text,
   },
 });

@@ -9,6 +9,7 @@ import React, {
 import { AppState } from 'react-native';
 import type { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { unregisterPushToken } from './pushNotifications';
 
 type AuthResult = { error: AuthError | null };
 
@@ -127,6 +128,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         return { error };
       },
       logout: async () => {
+        // Detach this device BEFORE the session goes away — the update is
+        // RLS-scoped to the signed-in user, so it would be rejected after
+        // sign-out. Without it, the next person to sign in on this phone would
+        // keep receiving the previous user's notifications.
+        await unregisterPushToken();
         const { error } = await supabase.auth.signOut();
         return { error };
       },

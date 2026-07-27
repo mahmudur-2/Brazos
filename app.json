@@ -6,10 +6,13 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "scheme": "brazos",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.brazos.app"
     },
     "android": {
+      "package": "com.brazos.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,6 +42,12 @@
         "expo-audio",
         {
           "microphonePermission": "Allow Brazos to use the microphone so you can send voice messages in chat."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#1F4D3A"
         }
       ]
     ]

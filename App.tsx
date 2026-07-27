@@ -1,4 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
+import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -8,6 +9,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
+import { usePushNotifications } from './hooks/usePushNotifications';
+import { configurePushHandling } from './lib/pushNotifications';
+import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
 import type {
   HomeStackParamList,
   MapStackParamList,
@@ -31,6 +35,10 @@ import { CellJobsScreen } from './screens/CellJobsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { WorkerProfileScreen } from './screens/WorkerProfileScreen';
 import { AdminReportsScreen } from './screens/AdminReportsScreen';
+import { NotificationSettingsScreen } from './screens/NotificationSettingsScreen';
+import { LegalDocumentScreen } from './screens/LegalDocumentScreen';
+import { LegalGateScreen } from './screens/LegalGateScreen';
+import { useLegalGate } from './hooks/useLegalGate';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -92,6 +100,11 @@ function ProfileStackNavigator() {
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
       <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
       <ProfileStack.Screen name="AdminReports" component={AdminReportsScreen} />
+      <ProfileStack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+      />
+      <ProfileStack.Screen name="LegalDocument" component={LegalDocumentScreen} />
     </ProfileStack.Navigator>
   );
 }
@@ -147,8 +160,13 @@ function MainTabs() {
 
 function RootNavigator() {
   const { user, loading } = useAuth();
+  const legal = useLegalGate();
 
-  if (loading) {
+  // Lives inside NavigationContainer so a tapped notification always has a
+  // mounted container to route through.
+  usePushNotifications();
+
+  if (loading || (user && legal.state === 'loading')) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -156,14 +174,36 @@ function RootNavigator() {
     );
   }
 
-  return user ? <MainTabs /> : <AuthScreen />;
+  if (!user) return <AuthScreen />;
+
+  // Sits between authentication and the app itself, so it covers both cases
+  // with one gate: a brand-new account meets it the moment sign-up completes
+  // (nothing is usable before it), and an existing account meets it on the
+  // next launch after the documents change.
+  if (legal.state === 'needs_acceptance') {
+    return <LegalGateScreen onAccepted={legal.markAccepted} />;
+  }
+
+  return <MainTabs />;
 }
 
 export default function App() {
+  // Foreground presentation + the Android channel. Set before anything can
+  // arrive, and independent of auth — a notification can land while the app is
+  // on the sign-in screen.
+  useEffect(() => {
+    configurePushHandling();
+  }, []);
+
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer>
+        <NavigationContainer
+          ref={navigationRef}
+          // A cold-start tap is delivered before this mounts, so the routing
+          // it requested is parked and replayed here.
+          onReady={flushPendingNavigation}
+        >
           <RootNavigator />
           <StatusBar style="auto" />
         </NavigationContainer>

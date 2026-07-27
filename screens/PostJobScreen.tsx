@@ -34,6 +34,7 @@ import {
 } from '../lib/jobs';
 import { createJobRequest } from '../lib/jobRequests';
 import { alertAsync } from '../lib/dialog';
+import { maybePromptForPush } from '../lib/pushNotifications';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { uploadJobAttachment } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
@@ -282,6 +283,18 @@ export function PostJobScreen() {
       await alertAsync(
         'Saved, but without a map pin',
         `Your job is live, but we couldn't save its location for the map: ${locationError.message}`
+      );
+    }
+
+    // First good moment to ask: they've just posted work and have a concrete
+    // reason to want alerts. Only on a genuinely new post — editing an
+    // existing job isn't the same moment. Deliberately not awaited so the
+    // success animation isn't held up behind a dialog.
+    if (!isEditing) {
+      maybePromptForPush(
+        isHiring
+          ? 'Get told the moment they accept, decline, or counter your offer.'
+          : 'Get told the moment a worker bids on your job.'
       );
     }
 

@@ -73,9 +73,18 @@ export type MapStackNavigation = NativeStackNavigationProp<MapStackParamList>;
 export type ProfileStackParamList = {
   ProfileMain: undefined;
   AdminReports: undefined;
+  NotificationSettings: undefined;
+  LegalDocument: { document: 'terms' | 'privacy' };
 };
 
 export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParamList>;
+
+// LegalDocument is only registered in ProfileStack, but gets a standalone
+// route-param type for the same reason as Chat/JobDetail: the screen only
+// needs its own params and goBack().
+export type LegalDocumentRouteParamList = {
+  LegalDocument: { document: 'terms' | 'privacy' };
+};
 
 // Chat is registered in both MyJobsStack and MessagesStack (reached from a job's
 // detail screen or from the inbox). It only needs its own route param shape and

@@ -140,6 +140,74 @@ const MIGRATIONS = [
         checkRpc('portfolio_category_freeform_enabled', {})],
     ],
   },
+  {
+    file: 'phase20_push_notifications.sql',
+    checks: [
+      ['push_tokens table', () => checkColumn('push_tokens', 'id')],
+      ['push_tokens.user_id', () => checkColumn('push_tokens', 'user_id')],
+      ['push_tokens.token', () => checkColumn('push_tokens', 'token')],
+      ['push_tokens.platform', () => checkColumn('push_tokens', 'platform')],
+      ['push_tokens.active', () => checkColumn('push_tokens', 'active')],
+      ['notification_prefs table', () => checkColumn('notification_prefs', 'user_id')],
+      ['notification_prefs.messages', () => checkColumn('notification_prefs', 'messages')],
+      ['notification_prefs.bids', () => checkColumn('notification_prefs', 'bids')],
+      ['notification_prefs.job_updates', () =>
+        checkColumn('notification_prefs', 'job_updates')],
+      ['notification_prefs.hire_requests', () =>
+        checkColumn('notification_prefs', 'hire_requests')],
+      ['notification_prefs.nearby_jobs', () =>
+        checkColumn('notification_prefs', 'nearby_jobs')],
+      ['notification_prefs.nearby_radius_miles', () =>
+        checkColumn('notification_prefs', 'nearby_radius_miles')],
+      ['notification_prefs.home_lat', () => checkColumn('notification_prefs', 'home_lat')],
+      ['notification_prefs.home_lng', () => checkColumn('notification_prefs', 'home_lng')],
+      ['notification_outbox table', () => checkColumn('notification_outbox', 'id')],
+      ['notification_outbox.recipient_id', () =>
+        checkColumn('notification_outbox', 'recipient_id')],
+      ['notification_outbox.category', () =>
+        checkColumn('notification_outbox', 'category')],
+      ['notification_outbox.dedupe_key', () =>
+        checkColumn('notification_outbox', 'dedupe_key')],
+      ['notification_outbox.status', () => checkColumn('notification_outbox', 'status')],
+      ['rpc register_push_token()', () =>
+        checkRpc('register_push_token', { p_token: '', p_platform: 'unknown' })],
+      ['rpc should_notify()', () =>
+        checkRpc('should_notify', {
+          p_recipient: ZERO_UUID,
+          p_actor: ZERO_UUID,
+          p_category: 'messages',
+        })],
+      // service_role-only. A permission-denied answer still proves it exists —
+      // only PGRST202 (no such function) counts as missing.
+      ['rpc claim_notification_batch()', () =>
+        checkRpc('claim_notification_batch', { p_limit: 1 })],
+      ['rpc resolve_notification()', () =>
+        checkRpc('resolve_notification', {
+          p_outbox_id: ZERO_UUID,
+          p_status: 'sent',
+          p_error: null,
+        })],
+      ['rpc deactivate_push_token()', () =>
+        checkRpc('deactivate_push_token', { p_token: '' })],
+      ['rpc push_notifications_enabled()', () =>
+        checkRpc('push_notifications_enabled', {})],
+    ],
+  },
+  {
+    file: 'phase21_legal_acceptance.sql',
+    checks: [
+      ['legal_acceptances table', () => checkColumn('legal_acceptances', 'id')],
+      ['legal_acceptances.user_id', () => checkColumn('legal_acceptances', 'user_id')],
+      ['legal_acceptances.document', () => checkColumn('legal_acceptances', 'document')],
+      ['legal_acceptances.version', () => checkColumn('legal_acceptances', 'version')],
+      ['legal_acceptances.accepted_at', () =>
+        checkColumn('legal_acceptances', 'accepted_at')],
+      ['rpc accept_legal_documents()', () =>
+        checkRpc('accept_legal_documents', { p_documents: [] })],
+      ['rpc legal_acceptance_enabled()', () =>
+        checkRpc('legal_acceptance_enabled', {})],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

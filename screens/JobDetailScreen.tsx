@@ -31,6 +31,7 @@ import {
 } from '../lib/jobs';
 import { createBid, fetchMyBidForJob, type Bid } from '../lib/bids';
 import { alertAsync } from '../lib/dialog';
+import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
@@ -106,6 +107,13 @@ export function JobDetailScreen() {
     }
 
     await alertAsync('Bid placed', 'The client can now see your bid.');
+
+    // Second good moment to ask: they have a bid in flight whose outcome they
+    // now care about. No-ops if the PostJob path already asked.
+    await maybePromptForPush(
+      'Get told the moment this client accepts your bid — and when new jobs like this are posted.'
+    );
+
     // Show the worker their pending bid in the My Jobs hub tab.
     navigation.getParent()?.navigate('MyJobs' as never);
   }
