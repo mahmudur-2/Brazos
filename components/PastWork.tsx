@@ -11,7 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { PhotoViewer } from './PhotoViewer';
-import { JOB_CATEGORY_LABELS, type JobCategory } from '../lib/jobs';
+import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
   categoriesInPortfolio,
   fetchPortfolio,
@@ -54,7 +54,7 @@ export function PastWork({
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [stats, setStats] = useState<CategoryStat[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<JobCategory | typeof ALL>(ALL);
+  const [filter, setFilter] = useState<string>(ALL);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -148,7 +148,7 @@ export function PastWork({
                   {categories.map((c) => (
                     <FilterTab
                       key={c}
-                      label={JOB_CATEGORY_LABELS[c] ?? c}
+                      label={(JOB_CATEGORY_LABELS as Record<string, string>)[c] ?? c}
                       active={filter === c}
                       onPress={() => setFilter(c)}
                     />
@@ -182,7 +182,8 @@ export function PastWork({
                     )}
 
                     <Text style={styles.tileCategory}>
-                      {JOB_CATEGORY_LABELS[item.category] ?? item.category}
+                      {(JOB_CATEGORY_LABELS as Record<string, string>)[item.category] ??
+                        item.category}
                     </Text>
                     {item.caption ? (
                       <Text style={styles.tileCaption} numberOfLines={2}>

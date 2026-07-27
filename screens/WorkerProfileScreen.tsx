@@ -3,9 +3,10 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-nat
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from '../components/Avatar';
+import { AvatarPressable } from '../components/AvatarPressable';
 import { Card } from '../components/Card';
 import { PastWork } from '../components/PastWork';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { VerificationBadge } from '../components/VerificationBadge';
 import {
@@ -31,6 +32,7 @@ export function WorkerProfileScreen() {
   const { params } = useRoute<RouteProp<WorkerProfileRouteParamList, 'WorkerProfile'>>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -64,7 +66,14 @@ export function WorkerProfileScreen() {
         >
           <Card>
             <View style={styles.headerRow}>
-              <Avatar name={name} uri={profile?.avatar_url} size={64} />
+              <AvatarPressable
+                name={name}
+                uri={profile?.avatar_url}
+                size={64}
+                onLongPress={
+                  profile?.avatar_url ? () => setAvatarUri(profile.avatar_url) : undefined
+                }
+              />
               <View style={styles.headerText}>
                 <View style={styles.nameRow}>
                   <Text style={styles.name} numberOfLines={1}>
@@ -110,6 +119,13 @@ export function WorkerProfileScreen() {
           <PastWork workerId={params.workerId} />
         </ScrollView>
       )}
+
+      <PhotoViewer
+        visible={!!avatarUri}
+        uri={avatarUri}
+        onClose={() => setAvatarUri(null)}
+        allowShare={false}
+      />
     </SafeAreaView>
   );
 }

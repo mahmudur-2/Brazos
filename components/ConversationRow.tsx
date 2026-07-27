@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from './Avatar';
+import { AvatarPressable } from './AvatarPressable';
 import { Card } from './Card';
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
@@ -19,6 +19,10 @@ type ConversationRowProps = {
   awaitingRequest?: boolean;
   onPress: () => void;
   onLongPress?: () => void;
+  /** Long-press specifically on the avatar — opens it full-screen. Separate
+   *  from onLongPress above (the row's own long-press opens the moderation
+   *  menu); the two are independent nested Pressables. */
+  onLongPressAvatar?: () => void;
 };
 
 export function ConversationRow({
@@ -33,6 +37,7 @@ export function ConversationRow({
   awaitingRequest = false,
   onPress,
   onLongPress,
+  onLongPressAvatar,
 }: ConversationRowProps) {
   return (
     <Card
@@ -41,7 +46,12 @@ export function ConversationRow({
       style={awaitingRequest ? styles.awaitingCard : undefined}
     >
       <View style={styles.row}>
-        <Avatar name={name} uri={avatarUrl} size={48} />
+        <AvatarPressable
+          name={name}
+          uri={avatarUrl}
+          size={48}
+          onLongPress={onLongPressAvatar}
+        />
 
         <View style={styles.content}>
           <View style={styles.topRow}>

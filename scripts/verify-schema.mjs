@@ -130,6 +130,16 @@ const MIGRATIONS = [
       ['rpc my_pending_job_requests()', () => checkRpc('my_pending_job_requests', {})],
     ],
   },
+  {
+    file: 'phase19_portfolio_category_freeform.sql',
+    checks: [
+      // A CHECK-constraint swap has no shape a PostgREST schema probe can
+      // see, so this marker function's existence is what phase19 actually
+      // ran registers as — see the SQL file for why.
+      ['rpc portfolio_category_freeform_enabled()', () =>
+        checkRpc('portfolio_category_freeform_enabled', {})],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

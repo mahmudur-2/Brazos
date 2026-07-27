@@ -5,13 +5,22 @@ import type { JobCategory } from './jobs';
  *  limit holds even outside this client. */
 export const MAX_PORTFOLIO_ITEMS = 20;
 export const MAX_CAPTION_LENGTH = 140;
+/** Enough to force an actual sentence, not a one-word placeholder caption. */
+export const MIN_DESCRIPTION_LENGTH = 10;
 
 export type PortfolioItem = {
   id: string;
   worker_id: string;
   source_job_id: string | null;
   photo_url: string;
-  category: JobCategory;
+  /**
+   * A JOB_CATEGORIES key ('handyman', 'dog_walking', …) OR free text typed
+   * against the "Other" option (phase19 — the column isn't enum-constrained,
+   * so a custom category isn't rejected). Look up JOB_CATEGORY_LABELS with a
+   * raw-string fallback when displaying it, same as everywhere else category
+   * labels are shown in this app.
+   */
+  category: string;
   caption: string | null;
   display_order: number;
   created_at: string;
@@ -106,8 +115,10 @@ export type NewPortfolioItem = {
   workerId: string;
   sourceJobId: string | null;
   photoUrl: string;
-  category: JobCategory;
-  caption?: string | null;
+  category: string;
+  /** Required — see MIN_DESCRIPTION_LENGTH. Named `caption` in storage for
+   *  schema continuity, but the UI now requires a real description. */
+  caption: string;
 };
 
 export async function addPortfolioItem(input: NewPortfolioItem, displayOrder: number) {
@@ -118,7 +129,7 @@ export async function addPortfolioItem(input: NewPortfolioItem, displayOrder: nu
       source_job_id: input.sourceJobId,
       photo_url: input.photoUrl,
       category: input.category,
-      caption: input.caption?.trim() || null,
+      caption: input.caption.trim(),
       display_order: displayOrder,
     })
     .select()
@@ -127,10 +138,14 @@ export async function addPortfolioItem(input: NewPortfolioItem, displayOrder: nu
   return { data: data as PortfolioItem | null, error };
 }
 
-export async function updatePortfolioCaption(itemId: string, caption: string) {
+/** Edit an already-featured item's category and/or description in place. */
+export async function updatePortfolioItem(
+  itemId: string,
+  patch: { category: string; caption: string }
+) {
   const { error } = await supabase
     .from('portfolio_items')
-    .update({ caption: caption.trim() || null })
+    .update({ category: patch.category, caption: patch.caption.trim() })
     .eq('id', itemId);
 
   return { error };
@@ -142,8 +157,8 @@ export async function removePortfolioItem(itemId: string) {
 }
 
 /** Categories present in a gallery, in gallery order — drives the filter tabs. */
-export function categoriesInPortfolio(items: PortfolioItem[]): JobCategory[] {
-  const seen: JobCategory[] = [];
+export function categoriesInPortfolio(items: PortfolioItem[]): string[] {
+  const seen: string[] = [];
   for (const item of items) {
     if (!seen.includes(item.category)) seen.push(item.category);
   }

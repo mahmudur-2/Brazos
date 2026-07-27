@@ -1,5 +1,5 @@
 import { Pressable, Image, StyleSheet, Text, View } from 'react-native';
-import { Avatar } from './Avatar';
+import { AvatarPressable } from './AvatarPressable';
 import { VoiceNote } from './VoiceNote';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 import { formatClockTime } from '../lib/time';
@@ -43,13 +43,12 @@ export function ChatBubble({
       ]}
     >
       {!isOwn && (
-        <Pressable
+        <AvatarPressable
+          name={senderName}
+          uri={senderAvatarUrl}
+          size={28}
           onLongPress={onLongPressAvatar}
-          delayLongPress={350}
-          disabled={!onLongPressAvatar}
-        >
-          <Avatar name={senderName} uri={senderAvatarUrl} size={28} />
-        </Pressable>
+        />
       )}
 
       <Pressable

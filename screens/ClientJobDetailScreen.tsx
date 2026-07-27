@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from '../components/Avatar';
+import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { BidWorkerCard } from '../components/BidWorkerCard';
@@ -64,6 +64,7 @@ export function ClientJobDetailScreen() {
   const [worker, setWorker] = useState<Profile | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
@@ -240,6 +241,11 @@ export function ClientJobDetailScreen() {
                             })
                         : undefined
                     }
+                    onLongPressAvatar={
+                      bid.worker?.avatar_url
+                        ? () => setAvatarUri(bid.worker!.avatar_url)
+                        : undefined
+                    }
                     canRehire={!!bid.worker && rehirable.has(bid.worker.id)}
                     onHireAgain={
                       bid.worker
@@ -270,7 +276,14 @@ export function ClientJobDetailScreen() {
                 }
                 disabled={!job.assigned_worker_id}
               >
-                <Avatar name={worker?.full_name} uri={worker?.avatar_url} size={44} />
+                <AvatarPressable
+                  name={worker?.full_name}
+                  uri={worker?.avatar_url}
+                  size={44}
+                  onLongPress={
+                    worker?.avatar_url ? () => setAvatarUri(worker?.avatar_url ?? null) : undefined
+                  }
+                />
                 <View style={styles.workerText}>
                   <View style={styles.workerNameRow}>
                     <Text style={styles.workerName} numberOfLines={1}>
@@ -381,6 +394,13 @@ export function ClientJobDetailScreen() {
         visible={!!viewerUri}
         uri={viewerUri}
         onClose={() => setViewerUri(null)}
+      />
+
+      <PhotoViewer
+        visible={!!avatarUri}
+        uri={avatarUri}
+        onClose={() => setAvatarUri(null)}
+        allowShare={false}
       />
     </SafeAreaView>
   );

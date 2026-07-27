@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -25,6 +24,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { AmountPrompt } from '../components/AmountPrompt';
 import { ChatBubble } from '../components/ChatBubble';
+import { ChatComposer } from '../components/ChatComposer';
 import { JobRequestCard } from '../components/JobRequestCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { QuickReplies } from '../components/QuickReplies';
@@ -57,10 +57,6 @@ import { removeReaction, setReaction } from '../lib/reactions';
 import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
-
-/** One size for every composer control (icons, input, send) so the row reads
- *  as a single evenly-spaced strip rather than mixed heights. */
-const CONTROL_SIZE = 38;
 
 export function ChatScreen() {
   // Chat is nested in more than one tab's stack, so its nav/route types are
@@ -641,78 +637,20 @@ export function ChatScreen() {
               </View>
             )}
 
-            {/* paddingBottom carries the home-indicator inset here rather than
-                on the SafeAreaView, so the composer's own surface colour runs
-                to the bottom of the screen instead of leaving a bare gap. It
-                drops to zero while the keyboard is up, since the inset area is
-                covered by the keyboard then. */}
-            <View
-              style={[
-                styles.inputRow,
-                { paddingBottom: spacing.sm + (keyboardUp ? 0 : insets.bottom) },
-              ]}
-            >
-              {Platform.OS !== 'web' && (
-                <Pressable
-                  onPress={pickFromCamera}
-                  style={styles.iconBtn}
-                  hitSlop={6}
-                  disabled={recorder.isRecording}
-                >
-                  <Ionicons name="camera-outline" size={22} color={colors.primary} />
-                </Pressable>
-              )}
-              <Pressable
-                onPress={pickFromLibrary}
-                style={styles.iconBtn}
-                hitSlop={6}
-                disabled={recorder.isRecording}
-              >
-                <Ionicons name="image-outline" size={22} color={colors.primary} />
-              </Pressable>
-
-              {Platform.OS !== 'web' && (
-                <Pressable
-                  onPressIn={handleMicPressIn}
-                  onPressOut={handleMicPressOut}
-                  style={[styles.iconBtn, recorder.isRecording && styles.iconBtnActive]}
-                  hitSlop={6}
-                  disabled={sending}
-                  accessibilityLabel="Hold to record a voice message"
-                >
-                  <Ionicons
-                    name={recorder.isRecording ? 'stop' : 'mic-outline'}
-                    size={22}
-                    color={recorder.isRecording ? colors.onPrimary : colors.primary}
-                  />
-                </Pressable>
-              )}
-
-              {recorder.isRecording ? (
-                <Text style={styles.recordingFill}>Recording…</Text>
-              ) : (
-                <TextInput
-                  style={styles.input}
-                  value={text}
-                  onChangeText={setText}
-                  placeholder="Message…"
-                  placeholderTextColor={colors.textSubtle}
-                  multiline
-                />
-              )}
-
-              <Pressable
-                onPress={handleSendText}
-                disabled={!text.trim() || sending || recorder.isRecording}
-                style={[
-                  styles.sendBtn,
-                  (!text.trim() || sending || recorder.isRecording) &&
-                    styles.sendBtnDisabled,
-                ]}
-              >
-                <Ionicons name="arrow-up" size={20} color={colors.onPrimary} />
-              </Pressable>
-            </View>
+            <ChatComposer
+              text={text}
+              onChangeText={setText}
+              onSend={handleSendText}
+              sending={sending}
+              isRecording={recorder.isRecording}
+              onPickCamera={pickFromCamera}
+              onPickLibrary={pickFromLibrary}
+              onMicPressIn={handleMicPressIn}
+              onMicPressOut={handleMicPressOut}
+              // The inset itself drops to zero while the keyboard is up,
+              // since the inset area is covered by the keyboard then.
+              bottomInset={keyboardUp ? 0 : insets.bottom}
+            />
           </>
         )}
       </KeyboardAvoidingView>
@@ -815,27 +753,6 @@ const styles = StyleSheet.create({
     maxWidth: 280,
     lineHeight: 20,
   },
-  inputRow: {
-    flexDirection: 'row',
-    // `center`, not `flex-end`: with flex-end the 36px icons sat flush to the
-    // bottom while the 40px-min input's text baseline sat higher, which read
-    // as the input floating up and to the right of the icons. Centring aligns
-    // every control on one axis regardless of how tall the input grows.
-    alignItems: 'center',
-    gap: spacing.sm,
-    // Slightly tighter than the icons' own inset so the row's outer edges are
-    // optically even with the 36/40px round controls sitting inside it.
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    backgroundColor: colors.surface,
-  },
-  iconBtn: {
-    width: CONTROL_SIZE,
-    height: CONTROL_SIZE,
-    borderRadius: CONTROL_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   requestRow: {
     flexDirection: 'row',
     marginBottom: spacing.md,
@@ -883,9 +800,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.border,
   },
-  iconBtnActive: {
-    backgroundColor: colors.danger,
-  },
   recordingBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -912,42 +826,6 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 12,
     color: colors.danger,
-  },
-  recordingFill: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textMuted,
-    paddingVertical: spacing.sm + 2,
-  },
-  input: {
-    flex: 1,
-    // Matches the 38px control size either side of it, so the input's box and
-    // the round buttons share one height and one centre line.
-    minHeight: CONTROL_SIZE,
-    maxHeight: 100,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
-    // Vertically centres the text within the 38px box on both platforms;
-    // paddingVertical alone left it sitting high next to the icons.
-    paddingTop: Platform.OS === 'ios' ? 10 : 8,
-    paddingBottom: Platform.OS === 'ios' ? 10 : 8,
-    fontSize: 15,
-    lineHeight: 19,
-    color: colors.text,
-    backgroundColor: colors.background,
-  },
-  sendBtn: {
-    width: CONTROL_SIZE,
-    height: CONTROL_SIZE,
-    borderRadius: CONTROL_SIZE / 2,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendBtnDisabled: {
-    opacity: 0.4,
   },
   blockedNotice: {
     flexDirection: 'row',

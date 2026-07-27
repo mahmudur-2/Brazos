@@ -3,7 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
 import { BrowseJobCard } from '../components/BrowseJobCard';
-import { useAuth } from '../hooks/useAuth';
+import { HomeGreeting } from '../components/HomeGreeting';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import type { HomeStackNavigation } from '../lib/navigation';
@@ -12,7 +12,6 @@ import { colors, spacing } from '../lib/theme';
 const PREVIEW_COUNT = 3;
 
 export function HomeScreen() {
-  const { user } = useAuth();
   const { profile } = useProfile();
   const { jobs, loading } = useOpenJobs();
   const navigation = useNavigation<HomeStackNavigation>();
@@ -31,12 +30,7 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{firstName ? `Hi, ${firstName}` : 'Home'}</Text>
-          <Text style={styles.subtitle}>
-            {user?.email ?? 'Post a job or find work'}
-          </Text>
-        </View>
+        <HomeGreeting firstName={firstName} />
 
         <View style={styles.actions}>
           <Button title="Post a Job" onPress={() => navigation.navigate('PostJob')} />
@@ -80,18 +74,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
     gap: spacing.xxl,
-  },
-  header: {
-    gap: spacing.xs + 2,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: colors.text,
-  },
-  subtitle: {
-    fontSize: 15,
-    color: colors.textMuted,
   },
   actions: {
     gap: spacing.md,

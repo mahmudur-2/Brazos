@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Avatar } from './Avatar';
+import { AvatarPressable } from './AvatarPressable';
 import { Button } from './Button';
 import { Card } from './Card';
 import { StatusBadge } from './StatusBadge';
@@ -22,6 +22,9 @@ type BidWorkerCardProps = {
   onHireAgain?: () => void;
   /** Opens the worker's public profile (rating, bio, Past Work gallery). */
   onViewProfile?: () => void;
+  /** Long-press on the avatar specifically — opens it full-screen, a faster
+   *  look than navigating to the full profile. */
+  onLongPressAvatar?: () => void;
 };
 
 export function BidWorkerCard({
@@ -34,6 +37,7 @@ export function BidWorkerCard({
   canRehire = false,
   onHireAgain,
   onViewProfile,
+  onLongPressAvatar,
 }: BidWorkerCardProps) {
   const worker = bid.worker;
   const name = worker?.full_name ?? 'Worker';
@@ -55,7 +59,12 @@ export function BidWorkerCard({
         onPress={onViewProfile}
         disabled={!onViewProfile}
       >
-        <Avatar name={name} uri={worker?.avatar_url} size={48} />
+        <AvatarPressable
+          name={name}
+          uri={worker?.avatar_url}
+          size={48}
+          onLongPress={onLongPressAvatar}
+        />
         <View style={styles.headerText}>
           <View style={styles.nameRow}>
             <Text style={styles.name} numberOfLines={1}>

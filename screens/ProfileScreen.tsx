@@ -12,10 +12,13 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Avatar } from '../components/Avatar';
+import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { CategoryAccordion } from '../components/CategoryAccordion';
 import { Chip } from '../components/Chip';
 import { PastWork } from '../components/PastWork';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { PortfolioPicker } from '../components/PortfolioPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
@@ -23,7 +26,7 @@ import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
-import { JOB_CATEGORIES, JOB_CATEGORY_ICONS, JOB_CATEGORY_LABELS } from '../lib/jobs';
+import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
 import { updateProfile } from '../lib/profiles';
 import { uploadAvatar } from '../lib/storage';
 import type { ProfileStackNavigation } from '../lib/navigation';
@@ -57,6 +60,14 @@ export function ProfileScreen() {
   const [pickerOpen, setPickerOpen] = useState(false);
   // Bumped after the picker adds an item, so PastWork refetches.
   const [portfolioVersion, setPortfolioVersion] = useState(0);
+  // Named distinctly from avatarUrl (the editable draft value) — this is just
+  // which photo the full-screen viewer is currently showing.
+  const [avatarViewerUri, setAvatarViewerUri] = useState<string | null>(null);
+  // Long-pressing the user's own avatar opens this small menu instead of
+  // jumping straight to the full-screen viewer, so "Remove Photo" has
+  // somewhere to live.
+  const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  const [removingAvatar, setRemovingAvatar] = useState(false);
 
   const loadedRef = useRef<string | null>(null);
 
@@ -97,6 +108,37 @@ export function ProfileScreen() {
       setPendingAsset(result.assets[0]);
       setAvatarUrl(result.assets[0].uri);
     }
+  }
+
+  /** Resets the profile picture to the default placeholder avatar. */
+  async function handleRemoveAvatar() {
+    if (!user) return;
+    const ok = await confirmAsync({
+      title: 'Remove profile photo?',
+      message: 'This resets your profile picture to the default avatar.',
+      confirmText: 'Remove',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+
+    // Discard any unsaved pending pick and clear the draft immediately —
+    // this action isn't staged behind the Save button.
+    setPendingAsset(null);
+    setAvatarUrl(null);
+
+    if (!profile?.avatar_url) return;
+
+    setRemovingAvatar(true);
+    const { data, error } = await updateProfile(user.id, { avatar_url: null });
+    setRemovingAvatar(false);
+
+    if (error) {
+      await alertAsync('Could not remove photo', error.message);
+      setAvatarUrl(profile.avatar_url);
+      return;
+    }
+    if (data) setProfile(data);
   }
 
   async function handleCancel() {
@@ -211,8 +253,8 @@ export function ProfileScreen() {
 
   const selectedCategoryLabels = categories.map((c) => ({
     key: c,
-    label: JOB_CATEGORY_LABELS[c as keyof typeof JOB_CATEGORY_LABELS] ?? c,
-    icon: JOB_CATEGORY_ICONS[c as keyof typeof JOB_CATEGORY_ICONS],
+    label: skillCategoryLabel(c),
+    icon: skillCategoryIcon(c),
   }));
 
   return (
@@ -240,14 +282,30 @@ export function ProfileScreen() {
         >
           <View style={styles.avatarRow}>
             {isEditing ? (
-              <Pressable onPress={pickAvatar} style={styles.avatarPress}>
+              // onPress (change photo) and onLongPress (open the photo menu)
+              // coexist fine on one Pressable — they're different gestures.
+              <Pressable
+                onPress={pickAvatar}
+                onLongPress={
+                  avatarUrl ? () => setAvatarMenuOpen(true) : undefined
+                }
+                delayLongPress={350}
+                style={styles.avatarPress}
+              >
                 <Avatar name={fullName} uri={avatarUrl} size={84} />
                 <View style={styles.avatarEdit}>
                   <Ionicons name="camera" size={16} color={colors.onPrimary} />
                 </View>
               </Pressable>
             ) : (
-              <Avatar name={fullName} uri={avatarUrl} size={84} />
+              <AvatarPressable
+                name={fullName}
+                uri={avatarUrl}
+                size={84}
+                onLongPress={
+                  avatarUrl ? () => setAvatarMenuOpen(true) : undefined
+                }
+              />
             )}
             <Text style={styles.email}>{user?.email}</Text>
             <Text style={styles.roleNote}>You can post jobs and find work.</Text>
@@ -293,17 +351,18 @@ export function ProfileScreen() {
 
                 <View style={styles.field}>
                   <Text style={styles.fieldLabel}>Job categories (optional)</Text>
-                  <View style={styles.chips}>
-                    {JOB_CATEGORIES.map((c) => (
-                      <Chip
-                        key={c}
-                        label={JOB_CATEGORY_LABELS[c]}
-                        icon={JOB_CATEGORY_ICONS[c]}
-                        selected={categories.includes(c)}
-                        onPress={() => toggleCategory(c)}
-                      />
-                    ))}
-                  </View>
+                  <CategoryAccordion
+                    selected={categories}
+                    onToggle={toggleCategory}
+                    onAddCustom={(label) =>
+                      setCategories((prev) =>
+                        prev.includes(label) ? prev : [...prev, label]
+                      )
+                    }
+                    onRemoveCustom={(key) =>
+                      setCategories((prev) => prev.filter((c) => c !== key))
+                    }
+                  />
                 </View>
 
                 <View style={styles.editActions}>
@@ -381,8 +440,71 @@ export function ProfileScreen() {
           visible={pickerOpen}
           workerId={user.id}
           onClose={() => setPickerOpen(false)}
-          onAdded={() => setPortfolioVersion((v) => v + 1)}
+          onChanged={() => setPortfolioVersion((v) => v + 1)}
         />
+      )}
+
+      <PhotoViewer
+        visible={!!avatarViewerUri}
+        uri={avatarViewerUri}
+        onClose={() => setAvatarViewerUri(null)}
+        allowShare={false}
+      />
+
+      {/* Plain in-tree overlay, not a nested Modal — see PortfolioPicker for
+          why stacking a second native Modal here would be a bug risk. */}
+      {avatarMenuOpen && (
+        <Pressable
+          style={styles.menuBackdrop}
+          onPress={() => setAvatarMenuOpen(false)}
+        >
+          <View style={styles.menuSheet}>
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                setAvatarMenuOpen(false);
+                if (avatarUrl) setAvatarViewerUri(avatarUrl);
+              }}
+            >
+              <Ionicons name="eye-outline" size={18} color={colors.text} />
+              <Text style={styles.menuRowText}>View photo</Text>
+            </Pressable>
+
+            {isEditing && (
+              <Pressable
+                style={styles.menuRow}
+                onPress={() => {
+                  setAvatarMenuOpen(false);
+                  pickAvatar();
+                }}
+              >
+                <Ionicons name="camera-outline" size={18} color={colors.text} />
+                <Text style={styles.menuRowText}>Change photo</Text>
+              </Pressable>
+            )}
+
+            <Pressable
+              style={styles.menuRow}
+              onPress={() => {
+                setAvatarMenuOpen(false);
+                handleRemoveAvatar();
+              }}
+              disabled={removingAvatar}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.danger} />
+              <Text style={[styles.menuRowText, styles.menuRowTextDanger]}>
+                Remove Photo
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.menuCancelRow}
+              onPress={() => setAvatarMenuOpen(false)}
+            >
+              <Text style={styles.menuCancelText}>Cancel</Text>
+            </Pressable>
+          </View>
+        </Pressable>
       )}
     </SafeAreaView>
   );
@@ -471,5 +593,49 @@ const styles = StyleSheet.create({
   editActions: {
     gap: spacing.md,
     marginTop: spacing.xs,
+  },
+  menuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(31,46,34,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuSheet: {
+    width: 240,
+    borderRadius: 14,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    paddingVertical: spacing.xs,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  menuRowText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  menuRowTextDanger: {
+    color: colors.danger,
+  },
+  menuCancelRow: {
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    alignItems: 'center',
+  },
+  menuCancelText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
 });

@@ -12,6 +12,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
+import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportDialog } from '../components/ReportDialog';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
@@ -52,6 +53,7 @@ export function MessagesInboxScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
   // Threads with a hire request waiting on THIS user. There are no push
   // notifications, so this list is the only thing that surfaces a new request
   // or counter-offer.
@@ -251,6 +253,9 @@ export function MessagesInboxScreen() {
                         muted: item.muted,
                       })
               }
+              onLongPressAvatar={
+                item.avatarUrl ? () => setAvatarUri(item.avatarUrl) : undefined
+              }
             />
           )}
           contentContainerStyle={
@@ -292,6 +297,13 @@ export function MessagesInboxScreen() {
           onClose={() => setReportTarget(null)}
         />
       )}
+
+      <PhotoViewer
+        visible={!!avatarUri}
+        uri={avatarUri}
+        onClose={() => setAvatarUri(null)}
+        allowShare={false}
+      />
     </SafeAreaView>
   );
 }
