@@ -113,7 +113,12 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   }
 
   const doc = LEGAL_DOCUMENTS[tab];
+  // The real gate. Detected from actual scroll position/content size (above),
+  // never a timer — a user could read faster or slower than any fixed delay,
+  // and a delay would let someone "accept" without the content ever having
+  // reached the bottom of the viewport at all.
   const bothSeen = seen.terms && seen.privacy;
+  const canCheck = bothSeen;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -152,16 +157,17 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
         {!bothSeen && (
           <Text style={styles.nudge}>
             {seen[tab]
-              ? `Now read the ${tab === 'terms' ? 'Privacy Policy' : 'Terms of Service'}.`
-              : 'Scroll to the end to read the whole document.'}
+              ? `Now scroll to the end of the ${tab === 'terms' ? 'Privacy Policy' : 'Terms of Service'}.`
+              : 'Scroll to the end of this document to unlock the checkbox below.'}
           </Text>
         )}
 
         <Pressable
-          style={styles.checkRow}
-          onPress={() => setAgreed((v) => !v)}
+          style={[styles.checkRow, !canCheck && styles.checkRowDisabled]}
+          onPress={() => canCheck && setAgreed((v) => !v)}
+          disabled={!canCheck}
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: agreed }}
+          accessibilityState={{ checked: agreed, disabled: !canCheck }}
         >
           <Ionicons
             name={agreed ? 'checkbox' : 'square-outline'}
@@ -176,7 +182,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
         <Button
           title="Continue"
           onPress={handleContinue}
-          disabled={!agreed}
+          disabled={!agreed || !bothSeen}
           loading={saving}
         />
         <Pressable onPress={handleSignOut} hitSlop={8} disabled={saving}>
@@ -241,6 +247,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.sm,
+  },
+  checkRowDisabled: {
+    opacity: 0.45,
   },
   checkLabel: {
     flex: 1,

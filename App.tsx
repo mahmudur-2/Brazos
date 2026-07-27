@@ -52,7 +52,9 @@ const ProfileStack = createNativeStackNavigator<ProfileStackParamList>();
 // [active, inactive] icon per tab.
 const TAB_ICONS: Record<string, [IoniconName, IoniconName]> = {
   Home: ['home', 'home-outline'],
-  Map: ['map', 'map-outline'],
+  // A teardrop location-pin marker, not the map-square glyph — this tab is
+  // "find work near you", and a pin reads as that more directly than a map.
+  Map: ['location', 'location-outline'],
   MyJobs: ['briefcase', 'briefcase-outline'],
   Messages: ['chatbubbles', 'chatbubbles-outline'],
   Profile: ['person', 'person-outline'],

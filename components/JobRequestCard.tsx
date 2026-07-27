@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { formatBudget, JOB_CATEGORY_LABELS } from '../lib/jobs';
@@ -23,6 +23,13 @@ type JobRequestCardProps = {
   onAccept: () => void;
   onDecline: () => void;
   onCounter: () => void;
+  /**
+   * Present only when this card can lead into the job it created — i.e. its
+   * own event is 'accepted' and a job actually exists. Rendered as a tappable
+   * card rather than a button so it reads as "this now points somewhere",
+   * matching how the rest of the thread treats a settled request.
+   */
+  onOpenJob?: () => void;
 };
 
 const EVENT_LABEL: Record<string, string> = {
@@ -57,9 +64,11 @@ export function JobRequestCard({
   onAccept,
   onDecline,
   onCounter,
+  onOpenJob,
 }: JobRequestCardProps) {
   const event = message.request_event ?? 'created';
   const amount = message.request_amount_cents;
+  const openable = event === 'accepted' && !!onOpenJob;
 
   const isMyTurn =
     !!request && isOpenRequest(request.status) && request.awaiting_id === currentUserId;
@@ -79,51 +88,71 @@ export function JobRequestCard({
       : null;
 
   return (
-    <View style={[styles.card, !isLatest && styles.cardHistoric]}>
-      <View style={styles.header}>
-        <View style={styles.iconWrap}>
-          <Ionicons
-            name={
-              event === 'accepted'
-                ? 'checkmark-circle'
-                : event === 'declined' || event === 'closed'
-                ? 'close-circle'
-                : 'briefcase'
-            }
-            size={16}
-            color={colors.primary}
-          />
+    <View
+      style={[styles.card, !isLatest && styles.cardHistoric]}
+      // Pressable wraps everything below rather than the outer View, so the
+      // action buttons (Accept/Decline/Counter, when also present) stay their
+      // own independent touch targets rather than nesting inside this one.
+    >
+      <Pressable
+        onPress={openable ? onOpenJob : undefined}
+        disabled={!openable}
+        accessibilityRole={openable ? 'button' : undefined}
+      >
+        <View style={styles.header}>
+          <View style={styles.iconWrap}>
+            <Ionicons
+              name={
+                event === 'accepted'
+                  ? 'checkmark-circle'
+                  : event === 'declined' || event === 'closed'
+                  ? 'close-circle'
+                  : 'briefcase'
+              }
+              size={16}
+              color={colors.primary}
+            />
+          </View>
+          <Text style={styles.eventLabel}>{EVENT_LABEL[event] ?? 'Job request'}</Text>
+          {openable && (
+            <Ionicons
+              name="chevron-forward"
+              size={16}
+              color={colors.textSubtle}
+              style={styles.openChevron}
+            />
+          )}
         </View>
-        <Text style={styles.eventLabel}>{EVENT_LABEL[event] ?? 'Job request'}</Text>
-      </View>
 
-      {/* Terms come from the live request: they don't change during a
-          negotiation — only the price does, and that's snapshotted below. */}
-      {request && (
-        <>
-          <Text style={styles.title}>{request.title}</Text>
-          <Text style={styles.meta}>
-            {JOB_CATEGORY_LABELS[request.category] ?? request.category}
-            {request.location ? ` · ${request.location}` : ''}
+        {/* Terms come from the live request: they don't change during a
+            negotiation — only the price does, and that's snapshotted below. */}
+        {request && (
+          <>
+            <Text style={styles.title}>{request.title}</Text>
+            <Text style={styles.meta}>
+              {JOB_CATEGORY_LABELS[request.category] ?? request.category}
+              {request.location ? ` · ${request.location}` : ''}
+            </Text>
+          </>
+        )}
+
+        {amount != null && (
+          <Text style={styles.amount}>
+            {formatBudget(amount)}
+            {event === 'countered' && <Text style={styles.amountNote}> proposed</Text>}
           </Text>
-        </>
-      )}
+        )}
 
-      {amount != null && (
-        <Text style={styles.amount}>
-          {formatBudget(amount)}
-          {event === 'countered' && <Text style={styles.amountNote}> proposed</Text>}
-        </Text>
-      )}
+        {request?.description ? (
+          <Text style={styles.description} numberOfLines={3}>
+            {request.description}
+          </Text>
+        ) : null}
 
-      {request?.description ? (
-        <Text style={styles.description} numberOfLines={3}>
-          {request.description}
-        </Text>
-      ) : null}
-
-      {settledNote && <Text style={styles.settledNote}>{settledNote}</Text>}
-      {waitingNote && <Text style={styles.waitingNote}>{waitingNote}</Text>}
+        {settledNote && <Text style={styles.settledNote}>{settledNote}</Text>}
+        {waitingNote && <Text style={styles.waitingNote}>{waitingNote}</Text>}
+        {openable && <Text style={styles.openHint}>Tap to view the job</Text>}
+      </Pressable>
 
       {showActions && (
         <View style={styles.actions}>
@@ -193,11 +222,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   eventLabel: {
+    flex: 1,
     fontSize: 11,
     fontWeight: '800',
     color: colors.primary,
     textTransform: 'uppercase',
     letterSpacing: 0.4,
+  },
+  openChevron: {
+    marginLeft: spacing.xs,
+  },
+  openHint: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+    marginTop: spacing.sm,
   },
   title: {
     fontSize: 15,

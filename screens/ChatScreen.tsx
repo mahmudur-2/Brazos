@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,7 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
   useNavigation,
@@ -35,7 +34,7 @@ import { useChat } from '../hooks/useChat';
 import { useJob } from '../hooks/useJob';
 import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
-import { canRehireWorker, formatBudget } from '../lib/jobs';
+import { canRehireWorker, fetchJobById, formatBudget } from '../lib/jobs';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
@@ -95,26 +94,11 @@ export function ChatScreen() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [counterTarget, setCounterTarget] = useState<JobRequest | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [openingJobId, setOpeningJobId] = useState<string | null>(null);
 
   const { byId: requestsById, refresh: refreshRequests } = useJobRequests(params.jobId);
 
   const recorder = useVoiceRecorder();
-  const insets = useSafeAreaInsets();
-  // The composer owns the bottom safe-area inset (SafeAreaView no longer
-  // applies it — see the `edges` prop above), but that inset must collapse
-  // while the keyboard is up or it becomes a gap above the keyboard.
-  const [keyboardUp, setKeyboardUp] = useState(false);
-
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvent, () => setKeyboardUp(true));
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardUp(false));
-    return () => {
-      show.remove();
-      hide.remove();
-    };
-  }, []);
 
   async function handleMicPressIn() {
     if (sending) return;
@@ -300,6 +284,45 @@ export function ChatScreen() {
         'The job is now assigned and has moved into My Jobs.'
       );
     }
+  }
+
+  /**
+   * Opens the job an accepted request created. Either party can tap into it —
+   * routed to whichever screen their own role actually has: the client's full
+   * job-with-bids view, or the worker's status screen. Both live in the My
+   * Jobs stack regardless of which tab Chat itself was reached from, so this
+   * always goes through the tab-level parent rather than the local stack.
+   */
+  async function openAcceptedJob(request: JobRequest) {
+    if (!request.created_job_id || !user || openingJobId) return;
+    const jobId = request.created_job_id;
+
+    if (user.id === request.client_id) {
+      // The client's screen needs the full job row (bids, status, etc.), not
+      // just the id, so it's fetched before navigating.
+      setOpeningJobId(request.id);
+      const { data: fetchedJob, error } = await fetchJobById(jobId);
+      setOpeningJobId(null);
+
+      if (error || !fetchedJob) {
+        await alertAsync(
+          'Could not open job',
+          error?.message ?? 'This job could not be found.'
+        );
+        return;
+      }
+      (navigation.getParent() as any)?.navigate('MyJobs', {
+        screen: 'ClientJobDetail',
+        params: { job: fetchedJob },
+      });
+      return;
+    }
+
+    // The worker's screen only takes the id and loads itself.
+    (navigation.getParent() as any)?.navigate('MyJobs', {
+      screen: 'WorkerJob',
+      params: { jobId },
+    });
   }
 
   // Long-pressing a message offers both actions rather than jumping straight
@@ -533,6 +556,11 @@ export function ChatScreen() {
                       onAccept={() => request && respondToRequest(request, 'accept')}
                       onDecline={() => request && confirmDecline(request)}
                       onCounter={() => request && setCounterTarget(request)}
+                      onOpenJob={
+                        request?.created_job_id
+                          ? () => openAcceptedJob(request)
+                          : undefined
+                      }
                     />
                   </View>
                 );
@@ -647,9 +675,6 @@ export function ChatScreen() {
               onPickLibrary={pickFromLibrary}
               onMicPressIn={handleMicPressIn}
               onMicPressOut={handleMicPressOut}
-              // The inset itself drops to zero while the keyboard is up,
-              // since the inset area is covered by the keyboard then.
-              bottomInset={keyboardUp ? 0 : insets.bottom}
             />
           </>
         )}

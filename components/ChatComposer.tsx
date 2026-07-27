@@ -31,7 +31,6 @@ type ChatComposerProps = {
    * force all three controls to render for visual comparison on web.
    */
   showCameraAndMic?: boolean;
-  bottomInset: number;
 };
 
 export function ChatComposer({
@@ -45,15 +44,11 @@ export function ChatComposer({
   onMicPressIn,
   onMicPressOut,
   showCameraAndMic = Platform.OS !== 'web',
-  bottomInset,
 }: ChatComposerProps) {
   const sendDisabled = !text.trim() || sending || isRecording;
 
   return (
-    // paddingBottom carries the home-indicator inset here rather than on the
-    // screen's SafeAreaView, so the composer's own surface colour runs to the
-    // bottom of the screen instead of leaving a bare gap.
-    <View style={[styles.row, { paddingBottom: spacing.sm + bottomInset }]}>
+    <View style={styles.row}>
       {showCameraAndMic && (
         <Pressable
           onPress={onPickCamera}
@@ -124,6 +119,16 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+    // No safe-area inset added here, deliberately. ChatComposer is only ever
+    // rendered inside ChatScreen, which is only ever reached nested inside
+    // the app's bottom Tab.Navigator — its tab bar is always visible below
+    // this screen and already pads itself for the home indicator. Adding the
+    // device's bottom inset again here double-padded the space between the
+    // composer and the tab bar, which is exactly the persistent empty-gap bug
+    // reported before. If a screen ever hosts this composer WITHOUT a tab bar
+    // beneath it, that screen's own SafeAreaView should own the inset instead
+    // of this component guessing at it.
+    paddingBottom: spacing.sm,
     backgroundColor: colors.surface,
   },
   iconBtn: {
