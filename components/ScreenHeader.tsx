@@ -13,6 +13,11 @@ type ScreenHeaderProps = {
   onPressTitle?: () => void;
   /** Overrides title/subtitle/back-icon colors, e.g. for the Map tab's dark mode. */
   palette?: ColorPalette;
+  /** Small glyph rendered inline immediately after the title text. Distinct
+   *  from `right`, which pins its content to the far edge of the header. */
+  titleIcon?: ReactNode;
+  /** Bumps the title's own size. Defaults to the standard 24. */
+  titleSize?: number;
 };
 
 export function ScreenHeader({
@@ -22,12 +27,35 @@ export function ScreenHeader({
   right,
   onPressTitle,
   palette = colors,
+  titleIcon,
+  titleSize,
 }: ScreenHeaderProps) {
+  const titleText = (
+    <Text
+      style={[
+        styles.title,
+        { color: palette.text },
+        // flexShrink (not flex:1) so a long title truncates instead of
+        // shoving titleIcon off the row — the icon stays adjacent either way.
+        titleIcon ? styles.titleShrinkable : null,
+        titleSize ? { fontSize: titleSize } : null,
+      ]}
+      numberOfLines={1}
+    >
+      {title}
+    </Text>
+  );
+
   const titles = (
     <>
-      <Text style={[styles.title, { color: palette.text }]} numberOfLines={1}>
-        {title}
-      </Text>
+      {titleIcon ? (
+        <View style={styles.titleRow}>
+          {titleText}
+          {titleIcon}
+        </View>
+      ) : (
+        titleText
+      )}
       {subtitle ? (
         <Text
           style={[styles.subtitle, { color: palette.textMuted }]}
@@ -77,6 +105,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 24,
     fontWeight: '800',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  titleShrinkable: {
+    flexShrink: 1,
   },
   subtitle: {
     fontSize: 14,

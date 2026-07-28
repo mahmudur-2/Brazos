@@ -36,7 +36,15 @@ export function MapScreen() {
           on its own, which would make it the one inconsistent header when
           the device is in dark mode. */}
       <View style={styles.headerWrap}>
-        <ScreenHeader title="Jobs Near You" />
+        <ScreenHeader
+          title="Find Jobs Near You"
+          titleSize={26}
+          // Same Ionicons family and outline weight as the tab bar's own Map
+          // pin, so the two read as the same icon set rather than two styles.
+          titleIcon={
+            <Ionicons name="location-outline" size={22} color={colors.primary} />
+          }
+        />
       </View>
 
       {error ? (

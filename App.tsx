@@ -117,6 +117,15 @@ const TAB_BAR_CONTENT_HEIGHT = 70;
 const TAB_ICON_WRAPPER_HEIGHT = TAB_BAR_CONTENT_HEIGHT - 10;
 const TAB_BOTTOM_GAP = 3;
 
+// How much room to leave below the labels for the home indicator. iOS reports
+// insets.bottom = 34 on notched devices, and reserving all of it was what left
+// the visible band of empty white under the labels: the content area stops at
+// 70px and the remaining 34 is pure padding. The indicator itself only
+// occupies roughly the bottom 13px, so 16 clears it with margin while cutting
+// that dead space by more than half. Devices reporting a smaller inset keep
+// their own (the Math.min below), since they need less, not more.
+const TAB_BAR_SAFE_BOTTOM = 16;
+
 // Reused, not reinvented — the same tokens Button.tsx's primary variant and
 // the rating-star UI already use, so the tab bar can't drift from them.
 const TAB_DOT_SIZE = 4;
@@ -212,7 +221,8 @@ function MainTabs() {
   // whole bar on a notched device and the home indicator would eat into the
   // content slot, re-creating the overflow that height is sized to avoid.
   const insets = useSafeAreaInsets();
-  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
+  const bottomInset = Math.min(insets.bottom, TAB_BAR_SAFE_BOTTOM);
+  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + bottomInset;
 
   return (
     <Tab.Navigator
@@ -258,6 +268,13 @@ function MainTabs() {
         tabBarIconStyle: { width: '100%', height: TAB_ICON_WRAPPER_HEIGHT },
         tabBarStyle: {
           height: tabBarHeight,
+          // MUST accompany the height above. BottomTabBar.js applies
+          // `paddingBottom: insets.bottom` (the full 34 on a notched device)
+          // to the bar; tabBarStyle is merged last so this overrides it.
+          // Without it the bar would be 86 tall with 34 of padding, leaving
+          // the content only 52 of the 70 it needs — re-creating the overflow
+          // the height was sized to avoid.
+          paddingBottom: bottomInset,
           backgroundColor: TAB_BAR_BACKGROUND,
           borderTopColor: TAB_HAIRLINE_COLOR,
           elevation: 0,

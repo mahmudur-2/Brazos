@@ -1,4 +1,11 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Button } from '../components/Button';
@@ -29,16 +36,27 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <View style={styles.content}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
         <HomeGreeting firstName={firstName} />
 
         <View style={styles.actions}>
           <Button
             title="Post a Job"
             size="lg"
+            icon="briefcase-outline"
             onPress={() => navigation.navigate('PostJob')}
           />
-          <Button title="Find Work" variant="secondary" size="lg" onPress={goToFindWork} />
+          <Button
+            title="Find Work"
+            variant="secondary"
+            size="lg"
+            icon="search-outline"
+            onPress={goToFindWork}
+          />
         </View>
 
         <View style={styles.previewSection}>
@@ -63,7 +81,7 @@ export function HomeScreen() {
             </View>
           )}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -73,10 +91,17 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  content: {
+  scroll: {
     flex: 1,
+  },
+  content: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
+    // Matches previewSection's gap, so the space under the last card mirrors
+    // the space above the first one. Previously absent entirely — with the
+    // SafeAreaView scoped to edges={['top']}, nothing separated the last card
+    // from the tab bar and it sat flush against it.
+    paddingBottom: spacing.lg,
     // Bigger buttons get more surrounding room too, pushing the preview
     // section further down — a single shared gap keeps it even between
     // every section rather than hand-tuning each one separately.
@@ -86,8 +111,11 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
   },
   previewSection: {
-    flex: 1,
-    gap: spacing.md,
+    // No flex:1 — inside a ScrollView it would fight the content's natural
+    // height. The list is as tall as its cards and the scroll view handles
+    // any overflow, which is also what lets paddingBottom above actually
+    // show as clearance instead of just clipping the last card sooner.
+    gap: spacing.lg,
   },
   previewHeader: {
     flexDirection: 'row',

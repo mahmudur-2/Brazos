@@ -3,9 +3,14 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  View,
   type PressableProps,
 } from 'react-native';
-import { colors, radius, type ColorPalette } from '../lib/theme';
+import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
+import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 type ButtonSize = 'md' | 'lg';
 
@@ -24,6 +29,9 @@ type ButtonProps = {
   size?: ButtonSize;
   /** Overrides fill/text colors, e.g. for the Map tab's dark mode. */
   palette?: ColorPalette;
+  /** Small glyph rendered after the title. Inherits the title's color so it
+   *  can't drift from the variant's text treatment. */
+  icon?: IoniconName;
 } & Omit<PressableProps, 'onPress' | 'disabled'>;
 
 export function Button({
@@ -34,6 +42,7 @@ export function Button({
   variant = 'primary',
   size = 'md',
   palette = colors,
+  icon,
   style,
   ...rest
 }: ButtonProps) {
@@ -65,6 +74,15 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator color={textColor} />
+      ) : icon ? (
+        <View style={styles.row}>
+          <Text style={[styles.text, { fontSize: sizeStyle.fontSize, color: textColor }]}>
+            {title}
+          </Text>
+          {/* Sized from the title rather than a fixed number so it stays
+              matched to the text at every ButtonSize. */}
+          <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={textColor} />
+        </View>
       ) : (
         <Text style={[styles.text, { fontSize: sizeStyle.fontSize, color: textColor }]}>
           {title}
@@ -88,5 +106,10 @@ const styles = StyleSheet.create({
   },
   text: {
     fontWeight: '700',
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
 });
