@@ -92,6 +92,24 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
     };
   }, [perm]);
 
+  // Without a real GPS fix to center on, DEFAULT_REGION is just one arbitrary
+  // fixed neighborhood — any hotspot outside its ~0.08° span (about 5.5mi
+  // across) is invisible until the user manually pans/zooms, with nothing on
+  // screen hinting it's there. That's what made only the closest cluster to
+  // DEFAULT_REGION visible after seeding several neighborhoods spread across
+  // Brooklyn. Once real cells load, fit the viewport to all of them instead —
+  // this only runs when there's no GPS position to prefer, so "jobs near me"
+  // for a user who did grant location is untouched.
+  useEffect(() => {
+    if (perm === 'granted') return;
+    if (perm === 'loading') return;
+    if (cells.length === 0) return;
+    mapRef.current?.fitToCoordinates(
+      cells.map((c) => ({ latitude: c.cell_lat, longitude: c.cell_lng })),
+      { edgePadding: { top: 80, right: 60, bottom: 80, left: 60 }, animated: true }
+    );
+  }, [cells, perm]);
+
   if (perm === 'loading') {
     return (
       <View style={[styles.center, { backgroundColor: palette.background }]}>

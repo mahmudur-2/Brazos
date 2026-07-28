@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
+import { useThemeColors } from './hooks/useThemeColors';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { configurePushHandling } from './lib/pushNotifications';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
@@ -59,6 +60,54 @@ const TAB_ICONS: Record<string, [IoniconName, IoniconName]> = {
   Messages: ['chatbubbles', 'chatbubbles-outline'],
   Profile: ['person', 'person-outline'],
 };
+
+// tabBarIcon renders the label itself now (see MainTabs), so this is the
+// visual label text — kept separate from each Tab.Screen's tabBarLabel
+// option below, which is left in place purely for the accessibility string
+// React Navigation builds from it ("Map, tab, 2 of 5" etc).
+const TAB_LABELS: Record<string, string> = {
+  Home: 'Home',
+  Map: 'Map',
+  MyJobs: 'My Jobs',
+  Messages: 'Messages',
+  Profile: 'Profile',
+};
+
+// Bottom tab bar sizing. @react-navigation/bottom-tabs 7.18.3 (the version
+// installed here) bakes in — with nothing in this file overriding them —
+// a 25px icon (ICON_SIZE_ROUND in its TabBarIcon.js), a 10px label
+// (labelBeneath in BottomTabItem.js), and a 49px bar content height
+// (TABBAR_HEIGHT_UIKIT in BottomTabBar.js, before the device's safe-area
+// bottom inset is added on top). None of those are exposed as constants to
+// import, so they're reproduced here from the installed source rather than
+// guessed.
+//
+// First pass scaled everything up (35%/35%/25%) and came back too big.
+// These are the corrected values — roughly the midpoint between that pass
+// and the untouched defaults above, given as exact pixel targets rather
+// than a scale factor this time. Not to be changed again without a fresh
+// measurement.
+const BASE_TAB_ICON_SIZE = 25;
+const BASE_TAB_LABEL_FONT_SIZE = 10;
+const BASE_TAB_BAR_CONTENT_HEIGHT = 49;
+const TAB_ICON_SIZE = 29;
+const TAB_LABEL_FONT_SIZE = 12;
+const TAB_BAR_CONTENT_HEIGHT = 55;
+
+// BottomTabItem.js's tabVerticalUiKit style wraps whatever tabBarIcon
+// renders in 5px of padding on every side — not overridable — so the
+// content block below only ever has TAB_BAR_CONTENT_HEIGHT - 10 to fill.
+// tabItemContent is given exactly that height and packs itself against the
+// BOTTOM of it (justifyContent: 'flex-end') instead of the top, so the
+// leftover slack collects above the icon instead of below the label —
+// content sits low in the bar, with only TAB_BOTTOM_GAP of new space plus
+// the library's fixed 5px padding left underneath it.
+const TAB_ICON_WRAPPER_HEIGHT = TAB_BAR_CONTENT_HEIGHT - 10;
+const TAB_BOTTOM_GAP = 3;
+
+// Reused, not reinvented — the same tokens Button.tsx's primary variant and
+// the rating-star UI already use, so the tab bar can't drift from them.
+const TAB_DOT_SIZE = 4;
 
 function HomeStackNavigator() {
   return (
@@ -124,18 +173,64 @@ function MapStackNavigator() {
 }
 
 function MainTabs() {
+  // getTabBarHeight() (bottom-tabs internals) uses a custom tabBarStyle.height
+  // VERBATIM when one is set, rather than adding the safe-area inset on top of
+  // it the way the default 49px computation does — so the inset has to be
+  // folded in here by hand to land on a genuinely ~25%-taller CONTENT height
+  // rather than a taller bar with a squeezed content area on notched devices.
+  const insets = useSafeAreaInsets();
+  const { palette } = useThemeColors();
+  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.textSubtle,
-        tabBarIcon: ({ focused, color, size }) => {
+        // Gold hairline minimal style: muted gray inactive, the app's own
+        // forest green (same token Button.tsx's primary variant uses) when
+        // active. Both come from useThemeColors() so they adapt with the
+        // device's light/dark setting.
+        tabBarActiveTintColor: palette.primary,
+        tabBarInactiveTintColor: palette.textMuted,
+        tabBarShowLabel: false,
+        tabBarIcon: ({ focused, color }) => {
           const [active, inactive] = TAB_ICONS[route.name] ?? [
             'ellipse',
             'ellipse-outline',
           ];
-          return <Ionicons name={focused ? active : inactive} size={size} color={color} />;
+          const label = TAB_LABELS[route.name] ?? route.name;
+          return (
+            <View style={styles.tabItemContent}>
+              <Ionicons
+                name={focused ? active : inactive}
+                size={TAB_ICON_SIZE}
+                color={color}
+              />
+              <Text style={[styles.tabItemLabel, { color }]} numberOfLines={1}>
+                {label}
+              </Text>
+              <View
+                style={[
+                  styles.tabItemDot,
+                  { backgroundColor: palette.star, opacity: focused ? 1 : 0 },
+                ]}
+              />
+            </View>
+          );
+        },
+        // Now wraps the whole icon+label+dot block (see tabItemContent),
+        // not just the icon — width:'100%' so longer labels like "Messages"
+        // have the full tab column to lay out in, instead of the library's
+        // default 31px-wide icon-only box.
+        tabBarIconStyle: { width: '100%', height: TAB_ICON_WRAPPER_HEIGHT },
+        tabBarStyle: {
+          height: tabBarHeight,
+          // Transparent fill + a recolored hairline instead of a solid bar —
+          // elevation:0 drops the library's default Android shadow, which
+          // would otherwise show as a dark line under a see-through bar.
+          backgroundColor: 'transparent',
+          borderTopColor: palette.star,
+          elevation: 0,
         },
       })}
     >
@@ -220,5 +315,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.background,
+  },
+  // Fills TAB_ICON_WRAPPER_HEIGHT and packs against the bottom instead of
+  // the top — see the comment on TAB_ICON_WRAPPER_HEIGHT/TAB_BOTTOM_GAP.
+  tabItemContent: {
+    height: '100%',
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: TAB_BOTTOM_GAP,
+  },
+  tabItemLabel: {
+    fontSize: TAB_LABEL_FONT_SIZE,
+    lineHeight: TAB_LABEL_FONT_SIZE + 2,
+    fontWeight: '500',
+    marginTop: 2,
+  },
+  tabItemDot: {
+    width: TAB_DOT_SIZE,
+    height: TAB_DOT_SIZE,
+    borderRadius: TAB_DOT_SIZE / 2,
+    marginTop: 3,
   },
 });

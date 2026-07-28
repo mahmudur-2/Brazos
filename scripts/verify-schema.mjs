@@ -208,6 +208,17 @@ const MIGRATIONS = [
         checkRpc('legal_acceptance_enabled', {})],
     ],
   },
+  {
+    file: 'phase23_realistic_job_seed.sql',
+    checks: [
+      // The enum extension (job_category +4 values) and the job_requests
+      // CHECK-constraint widening have no PostgREST-visible shape of their
+      // own — same situation as phase19's constraint swap — so this marker
+      // function's existence is what confirms the migration actually ran.
+      ['rpc job_categories_expanded()', () =>
+        checkRpc('job_categories_expanded', {})],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

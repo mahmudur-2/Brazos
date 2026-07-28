@@ -17,7 +17,7 @@ import {
   type HotspotCell,
 } from '../lib/hotspots';
 import type { MapStackNavigation } from '../lib/navigation';
-import { radius, shadows, spacing } from '../lib/theme';
+import { colors, radius, shadows, spacing } from '../lib/theme';
 
 export function MapScreen() {
   const navigation = useNavigation<MapStackNavigation>();
@@ -30,7 +30,14 @@ export function MapScreen() {
       style={[styles.safe, { backgroundColor: palette.background }]}
       edges={['top']}
     >
-      <ScreenHeader title="Jobs Near You" palette={palette} />
+      {/* Deliberately NOT palette-driven — every other screen's ScreenHeader
+          stays on the fixed light palette (see useThemeColors.ts), and this
+          header matching that today matters more than it dark-mode-adapting
+          on its own, which would make it the one inconsistent header when
+          the device is in dark mode. */}
+      <View style={styles.headerWrap}>
+        <ScreenHeader title="Jobs Near You" />
+      </View>
 
       {error ? (
         <Text
@@ -115,6 +122,9 @@ export function MapScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
+  },
+  headerWrap: {
+    backgroundColor: colors.surface,
   },
   legend: {
     flexGrow: 0,

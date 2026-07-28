@@ -4,7 +4,11 @@ import { supabase } from './supabase';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-// Mirrors the Postgres `job_category` enum.
+// Mirrors the Postgres `job_category` enum. Originally 7 values; phase23
+// (supabase/phase23_realistic_job_seed.sql) extended the live enum with the
+// 4 marked below to match SKILL_CATEGORIES (lib/skillCategories.ts) — the
+// comment there previously said this list "can't be freely extended" because
+// nothing had done so yet, not because it structurally couldn't be.
 export const JOB_CATEGORIES = [
   'dog_walking',
   'cleaning',
@@ -12,6 +16,10 @@ export const JOB_CATEGORIES = [
   'yard_work',
   'handyman',
   'errands',
+  'furniture_assembly', // added phase23
+  'tv_mounting',        // added phase23
+  'painting',           // added phase23
+  'packing',            // added phase23
   'other',
 ] as const;
 
@@ -24,6 +32,13 @@ export const JOB_CATEGORY_LABELS: Record<JobCategory, string> = {
   yard_work: 'Yard work',
   handyman: 'Handyman',
   errands: 'Errands',
+  // Labels for the 4 added categories match SKILL_CATEGORIES' wording exactly
+  // (lib/skillCategories.ts), so the same category reads identically whether
+  // it's shown as a job's category or a worker's advertised skill.
+  furniture_assembly: 'Furniture Assembly',
+  tv_mounting: 'TV/Furniture Mounting',
+  painting: 'Painting',
+  packing: 'Packing/Unpacking',
   other: 'Other',
 };
 
@@ -34,6 +49,10 @@ export const JOB_CATEGORY_ICONS: Record<JobCategory, IoniconName> = {
   yard_work: 'leaf',
   handyman: 'hammer',
   errands: 'bag-handle',
+  furniture_assembly: 'construct',
+  tv_mounting: 'tv',
+  painting: 'color-palette',
+  packing: 'archive',
   other: 'ellipsis-horizontal',
 };
 
