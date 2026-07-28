@@ -9,7 +9,6 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
-import { useThemeColors } from './hooks/useThemeColors';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { configurePushHandling } from './lib/pushNotifications';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
@@ -82,32 +81,65 @@ const TAB_LABELS: Record<string, string> = {
 // import, so they're reproduced here from the installed source rather than
 // guessed.
 //
-// First pass scaled everything up (35%/35%/25%) and came back too big.
-// These are the corrected values — roughly the midpoint between that pass
-// and the untouched defaults above, given as exact pixel targets rather
-// than a scale factor this time. Not to be changed again without a fresh
-// measurement.
+// Icon and label are deliberate design sizes, landed on after two rounds of
+// feedback (a 35%/35% scale-up read too big; these are the midpoint). The bar
+// height is NOT a taste value the same way — it's derived from what the
+// content actually measures, see the arithmetic below.
 const BASE_TAB_ICON_SIZE = 25;
 const BASE_TAB_LABEL_FONT_SIZE = 10;
 const BASE_TAB_BAR_CONTENT_HEIGHT = 49;
 const TAB_ICON_SIZE = 29;
 const TAB_LABEL_FONT_SIZE = 12;
-const TAB_BAR_CONTENT_HEIGHT = 55;
 
-// BottomTabItem.js's tabVerticalUiKit style wraps whatever tabBarIcon
-// renders in 5px of padding on every side — not overridable — so the
-// content block below only ever has TAB_BAR_CONTENT_HEIGHT - 10 to fill.
-// tabItemContent is given exactly that height and packs itself against the
-// BOTTOM of it (justifyContent: 'flex-end') instead of the top, so the
-// leftover slack collects above the icon instead of below the label —
-// content sits low in the bar, with only TAB_BOTTOM_GAP of new space plus
-// the library's fixed 5px padding left underneath it.
+// BottomTabItem.js's tabVerticalUiKit style wraps whatever tabBarIcon renders
+// in 5px of padding on every side — not overridable — so the usable slot is
+// always TAB_BAR_CONTENT_HEIGHT - 10. The stacked content below needs:
+//
+//   icon glyph box   32   (Ionicons renders in a Text box ~size + 3, NOT 29)
+//   label            16   (marginTop 2 + lineHeight 14)
+//   dot               7   (marginTop 3 + size 4)
+//   paddingBottom     3   (TAB_BOTTOM_GAP)
+//   ------------------------
+//   total            58
+//
+// so the slot must be >= 58, i.e. the bar >= 68. 70 is that plus 2px of
+// slack. The bar was 55 (a 45px slot) for several iterations, which is where
+// the icons-crossing-the-hairline bug came from: 58 into 45 overflows by 13,
+// and because tabItemContent packs to flex-end the overflow went out the TOP,
+// through the hairline.
+//
+// Careful with the icon line: react-native-web collapses the label's <Text>
+// layout box to ~1px instead of 14, which made the old 55/45 combination
+// measure as fitting exactly on web while overflowing on device. Any harness
+// measurement of this stack taken on web reads ~13px shorter than native —
+// don't size this from a web number without adding that back.
+const TAB_BAR_CONTENT_HEIGHT = 70;
 const TAB_ICON_WRAPPER_HEIGHT = TAB_BAR_CONTENT_HEIGHT - 10;
 const TAB_BOTTOM_GAP = 3;
 
 // Reused, not reinvented — the same tokens Button.tsx's primary variant and
 // the rating-star UI already use, so the tab bar can't drift from them.
 const TAB_DOT_SIZE = 4;
+
+// Deliberately hardcoded, NOT sourced from useThemeColors() — that hook's
+// useColorScheme() dependency was forcing MainTabs' screenOptions (and this
+// style object) to recompute on every system light/dark flip. Android has a
+// well-known rendering bug where a `transparent` background combined with a
+// nonzero `elevation` renders as a solid black rectangle instead of a proper
+// shadow — see the elevation:0 override below, which only reliably wins
+// over the library's own default elevation:8 (BottomTabBar.js's `bottom`
+// style) once it's actually applied; a recompute is exactly the kind of
+// moment where a transient style could briefly fall back to that default.
+// An opaque background makes that whole bug class structurally impossible
+// regardless of timing, on top of removing the theme dependency itself.
+// Values below reuse the app's existing light-palette tokens (not new hex
+// literals) so this can't silently drift from Button.tsx's primary green or
+// the rating-star gold. Proper light/dark tab bar theming comes later.
+const TAB_BAR_BACKGROUND = colors.surface;
+const TAB_HAIRLINE_COLOR = colors.star;
+const TAB_ACTIVE_COLOR = colors.primary;
+const TAB_INACTIVE_COLOR = colors.textMuted;
+const TAB_DOT_COLOR = colors.star;
 
 function HomeStackNavigator() {
   return (
@@ -176,22 +208,20 @@ function MainTabs() {
   // getTabBarHeight() (bottom-tabs internals) uses a custom tabBarStyle.height
   // VERBATIM when one is set, rather than adding the safe-area inset on top of
   // it the way the default 49px computation does — so the inset has to be
-  // folded in here by hand to land on a genuinely ~25%-taller CONTENT height
-  // rather than a taller bar with a squeezed content area on notched devices.
+  // folded in here by hand. Without this, TAB_BAR_CONTENT_HEIGHT would be the
+  // whole bar on a notched device and the home indicator would eat into the
+  // content slot, re-creating the overflow that height is sized to avoid.
   const insets = useSafeAreaInsets();
-  const { palette } = useThemeColors();
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + insets.bottom;
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        // Gold hairline minimal style: muted gray inactive, the app's own
-        // forest green (same token Button.tsx's primary variant uses) when
-        // active. Both come from useThemeColors() so they adapt with the
-        // device's light/dark setting.
-        tabBarActiveTintColor: palette.primary,
-        tabBarInactiveTintColor: palette.textMuted,
+        // Gold hairline minimal style — hardcoded, not theme-adaptive, see
+        // TAB_BAR_BACKGROUND etc above for why.
+        tabBarActiveTintColor: TAB_ACTIVE_COLOR,
+        tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
         tabBarShowLabel: false,
         tabBarIcon: ({ focused, color }) => {
           const [active, inactive] = TAB_ICONS[route.name] ?? [
@@ -206,14 +236,17 @@ function MainTabs() {
                 size={TAB_ICON_SIZE}
                 color={color}
               />
-              <Text style={[styles.tabItemLabel, { color }]} numberOfLines={1}>
+              <Text
+                style={[
+                  styles.tabItemLabel,
+                  { color, fontWeight: focused ? '700' : '500' },
+                ]}
+                numberOfLines={1}
+              >
                 {label}
               </Text>
               <View
-                style={[
-                  styles.tabItemDot,
-                  { backgroundColor: palette.star, opacity: focused ? 1 : 0 },
-                ]}
+                style={[styles.tabItemDot, { opacity: focused ? 1 : 0 }]}
               />
             </View>
           );
@@ -225,11 +258,8 @@ function MainTabs() {
         tabBarIconStyle: { width: '100%', height: TAB_ICON_WRAPPER_HEIGHT },
         tabBarStyle: {
           height: tabBarHeight,
-          // Transparent fill + a recolored hairline instead of a solid bar —
-          // elevation:0 drops the library's default Android shadow, which
-          // would otherwise show as a dark line under a see-through bar.
-          backgroundColor: 'transparent',
-          borderTopColor: palette.star,
+          backgroundColor: TAB_BAR_BACKGROUND,
+          borderTopColor: TAB_HAIRLINE_COLOR,
           elevation: 0,
         },
       })}
@@ -326,9 +356,9 @@ const styles = StyleSheet.create({
     paddingBottom: TAB_BOTTOM_GAP,
   },
   tabItemLabel: {
+    // fontWeight is set per-render (bold when focused) — see tabBarIcon.
     fontSize: TAB_LABEL_FONT_SIZE,
     lineHeight: TAB_LABEL_FONT_SIZE + 2,
-    fontWeight: '500',
     marginTop: 2,
   },
   tabItemDot: {
@@ -336,5 +366,6 @@ const styles = StyleSheet.create({
     height: TAB_DOT_SIZE,
     borderRadius: TAB_DOT_SIZE / 2,
     marginTop: 3,
+    backgroundColor: TAB_DOT_COLOR,
   },
 });

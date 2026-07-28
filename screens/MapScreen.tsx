@@ -53,13 +53,13 @@ export function MapScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={[styles.legend, { borderBottomColor: palette.border }]}
+        style={[styles.legend, { borderBottomColor: colors.border }]}
         contentContainerStyle={styles.legendContent}
       >
         {HOTSPOT_TIERS.map((t) => (
           <View key={t.key} style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: t.stroke }]} />
-            <Text style={[styles.legendLabel, { color: palette.textMuted }]}>
+            <Text style={[styles.legendLabel, { color: colors.textMuted }]}>
               {t.label}
             </Text>
           </View>
@@ -129,6 +129,12 @@ const styles = StyleSheet.create({
   legend: {
     flexGrow: 0,
     borderBottomWidth: 1,
+    // No explicit background before this — it inherited the SafeAreaView's
+    // palette.background, which goes near-black in dark mode. That left a
+    // black strip between the (already hardcoded-white) header above it and
+    // the map below, since nothing here was opaque. Same fix as the header:
+    // fixed light, not palette-driven, matching the rest of the app for now.
+    backgroundColor: colors.surface,
   },
   legendContent: {
     paddingHorizontal: spacing.lg,

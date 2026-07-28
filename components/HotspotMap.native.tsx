@@ -28,6 +28,10 @@ const DEFAULT_REGION = {
 // Standard dark "Night mode" Google Maps style (customMapStyle only takes
 // effect on the Google Maps provider, i.e. Android here — iOS stays on Apple
 // Maps and gets its dark look via the `userInterfaceStyle` prop below).
+// NOT CURRENTLY USED — the map is hardcoded to light below, same as the tab
+// bar and header (see App.tsx/MapScreen.tsx), until this screen gets a real,
+// deliberately-designed dark mode. Kept rather than deleted so that pass
+// doesn't have to rebuild this from scratch.
 const DARK_MAP_STYLE: MapStyleElement[] = [
   { elementType: 'geometry', stylers: [{ color: '#1B2620' }] },
   { elementType: 'labels.text.stroke', stylers: [{ color: '#1B2620' }] },
@@ -46,7 +50,7 @@ const DARK_MAP_STYLE: MapStyleElement[] = [
 ];
 
 export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
-  const { palette, isDark } = useThemeColors();
+  const { palette } = useThemeColors();
   const [perm, setPerm] = useState<PermState>('loading');
   const mapRef = useRef<MapView>(null);
 
@@ -156,8 +160,9 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         showsUserLocation={perm === 'granted'}
         showsMyLocationButton={perm === 'granted'}
         toolbarEnabled={false}
-        userInterfaceStyle={isDark ? 'dark' : 'light'}
-        customMapStyle={isDark ? DARK_MAP_STYLE : []}
+        // Hardcoded light — see the DARK_MAP_STYLE comment above.
+        userInterfaceStyle="light"
+        customMapStyle={[]}
       >
         {cells.flatMap((cell) => {
           const tier = tierForCount(cell.job_count);
