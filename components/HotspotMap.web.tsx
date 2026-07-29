@@ -79,7 +79,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
               />
               <View style={styles.rowText}>
                 <Text style={[styles.count, { color: colors.text }]}>
-                  {cell.job_count} open jobs
+                  {cell.job_count} open {cell.job_count === 1 ? 'job' : 'jobs'}
                 </Text>
                 <Text
                   style={[styles.categories, { color: colors.textMuted }]}

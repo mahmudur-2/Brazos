@@ -98,7 +98,7 @@ export function MapScreen() {
                   ]}
                 />
                 <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                  {selected.job_count} open jobs
+                  {selected.job_count} open {selected.job_count === 1 ? 'job' : 'jobs'}
                 </Text>
               </View>
               <Pressable onPress={() => setSelected(null)} hitSlop={8}>
