@@ -27,6 +27,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { formatPhoneDisplay } from '../lib/phone';
+import { fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
 import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
 import { updateProfile } from '../lib/profiles';
 import { uploadAvatar } from '../lib/storage';
@@ -76,6 +77,9 @@ export function ProfileScreen() {
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  // Backs the above-the-fold summary line — same worker_job_stats() RPC
+  // PastWork's own stat line further down the page already calls.
+  const [jobStats, setJobStats] = useState<CategoryStat[]>([]);
 
   const loadedRef = useRef<string | null>(null);
 
@@ -104,6 +108,20 @@ export function ProfileScreen() {
       loadDraftFromProfile();
     }
   }, [profile]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    fetchWorkerJobStats(user.id).then(({ data }) => {
+      if (active) setJobStats(data);
+    });
+    return () => {
+      active = false;
+    };
+    // portfolioVersion isn't really about jobs, but a newly-completed job is
+    // usually followed by adding it to the portfolio, so re-checking here
+    // too keeps this line from going stale without a dedicated subscription.
+  }, [user, portfolioVersion]);
 
   function toggleCategory(c: string) {
     setCategories((prev) =>
@@ -277,6 +295,31 @@ export function ProfileScreen() {
     icon: skillCategoryIcon(c),
   }));
 
+  // Replaces static, identical-for-every-user copy ("You can post jobs and
+  // find work") with something that's actually true of this specific
+  // account — same signals PastWork's own stat line further down already
+  // shows (job count by category), plus rating and tenure where there's
+  // something real to say.
+  const totalCompletedJobs = jobStats.reduce((sum, s) => sum + s.count, 0);
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString(undefined, {
+        month: 'short',
+        year: 'numeric',
+      })
+    : null;
+  const summaryParts: string[] = [];
+  if (profile?.rating_count) {
+    summaryParts.push(`★ ${(profile.rating_avg ?? 0).toFixed(1)} (${profile.rating_count})`);
+  }
+  if (totalCompletedJobs > 0) {
+    summaryParts.push(`${totalCompletedJobs} job${totalCompletedJobs === 1 ? '' : 's'} completed`);
+  }
+  if (memberSince) {
+    summaryParts.push(`Member since ${memberSince}`);
+  }
+  const profileSummary =
+    summaryParts.length > 0 ? summaryParts.join(' · ') : 'You can post jobs and find work.';
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
@@ -328,7 +371,7 @@ export function ProfileScreen() {
               />
             )}
             <Text style={styles.email}>{user?.email}</Text>
-            <Text style={styles.roleNote}>You can post jobs and find work.</Text>
+            <Text style={styles.roleNote}>{profileSummary}</Text>
           </View>
 
           <Card>
