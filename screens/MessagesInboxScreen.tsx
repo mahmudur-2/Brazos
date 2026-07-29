@@ -262,10 +262,11 @@ export function MessagesInboxScreen() {
           contentContainerStyle={
             rows.length === 0
               ? styles.emptyContainer
-              : // A handful of rows top-anchored with the default padding left
-                // most of the screen bare below them — reads as broken, not
-                // "caught up". Centering with roomier spacing when there's
-                // only a few makes it read as deliberately minimal instead.
+              : // A handful of rows with the default padding left most of the
+                // screen bare below them — reads as broken, not "caught up".
+                // Roomier padding/gap between rows (not centering the group —
+                // that read as an empty/broken state instead of a real,
+                // short list) makes it read as deliberately minimal.
               rows.length <= 3
               ? styles.sparseContent
               : styles.listContent
@@ -332,8 +333,10 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   sparseContent: {
-    flexGrow: 1,
-    justifyContent: 'center',
+    // No flexGrow/justifyContent — that centered the row group as a block,
+    // which reads as an empty/broken state, not a short real list. Rows stay
+    // top-anchored under the header; the "generous" part is just more
+    // padding/gap than the normal listContent uses.
     padding: spacing.xl,
     gap: spacing.lg,
   },
