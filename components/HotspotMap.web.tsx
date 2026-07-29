@@ -9,30 +9,32 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { MapPinIcon } from './MapPinIcon';
-import { useThemeColors } from '../hooks/useThemeColors';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
   summarizeCategories,
   tierForCount,
   type HotspotMapProps,
 } from '../lib/hotspots';
-import { radius, spacing } from '../lib/theme';
+import { colors, radius, spacing } from '../lib/theme';
 
 /**
  * Web fallback for the hotspot map — react-native-maps has no web support, so
  * the browser gets the same tier colors and counts as a scrollable list of
  * zone cards. Metro resolves this file automatically on the web target.
+ *
+ * Hardcoded to the light palette, not useThemeColors() — same reasoning as
+ * MapScreen/HotspotMap.native: the rest of the Map tab is fixed light, so a
+ * theme-reactive fallback here would be the one thing on this tab that goes
+ * dark on a dark-mode device.
  */
 export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
-  const { palette } = useThemeColors();
-
   if (loading) {
     return (
-      <View style={[styles.center, { backgroundColor: palette.background }]}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <MapPinIcon size={80} />
         <ActivityIndicator
           size="small"
-          color={palette.primary}
+          color={colors.primary}
           style={styles.loadingSpinner}
         />
       </View>
@@ -41,10 +43,10 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
 
   if (cells.length === 0) {
     return (
-      <View style={[styles.center, { backgroundColor: palette.background }]}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <MapPinIcon size={88} />
-        <Text style={[styles.emptyTitle, { color: palette.text }]}>No hotspots yet</Text>
-        <Text style={[styles.emptyText, { color: palette.textMuted }]}>
+        <Text style={[styles.emptyTitle, { color: colors.text }]}>No hotspots yet</Text>
+        <Text style={[styles.emptyText, { color: colors.textMuted }]}>
           Hotspots appear here as more jobs are posted nearby.
         </Text>
       </View>
@@ -55,13 +57,13 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
 
   return (
     <ScrollView
-      style={{ backgroundColor: palette.background }}
+      style={{ backgroundColor: colors.background }}
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
       <View style={styles.webNote}>
-        <Ionicons name="information-circle-outline" size={16} color={palette.textMuted} />
-        <Text style={[styles.webNoteText, { color: palette.textMuted }]}>
+        <Ionicons name="information-circle-outline" size={16} color={colors.textMuted} />
+        <Text style={[styles.webNoteText, { color: colors.textMuted }]}>
           The interactive map runs on the phone (Expo Go). Here are the active
           zones.
         </Text>
@@ -70,27 +72,23 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
       {sorted.map((cell) => {
         const tier = tierForCount(cell.job_count);
         return (
-          <Card
-            key={`${cell.ilat}:${cell.ilng}`}
-            onPress={() => onSelectCell(cell)}
-            palette={palette}
-          >
+          <Card key={`${cell.ilat}:${cell.ilng}`} onPress={() => onSelectCell(cell)}>
             <View style={styles.row}>
               <View
-                style={[styles.swatch, { backgroundColor: tier?.stroke ?? palette.border }]}
+                style={[styles.swatch, { backgroundColor: tier?.stroke ?? colors.border }]}
               />
               <View style={styles.rowText}>
-                <Text style={[styles.count, { color: palette.text }]}>
+                <Text style={[styles.count, { color: colors.text }]}>
                   {cell.job_count} open jobs
                 </Text>
                 <Text
-                  style={[styles.categories, { color: palette.textMuted }]}
+                  style={[styles.categories, { color: colors.textMuted }]}
                   numberOfLines={1}
                 >
                   {summarizeCategories(cell.categories, JOB_CATEGORY_LABELS)}
                 </Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color={palette.textSubtle} />
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </View>
           </Card>
         );

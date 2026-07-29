@@ -5,14 +5,13 @@ import MapView, { Circle, Polygon, type MapStyleElement } from 'react-native-map
 import * as Location from 'expo-location';
 import { Button } from './Button';
 import { MapPinIcon } from './MapPinIcon';
-import { useThemeColors } from '../hooks/useThemeColors';
 import {
   cellPolygon,
   glowRingsForCell,
   tierForCount,
   type HotspotMapProps,
 } from '../lib/hotspots';
-import { radius, spacing } from '../lib/theme';
+import { colors, radius, spacing } from '../lib/theme';
 
 type PermState = 'loading' | 'granted' | 'denied' | 'skipped';
 
@@ -50,7 +49,6 @@ const DARK_MAP_STYLE: MapStyleElement[] = [
 ];
 
 export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
-  const { palette } = useThemeColors();
   const [perm, setPerm] = useState<PermState>('loading');
   const mapRef = useRef<MapView>(null);
 
@@ -116,11 +114,11 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
 
   if (perm === 'loading') {
     return (
-      <View style={[styles.center, { backgroundColor: palette.background }]}>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
         <MapPinIcon size={80} />
         <ActivityIndicator
           size="small"
-          color={palette.primary}
+          color={colors.primary}
           style={styles.loadingSpinner}
         />
       </View>
@@ -129,22 +127,21 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
 
   if (perm === 'denied') {
     return (
-      <View style={[styles.fallback, { backgroundColor: palette.background }]}>
+      <View style={[styles.fallback, { backgroundColor: colors.background }]}>
         <MapPinIcon size={88} />
-        <Text style={[styles.fallbackTitle, { color: palette.text }]}>
+        <Text style={[styles.fallbackTitle, { color: colors.text }]}>
           Location is off
         </Text>
-        <Text style={[styles.fallbackText, { color: palette.textMuted }]}>
+        <Text style={[styles.fallbackText, { color: colors.textMuted }]}>
           Brazos uses your location to show work near you on the map. Turn it on
           in Settings to see nearby hotspots.
         </Text>
         <View style={styles.fallbackActions}>
-          <Button title="Open Settings" onPress={() => Linking.openSettings()} palette={palette} />
+          <Button title="Open Settings" onPress={() => Linking.openSettings()} />
           <Button
             title="View map without location"
             variant="secondary"
             onPress={() => setPerm('skipped')}
-            palette={palette}
           />
         </View>
       </View>
@@ -207,11 +204,11 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         <View
           style={[
             styles.loadingPill,
-            { backgroundColor: palette.surface, borderColor: palette.border },
+            { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
-          <ActivityIndicator size="small" color={palette.primary} />
-          <Text style={[styles.loadingText, { color: palette.text }]}>
+          <ActivityIndicator size="small" color={colors.primary} />
+          <Text style={[styles.loadingText, { color: colors.text }]}>
             Updating hotspots…
           </Text>
         </View>
@@ -221,11 +218,11 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         <View
           style={[
             styles.emptyBanner,
-            { backgroundColor: palette.surface, borderColor: palette.border },
+            { backgroundColor: colors.surface, borderColor: colors.border },
           ]}
         >
-          <Ionicons name="sparkles-outline" size={16} color={palette.textMuted} />
-          <Text style={[styles.emptyBannerText, { color: palette.textMuted }]}>
+          <Ionicons name="sparkles-outline" size={16} color={colors.textMuted} />
+          <Text style={[styles.emptyBannerText, { color: colors.textMuted }]}>
             No active hotspots yet — they appear as more jobs are posted nearby.
           </Text>
         </View>
