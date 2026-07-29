@@ -220,6 +220,7 @@ declare
   v_status text;
   v_roll double precision;
   v_created_at timestamptz;
+  v_photo_keyword text;
   v_profile_count integer;
   v_can_assign boolean;
   v_seq integer := 0;
@@ -288,12 +289,33 @@ begin
         else                  now() - ((random() * 14) * interval '1 day')      - (random() * interval '20 hours')
       end;
 
-      -- ~35% of jobs get 1-2 photos — see phase22 for why picsum.photos
-      -- rather than a bespoke asset (no existing demo-photo convention here).
+      -- picsum.photos (phase22's original choice) serves arbitrary stock
+      -- photography with no category awareness — the seed string only
+      -- controls WHICH random photo comes back, not what's in it, so a
+      -- furniture-assembly job could just as easily get a beach photo as a
+      -- couch. loremflickr.com supports keyword search, so each category
+      -- gets photos actually related to it; ?lock=N keeps a given job's
+      -- photo stable across reloads the same way picsum's seed did.
+      v_photo_keyword := case v_tpl.category
+        when 'handyman' then 'handyman,tools'
+        when 'cleaning' then 'cleaning,housekeeping'
+        when 'moving' then 'moving,boxes'
+        when 'dog_walking' then 'dog,leash'
+        when 'yard_work' then 'gardening,yard'
+        when 'errands' then 'delivery,package'
+        when 'furniture_assembly' then 'furniture,assembly'
+        when 'tv_mounting' then 'television,wall'
+        when 'painting' then 'paint,wall'
+        when 'packing' then 'moving,boxes'
+        else 'home,repair'
+      end;
+
+      -- ~35% of jobs get 1-2 photos, the rest none, so it reads as "some
+      -- listings have photos" rather than either all or none.
       v_photos := case
         when random() < 0.35 then (
           select jsonb_agg(
-            'https://picsum.photos/seed/brazos-job23-' || v_seq || '-' || gs || '/800/600'
+            'https://loremflickr.com/800/600/' || v_photo_keyword || '?lock=' || (v_seq * 10 + gs)
           )
           from generate_series(1, 1 + (random() < 0.4)::int) as gs
         )
