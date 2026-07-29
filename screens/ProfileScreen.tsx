@@ -32,7 +32,7 @@ import { updateProfile } from '../lib/profiles';
 import { uploadAvatar } from '../lib/storage';
 import { isValidPhone } from '../lib/validation';
 import type { ProfileStackNavigation } from '../lib/navigation';
-import { colors, spacing } from '../lib/theme';
+import { colors, radius, spacing } from '../lib/theme';
 
 const LANGUAGE_OPTIONS = [
   { label: 'English', value: 'en' },
@@ -473,12 +473,24 @@ export function ProfileScreen() {
             </Pressable>
           </Card>
 
+          {/* Deliberately NOT a Button like Log out below — same pill shape
+              and secondary styling made a moderation action (bans other
+              users, cancels their jobs) look like a twin of "sign out of
+              your own account", with nothing to stop a mis-tap. Boxed off,
+              amber-tinted, and icon-led instead so it reads as a different
+              category of action, not a routine one. */}
           {profile?.is_admin && (
-            <Button
-              title="Review reports (admin)"
-              variant="secondary"
+            <Pressable
+              style={styles.adminCard}
               onPress={() => navigation.navigate('AdminReports')}
-            />
+            >
+              <Text style={styles.adminEyebrow}>Admin</Text>
+              <View style={styles.adminRow}>
+                <Ionicons name="shield-checkmark-outline" size={20} color={colors.warning} />
+                <Text style={styles.adminLabel}>Review reports</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.warning} />
+              </View>
+            </Pressable>
           )}
 
           <Button
@@ -713,5 +725,31 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: colors.text,
+  },
+  adminCard: {
+    backgroundColor: colors.warningBg,
+    borderWidth: 1,
+    borderColor: colors.warning,
+    borderRadius: radius.lg,
+    padding: spacing.md,
+    gap: spacing.xs,
+  },
+  adminEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.warning,
+  },
+  adminRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  adminLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.warning,
   },
 });
