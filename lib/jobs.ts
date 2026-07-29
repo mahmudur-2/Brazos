@@ -56,6 +56,34 @@ export const JOB_CATEGORY_ICONS: Record<JobCategory, IoniconName> = {
   other: 'ellipsis-horizontal',
 };
 
+/**
+ * Per-category accent for icon chips (job cards, job details, portfolio
+ * items). Every category previously shared the same muted green square, so
+ * a list of jobs was only distinguishable by reading each title — color
+ * now does that scanning work instead. `icon` is whichever of white/dark
+ * reads with better contrast against that category's `bg`.
+ */
+export const JOB_CATEGORY_COLORS: Record<JobCategory, { bg: string; icon: string }> = {
+  handyman: { bg: '#3B6FA6', icon: '#FFFFFF' }, // blue
+  cleaning: { bg: '#2E8B84', icon: '#FFFFFF' }, // teal
+  moving: { bg: '#C56A2E', icon: '#FFFFFF' }, // orange
+  dog_walking: { bg: '#7B5CA6', icon: '#FFFFFF' }, // purple
+  yard_work: { bg: '#5A8F3C', icon: '#FFFFFF' }, // green (distinct from the brand's deeper forest green)
+  errands: { bg: '#E0A93A', icon: '#3D2B0F' }, // amber — light enough to need a dark glyph
+  furniture_assembly: { bg: '#8B6544', icon: '#FFFFFF' }, // brown/tan
+  tv_mounting: { bg: '#5B6B75', icon: '#FFFFFF' }, // slate gray
+  painting: { bg: '#B85C7A', icon: '#FFFFFF' }, // rose/pink
+  packing: { bg: '#4A5A9E', icon: '#FFFFFF' }, // indigo
+  other: { bg: '#6B7280', icon: '#FFFFFF' }, // neutral gray fallback
+};
+
+/** JOB_CATEGORY_COLORS[category], guarded the same way JOB_CATEGORY_ICONS
+ *  lookups are elsewhere — job.category can in principle carry a raw DB
+ *  value outside the current JobCategory union. */
+export function categoryAccent(category: JobCategory): { bg: string; icon: string } {
+  return JOB_CATEGORY_COLORS[category] ?? JOB_CATEGORY_COLORS.other;
+}
+
 // Status is left as a string so unknown values from the DB still render.
 export type Job = {
   id: string;

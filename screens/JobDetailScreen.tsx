@@ -24,6 +24,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBidCount } from '../hooks/useBidCount';
 import { jobStage } from '../lib/jobStage';
 import {
+  categoryAccent,
   dollarsToCents,
   formatBudget,
   JOB_CATEGORY_ICONS,
@@ -54,6 +55,7 @@ export function JobDetailScreen() {
   const isOwnJob = !!user && job.client_id === user.id;
   const bidCount = useBidCount(job.id);
   const stage = jobStage(job.status, bidCount, isOwnJob);
+  const accent = categoryAccent(job.category);
 
   useEffect(() => {
     let active = true;
@@ -135,11 +137,11 @@ export function JobDetailScreen() {
               details, and (for an eligible poster) the manage actions. */}
           <Card>
             <View style={styles.jobHeader}>
-              <View style={styles.iconCircle}>
+              <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
                 <Ionicons
                   name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                   size={22}
-                  color={colors.primary}
+                  color={accent.icon}
                 />
               </View>
               <View style={styles.jobHeaderText}>
@@ -274,7 +276,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
   },

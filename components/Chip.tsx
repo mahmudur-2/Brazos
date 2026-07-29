@@ -10,9 +10,14 @@ type ChipProps = {
   icon?: IoniconName;
   selected?: boolean;
   onPress?: () => void;
+  /** Tints the icon when unselected — e.g. each job category's own accent
+   *  color, so a row of category chips reads as more than a single flat
+   *  color. Selected state keeps its full-strength primary fill regardless,
+   *  so which chip is chosen never depends on remembering a category color. */
+  accentColor?: string;
 };
 
-export function Chip({ label, icon, selected = false, onPress }: ChipProps) {
+export function Chip({ label, icon, selected = false, onPress, accentColor }: ChipProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -26,7 +31,7 @@ export function Chip({ label, icon, selected = false, onPress }: ChipProps) {
         <Ionicons
           name={icon}
           size={16}
-          color={selected ? colors.onPrimary : colors.textMuted}
+          color={selected ? colors.onPrimary : accentColor ?? colors.textMuted}
         />
       )}
       <Text style={[styles.label, selected && styles.labelSelected]}>{label}</Text>

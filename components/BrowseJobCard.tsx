@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { colors, radius, spacing } from '../lib/theme';
 import {
+  categoryAccent,
   formatBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
@@ -11,14 +12,16 @@ import {
 import { formatTimeAgo } from '../lib/time';
 
 export function BrowseJobCard({ job, onPress }: { job: OpenJob; onPress: () => void }) {
+  const accent = categoryAccent(job.category);
+
   return (
     <Card onPress={onPress}>
       <View style={styles.headerRow}>
-        <View style={styles.iconCircle}>
+        <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
           <Ionicons
             name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
             size={20}
-            color={colors.primary}
+            color={accent.icon}
           />
         </View>
         <View style={styles.headerText}>
@@ -52,7 +55,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
   },

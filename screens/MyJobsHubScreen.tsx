@@ -109,6 +109,7 @@ export function MyJobsHubScreen() {
                     <HubCard
                       key={`work-${job.id}`}
                       icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+                      category={job.category}
                       title={job.title}
                       subtitle={`Client · ${names[job.client_id] ?? 'Client'}`}
                       priceCents={job.final_amount_cents ?? job.budget_cents}
@@ -134,6 +135,7 @@ export function MyJobsHubScreen() {
                       <HubCard
                         key={`posted-${job.id}`}
                         icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+                        category={job.category}
                         title={job.title}
                         subtitle={worker}
                         priceCents={job.final_amount_cents ?? job.budget_cents}
@@ -164,6 +166,7 @@ export function MyJobsHubScreen() {
                         icon={
                           JOB_CATEGORY_ICONS[bid.job.category] ?? 'ellipsis-horizontal'
                         }
+                        category={bid.job.category}
                         title={bid.job.title}
                         subtitle={`Client · ${names[bid.job.client_id] ?? 'Client'}`}
                         priceCents={bid.amount_cents}

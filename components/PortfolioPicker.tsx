@@ -16,7 +16,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { useOneTimeNotice } from '../hooks/useOneTimeNotice';
-import { JOB_CATEGORIES, JOB_CATEGORY_ICONS, JOB_CATEGORY_LABELS } from '../lib/jobs';
+import {
+  categoryAccent,
+  JOB_CATEGORIES,
+  JOB_CATEGORY_ICONS,
+  JOB_CATEGORY_LABELS,
+} from '../lib/jobs';
 import {
   addPortfolioItem,
   fetchPortfolio,
@@ -391,7 +396,7 @@ export function PortfolioPicker({
                       <Ionicons
                         name={JOB_CATEGORY_ICONS[c]}
                         size={14}
-                        color={category === c ? colors.onPrimary : colors.textMuted}
+                        color={category === c ? colors.onPrimary : categoryAccent(c).bg}
                       />
                       <Text
                         style={[

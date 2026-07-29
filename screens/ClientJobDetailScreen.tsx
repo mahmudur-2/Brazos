@@ -38,6 +38,7 @@ import {
 } from '../lib/bids';
 import { jobStage } from '../lib/jobStage';
 import {
+  categoryAccent,
   completionPhotosOf,
   fetchRehirableWorkerIds,
   formatBidCount,
@@ -71,6 +72,7 @@ export function ClientJobDetailScreen() {
 
   const canAccept = job.status === 'open';
   const workerName = worker?.full_name ?? 'the worker';
+  const accent = categoryAccent(job.category);
   // Always the poster's own view of their job, so isPoster is unconditionally
   // true here — this is the one screen that legitimately shows "In Progress".
   const stage = jobStage(job.status, bids.length, true);
@@ -169,11 +171,11 @@ export function ClientJobDetailScreen() {
       >
         <Card>
           <View style={styles.jobHeader}>
-            <View style={styles.iconCircle}>
+            <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
               <Ionicons
                 name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                 size={22}
-                color={colors.primary}
+                color={accent.icon}
               />
             </View>
             <View style={styles.jobHeaderText}>
@@ -424,7 +426,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -4,12 +4,14 @@ import type { ComponentProps } from 'react';
 import { Card } from './Card';
 import { StatusBadge } from './StatusBadge';
 import { colors, radius, spacing } from '../lib/theme';
-import { formatBudget } from '../lib/jobs';
+import { categoryAccent, formatBudget, type JobCategory } from '../lib/jobs';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 type HubCardProps = {
   icon: IoniconName;
+  /** Drives the icon chip's per-category accent color — see JOB_CATEGORY_COLORS. */
+  category: JobCategory;
   title: string;
   /** Counterparty line, e.g. "Worker · Carlos Reyes". */
   subtitle: string;
@@ -21,6 +23,7 @@ type HubCardProps = {
 
 export function HubCard({
   icon,
+  category,
   title,
   subtitle,
   priceCents,
@@ -28,11 +31,13 @@ export function HubCard({
   status,
   onPress,
 }: HubCardProps) {
+  const accent = categoryAccent(category);
+
   return (
     <Card onPress={onPress}>
       <View style={styles.headerRow}>
-        <View style={styles.iconCircle}>
-          <Ionicons name={icon} size={20} color={colors.primary} />
+        <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
+          <Ionicons name={icon} size={20} color={accent.icon} />
         </View>
         <View style={styles.headerText}>
           <Text style={styles.title} numberOfLines={1}>
@@ -66,7 +71,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
   },

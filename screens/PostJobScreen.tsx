@@ -22,6 +22,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import {
+  categoryAccent,
   createJob,
   dollarsToCents,
   fetchJobById,
@@ -460,6 +461,7 @@ export function PostJobScreen() {
                   key={c}
                   label={JOB_CATEGORY_LABELS[c]}
                   icon={JOB_CATEGORY_ICONS[c]}
+                  accentColor={categoryAccent(c).bg}
                   selected={category === c}
                   onPress={() => setCategory(c)}
                 />

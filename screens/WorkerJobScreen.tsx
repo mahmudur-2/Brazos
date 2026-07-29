@@ -23,6 +23,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import {
+  categoryAccent,
   completionPhotosOf,
   formatBudget,
   JOB_CATEGORY_ICONS,
@@ -171,11 +172,11 @@ export function WorkerJobScreen() {
         >
           <Card>
             <View style={styles.jobHeader}>
-              <View style={styles.iconCircle}>
+              <View style={[styles.iconCircle, { backgroundColor: categoryAccent(job.category).bg }]}>
                 <Ionicons
                   name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                   size={22}
-                  color={colors.primary}
+                  color={categoryAccent(job.category).icon}
                 />
               </View>
               <View style={styles.jobHeaderText}>
@@ -362,7 +363,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
   },
