@@ -260,7 +260,15 @@ export function MessagesInboxScreen() {
             />
           )}
           contentContainerStyle={
-            rows.length === 0 ? styles.emptyContainer : styles.listContent
+            rows.length === 0
+              ? styles.emptyContainer
+              : // A handful of rows top-anchored with the default padding left
+                // most of the screen bare below them — reads as broken, not
+                // "caught up". Centering with roomier spacing when there's
+                // only a few makes it read as deliberately minimal instead.
+              rows.length <= 3
+              ? styles.sparseContent
+              : styles.listContent
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -322,6 +330,12 @@ const styles = StyleSheet.create({
   listContent: {
     padding: spacing.lg,
     gap: spacing.md,
+  },
+  sparseContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    padding: spacing.xl,
+    gap: spacing.lg,
   },
   emptyContainer: {
     flexGrow: 1,

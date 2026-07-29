@@ -13,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { BrowseJobCard } from '../components/BrowseJobCard';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { JobOwnerActions } from '../components/JobOwnerActions';
@@ -22,6 +23,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useBidCount } from '../hooks/useBidCount';
+import { useOpenJobs } from '../hooks/useOpenJobs';
 import { jobStage } from '../lib/jobStage';
 import {
   categoryAccent,
@@ -29,6 +31,7 @@ import {
   formatBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
+  type OpenJob,
 } from '../lib/jobs';
 import { createBid, fetchMyBidForJob, type Bid } from '../lib/bids';
 import { alertAsync } from '../lib/dialog';
@@ -56,6 +59,21 @@ export function JobDetailScreen() {
   const bidCount = useBidCount(job.id);
   const stage = jobStage(job.status, bidCount, isOwnJob);
   const accent = categoryAccent(job.category);
+
+  // Content otherwise stops dead after the two cards below, leaving a blank
+  // scroll area down to the tab bar. Reuses the same open-jobs feed Home's
+  // preview list is built on — same-category matches first, newest within
+  // that, current job excluded, capped at 3.
+  const { jobs: openJobs } = useOpenJobs();
+  const similarJobs: OpenJob[] = openJobs
+    .filter((j) => j.id !== job.id)
+    .sort((a, b) => {
+      const aMatch = a.category === job.category ? 0 : 1;
+      const bMatch = b.category === job.category ? 0 : 1;
+      if (aMatch !== bMatch) return aMatch - bMatch;
+      return b.created_at.localeCompare(a.created_at);
+    })
+    .slice(0, 3);
 
   useEffect(() => {
     let active = true;
@@ -242,6 +260,21 @@ export function JobDetailScreen() {
               </View>
             </Card>
           )}
+
+          {similarJobs.length > 0 && (
+            <View style={styles.similarSection}>
+              <Text style={styles.similarTitle}>Similar jobs nearby</Text>
+              <View style={styles.similarList}>
+                {similarJobs.map((sj) => (
+                  <BrowseJobCard
+                    key={sj.id}
+                    job={sj}
+                    onPress={() => (navigation as any).navigate('JobDetail', { job: sj })}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -341,6 +374,19 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: colors.text,
+  },
+  similarSection: {
+    gap: spacing.md,
+  },
+  similarTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  similarList: {
+    gap: spacing.md,
   },
   form: {
     gap: spacing.lg,
