@@ -14,6 +14,10 @@ export type Conversation = {
   /** Voice note (phase16). Null until that migration runs, which the inbox
    *  preview tolerates — it just falls through to the text/photo cases. */
   last_message_audio_url: string | null;
+  /** Unsend (phase25). Set if the last message in the thread was unsent —
+   *  the inbox preview checks this before falling back to the text/photo/
+   *  voice cases, same precedence as messagePreviewText(). */
+  last_message_unsent_at: string | null;
   last_message_at: string;
 };
 

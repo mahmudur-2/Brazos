@@ -44,6 +44,22 @@ export function useChat(jobId: string) {
           );
         }
       )
+      // Unsend (phase25) is an UPDATE, not a delete — this is what makes it
+      // show as "This message was unsent" on the OTHER party's screen live,
+      // rather than only on a manual refresh.
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `job_id=eq.${jobId}`,
+        },
+        (payload) => {
+          const message = payload.new as Message;
+          setMessages((prev) => prev.map((m) => (m.id === message.id ? message : m)));
+        }
+      )
       .subscribe();
 
     return () => {

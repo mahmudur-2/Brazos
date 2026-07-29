@@ -6,6 +6,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
+import { setAudioModeAsync } from 'expo-audio';
 import type { ComponentProps } from 'react';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
@@ -337,6 +338,19 @@ export default function App() {
   // on the sign-in screen.
   useEffect(() => {
     configurePushHandling();
+  }, []);
+
+  // Without this, a user who has never recorded a voice message (only
+  // received/played one) never triggers any setAudioModeAsync call at all,
+  // and the audio session's playsInSilentMode sits at expo-audio's own
+  // native default — false — for their whole session. Set once, up front,
+  // so voice-note playback works regardless of whether this device has ever
+  // recorded anything. See useVoiceRecorder.ts's setAudioMode() for why
+  // every subsequent call also has to keep repeating this explicitly.
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }).catch((err) => {
+      console.error('[App] setAudioModeAsync failed', err);
+    });
   }, []);
 
   return (

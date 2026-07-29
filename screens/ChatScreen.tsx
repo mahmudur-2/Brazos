@@ -40,9 +40,10 @@ import { markConversationRead, resolveOtherId } from '../lib/conversations';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
 import {
   CHAT_TEMPLATES,
-  formatClipDuration,
+  canUnsend,
   messagePreviewText,
   sendMessage,
+  unsendMessage,
   type Message,
 } from '../lib/messages';
 import {
@@ -100,31 +101,22 @@ export function ChatScreen() {
 
   const recorder = useVoiceRecorder();
 
-  async function handleMicPressIn() {
+  function handleMicTap() {
     if (sending) return;
-    const started = await recorder.start();
-    if (!started && recorder.error) {
-      await alertAsync('Cannot record', recorder.error);
+    recorder.tapMic();
+  }
+
+  async function handleStopRecording() {
+    await recorder.stopRecording();
+    if (recorder.error) {
+      await alertAsync('Recording failed', recorder.error);
       recorder.clearError();
     }
   }
 
-  async function handleMicPressOut() {
-    const clip = await recorder.stop();
-    if (!clip) {
-      // A sub-MIN_CLIP_MS clip is a mis-tap on the mic icon, so it's dropped
-      // without comment. A genuine recorder failure does get surfaced.
-      if (recorder.error) {
-        await alertAsync('Recording failed', recorder.error);
-        recorder.clearError();
-      }
-      return;
-    }
-    await sendVoiceNote(clip);
-  }
-
-  async function sendVoiceNote(clip: { uri: string; durationMs: number }) {
-    if (!user) return;
+  async function handleSendVoice() {
+    const clip = recorder.previewClip;
+    if (!user || !clip) return;
     setSending(true);
     const { url, error: uploadError } = await uploadChatAudio(params.jobId, clip.uri);
     if (uploadError || !url) {
@@ -150,6 +142,7 @@ export function ChatScreen() {
       await alertAsync('Could not send voice message', error.message);
       return;
     }
+    recorder.reset();
     if (data) addLocal(data);
   }
 
@@ -350,8 +343,39 @@ export function ChatScreen() {
             setReplyTo(target);
           },
         },
+        // Own messages only, and only inside the 15-minute window — see
+        // canUnsend() in lib/messages.ts. The RPC re-checks both server-side
+        // regardless of what this menu offers.
+        ...(canUnsend(menuTarget, user?.id)
+          ? [
+              {
+                key: 'unsend',
+                label: 'Unsend',
+                icon: 'arrow-undo-circle-outline' as const,
+                destructive: true,
+                onPress: () => {
+                  const target = menuTarget;
+                  setMenuTarget(null);
+                  handleUnsend(target);
+                },
+              },
+            ]
+          : []),
       ]
     : [];
+
+  async function handleUnsend(message: Message) {
+    const ok = await confirmAsync({
+      title: 'Unsend this message?',
+      message: 'It will be replaced with "This message was unsent" for both of you.',
+      confirmText: 'Unsend',
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+    const { error } = await unsendMessage(message.id);
+    if (error) await alertAsync('Could not unsend', error.message);
+  }
 
   async function confirmDecline(request: JobRequest) {
     const ok = await confirmAsync({
@@ -573,7 +597,9 @@ export function ChatScreen() {
                   senderName={counterparty?.full_name}
                   senderAvatarUrl={counterparty?.avatar_url}
                   reactions={reactionsByMessage[item.id]}
-                  onLongPress={() => setMenuTarget(item)}
+                  // Nothing to react to or reply to on an already-unsent
+                  // placeholder.
+                  onLongPress={item.unsent_at ? undefined : () => setMenuTarget(item)}
                   onPressImage={setViewerUri}
                   replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
                   replyToName={
@@ -626,7 +652,7 @@ export function ChatScreen() {
 
             {/* Quoted-reply chip: what you're replying to, above the input,
                 with a way to back out — same as WhatsApp. */}
-            {replyTo && !recorder.isRecording && (
+            {replyTo && recorder.phase === 'idle' && (
               <View style={styles.replyBar}>
                 <View style={styles.replyAccent} />
                 <View style={styles.replyBody}>
@@ -653,28 +679,20 @@ export function ChatScreen() {
               </View>
             )}
 
-            {recorder.isRecording && (
-              <View style={styles.recordingBar}>
-                <View style={styles.recordingDot} />
-                <Text style={styles.recordingTime}>
-                  {formatClipDuration(recorder.durationMs)}
-                </Text>
-                <Text style={styles.recordingHint}>
-                  Release to send · slide off to cancel
-                </Text>
-              </View>
-            )}
-
             <ChatComposer
               text={text}
               onChangeText={setText}
               onSend={handleSendText}
               sending={sending}
-              isRecording={recorder.isRecording}
               onPickCamera={pickFromCamera}
               onPickLibrary={pickFromLibrary}
-              onMicPressIn={handleMicPressIn}
-              onMicPressOut={handleMicPressOut}
+              recorderPhase={recorder.phase}
+              recorderDurationMs={recorder.durationMs}
+              previewUri={recorder.previewUri}
+              onMicTap={handleMicTap}
+              onStopRecording={handleStopRecording}
+              onSendVoice={handleSendVoice}
+              onDiscardVoice={recorder.discard}
             />
           </>
         )}
@@ -824,33 +842,6 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: radius.sm,
     backgroundColor: colors.border,
-  },
-  recordingBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    backgroundColor: colors.dangerBg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  recordingDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.danger,
-  },
-  recordingTime: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.danger,
-    fontVariant: ['tabular-nums'],
-  },
-  recordingHint: {
-    flex: 1,
-    fontSize: 12,
-    color: colors.danger,
   },
   blockedNotice: {
     flexDirection: 'row',

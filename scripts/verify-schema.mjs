@@ -219,6 +219,16 @@ const MIGRATIONS = [
         checkRpc('job_categories_expanded', {})],
     ],
   },
+  {
+    file: 'phase25_unsend_messages.sql',
+    checks: [
+      ['messages.unsent_at', () => checkColumn('messages', 'unsent_at')],
+      ['conversations.last_message_unsent_at', () =>
+        checkColumn('conversations', 'last_message_unsent_at')],
+      ['rpc unsend_message()', () =>
+        checkRpc('unsend_message', { p_message_id: ZERO_UUID })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

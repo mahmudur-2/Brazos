@@ -1,5 +1,8 @@
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { VoiceNote } from './VoiceNote';
+import type { RecorderPhase } from '../hooks/useVoiceRecorder';
+import { formatClipDuration } from '../lib/messages';
 import { colors, radius, spacing } from '../lib/theme';
 
 /**
@@ -20,11 +23,19 @@ type ChatComposerProps = {
   onChangeText: (text: string) => void;
   onSend: () => void;
   sending: boolean;
-  isRecording: boolean;
   onPickCamera: () => void;
   onPickLibrary: () => void;
-  onMicPressIn: () => void;
-  onMicPressOut: () => void;
+  /** idle | pending | recording | preview — see useVoiceRecorder.ts. */
+  recorderPhase: RecorderPhase;
+  recorderDurationMs: number;
+  /** Local file URI of the just-recorded clip, set only during 'preview'. */
+  previewUri: string | null;
+  /** Tap the mic icon — arms the recording start delay, or cancels it if
+   *  tapped again before it fires. */
+  onMicTap: () => void;
+  onStopRecording: () => void;
+  onSendVoice: () => void;
+  onDiscardVoice: () => void;
   /**
    * Camera and mic are native-only in the real app (Platform.OS !== 'web').
    * Exposed as a prop rather than checked internally so a harness/test can
@@ -38,14 +49,54 @@ export function ChatComposer({
   onChangeText,
   onSend,
   sending,
-  isRecording,
   onPickCamera,
   onPickLibrary,
-  onMicPressIn,
-  onMicPressOut,
+  recorderPhase,
+  recorderDurationMs,
+  previewUri,
+  onMicTap,
+  onStopRecording,
+  onSendVoice,
+  onDiscardVoice,
   showCameraAndMic = Platform.OS !== 'web',
 }: ChatComposerProps) {
-  const sendDisabled = !text.trim() || sending || isRecording;
+  const isArming = recorderPhase === 'pending';
+  const isRecording = recorderPhase === 'recording';
+  const isPreviewing = recorderPhase === 'preview';
+  const sendDisabled = !text.trim() || sending || isArming || isRecording || isPreviewing;
+
+  // Preview replaces the whole row: reviewing/sending a voice note and
+  // composing a text message at the same time isn't a state this needs to
+  // support, so camera/library/text-input/text-send all step aside for it.
+  if (isPreviewing) {
+    return (
+      <View style={styles.row}>
+        <Pressable
+          onPress={onDiscardVoice}
+          style={styles.iconBtn}
+          hitSlop={6}
+          accessibilityLabel="Discard recording"
+        >
+          <Ionicons name="trash-outline" size={ICON_GLYPH_SIZE} color={colors.danger} />
+        </Pressable>
+
+        <View style={styles.previewWrap}>
+          {previewUri ? (
+            <VoiceNote url={previewUri} durationMs={recorderDurationMs} isOwn={false} />
+          ) : null}
+        </View>
+
+        <Pressable
+          onPress={onSendVoice}
+          disabled={sending}
+          style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
+          accessibilityLabel="Send voice message"
+        >
+          <Ionicons name="arrow-up" size={SEND_GLYPH_SIZE} color={colors.onPrimary} />
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.row}>
@@ -54,7 +105,7 @@ export function ChatComposer({
           onPress={onPickCamera}
           style={styles.iconBtn}
           hitSlop={6}
-          disabled={isRecording}
+          disabled={isArming || isRecording}
         >
           <Ionicons name="camera-outline" size={ICON_GLYPH_SIZE} color={colors.primary} />
         </Pressable>
@@ -64,30 +115,36 @@ export function ChatComposer({
         onPress={onPickLibrary}
         style={styles.iconBtn}
         hitSlop={6}
-        disabled={isRecording}
+        disabled={isArming || isRecording}
       >
         <Ionicons name="image-outline" size={ICON_GLYPH_SIZE} color={colors.primary} />
       </Pressable>
 
       {showCameraAndMic && (
         <Pressable
-          onPressIn={onMicPressIn}
-          onPressOut={onMicPressOut}
-          style={[styles.iconBtn, isRecording && styles.iconBtnActive]}
+          onPress={isRecording ? onStopRecording : onMicTap}
+          style={[styles.iconBtn, (isArming || isRecording) && styles.iconBtnActive]}
           hitSlop={6}
           disabled={sending}
-          accessibilityLabel="Hold to record a voice message"
+          accessibilityLabel={
+            isRecording ? 'Stop recording' : isArming ? 'Cancel recording' : 'Record a voice message'
+          }
         >
           <Ionicons
             name={isRecording ? 'stop' : 'mic-outline'}
             size={ICON_GLYPH_SIZE}
-            color={isRecording ? colors.onPrimary : colors.primary}
+            color={isArming || isRecording ? colors.onPrimary : colors.primary}
           />
         </Pressable>
       )}
 
       {isRecording ? (
-        <Text style={styles.recordingFill}>Recording…</Text>
+        <View style={styles.recordingFill}>
+          <View style={styles.recordingDot} />
+          <Text style={styles.recordingText}>
+            Recording… {formatClipDuration(recorderDurationMs)}
+          </Text>
+        </View>
       ) : (
         <TextInput
           style={styles.input}
@@ -96,6 +153,7 @@ export function ChatComposer({
           placeholder="Message…"
           placeholderTextColor={colors.textSubtle}
           multiline
+          editable={!isArming}
         />
       )}
 
@@ -143,9 +201,26 @@ const styles = StyleSheet.create({
   },
   recordingFill: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.sm + 2,
+  },
+  recordingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.danger,
+  },
+  recordingText: {
     fontSize: 15,
     color: colors.textMuted,
-    paddingVertical: spacing.sm + 2,
+    fontVariant: ['tabular-nums'],
+  },
+  previewWrap: {
+    flex: 1,
+    minHeight: COMPOSER_CONTROL_SIZE,
+    justifyContent: 'center',
   },
   input: {
     flex: 1,

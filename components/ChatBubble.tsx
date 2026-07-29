@@ -57,56 +57,65 @@ export function ChatBubble({
         style={styles.bubbleWrap}
       >
         <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
-          {/* Quoted reply strip, WhatsApp-style: an accent rail, the original
-              sender's name, and a one-line summary of what's being replied to. */}
-          {replyTo && (
-            <View style={[styles.quote, isOwn ? styles.quoteOwn : styles.quoteOther]}>
-              <View
-                style={[styles.quoteBar, isOwn ? styles.quoteBarOwn : styles.quoteBarOther]}
-              />
-              <View style={styles.quoteBody}>
-                <Text
-                  style={[styles.quoteName, isOwn && styles.quoteNameOwn]}
-                  numberOfLines={1}
-                >
-                  {replyToName ?? 'Message'}
-                </Text>
-                <Text
-                  style={[styles.quoteText, isOwn && styles.quoteTextOwn]}
-                  numberOfLines={1}
-                >
-                  {messagePreviewText(replyTo)}
-                </Text>
-              </View>
-              {replyTo.image_url ? (
-                <Image source={{ uri: replyTo.image_url }} style={styles.quoteThumb} />
-              ) : null}
-            </View>
-          )}
+          {message.unsent_at ? (
+            <Text style={[styles.unsentText, isOwn && styles.unsentTextOwn]}>
+              This message was unsent
+            </Text>
+          ) : (
+            <>
+              {/* Quoted reply strip, WhatsApp-style: an accent rail, the
+                  original sender's name, and a one-line summary of what's
+                  being replied to. */}
+              {replyTo && (
+                <View style={[styles.quote, isOwn ? styles.quoteOwn : styles.quoteOther]}>
+                  <View
+                    style={[styles.quoteBar, isOwn ? styles.quoteBarOwn : styles.quoteBarOther]}
+                  />
+                  <View style={styles.quoteBody}>
+                    <Text
+                      style={[styles.quoteName, isOwn && styles.quoteNameOwn]}
+                      numberOfLines={1}
+                    >
+                      {replyToName ?? 'Message'}
+                    </Text>
+                    <Text
+                      style={[styles.quoteText, isOwn && styles.quoteTextOwn]}
+                      numberOfLines={1}
+                    >
+                      {messagePreviewText(replyTo)}
+                    </Text>
+                  </View>
+                  {replyTo.image_url ? (
+                    <Image source={{ uri: replyTo.image_url }} style={styles.quoteThumb} />
+                  ) : null}
+                </View>
+              )}
 
-          {message.image_url ? (
-            // onLongPress is forwarded here as well as on the wrapper: this
-            // inner Pressable claims the touch, so without it a long-press on
-            // a photo never reached the reaction picker the way it does on a
-            // text message.
-            <Pressable
-              onPress={() => onPressImage?.(message.image_url!)}
-              onLongPress={onLongPress}
-              delayLongPress={350}
-            >
-              <Image source={{ uri: message.image_url }} style={styles.image} />
-            </Pressable>
-          ) : null}
-          {message.audio_url ? (
-            <VoiceNote
-              url={message.audio_url}
-              durationMs={message.audio_duration_ms}
-              isOwn={isOwn}
-            />
-          ) : null}
-          {message.content ? (
-            <Text style={[styles.text, isOwn && styles.textOwn]}>{message.content}</Text>
-          ) : null}
+              {message.image_url ? (
+                // onLongPress is forwarded here as well as on the wrapper:
+                // this inner Pressable claims the touch, so without it a
+                // long-press on a photo never reached the reaction picker
+                // the way it does on a text message.
+                <Pressable
+                  onPress={() => onPressImage?.(message.image_url!)}
+                  onLongPress={onLongPress}
+                  delayLongPress={350}
+                >
+                  <Image source={{ uri: message.image_url }} style={styles.image} />
+                </Pressable>
+              ) : null}
+              {message.audio_url ? (
+                <VoiceNote
+                  url={message.audio_url}
+                  durationMs={message.audio_duration_ms}
+                  isOwn={isOwn}
+                />
+              ) : null}
+              {message.content ? (
+                <Text style={[styles.text, isOwn && styles.textOwn]}>{message.content}</Text>
+              ) : null}
+            </>
+          )}
           <Text style={[styles.time, isOwn && styles.timeOwn]}>
             {formatClockTime(message.created_at)}
           </Text>
@@ -234,6 +243,14 @@ const styles = StyleSheet.create({
   },
   textOwn: {
     color: colors.onPrimary,
+  },
+  unsentText: {
+    fontSize: 14,
+    fontStyle: 'italic',
+    color: colors.textSubtle,
+  },
+  unsentTextOwn: {
+    color: 'rgba(244,241,232,0.75)',
   },
   time: {
     fontSize: 11,

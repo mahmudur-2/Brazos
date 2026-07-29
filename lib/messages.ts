@@ -22,8 +22,34 @@ export type Message = {
   job_request_id: string | null;
   request_event: 'created' | 'countered' | 'accepted' | 'declined' | 'closed' | null;
   request_amount_cents: number | null;
+  /**
+   * Unsend (phase25). Set once the sender unsends this message — content,
+   * image_url, audio_url and audio_duration_ms are wiped server-side at the
+   * same time (see unsend_message() RPC), not just hidden client-side, so a
+   * placeholder is all that's left to render regardless of client version.
+   */
+  unsent_at: string | null;
   created_at: string;
 };
+
+/** How long after sending a message can still be unsent. Mirrors the window
+ *  enforced server-side in unsend_message() — this copy only controls
+ *  whether the menu item is offered, not whether the action succeeds. */
+export const UNSEND_WINDOW_MS = 15 * 60 * 1000;
+
+/** Whether `userId` may still unsend `message` right now. */
+export function canUnsend(message: Message, userId: string | null | undefined): boolean {
+  if (!userId || message.sender_id !== userId) return false;
+  if (message.unsent_at) return false;
+  return Date.now() - new Date(message.created_at).getTime() < UNSEND_WINDOW_MS;
+}
+
+/** Unsend a message. Server-side re-checks ownership and the 15-minute
+ *  window regardless of what canUnsend() already gated on client-side. */
+export async function unsendMessage(messageId: string) {
+  const { error } = await supabase.rpc('unsend_message', { p_message_id: messageId });
+  return { error };
+}
 
 // One-tap templates for hands-full workers (driving, on a ladder, etc).
 export const CHAT_TEMPLATES = [
@@ -79,6 +105,7 @@ export async function sendMessage(input: NewMessageInput) {
  * chip and the strip inside a reply bubble both use this, so they can't drift.
  */
 export function messagePreviewText(message: Message): string {
+  if (message.unsent_at) return 'This message was unsent';
   if (message.job_request_id) return 'Job request';
   if (message.audio_url) return 'Voice message';
   if (message.image_url) return message.content || 'Photo';
