@@ -71,7 +71,8 @@ export function HomeScreen() {
             <ActivityIndicator color={colors.primary} style={styles.previewLoader} />
           ) : preview.length === 0 ? (
             <Text style={styles.previewEmpty}>
-              No open jobs right now — check back soon.
+              No open jobs right now — new jobs appear here automatically as
+              clients post them.
             </Text>
           ) : (
             <View style={styles.previewList}>

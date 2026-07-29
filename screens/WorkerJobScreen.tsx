@@ -30,7 +30,7 @@ import {
   updateJobStatus,
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { uploadJobPhoto } from '../lib/storage';
+import { deleteJobPhoto, uploadJobPhoto } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
@@ -111,6 +111,14 @@ export function WorkerJobScreen() {
 
   function removeDonePhoto(url: string) {
     setDonePhotos((prev) => prev.filter((p) => p !== url));
+
+    // Unlike PostJobScreen's photos, donePhotos never holds anything already
+    // saved to the job — it only ever starts empty and fills with fresh
+    // uploads from this completion attempt, so every removal here is always
+    // safe to clean up from storage immediately.
+    deleteJobPhoto(url).then(({ error }) => {
+      if (error) console.error('[WorkerJobScreen] deleteJobPhoto failed', error);
+    });
   }
 
   async function handleComplete() {

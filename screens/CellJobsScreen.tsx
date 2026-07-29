@@ -77,11 +77,19 @@ export function CellJobsScreen() {
     setRefreshing(false);
   }
 
+  // params.count is a snapshot from the moment the hotspot was tapped on the
+  // map — it's only used before the real list has ever loaded, as a
+  // reasonable placeholder instead of flashing "0". Once load() resolves
+  // (initial fetch, pull-to-refresh, or the realtime-triggered reload above),
+  // the subtitle always reflects jobs.length instead, so it can't drift out
+  // of sync with the list actually on screen.
+  const displayCount = loading ? params.count : jobs.length;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScreenHeader
         title="Jobs in this zone"
-        subtitle={`${params.count} open ${params.count === 1 ? 'job' : 'jobs'} nearby`}
+        subtitle={`${displayCount} open ${displayCount === 1 ? 'job' : 'jobs'} nearby`}
         onBack={() => navigation.goBack()}
       />
 

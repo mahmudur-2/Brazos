@@ -12,6 +12,7 @@ import { Button } from '../components/Button';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
+import { isValidEmail, isValidPhone } from '../lib/validation';
 import { colors, spacing } from '../lib/theme';
 
 type Mode = 'login' | 'signup';
@@ -24,18 +25,44 @@ export function AuthScreen() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const isLogin = mode === 'login';
 
+  function handleEmailChange(next: string) {
+    setEmail(next);
+    if (emailError) setEmailError(null);
+  }
+
+  function handlePhoneChange(next: string) {
+    setPhone(next);
+    if (phoneError) setPhoneError(null);
+  }
+
   async function handleSubmit() {
+    setEmailError(null);
+    setPhoneError(null);
+
     if (!email || !password) {
       await alertAsync('Missing details', 'Please enter your email and password.');
       return;
     }
 
-    if (!isLogin && (!fullName.trim() || !phone.trim())) {
-      await alertAsync('Missing details', 'Please enter your full name and phone number.');
+    if (!isValidEmail(email)) {
+      setEmailError('Enter a valid email address.');
       return;
+    }
+
+    if (!isLogin) {
+      if (!fullName.trim() || !phone.trim()) {
+        await alertAsync('Missing details', 'Please enter your full name and phone number.');
+        return;
+      }
+      if (!isValidPhone(phone)) {
+        setPhoneError('Enter a valid phone number.');
+        return;
+      }
     }
 
     setLoading(true);
@@ -90,7 +117,8 @@ export function AuthScreen() {
                 <TextField
                   label="Phone number"
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={handlePhoneChange}
+                  error={phoneError}
                   keyboardType="phone-pad"
                   autoComplete="tel"
                   placeholder="(555) 123-4567"
@@ -100,7 +128,8 @@ export function AuthScreen() {
             <TextField
               label="Email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={handleEmailChange}
+              error={emailError}
               keyboardType="email-address"
               autoComplete="email"
               placeholder="you@example.com"

@@ -73,11 +73,16 @@ export function ChatComposer({
       <View style={styles.row}>
         <Pressable
           onPress={onDiscardVoice}
-          style={styles.iconBtn}
+          disabled={sending}
+          style={[styles.iconBtn, sending && styles.iconBtnDisabled]}
           hitSlop={6}
           accessibilityLabel="Discard recording"
         >
-          <Ionicons name="trash-outline" size={ICON_GLYPH_SIZE} color={colors.danger} />
+          <Ionicons
+            name="trash-outline"
+            size={ICON_GLYPH_SIZE}
+            color={sending ? colors.textSubtle : colors.danger}
+          />
         </Pressable>
 
         <View style={styles.previewWrap}>
@@ -195,6 +200,9 @@ const styles = StyleSheet.create({
     borderRadius: COMPOSER_CONTROL_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  iconBtnDisabled: {
+    opacity: 0.4,
   },
   iconBtnActive: {
     backgroundColor: colors.danger,

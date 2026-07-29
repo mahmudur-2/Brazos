@@ -9,6 +9,11 @@ import { alertAsync } from '../lib/dialog';
 import { createReview, fetchMyReviewForJob, type Review } from '../lib/reviews';
 import { colors, spacing } from '../lib/theme';
 
+// Reviews render as a short quoted block wherever they're shown (this same
+// card once submitted, a worker's profile) — plenty of room for real
+// feedback without inviting an essay.
+const MAX_COMMENT_LENGTH = 300;
+
 type ReviewSectionProps = {
   jobId: string;
   reviewerId: string;
@@ -102,6 +107,8 @@ export function ReviewSection({
         label="Comment (optional)"
         value={comment}
         onChangeText={setComment}
+        hint={`${comment.length}/${MAX_COMMENT_LENGTH}`}
+        maxLength={MAX_COMMENT_LENGTH}
         placeholder={`Share how it went with ${revieweeName}…`}
         autoCapitalize="sentences"
         multiline

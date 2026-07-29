@@ -80,7 +80,12 @@ export function MapScreen() {
 
       {selected && (
         <View style={styles.sheet}>
-          <Card palette={palette}>
+          {/* Hardcoded light, not palette-driven — same reasoning as the
+              header/legend/map above: this was the one remaining piece of
+              the screen still following useThemeColors(), so it was the one
+              thing that would render dark-styled against an otherwise
+              all-light screen on a device in dark mode. */}
+          <Card>
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleWrap}>
                 <View
@@ -88,20 +93,20 @@ export function MapScreen() {
                     styles.sheetDot,
                     {
                       backgroundColor:
-                        tierForCount(selected.job_count)?.stroke ?? palette.border,
+                        tierForCount(selected.job_count)?.stroke ?? colors.border,
                     },
                   ]}
                 />
-                <Text style={[styles.sheetTitle, { color: palette.text }]}>
+                <Text style={[styles.sheetTitle, { color: colors.text }]}>
                   {selected.job_count} open jobs
                 </Text>
               </View>
               <Pressable onPress={() => setSelected(null)} hitSlop={8}>
-                <Ionicons name="close" size={20} color={palette.textMuted} />
+                <Ionicons name="close" size={20} color={colors.textMuted} />
               </Pressable>
             </View>
 
-            <Text style={[styles.sheetCategories, { color: palette.textMuted }]}>
+            <Text style={[styles.sheetCategories, { color: colors.textMuted }]}>
               {summarizeCategories(selected.categories, JOB_CATEGORY_LABELS)}
             </Text>
 
@@ -117,7 +122,6 @@ export function MapScreen() {
                 });
                 setSelected(null);
               }}
-              palette={palette}
               style={styles.sheetBtn}
             />
           </Card>

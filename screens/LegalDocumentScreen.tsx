@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { MarkdownText } from '../components/MarkdownText';
@@ -15,7 +15,25 @@ import { colors, spacing } from '../lib/theme';
 export function LegalDocumentScreen() {
   const navigation = useNavigation();
   const route = useRoute<RouteProp<LegalDocumentRouteParamList, 'LegalDocument'>>();
+  // route.params.document is typed as 'terms' | 'privacy', but the value
+  // still comes from outside this screen's control (a deep link, or a stale
+  // route restored from a previous app version) — LEGAL_DOCUMENTS[...] can
+  // genuinely be undefined at runtime even though TS doesn't see that here.
   const doc = LEGAL_DOCUMENTS[route.params.document];
+
+  if (!doc) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ScreenHeader title="Document" onBack={() => navigation.goBack()} />
+        <View style={styles.center}>
+          <Text style={styles.muted}>
+            This document isn't available. It may have moved, or this link is
+            out of date.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -32,6 +50,18 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  center: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  muted: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 20,
   },
   content: {
     padding: spacing.lg,

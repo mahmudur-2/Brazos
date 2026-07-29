@@ -29,6 +29,7 @@ import { alertAsync, confirmAsync } from '../lib/dialog';
 import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
 import { updateProfile } from '../lib/profiles';
 import { uploadAvatar } from '../lib/storage';
+import { isValidPhone } from '../lib/validation';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
 
@@ -36,6 +37,11 @@ const LANGUAGE_OPTIONS = [
   { label: 'English', value: 'en' },
   { label: 'Español', value: 'es' },
 ];
+
+// A bio renders as a short block on this same screen and on WorkerProfileScreen
+// — this is enough room for a few sentences without letting it grow into a
+// full paragraph that dominates either layout.
+const MAX_BIO_LENGTH = 200;
 
 function languageLabel(value: string) {
   return LANGUAGE_OPTIONS.find((o) => o.value === value)?.label ?? value;
@@ -68,6 +74,7 @@ export function ProfileScreen() {
   // somewhere to live.
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   const loadedRef = useRef<string | null>(null);
 
@@ -82,6 +89,12 @@ export function ProfileScreen() {
     setCategories(profile.categories ?? []);
     setAvatarUrl(profile.avatar_url ?? null);
     setPendingAsset(null);
+    setPhoneError(null);
+  }
+
+  function handlePhoneChange(next: string) {
+    setPhone(next);
+    if (phoneError) setPhoneError(null);
   }
 
   useEffect(() => {
@@ -122,8 +135,16 @@ export function ProfileScreen() {
     });
     if (!ok) return;
 
-    // Discard any unsaved pending pick and clear the draft immediately —
-    // this action isn't staged behind the Save button.
+    // Captured before clearing, so a failed API call below can restore
+    // exactly what was staged — previously pendingAsset was cleared
+    // unconditionally up front, so a failed removal would silently lose an
+    // in-progress replacement pick with no way to recover it short of
+    // re-picking, even though the removal itself never actually went through.
+    const previousPendingAsset = pendingAsset;
+    const previousAvatarUrl = avatarUrl;
+
+    // Clears the draft immediately — this action isn't staged behind the
+    // Save button — but only stays cleared if nothing below fails.
     setPendingAsset(null);
     setAvatarUrl(null);
 
@@ -135,7 +156,8 @@ export function ProfileScreen() {
 
     if (error) {
       await alertAsync('Could not remove photo', error.message);
-      setAvatarUrl(profile.avatar_url);
+      setAvatarUrl(previousAvatarUrl);
+      setPendingAsset(previousPendingAsset);
       return;
     }
     if (data) setProfile(data);
@@ -168,6 +190,10 @@ export function ProfileScreen() {
     if (!user) return;
     if (!fullName.trim() || !phone.trim()) {
       await alertAsync('Required', 'Full name and phone number are required.');
+      return;
+    }
+    if (!isValidPhone(phone)) {
+      setPhoneError('Enter a valid phone number.');
       return;
     }
 
@@ -225,25 +251,18 @@ export function ProfileScreen() {
   }
 
   async function handleLogout() {
-    // Deliberately two confirmations. Both put the destructive choice second
-    // and style it as destructive, so a stray tap lands on Cancel.
-    const first = await confirmAsync({
+    // One confirmation, not two — logout isn't destructive or unrecoverable
+    // the way unsend/ban-user are (you just sign back in), so it doesn't
+    // need the same friction. The destructive choice still sits second and
+    // styled as destructive, so a stray tap lands on Cancel.
+    const ok = await confirmAsync({
       title: 'Log out?',
       message: 'You can sign back in any time.',
       confirmText: 'Log out',
       cancelText: 'Cancel',
       destructive: true,
     });
-    if (!first) return;
-
-    const second = await confirmAsync({
-      title: 'Are you sure?',
-      message: "You'll need to sign back in.",
-      confirmText: 'Yes, log out',
-      cancelText: 'Cancel',
-      destructive: true,
-    });
-    if (!second) return;
+    if (!ok) return;
 
     setLoggingOut(true);
     const { error } = await logout();
@@ -324,7 +343,8 @@ export function ProfileScreen() {
                 <TextField
                   label="Phone number"
                   value={phone}
-                  onChangeText={setPhone}
+                  onChangeText={handlePhoneChange}
+                  error={phoneError}
                   keyboardType="phone-pad"
                   placeholder="(555) 123-4567"
                 />
@@ -342,6 +362,8 @@ export function ProfileScreen() {
                   label="Bio (optional)"
                   value={bio}
                   onChangeText={setBio}
+                  hint={`${bio.length}/${MAX_BIO_LENGTH}`}
+                  maxLength={MAX_BIO_LENGTH}
                   placeholder="A sentence about the work you do…"
                   autoCapitalize="sentences"
                   multiline

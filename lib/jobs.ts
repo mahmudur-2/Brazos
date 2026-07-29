@@ -417,12 +417,15 @@ export async function updateJobStatus(
   return { error };
 }
 
-/** Parse a dollar string from a form into integer cents, or null if empty. */
+/** Parse a dollar string from a form into integer cents, or null if empty.
+ *  Zero is rejected the same as negative — "no budget" is what an empty
+ *  field already means, so an explicit 0 can only be a mistake or a
+ *  meaningless amount, never a deliberate value. */
 export function dollarsToCents(input: string): number | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
   const dollars = Number(trimmed);
-  if (Number.isNaN(dollars) || dollars < 0) return Number.NaN;
+  if (Number.isNaN(dollars) || dollars <= 0) return Number.NaN;
   return Math.round(dollars * 100);
 }
 

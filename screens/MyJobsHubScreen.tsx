@@ -95,7 +95,9 @@ export function MyJobsHubScreen() {
               <Text style={styles.emptyText}>
                 {filter === 'active'
                   ? 'Post a job or place a bid to get started.'
-                  : 'No jobs in this state right now.'}
+                  : filter === 'in_progress'
+                  ? 'Jobs show up here once work has actually started.'
+                  : 'Jobs show up here once they’re completed or cancelled.'}
               </Text>
             </View>
           ) : (

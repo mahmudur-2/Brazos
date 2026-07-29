@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -35,9 +35,18 @@ export function AdminReportsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [actioningId, setActioningId] = useState<string | null>(null);
 
+  // useFocusEffect below re-fires load() on every focus, independently of
+  // onRefresh's pull-to-refresh — with no guard, two overlapping calls could
+  // resolve out of order and let a stale response overwrite a fresher one.
+  // Each call stamps its own id here; a response only gets applied if it's
+  // still the most recently STARTED call by the time it resolves.
+  const requestIdRef = useRef(0);
+
   const load = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
     setError(null);
     const { data, error } = await fetchAdminReports();
+    if (requestId !== requestIdRef.current) return;
     if (error) setError(error.message);
     else setReports(data);
     setLoading(false);

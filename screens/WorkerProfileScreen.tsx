@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
+import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -32,20 +33,35 @@ export function WorkerProfileScreen() {
   const { params } = useRoute<RouteProp<WorkerProfileRouteParamList, 'WorkerProfile'>>();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
 
-  useEffect(() => {
-    let active = true;
+  // Guards against both unmount and params.workerId changing again before a
+  // request resolves — set true at the start of each effect run, false on
+  // its cleanup, checked after the await so a stale response can't land.
+  const activeRef = useRef(true);
+
+  const load = useCallback(async () => {
     setLoading(true);
-    fetchProfileById(params.workerId).then(({ data }) => {
-      if (!active) return;
-      setProfile(data);
-      setLoading(false);
-    });
-    return () => {
-      active = false;
-    };
+    setError(null);
+    const { data, error } = await fetchProfileById(params.workerId);
+    if (!activeRef.current) return;
+    setProfile(data);
+    // A failed fetch (network blip, RLS denial) used to be indistinguishable
+    // from a genuinely sparse profile — data would just come back null and
+    // every field would render its empty fallback with no explanation. This
+    // surfaces it as a distinct, retryable error state instead.
+    if (error) setError(error.message);
+    setLoading(false);
   }, [params.workerId]);
+
+  useEffect(() => {
+    activeRef.current = true;
+    load();
+    return () => {
+      activeRef.current = false;
+    };
+  }, [load]);
 
   const name = profile?.full_name ?? params.workerName ?? 'Worker';
   const ratingCount = profile?.rating_count ?? 0;
@@ -58,6 +74,11 @@ export function WorkerProfileScreen() {
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+          <Button title="Try again" variant="secondary" onPress={load} style={styles.retryBtn} />
         </View>
       ) : (
         <ScrollView
@@ -139,6 +160,17 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
+  },
+  errorText: {
+    fontSize: 14,
+    color: colors.danger,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  retryBtn: {
+    marginTop: spacing.lg,
+    minWidth: 140,
   },
   content: {
     padding: spacing.lg,

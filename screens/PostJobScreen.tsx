@@ -36,12 +36,20 @@ import { createJobRequest } from '../lib/jobRequests';
 import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { resolveCurrentPlace } from '../lib/geolocation';
-import { uploadJobAttachment } from '../lib/storage';
+import { deleteJobPhoto, uploadJobAttachment } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 const MAX_PHOTOS = 5;
+// Titles show as a single line (sometimes two) on job cards throughout the
+// app — 80 chars is generous room for a real title while still fitting
+// there without wrapping into an unreadable wall of text.
+const MAX_TITLE_LENGTH = 80;
+// Descriptions render full-length on the job detail screen, not truncated
+// anywhere, so this only needs to block an unreasonable paste rather than
+// fit a specific layout.
+const MAX_DESCRIPTION_LENGTH = 500;
 
 export function PostJobScreen() {
   // Registered in three stacks (Home, MyJobs, Messages) for the Hire Again
@@ -80,6 +88,26 @@ export function PostJobScreen() {
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
+  // Tracks the pending post-success setTimeout so it can be cancelled if the
+  // screen unmounts before it fires (e.g. the user backs out manually during
+  // the animation) — otherwise its callback still runs and calls setState +
+  // navigation.navigate() against a screen that's no longer mounted.
+  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+    };
+  }, []);
+
+  // Photo URLs this job already had saved when editing started. Removing one
+  // of these from the picker is a draft change — the underlying file must
+  // stay in storage until (and unless) the edit is actually saved, since the
+  // still-live job row keeps referencing it until then. A photo NOT in this
+  // set was added during the current session and was never saved anywhere,
+  // so it's safe to delete from storage the moment it's removed. Stays empty
+  // for a brand-new (non-editing) post, where nothing is pre-existing.
+  const originalPhotosRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!editJobId) return;
@@ -107,6 +135,7 @@ export function PostJobScreen() {
       setLocation(job.location ?? '');
       setBudget(job.budget_cents != null ? String(job.budget_cents / 100) : '');
       setPhotos(job.photos);
+      originalPhotosRef.current = new Set(job.photos);
       if (loc) setCoords({ lat: loc.lat, lng: loc.lng });
       setLoadingJob(false);
     })();
@@ -133,7 +162,8 @@ export function PostJobScreen() {
       }),
     ]).start();
 
-    setTimeout(() => {
+    successTimeoutRef.current = setTimeout(() => {
+      successTimeoutRef.current = null;
       setShowSuccess(false);
       successScale.setValue(0.4);
       successOpacity.setValue(0);
@@ -195,6 +225,14 @@ export function PostJobScreen() {
 
   function removePhoto(url: string) {
     setPhotos((prev) => prev.filter((p) => p !== url));
+
+    // Only clean up storage for a photo added THIS session — one already
+    // saved on the job (edit mode) must stay until the edit is actually
+    // saved, since the still-live job row keeps referencing it until then.
+    if (originalPhotosRef.current.has(url)) return;
+    deleteJobPhoto(url).then(({ error }) => {
+      if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
+    });
   }
 
   async function handleSubmit() {
@@ -209,12 +247,18 @@ export function PostJobScreen() {
     }
 
     const budgetCents = dollarsToCents(budget);
-    if (Number.isNaN(budgetCents)) {
+    // dollarsToCents() already turns 0 (and negatives) into NaN, but that
+    // guarantee is checked explicitly here too, the same way JobDetailScreen's
+    // bid flow does — this call site shouldn't depend on staying in sync with
+    // that function's internals to keep a $0 job from posting.
+    if (Number.isNaN(budgetCents) || (budgetCents != null && budgetCents <= 0)) {
       await alertAsync('Invalid budget', 'Budget must be a positive dollar amount.');
       return;
     }
     // A hire request opens with a proposed price, so an amount is required —
-    // it's the starting point for the negotiation, not a final figure.
+    // it's the starting point for the negotiation, not a final figure. A real
+    // 0 can't reach here (caught above), so this is specifically the "left
+    // blank" case.
     if (isHiring && budgetCents == null) {
       await alertAsync(
         'Price required',
@@ -286,6 +330,19 @@ export function PostJobScreen() {
       );
     }
 
+    // Now that the save actually succeeded, any original photo the user
+    // removed during this edit is genuinely orphaned (the job row no longer
+    // references it) rather than just provisionally dropped — clean those up
+    // too, the same way a freshly-added-then-removed photo already was.
+    if (isEditing) {
+      for (const url of originalPhotosRef.current) {
+        if (photos.includes(url)) continue;
+        deleteJobPhoto(url).then(({ error }) => {
+          if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
+        });
+      }
+    }
+
     // First good moment to ask: they've just posted work and have a concrete
     // reason to want alerts. Only on a genuinely new post — editing an
     // existing job isn't the same moment. Deliberately not awaited so the
@@ -335,6 +392,8 @@ export function PostJobScreen() {
             label="Title"
             value={title}
             onChangeText={setTitle}
+            hint={`${title.length}/${MAX_TITLE_LENGTH}`}
+            maxLength={MAX_TITLE_LENGTH}
             placeholder="e.g. Walk my dog on weekday mornings"
             autoCapitalize="sentences"
           />
@@ -343,6 +402,8 @@ export function PostJobScreen() {
             label="Description"
             value={description}
             onChangeText={setDescription}
+            hint={`${description.length}/${MAX_DESCRIPTION_LENGTH}`}
+            maxLength={MAX_DESCRIPTION_LENGTH}
             placeholder="Describe what you need done…"
             autoCapitalize="sentences"
             multiline

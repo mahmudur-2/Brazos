@@ -6,6 +6,21 @@ const AVATAR_BUCKET = 'avatars';
 const CHAT_BUCKET = 'chat-photos';
 const CHAT_AUDIO_BUCKET = 'chat-audio';
 
+/**
+ * Recovers the storage path from a Supabase public URL, so a file that was
+ * only ever handed back to the caller as a URL (never as its own path) can
+ * still be deleted later. Returns null if the URL doesn't look like one of
+ * this project's public storage URLs — callers treat that as "nothing to
+ * delete" rather than an error, since it just means the photo was never
+ * actually uploaded to Supabase in the first place.
+ */
+function pathFromPublicUrl(bucket: string, url: string): string | null {
+  const marker = `/object/public/${bucket}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return decodeURIComponent(url.slice(idx + marker.length));
+}
+
 async function uploadAsset(
   bucket: string,
   path: string,
@@ -45,6 +60,20 @@ export async function uploadJobPhoto(jobId: string, asset: ImagePickerAsset) {
   const rawExt = (asset.uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
   const ext = rawExt.length <= 4 ? rawExt : 'jpg';
   return uploadAsset(BUCKET, `${jobId}/${Date.now()}.${ext}`, asset);
+}
+
+/**
+ * Delete a job-photos file (a posting attachment or a worker completion
+ * photo — both live in this bucket) given the public URL it was uploaded
+ * as. Used when a photo is removed from the picker before submit, so it
+ * doesn't sit orphaned in storage forever with nothing pointing at it.
+ * Requires the phase26 SQL (job-photos never had a DELETE policy before).
+ */
+export async function deleteJobPhoto(url: string) {
+  const path = pathFromPublicUrl(BUCKET, url);
+  if (!path) return { error: null };
+  const { error } = await supabase.storage.from(BUCKET).remove([path]);
+  return { error };
 }
 
 /**
