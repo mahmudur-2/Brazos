@@ -6,8 +6,14 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   open: { bg: colors.successBg, text: colors.success },
   assigned: { bg: colors.infoBg, text: colors.info },
   in_progress: { bg: colors.warningBg, text: colors.warning },
-  completed: { bg: colors.neutralBg, text: colors.neutral },
-  cancelled: { bg: colors.dangerBg, text: colors.danger },
+  // Completed and cancelled previously shared a near-identical low-contrast
+  // tan pill (completed) next to a red one (cancelled) — visually backwards,
+  // since red reads as "needs attention" for a job that's just over and
+  // done with. Completed now gets the positive-outcome green; cancelled
+  // moves to neutral gray, clearly different from completed at a glance
+  // without borrowing the danger red used elsewhere for rejected/actioned.
+  completed: { bg: colors.successBg, text: colors.success },
+  cancelled: { bg: colors.neutralBg, text: colors.neutral },
   // Bid statuses
   pending: { bg: colors.warningBg, text: colors.warning },
   accepted: { bg: colors.successBg, text: colors.success },
