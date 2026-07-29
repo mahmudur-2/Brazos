@@ -34,6 +34,8 @@ export function ChatBubble({
   replyToName,
   onLongPressAvatar,
 }: ChatBubbleProps) {
+  const isUnsent = !!message.unsent_at;
+
   return (
     <View
       style={[
@@ -56,11 +58,15 @@ export function ChatBubble({
         delayLongPress={350}
         style={styles.bubbleWrap}
       >
-        <View style={[styles.bubble, isOwn ? styles.bubbleOwn : styles.bubbleOther]}>
-          {message.unsent_at ? (
-            <Text style={[styles.unsentText, isOwn && styles.unsentTextOwn]}>
-              This message was unsent
-            </Text>
+        <View
+          style={[
+            styles.bubble,
+            isOwn ? styles.bubbleOwn : styles.bubbleOther,
+            isUnsent && styles.unsentBubble,
+          ]}
+        >
+          {isUnsent ? (
+            <Text style={styles.unsentText}>This message was unsent</Text>
           ) : (
             <>
               {/* Quoted reply strip, WhatsApp-style: an accent rail, the
@@ -116,7 +122,7 @@ export function ChatBubble({
               ) : null}
             </>
           )}
-          <Text style={[styles.time, isOwn && styles.timeOwn]}>
+          <Text style={[styles.time, isOwn && !isUnsent && styles.timeOwn]}>
             {formatClockTime(message.created_at)}
           </Text>
         </View>
@@ -178,6 +184,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderBottomLeftRadius: 4,
+  },
+  // Overrides bubbleOwn/bubbleOther's fill and border — an unsent message is
+  // an absence, not content, so it shouldn't carry the same full-weight
+  // solid-green (own) or solid-white (other) treatment as something that
+  // actually sent. Outlined and dashed reads as "nothing here" at a glance
+  // instead of looking like an ordinary message that happens to say so.
+  unsentBubble: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
   },
   quote: {
     flexDirection: 'row',
@@ -248,9 +265,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
     color: colors.textSubtle,
-  },
-  unsentTextOwn: {
-    color: 'rgba(244,241,232,0.75)',
   },
   time: {
     fontSize: 11,
