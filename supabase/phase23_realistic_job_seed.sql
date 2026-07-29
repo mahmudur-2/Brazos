@@ -118,6 +118,7 @@ delete from public.jobs
 --    title/description and a price that reflects the actual task -----------
 drop table if exists pg_temp.job_templates;
 create temp table job_templates (
+  id serial primary key,
   category text,
   title text,
   description text,
@@ -207,6 +208,8 @@ declare
   v_dlng double precision := 0.27 / (69.0 * cos(radians(40.7128)));
   v_nb record;
   v_tpl record;
+  v_tpl_bag integer[];
+  v_tpl_bag_pos integer;
   v_owner uuid;
   v_worker uuid;
   v_job_id uuid;
@@ -244,10 +247,25 @@ begin
   end if;
 
   for v_nb in select * from seed_neighborhoods loop
+    -- Bag shuffle per neighborhood: draw templates without replacement until
+    -- the bag is empty, then reshuffle a fresh one. `order by random() limit
+    -- 1` per job (the old approach) draws independently every time, so
+    -- neighborhoods with dozens of jobs pulled from ~25 templates reliably
+    -- produced the same title/description/price more than once — visible as
+    -- pixel-identical job cards in the same zone. This guarantees every
+    -- template is used once before any of them repeat.
+    v_tpl_bag := array(select id from job_templates order by random());
+    v_tpl_bag_pos := 0;
+
     for v_i in 1..v_nb.n loop
       v_seq := v_seq + 1;
 
-      select * into v_tpl from job_templates order by random() limit 1;
+      v_tpl_bag_pos := v_tpl_bag_pos + 1;
+      if v_tpl_bag_pos > array_length(v_tpl_bag, 1) then
+        v_tpl_bag := array(select id from job_templates order by random());
+        v_tpl_bag_pos := 1;
+      end if;
+      select * into v_tpl from job_templates where id = v_tpl_bag[v_tpl_bag_pos];
       select id into v_owner from public.profiles order by random() limit 1;
 
       -- Status mix: ~80% open, ~10% assigned, ~10% completed — "mostly open,

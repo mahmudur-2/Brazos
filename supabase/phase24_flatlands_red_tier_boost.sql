@@ -20,7 +20,7 @@
 -- INSERT statements, since how many are actually needed isn't known until
 -- the DO block below queries the live count.
 create temp table job_templates_p24 (
-  idx integer, title text, description text, category text, price_cents integer
+  idx integer primary key, title text, description text, category text, price_cents integer
 );
 insert into job_templates_p24 (idx, title, description, category, price_cents) values
   (0, 'Weed and mulch front yard beds', 'Small front yard, about 150 sq ft of beds. Need weeding and a couple bags of mulch spread — I''ll have the mulch delivered.', 'yard_work', 6500),
@@ -47,6 +47,8 @@ declare
   v_lat double precision;
   v_lng double precision;
   v_tpl record;
+  v_tpl_bag integer[];
+  v_tpl_bag_pos integer := 0;
   v_i integer;
   v_inserted integer := 0;
 begin
@@ -75,8 +77,18 @@ begin
       raise exception 'No profiles exist to own these jobs — sign up at least one account first.';
     end if;
 
+    -- Bag shuffle, same fix as phase23: the old fixed mod(v_i-1, 6) cycle
+    -- guaranteed an exact repeat of template 0 at v_i=7, template 1 at v_i=8,
+    -- etc. whenever v_needed > 6 — a second job with identical title,
+    -- description and price. Drawing without replacement removes that.
+    v_tpl_bag := array(select idx from job_templates_p24 order by random());
     for v_i in 1..v_needed loop
-      select * into v_tpl from job_templates_p24 where idx = mod(v_i - 1, 6) limit 1;
+      v_tpl_bag_pos := v_tpl_bag_pos + 1;
+      if v_tpl_bag_pos > array_length(v_tpl_bag, 1) then
+        v_tpl_bag := array(select idx from job_templates_p24 order by random());
+        v_tpl_bag_pos := 1;
+      end if;
+      select * into v_tpl from job_templates_p24 where idx = v_tpl_bag[v_tpl_bag_pos];
       -- A fresh random owner per job, not one owner for all of them — matches
       -- phase23's "varied poster identities across jobs" convention.
       select id into v_owner from public.profiles order by random() limit 1;
