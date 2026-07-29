@@ -43,7 +43,7 @@ export function ConversationRow({
     <Card
       onPress={onPress}
       onLongPress={onLongPress}
-      style={awaitingRequest ? styles.awaitingCard : undefined}
+      style={[unread && styles.unreadCard, awaitingRequest && styles.awaitingCard]}
     >
       <View style={styles.row}>
         <AvatarPressable
@@ -149,6 +149,9 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: 5,
     backgroundColor: colors.primary,
+  },
+  unreadCard: {
+    backgroundColor: colors.primarySoft,
   },
   awaitingCard: {
     borderColor: colors.primary,
