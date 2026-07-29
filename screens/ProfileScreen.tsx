@@ -26,6 +26,7 @@ import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { formatPhoneDisplay } from '../lib/phone';
 import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
 import { updateProfile } from '../lib/profiles';
 import { uploadAvatar } from '../lib/storage';
@@ -405,7 +406,9 @@ export function ProfileScreen() {
                 </View>
                 <View style={styles.readField}>
                   <Text style={styles.fieldLabel}>Phone number</Text>
-                  <Text style={styles.readValue}>{phone || '—'}</Text>
+                  <Text style={styles.readValue}>
+                    {phone ? formatPhoneDisplay(phone) : '—'}
+                  </Text>
                 </View>
                 <View style={styles.readField}>
                   <Text style={styles.fieldLabel}>Language</Text>
