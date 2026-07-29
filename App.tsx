@@ -363,7 +363,13 @@ export default function App() {
           onReady={flushPendingNavigation}
         >
           <RootNavigator />
-          <StatusBar style="auto" />
+          {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
+              app.json's userInterfaceStyle, Android's default status bar
+              fill) to the system light/dark setting, which on a dark-mode
+              device rendered as a solid black strip above every screen's
+              light cream content. The app is light-only for now (see the
+              tab bar / Map hardcoding elsewhere), so the status bar matches. */}
+          <StatusBar style="dark" backgroundColor={colors.background} />
         </NavigationContainer>
       </AuthProvider>
     </SafeAreaProvider>
