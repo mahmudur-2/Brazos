@@ -1,6 +1,14 @@
-import { Pressable, ScrollView, StyleSheet, Text } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { CHAT_TEMPLATES } from '../lib/messages';
 import { colors, radius, spacing } from '../lib/theme';
+
+// No gradient library in this project (expo-linear-gradient isn't
+// installed, and adding a native module tonight would need a rebuild) — a
+// handful of stacked, increasingly-opaque strips approximates the same fade
+// with plain Views. Opacity climbs left-to-right so the row's own surface
+// color visually swallows the trailing chip instead of hard-cutting it.
+const FADE_WIDTH = 28;
+const FADE_STEPS = 6;
 
 type QuickRepliesProps = {
   onSelect: (template: string) => void;
@@ -21,24 +29,34 @@ type QuickRepliesProps = {
  */
 export function QuickReplies({ onSelect, disabled = false }: QuickRepliesProps) {
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={styles.row}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      {CHAT_TEMPLATES.map((template) => (
-        <Pressable
-          key={template}
-          style={styles.chip}
-          onPress={() => onSelect(template)}
-          disabled={disabled}
-        >
-          <Text style={styles.chipText}>{template}</Text>
-        </Pressable>
-      ))}
-    </ScrollView>
+    <View style={styles.wrap}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.row}
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
+        {CHAT_TEMPLATES.map((template) => (
+          <Pressable
+            key={template}
+            style={styles.chip}
+            onPress={() => onSelect(template)}
+            disabled={disabled}
+          >
+            <Text style={styles.chipText}>{template}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+
+      {/* Hints that the row scrolls — without it the last chip just looks
+          cut off at the screen edge with nothing signaling more is there. */}
+      <View style={styles.fade} pointerEvents="none">
+        {Array.from({ length: FADE_STEPS }).map((_, i) => (
+          <View key={i} style={[styles.fadeStrip, { opacity: (i + 1) / FADE_STEPS }]} />
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -50,7 +68,7 @@ const CHIP_HEIGHT = CHIP_TEXT_LINE + CHIP_PAD_V * 2 + 2;
 export const QUICK_REPLIES_HEIGHT = CHIP_HEIGHT + spacing.sm * 2;
 
 const styles = StyleSheet.create({
-  row: {
+  wrap: {
     height: QUICK_REPLIES_HEIGHT,
     // Both are required. flexGrow:0 stops it expanding into spare space;
     // flexShrink:0 stops the keyboard's arrival compressing it, which is what
@@ -59,6 +77,22 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     borderTopWidth: 1,
     borderTopColor: colors.border,
+    backgroundColor: colors.surface,
+    position: 'relative',
+  },
+  row: {
+    flex: 1,
+  },
+  fade: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: FADE_WIDTH,
+    flexDirection: 'row',
+  },
+  fadeStrip: {
+    flex: 1,
     backgroundColor: colors.surface,
   },
   content: {
