@@ -86,9 +86,6 @@ const TAB_LABELS: Record<string, string> = {
 // feedback (a 35%/35% scale-up read too big; these are the midpoint). The bar
 // height is NOT a taste value the same way — it's derived from what the
 // content actually measures, see the arithmetic below.
-const BASE_TAB_ICON_SIZE = 25;
-const BASE_TAB_LABEL_FONT_SIZE = 10;
-const BASE_TAB_BAR_CONTENT_HEIGHT = 49;
 const TAB_ICON_SIZE = 29;
 const TAB_LABEL_FONT_SIZE = 12;
 

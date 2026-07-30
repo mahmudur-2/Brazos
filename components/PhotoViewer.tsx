@@ -276,7 +276,7 @@ export function PhotoViewer({
           return;
         }
 
-        const { dx, dy, vx, vy } = gestureState;
+        const { dx, dy, vy } = gestureState;
         const moved = Math.abs(dx) > TAP_SLOP || Math.abs(dy) > TAP_SLOP;
 
         if (!moved) {

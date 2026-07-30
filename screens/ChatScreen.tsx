@@ -6,7 +6,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -39,18 +38,13 @@ import { alertAsync, confirmAsync } from '../lib/dialog';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
 import {
-  CHAT_TEMPLATES,
   canUnsend,
   messagePreviewText,
   sendMessage,
   unsendMessage,
   type Message,
 } from '../lib/messages';
-import {
-  isOpenRequest,
-  respondToJobRequest,
-  type JobRequest,
-} from '../lib/jobRequests';
+import { respondToJobRequest, type JobRequest } from '../lib/jobRequests';
 import { useJobRequests } from '../hooks/useJobRequests';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
@@ -118,7 +112,11 @@ export function ChatScreen() {
     const clip = recorder.previewClip;
     if (!user || !clip) return;
     setSending(true);
-    const { url, error: uploadError } = await uploadChatAudio(params.jobId, clip.uri);
+    const { url, error: uploadError } = await uploadChatAudio(
+      params.jobId,
+      user.id,
+      clip.uri
+    );
     if (uploadError || !url) {
       setSending(false);
       await alertAsync(
@@ -437,7 +435,11 @@ export function ChatScreen() {
   async function sendPhoto(asset: ImagePicker.ImagePickerAsset) {
     if (!user) return;
     setSending(true);
-    const { url, error: uploadError } = await uploadChatPhoto(params.jobId, asset);
+    const { url, error: uploadError } = await uploadChatPhoto(
+      params.jobId,
+      user.id,
+      asset
+    );
     if (uploadError || !url) {
       setSending(false);
       await alertAsync(

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Circle, Polygon, type MapStyleElement } from 'react-native-maps';
+import MapView, { Circle, Polygon } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Button } from './Button';
 import { MapPinIcon } from './MapPinIcon';
@@ -23,30 +23,6 @@ const DEFAULT_REGION = {
   latitudeDelta: 0.08,
   longitudeDelta: 0.08,
 };
-
-// Standard dark "Night mode" Google Maps style (customMapStyle only takes
-// effect on the Google Maps provider, i.e. Android here — iOS stays on Apple
-// Maps and gets its dark look via the `userInterfaceStyle` prop below).
-// NOT CURRENTLY USED — the map is hardcoded to light below, same as the tab
-// bar and header (see App.tsx/MapScreen.tsx), until this screen gets a real,
-// deliberately-designed dark mode. Kept rather than deleted so that pass
-// doesn't have to rebuild this from scratch.
-const DARK_MAP_STYLE: MapStyleElement[] = [
-  { elementType: 'geometry', stylers: [{ color: '#1B2620' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#1B2620' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#8ea08f' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ color: '#2E3B33' }] },
-  { featureType: 'poi', elementType: 'geometry', stylers: [{ color: '#22302A' }] },
-  { featureType: 'poi', elementType: 'labels.text.fill', stylers: [{ color: '#6E8272' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#1E3328' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2A3A32' }] },
-  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#1B2620' }] },
-  { featureType: 'road', elementType: 'labels.text.fill', stylers: [{ color: '#8ea08f' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3E8863' }] },
-  { featureType: 'transit', elementType: 'geometry', stylers: [{ color: '#22302A' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#101712' }] },
-  { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#6E8272' }] },
-];
 
 export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   const [perm, setPerm] = useState<PermState>('loading');

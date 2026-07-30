@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { handleNotificationData } from '../lib/notificationRoutes';
 import { registerPushToken } from '../lib/pushNotifications';
@@ -37,6 +38,7 @@ export function usePushNotifications() {
 
   // --- Cold start: app was closed, tapping the notification launched it ----
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     if (handledColdStart.current) return;
 
     let active = true;
@@ -55,6 +57,7 @@ export function usePushNotifications() {
 
   // --- Warm start: app was backgrounded or already open -------------------
   useEffect(() => {
+    if (Platform.OS === 'web') return;
     const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
       // Any tap arriving through this listener is a fresh one, so the
       // cold-start replay is no longer relevant.

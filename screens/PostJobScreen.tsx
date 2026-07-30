@@ -313,7 +313,6 @@ export function PostJobScreen() {
           budgetCents,
           photos,
           coords,
-          hireWorkerId,
         });
     setSubmitting(false);
 

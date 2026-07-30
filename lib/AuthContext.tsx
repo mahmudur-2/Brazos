@@ -9,6 +9,7 @@ import React, {
 import { AppState } from 'react-native';
 import type { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { fetchCurrentUserBanned, updateProfile } from './profiles';
 import { unregisterPushToken } from './pushNotifications';
 
 type AuthResult = { error: AuthError | null };
@@ -67,14 +68,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
     let active = true;
 
     (async () => {
-      const { data } = await supabase
-        .from('profiles')
-        .select('banned')
-        .eq('id', userId)
-        .maybeSingle();
+      const { data: banned } = await fetchCurrentUserBanned(userId);
 
       if (!active) return;
-      if (data?.banned) {
+      if (banned) {
         setBannedNotice(true);
         await supabase.auth.signOut();
       }
@@ -116,10 +113,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
         // Belt-and-suspenders: if a session exists (confirmation off), make sure
         // the profile has the name/phone even if the trigger didn't populate it.
         if (!error && data.session && data.user) {
-          await supabase
-            .from('profiles')
-            .update({ full_name: fullName, phone })
-            .eq('id', data.user.id);
+          await updateProfile(data.user.id, { full_name: fullName, phone });
         }
         return { error };
       },

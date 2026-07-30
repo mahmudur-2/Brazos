@@ -4,8 +4,9 @@ import { colors, radius, spacing } from '../lib/theme';
 import { isVerified } from '../lib/profiles';
 
 /**
- * Shows a "Verified" pill for verified workers. For everyone else shows a muted
- * "ID-checked" label — per the spec, unverified is ID-checked, never unscreened.
+ * Only claims verification when the persisted status is exactly `verified`.
+ * The repository has no identity-check provider or workflow, so every other
+ * state must be described neutrally rather than claiming an ID check occurred.
  */
 export function VerificationBadge({ status }: { status?: string | null }) {
   if (isVerified(status)) {
@@ -18,9 +19,9 @@ export function VerificationBadge({ status }: { status?: string | null }) {
   }
 
   return (
-    <View style={[styles.pill, styles.idChecked]}>
-      <Ionicons name="checkmark-circle-outline" size={12} color={colors.textMuted} />
-      <Text style={[styles.text, styles.idCheckedText]}>ID-checked</Text>
+    <View style={[styles.pill, styles.notVerified]}>
+      <Ionicons name="ellipse-outline" size={12} color={colors.textMuted} />
+      <Text style={[styles.text, styles.notVerifiedText]}>Not verified</Text>
     </View>
   );
 }
@@ -37,7 +38,7 @@ const styles = StyleSheet.create({
   verified: {
     backgroundColor: colors.primarySoft,
   },
-  idChecked: {
+  notVerified: {
     backgroundColor: colors.neutralBg,
   },
   text: {
@@ -47,7 +48,7 @@ const styles = StyleSheet.create({
   verifiedText: {
     color: colors.primary,
   },
-  idCheckedText: {
+  notVerifiedText: {
     color: colors.textMuted,
   },
 });

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { resolveChatMediaUrl } from './storage';
 
 export type Message = {
   id: string;
@@ -59,15 +60,31 @@ export const CHAT_TEMPLATES = [
   'Job done',
 ] as const;
 
+const MESSAGE_COLUMNS =
+  'id, job_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, request_event, request_amount_cents, unsent_at, created_at';
+
+/** Replace stored private-media references with short-lived display URLs. */
+export async function resolveMessageMedia(message: Message): Promise<Message> {
+  const [imageUrl, audioUrl] = await Promise.all([
+    resolveChatMediaUrl('chat-photos', message.image_url),
+    resolveChatMediaUrl('chat-audio', message.audio_url),
+  ]);
+  return { ...message, image_url: imageUrl, audio_url: audioUrl };
+}
+
 /** All messages for a job, oldest first. */
 export async function fetchMessages(jobId: string) {
   const { data, error } = await supabase
     .from('messages')
-    .select('*')
+    .select(MESSAGE_COLUMNS)
     .eq('job_id', jobId)
     .order('created_at', { ascending: true });
 
-  return { data: (data ?? []) as Message[], error };
+  if (error) return { data: [] as Message[], error };
+  const messages = await Promise.all(
+    ((data ?? []) as Message[]).map((message) => resolveMessageMedia(message))
+  );
+  return { data: messages, error: null };
 }
 
 export type NewMessageInput = {
@@ -97,7 +114,10 @@ export async function sendMessage(input: NewMessageInput) {
     .select()
     .single();
 
-  return { data: data as Message | null, error };
+  return {
+    data: data ? await resolveMessageMedia(data as Message) : null,
+    error,
+  };
 }
 
 /**

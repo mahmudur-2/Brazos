@@ -145,8 +145,6 @@ export function ClientJobDetailScreen() {
     const { error } = await acceptBid({
       jobId: job.id,
       bidId: bid.id,
-      workerId: bid.worker.id,
-      amountCents: bid.amount_cents,
     });
     setAcceptingId(null);
 

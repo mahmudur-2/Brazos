@@ -18,20 +18,17 @@ export type NewReviewInput = {
 };
 
 /**
- * Insert a review. A DB trigger recomputes the reviewee's rating_avg /
- * rating_count on their profile, so the client doesn't touch other users' rows.
+ * Insert a review through create_review(), which derives reviewer_id and
+ * validates the completed job parties and rating before the aggregate trigger.
  */
-export async function createReview(reviewerId: string, input: NewReviewInput) {
+export async function createReview(_reviewerId: string, input: NewReviewInput) {
   const { data, error } = await supabase
-    .from('reviews')
-    .insert({
-      reviewer_id: reviewerId,
-      reviewee_id: input.revieweeId,
-      job_id: input.jobId,
-      rating: input.rating,
-      comment: input.comment.trim() || null,
+    .rpc('create_review', {
+      p_job_id: input.jobId,
+      p_reviewee_id: input.revieweeId,
+      p_rating: input.rating,
+      p_comment: input.comment.trim() || null,
     })
-    .select()
     .single();
 
   return { data: data as Review | null, error };
@@ -41,7 +38,7 @@ export async function createReview(reviewerId: string, input: NewReviewInput) {
 export async function fetchMyReviewForJob(reviewerId: string, jobId: string) {
   const { data, error } = await supabase
     .from('reviews')
-    .select('*')
+    .select('id, job_id, reviewer_id, reviewee_id, rating, comment, created_at')
     .eq('reviewer_id', reviewerId)
     .eq('job_id', jobId)
     .maybeSingle();

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { fetchProfileById, type Profile } from '../lib/profiles';
+import { fetchMyProfile, type Profile } from '../lib/profiles';
 import { useAuth } from './useAuth';
 
 /** Loads the signed-in user's own profile row. */
@@ -16,7 +16,7 @@ export function useProfile() {
       return;
     }
     setError(null);
-    const { data, error } = await fetchProfileById(user.id);
+    const { data, error } = await fetchMyProfile(user.id);
     if (error) setError(error.message);
     else setProfile(data);
     setLoading(false);

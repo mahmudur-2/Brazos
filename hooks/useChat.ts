@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { fetchMessages, type Message } from '../lib/messages';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { fetchMessages, resolveMessageMedia, type Message } from '../lib/messages';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -9,13 +9,18 @@ import { supabase } from '../lib/supabase';
  * (see phase8 SQL); without it, the initial fetch still works.
  */
 export function useChat(jobId: string) {
+  const instanceId = useId();
+  const runRef = useRef(0);
+  const loadRef = useRef(0);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    const load = ++loadRef.current;
     setError(null);
     const { data, error } = await fetchMessages(jobId);
+    if (load !== loadRef.current) return;
     if (error) setError(error.message);
     else setMessages(data);
     setLoading(false);
@@ -24,11 +29,15 @@ export function useChat(jobId: string) {
   useEffect(() => {
     setLoading(true);
     refresh();
+    return () => {
+      loadRef.current++;
+    };
   }, [refresh]);
 
   useEffect(() => {
+    let active = true;
     const channel = supabase
-      .channel(`messages:job:${jobId}`)
+      .channel(`messages:job:${jobId}:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         {
@@ -37,8 +46,9 @@ export function useChat(jobId: string) {
           table: 'messages',
           filter: `job_id=eq.${jobId}`,
         },
-        (payload) => {
-          const message = payload.new as Message;
+        async (payload) => {
+          const message = await resolveMessageMedia(payload.new as Message);
+          if (!active) return;
           setMessages((prev) =>
             prev.some((m) => m.id === message.id) ? prev : [...prev, message]
           );
@@ -55,17 +65,19 @@ export function useChat(jobId: string) {
           table: 'messages',
           filter: `job_id=eq.${jobId}`,
         },
-        (payload) => {
-          const message = payload.new as Message;
+        async (payload) => {
+          const message = await resolveMessageMedia(payload.new as Message);
+          if (!active) return;
           setMessages((prev) => prev.map((m) => (m.id === message.id ? message : m)));
         }
       )
       .subscribe();
 
     return () => {
+      active = false;
       supabase.removeChannel(channel);
     };
-  }, [jobId]);
+  }, [instanceId, jobId]);
 
   /** Append a just-sent message locally so the sender sees it immediately. */
   const addLocal = useCallback((message: Message) => {

@@ -61,7 +61,7 @@ export function HomeScreen() {
 
         <View style={styles.previewSection}>
           <View style={styles.previewHeader}>
-            <Text style={styles.previewTitle}>Nearby open jobs</Text>
+            <Text style={styles.previewTitle}>Open jobs</Text>
             <Pressable onPress={goToFindWork} hitSlop={8}>
               <Text style={styles.seeAll}>See all</Text>
             </Pressable>

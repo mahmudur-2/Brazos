@@ -1,8 +1,8 @@
 import { supabase } from './supabase';
 
-// Worker/client profile (public-facing subset). `completion_rate` is a
-// later-phase reputation field that may not exist in the DB yet, so it is
-// optional and the UI degrades gracefully when it's absent.
+// Combined profile shape. Public reads deliberately omit `phone`, `is_admin`,
+// and `banned`; get_my_profile() is the only client-facing read that returns
+// those self-only fields after phase29.
 export type Profile = {
   id: string;
   full_name: string | null;
@@ -31,16 +31,72 @@ export type ProfileUpdate = {
   categories?: string[];
 };
 
-/** Update the signed-in user's own profile row. */
+export const PUBLIC_PROFILE_COLUMNS =
+  'id, full_name, avatar_url, role, verification_status, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time';
+
+const SELF_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, phone, is_admin, banned`;
+
+function isMissingRpc(error: { code?: string } | null): boolean {
+  return error?.code === 'PGRST202';
+}
+
+/**
+ * Update the signed-in user's own editable fields. phase29 revokes direct
+ * profile UPDATE and rejects protected keys inside update_my_profile().
+ *
+ * The PGRST202 fallback is only for the pre-migration development window: it
+ * keeps the existing development database usable until phase29 is applied. Once the
+ * function exists, every other error is returned and never bypassed.
+ */
 export async function updateProfile(userId: string, patch: ProfileUpdate) {
+  const rpcResult = await supabase
+    .rpc('update_my_profile', { p_patch: patch })
+    .maybeSingle();
+
+  if (!isMissingRpc(rpcResult.error)) {
+    return { data: rpcResult.data as Profile | null, error: rpcResult.error };
+  }
+
   const { data, error } = await supabase
     .from('profiles')
     .update(patch)
     .eq('id', userId)
-    .select()
+    .select(SELF_PROFILE_COLUMNS)
     .maybeSingle();
 
   return { data: data as Profile | null, error };
+}
+
+/** Fetch the signed-in user's complete profile, including their own phone. */
+export async function fetchMyProfile(userId: string) {
+  const rpcResult = await supabase.rpc('get_my_profile').maybeSingle();
+  if (!isMissingRpc(rpcResult.error)) {
+    return { data: rpcResult.data as Profile | null, error: rpcResult.error };
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select(SELF_PROFILE_COLUMNS)
+    .eq('id', userId)
+    .maybeSingle();
+
+  return { data: data as Profile | null, error };
+}
+
+/** Check the signed-in account's ban flag without exposing it on public reads. */
+export async function fetchCurrentUserBanned(userId: string) {
+  const rpcResult = await supabase.rpc('current_user_is_banned');
+  if (!isMissingRpc(rpcResult.error)) {
+    return { data: rpcResult.data === true, error: rpcResult.error };
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('banned')
+    .eq('id', userId)
+    .maybeSingle();
+
+  return { data: data?.banned === true, error };
 }
 
 /** Fetch a set of profiles by id (for resolving counterparty names in lists). */
@@ -64,11 +120,14 @@ export async function fetchProfilesByIds(ids: string[]) {
 export async function fetchProfileById(id: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*')
+    .select(PUBLIC_PROFILE_COLUMNS)
     .eq('id', id)
     .maybeSingle();
 
-  return { data: data as Profile | null, error };
+  return {
+    data: data ? ({ ...data, phone: null, is_admin: null, banned: null } as Profile) : null,
+    error,
+  };
 }
 
 /** Up to two initials from a name, e.g. "Carlos Reyes" -> "CR". */

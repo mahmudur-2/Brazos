@@ -263,7 +263,7 @@ export function JobDetailScreen() {
 
           {similarJobs.length > 0 && (
             <View style={styles.similarSection}>
-              <Text style={styles.similarTitle}>Similar jobs nearby</Text>
+              <Text style={styles.similarTitle}>Similar open jobs</Text>
               <View style={styles.similarList}>
                 {similarJobs.map((sj) => (
                   <BrowseJobCard

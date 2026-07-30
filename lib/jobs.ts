@@ -164,12 +164,6 @@ export type NewJobInput = {
    * which is what feeds the hotspot map.
    */
   coords?: { lat: number; lng: number } | null;
-  /**
-   * Direct hire ("Hire Again"): skip open bidding and assign the job straight
-   * to this worker at the agreed price. When set, budgetCents is the agreed
-   * amount and the job is created already-assigned.
-   */
-  hireWorkerId?: string | null;
 };
 
 // Lightweight shape for the worker browse list (no bid count).
@@ -211,6 +205,8 @@ export function toOpenJob(row: any): OpenJob {
 // ever added to `jobs`.
 const OPEN_JOB_COLUMNS =
   'id, client_id, title, description, category, location, budget_cents, status, created_at, photos';
+const JOB_COLUMNS =
+  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos`;
 
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {
@@ -223,108 +219,53 @@ export async function fetchOpenJobs() {
   return { data: (data ?? []).map(toOpenJob), error };
 }
 
-/**
- * Insert a new job owned by `clientId`. Normally opens for bidding; when
- * `hireWorkerId` is set it's created already assigned to that worker
- * (direct hire), skipping the bidding round entirely.
- */
-export async function createJob(clientId: string, input: NewJobInput) {
-  const isDirectHire = !!input.hireWorkerId;
-
+/** Create an open job and its optional exact location in one transaction. */
+export async function createJob(_clientId: string, input: NewJobInput) {
   const { data, error } = await supabase
-    .from('jobs')
-    .insert({
-      client_id: clientId,
-      title: input.title,
-      description: input.description,
-      category: input.category,
-      location: input.location,
-      budget_cents: input.budgetCents,
-      photos: input.photos ?? [],
-      status: isDirectHire ? 'assigned' : 'open',
-      ...(isDirectHire
-        ? {
-            assigned_worker_id: input.hireWorkerId,
-            final_amount_cents: input.budgetCents,
-          }
-        : {}),
+    .rpc('create_job', {
+      p_title: input.title,
+      p_description: input.description,
+      p_category: input.category,
+      p_location: input.location,
+      p_budget_cents: input.budgetCents,
+      p_photos: input.photos ?? [],
+      p_lat: input.coords?.lat ?? null,
+      p_lng: input.coords?.lng ?? null,
     })
-    .select()
     .single();
 
-  if (error || !data) return { data: null, error };
-
-  // Exact coordinates live in job_locations (never on `jobs` — see phase12),
-  // so this is a second write. A failure here only costs the map pin, so it's
-  // logged into the return value but doesn't fail the whole post.
-  let locationError: { message: string } | null = null;
-  if (input.coords) {
-    const { error: locErr } = await supabase.from('job_locations').insert({
-      job_id: (data as Job).id,
-      lat: input.coords.lat,
-      lng: input.coords.lng,
-    });
-    if (locErr) {
-      // Surface the real cause (RLS denial, network error, etc.) instead of
-      // silently dropping it — the caller only sees a generic "no map pin"
-      // notice, so this is the only place the actual reason is visible.
-      console.error('[jobs] job_locations insert failed', locErr);
-      locationError = locErr;
-    }
-  }
-
-  return { data: data as Job, error: null, locationError };
+  return {
+    data: data ? mapJobRow(data) : null,
+    error,
+    locationError: null as { message: string } | null,
+  };
 }
 
 /**
  * Update a job's postable details (title/description/category/location/
- * budget/photos). Only reachable from the UI while the job has zero bids
- * (see ClientJobDetailScreen) — enforced there rather than in RLS because
- * the existing jobs_update_own policy also has to keep working for
- * acceptBid()/cancellation after bids exist, so it can't be narrowed to
- * zero-bid-only without breaking those.
+ * budget/photos). update_job_details() enforces ownership, open status, and
+ * zero bids, then updates/removes the exact location in the same transaction.
  */
 export async function updateJob(jobId: string, input: NewJobInput) {
   const { data, error } = await supabase
-    .from('jobs')
-    .update({
-      title: input.title,
-      description: input.description,
-      category: input.category,
-      location: input.location,
-      budget_cents: input.budgetCents,
-      photos: input.photos ?? [],
+    .rpc('update_job_details', {
+      p_job_id: jobId,
+      p_title: input.title,
+      p_description: input.description,
+      p_category: input.category,
+      p_location: input.location,
+      p_budget_cents: input.budgetCents,
+      p_photos: input.photos ?? [],
+      p_lat: input.coords?.lat ?? null,
+      p_lng: input.coords?.lng ?? null,
     })
-    .eq('id', jobId)
-    .select()
     .single();
 
-  if (error || !data) return { data: null, error };
-
-  let locationError: { message: string } | null = null;
-  if (input.coords) {
-    const { error: locErr } = await supabase
-      .from('job_locations')
-      .upsert({ job_id: jobId, lat: input.coords.lat, lng: input.coords.lng });
-    if (locErr) {
-      console.error('[jobs] job_locations upsert failed', locErr);
-      locationError = locErr;
-    }
-  } else {
-    // Location text changed without re-pinning, so any previously saved
-    // coordinates no longer match it — drop them rather than leave a stale
-    // pin on the map.
-    const { error: delErr } = await supabase
-      .from('job_locations')
-      .delete()
-      .eq('job_id', jobId);
-    if (delErr) {
-      console.error('[jobs] job_locations delete (stale pin) failed', delErr);
-      locationError = delErr;
-    }
-  }
-
-  return { data: data as Job, error: null, locationError };
+  return {
+    data: data ? mapJobRow(data) : null,
+    error,
+    locationError: null as { message: string } | null,
+  };
 }
 
 /**
@@ -391,7 +332,7 @@ export async function canRehireWorker(clientId: string, workerId: string) {
 export async function fetchJobsByClient(clientId: string) {
   const { data, error } = await supabase
     .from('jobs')
-    .select('*, bids!bids_job_id_fkey(count)')
+    .select(`${JOB_COLUMNS}, bids!bids_job_id_fkey(count)`)
     .eq('client_id', clientId)
     .order('created_at', { ascending: false });
 
@@ -402,7 +343,7 @@ export async function fetchJobsByClient(clientId: string) {
 export async function fetchJobsAssignedToWorker(workerId: string) {
   const { data, error } = await supabase
     .from('jobs')
-    .select('*, bids!bids_job_id_fkey(count)')
+    .select(`${JOB_COLUMNS}, bids!bids_job_id_fkey(count)`)
     .eq('assigned_worker_id', workerId)
     .order('created_at', { ascending: false });
 
@@ -413,7 +354,7 @@ export async function fetchJobsAssignedToWorker(workerId: string) {
 export async function fetchJobById(jobId: string) {
   const { data, error } = await supabase
     .from('jobs')
-    .select('*, bids!bids_job_id_fkey(count)')
+    .select(`${JOB_COLUMNS}, bids!bids_job_id_fkey(count)`)
     .eq('id', jobId)
     .maybeSingle();
 
@@ -429,19 +370,11 @@ export async function updateJobStatus(
   status: 'in_progress' | 'completed',
   photoUrls?: string[] | null
 ) {
-  const patch: Record<string, unknown> = { status };
-
-  // Only touch the photo columns when there's something to write, so the
-  // update doesn't fail if those (migration-added) columns aren't present yet.
-  if (photoUrls && photoUrls.length > 0) {
-    patch.completion_photos = photoUrls;
-    // Keep the legacy scalar in sync with the first photo so anything still
-    // reading completion_photo_url (older rows, external queries) sees a
-    // sensible value rather than null.
-    patch.completion_photo_url = photoUrls[0];
-  }
-
-  const { error } = await supabase.from('jobs').update(patch).eq('id', jobId);
+  const { error } = await supabase.rpc('transition_job_status', {
+    p_job_id: jobId,
+    p_status: status,
+    p_completion_photos: photoUrls ?? null,
+  });
   return { error };
 }
 

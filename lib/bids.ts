@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import type { JobCategory } from './jobs';
-import type { Profile } from './profiles';
+import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
 
 // Mirrors the Postgres bid status enum.
 export type BidStatus = 'pending' | 'accepted' | 'rejected' | 'withdrawn';
@@ -11,7 +11,7 @@ export type Bid = {
   worker_id: string;
   amount_cents: number;
   message: string | null;
-  status: string;
+  status: BidStatus;
   created_at: string;
 };
 
@@ -33,6 +33,12 @@ export type PendingBid = Bid & {
   } | null;
 };
 
+type PublicProfileRow = Omit<Profile, 'phone' | 'is_admin' | 'banned'>;
+
+function oneRelated<T>(value: T | T[] | null): T | null {
+  return Array.isArray(value) ? value[0] ?? null : value;
+}
+
 export type NewBidInput = {
   jobId: string;
   amountCents: number;
@@ -47,18 +53,14 @@ export const BID_SORT_OPTIONS: { label: string; value: BidSort }[] = [
   { label: 'Highest rated', value: 'rating' },
 ];
 
-/** Place a bid as `workerId` on a job. One bid per worker per job (DB-enforced). */
-export async function createBid(workerId: string, input: NewBidInput) {
+/** Place a bid; create_bid() derives the worker from the authenticated user. */
+export async function createBid(_workerId: string, input: NewBidInput) {
   const { data, error } = await supabase
-    .from('bids')
-    .insert({
-      worker_id: workerId,
-      job_id: input.jobId,
-      amount_cents: input.amountCents,
-      message: input.message,
-      status: 'pending',
+    .rpc('create_bid', {
+      p_job_id: input.jobId,
+      p_amount_cents: input.amountCents,
+      p_message: input.message,
     })
-    .select()
     .single();
 
   return { data: data as Bid | null, error };
@@ -68,7 +70,7 @@ export async function createBid(workerId: string, input: NewBidInput) {
 export async function fetchMyBidForJob(workerId: string, jobId: string) {
   const { data, error } = await supabase
     .from('bids')
-    .select('*')
+    .select('id, job_id, worker_id, amount_cents, message, status, created_at')
     .eq('worker_id', workerId)
     .eq('job_id', jobId)
     .maybeSingle();
@@ -81,28 +83,50 @@ export async function fetchPendingBidsByWorker(workerId: string) {
   const { data, error } = await supabase
     .from('bids')
     .select(
-      '*, job:jobs!bids_job_id_fkey(id, client_id, title, description, category, location, budget_cents, status, created_at)'
+      'id, job_id, worker_id, amount_cents, message, status, created_at, job:jobs!bids_job_id_fkey(id, client_id, title, description, category, location, budget_cents, status, created_at)'
     )
     .eq('worker_id', workerId)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
 
-  return { data: (data ?? []) as PendingBid[], error };
+  const rows = (data ?? []) as unknown as Array<
+    Bid & { job: PendingBid['job'] | NonNullable<PendingBid['job']>[] }
+  >;
+  return {
+    data: rows.map((row) => ({ ...row, job: oneRelated(row.job) })),
+    error,
+  };
 }
 
 /**
  * All bids on a job, each with the bidding worker's profile (for the client's
- * accept screen). Selects the worker profile with `(*)` so a missing later-phase
- * reputation column (e.g. completion_rate) doesn't break the query.
+ * accept screen). The explicit projection cannot pull phone or moderation
+ * fields into the embedded worker profile.
  */
 export async function fetchBidsForJob(jobId: string) {
   const { data, error } = await supabase
     .from('bids')
-    .select('*, worker:profiles!bids_worker_id_fkey(*)')
+    .select(
+      `id, job_id, worker_id, amount_cents, message, status, created_at, worker:profiles!bids_worker_id_fkey(${PUBLIC_PROFILE_COLUMNS})`
+    )
     .eq('job_id', jobId)
     .order('created_at', { ascending: false });
 
-  return { data: (data ?? []) as BidWithWorker[], error };
+  const rows = (data ?? []) as unknown as Array<
+    Bid & { worker: PublicProfileRow | PublicProfileRow[] | null }
+  >;
+  return {
+    data: rows.map((row) => {
+      const worker = oneRelated(row.worker);
+      return {
+        ...row,
+        worker: worker
+          ? { ...worker, phone: null, is_admin: null, banned: null }
+          : null,
+      };
+    }),
+    error,
+  };
 }
 
 /**
@@ -119,34 +143,18 @@ export async function fetchBidCount(jobId: string) {
 }
 
 /**
- * Accept a bid: assign the job to the worker and mark the bid accepted.
- * Two updates (no server-side transaction in Phase 1) — job first so the
- * assignment is the durable state if the second write fails.
+ * Accept a bid atomically; the RPC locks both rows and derives worker/amount
+ * from the pending bid rather than trusting client-supplied values.
  */
 export async function acceptBid(params: {
   jobId: string;
   bidId: string;
-  workerId: string;
-  amountCents: number;
 }) {
-  const { error: jobError } = await supabase
-    .from('jobs')
-    .update({
-      status: 'assigned',
-      assigned_worker_id: params.workerId,
-      accepted_bid_id: params.bidId,
-      final_amount_cents: params.amountCents,
-    })
-    .eq('id', params.jobId);
-
-  if (jobError) return { error: jobError };
-
-  const { error: bidError } = await supabase
-    .from('bids')
-    .update({ status: 'accepted' })
-    .eq('id', params.bidId);
-
-  return { error: bidError };
+  const { error } = await supabase.rpc('accept_bid', {
+    p_job_id: params.jobId,
+    p_bid_id: params.bidId,
+  });
+  return { error };
 }
 
 // ---------------------------------------------------------------------------
