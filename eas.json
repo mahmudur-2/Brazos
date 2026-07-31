@@ -1,0 +1,16 @@
+{
+  "cli": {
+    "version": ">= 16.0.1",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "testflight": {
+      "channel": "preview",
+      "environment": "preview",
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "testflight": {}
+  }
+}
