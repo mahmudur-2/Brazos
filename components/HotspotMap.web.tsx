@@ -8,81 +8,136 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import type * as MapLibre from 'maplibre-gl';
+import Feature from 'ol/Feature.js';
+import Map from 'ol/Map.js';
+import type MapBrowserEvent from 'ol/MapBrowserEvent.js';
+import ViewState from 'ol/View.js';
+import { defaults as defaultControls } from 'ol/control/defaults.js';
+import CircleGeometry from 'ol/geom/Circle.js';
+import Point from 'ol/geom/Point.js';
+import { defaults as defaultInteractions } from 'ol/interaction/defaults.js';
+import TileLayer from 'ol/layer/Tile.js';
+import VectorLayer from 'ol/layer/Vector.js';
+import { fromLonLat } from 'ol/proj.js';
+import XYZ from 'ol/source/XYZ.js';
+import VectorSource from 'ol/source/Vector.js';
+import CircleStyle from 'ol/style/Circle.js';
+import Fill from 'ol/style/Fill.js';
+import Stroke from 'ol/style/Stroke.js';
+import Style from 'ol/style/Style.js';
+import 'ol/ol.css';
 import { MapPinIcon } from './MapPinIcon';
-import { tierForCount, type HotspotMapProps } from '../lib/hotspots';
+import {
+  glowRingsForCell,
+  type HotspotCell,
+  type HotspotMapProps,
+} from '../lib/hotspots';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 
-declare global {
-  interface Window {
-    maplibregl?: typeof import('maplibre-gl');
-  }
-}
-
-const DEFAULT_CENTER: MapLibre.LngLatLike = [-73.9496, 40.6501];
-const DEFAULT_ZOOM = 11.5;
-const VECTOR_STYLE =
-  'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
-const VECTOR_LOAD_TIMEOUT_MS = 7000;
+const DEFAULT_CENTER: [number, number] = [-73.9496, 40.6501];
+const DEFAULT_ZOOM = 12;
+const PRIMARY_LOAD_TIMEOUT_MS = 7000;
 const FALLBACK_LOAD_TIMEOUT_MS = 10000;
-
-const RASTER_FALLBACK_STYLE: MapLibre.StyleSpecification = {
-  version: 8,
-  sources: {
-    openStreetMap: {
-      type: 'raster',
-      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap contributors',
-      maxzoom: 19,
-    },
-  },
-  layers: [
-    {
-      id: 'openStreetMap',
-      type: 'raster',
-      source: 'openStreetMap',
-    },
-  ],
-};
+const CARTO_RETINA_URL =
+  'https://basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png';
+const OSM_FALLBACK_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 type LocationState = 'idle' | 'loading' | 'granted' | 'denied';
 
+function createPrimarySource() {
+  return new XYZ({
+    attributions: [
+      '© OpenStreetMap contributors',
+      '© CARTO',
+    ],
+    attributionsCollapsible: true,
+    crossOrigin: 'anonymous',
+    maxZoom: 20,
+    tilePixelRatio: 2,
+    tileSize: 256,
+    transition: 180,
+    url: CARTO_RETINA_URL,
+  });
+}
+
+function createFallbackSource() {
+  return new XYZ({
+    attributions: '© OpenStreetMap contributors',
+    attributionsCollapsible: true,
+    crossOrigin: 'anonymous',
+    maxZoom: 19,
+    transition: 180,
+    url: OSM_FALLBACK_URL,
+  });
+}
+
 /**
- * Browser/PWA implementation of the hotspot map. MapLibre renders vector
- * streets through WebGL, so labels and roads stay sharp at every zoom level
- * and the map supports touch rotation and two-finger pitch. The privacy model
- * stays identical to native: this receives aggregated cell centers and counts,
- * never individual job coordinates.
+ * Browser/PWA implementation of the hotspot map. OpenLayers renders Retina
+ * image tiles without WebGL or web workers, avoiding the blank-map failure
+ * seen in installed iPhone PWAs while retaining pan, pinch zoom, and two-finger
+ * rotation. The privacy model stays identical to native: this receives
+ * aggregated cell centers and counts, never individual job coordinates.
  */
 export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   const containerRef = useRef<HTMLElement | null>(null);
-  const mapRef = useRef<MapLibre.Map | null>(null);
-  const hotspotMarkersRef = useRef<MapLibre.Marker[]>([]);
-  const userMarkerRef = useRef<MapLibre.Marker | null>(null);
+  const mapRef = useRef<Map | null>(null);
+  const viewRef = useRef<ViewState | null>(null);
+  const hotspotSourceRef = useRef<VectorSource | null>(null);
+  const userSourceRef = useRef<VectorSource | null>(null);
   const userCenteredRef = useRef(false);
+  const onSelectCellRef = useRef(onSelectCell);
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapReady, setMapReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
+  onSelectCellRef.current = onSelectCell;
+
   useEffect(() => {
     const container = containerRef.current;
     if (!container || mapRef.current) return;
 
-    const maplibregl = window.maplibregl;
-    if (!maplibregl) {
-      setMapError('The map engine did not load. Check your connection and try again.');
-      return;
-    }
-
     setMapReady(false);
     setMapError(null);
-    let map: MapLibre.Map | undefined;
+
+    const primarySource = createPrimarySource();
+    const baseLayer = new TileLayer({ preload: 2, source: primarySource });
+    const hotspotSource = new VectorSource({ wrapX: false });
+    const userSource = new VectorSource({ wrapX: false });
+    const hotspotLayer = new VectorLayer({ source: hotspotSource });
+    const userLayer = new VectorLayer({ source: userSource });
+    const view = new ViewState({
+      center: fromLonLat(DEFAULT_CENTER),
+      constrainRotation: false,
+      enableRotation: true,
+      maxZoom: 20,
+      zoom: DEFAULT_ZOOM,
+    });
+    const map = new Map({
+      controls: defaultControls({
+        attributionOptions: {
+          collapsed: true,
+          collapsible: true,
+        },
+        rotate: false,
+        zoom: true,
+      }),
+      interactions: defaultInteractions({
+        dragPan: true,
+        onFocusOnly: false,
+        pinchRotate: true,
+        pinchZoom: true,
+      }),
+      layers: [baseLayer, hotspotLayer, userLayer],
+      target: container,
+      view,
+    });
+
+    let activeSource = primarySource;
     let fallbackActive = false;
     let terminal = false;
-    let switchingStyle = false;
     let loadTimer: number | undefined;
+    const sourceCleanups: Array<() => void> = [];
 
     const clearLoadTimer = () => {
       if (loadTimer) {
@@ -92,190 +147,132 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
     };
 
     const markReady = () => {
-      if (terminal || !map) return;
+      if (terminal) return;
       terminal = true;
       clearLoadTimer();
-      map.resize();
+      map.updateSize();
       setMapReady(true);
       setMapError(null);
     };
 
-    const markFailed = (message: string) => {
+    const markFailed = () => {
       if (terminal) return;
       terminal = true;
       clearLoadTimer();
       setMapReady(false);
-      setMapError(message);
+      setMapError('The map could not connect. Tap below to try again.');
+    };
+
+    const watchSource = (source: XYZ) => {
+      const handleTileLoad = () => {
+        if (source === activeSource) markReady();
+      };
+      const handleTileError = () => {
+        if (source !== activeSource || terminal) return;
+        if (!fallbackActive) activateFallback();
+      };
+
+      source.on('tileloadend', handleTileLoad);
+      source.on('tileloaderror', handleTileError);
+      sourceCleanups.push(() => {
+        source.un('tileloadend', handleTileLoad);
+        source.un('tileloaderror', handleTileError);
+      });
     };
 
     const activateFallback = () => {
-      if (terminal || fallbackActive || switchingStyle || !map) return;
+      if (terminal || fallbackActive) return;
       fallbackActive = true;
-      switchingStyle = true;
       clearLoadTimer();
 
-      // Move style replacement out of the failing resource event. Safari can
-      // otherwise dispatch stale vector errors while the raster style is being
-      // installed and incorrectly terminate a healthy fallback.
-      window.setTimeout(() => {
-        if (terminal || !map) return;
-        try {
-          map.setStyle(RASTER_FALLBACK_STYLE);
-          switchingStyle = false;
-          loadTimer = window.setTimeout(() => {
-            markFailed('The map could not connect. Tap below to try again.');
-          }, FALLBACK_LOAD_TIMEOUT_MS);
-        } catch (error) {
-          console.error('[BRAZOS map] Failed to install fallback', error);
-          markFailed('The map could not start. Tap below to try again.');
-        }
-      }, 0);
+      const fallbackSource = createFallbackSource();
+      activeSource = fallbackSource;
+      watchSource(fallbackSource);
+      baseLayer.setSource(fallbackSource);
+      loadTimer = window.setTimeout(markFailed, FALLBACK_LOAD_TIMEOUT_MS);
     };
 
-    const handleIdle = () => {
-      if (terminal || switchingStyle || !map || !map.areTilesLoaded()) return;
+    watchSource(primarySource);
+    loadTimer = window.setTimeout(activateFallback, PRIMARY_LOAD_TIMEOUT_MS);
 
-      // A MapLibre "load" event only confirms that style metadata exists. On
-      // Safari it can fire while every street tile has failed, producing the
-      // blank cream canvas. Do not uncover the map until an actual tile has
-      // arrived and the renderer is idle.
-      if (fallbackActive || map.queryRenderedFeatures().length > 0) {
-        markReady();
-      } else {
-        activateFallback();
-      }
-    };
-
-    const handleMapError = (event: MapLibre.MapEventType['error']) => {
-      console.warn('[BRAZOS map]', event.error?.message ?? 'Map resource failed');
-      if (terminal || switchingStyle) return;
-
-      if (!fallbackActive) {
-        activateFallback();
-      }
-    };
-
-    const handleContextLost = () => {
-      markFailed('The map renderer stopped. Tap below to restart it.');
-    };
-
-    try {
-      map = new maplibregl.Map({
-        container,
-        style: VECTOR_STYLE,
-        center: DEFAULT_CENTER,
-        zoom: DEFAULT_ZOOM,
-        pitch: 20,
-        bearing: 0,
-        attributionControl: false,
-        dragRotate: true,
-        touchZoomRotate: true,
-        touchPitch: true,
+    const handleMapClick = (event: MapBrowserEvent) => {
+      map.forEachFeatureAtPixel(event.pixel, (featureLike) => {
+        const feature = featureLike as Feature<CircleGeometry>;
+        const cell = feature.get('hotspotCell') as HotspotCell | undefined;
+        if (!cell) return undefined;
+        onSelectCellRef.current(cell);
+        return true;
       });
+    };
 
-      map.addControl(
-        new maplibregl.NavigationControl({
-          showCompass: true,
-          showZoom: true,
-          visualizePitch: true,
-        }),
-        'top-left'
-      );
-      // Keep the legally required map-data credit available without a large
-      // permanent attribution strip covering the map.
-      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-      map.on('idle', handleIdle);
-      map.on('error', handleMapError);
-      map.on('webglcontextlost', handleContextLost);
-      mapRef.current = map;
-      loadTimer = window.setTimeout(activateFallback, VECTOR_LOAD_TIMEOUT_MS);
-    } catch (error) {
-      console.error('[BRAZOS map] Failed to initialize', error);
-      markFailed('The map could not start. Tap below to try again.');
-      return;
-    }
+    map.on('singleclick', handleMapClick);
+    mapRef.current = map;
+    viewRef.current = view;
+    hotspotSourceRef.current = hotspotSource;
+    userSourceRef.current = userSource;
 
-    const resizeTimer = window.setTimeout(() => map.resize(), 0);
+    const resizeObserver = new ResizeObserver(() => map.updateSize());
+    resizeObserver.observe(container);
+    const resizeTimer = window.setTimeout(() => map.updateSize(), 0);
+
     return () => {
-      window.clearTimeout(resizeTimer);
-      clearLoadTimer();
       terminal = true;
-      map.off('idle', handleIdle);
-      map.off('error', handleMapError);
-      map.off('webglcontextlost', handleContextLost);
-      hotspotMarkersRef.current.forEach((marker) => marker.remove());
-      hotspotMarkersRef.current = [];
-      userMarkerRef.current?.remove();
-      userMarkerRef.current = null;
-      map.remove();
+      clearLoadTimer();
+      window.clearTimeout(resizeTimer);
+      resizeObserver.disconnect();
+      sourceCleanups.forEach((cleanup) => cleanup());
+      map.un('singleclick', handleMapClick);
+      map.setTarget(undefined);
       mapRef.current = null;
+      viewRef.current = null;
+      hotspotSourceRef.current = null;
+      userSourceRef.current = null;
       setMapReady(false);
     };
   }, [retryKey]);
 
   useEffect(() => {
     const map = mapRef.current;
-    const maplibregl = window.maplibregl;
-    if (!map || !mapReady || !maplibregl) return;
+    const view = viewRef.current;
+    const source = hotspotSourceRef.current;
+    if (!map || !view || !source) return;
 
-    hotspotMarkersRef.current.forEach((marker) => marker.remove());
-    hotspotMarkersRef.current = [];
+    source.clear();
+    const features: Feature<CircleGeometry>[] = [];
 
     for (const cell of cells) {
-      const tier = tierForCount(cell.job_count);
-      if (!tier) continue;
-
-      const element = document.createElement('button');
-      const size =
-        tier.key === 'peak' ? 78 : tier.key === 'high' ? 68 : tier.key === 'medium' ? 58 : 48;
-      element.type = 'button';
-      element.className = 'brazos-hotspot-marker';
-      element.setAttribute(
-        'aria-label',
-        `${cell.job_count} open ${cell.job_count === 1 ? 'job' : 'jobs'}`
-      );
-      element.title = element.getAttribute('aria-label') ?? '';
-      Object.assign(element.style, {
-        width: `${size}px`,
-        height: `${size}px`,
-        border: '0',
-        borderRadius: '999px',
-        cursor: 'pointer',
-        padding: '0',
-        background: `radial-gradient(circle, ${tier.stroke}e6 0 16%, ${tier.stroke}8f 28%, ${tier.stroke}42 52%, ${tier.stroke}00 74%)`,
-        filter: 'drop-shadow(0 2px 5px rgba(10, 44, 34, 0.18))',
-        WebkitTapHighlightColor: 'transparent',
-      });
-      element.addEventListener('click', () => onSelectCell(cell));
-
-      hotspotMarkersRef.current.push(
-        new maplibregl.Marker({
-          element,
-          anchor: 'center',
-          pitchAlignment: 'map',
-          rotationAlignment: 'map',
-        })
-          .setLngLat([cell.cell_lng, cell.cell_lat])
-          .addTo(map)
-      );
+      const center = fromLonLat([cell.cell_lng, cell.cell_lat]);
+      for (const ring of glowRingsForCell(cell)) {
+        const feature = new Feature(new CircleGeometry(center, ring.radiusMeters));
+        feature.set('hotspotCell', cell);
+        feature.setStyle(
+          new Style({
+            fill: new Fill({ color: ring.fillColor }),
+          })
+        );
+        features.push(feature);
+      }
     }
 
-    if (cells.length > 0 && !userCenteredRef.current) {
-      const bounds = new maplibregl.LngLatBounds();
-      cells.forEach((cell) => bounds.extend([cell.cell_lng, cell.cell_lat]));
-      map.fitBounds(bounds, {
-        animate: true,
-        maxZoom: 14,
-        padding: 52,
-      });
-    }
+    source.addFeatures(features);
 
-    window.setTimeout(() => map.resize(), 0);
-  }, [cells, mapReady, onSelectCell]);
+    if (features.length > 0 && !userCenteredRef.current) {
+      map.updateSize();
+      const extent = source.getExtent();
+      if (extent) {
+        view.fit(extent, {
+          duration: 600,
+          maxZoom: 14,
+          padding: [52, 52, 52, 52],
+        });
+      }
+    }
+  }, [cells, mapReady]);
 
   const locateUser = useCallback(async () => {
-    const map = mapRef.current;
-    if (!map || locationState === 'loading') return;
+    const view = viewRef.current;
+    const userSource = userSourceRef.current;
+    if (!view || !userSource || locationState === 'loading') return;
 
     setLocationState('loading');
     try {
@@ -288,41 +285,46 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-      const point: MapLibre.LngLatLike = [
+      const point = fromLonLat([
         position.coords.longitude,
         position.coords.latitude,
-      ];
+      ]);
+      const marker = new Feature(new Point(point));
+      marker.setStyle(
+        new Style({
+          image: new CircleStyle({
+            fill: new Fill({ color: colors.primary }),
+            radius: 10,
+            stroke: new Stroke({
+              color: colors.surface,
+              width: 4,
+            }),
+          }),
+        })
+      );
 
-      userMarkerRef.current?.remove();
-      const markerElement = document.createElement('div');
-      markerElement.setAttribute('aria-label', 'You are here');
-      Object.assign(markerElement.style, {
-        width: '22px',
-        height: '22px',
-        border: `4px solid ${colors.surface}`,
-        borderRadius: '999px',
-        backgroundColor: colors.primary,
-        boxShadow: '0 2px 9px rgba(10, 44, 34, 0.38)',
-      });
-      const maplibregl = window.maplibregl;
-      if (!maplibregl) {
-        setLocationState('denied');
-        return;
-      }
-      userMarkerRef.current = new maplibregl.Marker({
-        element: markerElement,
-        anchor: 'center',
-      })
-        .setLngLat(point)
-        .addTo(map);
-
+      userSource.clear();
+      userSource.addFeature(marker);
       userCenteredRef.current = true;
-      map.easeTo({ center: point, zoom: 14, pitch: 35, duration: 700 });
+      view.animate({ center: point, duration: 700, zoom: 14 });
       setLocationState('granted');
     } catch {
       setLocationState('denied');
     }
   }, [locationState]);
+
+  const rotateMap = useCallback(() => {
+    const view = viewRef.current;
+    if (!view) return;
+    view.animate({
+      duration: 240,
+      rotation: view.getRotation() + Math.PI / 4,
+    });
+  }, []);
+
+  const resetNorth = useCallback(() => {
+    viewRef.current?.animate({ duration: 240, rotation: 0 });
+  }, []);
 
   return (
     <View style={styles.flex}>
@@ -331,7 +333,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
           containerRef.current = node as unknown as HTMLElement | null;
         }}
         style={styles.map}
-        accessibilityLabel="Interactive vector job hotspot map"
+        accessibilityLabel="Interactive job hotspot map"
       />
 
       {!mapReady && !mapError && (
@@ -354,7 +356,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
             onPress={() => setRetryKey((value) => value + 1)}
             style={({ pressed }) => [
               styles.retryButton,
-              pressed && styles.locationButtonPressed,
+              pressed && styles.controlButtonPressed,
             ]}
           >
             <Ionicons name="refresh" size={18} color={colors.onPrimary} />
@@ -364,25 +366,42 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
       )}
 
       {mapReady && (
-        <Pressable
-          accessibilityLabel="Center map on my location"
-          accessibilityRole="button"
-          onPress={() => void locateUser()}
-          style={({ pressed }) => [
-            styles.locationButton,
-            pressed && styles.locationButtonPressed,
-          ]}
-        >
-          {locationState === 'loading' ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : (
-            <Ionicons
-              name={locationState === 'granted' ? 'navigate' : 'locate-outline'}
-              size={22}
-              color={colors.primary}
-            />
-          )}
-        </Pressable>
+        <>
+          <Pressable
+            accessibilityLabel="Center map on my location"
+            accessibilityRole="button"
+            onPress={() => void locateUser()}
+            style={({ pressed }) => [
+              styles.locationButton,
+              pressed && styles.controlButtonPressed,
+            ]}
+          >
+            {locationState === 'loading' ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons
+                name={locationState === 'granted' ? 'navigate' : 'locate-outline'}
+                size={22}
+                color={colors.primary}
+              />
+            )}
+          </Pressable>
+
+          <Pressable
+            accessibilityHint="Tap to rotate 45 degrees. Hold to reset north."
+            accessibilityLabel="Rotate map"
+            accessibilityRole="button"
+            delayLongPress={450}
+            onLongPress={resetNorth}
+            onPress={rotateMap}
+            style={({ pressed }) => [
+              styles.rotateButton,
+              pressed && styles.controlButtonPressed,
+            ]}
+          >
+            <Ionicons name="compass-outline" size={23} color={colors.primary} />
+          </Pressable>
+        </>
       )}
 
       {mapReady && locationState === 'denied' && (
@@ -421,13 +440,14 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#dfe9e2',
+    backgroundColor: '#e8eee9',
   },
   center: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     backgroundColor: colors.background,
     justifyContent: 'center',
+    zIndex: 20,
   },
   loadingSpinner: {
     marginTop: spacing.md,
@@ -470,7 +490,22 @@ const styles = StyleSheet.create({
     zIndex: 10,
     ...shadows.raised,
   },
-  locationButtonPressed: {
+  rotateButton: {
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    height: 46,
+    justifyContent: 'center',
+    position: 'absolute',
+    right: spacing.md,
+    top: spacing.md + 54,
+    width: 46,
+    zIndex: 10,
+    ...shadows.raised,
+  },
+  controlButtonPressed: {
     opacity: 0.82,
     transform: [{ scale: 0.97 }],
   },

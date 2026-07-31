@@ -22,9 +22,6 @@ for (const requiredFile of [
   'icon-192.png',
   'icon-512.png',
   'sw.js',
-  'vendor/maplibre-gl-csp.js',
-  'vendor/maplibre-gl-csp-worker.js',
-  'vendor/maplibre-gl.css',
 ]) {
   await readFile(resolve(clientDir, requiredFile));
 }

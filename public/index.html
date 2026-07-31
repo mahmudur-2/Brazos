@@ -20,17 +20,6 @@
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icon-192.png?v=3" />
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png?v=3" />
-    <!-- Keep MapLibre and its worker on the BRAZOS origin. The CSP build avoids
-         blob workers, which are unreliable in installed iPhone PWAs. -->
-    <link rel="stylesheet" href="/vendor/maplibre-gl.css?v=4.7.1-csp" />
-    <script src="/vendor/maplibre-gl-csp.js?v=4.7.1-csp"></script>
-    <script>
-      if (window.maplibregl) {
-        window.maplibregl.setWorkerUrl(
-          '/vendor/maplibre-gl-csp-worker.js?v=4.7.1-csp'
-        );
-      }
-    </script>
     <script src="/config.js?v=20260731-1"></script>
     <script>
       if ('serviceWorker' in navigator) {

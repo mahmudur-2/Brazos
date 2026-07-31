@@ -22,7 +22,7 @@
     "expo-sharing": "~14.0.8",
     "expo-status-bar": "~3.0.9",
     "expo-updates": "~29.0.19",
-    "maplibre-gl": "^4.7.1",
+    "ol": "^10.10.0",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
@@ -48,8 +48,6 @@
     "lint": "tsc --noEmit --pretty false --noUnusedLocals --noUnusedParameters",
     "test": "node --test tests/*.test.mjs",
     "export": "expo export --platform all",
-    "preweb": "node scripts/sync-maplibre-assets.mjs",
-    "prebuild:web": "node scripts/sync-maplibre-assets.mjs",
     "build:web": "expo export --platform web --output-dir dist/client && node scripts/prepare-sites-build.mjs",
     "release:testflight": "npx eas-cli@latest build --platform ios --profile testflight --auto-submit",
     "update:preview": "npx eas-cli@latest update --channel preview --environment preview"
