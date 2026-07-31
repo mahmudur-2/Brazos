@@ -98,11 +98,10 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
-    // Matches previewSection's gap, so the space under the last card mirrors
-    // the space above the first one. Previously absent entirely — with the
-    // SafeAreaView scoped to edges={['top']}, nothing separated the last card
-    // from the tab bar and it sat flush against it.
-    paddingBottom: spacing.lg,
+    // MainTabs already lays the tab bar out below this scene and owns the
+    // bottom safe-area inset. Extra content padding here rendered as a blank
+    // cream band above the bar instead of protecting anything.
+    paddingBottom: 0,
     // Bigger buttons get more surrounding room too, pushing the preview
     // section further down — a single shared gap keeps it even between
     // every section rather than hand-tuning each one separately.
