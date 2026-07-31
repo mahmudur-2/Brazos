@@ -27,8 +27,12 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(html, /rel="manifest"/);
   assert.match(html, /apple-mobile-web-app-capable/);
   assert.match(html, /navigator\.serviceWorker\.register\('\/sw\.js'\)/);
+  assert.doesNotMatch(html, /src="\/config\.js"/);
   assert.match(webSupabase, /__BRAZOS_CONFIG__/);
   assert.match(worker, /url\.pathname === '\/config\.js'/);
+  assert.match(worker, /injectRuntimeConfig/);
+  assert.match(worker, /runtimeConfigScript\(env\)/);
+  assert.match(worker, /Cache-Control', 'no-store'/);
   assert.match(worker, /env\.ASSETS\.fetch/);
   assert.doesNotMatch(worker, /service_role/i);
   assert.match(buildPreparation, /await rm\(staticConfigPath\)/);

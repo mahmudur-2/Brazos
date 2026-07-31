@@ -29,16 +29,61 @@ function runtimeConfigResponse(env) {
     });
   }
 
+  return new Response(runtimeConfigScript(env), {
+    headers: {
+      'Cache-Control': 'no-store',
+      'Content-Type': 'application/javascript; charset=utf-8',
+    },
+  });
+}
+
+function runtimeConfigScript(env) {
   const config = JSON.stringify({
     SUPABASE_URL: env.SUPABASE_URL,
     SUPABASE_KEY: env.SUPABASE_KEY,
   }).replace(/</g, '\\u003c');
 
-  return new Response(`globalThis.__BRAZOS_CONFIG__ = ${config};\n`, {
-    headers: {
-      'Cache-Control': 'no-store',
-      'Content-Type': 'application/javascript; charset=utf-8',
-    },
+  return `globalThis.__BRAZOS_CONFIG__ = ${config};\n`;
+}
+
+async function injectRuntimeConfig(response, env) {
+  if (!response.headers.get('Content-Type')?.includes('text/html')) {
+    return response;
+  }
+
+  if (!env.SUPABASE_URL || !env.SUPABASE_KEY) {
+    return new Response('Hosted configuration is unavailable.', {
+      status: 503,
+      headers: {
+        'Cache-Control': 'no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
+  }
+
+  const html = await response.text();
+  const marker = '</head>';
+  if (!html.includes(marker)) {
+    return new Response('The application shell is invalid.', {
+      status: 500,
+      headers: {
+        'Cache-Control': 'no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+    });
+  }
+
+  const configuredHtml = html.replace(
+    marker,
+    `<script>${runtimeConfigScript(env)}</script>${marker}`
+  );
+  const headers = new Headers(response.headers);
+  headers.set('Cache-Control', 'no-store');
+
+  return new Response(configuredHtml, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
   });
 }
 
@@ -58,6 +103,7 @@ export default {
       response = await env.ASSETS.fetch(new Request(shellUrl, request));
     }
 
+    response = await injectRuntimeConfig(response, env);
     return withSecurityHeaders(response);
   },
 };
