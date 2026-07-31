@@ -28,7 +28,7 @@ test('web build is installable and receives hosted runtime configuration', async
   );
   assert.deepEqual(
     pwa.icons.map((icon) => icon.src),
-    ['/icon-192.png?v=2', '/icon-512.png?v=2']
+    ['/icon-192.png?v=3', '/icon-512.png?v=3']
   );
   assert.match(html, /rel="manifest"/);
   assert.match(html, /apple-mobile-web-app-capable/);
@@ -36,7 +36,7 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(html, /src="\/config\.js\?v=20260731-1"/);
   assert.match(html, /id="brazos-startup"/);
   assert.match(html, /BRAZOS could not start/);
-  assert.match(serviceWorker, /brazos-shell-v3/);
+  assert.match(serviceWorker, /brazos-shell-v4/);
   assert.doesNotMatch(serviceWorker, /APP_SHELL = \['\/'/);
   assert.match(webSupabase, /__BRAZOS_CONFIG__/);
   assert.match(worker, /url\.pathname === '\/config\.js'/);
