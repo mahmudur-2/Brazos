@@ -94,8 +94,11 @@ const styles = StyleSheet.create({
   },
   scroll: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   content: {
+    flexGrow: 1,
+    backgroundColor: colors.background,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.xxl,
     // MainTabs already lays the tab bar out below this scene and owns the
