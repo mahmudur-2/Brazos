@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 import { supabase } from './supabase';
+import { transitionJobStatusWithoutRpc } from './jobStatusCompatibility';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -375,6 +376,9 @@ export async function updateJobStatus(
     p_status: status,
     p_completion_photos: photoUrls ?? null,
   });
+  if (error?.code === 'PGRST202') {
+    return transitionJobStatusWithoutRpc({ jobId, status, photoUrls });
+  }
   return { error };
 }
 

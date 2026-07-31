@@ -97,6 +97,27 @@ test('missing accept_bid deployments have a constrained compatibility path', asy
   assert.match(phase30, /notify pgrst, 'reload schema'/i);
 });
 
+test('missing transition_job_status deployments have a constrained compatibility path', async () => {
+  const [jobsSource, compatibility, phase31] = await Promise.all([
+    read('lib/jobs.ts'),
+    read('lib/jobStatusCompatibility.ts'),
+    read('supabase/phase31_transition_job_status_rpc.sql'),
+  ]);
+
+  assert.match(jobsSource, /error\?\.code === 'PGRST202'/);
+  assert.match(jobsSource, /transitionJobStatusWithoutRpc\(\{ jobId, status, photoUrls \}\)/);
+  assert.match(compatibility, /supabase\.auth\.getUser\(\)/);
+  assert.match(compatibility, /\.select\('id, assigned_worker_id, status'\)/);
+  assert.match(compatibility, /\.eq\('assigned_worker_id', user\.id\)/);
+  assert.match(compatibility, /\.eq\('status', expectedStatus\)/);
+  assert.match(compatibility, /photos\.length > 5/);
+  assert.doesNotMatch(compatibility, /client_id|accepted_bid_id|final_amount_cents/);
+  assert.match(phase31, /create or replace function public\.transition_job_status\(/i);
+  assert.match(phase31, /where id = p_job_id\s+for update;/i);
+  assert.match(phase31, /v_job\.assigned_worker_id <> v_user/i);
+  assert.match(phase31, /notify pgrst, 'reload schema'/i);
+});
+
 test('chat media is private, membership-scoped, and stored by caller-owned path', () => {
   assert.match(
     migration,
