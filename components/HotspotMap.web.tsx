@@ -8,32 +8,30 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import * as L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import * as maplibregl from 'maplibre-gl';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { MapPinIcon } from './MapPinIcon';
-import {
-  glowRingsForCell,
-  tierForCount,
-  type HotspotMapProps,
-} from '../lib/hotspots';
+import { tierForCount, type HotspotMapProps } from '../lib/hotspots';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 
-const DEFAULT_CENTER: L.LatLngExpression = [40.6501, -73.9496];
-const DEFAULT_ZOOM = 12;
+const DEFAULT_CENTER: maplibregl.LngLatLike = [-73.9496, 40.6501];
+const DEFAULT_ZOOM = 11.5;
+const VECTOR_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
 type LocationState = 'idle' | 'loading' | 'granted' | 'denied';
 
 /**
- * Browser/PWA implementation of the hotspot map. Leaflet is used here because
- * react-native-maps only supports native iOS and Android. The data and privacy
- * model stay identical: the map receives aggregated cell centers and counts,
+ * Browser/PWA implementation of the hotspot map. MapLibre renders vector
+ * streets through WebGL, so labels and roads stay sharp at every zoom level
+ * and the map supports touch rotation and two-finger pitch. The privacy model
+ * stays identical to native: this receives aggregated cell centers and counts,
  * never individual job coordinates.
  */
 export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   const containerRef = useRef<HTMLElement | null>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const hotspotLayerRef = useRef<L.LayerGroup | null>(null);
-  const userLayerRef = useRef<L.LayerGroup | null>(null);
+  const mapRef = useRef<maplibregl.Map | null>(null);
+  const hotspotMarkersRef = useRef<maplibregl.Marker[]>([]);
+  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
   const userCenteredRef = useRef(false);
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapReady, setMapReady] = useState(false);
@@ -42,86 +40,114 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
     const container = containerRef.current;
     if (!container || mapRef.current) return;
 
-    const map = L.map(container, {
-      attributionControl: true,
-      zoomControl: true,
-    }).setView(DEFAULT_CENTER, DEFAULT_ZOOM);
+    const map = new maplibregl.Map({
+      container,
+      style: VECTOR_STYLE,
+      center: DEFAULT_CENTER,
+      zoom: DEFAULT_ZOOM,
+      pitch: 20,
+      bearing: 0,
+      attributionControl: false,
+      dragRotate: true,
+      touchZoomRotate: true,
+      touchPitch: true,
+    });
 
-    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-      maxZoom: 19,
-    }).addTo(map);
+    map.addControl(
+      new maplibregl.NavigationControl({
+        showCompass: true,
+        showZoom: true,
+        visualizePitch: true,
+      }),
+      'top-left'
+    );
+    // Keep the legally required map-data credit available without the large
+    // permanent Leaflet attribution strip that previously covered the map.
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
 
-    hotspotLayerRef.current = L.layerGroup().addTo(map);
-    userLayerRef.current = L.layerGroup().addTo(map);
+    const markReady = () => {
+      map.resize();
+      setMapReady(true);
+    };
+    map.on('load', markReady);
     mapRef.current = map;
-    setMapReady(true);
 
-    const resizeTimer = window.setTimeout(() => map.invalidateSize(), 0);
-
+    const resizeTimer = window.setTimeout(() => map.resize(), 0);
     return () => {
       window.clearTimeout(resizeTimer);
+      map.off('load', markReady);
+      hotspotMarkersRef.current.forEach((marker) => marker.remove());
+      hotspotMarkersRef.current = [];
+      userMarkerRef.current?.remove();
+      userMarkerRef.current = null;
       map.remove();
       mapRef.current = null;
-      hotspotLayerRef.current = null;
-      userLayerRef.current = null;
       setMapReady(false);
     };
   }, []);
 
   useEffect(() => {
     const map = mapRef.current;
-    const hotspotLayer = hotspotLayerRef.current;
-    if (!map || !hotspotLayer) return;
+    if (!map || !mapReady) return;
 
-    hotspotLayer.clearLayers();
+    hotspotMarkersRef.current.forEach((marker) => marker.remove());
+    hotspotMarkersRef.current = [];
 
     for (const cell of cells) {
       const tier = tierForCount(cell.job_count);
       if (!tier) continue;
 
-      const center: L.LatLngExpression = [cell.cell_lat, cell.cell_lng];
-      const rings = glowRingsForCell(cell);
-
-      rings.forEach((ring, index) => {
-        const circle = L.circle(center, {
-          radius: ring.radiusMeters,
-          color: 'transparent',
-          weight: 0,
-          fillColor: tier.stroke,
-          fillOpacity: [0.1, 0.16, 0.24, 0.36, 0.55][index] ?? 0.25,
-          interactive: index === rings.length - 1,
-        }).addTo(hotspotLayer);
-
-        if (index === rings.length - 1) {
-          circle
-            .bindTooltip(
-              `${cell.job_count} open ${cell.job_count === 1 ? 'job' : 'jobs'}`,
-              { direction: 'top', offset: [0, -8] }
-            )
-            .on('click', () => onSelectCell(cell));
-        }
+      const element = document.createElement('button');
+      const size =
+        tier.key === 'peak' ? 78 : tier.key === 'high' ? 68 : tier.key === 'medium' ? 58 : 48;
+      element.type = 'button';
+      element.className = 'brazos-hotspot-marker';
+      element.setAttribute(
+        'aria-label',
+        `${cell.job_count} open ${cell.job_count === 1 ? 'job' : 'jobs'}`
+      );
+      element.title = element.getAttribute('aria-label') ?? '';
+      Object.assign(element.style, {
+        width: `${size}px`,
+        height: `${size}px`,
+        border: '0',
+        borderRadius: '999px',
+        cursor: 'pointer',
+        padding: '0',
+        background: `radial-gradient(circle, ${tier.stroke}e6 0 16%, ${tier.stroke}8f 28%, ${tier.stroke}42 52%, ${tier.stroke}00 74%)`,
+        filter: 'drop-shadow(0 2px 5px rgba(10, 44, 34, 0.18))',
+        WebkitTapHighlightColor: 'transparent',
       });
+      element.addEventListener('click', () => onSelectCell(cell));
+
+      hotspotMarkersRef.current.push(
+        new maplibregl.Marker({
+          element,
+          anchor: 'center',
+          pitchAlignment: 'map',
+          rotationAlignment: 'map',
+        })
+          .setLngLat([cell.cell_lng, cell.cell_lat])
+          .addTo(map)
+      );
     }
 
     if (cells.length > 0 && !userCenteredRef.current) {
-      const bounds = L.latLngBounds(
-        cells.map((cell) => [cell.cell_lat, cell.cell_lng] as L.LatLngTuple)
-      );
+      const bounds = new maplibregl.LngLatBounds();
+      cells.forEach((cell) => bounds.extend([cell.cell_lng, cell.cell_lat]));
       map.fitBounds(bounds, {
         animate: true,
         maxZoom: 14,
-        padding: [44, 44],
+        padding: 52,
       });
     }
 
-    window.setTimeout(() => map.invalidateSize(), 0);
+    window.setTimeout(() => map.resize(), 0);
   }, [cells, mapReady, onSelectCell]);
 
   const locateUser = useCallback(async () => {
     const map = mapRef.current;
-    const userLayer = userLayerRef.current;
-    if (!map || !userLayer || locationState === 'loading') return;
+    if (!map || locationState === 'loading') return;
 
     setLocationState('loading');
     try {
@@ -134,24 +160,31 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-      const point: L.LatLngExpression = [
-        position.coords.latitude,
+      const point: maplibregl.LngLatLike = [
         position.coords.longitude,
+        position.coords.latitude,
       ];
 
-      userLayer.clearLayers();
-      L.circleMarker(point, {
-        radius: 9,
-        color: colors.surface,
-        weight: 3,
-        fillColor: colors.primary,
-        fillOpacity: 1,
+      userMarkerRef.current?.remove();
+      const markerElement = document.createElement('div');
+      markerElement.setAttribute('aria-label', 'You are here');
+      Object.assign(markerElement.style, {
+        width: '22px',
+        height: '22px',
+        border: `4px solid ${colors.surface}`,
+        borderRadius: '999px',
+        backgroundColor: colors.primary,
+        boxShadow: '0 2px 9px rgba(10, 44, 34, 0.38)',
+      });
+      userMarkerRef.current = new maplibregl.Marker({
+        element: markerElement,
+        anchor: 'center',
       })
-        .bindTooltip('You are here', { direction: 'top', offset: [0, -8] })
-        .addTo(userLayer);
+        .setLngLat(point)
+        .addTo(map);
 
       userCenteredRef.current = true;
-      map.setView(point, 14, { animate: true });
+      map.easeTo({ center: point, zoom: 14, pitch: 35, duration: 700 });
       setLocationState('granted');
     } catch {
       setLocationState('denied');
@@ -165,7 +198,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
           containerRef.current = node as unknown as HTMLElement | null;
         }}
         style={styles.map}
-        accessibilityLabel="Interactive job hotspot map"
+        accessibilityLabel="Interactive vector job hotspot map"
       />
 
       {!mapReady && (
@@ -203,7 +236,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         <View style={styles.locationNotice}>
           <Ionicons name="location-outline" size={16} color={colors.textMuted} />
           <Text style={styles.locationNoticeText}>
-            Location is off. You can still pan, zoom, and open hotspots.
+            Location is off. You can still pan, zoom, rotate, and open hotspots.
           </Text>
         </View>
       )}
@@ -235,7 +268,7 @@ const styles = StyleSheet.create({
   },
   map: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#e8eee9',
+    backgroundColor: '#dfe9e2',
   },
   center: {
     ...StyleSheet.absoluteFillObject,
@@ -258,7 +291,7 @@ const styles = StyleSheet.create({
     right: spacing.md,
     top: spacing.md,
     width: 46,
-    zIndex: 1000,
+    zIndex: 10,
     ...shadows.raised,
   },
   locationButtonPressed: {
@@ -279,7 +312,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     position: 'absolute',
     right: spacing.lg,
-    zIndex: 1000,
+    zIndex: 10,
   },
   locationNoticeText: {
     color: colors.textMuted,
@@ -300,7 +333,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     position: 'absolute',
     top: spacing.md,
-    zIndex: 900,
+    zIndex: 9,
   },
   loadingText: {
     color: colors.text,
@@ -321,7 +354,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     position: 'absolute',
     right: spacing.lg,
-    zIndex: 900,
+    zIndex: 9,
   },
   emptyBannerText: {
     color: colors.textMuted,

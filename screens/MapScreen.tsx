@@ -8,7 +8,6 @@ import { Card } from '../components/Card';
 import { HotspotMap } from '../components/HotspotMap';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useHotspots } from '../hooks/useHotspots';
-import { useThemeColors } from '../hooks/useThemeColors';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
   HOTSPOT_TIERS,
@@ -21,20 +20,16 @@ import { colors, radius, shadows, spacing } from '../lib/theme';
 
 export function MapScreen() {
   const navigation = useNavigation<MapStackNavigation>();
-  const { palette } = useThemeColors();
   const { cells, loading, error } = useHotspots();
   const [selected, setSelected] = useState<HotspotCell | null>(null);
 
   return (
     <SafeAreaView
-      style={[styles.safe, { backgroundColor: palette.background }]}
+      style={styles.safe}
       edges={['top']}
     >
-      {/* Deliberately NOT palette-driven — every other screen's ScreenHeader
-          stays on the fixed light palette (see useThemeColors.ts), and this
-          header matching that today matters more than it dark-mode-adapting
-          on its own, which would make it the one inconsistent header when
-          the device is in dark mode. */}
+      {/* The map screen intentionally uses the app's fixed cream palette so
+          iOS dark mode cannot expose dark gaps around the light map. */}
       <View style={styles.headerWrap}>
         <ScreenHeader
           title="Find Jobs Near You"
@@ -51,7 +46,7 @@ export function MapScreen() {
         <Text
           style={[
             styles.error,
-            { color: palette.danger, backgroundColor: palette.dangerBg },
+            { color: colors.danger, backgroundColor: colors.dangerBg },
           ]}
         >
           {error}
@@ -80,11 +75,7 @@ export function MapScreen() {
 
       {selected && (
         <View style={styles.sheet}>
-          {/* Hardcoded light, not palette-driven — same reasoning as the
-              header/legend/map above: this was the one remaining piece of
-              the screen still following useThemeColors(), so it was the one
-              thing that would render dark-styled against an otherwise
-              all-light screen on a device in dark mode. */}
+          {/* Keep the hotspot detail card consistent with the light map UI. */}
           <Card>
             <View style={styles.sheetHeader}>
               <View style={styles.sheetTitleWrap}>
@@ -134,9 +125,10 @@ export function MapScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
+    backgroundColor: colors.background,
   },
   headerWrap: {
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   legend: {
     flexGrow: 0,
@@ -146,7 +138,7 @@ const styles = StyleSheet.create({
     // black strip between the (already hardcoded-white) header above it and
     // the map below, since nothing here was opaque. Same fix as the header:
     // fixed light, not palette-driven, matching the rest of the app for now.
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   legendContent: {
     paddingHorizontal: spacing.lg,
@@ -169,6 +161,8 @@ const styles = StyleSheet.create({
   },
   mapWrap: {
     flex: 1,
+    backgroundColor: colors.background,
+    overflow: 'hidden',
   },
   sheet: {
     position: 'absolute',
