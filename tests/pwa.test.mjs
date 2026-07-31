@@ -5,10 +5,11 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('web build is installable and receives hosted runtime configuration', async () => {
-  const [appConfig, manifest, html, webSupabase, worker, buildPreparation] = await Promise.all([
+  const [appConfig, manifest, html, serviceWorker, webSupabase, worker, buildPreparation] = await Promise.all([
     read('app.json'),
     read('public/manifest.json'),
     read('public/index.html'),
+    read('public/sw.js'),
     read('lib/supabase.web.ts'),
     read('hosting/sites-worker.js'),
     read('scripts/prepare-sites-build.mjs'),
@@ -27,7 +28,11 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(html, /rel="manifest"/);
   assert.match(html, /apple-mobile-web-app-capable/);
   assert.match(html, /navigator\.serviceWorker\.register\('\/sw\.js'\)/);
-  assert.doesNotMatch(html, /src="\/config\.js"/);
+  assert.match(html, /src="\/config\.js\?v=20260731-1"/);
+  assert.match(html, /id="brazos-startup"/);
+  assert.match(html, /BRAZOS could not start/);
+  assert.match(serviceWorker, /brazos-shell-v2/);
+  assert.doesNotMatch(serviceWorker, /APP_SHELL = \['\/'/);
   assert.match(webSupabase, /__BRAZOS_CONFIG__/);
   assert.match(worker, /url\.pathname === '\/config\.js'/);
   assert.match(worker, /injectRuntimeConfig/);
