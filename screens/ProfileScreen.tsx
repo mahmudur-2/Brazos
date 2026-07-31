@@ -631,7 +631,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 0,
     gap: spacing.lg,
   },
   editLink: {

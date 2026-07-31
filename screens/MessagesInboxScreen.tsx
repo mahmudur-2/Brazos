@@ -329,7 +329,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   listContent: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+    paddingBottom: 0,
     gap: spacing.md,
   },
   sparseContent: {
@@ -337,7 +339,9 @@ const styles = StyleSheet.create({
     // which reads as an empty/broken state, not a short real list. Rows stay
     // top-anchored under the header; the "generous" part is just more
     // padding/gap than the normal listContent uses.
-    padding: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
+    paddingBottom: 0,
     gap: spacing.lg,
   },
   emptyContainer: {

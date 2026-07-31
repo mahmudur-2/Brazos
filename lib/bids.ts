@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { acceptBidWithoutRpc } from './acceptBidCompatibility';
 import type { JobCategory } from './jobs';
 import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
 
@@ -154,6 +155,9 @@ export async function acceptBid(params: {
     p_job_id: params.jobId,
     p_bid_id: params.bidId,
   });
+  if (error?.code === 'PGRST202') {
+    return acceptBidWithoutRpc(params);
+  }
   return { error };
 }
 

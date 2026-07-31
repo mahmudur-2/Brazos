@@ -205,8 +205,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
+    paddingBottom: 0,
     gap: spacing.xl,
   },
   section: {

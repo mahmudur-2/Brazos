@@ -79,6 +79,24 @@ test('job, bid, and review protected writes use server-validated RPCs', () => {
   assert.doesNotMatch(reviews, /\.from\('reviews'\)\s*\.insert\(/);
 });
 
+test('missing accept_bid deployments have a constrained compatibility path', async () => {
+  const [bidsSource, compatibility, phase30] = await Promise.all([
+    read('lib/bids.ts'),
+    read('lib/acceptBidCompatibility.ts'),
+    read('supabase/phase30_accept_bid_rpc.sql'),
+  ]);
+
+  assert.match(bidsSource, /error\?\.code === 'PGRST202'/);
+  assert.match(bidsSource, /acceptBidWithoutRpc\(params\)/);
+  assert.match(compatibility, /\.select\('id, worker_id, amount_cents, status'\)/);
+  assert.doesNotMatch(compatibility, /workerId|amountCents/);
+  assert.match(compatibility, /\.eq\('status', 'open'\)/);
+  assert.match(compatibility, /const rollback = async/);
+  assert.match(phase30, /create or replace function public\.accept_bid\(/i);
+  assert.match(phase30, /where id = p_job_id\s+for update;/i);
+  assert.match(phase30, /notify pgrst, 'reload schema'/i);
+});
+
 test('chat media is private, membership-scoped, and stored by caller-owned path', () => {
   assert.match(
     migration,

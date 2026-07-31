@@ -36,6 +36,7 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(html, /src="\/config\.js\?v=20260731-1"/);
   assert.match(html, /id="brazos-startup"/);
   assert.match(html, /BRAZOS could not start/);
+  assert.match(html, /maplibre-gl@4\.7\.1\/dist\/maplibre-gl\.js/);
   assert.match(serviceWorker, /brazos-shell-v4/);
   assert.doesNotMatch(serviceWorker, /APP_SHELL = \['\/'/);
   assert.match(webSupabase, /__BRAZOS_CONFIG__/);
@@ -60,11 +61,13 @@ test('PWA ships the BRAZOS icon and a sharp rotatable privacy-preserving web map
   assert.deepEqual([icon192.readUInt32BE(16), icon192.readUInt32BE(20)], [192, 192]);
   assert.deepEqual([icon512.readUInt32BE(16), icon512.readUInt32BE(20)], [512, 512]);
   assert.match(webMap, /new maplibregl\.Map\(/);
-  assert.match(webMap, /tiles\.openfreemap\.org\/styles\/liberty/);
+  assert.match(webMap, /tiles\.openfreemap\.org\/styles\/bright/);
   assert.match(webMap, /dragRotate: true/);
   assert.match(webMap, /touchZoomRotate: true/);
   assert.match(webMap, /touchPitch: true/);
   assert.match(webMap, /AttributionControl\(\{ compact: true \}\)/);
+  assert.match(webMap, /RASTER_FALLBACK_STYLE/);
+  assert.match(webMap, /MapPinIcon size=\{120\}/);
   assert.match(webMap, /requestForegroundPermissionsAsync/);
   assert.match(webMap, /onSelectCell\(cell\)/);
   assert.match(webMap, /aggregated cell centers and counts/);

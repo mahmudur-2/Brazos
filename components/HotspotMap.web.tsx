@@ -8,15 +8,42 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import * as maplibregl from 'maplibre-gl';
-import 'maplibre-gl/dist/maplibre-gl.css';
+import type * as MapLibre from 'maplibre-gl';
 import { MapPinIcon } from './MapPinIcon';
 import { tierForCount, type HotspotMapProps } from '../lib/hotspots';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 
-const DEFAULT_CENTER: maplibregl.LngLatLike = [-73.9496, 40.6501];
+declare global {
+  interface Window {
+    maplibregl?: typeof import('maplibre-gl');
+  }
+}
+
+const DEFAULT_CENTER: MapLibre.LngLatLike = [-73.9496, 40.6501];
 const DEFAULT_ZOOM = 11.5;
-const VECTOR_STYLE = 'https://tiles.openfreemap.org/styles/liberty';
+const VECTOR_STYLE = 'https://tiles.openfreemap.org/styles/bright';
+const VECTOR_LOAD_TIMEOUT_MS = 8000;
+const FALLBACK_LOAD_TIMEOUT_MS = 12000;
+
+const RASTER_FALLBACK_STYLE: MapLibre.StyleSpecification = {
+  version: 8,
+  sources: {
+    openStreetMap: {
+      type: 'raster',
+      tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
+      tileSize: 256,
+      attribution: '© OpenStreetMap contributors',
+      maxzoom: 19,
+    },
+  },
+  layers: [
+    {
+      id: 'openStreetMap',
+      type: 'raster',
+      source: 'openStreetMap',
+    },
+  ],
+};
 
 type LocationState = 'idle' | 'loading' | 'granted' | 'denied';
 
@@ -29,53 +56,100 @@ type LocationState = 'idle' | 'loading' | 'granted' | 'denied';
  */
 export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
   const containerRef = useRef<HTMLElement | null>(null);
-  const mapRef = useRef<maplibregl.Map | null>(null);
-  const hotspotMarkersRef = useRef<maplibregl.Marker[]>([]);
-  const userMarkerRef = useRef<maplibregl.Marker | null>(null);
+  const mapRef = useRef<MapLibre.Map | null>(null);
+  const hotspotMarkersRef = useRef<MapLibre.Marker[]>([]);
+  const userMarkerRef = useRef<MapLibre.Marker | null>(null);
   const userCenteredRef = useRef(false);
   const [locationState, setLocationState] = useState<LocationState>('idle');
   const [mapReady, setMapReady] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container,
-      style: VECTOR_STYLE,
-      center: DEFAULT_CENTER,
-      zoom: DEFAULT_ZOOM,
-      pitch: 20,
-      bearing: 0,
-      attributionControl: false,
-      dragRotate: true,
-      touchZoomRotate: true,
-      touchPitch: true,
-    });
+    const maplibregl = window.maplibregl;
+    if (!maplibregl) {
+      setMapError('The map engine did not load. Check your connection and try again.');
+      return;
+    }
 
-    map.addControl(
-      new maplibregl.NavigationControl({
-        showCompass: true,
-        showZoom: true,
-        visualizePitch: true,
-      }),
-      'top-left'
-    );
-    // Keep the legally required map-data credit available without the large
-    // permanent Leaflet attribution strip that previously covered the map.
-    map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+    setMapReady(false);
+    setMapError(null);
+    let map: MapLibre.Map;
+    let fallbackActive = false;
+    let settled = false;
+    let terminalTimer: number | undefined;
+    let vectorTimer: number | undefined;
 
     const markReady = () => {
+      settled = true;
+      if (vectorTimer) window.clearTimeout(vectorTimer);
+      if (terminalTimer) window.clearTimeout(terminalTimer);
       map.resize();
       setMapReady(true);
+      setMapError(null);
     };
-    map.on('load', markReady);
-    mapRef.current = map;
+
+    const activateFallback = () => {
+      if (settled || fallbackActive) return;
+      fallbackActive = true;
+      map.setStyle(RASTER_FALLBACK_STYLE);
+      terminalTimer = window.setTimeout(() => {
+        if (!settled) {
+          setMapError('The map could not connect. Tap below to try again.');
+        }
+      }, FALLBACK_LOAD_TIMEOUT_MS);
+    };
+
+    const handleMapError = (event: MapLibre.MapEventType['error']) => {
+      console.warn('[BRAZOS map]', event.error?.message ?? 'Map resource failed');
+      if (!settled) activateFallback();
+    };
+
+    try {
+      map = new maplibregl.Map({
+        container,
+        style: VECTOR_STYLE,
+        center: DEFAULT_CENTER,
+        zoom: DEFAULT_ZOOM,
+        pitch: 20,
+        bearing: 0,
+        attributionControl: false,
+        dragRotate: true,
+        touchZoomRotate: true,
+        touchPitch: true,
+      });
+
+      map.addControl(
+        new maplibregl.NavigationControl({
+          showCompass: true,
+          showZoom: true,
+          visualizePitch: true,
+        }),
+        'top-left'
+      );
+      // Keep the legally required map-data credit available without a large
+      // permanent attribution strip covering the map.
+      map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
+      map.on('load', markReady);
+      map.on('error', handleMapError);
+      mapRef.current = map;
+      vectorTimer = window.setTimeout(activateFallback, VECTOR_LOAD_TIMEOUT_MS);
+    } catch (error) {
+      console.error('[BRAZOS map] Failed to initialize', error);
+      setMapError('The map could not start. Tap below to try again.');
+      return;
+    }
 
     const resizeTimer = window.setTimeout(() => map.resize(), 0);
     return () => {
       window.clearTimeout(resizeTimer);
+      if (vectorTimer) window.clearTimeout(vectorTimer);
+      if (terminalTimer) window.clearTimeout(terminalTimer);
       map.off('load', markReady);
+      map.off('error', handleMapError);
       hotspotMarkersRef.current.forEach((marker) => marker.remove());
       hotspotMarkersRef.current = [];
       userMarkerRef.current?.remove();
@@ -84,11 +158,12 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
       mapRef.current = null;
       setMapReady(false);
     };
-  }, []);
+  }, [retryKey]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapReady) return;
+    const maplibregl = window.maplibregl;
+    if (!map || !mapReady || !maplibregl) return;
 
     hotspotMarkersRef.current.forEach((marker) => marker.remove());
     hotspotMarkersRef.current = [];
@@ -160,7 +235,7 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
       const position = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
-      const point: maplibregl.LngLatLike = [
+      const point: MapLibre.LngLatLike = [
         position.coords.longitude,
         position.coords.latitude,
       ];
@@ -176,6 +251,11 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         backgroundColor: colors.primary,
         boxShadow: '0 2px 9px rgba(10, 44, 34, 0.38)',
       });
+      const maplibregl = window.maplibregl;
+      if (!maplibregl) {
+        setLocationState('denied');
+        return;
+      }
       userMarkerRef.current = new maplibregl.Marker({
         element: markerElement,
         anchor: 'center',
@@ -201,9 +281,9 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         accessibilityLabel="Interactive vector job hotspot map"
       />
 
-      {!mapReady && (
+      {!mapReady && !mapError && (
         <View style={styles.center}>
-          <MapPinIcon size={80} />
+          <MapPinIcon size={120} />
           <ActivityIndicator
             size="small"
             color={colors.primary}
@@ -212,27 +292,47 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         </View>
       )}
 
-      <Pressable
-        accessibilityLabel="Center map on my location"
-        accessibilityRole="button"
-        onPress={() => void locateUser()}
-        style={({ pressed }) => [
-          styles.locationButton,
-          pressed && styles.locationButtonPressed,
-        ]}
-      >
-        {locationState === 'loading' ? (
-          <ActivityIndicator size="small" color={colors.primary} />
-        ) : (
-          <Ionicons
-            name={locationState === 'granted' ? 'navigate' : 'locate-outline'}
-            size={22}
-            color={colors.primary}
-          />
-        )}
-      </Pressable>
+      {mapError && (
+        <View style={styles.center}>
+          <MapPinIcon size={120} />
+          <Text style={styles.mapErrorText}>{mapError}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setRetryKey((value) => value + 1)}
+            style={({ pressed }) => [
+              styles.retryButton,
+              pressed && styles.locationButtonPressed,
+            ]}
+          >
+            <Ionicons name="refresh" size={18} color={colors.onPrimary} />
+            <Text style={styles.retryButtonText}>Retry map</Text>
+          </Pressable>
+        </View>
+      )}
 
-      {locationState === 'denied' && (
+      {mapReady && (
+        <Pressable
+          accessibilityLabel="Center map on my location"
+          accessibilityRole="button"
+          onPress={() => void locateUser()}
+          style={({ pressed }) => [
+            styles.locationButton,
+            pressed && styles.locationButtonPressed,
+          ]}
+        >
+          {locationState === 'loading' ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <Ionicons
+              name={locationState === 'granted' ? 'navigate' : 'locate-outline'}
+              size={22}
+              color={colors.primary}
+            />
+          )}
+        </Pressable>
+      )}
+
+      {mapReady && locationState === 'denied' && (
         <View style={styles.locationNotice}>
           <Ionicons name="location-outline" size={16} color={colors.textMuted} />
           <Text style={styles.locationNoticeText}>
@@ -241,14 +341,14 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         </View>
       )}
 
-      {loading && (
+      {mapReady && loading && (
         <View style={styles.loadingPill}>
           <ActivityIndicator size="small" color={colors.primary} />
           <Text style={styles.loadingText}>Updating hotspots…</Text>
         </View>
       )}
 
-      {!loading && cells.length === 0 && (
+      {mapReady && !loading && cells.length === 0 && (
         <View style={styles.emptyBanner}>
           <Ionicons name="sparkles-outline" size={16} color={colors.textMuted} />
           <Text style={styles.emptyBannerText}>
@@ -278,6 +378,29 @@ const styles = StyleSheet.create({
   },
   loadingSpinner: {
     marginTop: spacing.md,
+  },
+  mapErrorText: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: spacing.lg,
+    maxWidth: 300,
+    textAlign: 'center',
+  },
+  retryButton: {
+    alignItems: 'center',
+    backgroundColor: colors.primary,
+    borderRadius: radius.pill,
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+  },
+  retryButtonText: {
+    color: colors.onPrimary,
+    fontSize: 14,
+    fontWeight: '700',
   },
   locationButton: {
     alignItems: 'center',
