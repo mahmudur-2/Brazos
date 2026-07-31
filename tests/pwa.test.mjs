@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const readBinary = (path) => readFile(new URL(`../${path}`, import.meta.url));
 
 test('web build is installable and receives hosted runtime configuration', async () => {
   const [appConfig, manifest, html, serviceWorker, webSupabase, worker, buildPreparation] = await Promise.all([
@@ -25,13 +26,17 @@ test('web build is installable and receives hosted runtime configuration', async
     pwa.icons.map((icon) => icon.sizes),
     ['192x192', '512x512']
   );
+  assert.deepEqual(
+    pwa.icons.map((icon) => icon.src),
+    ['/icon-192.png?v=2', '/icon-512.png?v=2']
+  );
   assert.match(html, /rel="manifest"/);
   assert.match(html, /apple-mobile-web-app-capable/);
   assert.match(html, /navigator\.serviceWorker\.register\('\/sw\.js'\)/);
   assert.match(html, /src="\/config\.js\?v=20260731-1"/);
   assert.match(html, /id="brazos-startup"/);
   assert.match(html, /BRAZOS could not start/);
-  assert.match(serviceWorker, /brazos-shell-v2/);
+  assert.match(serviceWorker, /brazos-shell-v3/);
   assert.doesNotMatch(serviceWorker, /APP_SHELL = \['\/'/);
   assert.match(webSupabase, /__BRAZOS_CONFIG__/);
   assert.match(worker, /url\.pathname === '\/config\.js'/);
@@ -41,6 +46,25 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(worker, /env\.ASSETS\.fetch/);
   assert.doesNotMatch(worker, /service_role/i);
   assert.match(buildPreparation, /await rm\(staticConfigPath\)/);
+});
+
+test('PWA ships the BRAZOS icon and an interactive privacy-preserving web map', async () => {
+  const [icon192, icon512, webMap, packageJson] = await Promise.all([
+    readBinary('public/icon-192.png'),
+    readBinary('public/icon-512.png'),
+    read('components/HotspotMap.web.tsx'),
+    read('package.json'),
+  ]);
+
+  assert.deepEqual([icon192.readUInt32BE(16), icon192.readUInt32BE(20)], [192, 192]);
+  assert.deepEqual([icon512.readUInt32BE(16), icon512.readUInt32BE(20)], [512, 512]);
+  assert.match(webMap, /L\.map\(/);
+  assert.match(webMap, /tile\.openstreetmap\.org/);
+  assert.match(webMap, /OpenStreetMap contributors/);
+  assert.match(webMap, /requestForegroundPermissionsAsync/);
+  assert.match(webMap, /onSelectCell\(cell\)/);
+  assert.match(webMap, /aggregated cell centers and counts/);
+  assert.equal(JSON.parse(packageJson).dependencies.leaflet, '^1.9.4');
 });
 
 test('TestFlight and EAS Update configuration remains present', async () => {

@@ -127,7 +127,7 @@ export function glowRingsForCell(cell: HotspotCell): GlowRing[] {
 
 // Shared props for the platform-specific map implementations
 // (HotspotMap.native.tsx uses react-native-maps; HotspotMap.web.tsx is a
-// card-list fallback because react-native-maps has no web support).
+// Leaflet map because react-native-maps has no web support).
 export type HotspotMapProps = {
   cells: HotspotCell[];
   loading: boolean;

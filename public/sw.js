@@ -1,5 +1,9 @@
-const CACHE_NAME = 'brazos-shell-v2';
-const APP_SHELL = ['/manifest.json', '/icon-192.png', '/icon-512.png'];
+const CACHE_NAME = 'brazos-shell-v3';
+const APP_SHELL = [
+  '/manifest.json',
+  '/icon-192.png?v=2',
+  '/icon-512.png?v=2',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
