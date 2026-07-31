@@ -21,9 +21,10 @@ declare global {
 
 const DEFAULT_CENTER: MapLibre.LngLatLike = [-73.9496, 40.6501];
 const DEFAULT_ZOOM = 11.5;
-const VECTOR_STYLE = 'https://tiles.openfreemap.org/styles/bright';
-const VECTOR_LOAD_TIMEOUT_MS = 8000;
-const FALLBACK_LOAD_TIMEOUT_MS = 12000;
+const VECTOR_STYLE =
+  'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json';
+const VECTOR_LOAD_TIMEOUT_MS = 7000;
+const FALLBACK_LOAD_TIMEOUT_MS = 10000;
 
 const RASTER_FALLBACK_STYLE: MapLibre.StyleSpecification = {
   version: 8,
@@ -77,35 +78,85 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
 
     setMapReady(false);
     setMapError(null);
-    let map: MapLibre.Map;
+    let map: MapLibre.Map | undefined;
     let fallbackActive = false;
-    let settled = false;
-    let terminalTimer: number | undefined;
-    let vectorTimer: number | undefined;
+    let terminal = false;
+    let switchingStyle = false;
+    let loadTimer: number | undefined;
+
+    const clearLoadTimer = () => {
+      if (loadTimer) {
+        window.clearTimeout(loadTimer);
+        loadTimer = undefined;
+      }
+    };
 
     const markReady = () => {
-      settled = true;
-      if (vectorTimer) window.clearTimeout(vectorTimer);
-      if (terminalTimer) window.clearTimeout(terminalTimer);
+      if (terminal || !map) return;
+      terminal = true;
+      clearLoadTimer();
       map.resize();
       setMapReady(true);
       setMapError(null);
     };
 
+    const markFailed = (message: string) => {
+      if (terminal) return;
+      terminal = true;
+      clearLoadTimer();
+      setMapReady(false);
+      setMapError(message);
+    };
+
     const activateFallback = () => {
-      if (settled || fallbackActive) return;
+      if (terminal || fallbackActive || switchingStyle || !map) return;
       fallbackActive = true;
-      map.setStyle(RASTER_FALLBACK_STYLE);
-      terminalTimer = window.setTimeout(() => {
-        if (!settled) {
-          setMapError('The map could not connect. Tap below to try again.');
+      switchingStyle = true;
+      clearLoadTimer();
+
+      // Move style replacement out of the failing resource event. Safari can
+      // otherwise dispatch stale vector errors while the raster style is being
+      // installed and incorrectly terminate a healthy fallback.
+      window.setTimeout(() => {
+        if (terminal || !map) return;
+        try {
+          map.setStyle(RASTER_FALLBACK_STYLE);
+          switchingStyle = false;
+          loadTimer = window.setTimeout(() => {
+            markFailed('The map could not connect. Tap below to try again.');
+          }, FALLBACK_LOAD_TIMEOUT_MS);
+        } catch (error) {
+          console.error('[BRAZOS map] Failed to install fallback', error);
+          markFailed('The map could not start. Tap below to try again.');
         }
-      }, FALLBACK_LOAD_TIMEOUT_MS);
+      }, 0);
+    };
+
+    const handleIdle = () => {
+      if (terminal || switchingStyle || !map || !map.areTilesLoaded()) return;
+
+      // A MapLibre "load" event only confirms that style metadata exists. On
+      // Safari it can fire while every street tile has failed, producing the
+      // blank cream canvas. Do not uncover the map until an actual tile has
+      // arrived and the renderer is idle.
+      if (fallbackActive || map.queryRenderedFeatures().length > 0) {
+        markReady();
+      } else {
+        activateFallback();
+      }
     };
 
     const handleMapError = (event: MapLibre.MapEventType['error']) => {
       console.warn('[BRAZOS map]', event.error?.message ?? 'Map resource failed');
-      if (!settled) activateFallback();
+      if (terminal || switchingStyle) return;
+
+      if (!fallbackActive) {
+        activateFallback();
+      }
+    };
+
+    const handleContextLost = () => {
+      markFailed('The map renderer stopped. Tap below to restart it.');
     };
 
     try {
@@ -133,23 +184,25 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
       // Keep the legally required map-data credit available without a large
       // permanent attribution strip covering the map.
       map.addControl(new maplibregl.AttributionControl({ compact: true }), 'bottom-right');
-      map.on('load', markReady);
+      map.on('idle', handleIdle);
       map.on('error', handleMapError);
+      map.on('webglcontextlost', handleContextLost);
       mapRef.current = map;
-      vectorTimer = window.setTimeout(activateFallback, VECTOR_LOAD_TIMEOUT_MS);
+      loadTimer = window.setTimeout(activateFallback, VECTOR_LOAD_TIMEOUT_MS);
     } catch (error) {
       console.error('[BRAZOS map] Failed to initialize', error);
-      setMapError('The map could not start. Tap below to try again.');
+      markFailed('The map could not start. Tap below to try again.');
       return;
     }
 
     const resizeTimer = window.setTimeout(() => map.resize(), 0);
     return () => {
       window.clearTimeout(resizeTimer);
-      if (vectorTimer) window.clearTimeout(vectorTimer);
-      if (terminalTimer) window.clearTimeout(terminalTimer);
-      map.off('load', markReady);
+      clearLoadTimer();
+      terminal = true;
+      map.off('idle', handleIdle);
       map.off('error', handleMapError);
+      map.off('webglcontextlost', handleContextLost);
       hotspotMarkersRef.current.forEach((marker) => marker.remove());
       hotspotMarkersRef.current = [];
       userMarkerRef.current?.remove();

@@ -48,6 +48,8 @@
     "lint": "tsc --noEmit --pretty false --noUnusedLocals --noUnusedParameters",
     "test": "node --test tests/*.test.mjs",
     "export": "expo export --platform all",
+    "preweb": "node scripts/sync-maplibre-assets.mjs",
+    "prebuild:web": "node scripts/sync-maplibre-assets.mjs",
     "build:web": "expo export --platform web --output-dir dist/client && node scripts/prepare-sites-build.mjs",
     "release:testflight": "npx eas-cli@latest build --platform ios --profile testflight --auto-submit",
     "update:preview": "npx eas-cli@latest update --channel preview --environment preview"
