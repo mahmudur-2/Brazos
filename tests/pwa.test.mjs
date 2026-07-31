@@ -5,12 +5,13 @@ import test from 'node:test';
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('web build is installable and receives hosted runtime configuration', async () => {
-  const [appConfig, manifest, html, webSupabase, worker] = await Promise.all([
+  const [appConfig, manifest, html, webSupabase, worker, buildPreparation] = await Promise.all([
     read('app.json'),
     read('public/manifest.json'),
     read('public/index.html'),
     read('lib/supabase.web.ts'),
     read('hosting/sites-worker.js'),
+    read('scripts/prepare-sites-build.mjs'),
   ]);
 
   const app = JSON.parse(appConfig);
@@ -30,6 +31,7 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(worker, /url\.pathname === '\/config\.js'/);
   assert.match(worker, /env\.ASSETS\.fetch/);
   assert.doesNotMatch(worker, /service_role/i);
+  assert.match(buildPreparation, /await rm\(staticConfigPath\)/);
 });
 
 test('TestFlight and EAS Update configuration remains present', async () => {
