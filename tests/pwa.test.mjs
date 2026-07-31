@@ -70,7 +70,7 @@ test('PWA ships the BRAZOS icon and a sharp rotatable privacy-preserving web map
   assert.match(webMap, /aggregated cell centers and counts/);
   assert.match(mapScreen, /backgroundColor: colors\.background/);
   assert.doesNotMatch(mapScreen, /useThemeColors/);
-  assert.equal(JSON.parse(packageJson).dependencies['maplibre-gl'], '^6.1.0');
+  assert.equal(JSON.parse(packageJson).dependencies['maplibre-gl'], '^4.7.1');
   assert.equal(JSON.parse(packageJson).dependencies.leaflet, undefined);
 });
 
