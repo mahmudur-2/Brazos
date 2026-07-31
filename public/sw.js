@@ -1,8 +1,9 @@
-const CACHE_NAME = 'brazos-shell-v4';
+const CACHE_NAME = 'brazos-shell-v5';
 const APP_SHELL = [
   '/manifest.json',
-  '/icon-192.png?v=3',
-  '/icon-512.png?v=3',
+  '/apple-touch-icon.png?v=4',
+  '/icon-192.png?v=4',
+  '/icon-512.png?v=4',
 ];
 
 self.addEventListener('install', (event) => {

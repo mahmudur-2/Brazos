@@ -28,16 +28,17 @@ test('web build is installable and receives hosted runtime configuration', async
   );
   assert.deepEqual(
     pwa.icons.map((icon) => icon.src),
-    ['/icon-192.png?v=3', '/icon-512.png?v=3']
+    ['/icon-192.png?v=4', '/icon-512.png?v=4']
   );
   assert.match(html, /rel="manifest"/);
   assert.match(html, /apple-mobile-web-app-capable/);
+  assert.match(html, /apple-touch-icon\.png\?v=4/);
   assert.match(html, /navigator\.serviceWorker\.register\('\/sw\.js'\)/);
   assert.match(html, /src="\/config\.js\?v=20260731-1"/);
   assert.match(html, /id="brazos-startup"/);
   assert.match(html, /BRAZOS could not start/);
   assert.doesNotMatch(html, /maplibre/i);
-  assert.match(serviceWorker, /brazos-shell-v4/);
+  assert.match(serviceWorker, /brazos-shell-v5/);
   assert.doesNotMatch(serviceWorker, /APP_SHELL = \['\/'/);
   assert.match(webSupabase, /__BRAZOS_CONFIG__/);
   assert.match(worker, /url\.pathname === '\/config\.js'/);
@@ -49,17 +50,27 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(buildPreparation, /await rm\(staticConfigPath\)/);
 });
 
-test('PWA ships the BRAZOS icon and a sharp rotatable privacy-preserving web map', async () => {
-  const [icon192, icon512, webMap, mapScreen, packageJson] = await Promise.all([
+test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web map', async () => {
+  const [nativeIcon, appleIcon, icon192, icon512, webMap, mapScreen, packageJson, appConfig] = await Promise.all([
+    readBinary('assets/icon.png'),
+    readBinary('public/apple-touch-icon.png'),
     readBinary('public/icon-192.png'),
     readBinary('public/icon-512.png'),
     read('components/HotspotMap.web.tsx'),
     read('screens/MapScreen.tsx'),
     read('package.json'),
+    read('app.json'),
   ]);
 
+  assert.deepEqual([nativeIcon.readUInt32BE(16), nativeIcon.readUInt32BE(20)], [1024, 1024]);
+  assert.deepEqual([appleIcon.readUInt32BE(16), appleIcon.readUInt32BE(20)], [180, 180]);
   assert.deepEqual([icon192.readUInt32BE(16), icon192.readUInt32BE(20)], [192, 192]);
   assert.deepEqual([icon512.readUInt32BE(16), icon512.readUInt32BE(20)], [512, 512]);
+  assert.equal(JSON.parse(appConfig).expo.icon, './assets/icon.png');
+  assert.equal(
+    JSON.parse(appConfig).expo.android.adaptiveIcon.foregroundImage,
+    './assets/icon.png'
+  );
   assert.match(webMap, /new Map\(/);
   assert.match(webMap, /rastertiles\/voyager\/\{z\}\/\{x\}\/\{y\}@2x\.png/);
   assert.match(webMap, /tilePixelRatio: 2/);

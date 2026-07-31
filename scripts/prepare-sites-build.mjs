@@ -19,6 +19,7 @@ if (manifest.display !== 'standalone' || !indexHtml.includes('rel="manifest"')) 
 }
 
 for (const requiredFile of [
+  'apple-touch-icon.png',
   'icon-192.png',
   'icon-512.png',
   'sw.js',
