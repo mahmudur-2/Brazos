@@ -1,4 +1,4 @@
-const CACHE_NAME = 'brazos-shell-v5';
+const CACHE_NAME = 'brazos-shell-v6';
 const APP_SHELL = [
   '/manifest.json',
   '/apple-touch-icon.png?v=4',
