@@ -34,7 +34,7 @@ import {
   type OpenJob,
 } from '../lib/jobs';
 import { createBid, fetchMyBidForJob, type Bid } from '../lib/bids';
-import { alertAsync } from '../lib/dialog';
+import { alertAsync, confirmAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
@@ -51,6 +51,10 @@ export function JobDetailScreen() {
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  // Separate from `submitting` so the two bid paths disable each other while
+  // either is in flight, and repeated taps on the listed-price button cannot
+  // stack a second create_bid call behind the first.
+  const [takingListedPrice, setTakingListedPrice] = useState(false);
   const [existingBid, setExistingBid] = useState<Bid | null>(null);
   const [checking, setChecking] = useState(true);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -92,6 +96,80 @@ export function JobDetailScreen() {
     };
   }, [user, job.id, isOwnJob]);
 
+  /**
+   * Shared tail of both bid paths. Everything that decides whether the bid is
+   * allowed — job still open, not your own job, not blocked, no existing bid —
+   * lives in create_bid(), so this only has to report what came back.
+   */
+  async function placeBid(amountCents: number, pitch: string) {
+    if (!user) return false;
+
+    const { data, error } = await createBid(user.id, {
+      jobId: job.id,
+      amountCents,
+      message: pitch,
+    });
+
+    if (error) {
+      const msg =
+        error.code === '23505'
+          ? 'You already have a bid on this job.'
+          : error.message;
+      await alertAsync('Could not place bid', msg);
+      // A duplicate means someone (this screen, a second tap, another device)
+      // already bid — resync so the form is replaced by the real bid rather
+      // than inviting another attempt.
+      if (error.code === '23505') {
+        const { data: mine } = await fetchMyBidForJob(user.id, job.id);
+        setExistingBid(mine);
+      }
+      return false;
+    }
+
+    if (data) setExistingBid(data);
+    return true;
+  }
+
+  /**
+   * "I'll do it for $X" — a bid at the poster's own listed budget, so a worker
+   * who is simply happy with the advertised price does not have to retype it
+   * and invent a pitch.
+   *
+   * It is an ordinary bid, deliberately: same table, same create_bid()
+   * validation, same competing-bid handling, and the same accept_bid() the
+   * poster already uses. Pressing it books nothing — the poster still has to
+   * choose this worker over the others.
+   */
+  async function handleTakeListedPrice() {
+    if (!user || job.budget_cents == null || takingListedPrice || submitting) return;
+
+    const ok = await confirmAsync({
+      title: `Offer to do this for ${formatBudget(job.budget_cents)}?`,
+      message:
+        'This sends the client a bid at their listed budget. They still choose who gets the job.',
+      confirmText: 'Send offer',
+      cancelText: 'Cancel',
+    });
+    if (!ok) return;
+
+    setTakingListedPrice(true);
+    const sent = await placeBid(
+      job.budget_cents,
+      `I can do this for your listed budget of ${formatBudget(job.budget_cents)}.`
+    );
+    setTakingListedPrice(false);
+    if (!sent) return;
+
+    await alertAsync(
+      'Offer sent',
+      'The client can see your offer and open your profile from it.'
+    );
+    await maybePromptForPush(
+      'Get told the moment this client accepts your offer — and when new jobs like this are posted.'
+    );
+    navigation.getParent()?.navigate('MyJobs' as never);
+  }
+
   async function handleSubmit() {
     if (!user) return;
 
@@ -110,21 +188,9 @@ export function JobDetailScreen() {
     }
 
     setSubmitting(true);
-    const { error } = await createBid(user.id, {
-      jobId: job.id,
-      amountCents,
-      message: message.trim(),
-    });
+    const placed = await placeBid(amountCents, message.trim());
     setSubmitting(false);
-
-    if (error) {
-      const msg =
-        error.code === '23505'
-          ? 'You already have a bid on this job.'
-          : error.message;
-      await alertAsync('Could not place bid', msg);
-      return;
-    }
+    if (!placed) return;
 
     await alertAsync('Bid placed', 'The client can now see your bid.');
 
@@ -236,29 +302,59 @@ export function JobDetailScreen() {
               </Text>
             </Card>
           ) : (
-            <Card>
-              <Text style={styles.sectionTitle}>Place a bid</Text>
-              <View style={styles.form}>
-                <TextField
-                  label="Your bid (USD)"
-                  value={amount}
-                  onChangeText={setAmount}
-                  placeholder="e.g. 45"
-                  keyboardType="numeric"
-                />
-                <TextField
-                  label="Pitch"
-                  value={message}
-                  onChangeText={setMessage}
-                  placeholder="Why should the client pick you?"
-                  autoCapitalize="sentences"
-                  multiline
-                  numberOfLines={3}
-                  style={styles.multiline}
-                />
-                <Button title="Place bid" onPress={handleSubmit} loading={submitting} />
-              </View>
-            </Card>
+            <>
+              {/* Happy with the advertised price? One tap, no retyping the
+                  number and no inventing a pitch. Still an ordinary bid the
+                  poster has to accept. */}
+              {job.budget_cents != null && (
+                <Card>
+                  <Text style={styles.sectionTitle}>Take it at the listed price</Text>
+                  <Text style={styles.quickBidText}>
+                    Send {formatBudget(job.budget_cents)} as your bid, exactly
+                    as posted. The client still picks who gets the job.
+                  </Text>
+                  <Button
+                    title={`I’ll do it for ${formatBudget(job.budget_cents)}`}
+                    icon="checkmark-circle-outline"
+                    onPress={handleTakeListedPrice}
+                    loading={takingListedPrice}
+                    disabled={submitting}
+                    style={styles.quickBidAction}
+                  />
+                </Card>
+              )}
+
+              <Card>
+                <Text style={styles.sectionTitle}>
+                  {job.budget_cents != null ? 'Or name your own price' : 'Place a bid'}
+                </Text>
+                <View style={styles.form}>
+                  <TextField
+                    label="Your bid (USD)"
+                    value={amount}
+                    onChangeText={setAmount}
+                    placeholder="e.g. 45"
+                    keyboardType="numeric"
+                  />
+                  <TextField
+                    label="Pitch"
+                    value={message}
+                    onChangeText={setMessage}
+                    placeholder="Why should the client pick you?"
+                    autoCapitalize="sentences"
+                    multiline
+                    numberOfLines={3}
+                    style={styles.multiline}
+                  />
+                  <Button
+                    title="Place bid"
+                    onPress={handleSubmit}
+                    loading={submitting}
+                    disabled={takingListedPrice}
+                  />
+                </View>
+              </Card>
+            </>
           )}
 
           {similarJobs.length > 0 && (
@@ -387,6 +483,15 @@ const styles = StyleSheet.create({
   },
   similarList: {
     gap: spacing.md,
+  },
+  quickBidText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 20,
+    marginTop: spacing.xs,
+  },
+  quickBidAction: {
+    marginTop: spacing.lg,
   },
   form: {
     gap: spacing.lg,

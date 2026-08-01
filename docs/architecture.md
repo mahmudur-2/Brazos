@@ -65,7 +65,21 @@ worker has already completed a job for this client, and the negotiation must
 attach to an existing `thread_job_id` — messaging is keyed to a job and only
 the client and the assigned worker are parties to it. So there is no path
 today for a first-time direct offer to a stranger. Reaching a worker you have
-never hired means posting a job they can bid on.
+never hired means posting a job they can bid on, which is what the worker
+profile offers when the direct-offer path is not open.
+
+`job_requests.category` is plain text with its own CHECK, so it does not
+follow the `job_category` enum automatically — phase23 widened the enum and
+phase33 had to widen the CHECK to match. Change both together.
+
+**Entry points into a direct offer:** the worker profile ("Send an offer"),
+a bid card on the client's own job, and the chat header. All three land on
+PostJobScreen in hire mode, which calls `create_job_request()`.
+
+**"I'll do it for $X"** on an open job is not a third system: it is an
+ordinary bid at the poster's listed `budget_cents`, through the same
+`create_bid()`, appearing in the same bid list, accepted with the same
+`accept_bid()`.
 
 ## Jobs
 
