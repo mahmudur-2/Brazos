@@ -50,6 +50,25 @@ async function checkColumn(table, column) {
   return { ok: false, detail: `${res.status} ${body.code ?? ''} ${body.message ?? ''}`.trim() };
 }
 
+/**
+ * The inverse of checkColumn: asserts a column is NOT readable with the
+ * publishable key. phase29 revokes every direct grant on public.profiles and
+ * re-grants only a public column list, so a column that still reads back here
+ * means the hardening was never applied (or was rolled back) — the one part of
+ * phase29 that an existence probe cannot see.
+ */
+async function checkColumnRevoked(table, column) {
+  const res = await fetch(
+    `${BASE}/rest/v1/${table}?select=${encodeURIComponent(column)}&limit=0`,
+    { headers }
+  );
+  if (!res.ok) return { ok: true, note: `not readable (responded ${res.status})` };
+  return {
+    ok: false,
+    detail: `${table}.${column} is still readable with the publishable key`,
+  };
+}
+
 async function checkRpc(fn, args) {
   const res = await fetch(`${BASE}/rest/v1/rpc/${fn}`, {
     method: 'POST',
@@ -227,6 +246,80 @@ const MIGRATIONS = [
         checkColumn('conversations', 'last_message_unsent_at')],
       ['rpc unsend_message()', () =>
         checkRpc('unsend_message', { p_message_id: ZERO_UUID })],
+    ],
+  },
+  {
+    // Every function below is revoked from public and granted only to
+    // `authenticated`, so probing them with the publishable (anon) key is
+    // rejected at the permission layer before any body runs — nothing here
+    // can write. A permission-denied answer still proves existence; only
+    // PGRST202 counts as missing.
+    file: 'phase29_security_hardening.sql',
+    checks: [
+      // is_active_user() is deliberately NOT checked here: phase13 creates it
+      // too, so it passes whether or not phase29 ran and would be a false green.
+      ['rpc is_profile_active()', () =>
+        checkRpc('is_profile_active', { p_user: ZERO_UUID })],
+      ['rpc current_user_is_admin()', () => checkRpc('current_user_is_admin', {})],
+      ['rpc current_user_is_banned()', () => checkRpc('current_user_is_banned', {})],
+      ['rpc get_my_profile()', () => checkRpc('get_my_profile', {})],
+      ['rpc update_my_profile()', () =>
+        checkRpc('update_my_profile', { p_patch: {} })],
+      ['rpc create_job()', () =>
+        checkRpc('create_job', {
+          p_title: '',
+          p_description: '',
+          p_category: 'other',
+          p_location: '',
+        })],
+      ['rpc update_job_details()', () =>
+        checkRpc('update_job_details', {
+          p_job_id: ZERO_UUID,
+          p_title: '',
+          p_description: '',
+          p_category: 'other',
+          p_location: '',
+        })],
+      ['rpc create_bid()', () =>
+        checkRpc('create_bid', {
+          p_job_id: ZERO_UUID,
+          p_amount_cents: 1,
+          p_message: '',
+        })],
+      ['rpc create_review()', () =>
+        checkRpc('create_review', {
+          p_job_id: ZERO_UUID,
+          p_reviewee_id: ZERO_UUID,
+          p_rating: 5,
+          p_comment: null,
+        })],
+      // The headline property of this migration: the private profile columns
+      // must no longer be directly readable. Without these two, the checks
+      // above could all pass while phone/is_admin were still world-readable.
+      ['profiles.phone revoked', () => checkColumnRevoked('profiles', 'phone')],
+      ['profiles.is_admin revoked', () => checkColumnRevoked('profiles', 'is_admin')],
+    ],
+  },
+  {
+    // Originally created by phase29; phase30 restores it where production
+    // reported it missing. Either file having run satisfies this check.
+    file: 'phase30_accept_bid_rpc.sql',
+    checks: [
+      ['rpc accept_bid()', () =>
+        checkRpc('accept_bid', { p_job_id: ZERO_UUID, p_bid_id: ZERO_UUID })],
+    ],
+  },
+  {
+    // Same relationship as phase30 — phase29 creates it, phase31 restores it.
+    // lib/jobStatusCompatibility.ts only exists to cover its absence.
+    file: 'phase31_transition_job_status_rpc.sql',
+    checks: [
+      ['rpc transition_job_status()', () =>
+        checkRpc('transition_job_status', {
+          p_job_id: ZERO_UUID,
+          p_status: 'in_progress',
+          p_completion_photos: null,
+        })],
     ],
   },
 ];
