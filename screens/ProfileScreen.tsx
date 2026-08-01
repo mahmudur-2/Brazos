@@ -536,9 +536,12 @@ export function ProfileScreen() {
             </Pressable>
           )}
 
+          {/* Destructive styling only — handleLogout, its confirmation, and
+              where it lands are all unchanged. */}
           <Button
             title="Log out"
-            variant="secondary"
+            variant="destructive"
+            icon="log-out-outline"
             onPress={handleLogout}
             loading={loggingOut}
           />

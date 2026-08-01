@@ -24,7 +24,14 @@ type ButtonProps = {
   onPress: () => void;
   loading?: boolean;
   disabled?: boolean;
-  variant?: 'primary' | 'secondary';
+  /**
+   * `destructive` is the secondary shape in the danger palette — red label,
+   * red glyph, red border over a faint red tint. For actions that end
+   * something (signing out, and nothing else today). Kept as a variant rather
+   * than a per-call `palette` override so every destructive control in the
+   * app is the same red without each caller re-deriving it.
+   */
+  variant?: 'primary' | 'secondary' | 'destructive';
   /** Taller, larger-text variant for buttons that need more visual weight. */
   size?: ButtonSize;
   /** Overrides fill/text colors, e.g. for the Map tab's dark mode. */
@@ -48,12 +55,26 @@ export function Button({
 }: ButtonProps) {
   const isDisabled = disabled || loading;
   const isSecondary = variant === 'secondary';
+  const isDestructive = variant === 'destructive';
   const sizeStyle = SIZES[size];
 
-  const fillStyle = isSecondary
+  // dangerBg is a pale tint of danger in the light palette and a dark one in
+  // the dark palette, so `danger` text stays legible on it either way — the
+  // same pairing the status badges already rely on.
+  const fillStyle = isDestructive
+    ? {
+        backgroundColor: palette.dangerBg,
+        borderWidth: 1,
+        borderColor: palette.danger,
+      }
+    : isSecondary
     ? { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border }
     : { backgroundColor: palette.primary };
-  const textColor = isSecondary ? palette.primary : palette.onPrimary;
+  const textColor = isDestructive
+    ? palette.danger
+    : isSecondary
+    ? palette.primary
+    : palette.onPrimary;
 
   return (
     <Pressable
