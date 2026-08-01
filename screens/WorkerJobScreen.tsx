@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -166,8 +168,13 @@ export function WorkerJobScreen() {
           )}
         </View>
       ) : (
+        <KeyboardAvoidingView
+          style={styles.flex}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
         <ScrollView
           contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           <Card>
@@ -329,6 +336,7 @@ export function WorkerJobScreen() {
             </Card>
           )}
         </ScrollView>
+        </KeyboardAvoidingView>
       )}
 
       <PhotoViewer
@@ -344,6 +352,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
   },
   center: {
     flex: 1,

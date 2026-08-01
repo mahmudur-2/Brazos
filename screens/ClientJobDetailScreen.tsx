@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
@@ -163,10 +164,15 @@ export function ClientJobDetailScreen() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
+        <ScrollView
+          contentContainerStyle={styles.content}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
         <Card>
           <View style={styles.jobHeader}>
             <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
@@ -374,7 +380,8 @@ export function ClientJobDetailScreen() {
             )}
           </>
         )}
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {showSuccess && (
         <Animated.View style={[styles.successOverlay, { opacity: successOpacity }]}>
@@ -410,6 +417,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  flex: {
+    flex: 1,
   },
   content: {
     padding: spacing.lg,
