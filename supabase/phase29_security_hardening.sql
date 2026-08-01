@@ -755,6 +755,7 @@ drop policy if exists "chat_photos_insert" on storage.objects;
 drop policy if exists "chat_audio_read" on storage.objects;
 drop policy if exists "chat_audio_insert" on storage.objects;
 
+drop policy if exists "chat_photos_read_party" on storage.objects;
 create policy "chat_photos_read_party"
   on storage.objects for select
   to authenticated
@@ -768,6 +769,7 @@ create policy "chat_photos_read_party"
     )
   );
 
+drop policy if exists "chat_photos_insert_party" on storage.objects;
 create policy "chat_photos_insert_party"
   on storage.objects for insert
   to authenticated
@@ -787,6 +789,7 @@ create policy "chat_photos_insert_party"
     )
   );
 
+drop policy if exists "chat_audio_read_party" on storage.objects;
 create policy "chat_audio_read_party"
   on storage.objects for select
   to authenticated
@@ -800,6 +803,7 @@ create policy "chat_audio_read_party"
     )
   );
 
+drop policy if exists "chat_audio_insert_party" on storage.objects;
 create policy "chat_audio_insert_party"
   on storage.objects for insert
   to authenticated
