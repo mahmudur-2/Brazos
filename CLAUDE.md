@@ -59,3 +59,97 @@ the user first — don't assume it's in scope because it seemed necessary.
 Always run `git status` first and report the current branch and whether the
 tree is clean, before making any change. If the branch or tree state looks
 unexpected, flag it to the user rather than proceeding silently.
+
+**Required branch: `mainexpo`.** If HEAD is on any other branch, stop and
+report it — do not switch branches and do not edit.
+
+## Verified architecture
+
+Full detail (tables, RPCs, buckets, who-may-do-what) lives in
+[docs/architecture.md](docs/architecture.md). The short version:
+
+- Entry point `index.ts` → `App.tsx`. Navigation is a 5-tab bottom bar
+  (Home / Map / My Jobs / Messages / Profile), each tab a native stack. All
+  route param types live in `lib/navigation.ts`.
+- `screens/` are routed screens, `components/` are shared UI, `hooks/` are
+  data hooks, `lib/` is data access + domain logic. Design tokens are in
+  `lib/theme.ts` — never hardcode a hex value in a screen.
+- Supabase is the entire backend. `lib/supabase.ts` is the client; every
+  table read/write and RPC call goes through a module in `lib/`.
+- Migrations are hand-run SQL files in `supabase/phaseNN_*.sql`, applied in
+  numeric order. They are the schema's source of truth; there is no
+  Supabase CLI migration directory.
+
+## Test and validation commands
+
+| Command | What it does |
+| --- | --- |
+| `npm run verify` | Lint + tests. The default check after a change. |
+| `npm run typecheck` | `tsc --noEmit` |
+| `npm run lint` | typecheck plus `--noUnusedLocals --noUnusedParameters` |
+| `npm test` | `node --test tests/*.test.mjs` (source-level guard tests) |
+| `node scripts/verify-schema.mjs` | Asks the live database what actually exists. Needs `.env`. |
+
+Run the narrowest one that covers what changed; `npm run verify` once at the
+end of a batch of work.
+
+Known pre-existing failure: `tests/pwa.test.mjs` → "web build is installable
+and receives hosted runtime configuration" expects `config.js?v=20260731-1`
+while `public/index.html` ships `-2`. Both sides are on the frozen web/PWA
+surface, so it is left alone deliberately. 12 of 13 tests pass; treat that as
+green for native work.
+
+## Critical business invariants
+
+Break any of these and the marketplace is wrong, not just ugly.
+
+- **Money is integer cents** (`budget_cents`, `amount_cents`,
+  `final_amount_cents`). Never store or compare dollars. Format only through
+  `formatBudget()`.
+- **A job is only ever assigned by the database.** `accept_bid()` (open-job
+  bidding) and `respond_job_request()` (private direct offers) are the only
+  two paths. Never set `assigned_worker_id` or `status` from the client.
+- **Bids and job requests are separate systems on purpose.** Bids are the
+  public competition on an open job; job requests are a private two-party
+  negotiation with alternating turns. Do not merge them.
+- **A job request creates no job row until it is accepted.**
+- **Status flow** is `open → assigned → in_progress → completed`, and only
+  `transition_job_status()` may move it.
+- **A user is both customer and worker.** There is no role switch, no mode,
+  and no role gate — the same account posts jobs and takes work.
+- **Never invent marketplace data.** No placeholder ratings, fake review
+  counts, stub work history, or stock imagery standing in for real uploads.
+
+## Supabase migration rules
+
+- Never run anything against production. Write the SQL, hand it over.
+- New file, next number: `supabase/phaseNN_short_name.sql`. Never edit an
+  already-deployed migration (phase29–32 in particular are deployed and
+  verified).
+- Migrations must be **idempotent** — safe to paste twice.
+- **phase32 revoked default EXECUTE on new functions.** Any new function
+  needs an explicit `grant execute … to authenticated;` or it is unreachable
+  from the app.
+- Never weaken RLS, a policy, or a grant to make a feature work. If a feature
+  needs data the caller cannot see, add a narrow `security definer` function
+  that returns only what is needed.
+- Changing an existing RPC's parameter list means `drop function` with the
+  full old signature, then create the new one, then re-grant.
+
+## Mobile UX requirements
+
+- Every screen is wrapped in `SafeAreaView` from
+  `react-native-safe-area-context` with explicit `edges`. Screens inside the
+  tab bar do not add bottom padding — `MainTabs` already owns that inset
+  (there is a test asserting this).
+- Any screen with a text input needs `KeyboardAvoidingView`
+  (`behavior="padding"` on iOS only) around a `ScrollView` with
+  `keyboardShouldPersistTaps="handled"`, and the submit control must stay
+  reachable with the keyboard open.
+- Use `lib/dialog.ts` (`alertAsync` / `confirmAsync`), never `Alert.alert` —
+  `Alert` is a no-op on web and breaks control flow.
+- Touch targets ≥ 44pt; long titles and locations get `numberOfLines` plus a
+  flex parent so they truncate instead of pushing siblings off-screen.
+- Animation uses the built-in `Animated` API with
+  `useNativeDriver: Platform.OS !== 'web'`. No animation library is installed
+  and none should be added.

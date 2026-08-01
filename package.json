@@ -47,6 +47,7 @@
     "typecheck": "tsc --noEmit --pretty false",
     "lint": "tsc --noEmit --pretty false --noUnusedLocals --noUnusedParameters",
     "test": "node --test tests/*.test.mjs",
+    "verify": "npm run lint && npm test",
     "export": "expo export --platform all",
     "build:web": "expo export --platform web --output-dir dist/client && node scripts/prepare-sites-build.mjs",
     "release:testflight": "npx eas-cli@latest build --platform ios --profile testflight --auto-submit",
