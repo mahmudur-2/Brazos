@@ -8,6 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
 const migration = read('supabase/phase29_security_hardening.sql');
+const executeGrants = read('supabase/phase32_function_execute_privileges.sql');
 const profiles = read('lib/profiles.ts');
 const jobs = read('lib/jobs.ts');
 const bids = read('lib/bids.ts');
@@ -156,6 +157,73 @@ test('web does not register unsupported notification response listeners', () => 
   assert.equal(guards.length, 2);
   assert.match(pushHook, /getLastNotificationResponseAsync/);
   assert.match(pushHook, /addNotificationResponseReceivedListener/);
+});
+
+test('function EXECUTE is revoked from anon and regranted to intended roles only', () => {
+  // Four app RPCs: authenticated + service_role.
+  const authenticatedFunctions = [
+    'public\\.is_active_user\\(\\)',
+    'public\\.create_review\\(uuid, uuid, integer, text\\)',
+    'public\\.accept_bid\\(uuid, uuid\\)',
+    'public\\.transition_job_status\\(uuid, text, jsonb\\)',
+  ];
+  for (const signature of authenticatedFunctions) {
+    assert.match(
+      executeGrants,
+      new RegExp(
+        `revoke execute on function ${signature}\\s*from public, anon, authenticated, service_role;`,
+        'i'
+      ),
+      `${signature} must be revoked from anon`
+    );
+    assert.match(
+      executeGrants,
+      new RegExp(
+        `grant execute on function ${signature}\\s*to authenticated, service_role;`,
+        'i'
+      ),
+      `${signature} must be regranted to authenticated and service_role`
+    );
+  }
+
+  // The outbox drainer mutates notification_outbox.attempts: service_role only.
+  const drainer = 'public\\.claim_notification_batch\\(integer\\)';
+  assert.match(
+    executeGrants,
+    new RegExp(
+      `revoke execute on function ${drainer}\\s*from public, anon, authenticated, service_role;`,
+      'i'
+    )
+  );
+  assert.match(
+    executeGrants,
+    new RegExp(`grant execute on function ${drainer}\\s*to service_role;`, 'i')
+  );
+  assert.doesNotMatch(
+    executeGrants,
+    new RegExp(`grant execute on function ${drainer}\\s*to[^;]*authenticated`, 'i'),
+    'claim_notification_batch must never be granted to authenticated'
+  );
+
+  // Deny-by-default for future functions, so the anon drift cannot recur.
+  for (const role of ['public', 'anon', 'authenticated', 'service_role']) {
+    assert.match(
+      executeGrants,
+      new RegExp(
+        `alter default privileges for role postgres in schema public\\s*revoke execute on functions from ${role};`,
+        'i'
+      ),
+      `default privileges must revoke execute from ${role}`
+    );
+  }
+
+  // Privileges only — this migration must not redefine or drop anything.
+  // Comments are stripped first: the header explains the root cause in prose
+  // and legitimately mentions the DDL this file must not actually contain.
+  const statements = executeGrants.replace(/--[^\n]*/g, '');
+  assert.doesNotMatch(statements, /create or replace function/i);
+  assert.doesNotMatch(statements, /drop function/i);
+  assert.doesNotMatch(statements, /alter function/i);
 });
 
 test('unsupported identity and proximity claims are absent', () => {
