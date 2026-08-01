@@ -1,8 +1,19 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0"
+cd /d "%~dp0.."
 
-echo === BRAZOS Dev Launcher ===
+set "METRO_PORT=8081"
+if defined BRAZOS_METRO_PORT set "METRO_PORT=%BRAZOS_METRO_PORT%"
+
+echo ================================================
+echo   BRAZOS Developer Control Center
+echo   Start BRAZOS
+echo ================================================
+echo.
+echo This checks your git branch, working tree, and
+echo dependencies, then starts the Expo dev server
+echo attached to this window with the QR code visible.
+echo Metro port: %METRO_PORT% (set BRAZOS_METRO_PORT to change)
 echo.
 
 echo Checking git branch...
@@ -35,7 +46,7 @@ echo.
 
 echo Starting Expo (Expo Go)...
 echo.
-call npx expo start
+call npm start -- --port %METRO_PORT%
 
 echo.
 echo Expo has exited.
