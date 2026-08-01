@@ -67,6 +67,9 @@ export function ClientJobDetailScreen() {
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  // Handed to ReviewSection so focusing its comment field can lift the card
+  // clear of the keyboard — the review card is the last thing in this list.
+  const scrollRef = useRef<ScrollView>(null);
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
@@ -169,8 +172,12 @@ export function ClientJobDetailScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          // Swiping the list down puts the keyboard away, so it never has to
+          // be dismissed by hunting for empty space to tap.
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
         <Card>
@@ -367,6 +374,7 @@ export function ClientJobDetailScreen() {
                   revieweeId={job.assigned_worker_id}
                   revieweeName={workerName}
                   prompt={`How was ${workerName}’s work?`}
+                  scrollRef={scrollRef}
                 />
               ) : null
             ) : (
@@ -423,6 +431,10 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
+    // Extra clearance below the last card so that, once the review form has
+    // been scrolled to the end with the keyboard open, Submit sits clear of
+    // the keyboard's top edge rather than flush against it.
+    paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   jobHeader: {

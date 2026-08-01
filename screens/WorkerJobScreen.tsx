@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -54,6 +54,9 @@ export function WorkerJobScreen() {
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [working, setWorking] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  // Handed to ReviewSection so focusing its comment field can lift the card
+  // clear of the keyboard — the review card is the last thing in this list.
+  const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     if (!job?.client_id) return;
@@ -173,8 +176,12 @@ export function WorkerJobScreen() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
         <ScrollView
+          ref={scrollRef}
           contentContainerStyle={styles.content}
           keyboardShouldPersistTaps="handled"
+          // Swiping the list down puts the keyboard away, so it never has to
+          // be dismissed by hunting for empty space to tap.
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <Card>
@@ -324,6 +331,7 @@ export function WorkerJobScreen() {
                   revieweeId={job.client_id}
                   revieweeName={clientName}
                   prompt={`How was working with ${clientName}?`}
+                  scrollRef={scrollRef}
                 />
               )}
             </>
@@ -363,6 +371,10 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.lg,
+    // Extra clearance below the last card so that, once the review form has
+    // been scrolled to the end with the keyboard open, Submit sits clear of
+    // the keyboard's top edge rather than flush against it.
+    paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
   jobHeader: {
@@ -446,8 +458,13 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   photo: {
-    width: '100%',
-    height: 200,
+    // Fixed width, not '100%'. These tiles live inside a HORIZONTAL
+    // ScrollView, whose content container has no bounded width for a
+    // percentage to resolve against — the just-uploaded completion photos
+    // were laying out at zero width because of it. Matches donePhoto below
+    // so the preview and the saved gallery are the same size.
+    width: 240,
+    height: 180,
     borderRadius: radius.md,
     backgroundColor: colors.border,
   },

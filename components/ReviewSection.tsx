@@ -1,5 +1,12 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState, type RefObject } from 'react';
+import {
+  ActivityIndicator,
+  Keyboard,
+  StyleSheet,
+  Text,
+  View,
+  type ScrollView,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -22,6 +29,13 @@ type ReviewSectionProps = {
   /** e.g. "How was working with Carlos?" prompt label. */
   prompt: string;
   onSubmitted?: () => void;
+  /**
+   * The ScrollView this card is rendered inside. Given one, focusing the
+   * comment field scrolls the card up out from under the keyboard — see
+   * revealAboveKeyboard() for why this is the host's scroller rather than
+   * something the card owns itself.
+   */
+  scrollRef?: RefObject<ScrollView | null>;
 };
 
 export function ReviewSection({
@@ -31,12 +45,45 @@ export function ReviewSection({
   revieweeName,
   prompt,
   onSubmitted,
+  scrollRef,
 }: ReviewSectionProps) {
   const [existing, setExisting] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [commentFocused, setCommentFocused] = useState(false);
+
+  /**
+   * On both screens that host it, this card is the LAST thing in the scroll
+   * content — so "scroll to the end" is exactly "put the comment field and
+   * the Submit button above the keyboard", with no measuring needed.
+   *
+   * The KeyboardAvoidingView those screens wrap the scroller in only shrinks
+   * the viewport; it never scrolls, which is why the field and the button
+   * ended up underneath the keyboard on a small iPhone. This supplies the
+   * missing half.
+   */
+  useEffect(() => {
+    if (!commentFocused || !scrollRef) return;
+
+    // keyboardDidShow fires after the KeyboardAvoidingView has already
+    // applied its padding, so the content height this scrolls against is the
+    // final one — no guessing at the keyboard's animation duration.
+    const shown = Keyboard.addListener('keyboardDidShow', () => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    // Covers the case where the keyboard is already up (so no new
+    // keyboardDidShow arrives) and focus merely moved into this field.
+    const frame = requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+
+    return () => {
+      shown.remove();
+      cancelAnimationFrame(frame);
+    };
+  }, [commentFocused, scrollRef]);
 
   useEffect(() => {
     let active = true;
@@ -114,6 +161,8 @@ export function ReviewSection({
         multiline
         numberOfLines={3}
         style={styles.multiline}
+        onFocus={() => setCommentFocused(true)}
+        onBlur={() => setCommentFocused(false)}
       />
       <Button
         title="Submit review"
