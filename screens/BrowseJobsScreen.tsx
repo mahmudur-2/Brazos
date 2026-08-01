@@ -1,16 +1,9 @@
-import {
-  ActivityIndicator,
-  FlatList,
-  RefreshControl,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { BrowseJobCard } from '../components/BrowseJobCard';
+import { BrowseJobCard, BrowseJobCardSkeleton } from '../components/BrowseJobCard';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import type { HomeStackNavigation } from '../lib/navigation';
@@ -42,8 +35,13 @@ export function BrowseJobsScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.primary} />
+        // Card-shaped placeholders rather than a centred spinner: the feed
+        // arrives into the same silhouette it was loading, so nothing shifts
+        // under the reader at the moment the data lands.
+        <View style={styles.listContent}>
+          {[0, 1, 2, 3].map((i) => (
+            <BrowseJobCardSkeleton key={i} />
+          ))}
         </View>
       ) : (
         <FlatList
@@ -62,6 +60,11 @@ export function BrowseJobsScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           showsVerticalScrollIndicator={false}
+          // The cards are taller now, so fewer fit a screen — render a batch
+          // that covers the first couple of screenfuls and keep a modest
+          // window either side, rather than the default sized for short rows.
+          initialNumToRender={8}
+          windowSize={11}
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
@@ -83,11 +86,6 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   listContent: {
     padding: spacing.lg,

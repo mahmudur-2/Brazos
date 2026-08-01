@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { colors, radius, spacing } from '../lib/theme';
@@ -11,62 +12,142 @@ import {
 } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 
+/**
+ * Fixed, so every card in the list is the same height whether its title runs
+ * to one line or two and whether it has a photo or not. A ragged list of
+ * different-height cards is the thing that makes a feed feel unfinished.
+ */
+const THUMB_SIZE = 92;
+
+/**
+ * A job in the browse feed: the poster's first photo, then everything needed
+ * to judge the work without opening it — title, category, location, pay, age.
+ *
+ * Jobs with no photo (most of them) get a category-tinted block with that
+ * category's glyph, using the accent palette the rest of the app already uses
+ * for the same category. There is deliberately no stock imagery: a downloaded
+ * photo of someone else's kitchen would be describing a job that does not
+ * exist.
+ */
 export function BrowseJobCard({ job, onPress }: { job: OpenJob; onPress: () => void }) {
   const accent = categoryAccent(job.category);
+  const icon = JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal';
+  const categoryLabel = JOB_CATEGORY_LABELS[job.category] ?? job.category;
+
+  // A URL can be present but dead — a deleted storage object, an expired
+  // host. Falling back on error means a broken image never renders as a grey
+  // hole in the middle of the feed.
+  const [imageFailed, setImageFailed] = useState(false);
+  const thumbUrl = job.photos?.[0];
+  const showImage = !!thumbUrl && !imageFailed;
 
   return (
-    <Card onPress={onPress}>
-      <View style={styles.headerRow}>
-        <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
-          <Ionicons
-            name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
-            size={20}
-            color={accent.icon}
+    <Card onPress={onPress} style={styles.card}>
+      <View style={styles.row}>
+        {showImage ? (
+          <Image
+            source={{ uri: thumbUrl }}
+            style={styles.thumb}
+            resizeMode="cover"
+            onError={() => setImageFailed(true)}
+            accessible
+            accessibilityLabel={`Photo for ${job.title}`}
           />
-        </View>
-        <View style={styles.headerText}>
-          <Text style={styles.title} numberOfLines={1}>
-            {job.title}
-          </Text>
-          <Text style={styles.meta} numberOfLines={1}>
-            {JOB_CATEGORY_LABELS[job.category] ?? job.category}
-            {job.location ? ` · ${job.location}` : ''}
-          </Text>
+        ) : (
+          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: accent.bg }]}>
+            <Ionicons name={icon} size={30} color={accent.icon} />
+          </View>
+        )}
+
+        <View style={styles.body}>
+          <View style={styles.bodyTop}>
+            <Text style={styles.title} numberOfLines={2}>
+              {job.title}
+            </Text>
+            <Text style={styles.meta} numberOfLines={1}>
+              {categoryLabel}
+              {job.location ? ` · ${job.location}` : ''}
+            </Text>
+          </View>
+
+          <View style={styles.footerRow}>
+            <Text style={styles.budget} numberOfLines={1}>
+              {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open budget'}
+            </Text>
+            <Text style={styles.time} numberOfLines={1}>
+              {formatTimeAgo(job.created_at)}
+            </Text>
+          </View>
         </View>
       </View>
+    </Card>
+  );
+}
 
-      <View style={styles.footerRow}>
-        <Text style={styles.budget}>
-          {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open budget'}
-        </Text>
-        <Text style={styles.time}>{formatTimeAgo(job.created_at)}</Text>
+/**
+ * The same card's silhouette with nothing in it, for while the feed loads.
+ * Matching the real card's height means the list does not jump when the data
+ * lands.
+ */
+export function BrowseJobCardSkeleton() {
+  return (
+    <Card style={styles.card}>
+      <View style={styles.row}>
+        <View style={[styles.thumb, styles.skeletonBlock]} />
+        <View style={styles.body}>
+          <View style={styles.bodyTop}>
+            <View style={[styles.skeletonLine, styles.skeletonBlock]} />
+            <View
+              style={[styles.skeletonLine, styles.skeletonLineShort, styles.skeletonBlock]}
+            />
+          </View>
+          <View style={styles.footerRow}>
+            <View
+              style={[styles.skeletonLine, styles.skeletonLineTiny, styles.skeletonBlock]}
+            />
+          </View>
+        </View>
       </View>
     </Card>
   );
 }
 
 const styles = StyleSheet.create({
-  headerRow: {
+  card: {
+    // Tighter than the default card padding: the thumbnail needs the width
+    // more than the card needs the margin.
+    padding: spacing.md,
+  },
+  row: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.md,
   },
-  iconCircle: {
-    width: 40,
-    height: 40,
+  thumb: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
     borderRadius: radius.md,
+    backgroundColor: colors.neutralBg,
+  },
+  thumbFallback: {
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerText: {
+  body: {
     flex: 1,
-    gap: 2,
+    // Pins the pay/age line to the bottom of the thumbnail's height, so it
+    // sits on the same baseline on every card regardless of title length.
+    height: THUMB_SIZE,
+    justifyContent: 'space-between',
+  },
+  bodyTop: {
+    gap: 3,
   },
   title: {
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+    lineHeight: 21,
   },
   meta: {
     fontSize: 13,
@@ -74,20 +155,32 @@ const styles = StyleSheet.create({
   },
   footerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    gap: spacing.sm,
   },
   budget: {
-    fontSize: 15,
-    fontWeight: '700',
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: '800',
     color: colors.text,
   },
   time: {
-    fontSize: 13,
-    color: colors.textMuted,
+    fontSize: 12,
+    color: colors.textSubtle,
+  },
+  skeletonBlock: {
+    backgroundColor: colors.neutralBg,
+  },
+  skeletonLine: {
+    height: 12,
+    borderRadius: radius.sm,
+  },
+  skeletonLineShort: {
+    width: '60%',
+  },
+  skeletonLineTiny: {
+    width: '35%',
+    height: 14,
   },
 });
