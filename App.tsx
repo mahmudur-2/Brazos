@@ -35,6 +35,7 @@ import { MapScreen } from './screens/MapScreen';
 import { CellJobsScreen } from './screens/CellJobsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { WorkerProfileScreen } from './screens/WorkerProfileScreen';
+import { WorkerSearchScreen } from './screens/WorkerSearchScreen';
 import { AdminReportsScreen } from './screens/AdminReportsScreen';
 import { NotificationSettingsScreen } from './screens/NotificationSettingsScreen';
 import { LegalDocumentScreen } from './screens/LegalDocumentScreen';
@@ -155,6 +156,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="PostJob" component={PostJobScreen} />
       <HomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
       <HomeStack.Screen name="JobDetail" component={JobDetailScreen} />
+      <HomeStack.Screen name="WorkerSearch" component={WorkerSearchScreen} />
       <HomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
     </HomeStack.Navigator>
   );

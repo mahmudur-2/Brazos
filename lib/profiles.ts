@@ -16,6 +16,11 @@ export type Profile = {
   language?: string | null;
   categories?: string[] | null;
   completion_rate?: number | null;
+  // Both are in PUBLIC_PROFILE_COLUMNS and so come back on every public read,
+  // but are null for almost every account — treat null as "unknown", never as
+  // zero, anywhere they are used to rank or describe someone.
+  on_time_pct?: number | null;
+  response_time?: string | null;
   // Moderation (phase13). Optional so the app still works if the migration
   // hasn't been run yet — both default to false/absent.
   is_admin?: boolean | null;

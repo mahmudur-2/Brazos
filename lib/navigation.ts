@@ -18,6 +18,11 @@ export type HomeStackParamList = {
   WorkerProfile: { workerId: string; workerName?: string };
   BrowseJobs: undefined;
   JobDetail: { job: OpenJob };
+  /**
+   * Worker search. Opened blank from Home's search field, or pre-run with a
+   * typed query / a tapped service chip.
+   */
+  WorkerSearch: { query?: string; category?: string } | undefined;
 };
 
 export type HomeStackNavigation = NativeStackNavigationProp<HomeStackParamList>;
@@ -105,6 +110,13 @@ export type JobDetailRouteParamList = { JobDetail: { job: OpenJob } };
 // standalone route-param type rather than being tied to one parent stack.
 export type WorkerProfileRouteParamList = {
   WorkerProfile: { workerId: string; workerName?: string };
+};
+
+// Only registered in HomeStack today, but given its own route-param type for
+// the same reason as the others: the screen needs its params and goBack(),
+// not the whole parent stack.
+export type WorkerSearchRouteParamList = {
+  WorkerSearch: { query?: string; category?: string } | undefined;
 };
 
 export type PostJobRouteParamList = {

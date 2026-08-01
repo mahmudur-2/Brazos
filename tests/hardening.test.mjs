@@ -226,6 +226,29 @@ test('function EXECUTE is revoked from anon and regranted to intended roles only
   assert.doesNotMatch(statements, /alter function/i);
 });
 
+test('worker search ranks on stored evidence and claims nothing more', () => {
+  const search = read('lib/workerSearch.ts');
+  const screen = read('screens/WorkerSearchScreen.tsx');
+
+  // Comments legitimately discuss the signals that were rejected and why, so
+  // they are stripped before asserting on what the code actually does.
+  const code = search.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+  // Completed-job counts come from the aggregate RPC, not from a client-side
+  // read of other people's job rows.
+  assert.match(code, /rpc\('worker_job_stats'/);
+  assert.match(code, /excludeUserId/);
+
+  // Nothing is ranked on data the schema does not hold.
+  assert.doesNotMatch(
+    code,
+    /\b(distance|proximity|latitude|longitude|availability|response_time)\b/i
+  );
+
+  // And the UI does not claim an intelligence the implementation lacks.
+  assert.doesNotMatch(screen, /\bAI\b|semantic|machine learning/i);
+});
+
 test('unsupported identity and proximity claims are absent', () => {
   assert.doesNotMatch(verificationBadge, /ID-checked/i);
   assert.match(verificationBadge, /Not verified/);
