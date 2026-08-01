@@ -1,21 +1,21 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 
 set "METRO_PORT=8081"
 if defined BRAZOS_METRO_PORT set "METRO_PORT=%BRAZOS_METRO_PORT%"
 
 echo ================================================
 echo   BRAZOS Developer Control Center
-echo   Clear Expo Cache
+echo   Build Android
 echo ================================================
 echo.
-echo This starts Expo with the Metro bundler cache
-echo cleared ("expo start --clear"). Use this when you
-echo see stale-bundle errors or changes that aren't
-echo showing up. It does not touch node_modules, does
-echo not install/upgrade anything, and does not modify
-echo any source code. Metro port: %METRO_PORT%
+echo This starts the Expo dev server targeting Android
+echo (npm run android / "expo start --android"). It will
+echo try to open a connected device or emulator through
+echo Expo Go or a dev client - it does NOT produce a
+echo production build or upload anything (no EAS build,
+echo no deploy). Metro port: %METRO_PORT%
 echo.
 
 if not exist "node_modules" (
@@ -26,9 +26,9 @@ if not exist "node_modules" (
     exit /b 1
 )
 
-echo Starting Expo with a cleared cache...
+echo Starting Expo for Android...
 echo.
-call npx expo start --clear --port %METRO_PORT%
+call npm run android -- --port %METRO_PORT%
 
 echo.
 echo Expo has exited.

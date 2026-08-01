@@ -1,6 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 
 set "METRO_PORT=8081"
 if defined BRAZOS_METRO_PORT set "METRO_PORT=%BRAZOS_METRO_PORT%"

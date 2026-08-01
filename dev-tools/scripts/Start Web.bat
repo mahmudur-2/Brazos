@@ -1,21 +1,20 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 
 set "METRO_PORT=8081"
 if defined BRAZOS_METRO_PORT set "METRO_PORT=%BRAZOS_METRO_PORT%"
 
 echo ================================================
 echo   BRAZOS Developer Control Center
-echo   Build Android
+echo   Start Web
 echo ================================================
 echo.
-echo This starts the Expo dev server targeting Android
-echo (npm run android / "expo start --android"). It will
-echo try to open a connected device or emulator through
-echo Expo Go or a dev client - it does NOT produce a
-echo production build or upload anything (no EAS build,
-echo no deploy). Metro port: %METRO_PORT%
+echo This starts the existing web dev server via
+echo "npm run web" (expo start --web). It only runs the
+echo pre-existing script from package.json - it does not
+echo change any web/PWA code, config, or deployment.
+echo Metro port: %METRO_PORT%
 echo.
 
 if not exist "node_modules" (
@@ -26,11 +25,11 @@ if not exist "node_modules" (
     exit /b 1
 )
 
-echo Starting Expo for Android...
+echo Starting Expo for Web...
 echo.
-call npm run android -- --port %METRO_PORT%
+call npm run web -- --port %METRO_PORT%
 
 echo.
-echo Expo has exited.
+echo Web server has exited.
 pause
 endlocal

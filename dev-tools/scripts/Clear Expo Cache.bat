@@ -1,20 +1,21 @@
 @echo off
 setlocal enabledelayedexpansion
-cd /d "%~dp0.."
+cd /d "%~dp0..\.."
 
 set "METRO_PORT=8081"
 if defined BRAZOS_METRO_PORT set "METRO_PORT=%BRAZOS_METRO_PORT%"
 
 echo ================================================
 echo   BRAZOS Developer Control Center
-echo   Start Web
+echo   Clear Expo Cache
 echo ================================================
 echo.
-echo This starts the existing web dev server via
-echo "npm run web" (expo start --web). It only runs the
-echo pre-existing script from package.json - it does not
-echo change any web/PWA code, config, or deployment.
-echo Metro port: %METRO_PORT%
+echo This starts Expo with the Metro bundler cache
+echo cleared ("expo start --clear"). Use this when you
+echo see stale-bundle errors or changes that aren't
+echo showing up. It does not touch node_modules, does
+echo not install/upgrade anything, and does not modify
+echo any source code. Metro port: %METRO_PORT%
 echo.
 
 if not exist "node_modules" (
@@ -25,11 +26,11 @@ if not exist "node_modules" (
     exit /b 1
 )
 
-echo Starting Expo for Web...
+echo Starting Expo with a cleared cache...
 echo.
-call npm run web -- --port %METRO_PORT%
+call npx expo start --clear --port %METRO_PORT%
 
 echo.
-echo Web server has exited.
+echo Expo has exited.
 pause
 endlocal
