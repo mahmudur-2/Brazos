@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TextField } from '../components/TextField';
@@ -27,6 +28,7 @@ import {
   dollarsToCents,
   fetchJobById,
   fetchJobLocation,
+  formatBudget,
   JOB_CATEGORIES,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
@@ -102,6 +104,9 @@ export function PostJobScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  // The amount an offer is about to be sent at, held while the confirmation
+  // is open. Null means nothing is pending.
+  const [confirmOfferCents, setConfirmOfferCents] = useState<number | null>(null);
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
@@ -311,6 +316,42 @@ export function PostJobScreen() {
     });
   }
 
+  /**
+   * The confirmed half of sending a direct offer. Creates NO job: it posts a
+   * private offer into whichever conversation these two have — a shared job's
+   * thread, or (phase36) the pair's direct thread, created on the spot if they
+   * have never spoken. A job only exists if the worker accepts, or they settle
+   * on a counter.
+   */
+  async function sendOffer(amountCents: number) {
+    // handleSubmit validated all of these before opening the confirmation;
+    // re-checking keeps this callable on its own terms rather than depending
+    // on that having happened.
+    if (!user || !hireWorkerId || !category) return;
+
+    setSubmitting(true);
+    const { error: requestError } = await createJobRequest({
+      workerId: hireWorkerId,
+      title: title.trim(),
+      description: description.trim(),
+      category,
+      location: location.trim(),
+      amountCents,
+      photos,
+      videos,
+      coords,
+      threadJobId: params?.threadJobId ?? null,
+    });
+    setSubmitting(false);
+    setConfirmOfferCents(null);
+
+    if (requestError) {
+      await alertAsync('Could not send offer', requestError.message);
+      return;
+    }
+    playSuccessThenLeave();
+  }
+
   async function handleSubmit() {
     if (!user) return;
 
@@ -343,31 +384,11 @@ export function PostJobScreen() {
       return;
     }
 
-    // A direct offer creates no job. It posts a private offer into whichever
-    // conversation these two have — a shared job's thread, or (phase36) the
-    // pair's direct thread, created on the spot if they have never spoken.
-    // A job only exists if the worker accepts, or they settle on a counter.
+    // Sending an offer puts a real, priced commitment in front of a specific
+    // person, so it gets a confirmation naming the amount and the recipient
+    // before it goes. sendOffer() below is the confirmed half.
     if (isHiring && !isEditing) {
-      setSubmitting(true);
-      const { error: requestError } = await createJobRequest({
-        workerId: hireWorkerId!,
-        title: title.trim(),
-        description: description.trim(),
-        category,
-        location: location.trim(),
-        amountCents: budgetCents!,
-        photos,
-        videos,
-        coords,
-        threadJobId: params?.threadJobId ?? null,
-      });
-      setSubmitting(false);
-
-      if (requestError) {
-        await alertAsync('Could not send offer', requestError.message);
-        return;
-      }
-      playSuccessThenLeave();
+      setConfirmOfferCents(budgetCents!);
       return;
     }
 
@@ -671,6 +692,21 @@ export function PostJobScreen() {
         visible={!!viewerUri}
         uri={viewerUri}
         onClose={() => setViewerUri(null)}
+      />
+
+      <ConfirmDialog
+        visible={confirmOfferCents != null}
+        title={
+          confirmOfferCents != null
+            ? `Send ${hireWorkerName} a ${formatBudget(confirmOfferCents)} offer?`
+            : ''
+        }
+        message={`Only ${hireWorkerName} sees this. They can accept, decline, or suggest a different price before anything is booked.`}
+        confirmText="Send offer"
+        cancelText="Cancel"
+        loading={submitting}
+        onConfirm={() => confirmOfferCents != null && sendOffer(confirmOfferCents)}
+        onCancel={() => setConfirmOfferCents(null)}
       />
     </SafeAreaView>
   );

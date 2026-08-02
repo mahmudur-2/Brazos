@@ -18,6 +18,7 @@ import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { BidWorkerCard } from '../components/BidWorkerCard';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
 import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -30,7 +31,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useJobBids } from '../hooks/useJobBids';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { alertAsync, confirmAsync } from '../lib/dialog';
+import { alertAsync } from '../lib/dialog';
 import {
   acceptBid,
   bestValueBidId,
@@ -68,6 +69,7 @@ export function ClientJobDetailScreen() {
   const { bids, loading, error, refresh } = useJobBids(job.id);
   const [sort, setSort] = useState<BidSort>('value');
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
+  const [pendingAccept, setPendingAccept] = useState<BidWithWorker | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [acceptedName, setAcceptedName] = useState('');
   const [worker, setWorker] = useState<Profile | null>(null);
@@ -136,18 +138,15 @@ export function ClientJobDetailScreen() {
     }, 1400);
   }
 
-  async function confirmAccept(bid: BidWithWorker) {
+  /**
+   * Accepting a bid assigns the job and closes every other bid on it, so it
+   * goes through the in-app confirmation rather than firing on one tap. The
+   * confirm button disables itself while accept_bid() is in flight, so a
+   * second tap cannot send a second accept.
+   */
+  function confirmAccept(bid: BidWithWorker) {
     if (!bid.worker || acceptingId) return;
-    const name = bid.worker.full_name ?? 'this worker';
-    const ok = await confirmAsync({
-      title: 'Accept bid?',
-      message: `Assign this job to ${name} for ${formatBudget(
-        bid.amount_cents
-      )}. This can't be undone here.`,
-      confirmText: 'Accept',
-      cancelText: 'Cancel',
-    });
-    if (ok) await doAccept(bid);
+    setPendingAccept(bid);
   }
 
   async function doAccept(bid: BidWithWorker) {
@@ -160,11 +159,13 @@ export function ClientJobDetailScreen() {
     setAcceptingId(null);
 
     if (error) {
+      setPendingAccept(null);
       await alertAsync('Could not accept bid', error.message);
       await refresh();
       return;
     }
 
+    setPendingAccept(null);
     playSuccessThenLeave(bid.worker.full_name ?? 'the worker');
   }
 
@@ -440,6 +441,23 @@ export function ClientJobDetailScreen() {
         uri={avatarUri}
         onClose={() => setAvatarUri(null)}
         allowShare={false}
+      />
+
+      <ConfirmDialog
+        visible={!!pendingAccept}
+        title={
+          pendingAccept
+            ? `Accept ${formatBudget(pendingAccept.amount_cents)} from ${
+                pendingAccept.worker?.full_name ?? 'this worker'
+              }?`
+            : ''
+        }
+        message="The job is assigned to them and the other bids are closed. This can’t be undone here."
+        confirmText="Accept bid"
+        cancelText="Cancel"
+        loading={!!pendingAccept && acceptingId === pendingAccept.id}
+        onConfirm={() => pendingAccept && doAccept(pendingAccept)}
+        onCancel={() => setPendingAccept(null)}
       />
     </SafeAreaView>
   );
