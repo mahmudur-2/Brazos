@@ -422,3 +422,13 @@ export function formatBidCount(count: number): string {
   if (count === 0) return 'No bids yet';
   return `${count} ${count === 1 ? 'bid' : 'bids'}`;
 }
+
+/**
+ * Same wording as formatBidCount, for the poster's own "Job & Bids" view —
+ * "pending" makes clear these are still-open, actionable bids on a job the
+ * viewer owns, distinct from the neutral wording a browsing worker sees.
+ */
+export function formatPendingBidCount(count: number): string {
+  if (count === 0) return 'No bids yet';
+  return `${count} ${count === 1 ? 'bid' : 'bids'} pending`;
+}

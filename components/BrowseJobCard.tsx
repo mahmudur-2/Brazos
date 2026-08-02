@@ -3,6 +3,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { Skeleton } from './Skeleton';
+import { useAuth } from '../hooks/useAuth';
 import { colors, radius, spacing } from '../lib/theme';
 import {
   categoryAccent,
@@ -31,6 +32,8 @@ const THUMB_SIZE = 92;
  * exist.
  */
 export function BrowseJobCard({ job, onPress }: { job: OpenJob; onPress: () => void }) {
+  const { user } = useAuth();
+  const isOwn = !!user && user.id === job.client_id;
   const accent = categoryAccent(job.category);
   const icon = JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal';
   const categoryLabel = JOB_CATEGORY_LABELS[job.category] ?? job.category;
@@ -69,6 +72,12 @@ export function BrowseJobCard({ job, onPress }: { job: OpenJob; onPress: () => v
               {categoryLabel}
               {job.location ? ` · ${job.location}` : ''}
             </Text>
+            {isOwn && (
+              <View style={styles.ownBadge}>
+                <Ionicons name="person-outline" size={11} color={colors.info} />
+                <Text style={styles.ownBadgeText}>Your job</Text>
+              </View>
+            )}
           </View>
 
           <View style={styles.footerRow}>
@@ -149,6 +158,22 @@ const styles = StyleSheet.create({
   meta: {
     fontSize: 13,
     color: colors.textMuted,
+  },
+  ownBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    alignSelf: 'flex-start',
+    backgroundColor: colors.infoBg,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
+    borderRadius: radius.pill,
+    marginTop: 2,
+  },
+  ownBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.info,
   },
   footerRow: {
     flexDirection: 'row',

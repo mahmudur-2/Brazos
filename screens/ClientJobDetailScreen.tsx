@@ -42,8 +42,8 @@ import {
   categoryAccent,
   completionPhotosOf,
   fetchRehirableWorkerIds,
-  formatBidCount,
   formatBudget,
+  formatPendingBidCount,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
 } from '../lib/jobs';
@@ -202,7 +202,7 @@ export function ClientJobDetailScreen() {
           </View>
           <View style={styles.jobFooter}>
             <Text style={styles.budget}>{formatBudget(job.budget_cents)}</Text>
-            <Text style={styles.bidCount}>{formatBidCount(bids.length)}</Text>
+            <Text style={styles.bidCount}>{formatPendingBidCount(bids.length)}</Text>
           </View>
 
           <JobOwnerActions jobId={job.id} posterId={job.client_id} status={job.status} />
