@@ -17,6 +17,7 @@ import { BrowseJobCard } from '../components/BrowseJobCard';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { JobOwnerActions } from '../components/JobOwnerActions';
+import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
@@ -267,6 +268,23 @@ export function JobDetailScreen() {
                   <Pressable key={url} onPress={() => setViewerUri(url)}>
                     <Image source={{ uri: url }} style={styles.photo} />
                   </Pressable>
+                ))}
+              </ScrollView>
+            )}
+
+            {job.videos?.length > 0 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoRow}
+                style={styles.photoScroll}
+              >
+                {job.videos.map((url, index) => (
+                  <JobVideo
+                    key={url}
+                    uri={url}
+                    label={job.videos.length > 1 ? `Clip ${index + 1}` : 'Watch clip'}
+                  />
                 ))}
               </ScrollView>
             )}

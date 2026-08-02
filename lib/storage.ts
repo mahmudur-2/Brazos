@@ -185,3 +185,56 @@ export async function uploadJobAttachment(userId: string, asset: ImagePickerAsse
   const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   return uploadAsset(BUCKET, `postings/${userId}/${unique}.${ext}`, asset);
 }
+
+/** Container formats a picker can realistically hand back, mapped to the
+ *  content type the object is stored with. Anything outside this list is
+ *  refused before upload rather than stored with a guessed type. */
+const VIDEO_CONTENT_TYPES: Record<string, string> = {
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  m4v: 'video/x-m4v',
+};
+
+/** Whether a picked asset is a video this app will accept. */
+export function isSupportedVideo(asset: ImagePickerAsset): boolean {
+  if (asset.mimeType?.startsWith('video/')) {
+    return Object.values(VIDEO_CONTENT_TYPES).includes(asset.mimeType);
+  }
+  return videoExtension(asset.uri) !== null;
+}
+
+function videoExtension(uri: string): string | null {
+  const ext = (uri.split('?')[0].split('.').pop() ?? '').toLowerCase();
+  return ext in VIDEO_CONTENT_TYPES ? ext : null;
+}
+
+/**
+ * Upload a short video attached to a job posting. Same public `job-photos`
+ * bucket and same `postings/<uid>/…` prefix as the poster's photos, so it is
+ * covered by the storage policies that already exist (phase29 authorises the
+ * insert on the path's owner, phase26 the delete) — no new bucket and no
+ * loosened policy.
+ *
+ * The content type is resolved from an allowlist rather than trusted from the
+ * picker, so an object can never be stored under a type this app would not
+ * play back.
+ */
+export async function uploadJobVideo(userId: string, asset: ImagePickerAsset) {
+  const ext =
+    videoExtension(asset.uri) ??
+    Object.keys(VIDEO_CONTENT_TYPES).find(
+      (key) => VIDEO_CONTENT_TYPES[key] === asset.mimeType
+    ) ??
+    null;
+
+  if (!ext) {
+    return { url: null, error: new Error('Unsupported video format') };
+  }
+
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return uploadAsset(
+    BUCKET,
+    `postings/${userId}/${unique}.${ext}`,
+    { ...asset, mimeType: VIDEO_CONTENT_TYPES[ext] },
+  );
+}

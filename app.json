@@ -61,7 +61,8 @@
         {
           "color": "#1F4D3A"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "extra": {
       "eas": {

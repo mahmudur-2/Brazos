@@ -37,12 +37,26 @@ import { createJobRequest } from '../lib/jobRequests';
 import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { resolveCurrentPlace } from '../lib/geolocation';
-import { deleteJobPhoto, uploadJobAttachment } from '../lib/storage';
+import {
+  deleteJobPhoto,
+  isSupportedVideo,
+  uploadJobAttachment,
+  uploadJobVideo,
+} from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 const MAX_PHOTOS = 5;
+// Two is a demonstration, not a documentary. Matches the cap create_job()
+// enforces server-side (phase34).
+const MAX_VIDEOS = 2;
+// A minute is long enough to walk through a job and short enough to upload on
+// a phone connection without the poster giving up on it.
+const MAX_VIDEO_DURATION_MS = 60_000;
+// Roughly a minute of phone video at default quality, with headroom. Past
+// this the upload is the worst part of posting a job.
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 // Titles show as a single line (sometimes two) on job cards throughout the
 // app — 80 chars is generous room for a real title while still fitting
 // there without wrapping into an unreadable wall of text.
@@ -83,6 +97,8 @@ export function PostJobScreen() {
   const [budget, setBudget] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [videos, setVideos] = useState<string[]>([]);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -109,6 +125,8 @@ export function PostJobScreen() {
   // so it's safe to delete from storage the moment it's removed. Stays empty
   // for a brand-new (non-editing) post, where nothing is pre-existing.
   const originalPhotosRef = useRef<Set<string>>(new Set());
+  /** Same rule as originalPhotosRef, for the posting's videos. */
+  const originalVideosRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!editJobId) return;
@@ -137,6 +155,8 @@ export function PostJobScreen() {
       setBudget(job.budget_cents != null ? String(job.budget_cents / 100) : '');
       setPhotos(job.photos);
       originalPhotosRef.current = new Set(job.photos);
+      setVideos(job.videos);
+      originalVideosRef.current = new Set(job.videos);
       if (loc) setCoords({ lat: loc.lat, lng: loc.lng });
       setLoadingJob(false);
     })();
@@ -175,6 +195,7 @@ export function PostJobScreen() {
       setCoords(null);
       setBudget('');
       setPhotos([]);
+      setVideos([]);
       if (isEditing) {
         // Pop back to the hub instead of goBack(): this screen was pushed
         // from ClientJobDetailScreen, which only holds the pre-edit job as a
@@ -222,6 +243,72 @@ export function PostJobScreen() {
       return;
     }
     setPhotos((prev) => [...prev, url]);
+  }
+
+  async function handleAddVideo() {
+    if (videos.length >= MAX_VIDEOS || !user) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['videos'],
+      // Caps recording length where the picker offers to record. A video
+      // chosen from the library is not covered by it, so the real check is
+      // the duration test below — this just stops the obvious case earlier.
+      videoMaxDuration: MAX_VIDEO_DURATION_MS / 1000,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    const asset = result.assets[0];
+
+    // Format, length and size are all checked before a byte is uploaded, so a
+    // rejected file costs nothing and the reason is specific.
+    if (!isSupportedVideo(asset)) {
+      await alertAsync(
+        'Unsupported video',
+        'Please choose an MP4 or MOV video. Other formats can’t be played back reliably in the app.'
+      );
+      return;
+    }
+    if (asset.duration != null && asset.duration > MAX_VIDEO_DURATION_MS) {
+      await alertAsync(
+        'Video is too long',
+        `Videos must be under ${MAX_VIDEO_DURATION_MS / 1000} seconds. Trim it and try again.`
+      );
+      return;
+    }
+    if (asset.fileSize != null && asset.fileSize > MAX_VIDEO_BYTES) {
+      await alertAsync(
+        'Video is too large',
+        `Videos must be under ${Math.round(MAX_VIDEO_BYTES / (1024 * 1024))} MB.`
+      );
+      return;
+    }
+
+    setUploadingVideo(true);
+    const { url, error } = await uploadJobVideo(user.id, asset);
+    setUploadingVideo(false);
+
+    // Only a successful upload is added to the list, so the job can never be
+    // saved referencing something that is not in storage.
+    if (error || !url) {
+      await alertAsync(
+        'Video upload failed',
+        'Please try again. On a slow connection a shorter clip will upload more reliably.'
+      );
+      return;
+    }
+    setVideos((prev) => [...prev, url]);
+  }
+
+  function removeVideo(url: string) {
+    setVideos((prev) => prev.filter((v) => v !== url));
+
+    // Same rule as removePhoto: a video already saved on the job has to stay
+    // in storage until the edit is actually saved, because the live job row
+    // still references it.
+    if (originalVideosRef.current.has(url)) return;
+    deleteJobPhoto(url).then(({ error }) => {
+      if (error) console.error('[PostJobScreen] deleteJobPhoto (video) failed', error);
+    });
   }
 
   function removePhoto(url: string) {
@@ -303,6 +390,7 @@ export function PostJobScreen() {
           location: location.trim(),
           budgetCents,
           photos,
+          videos,
           coords,
         })
       : await createJob(user.id, {
@@ -312,6 +400,7 @@ export function PostJobScreen() {
           location: location.trim(),
           budgetCents,
           photos,
+          videos,
           coords,
         });
     setSubmitting(false);
@@ -339,6 +428,12 @@ export function PostJobScreen() {
         if (photos.includes(url)) continue;
         deleteJobPhoto(url).then(({ error }) => {
           if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
+        });
+      }
+      for (const url of originalVideosRef.current) {
+        if (videos.includes(url)) continue;
+        deleteJobPhoto(url).then(({ error }) => {
+          if (error) console.error('[PostJobScreen] deleteJobPhoto (video) failed', error);
         });
       }
     }
@@ -446,6 +541,59 @@ export function PostJobScreen() {
                     <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
                     <Ionicons name="add" size={28} color={colors.primary} />
+                  )}
+                </Pressable>
+              )}
+            </ScrollView>
+          </View>
+
+          <View style={styles.field}>
+            <Text style={styles.fieldLabel}>
+              Video (optional) · {videos.length}/{MAX_VIDEOS}
+            </Text>
+            <Text style={styles.fieldHint}>
+              Up to {MAX_VIDEO_DURATION_MS / 1000} seconds each. A short clip
+              explains an awkward job faster than a paragraph.
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.photoRow}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* No thumbnail: extracting one needs a second native module,
+                  and a labelled play tile says what it is without pretending
+                  to preview a frame that was never generated. */}
+              {videos.map((url, index) => (
+                <View key={url} style={styles.photoWrap}>
+                  <View style={styles.videoTile}>
+                    <Ionicons name="play-circle" size={30} color={colors.primary} />
+                    <Text style={styles.videoTileText}>Clip {index + 1}</Text>
+                  </View>
+                  <Pressable
+                    style={styles.photoRemove}
+                    onPress={() => removeVideo(url)}
+                    hitSlop={6}
+                    accessibilityLabel={`Remove clip ${index + 1}`}
+                  >
+                    <Ionicons name="close" size={14} color={colors.onPrimary} />
+                  </Pressable>
+                </View>
+              ))}
+
+              {videos.length < MAX_VIDEOS && (
+                <Pressable
+                  style={styles.addTile}
+                  onPress={handleAddVideo}
+                  disabled={uploadingVideo}
+                >
+                  {uploadingVideo ? (
+                    <>
+                      <ActivityIndicator size="small" color={colors.primary} />
+                      <Text style={styles.uploadingText}>Uploading…</Text>
+                    </>
+                  ) : (
+                    <Ionicons name="videocam-outline" size={26} color={colors.primary} />
                   )}
                 </Pressable>
               )}
@@ -582,6 +730,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: colors.text,
+  },
+  fieldHint: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
+    marginTop: -spacing.xs,
+  },
+  videoTile: {
+    width: 76,
+    height: 76,
+    borderRadius: radius.md,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  videoTileText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  uploadingText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
+    marginTop: spacing.xs,
   },
   photoRow: {
     gap: spacing.sm,

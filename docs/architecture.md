@@ -85,9 +85,11 @@ ordinary bid at the poster's listed `budget_cents`, through the same
 
 `jobs` columns the app relies on: `id, client_id, title, description,
 category, location, budget_cents, status, created_at, assigned_worker_id,
-final_amount_cents, completion_photo_url, completion_photos, photos`.
+final_amount_cents, completion_photo_url, completion_photos, photos, videos`.
 
-- `photos` / `completion_photos` are `jsonb` arrays of strings.
+- `photos` / `videos` / `completion_photos` are `jsonb` arrays of strings.
+  `photos` means images only — `videos` (phase34, max 2) is separate so every
+  existing image call site keeps meaning images.
 - `budget_cents` — integer cents. There is no `budget` column.
 - `jobs ↔ bids` has **two** foreign keys (`bids.job_id` and
   `jobs.accepted_bid_id`), so any PostgREST embed must disambiguate:
@@ -140,7 +142,7 @@ Real reputation signals available for ranking (nothing else is real):
 
 | Bucket | Public | Holds |
 | --- | --- | --- |
-| `job-photos` | yes | posting attachments (`postings/<uid>/…`) and worker completion photos (`<jobId>/…`) |
+| `job-photos` | yes | posting photos and videos (`postings/<uid>/…`) and worker completion photos (`<jobId>/…`) |
 | `avatars` | yes | profile pictures |
 | `chat-photos` | **no** | in-chat images |
 | `chat-audio` | **no** | voice notes |

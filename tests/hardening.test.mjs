@@ -226,6 +226,27 @@ test('function EXECUTE is revoked from anon and regranted to intended roles only
   assert.doesNotMatch(statements, /alter function/i);
 });
 
+test('job videos reuse the owned posting path and never autoplay', () => {
+  const storageSource = read('lib/storage.ts');
+  const jobVideo = read('components/JobVideo.tsx');
+  const listingCard = read('components/BrowseJobCard.tsx');
+
+  // Same caller-owned prefix the posting's photos use, so phase29's
+  // job_photos_insert policy already authorises it and no bucket or policy
+  // had to be widened for video.
+  const uploads = storageSource.match(/postings\/\$\{userId\}\//g) ?? [];
+  assert.equal(uploads.length, 2, 'photo and video uploads share the owned path');
+
+  // Playback is native-controlled and never starts itself.
+  const videoCode = jobVideo.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.match(videoCode, /nativeControls/);
+  assert.doesNotMatch(videoCode, /\.play\(\)/);
+  assert.doesNotMatch(videoCode, /autoPlay|shouldPlay/i);
+
+  // Scrolling feeds stay image-only — no decoder per row.
+  assert.doesNotMatch(listingCard, /expo-video|VideoView/);
+});
+
 test('worker search ranks on stored evidence and claims nothing more', () => {
   const search = read('lib/workerSearch.ts');
   const screen = read('screens/WorkerSearchScreen.tsx');

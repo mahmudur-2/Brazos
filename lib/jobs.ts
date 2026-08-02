@@ -102,6 +102,10 @@ export type Job = {
   completion_photo_url: string | null;
   /** Photos the client attached when posting (phase13). Max 5, may be empty. */
   photos: string[];
+  /** Short videos the client attached when posting (phase34). Max 2, may be
+   *  empty. Kept separate from `photos` so every existing image call site
+   *  keeps meaning images. */
+  videos: string[];
   /**
    * Photos the worker attached when marking the job complete (phase17).
    * Use completionPhotosOf() rather than reading this directly — it folds in
@@ -132,6 +136,7 @@ export function mapJobRow(row: any): Job {
     final_amount_cents: row.final_amount_cents ?? null,
     completion_photo_url: row.completion_photo_url ?? null,
     photos: toPhotoArray(row.photos),
+    videos: toPhotoArray(row.videos),
     completion_photos: toPhotoArray(row.completion_photos),
   };
 }
@@ -159,6 +164,8 @@ export type NewJobInput = {
   budgetCents: number | null;
   /** Public URLs of photos attached to the posting (max 5, enforced in UI). */
   photos?: string[];
+  /** Public URLs of short videos attached to the posting (max 2). */
+  videos?: string[];
   /**
    * Resolved GPS for the location, when the client used the "use my location"
    * button. Stored in `job_locations` (jobs.lat/lng were removed in phase12),
@@ -179,6 +186,7 @@ export type OpenJob = {
   status: string;
   created_at: string;
   photos: string[];
+  videos: string[];
 };
 
 export function toOpenJob(row: any): OpenJob {
@@ -193,8 +201,10 @@ export function toOpenJob(row: any): OpenJob {
     status: row.status,
     created_at: row.created_at,
     // jobs_in_cell() (the map drill-down RPC) doesn't select photos, so this
-    // is absent there and correctly falls back to an empty list.
+    // is absent there and correctly falls back to an empty list. Same for
+    // videos, which that RPC likewise does not return.
     photos: toPhotoArray(row.photos),
+    videos: toPhotoArray(row.videos),
   };
 }
 
@@ -205,7 +215,7 @@ export function toOpenJob(row: any): OpenJob {
 // from silently reopening this class of leak if a new sensitive column is
 // ever added to `jobs`.
 const OPEN_JOB_COLUMNS =
-  'id, client_id, title, description, category, location, budget_cents, status, created_at, photos';
+  'id, client_id, title, description, category, location, budget_cents, status, created_at, photos, videos';
 const JOB_COLUMNS =
   `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos`;
 
@@ -232,6 +242,7 @@ export async function createJob(_clientId: string, input: NewJobInput) {
       p_photos: input.photos ?? [],
       p_lat: input.coords?.lat ?? null,
       p_lng: input.coords?.lng ?? null,
+      p_videos: input.videos ?? [],
     })
     .single();
 
@@ -244,8 +255,9 @@ export async function createJob(_clientId: string, input: NewJobInput) {
 
 /**
  * Update a job's postable details (title/description/category/location/
- * budget/photos). update_job_details() enforces ownership, open status, and
- * zero bids, then updates/removes the exact location in the same transaction.
+ * budget/photos/videos). update_job_details() enforces ownership, open status,
+ * and zero bids, then updates/removes the exact location in the same
+ * transaction.
  */
 export async function updateJob(jobId: string, input: NewJobInput) {
   const { data, error } = await supabase
@@ -259,6 +271,7 @@ export async function updateJob(jobId: string, input: NewJobInput) {
       p_photos: input.photos ?? [],
       p_lat: input.coords?.lat ?? null,
       p_lng: input.coords?.lng ?? null,
+      p_videos: input.videos ?? [],
     })
     .single();
 
