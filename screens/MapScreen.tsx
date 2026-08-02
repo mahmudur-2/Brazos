@@ -39,6 +39,26 @@ export function MapScreen() {
           titleIcon={
             <Ionicons name="location-outline" size={22} color={colors.primary} />
           }
+          right={
+            <Pressable
+              // Cross-tab, same pattern JobDetailScreen already uses to reach
+              // MyJobs from a different stack — reuses the existing complete
+              // open-jobs list rather than duplicating it inside MapStack.
+              onPress={() => {
+                // Untyped cast for the same reason useJobOwnerActions' onEdit
+                // is: this crosses from MapStackNavigation into a sibling
+                // tab's stack, which the two-argument navigate overload can't
+                // resolve cleanly.
+                const parentNavigate = navigation.getParent()?.navigate as
+                  | ((name: string, params?: object) => void)
+                  | undefined;
+                parentNavigate?.('Home', { screen: 'BrowseJobs' });
+              }}
+              hitSlop={10}
+            >
+              <Text style={styles.seeAll}>See All Jobs</Text>
+            </Pressable>
+          }
         />
       </View>
 
@@ -129,6 +149,11 @@ const styles = StyleSheet.create({
   },
   headerWrap: {
     backgroundColor: colors.background,
+  },
+  seeAll: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
   legend: {
     flexGrow: 0,

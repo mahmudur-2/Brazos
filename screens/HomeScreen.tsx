@@ -135,13 +135,19 @@ export function HomeScreen() {
 
         {/* --- Worker half --------------------------------------------- */}
         <View style={styles.workSection}>
+          <Text style={styles.workEyebrow}>Looking for work?</Text>
+
+          <Button
+            title="Find Jobs Nearby"
+            variant="secondary"
+            icon="search-outline"
+            onPress={goToFindWork}
+          />
+
           <View style={styles.workHeader}>
-            <View style={styles.workHeaderText}>
-              <Text style={styles.workEyebrow}>Looking for work?</Text>
-              <Text style={styles.workTitle}>Open jobs</Text>
-            </View>
+            <Text style={styles.workTitle}>Open jobs</Text>
             <Pressable onPress={goToFindWork} hitSlop={10}>
-              <Text style={styles.seeAll}>See all</Text>
+              <Text style={styles.seeAll}>See All Jobs</Text>
             </Pressable>
           </View>
 
@@ -178,13 +184,6 @@ export function HomeScreen() {
               ))}
             </View>
           )}
-
-          <Button
-            title="Find Work"
-            variant="secondary"
-            icon="search-outline"
-            onPress={goToFindWork}
-          />
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -311,17 +310,13 @@ const styles = StyleSheet.create({
   },
   workHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
   },
-  workHeaderText: {
-    flex: 1,
-    gap: 2,
-  },
   workEyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: colors.textMuted,
     textTransform: 'uppercase',
     letterSpacing: 0.4,

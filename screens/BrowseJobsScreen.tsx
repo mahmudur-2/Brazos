@@ -24,7 +24,7 @@ export function BrowseJobsScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScreenHeader
-        title="Find Work"
+        title="All Open Jobs"
         subtitle={
           jobs.length > 0
             ? `${jobs.length} open ${jobs.length === 1 ? 'job' : 'jobs'}`
