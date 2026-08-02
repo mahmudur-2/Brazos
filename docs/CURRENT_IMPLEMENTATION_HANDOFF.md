@@ -3,6 +3,161 @@
 Read this file first in any new session before continuing this work. It is
 the single source of truth for what's done, what's next, and why.
 
+---
+
+## SESSION 2 — Bounded Profile Fix Pass (current, read this first)
+
+**Objective:** two isolated fixes on the Profile/Edit Profile screen only,
+requested directly by the user (not from the PDF roadmap below):
+
+1. Restore the full profile-photo action menu (library / camera / remove /
+   cancel) — a short tap on the avatar or its camera badge had regressed to
+   opening the photo library directly, with no camera option anywhere in
+   the code and "Remove" only reachable via an undiscoverable long-press.
+2. Replace the single plain-text phone field with a real international
+   phone input: flag + dial code + searchable country picker + separate
+   local-number field, normalized to E.164 for storage.
+
+**Baseline for this session:** branch `mainexpo`, HEAD `a679016` (tip of
+Session 1 below), tree clean at start.
+
+**Scope discipline:** nothing else from the PDF roadmap (Session 1's
+Deferred requirements) was touched. No Supabase migration. No RLS/auth
+change. No unrelated Profile/Edit Profile redesign.
+
+### Subphase 1 — avatar action menu (Issue 1)
+
+**Root cause of the regression:** there was no regression in the sense of
+something that used to work being deleted — reading `screens/ProfileScreen.tsx`
+as it stood at `a679016`, a **camera capture path never existed at all**.
+The avatar `Pressable`'s `onPress` called `pickAvatar()` (library-only)
+directly; the fuller menu (`avatarMenuOpen`: View photo / Change photo /
+Remove Photo / Cancel) only opened on a 350ms long-press, and "Change
+photo" inside it also just called the same library-only `pickAvatar()`.
+So: no camera option existed anywhere, and the richer menu was gated
+behind a gesture most users would never discover — which is exactly what
+the user's screenshot/report describes as "now opens only the photo
+library."
+
+**Fix:** the avatar `Pressable`'s short tap (in edit mode) now opens a new
+`ActionSheet` (component already existed, previously only used for the
+Messages long-press menu — reused as-is, not reinvented) with exactly:
+Choose from library / Take photo / Remove current photo (only when
+`avatarUrl` is set) / Cancel (the sheet's own built-in cancel row). The
+long-press menu (`avatarMenuOpen`) was left in place, unchanged in its own
+gesture/content, **except** its "Remove Photo" row now opens the same new
+confirmation dialog instead of calling removal directly (see below) — it
+would otherwise have silently skipped confirmation once `handleRemoveAvatar`
+stopped confirming internally.
+
+- **Take photo** is new: `ImagePicker.requestCameraPermissionsAsync()` →
+  if denied, a plain `alertAsync` guidance message (no crash, no native
+  Alert.alert misuse) → if granted, `ImagePicker.launchCameraAsync()` with
+  the same `allowsEditing`/`aspect`/`quality` options `pickAvatar` already
+  used. Both library and camera stage the exact same
+  `pendingAsset`/`avatarUrl` draft state — the actual upload still only
+  happens once, inside `handleSave`, so there is exactly one upload
+  implementation, not two.
+- **Remove current photo** confirmation now goes through the `ConfirmDialog`
+  component (added in Session 1's Subphase A) instead of the old
+  `confirmAsync` native-Alert call, with the exact copy the user specified:
+  title "Remove profile photo?", body "Your initials will be shown
+  instead.", buttons "Cancel"/"Remove", destructive styling. The actual
+  removal logic (`handleRemoveAvatar`) is unchanged apart from no longer
+  owning its own confirmation — same capture-and-rollback-on-failure
+  behavior as before (a failed `updateProfile` call restores the previous
+  `avatarUrl`/`pendingAsset` and shows an error via `alertAsync`).
+- **Initials fallback**: no new logic needed — `components/Avatar.tsx`
+  already renders `getInitials(name)` (from `lib/profiles.ts`) whenever
+  `uri` is falsy, and removal already sets `avatarUrl` to `null`.
+- **Storage object deletion**: deliberately **not** added.
+  `uploadAvatar()` writes to a stable per-user path
+  (`${userId}/avatar.<ext>`, `upsert: true`), so removal only ever needs to
+  null the `profiles.avatar_url` column — there is no orphaned-file
+  accumulation to clean up the way there is for job photos, and
+  `lib/storage.ts` has no existing "delete an avatar object" utility to
+  reuse. Adding one would be new backend-adjacent behavior for no benefit,
+  so per the task's own caution ("do not delete a file that may still be
+  referenced elsewhere") this was left alone — same behavior as before.
+- **Known pre-existing minor inconsistency, not touched:** the long-press
+  menu's "Change photo" row still calls `pickAvatar()` directly
+  (library-only, no camera choice) rather than opening the new action
+  sheet. This existed before this session, was not what the user reported
+  as broken (the *primary tap* interaction was), and unifying it would be
+  a scope-creeping UI change to an untouched, working code path. Flagged
+  here for a future pass if the user wants full consistency between the
+  two entry points.
+
+**Files changed:** `screens/ProfileScreen.tsx` only.
+
+**Validation:** `npm run lint` clean. `npm test` → 14 pass / 1 fail (same
+pre-existing `pwa.test.mjs` failure, unrelated).
+
+**Manual iPhone/Android checks still required (not done — no device/simulator
+used):** camera permission grant and denial flows on a real device; that
+the live camera actually opens and a captured photo round-trips through
+crop → stage → Save → upload correctly; that Android hardware back
+dismisses the new `ActionSheet`/`ConfirmDialog` safely (both already use
+`Modal`'s `onRequestClose`, same mechanism as the rest of the app, but not
+device-verified here).
+
+### Subphase 2 — international phone input (Issue 2)
+
+**Dependency decision — read this before touching phone code again:**
+
+The task asked for a full country-picker component (flag + name + dial
+code + search modal). The obvious npm candidate,
+`react-native-international-phone-number@0.12.3`, was **not installed**.
+Its published `package.json` declares a dependency on
+`react-native-country-select@0.3.9`, which in turn declares a dependency
+on `@agnoliaarisian7180/string-argv@"latest"` — a nonexistent package
+under an unofficial-looking personal scope, standing in for what should be
+the well-known unscoped `string-argv` utility (confirmed via
+`npm view <pkg> dependencies` on each package directly, and via the npm
+install debug log showing exactly which package in the chain declared it).
+An unpinned `"latest"` dependency on a currently-404ing scoped package is
+the shape of a dependency-confusion supply-chain attack: harmless today
+because nothing is published there yet, but the account behind that scope
+could publish malicious code to it at any time and it would be silently
+pulled in on the next `npm install`/lockfile update. **This chain must not
+be installed.** If a future session considers `react-native-international-
+phone-number` or `react-native-country-select` again, re-verify this first
+— do not assume it was a transient fluke.
+
+**What was installed instead:** `libphonenumber-js@1.13.10` only —
+verified via `npm view libphonenumber-js dependencies` / `peerDependencies`
+to have **zero dependencies of its own**, single well-established
+maintainer (catamphetamine), pure JS (no native linking, Expo/Expo-Go
+safe). `package.json`/`package-lock.json` diff for this install is exactly
+one dependency line plus its lockfile entry — confirmed via `git diff`
+before committing. Used via the `libphonenumber-js/mobile` entry point
+(smaller bundled metadata, intended by the library itself for React
+Native).
+
+**Country name + flag data:** `libphonenumber-js` provides ISO-3166-1
+alpha-2 codes and calling codes (`getCountries()`, `getCountryCallingCode()`)
+but **no country display names**. `Intl.DisplayNames` was considered and
+rejected — it is not reliably available in Hermes without an additional
+`@formatjs/intl-displaynames` polyfill (i.e. a second dependency, and an
+uncertain one), so trusting it un-polyfilled would risk silently showing
+raw ISO codes instead of names on-device. Instead, `lib/countries.ts`
+(new) hand-authors a **complete** ISO-3166-1 English short-name table (not
+a curated/partial subset — every code `getCountries()` can return has an
+entry) and derives flag emoji programmatically from the ISO2 code via the
+regional-indicator-symbol codepoint formula (no image assets, no separate
+flag package). This is genuinely "existing app country data plus current
+input components" (tier 2 of the task's own dependency-preference order),
+not a hardcoded partial list.
+
+*(This section is completed by the implementing session in one sitting —
+see the file list, validation results, and commit hash recorded below once
+Subphase 2 lands. If you are picking this up mid-way, check `git log` and
+`git diff` against what's described here before assuming it's finished.)*
+
+---
+
+## SESSION 1 — Original bounded pre-reset pass (complete, HEAD `a679016`)
+
 ## Objective
 
 Implement the feedback captured in the 13-page (11 content-page) requirements

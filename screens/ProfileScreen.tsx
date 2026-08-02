@@ -11,12 +11,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { Avatar } from '../components/Avatar';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { CategoryAccordion } from '../components/CategoryAccordion';
 import { Chip } from '../components/Chip';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { PortfolioPicker } from '../components/PortfolioPicker';
@@ -75,6 +77,12 @@ export function ProfileScreen() {
   // jumping straight to the full-screen viewer, so "Remove Photo" has
   // somewhere to live.
   const [avatarMenuOpen, setAvatarMenuOpen] = useState(false);
+  // Short-tap-while-editing action sheet (library / camera / remove) — kept
+  // separate from avatarMenuOpen (the long-press view/change/remove menu,
+  // reachable in both editing and non-editing states) so neither gesture's
+  // behavior regresses the other.
+  const [avatarActionSheetOpen, setAvatarActionSheetOpen] = useState(false);
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [removingAvatar, setRemovingAvatar] = useState(false);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   // Backs the above-the-fold summary line — same worker_job_stats() RPC
@@ -129,6 +137,9 @@ export function ProfileScreen() {
     );
   }
 
+  /** Library and camera both stage the same pendingAsset/avatarUrl draft —
+   *  the actual upload only happens once, in handleSave, so neither path
+   *  needs (or has) its own upload logic. */
   async function pickAvatar() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
@@ -142,17 +153,32 @@ export function ProfileScreen() {
     }
   }
 
-  /** Resets the profile picture to the default placeholder avatar. */
+  async function takePhoto() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      await alertAsync(
+        'Camera access needed',
+        'Enable camera access for Brazos in your device Settings to take a new photo.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setPendingAsset(result.assets[0]);
+      setAvatarUrl(result.assets[0].uri);
+    }
+  }
+
+  /** Resets the profile picture to the default placeholder avatar. Only the
+   *  confirmation itself moved to ConfirmDialog (see removeConfirmOpen) —
+   *  this is still the same rollback-on-failure logic as before. */
   async function handleRemoveAvatar() {
     if (!user) return;
-    const ok = await confirmAsync({
-      title: 'Remove profile photo?',
-      message: 'This resets your profile picture to the default avatar.',
-      confirmText: 'Remove',
-      cancelText: 'Cancel',
-      destructive: true,
-    });
-    if (!ok) return;
 
     // Captured before clearing, so a failed API call below can restore
     // exactly what was staged — previously pendingAsset was cleared
@@ -167,11 +193,15 @@ export function ProfileScreen() {
     setPendingAsset(null);
     setAvatarUrl(null);
 
-    if (!profile?.avatar_url) return;
+    if (!profile?.avatar_url) {
+      setRemoveConfirmOpen(false);
+      return;
+    }
 
     setRemovingAvatar(true);
     const { data, error } = await updateProfile(user.id, { avatar_url: null });
     setRemovingAvatar(false);
+    setRemoveConfirmOpen(false);
 
     if (error) {
       await alertAsync('Could not remove photo', error.message);
@@ -320,6 +350,41 @@ export function ProfileScreen() {
   const profileSummary =
     summaryParts.length > 0 ? summaryParts.join(' · ') : 'You can post jobs and find work.';
 
+  const avatarActionSheetItems: ActionSheetItem[] = [
+    {
+      key: 'library',
+      label: 'Choose from library',
+      icon: 'image-outline',
+      onPress: () => {
+        setAvatarActionSheetOpen(false);
+        pickAvatar();
+      },
+    },
+    {
+      key: 'camera',
+      label: 'Take photo',
+      icon: 'camera-outline',
+      onPress: () => {
+        setAvatarActionSheetOpen(false);
+        takePhoto();
+      },
+    },
+    ...(avatarUrl
+      ? [
+          {
+            key: 'remove',
+            label: 'Remove current photo',
+            icon: 'trash-outline' as const,
+            destructive: true,
+            onPress: () => {
+              setAvatarActionSheetOpen(false);
+              setRemoveConfirmOpen(true);
+            },
+          },
+        ]
+      : []),
+  ];
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
@@ -349,10 +414,11 @@ export function ProfileScreen() {
         >
           <View style={styles.avatarRow}>
             {isEditing ? (
-              // onPress (change photo) and onLongPress (open the photo menu)
+              // onPress (the full library/camera/remove action sheet) and
+              // onLongPress (the older view/change/remove menu, unchanged)
               // coexist fine on one Pressable — they're different gestures.
               <Pressable
-                onPress={pickAvatar}
+                onPress={() => setAvatarActionSheetOpen(true)}
                 onLongPress={
                   avatarUrl ? () => setAvatarMenuOpen(true) : undefined
                 }
@@ -604,7 +670,7 @@ export function ProfileScreen() {
               style={styles.menuRow}
               onPress={() => {
                 setAvatarMenuOpen(false);
-                handleRemoveAvatar();
+                setRemoveConfirmOpen(true);
               }}
               disabled={removingAvatar}
             >
@@ -623,6 +689,25 @@ export function ProfileScreen() {
           </View>
         </Pressable>
       )}
+
+      <ActionSheet
+        visible={avatarActionSheetOpen}
+        title="Profile photo"
+        items={avatarActionSheetItems}
+        onClose={() => setAvatarActionSheetOpen(false)}
+      />
+
+      <ConfirmDialog
+        visible={removeConfirmOpen}
+        title="Remove profile photo?"
+        message="Your initials will be shown instead."
+        confirmText="Remove"
+        cancelText="Cancel"
+        destructive
+        loading={removingAvatar}
+        onConfirm={handleRemoveAvatar}
+        onCancel={() => setRemoveConfirmOpen(false)}
+      />
     </SafeAreaView>
   );
 }
