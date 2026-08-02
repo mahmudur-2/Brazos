@@ -106,12 +106,18 @@ test('missing transition_job_status deployments have a constrained compatibility
   ]);
 
   assert.match(jobsSource, /error\?\.code === 'PGRST202'/);
-  assert.match(jobsSource, /transitionJobStatusWithoutRpc\(\{ jobId, status, photoUrls \}\)/);
+  assert.match(
+    jobsSource,
+    /transitionJobStatusWithoutRpc\(\{ jobId, status, photoUrls, videoUrls \}\)/
+  );
   assert.match(compatibility, /supabase\.auth\.getUser\(\)/);
   assert.match(compatibility, /\.select\('id, assigned_worker_id, status'\)/);
   assert.match(compatibility, /\.eq\('assigned_worker_id', user\.id\)/);
   assert.match(compatibility, /\.eq\('status', expectedStatus\)/);
   assert.match(compatibility, /photos\.length > 5/);
+  // phase35 caps completion evidence at one video; the compatibility path has
+  // to refuse a second one for the same reason the RPC does.
+  assert.match(compatibility, /videos\.length > 1/);
   assert.doesNotMatch(compatibility, /client_id|accepted_bid_id|final_amount_cents/);
   assert.match(phase31, /create or replace function public\.transition_job_status\(/i);
   assert.match(phase31, /where id = p_job_id\s+for update;/i);

@@ -39,7 +39,7 @@ import { maybePromptForPush } from '../lib/pushNotifications';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import {
   deleteJobPhoto,
-  isSupportedVideo,
+  rejectionForPickedVideo,
   uploadJobAttachment,
   uploadJobVideo,
 } from '../lib/storage';
@@ -260,26 +260,14 @@ export function PostJobScreen() {
     const asset = result.assets[0];
 
     // Format, length and size are all checked before a byte is uploaded, so a
-    // rejected file costs nothing and the reason is specific.
-    if (!isSupportedVideo(asset)) {
-      await alertAsync(
-        'Unsupported video',
-        'Please choose an MP4 or MOV video. Other formats can’t be played back reliably in the app.'
-      );
-      return;
-    }
-    if (asset.duration != null && asset.duration > MAX_VIDEO_DURATION_MS) {
-      await alertAsync(
-        'Video is too long',
-        `Videos must be under ${MAX_VIDEO_DURATION_MS / 1000} seconds. Trim it and try again.`
-      );
-      return;
-    }
-    if (asset.fileSize != null && asset.fileSize > MAX_VIDEO_BYTES) {
-      await alertAsync(
-        'Video is too large',
-        `Videos must be under ${Math.round(MAX_VIDEO_BYTES / (1024 * 1024))} MB.`
-      );
+    // rejected file costs nothing and the reason is specific. Shared with the
+    // worker's completion clip so both are refused in the same words.
+    const rejection = rejectionForPickedVideo(asset, {
+      maxDurationMs: MAX_VIDEO_DURATION_MS,
+      maxBytes: MAX_VIDEO_BYTES,
+    });
+    if (rejection) {
+      await alertAsync(rejection.title, rejection.message);
       return;
     }
 

@@ -364,6 +364,23 @@ const MIGRATIONS = [
         })],
     ],
   },
+  {
+    file: 'phase35_completion_videos.sql',
+    checks: [
+      ['jobs.completion_videos', () => checkColumn('jobs', 'completion_videos')],
+      // The 4-argument signature only resolves once phase35 has replaced
+      // phase31's 3-argument one, so this distinguishes the new function from
+      // the old. (The phase31 check above keeps passing either way: PostgREST
+      // still matches a call that omits a defaulted trailing argument.)
+      ['rpc transition_job_status() takes p_completion_videos', () =>
+        checkRpc('transition_job_status', {
+          p_job_id: ZERO_UUID,
+          p_status: 'in_progress',
+          p_completion_photos: null,
+          p_completion_videos: null,
+        })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

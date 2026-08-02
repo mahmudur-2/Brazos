@@ -6,6 +6,7 @@ type TransitionParams = {
   jobId: string;
   status: TransitionStatus;
   photoUrls?: string[] | null;
+  videoUrls?: string[] | null;
 };
 
 type JobTransitionError = {
@@ -38,6 +39,7 @@ export async function transitionJobStatusWithoutRpc(
   params: TransitionParams
 ): Promise<{ error: JobTransitionError | null }> {
   const photos = params.photoUrls ?? [];
+  const videos = params.videoUrls ?? [];
   if (
     photos.length > 5 ||
     photos.some((photo) => typeof photo !== 'string' || photo.length > 2048)
@@ -46,6 +48,17 @@ export async function transitionJobStatusWithoutRpc(
       error: transitionError(
         'BRAZOS_INVALID_COMPLETION_PHOTOS',
         'Completion photos must contain at most five valid uploads.'
+      ),
+    };
+  }
+  if (
+    videos.length > 1 ||
+    videos.some((video) => typeof video !== 'string' || video.length > 2048)
+  ) {
+    return {
+      error: transitionError(
+        'BRAZOS_INVALID_COMPLETION_VIDEOS',
+        'A completed job can carry at most one video.'
       ),
     };
   }
@@ -87,11 +100,18 @@ export async function transitionJobStatusWithoutRpc(
     status: TransitionStatus;
     completion_photos?: string[];
     completion_photo_url?: string;
+    completion_videos?: string[];
   } = { status: params.status };
 
   if (params.status === 'completed' && params.photoUrls != null) {
     patch.completion_photos = photos;
     if (photos.length > 0) patch.completion_photo_url = photos[0];
+  }
+  // Only written when the caller actually passed one, so this path stays
+  // usable against a database where phase35 has not been applied yet as long
+  // as no video is attached.
+  if (params.status === 'completed' && params.videoUrls != null) {
+    patch.completion_videos = videos;
   }
 
   const { data: updatedJob, error: updateError } = await supabase

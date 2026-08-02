@@ -19,6 +19,7 @@ import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { BidWorkerCard } from '../components/BidWorkerCard';
 import { JobOwnerActions } from '../components/JobOwnerActions';
+import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -42,6 +43,7 @@ import { jobStage } from '../lib/jobStage';
 import {
   categoryAccent,
   completionPhotosOf,
+  completionVideosOf,
   fetchRehirableWorkerIds,
   formatBudget,
   formatPendingBidCount,
@@ -333,7 +335,9 @@ export function ClientJobDetailScreen() {
                 worker submitted on completion. Rendered as soon as the worker
                 marks the job done, so the client reviews the finished work
                 here rather than having to ask for it. */}
-            {(job.photos?.length > 0 || completionPhotosOf(job).length > 0) && (
+            {(job.photos?.length > 0 ||
+              completionPhotosOf(job).length > 0 ||
+              completionVideosOf(job).length > 0) && (
               <Card>
                 {job.photos?.length > 0 && (
                   <View style={styles.photoGroup}>
@@ -364,6 +368,21 @@ export function ClientJobDetailScreen() {
                         <Pressable key={url} onPress={() => setViewerUri(url)}>
                           <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
                         </Pressable>
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {completionVideosOf(job).length > 0 && (
+                  <View style={styles.photoGroup}>
+                    <Text style={styles.photoGroupLabel}>After · video</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.photoRow}
+                    >
+                      {completionVideosOf(job).map((url) => (
+                        <JobVideo key={url} uri={url} label="Finished work" />
                       ))}
                     </ScrollView>
                   </View>

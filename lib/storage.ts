@@ -106,11 +106,12 @@ export async function uploadJobPhoto(jobId: string, asset: ImagePickerAsset) {
 }
 
 /**
- * Delete a job-photos file (a posting attachment or a worker completion
- * photo — both live in this bucket) given the public URL it was uploaded
- * as. Used when a photo is removed from the picker before submit, so it
- * doesn't sit orphaned in storage forever with nothing pointing at it.
- * Requires the phase26 SQL (job-photos never had a DELETE policy before).
+ * Delete a job-photos file (a posting attachment, a worker completion photo,
+ * or a completion video — they all live in this bucket) given the public URL
+ * it was uploaded as. Used when media is removed from the picker before
+ * submit, so it doesn't sit orphaned in storage forever with nothing pointing
+ * at it. Requires the phase26 SQL (job-photos never had a DELETE policy
+ * before).
  */
 export async function deleteJobPhoto(url: string) {
   const path = pathFromPublicUrl(BUCKET, url);
@@ -206,6 +207,80 @@ export function isSupportedVideo(asset: ImagePickerAsset): boolean {
 function videoExtension(uri: string): string | null {
   const ext = (uri.split('?')[0].split('.').pop() ?? '').toLowerCase();
   return ext in VIDEO_CONTENT_TYPES ? ext : null;
+}
+
+/**
+ * Format, length and size checks a picked video has to pass, in one place so
+ * a job posting's clip and a worker's completion clip are refused for the
+ * same reasons in the same words — only the limits differ.
+ *
+ * Returns a `{ title, message }` ready to show, or null when the asset is
+ * acceptable. Everything here is checked before a byte is uploaded, so a
+ * rejected file costs nothing and the reason is specific.
+ */
+export function rejectionForPickedVideo(
+  asset: ImagePickerAsset,
+  limits: { maxDurationMs: number; maxBytes: number }
+): { title: string; message: string } | null {
+  if (!isSupportedVideo(asset)) {
+    return {
+      title: 'Unsupported video',
+      message:
+        'Please choose an MP4 or MOV video. Other formats can’t be played back reliably in the app.',
+    };
+  }
+  if (asset.duration != null && asset.duration > limits.maxDurationMs) {
+    const seconds = Math.round(limits.maxDurationMs / 1000);
+    return {
+      title: 'Video is too long',
+      message:
+        seconds % 60 === 0
+          ? `Videos must be under ${seconds / 60} ${seconds === 60 ? 'minute' : 'minutes'}. Trim it and try again.`
+          : `Videos must be under ${seconds} seconds. Trim it and try again.`,
+    };
+  }
+  if (asset.fileSize != null && asset.fileSize > limits.maxBytes) {
+    return {
+      title: 'Video is too large',
+      message: `Videos must be under ${Math.round(limits.maxBytes / (1024 * 1024))} MB.`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Upload the assigned worker's completion video. Same public `job-photos`
+ * bucket as their completion photos, under `{jobId}/completion/…`.
+ *
+ * phase29's job_photos_insert policy authorises a non-`postings` path whose
+ * FIRST folder segment is a job the caller is the assigned worker on, and
+ * phase26's delete policy scopes removal by the same rule — a `completion/`
+ * segment sits below that first segment, so both already cover this path
+ * exactly as written. No new bucket, no new policy, and deliberately nothing
+ * loosened.
+ *
+ * The content type is resolved from an allowlist rather than trusted from the
+ * picker, so an object can never be stored under a type this app would not
+ * play back.
+ */
+export async function uploadCompletionVideo(jobId: string, asset: ImagePickerAsset) {
+  const ext =
+    videoExtension(asset.uri) ??
+    Object.keys(VIDEO_CONTENT_TYPES).find(
+      (key) => VIDEO_CONTENT_TYPES[key] === asset.mimeType
+    ) ??
+    null;
+
+  if (!ext) {
+    return { url: null, error: new Error('Unsupported video format') };
+  }
+
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return uploadAsset(
+    BUCKET,
+    `${jobId}/completion/${unique}.${ext}`,
+    { ...asset, mimeType: VIDEO_CONTENT_TYPES[ext] },
+  );
 }
 
 /**

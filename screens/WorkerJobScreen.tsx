@@ -17,6 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { JobProgress } from '../components/JobProgress';
+import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -27,18 +28,39 @@ import { alertAsync, confirmAsync } from '../lib/dialog';
 import {
   categoryAccent,
   completionPhotosOf,
+  completionVideosOf,
   formatBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   updateJobStatus,
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { deleteJobPhoto, uploadJobPhoto } from '../lib/storage';
+import {
+  deleteJobPhoto,
+  rejectionForPickedVideo,
+  uploadCompletionVideo,
+  uploadJobPhoto,
+} from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 /** Same cap as a job posting's photos, for consistency. */
 const MAX_DONE_PHOTOS = 5;
+/** One clip is the evidence; a second is a second opinion nobody asked for.
+ *  Matches the cap transition_job_status() enforces server-side (phase35). */
+const MAX_DONE_VIDEOS = 1;
+/** Two minutes — long enough to walk a client through finished work, short
+ *  enough to upload from a job site. */
+const MAX_DONE_VIDEO_DURATION_MS = 120_000;
+/** Roughly two minutes of phone video at default quality, with headroom. Past
+ *  this the upload becomes the worst part of finishing a job. */
+const MAX_DONE_VIDEO_BYTES = 100 * 1024 * 1024;
+
+/** mm:ss for a picked clip's length, so the worker can see what they attached. */
+function formatDuration(ms: number): string {
+  const total = Math.round(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
 
 export function WorkerJobScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
@@ -52,6 +74,12 @@ export function WorkerJobScreen() {
   // submit, so a slow upload never blocks marking the job done).
   const [donePhotos, setDonePhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  // The single completion clip, held the same way: uploaded on pick, so the
+  // job is never marked complete referencing something not yet in storage.
+  const [doneVideo, setDoneVideo] = useState<{ url: string; durationMs: number | null } | null>(
+    null
+  );
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const [working, setWorking] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   // Handed to ReviewSection so focusing its comment field can lift the card
@@ -83,35 +111,105 @@ export function WorkerJobScreen() {
     await refresh();
   }
 
-  async function pickPhoto() {
-    if (donePhotos.length >= MAX_DONE_PHOTOS) return;
+  const photoSlots = MAX_DONE_PHOTOS - donePhotos.length;
+  const videoSlots = doneVideo ? 0 : MAX_DONE_VIDEOS;
+  const canAddMedia = photoSlots > 0 || videoSlots > 0;
+  const uploadingMedia = uploadingPhoto || uploadingVideo;
+
+  /**
+   * One "Add photos or video" control rather than two pickers: the worker
+   * opens the library once and picks whatever shows the finished job best —
+   * photos, a clip, or both. Everything over a limit is refused with a reason,
+   * and everything under it is still kept, so a rejected extra never costs the
+   * worker the files they actually wanted.
+   */
+  async function pickCompletionMedia() {
+    if (!canAddMedia) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
+      mediaTypes: ['images', 'videos'],
       quality: 0.7,
       allowsMultipleSelection: true,
-      selectionLimit: MAX_DONE_PHOTOS - donePhotos.length,
+      selectionLimit: photoSlots + videoSlots,
+      // Caps recording length where the picker offers to record. A clip chosen
+      // from the library isn't covered by it, so the real check is
+      // rejectionForPickedVideo below — this just stops the obvious case sooner.
+      videoMaxDuration: MAX_DONE_VIDEO_DURATION_MS / 1000,
     });
     if (result.canceled || result.assets.length === 0) return;
 
-    setUploadingPhoto(true);
-    const uploaded: string[] = [];
-    let failures = 0;
-    for (const asset of result.assets) {
-      const { url, error: uploadError } = await uploadJobPhoto(params.jobId, asset);
-      if (uploadError || !url) failures++;
-      else uploaded.push(url);
-    }
-    setUploadingPhoto(false);
+    const images = result.assets.filter((a) => a.type !== 'video');
+    const clips = result.assets.filter((a) => a.type === 'video');
+    // Every reason something was left out, collected and reported once at the
+    // end — one clear summary beats a sequence of interrupting alerts.
+    const skipped: string[] = [];
 
-    if (uploaded.length > 0) {
-      setDonePhotos((prev) => [...prev, ...uploaded].slice(0, MAX_DONE_PHOTOS));
-    }
-    if (failures > 0) {
-      await alertAsync(
-        'Some photos didn’t upload',
-        `${failures} of ${result.assets.length} couldn’t be uploaded. You can try again, or finish without them.`
+    const acceptedImages = images.slice(0, photoSlots);
+    if (images.length > acceptedImages.length) {
+      skipped.push(
+        `Only ${MAX_DONE_PHOTOS} photos can be attached, so ${
+          images.length - acceptedImages.length
+        } weren’t added.`
       );
+    }
+
+    if (acceptedImages.length > 0) {
+      setUploadingPhoto(true);
+      const uploaded: string[] = [];
+      let failures = 0;
+      for (const asset of acceptedImages) {
+        const { url, error: uploadError } = await uploadJobPhoto(params.jobId, asset);
+        if (uploadError || !url) failures++;
+        else uploaded.push(url);
+      }
+      setUploadingPhoto(false);
+
+      if (uploaded.length > 0) {
+        setDonePhotos((prev) => [...prev, ...uploaded].slice(0, MAX_DONE_PHOTOS));
+      }
+      if (failures > 0) {
+        skipped.push(
+          `${failures} ${failures === 1 ? 'photo' : 'photos'} couldn’t be uploaded.`
+        );
+      }
+    }
+
+    if (clips.length > 0) {
+      if (videoSlots === 0) {
+        skipped.push('Only one video can be attached, so the clip wasn’t added.');
+      } else {
+        if (clips.length > 1) {
+          skipped.push('Only one video can be attached, so the first clip was used.');
+        }
+        const clip = clips[0];
+        const rejection = rejectionForPickedVideo(clip, {
+          maxDurationMs: MAX_DONE_VIDEO_DURATION_MS,
+          maxBytes: MAX_DONE_VIDEO_BYTES,
+        });
+        if (rejection) {
+          skipped.push(rejection.message);
+        } else {
+          setUploadingVideo(true);
+          const { url, error: uploadError } = await uploadCompletionVideo(
+            params.jobId,
+            clip
+          );
+          setUploadingVideo(false);
+          // Only a successful upload is kept, so the job can never be completed
+          // referencing something that is not in storage.
+          if (uploadError || !url) {
+            skipped.push(
+              'The video couldn’t be uploaded. On a slow connection a shorter clip uploads more reliably.'
+            );
+          } else {
+            setDoneVideo({ url, durationMs: clip.duration ?? null });
+          }
+        }
+      }
+    }
+
+    if (skipped.length > 0) {
+      await alertAsync('Some files weren’t added', skipped.join('\n\n'));
     }
   }
 
@@ -127,32 +225,53 @@ export function WorkerJobScreen() {
     });
   }
 
+  /** Same rule as removeDonePhoto: nothing here is referenced by the job row
+   *  yet, so the object is safe to remove from storage right away. */
+  function removeDoneVideo() {
+    const url = doneVideo?.url;
+    setDoneVideo(null);
+    if (!url) return;
+    deleteJobPhoto(url).then(({ error }) => {
+      if (error) console.error('[WorkerJobScreen] delete completion video failed', error);
+    });
+  }
+
   async function handleComplete() {
-    // Photos are optional, so an empty gallery gets one gentle nudge rather
-    // than a hard block — the client sees these as the "after" half of the
-    // job, so it's worth one prompt before finishing without them.
-    if (donePhotos.length === 0) {
+    // An upload still in flight would be dropped by the write below, so the
+    // button is disabled for it — this is the belt to that braces.
+    if (uploadingMedia) return;
+
+    // Evidence is optional, so an empty gallery gets one gentle nudge rather
+    // than a hard block — the client sees this as the "after" half of the
+    // job, so it's worth one prompt before finishing without it.
+    if (donePhotos.length === 0 && !doneVideo) {
       const addNow = await confirmAsync({
-        title: 'Add a photo of the finished job?',
+        title: 'Show the client the finished job?',
         message:
-          'A quick photo shows the client what you did. You can also finish without one.',
-        confirmText: 'Add photo',
+          'A quick photo or short clip shows what you did. You can also finish without one.',
+        confirmText: 'Add photos or video',
         cancelText: 'Finish without',
       });
       if (addNow) {
-        await pickPhoto();
-        return; // Let them review the picked photos, then tap Mark complete again.
+        await pickCompletionMedia();
+        return; // Let them review what was picked, then tap Mark complete again.
       }
     }
 
     setWorking(true);
-    const { error } = await updateJobStatus(params.jobId, 'completed', donePhotos);
+    const { error } = await updateJobStatus(
+      params.jobId,
+      'completed',
+      donePhotos,
+      doneVideo ? [doneVideo.url] : []
+    );
     setWorking(false);
     if (error) {
       await alertAsync('Could not complete job', error.message);
       return;
     }
     setDonePhotos([]);
+    setDoneVideo(null);
     await refresh();
   }
 
@@ -248,8 +367,30 @@ export function WorkerJobScreen() {
             <Card>
               <Text style={styles.actionTitle}>Finish up</Text>
               <Text style={styles.actionText}>
-                Add photos of the finished work (optional), then mark it complete.
+                Add up to {MAX_DONE_PHOTOS} photos and one short video of the
+                finished work (optional), then mark it complete.
               </Text>
+
+              {doneVideo && (
+                <View style={styles.videoWrap}>
+                  <JobVideo uri={doneVideo.url} label="Finished work" />
+                  <Pressable
+                    style={styles.photoRemove}
+                    onPress={removeDoneVideo}
+                    hitSlop={6}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove video"
+                  >
+                    <Ionicons name="close" size={16} color={colors.onPrimary} />
+                  </Pressable>
+                  <Text style={styles.mediaCount}>
+                    Video attached
+                    {doneVideo.durationMs != null
+                      ? ` · ${formatDuration(doneVideo.durationMs)}`
+                      : ''}
+                  </Text>
+                </View>
+              )}
 
               {donePhotos.length > 0 && (
                 <ScrollView
@@ -275,52 +416,71 @@ export function WorkerJobScreen() {
                 </ScrollView>
               )}
 
-              {donePhotos.length < MAX_DONE_PHOTOS && (
+              {canAddMedia && (
                 <Pressable
                   style={styles.photoPicker}
-                  onPress={pickPhoto}
-                  disabled={uploadingPhoto}
+                  onPress={pickCompletionMedia}
+                  disabled={uploadingMedia}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add photos or video of the finished work"
                 >
-                  {uploadingPhoto ? (
+                  {uploadingMedia ? (
                     <ActivityIndicator size="small" color={colors.primary} />
                   ) : (
                     <Ionicons name="camera-outline" size={22} color={colors.primary} />
                   )}
                   <Text style={styles.photoPickerText}>
-                    {donePhotos.length === 0
-                      ? 'Add done photos (optional)'
-                      : `Add another (${donePhotos.length}/${MAX_DONE_PHOTOS})`}
+                    {uploadingMedia ? 'Uploading…' : 'Add photos or video'}
                   </Text>
                 </Pressable>
+              )}
+
+              {(donePhotos.length > 0 || doneVideo) && (
+                <Text style={styles.mediaCount}>
+                  {donePhotos.length}/{MAX_DONE_PHOTOS} photos
+                  {doneVideo ? ' · 1 video' : ''}
+                </Text>
               )}
 
               <Button
                 title="Mark complete"
                 onPress={handleComplete}
                 loading={working}
-                disabled={uploadingPhoto}
+                disabled={uploadingMedia}
                 style={styles.action}
               />
             </Card>
           ) : job.status === 'completed' ? (
             <>
-              {completionPhotosOf(job).length > 0 ? (
+              {completionPhotosOf(job).length > 0 || completionVideosOf(job).length > 0 ? (
                 <Card>
-                  <Text style={styles.actionTitle}>
-                    {completionPhotosOf(job).length === 1 ? 'Done photo' : 'Done photos'}
-                  </Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.donePhotoRow}
-                    style={styles.donePhotoScroll}
-                  >
-                    {completionPhotosOf(job).map((url) => (
-                      <Pressable key={url} onPress={() => setViewerUri(url)}>
-                        <Image source={{ uri: url }} style={styles.donePhoto} />
-                      </Pressable>
-                    ))}
-                  </ScrollView>
+                  <Text style={styles.actionTitle}>Finished work</Text>
+                  {completionPhotosOf(job).length > 0 && (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.donePhotoRow}
+                      style={styles.donePhotoScroll}
+                    >
+                      {completionPhotosOf(job).map((url) => (
+                        <Pressable key={url} onPress={() => setViewerUri(url)}>
+                          <Image source={{ uri: url }} style={styles.donePhoto} />
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  )}
+                  {completionVideosOf(job).length > 0 && (
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.donePhotoRow}
+                      style={styles.donePhotoScroll}
+                    >
+                      {completionVideosOf(job).map((url) => (
+                        <JobVideo key={url} uri={url} label="Finished work" />
+                      ))}
+                    </ScrollView>
+                  )}
                 </Card>
               ) : null}
 
@@ -456,6 +616,16 @@ const styles = StyleSheet.create({
   photoWrap: {
     marginTop: spacing.lg,
     position: 'relative',
+  },
+  videoWrap: {
+    marginTop: spacing.lg,
+    alignSelf: 'flex-start',
+    position: 'relative',
+  },
+  mediaCount: {
+    fontSize: 13,
+    color: colors.textMuted,
+    marginTop: spacing.sm,
   },
   photo: {
     // Fixed width, not '100%'. These tiles live inside a HORIZONTAL

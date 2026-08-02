@@ -112,6 +112,12 @@ export type Job = {
    * the legacy single completion_photo_url for jobs finished before phase17.
    */
   completion_photos: string[];
+  /**
+   * The single video the worker could attach when marking the job complete
+   * (phase35). Empty for every job completed before that migration, which is
+   * why nothing here ever assumes one exists.
+   */
+  completion_videos: string[];
 };
 
 /** `photos` is jsonb; tolerate null/legacy rows and non-array values. */
@@ -138,6 +144,7 @@ export function mapJobRow(row: any): Job {
     photos: toPhotoArray(row.photos),
     videos: toPhotoArray(row.videos),
     completion_photos: toPhotoArray(row.completion_photos),
+    completion_videos: toPhotoArray(row.completion_videos),
   };
 }
 
@@ -154,6 +161,15 @@ export function completionPhotosOf(job: {
   const list = job.completion_photos ?? [];
   if (list.length > 0) return list;
   return job.completion_photo_url ? [job.completion_photo_url] : [];
+}
+
+/**
+ * Every completion video for a job. There is no legacy single-column form to
+ * fold in the way completionPhotosOf() has — the column arrived with phase35
+ * and every job completed before it simply has none.
+ */
+export function completionVideosOf(job: { completion_videos?: string[] | null }): string[] {
+  return job.completion_videos ?? [];
 }
 
 export type NewJobInput = {
@@ -217,7 +233,7 @@ export function toOpenJob(row: any): OpenJob {
 const OPEN_JOB_COLUMNS =
   'id, client_id, title, description, category, location, budget_cents, status, created_at, photos, videos';
 const JOB_COLUMNS =
-  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos`;
+  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos`;
 
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {
@@ -433,20 +449,24 @@ export async function fetchJobById(jobId: string) {
 
 /**
  * Update a job's status through the completion flow (assigned -> in_progress ->
- * completed). Pass a photo URL to store the worker's "done" photo on completion.
+ * completed). Pass the worker's "done" photos and video to store them as the
+ * completion evidence in the same transaction as the status change, so the job
+ * can never end up marked complete with its evidence half-written.
  */
 export async function updateJobStatus(
   jobId: string,
   status: 'in_progress' | 'completed',
-  photoUrls?: string[] | null
+  photoUrls?: string[] | null,
+  videoUrls?: string[] | null
 ) {
   const { error } = await supabase.rpc('transition_job_status', {
     p_job_id: jobId,
     p_status: status,
     p_completion_photos: photoUrls ?? null,
+    p_completion_videos: videoUrls ?? null,
   });
   if (error?.code === 'PGRST202') {
-    return transitionJobStatusWithoutRpc({ jobId, status, photoUrls });
+    return transitionJobStatusWithoutRpc({ jobId, status, photoUrls, videoUrls });
   }
   return { error };
 }
