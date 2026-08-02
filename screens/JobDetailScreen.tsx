@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
 import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -35,7 +36,7 @@ import {
   type OpenJob,
 } from '../lib/jobs';
 import { createBid, fetchMyBidForJob, type Bid } from '../lib/bids';
-import { alertAsync, confirmAsync } from '../lib/dialog';
+import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
@@ -59,6 +60,7 @@ export function JobDetailScreen() {
   const [existingBid, setExistingBid] = useState<Bid | null>(null);
   const [checking, setChecking] = useState(true);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [confirmBidVisible, setConfirmBidVisible] = useState(false);
 
   const isOwnJob = !!user && job.client_id === user.id;
   const bidCount = useBidCount(job.id);
@@ -141,17 +143,13 @@ export function JobDetailScreen() {
    * poster already uses. Pressing it books nothing — the poster still has to
    * choose this worker over the others.
    */
-  async function handleTakeListedPrice() {
+  function handleTakeListedPrice() {
     if (!user || job.budget_cents == null || takingListedPrice || submitting) return;
+    setConfirmBidVisible(true);
+  }
 
-    const ok = await confirmAsync({
-      title: `Offer to do this for ${formatBudget(job.budget_cents)}?`,
-      message:
-        'This sends the client a bid at their listed budget. They still choose who gets the job.',
-      confirmText: 'Send offer',
-      cancelText: 'Cancel',
-    });
-    if (!ok) return;
+  async function confirmTakeListedPrice() {
+    if (!user || job.budget_cents == null) return;
 
     setTakingListedPrice(true);
     const sent = await placeBid(
@@ -159,6 +157,7 @@ export function JobDetailScreen() {
       `I can do this for your listed budget of ${formatBudget(job.budget_cents)}.`
     );
     setTakingListedPrice(false);
+    setConfirmBidVisible(false);
     if (!sent) return;
 
     await alertAsync(
@@ -397,6 +396,19 @@ export function JobDetailScreen() {
         uri={viewerUri}
         onClose={() => setViewerUri(null)}
       />
+
+      {job.budget_cents != null && (
+        <ConfirmDialog
+          visible={confirmBidVisible}
+          title={`Send a ${formatBudget(job.budget_cents)} bid?`}
+          message="The client will receive your bid and decide who gets the job."
+          confirmText="Send bid"
+          cancelText="Cancel"
+          loading={takingListedPrice}
+          onConfirm={confirmTakeListedPrice}
+          onCancel={() => setConfirmBidVisible(false)}
+        />
+      )}
     </SafeAreaView>
   );
 }

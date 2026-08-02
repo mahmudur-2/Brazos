@@ -1,5 +1,6 @@
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Button } from './Button';
+import { ConfirmDialog } from './ConfirmDialog';
 import { useJobOwnerActions } from '../hooks/useJobOwnerActions';
 import { colors, spacing } from '../lib/theme';
 
@@ -22,7 +23,15 @@ type JobOwnerActionsProps = {
  * reads as one component.
  */
 export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActionsProps) {
-  const { canManage, deleting, onEdit, onDelete } = useJobOwnerActions(jobId, posterId, status);
+  const {
+    canManage,
+    deleting,
+    onEdit,
+    onDelete,
+    deleteDialogVisible,
+    confirmDelete,
+    cancelDelete,
+  } = useJobOwnerActions(jobId, posterId, status);
 
   if (!canManage) return null;
 
@@ -43,6 +52,18 @@ export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActi
         disabled={deleting}
         palette={{ ...colors, primary: colors.danger, border: colors.danger }}
         style={styles.btn}
+      />
+
+      <ConfirmDialog
+        visible={deleteDialogVisible}
+        title="Delete this job?"
+        message="This cannot be undone."
+        confirmText="Delete job"
+        cancelText="Cancel"
+        destructive
+        loading={deleting}
+        onConfirm={confirmDelete}
+        onCancel={cancelDelete}
       />
     </View>
   );

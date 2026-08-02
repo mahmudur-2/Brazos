@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { deleteJob } from '../lib/jobs';
-import { alertAsync, confirmAsync } from '../lib/dialog';
+import { alertAsync } from '../lib/dialog';
 import { useAuth } from './useAuth';
 
 /**
@@ -30,6 +30,10 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
   const { user } = useAuth();
   const [bidCount, setBidCount] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
+  // Owned here (not by the confirmation dialog itself) so JobOwnerActions can
+  // render a BRAZOS ConfirmDialog around this hook's own delete logic without
+  // the dialog component needing to know anything about jobs or RPCs.
+  const [deleteDialogVisible, setDeleteDialogVisible] = useState(false);
 
   const isOwner = !!user && user.id === posterId;
 
@@ -88,18 +92,19 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
     });
   }
 
-  async function onDelete() {
-    const ok = await confirmAsync({
-      title: 'Delete this job?',
-      confirmText: 'Delete',
-      cancelText: 'Cancel',
-      destructive: true,
-    });
-    if (!ok) return;
+  function onDelete() {
+    setDeleteDialogVisible(true);
+  }
 
+  function cancelDelete() {
+    setDeleteDialogVisible(false);
+  }
+
+  async function confirmDelete() {
     setDeleting(true);
     const { error } = await deleteJob(jobId);
     setDeleting(false);
+    setDeleteDialogVisible(false);
 
     if (error) {
       await alertAsync('Could not delete job', error.message);
@@ -113,5 +118,13 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
     navigation.getParent()?.navigate('MyJobs' as never);
   }
 
-  return { canManage, deleting, onEdit, onDelete };
+  return {
+    canManage,
+    deleting,
+    onEdit,
+    onDelete,
+    deleteDialogVisible,
+    confirmDelete,
+    cancelDelete,
+  };
 }
