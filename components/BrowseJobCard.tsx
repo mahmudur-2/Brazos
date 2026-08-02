@@ -7,7 +7,9 @@ import { useAuth } from '../hooks/useAuth';
 import { colors, radius, spacing } from '../lib/theme';
 import {
   categoryAccent,
+  formatBidCount,
   formatBudget,
+  formatPendingBidCount,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
@@ -32,7 +34,18 @@ const THUMB_SIZE = 92;
  * photo of someone else's kitchen would be describing a job that does not
  * exist.
  */
-export function BrowseJobCard({ job, onPress }: { job: OpenJob; onPress: () => void }) {
+export function BrowseJobCard({
+  job,
+  bidCount,
+  onPress,
+}: {
+  job: OpenJob;
+  /** From useBidCounts(). Undefined means not known yet (or the batched RPC
+   *  isn't deployed), in which case the line is omitted rather than guessed
+   *  at — "No bids yet" on a job with bids would be worse than silence. */
+  bidCount?: number;
+  onPress: () => void;
+}) {
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
   const accent = categoryAccent(job.category);
@@ -88,6 +101,13 @@ export function BrowseJobCard({ job, onPress }: { job: OpenJob; onPress: () => v
             <Text style={styles.budget} numberOfLines={1}>
               {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open budget'}
             </Text>
+            {/* Sits next to the pay, where a worker is already looking to
+                judge the job — not next to the title, which it would crowd. */}
+            {bidCount != null && (
+              <Text style={styles.bids} numberOfLines={1}>
+                {isOwn ? formatPendingBidCount(bidCount) : formatBidCount(bidCount)}
+              </Text>
+            )}
             <Text style={styles.time} numberOfLines={1}>
               {formatTimeAgo(job.created_at)}
             </Text>
@@ -190,6 +210,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: colors.text,
+  },
+  bids: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
   time: {
     fontSize: 12,

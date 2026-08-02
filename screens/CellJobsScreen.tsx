@@ -12,6 +12,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { useBidCounts } from '../hooks/useBidCounts';
 import { fetchJobsInCell } from '../lib/hotspots';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
@@ -24,6 +25,9 @@ export function CellJobsScreen() {
   const navigation = useNavigation<MapStackNavigation>();
   const { params } = useRoute<RouteProp<MapStackParamList, 'CellJobs'>>();
   const [jobs, setJobs] = useState<OpenJob[]>([]);
+  // Same batched source the full list uses, so a job shows the same count
+  // whichever surface it was opened from.
+  const bidCounts = useBidCounts(jobs.map((j) => j.id));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -106,6 +110,7 @@ export function CellJobsScreen() {
           renderItem={({ item }) => (
             <BrowseJobCard
               job={item}
+              bidCount={bidCounts[item.id]}
               onPress={() => navigation.navigate('JobDetail', { job: item })}
             />
           )}

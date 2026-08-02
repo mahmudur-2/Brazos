@@ -436,6 +436,12 @@ const MIGRATIONS = [
         })],
     ],
   },
+  {
+    file: 'phase38_job_bid_counts_batch.sql',
+    checks: [
+      ['rpc job_bid_counts()', () => checkRpc('job_bid_counts', { p_job_ids: [ZERO_UUID] })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

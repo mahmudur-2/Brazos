@@ -148,6 +148,38 @@ export async function fetchBidCount(jobId: string) {
   return { data: typeof data === 'number' ? data : 0, error };
 }
 
+/** Server caps the array too (phase38); mirrored so a long list is chunked
+ *  here rather than coming back empty. */
+const BID_COUNT_BATCH = 200;
+
+/**
+ * Bid counts for a page of jobs, in one round trip per 200 ids.
+ *
+ * The same count job_bid_count() returns, batched — a list card cannot use a
+ * plain `bids` embed (RLS under-counts for anyone who is not the poster) and
+ * cannot call the single-job RPC per row (an N+1 across a 90-job feed). Jobs
+ * with no bids are absent from the RPC's result, so they are filled in as 0
+ * here: a missing id means zero, never "unknown".
+ */
+export async function fetchBidCounts(jobIds: string[]) {
+  if (jobIds.length === 0) return { data: {} as Record<string, number>, error: null };
+
+  const counts: Record<string, number> = {};
+  for (const id of jobIds) counts[id] = 0;
+
+  for (let i = 0; i < jobIds.length; i += BID_COUNT_BATCH) {
+    const { data, error } = await supabase.rpc('job_bid_counts', {
+      p_job_ids: jobIds.slice(i, i + BID_COUNT_BATCH),
+    });
+    if (error) return { data: counts, error };
+    for (const row of (data ?? []) as { job_id: string; bid_count: number }[]) {
+      counts[row.job_id] = row.bid_count;
+    }
+  }
+
+  return { data: counts, error: null };
+}
+
 /**
  * Accept a bid atomically; the RPC locks both rows and derives worker/amount
  * from the pending bid rather than trusting client-supplied values.

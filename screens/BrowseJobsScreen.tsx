@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { BrowseJobCard, BrowseJobCardSkeleton } from '../components/BrowseJobCard';
 import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { useBidCounts } from '../hooks/useBidCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import type { HomeStackNavigation } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
@@ -13,6 +14,9 @@ import { colors, spacing } from '../lib/theme';
 export function BrowseJobsScreen() {
   const navigation = useNavigation<HomeStackNavigation>();
   const { jobs, loading, error, refresh } = useOpenJobs();
+  // One batched read for the whole page — see phase38 for why a per-card
+  // count is neither correct (RLS under-counts) nor affordable (N+1).
+  const bidCounts = useBidCounts(jobs.map((j) => j.id));
   const [refreshing, setRefreshing] = useState(false);
 
   async function onRefresh() {
@@ -52,6 +56,7 @@ export function BrowseJobsScreen() {
           renderItem={({ item }) => (
             <BrowseJobCard
               job={item}
+              bidCount={bidCounts[item.id]}
               onPress={() => navigation.navigate('JobDetail', { job: item })}
             />
           )}
