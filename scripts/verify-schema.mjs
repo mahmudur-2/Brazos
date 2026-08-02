@@ -322,6 +322,48 @@ const MIGRATIONS = [
         })],
     ],
   },
+  // phase33_job_request_categories.sql is deliberately NOT checked here.
+  // A CHECK constraint is invisible through PostgREST, and the only way to
+  // provoke it — calling create_job_request with one of the four categories
+  // phase23 added — needs a signed-in session; with just the publishable key
+  // the function raises 'Not signed in' long before the insert, so the probe
+  // would report a pass on an unmigrated database. A check that cannot fail
+  // is worse than no check. Confirm that one in the SQL editor:
+  //   select pg_get_constraintdef(oid) from pg_constraint
+  //   where conname = 'job_requests_category_valid';
+  {
+    file: 'phase34_job_videos.sql',
+    checks: [
+      ['jobs.videos', () => checkColumn('jobs', 'videos')],
+      // The 9-argument signature only resolves once phase34 has replaced the
+      // 8-argument one, so this distinguishes the new function from the old.
+      ['rpc create_job() takes p_videos', () =>
+        checkRpc('create_job', {
+          p_title: '',
+          p_description: '',
+          p_category: 'other',
+          p_location: '',
+          p_budget_cents: null,
+          p_photos: [],
+          p_lat: null,
+          p_lng: null,
+          p_videos: [],
+        })],
+      ['rpc update_job_details() takes p_videos', () =>
+        checkRpc('update_job_details', {
+          p_job_id: ZERO_UUID,
+          p_title: '',
+          p_description: '',
+          p_category: 'other',
+          p_location: '',
+          p_budget_cents: null,
+          p_photos: [],
+          p_lat: null,
+          p_lng: null,
+          p_videos: [],
+        })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
