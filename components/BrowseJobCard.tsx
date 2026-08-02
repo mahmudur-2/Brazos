@@ -10,6 +10,7 @@ import {
   formatBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
+  jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
@@ -42,7 +43,10 @@ export function BrowseJobCard({ job, onPress }: { job: OpenJob; onPress: () => v
   // host. Falling back on error means a broken image never renders as a grey
   // hole in the middle of the feed.
   const [imageFailed, setImageFailed] = useState(false);
-  const thumbUrl = job.photos?.[0];
+  // One shared rule for which image represents a job, so the same job shows the
+  // same tile in the home preview, this feed, the map drill-down and the
+  // poster's hub — see jobThumbnailUrl().
+  const thumbUrl = jobThumbnailUrl(job);
   const showImage = !!thumbUrl && !imageFailed;
 
   return (

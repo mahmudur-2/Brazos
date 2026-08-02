@@ -14,9 +14,22 @@ import { HubCard } from '../components/HubCard';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
-import { JOB_CATEGORY_ICONS, toOpenJob } from '../lib/jobs';
+import {
+  JOB_CATEGORY_ICONS,
+  JOB_CATEGORY_LABELS,
+  jobThumbnailUrl,
+  toOpenJob,
+} from '../lib/jobs';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
+import { formatTimeAgo } from '../lib/time';
+
+/** "Cleaning · Bushwick" — the same category+location line the browse feed's
+ *  card shows, so one job reads identically on both surfaces. */
+function metaLineFor(job: { category: string; location: string | null }): string {
+  const label = JOB_CATEGORY_LABELS[job.category as keyof typeof JOB_CATEGORY_LABELS] ?? job.category;
+  return job.location ? `${label} · ${job.location}` : label;
+}
 
 type Filter = 'active' | 'in_progress' | 'completed';
 
@@ -112,6 +125,9 @@ export function MyJobsHubScreen() {
                       category={job.category}
                       title={job.title}
                       subtitle={`Client · ${names[job.client_id] ?? 'Client'}`}
+                      thumbnailUrl={jobThumbnailUrl(job)}
+                      metaLine={metaLineFor(job)}
+                      timeLabel={formatTimeAgo(job.created_at)}
                       priceCents={job.final_amount_cents ?? job.budget_cents}
                       status={job.status}
                       onPress={() =>
@@ -138,6 +154,9 @@ export function MyJobsHubScreen() {
                         category={job.category}
                         title={job.title}
                         subtitle={worker}
+                        thumbnailUrl={jobThumbnailUrl(job)}
+                        metaLine={metaLineFor(job)}
+                        timeLabel={formatTimeAgo(job.created_at)}
                         priceCents={job.final_amount_cents ?? job.budget_cents}
                         status={job.status}
                         onPress={() =>
@@ -159,27 +178,28 @@ export function MyJobsHubScreen() {
                       </Text>
                     </View>
                   </View>
-                  {bidItems.map((bid) =>
-                    bid.job ? (
+                  {bidItems.map((bid) => {
+                    if (!bid.job) return null;
+                    // Normalized once so the card and the screen it opens are
+                    // built from the same row, not two different readings of it.
+                    const job = toOpenJob(bid.job);
+                    return (
                       <HubCard
                         key={`bid-${bid.id}`}
-                        icon={
-                          JOB_CATEGORY_ICONS[bid.job.category] ?? 'ellipsis-horizontal'
-                        }
-                        category={bid.job.category}
-                        title={bid.job.title}
-                        subtitle={`Client · ${names[bid.job.client_id] ?? 'Client'}`}
+                        icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+                        category={job.category}
+                        title={job.title}
+                        subtitle={`Client · ${names[job.client_id] ?? 'Client'}`}
+                        thumbnailUrl={jobThumbnailUrl(job)}
+                        metaLine={metaLineFor(job)}
+                        timeLabel={formatTimeAgo(job.created_at)}
                         priceCents={bid.amount_cents}
                         priceLabel="Your bid:"
                         status={bid.status}
-                        onPress={() =>
-                          navigation.navigate('JobDetail', {
-                            job: toOpenJob(bid.job),
-                          })
-                        }
+                        onPress={() => navigation.navigate('JobDetail', { job })}
                       />
-                    ) : null
-                  )}
+                    );
+                  })}
                 </View>
               )}
             </>

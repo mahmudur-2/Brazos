@@ -27,6 +27,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useJobBids } from '../hooks/useJobBids';
+import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import {
@@ -55,7 +56,11 @@ const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 export function ClientJobDetailScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ClientJobDetail'>>();
-  const { job } = params;
+  // Seeded from the hub card, then re-read canonically on every focus so an
+  // edit made in PostJob (title, budget, location, photos, videos) is reflected
+  // here the moment the poster comes back, instead of the card's snapshot from
+  // whenever the hub last loaded.
+  const { job } = useOwnedJobDetail(params.job);
 
   const { user } = useAuth();
   const { bids, loading, error, refresh } = useJobBids(job.id);

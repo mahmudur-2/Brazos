@@ -230,6 +230,62 @@ export async function fetchOpenJobs() {
   return { data: (data ?? []).map(toOpenJob), error };
 }
 
+/**
+ * One job in the same shape the browse feed uses. This is the canonical
+ * read for any screen that was handed an OpenJob through navigation params:
+ * a route param is a snapshot from whenever the list that produced it was
+ * loaded, so it can be both stale (the poster edited the job since) and
+ * incomplete (jobs_in_cell(), the map drill-down RPC, doesn't select photos
+ * or videos at all — see fetchJobsInCell).
+ *
+ * Deliberately the same OPEN_JOB_COLUMNS allowlist as fetchOpenJobs(), so
+ * this exposes nothing a worker browsing the public feed cannot already
+ * read.
+ */
+export async function fetchOpenJobById(jobId: string) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select(OPEN_JOB_COLUMNS)
+    .eq('id', jobId)
+    .maybeSingle();
+
+  return { data: data ? toOpenJob(data) : null, error };
+}
+
+/**
+ * Batched variant of fetchOpenJobById for hydrating a list of ids that came
+ * from somewhere with an incomplete projection. One query for the whole
+ * list, never one per row. Returns rows in the order the ids were given so
+ * a caller's existing ordering (e.g. the map RPC's) is preserved.
+ */
+export async function fetchOpenJobsByIds(ids: string[]) {
+  if (ids.length === 0) return { data: [] as OpenJob[], error: null };
+
+  const { data, error } = await supabase
+    .from('jobs')
+    .select(OPEN_JOB_COLUMNS)
+    .in('id', ids);
+
+  const byId = new Map((data ?? []).map((row) => [(row as { id: string }).id, toOpenJob(row)]));
+  return {
+    data: ids.map((id) => byId.get(id)).filter((j): j is OpenJob => !!j),
+    error,
+  };
+}
+
+/**
+ * The image a job should be represented by, in one place, so a job looks the
+ * same in the home preview, the browse list, the map drill-down and the
+ * poster's own hub.
+ *
+ * Priority is the poster's first photo. Returning null means the caller should
+ * fall back to that category's tinted icon block — there is deliberately no
+ * stock imagery standing in for a real upload.
+ */
+export function jobThumbnailUrl(job: { photos?: string[] | null }): string | null {
+  return job.photos?.[0] ?? null;
+}
+
 /** Create an open job and its optional exact location in one transaction. */
 export async function createJob(_clientId: string, input: NewJobInput) {
   const { data, error } = await supabase

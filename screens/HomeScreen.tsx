@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import {
+  Image,
   Keyboard,
   Pressable,
   ScrollView,
@@ -14,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { HomeGreeting } from '../components/HomeGreeting';
 import { Skeleton } from '../components/Skeleton';
+import { useAuth } from '../hooks/useAuth';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import {
@@ -21,6 +23,7 @@ import {
   formatBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
+  jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
 import { SKILL_CATEGORIES } from '../lib/skillCategories';
@@ -43,6 +46,7 @@ const QUICK_SERVICES = SKILL_CATEGORIES.slice(0, 6);
  */
 export function HomeScreen() {
   const { profile } = useProfile();
+  const { user } = useAuth();
   const { jobs, loading, error, refresh } = useOpenJobs();
   const navigation = useNavigation<HomeStackNavigation>();
 
@@ -180,7 +184,12 @@ export function HomeScreen() {
           ) : (
             <View style={styles.previewList}>
               {preview.map((job) => (
-                <JobPreviewRow key={job.id} job={job} onPress={() => openJob(job)} />
+                <JobPreviewRow
+                  key={job.id}
+                  job={job}
+                  isOwn={!!user && user.id === job.client_id}
+                  onPress={() => openJob(job)}
+                />
               ))}
             </View>
           )}
@@ -195,8 +204,21 @@ export function HomeScreen() {
  * one row on purpose — the full-size image cards live behind "See all", and
  * three of them here would bury the customer half of the screen.
  */
-function JobPreviewRow({ job, onPress }: { job: OpenJob; onPress: () => void }) {
+function JobPreviewRow({
+  job,
+  isOwn,
+  onPress,
+}: {
+  job: OpenJob;
+  isOwn: boolean;
+  onPress: () => void;
+}) {
   const accent = categoryAccent(job.category);
+  // Same thumbnail rule as the full browse card, at this row's density — a job
+  // with a photo should not look like a different job here than it does there.
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const thumbUrl = jobThumbnailUrl(job);
+  const showThumb = !!thumbUrl && !thumbFailed;
 
   return (
     <Pressable
@@ -204,18 +226,28 @@ function JobPreviewRow({ job, onPress }: { job: OpenJob; onPress: () => void }) 
       style={({ pressed }) => [styles.previewRow, pressed && styles.previewRowPressed]}
       accessibilityRole="button"
     >
-      <View style={[styles.previewIcon, { backgroundColor: accent.bg }]}>
-        <Ionicons
-          name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
-          size={17}
-          color={accent.icon}
+      {showThumb ? (
+        <Image
+          source={{ uri: thumbUrl! }}
+          style={styles.previewIcon}
+          resizeMode="cover"
+          onError={() => setThumbFailed(true)}
         />
-      </View>
+      ) : (
+        <View style={[styles.previewIcon, styles.previewIconFallback, { backgroundColor: accent.bg }]}>
+          <Ionicons
+            name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+            size={17}
+            color={accent.icon}
+          />
+        </View>
+      )}
       <View style={styles.previewText}>
         <Text style={styles.previewTitle} numberOfLines={1}>
           {job.title}
         </Text>
         <Text style={styles.previewMeta} numberOfLines={1}>
+          {isOwn ? 'Your job · ' : ''}
           {JOB_CATEGORY_LABELS[job.category] ?? job.category}
           {job.location ? ` · ${job.location}` : ''}
         </Text>
@@ -356,6 +388,9 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.sm,
+    backgroundColor: colors.neutralBg,
+  },
+  previewIconFallback: {
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',

@@ -31,6 +31,11 @@ export type PendingBid = Bid & {
     budget_cents: number | null;
     status: string;
     created_at: string;
+    /** Same media the browse feed shows, so a pending-bid card carries the
+     *  same thumbnail as the card the worker bid from. Nullable because rows
+     *  predating phase13/phase34 have no value; toOpenJob() normalizes. */
+    photos: string[] | null;
+    videos: string[] | null;
   } | null;
 };
 
@@ -84,7 +89,7 @@ export async function fetchPendingBidsByWorker(workerId: string) {
   const { data, error } = await supabase
     .from('bids')
     .select(
-      'id, job_id, worker_id, amount_cents, message, status, created_at, job:jobs!bids_job_id_fkey(id, client_id, title, description, category, location, budget_cents, status, created_at)'
+      'id, job_id, worker_id, amount_cents, message, status, created_at, job:jobs!bids_job_id_fkey(id, client_id, title, description, category, location, budget_cents, status, created_at, photos, videos)'
     )
     .eq('worker_id', workerId)
     .eq('status', 'pending')

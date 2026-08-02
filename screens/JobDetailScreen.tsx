@@ -25,6 +25,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useBidCount } from '../hooks/useBidCount';
+import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { jobStage } from '../lib/jobStage';
 import {
@@ -47,7 +48,13 @@ export function JobDetailScreen() {
   // nav/route types are standalone rather than tied to one parent stack.
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<JobDetailRouteParamList, 'JobDetail'>>();
-  const { job } = params;
+  // The route param is only the seed. Every list that can reach this screen
+  // (Home preview, All Open Jobs, the map zone drill-down, a pending bid card)
+  // hands over its own snapshot; re-reading through one canonical fetch is what
+  // makes the same job show the same media, budget and status regardless of
+  // which of them opened it, and what picks up the poster's edits on the way
+  // back from PostJob.
+  const { job, missing } = useOpenJobDetail(params.job);
   const { user } = useAuth();
 
   const [amount, setAmount] = useState('');
@@ -202,6 +209,25 @@ export function JobDetailScreen() {
 
     // Show the worker their pending bid in the My Jobs hub tab.
     navigation.getParent()?.navigate('MyJobs' as never);
+  }
+
+  // The canonical read came back empty: the poster deleted the job while this
+  // screen was open (or on a stale card the list has not dropped yet). Saying
+  // so beats leaving a bid form pointed at a row that no longer exists.
+  if (missing) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <ScreenHeader title="Job details" onBack={() => navigation.goBack()} />
+        <View style={styles.missing}>
+          <Ionicons name="alert-circle-outline" size={40} color={colors.textMuted} />
+          <Text style={styles.missingTitle}>This job is no longer available</Text>
+          <Text style={styles.missingText}>
+            The person who posted it has taken it down.
+          </Text>
+          <Button title="Go back" variant="secondary" onPress={() => navigation.goBack()} />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -553,5 +579,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSubtle,
     marginTop: spacing.md,
+  },
+  missing: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.xl,
+  },
+  missingTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  missingText: {
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginBottom: spacing.md,
   },
 });

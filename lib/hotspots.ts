@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { toOpenJob } from './jobs';
+import { fetchOpenJobsByIds, toOpenJob, type OpenJob } from './jobs';
 
 // Aggregated grid cell returned by the job_hotspots() RPC. Never contains
 // individual job coordinates — only the cell center + counts.
@@ -144,17 +144,36 @@ export async function fetchHotspots() {
   return { data: (data ?? []) as HotspotCell[], error };
 }
 
-/** Fetch the open jobs inside one cell (coordinate-free) for the drill-down list. */
+/**
+ * Fetch the open jobs inside one cell (coordinate-free) for the drill-down list.
+ *
+ * jobs_in_cell() predates the phase13 `photos` column and the phase34 `videos`
+ * column, so its rows carry neither — a job opened from the map would show a
+ * category tile where every other surface shows the poster's photo, and its
+ * detail screen would appear to have no media at all. Rather than change a
+ * deployed security-definer RPC's return shape, the ids it returns are
+ * re-read through the same column allowlist the browse feed uses, in one
+ * batched query (never one per row).
+ *
+ * The RPC decides *which* jobs are in the cell; the hydrating select only
+ * widens the projection on jobs the caller can already read (`fetchOpenJobs`
+ * selects the same columns from the same table under the same RLS). If that
+ * second query fails, the RPC's own rows are returned unchanged so the map
+ * drill-down degrades to its previous behavior instead of breaking.
+ */
 export async function fetchJobsInCell(ilat: number, ilng: number) {
   const { data, error } = await supabase.rpc('jobs_in_cell', {
     p_ilat: ilat,
     p_ilng: ilng,
   });
-  // jobs_in_cell() predates the phase13 photos column, so its rows don't
-  // carry `photos` at all — route through toOpenJob() (same as every other
-  // job-fetching path) so that and any other nullable/array field lands
-  // normalized instead of undefined.
-  return { data: (data ?? []).map(toOpenJob), error };
+  if (error) return { data: [] as OpenJob[], error };
+
+  const rows: OpenJob[] = (data ?? []).map(toOpenJob);
+  const { data: hydrated, error: hydrateError } = await fetchOpenJobsByIds(
+    rows.map((j) => j.id)
+  );
+
+  return { data: hydrateError ? rows : hydrated, error: null };
 }
 
 /** Human-readable category summary for a cell, e.g. "Cleaning · Handyman · +2". */
