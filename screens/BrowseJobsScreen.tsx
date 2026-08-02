@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { BrowseJobCard, BrowseJobCardSkeleton } from '../components/BrowseJobCard';
+import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import type { HomeStackNavigation } from '../lib/navigation';
@@ -44,6 +45,7 @@ export function BrowseJobsScreen() {
           ))}
         </View>
       ) : (
+        <FadeIn style={styles.flex}>
         <FlatList
           data={jobs}
           keyExtractor={(item) => item.id}
@@ -77,6 +79,7 @@ export function BrowseJobsScreen() {
             </View>
           }
         />
+        </FadeIn>
       )}
     </SafeAreaView>
   );
@@ -86,6 +89,11 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  // The FadeIn wrapper has to pass the SafeAreaView's height down to the
+  // FlatList, or the list sizes to its content and stops scrolling.
+  flex: {
+    flex: 1,
   },
   listContent: {
     padding: spacing.lg,

@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { HomeGreeting } from '../components/HomeGreeting';
+import { Skeleton } from '../components/Skeleton';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import {
@@ -150,10 +151,10 @@ export function HomeScreen() {
                   keeps its height and nothing below it jumps on load. */}
               {[0, 1, 2].map((i) => (
                 <View key={i} style={styles.skeletonRow}>
-                  <View style={styles.skeletonIcon} />
+                  <Skeleton style={styles.skeletonIcon} />
                   <View style={styles.skeletonText}>
-                    <View style={styles.skeletonLine} />
-                    <View style={[styles.skeletonLine, styles.skeletonLineShort]} />
+                    <Skeleton style={styles.skeletonLine} />
+                    <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
                   </View>
                 </View>
               ))}
@@ -425,7 +426,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: radius.sm,
-    backgroundColor: colors.neutralBg,
   },
   skeletonText: {
     flex: 1,
@@ -433,8 +433,6 @@ const styles = StyleSheet.create({
   },
   skeletonLine: {
     height: 10,
-    borderRadius: radius.sm,
-    backgroundColor: colors.neutralBg,
   },
   skeletonLineShort: {
     width: '55%',

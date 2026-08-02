@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
@@ -222,6 +223,9 @@ export function WorkerSearchScreen() {
           />
         </View>
       ) : (
+        // Re-fades on each new search, so results visibly replace the
+        // previous set instead of silently swapping under the reader.
+        <FadeIn style={styles.resultsFlex} resetKey={state.categories.join(',')}>
         <FlatList
           data={state.matches}
           keyExtractor={(item) => item.profile.id}
@@ -242,6 +246,7 @@ export function WorkerSearchScreen() {
             <WorkerResultCard match={item} onPress={() => openWorker(item)} />
           )}
         />
+        </FadeIn>
       )}
     </SafeAreaView>
   );
@@ -411,6 +416,11 @@ const styles = StyleSheet.create({
     color: colors.danger,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // The FadeIn wrapper has to pass its height down to the FlatList, or the
+  // list sizes to its content and stops scrolling.
+  resultsFlex: {
+    flex: 1,
   },
   listContent: {
     padding: spacing.lg,

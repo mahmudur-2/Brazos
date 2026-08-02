@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
+import { Skeleton } from './Skeleton';
 import { colors, radius, spacing } from '../lib/theme';
 import {
   categoryAccent,
@@ -93,18 +94,14 @@ export function BrowseJobCardSkeleton() {
   return (
     <Card style={styles.card}>
       <View style={styles.row}>
-        <View style={[styles.thumb, styles.skeletonBlock]} />
+        <Skeleton style={styles.thumb} />
         <View style={styles.body}>
           <View style={styles.bodyTop}>
-            <View style={[styles.skeletonLine, styles.skeletonBlock]} />
-            <View
-              style={[styles.skeletonLine, styles.skeletonLineShort, styles.skeletonBlock]}
-            />
+            <Skeleton style={styles.skeletonLine} />
+            <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
           </View>
           <View style={styles.footerRow}>
-            <View
-              style={[styles.skeletonLine, styles.skeletonLineTiny, styles.skeletonBlock]}
-            />
+            <Skeleton style={[styles.skeletonLine, styles.skeletonLineTiny]} />
           </View>
         </View>
       </View>
@@ -168,9 +165,6 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 12,
     color: colors.textSubtle,
-  },
-  skeletonBlock: {
-    backgroundColor: colors.neutralBg,
   },
   skeletonLine: {
     height: 12,

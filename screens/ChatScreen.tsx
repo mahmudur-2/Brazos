@@ -523,8 +523,15 @@ export function ChatScreen() {
                 })
               }
               hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Hire ${counterparty.full_name ?? 'this worker'} again`}
+              style={({ pressed }) => [
+                styles.hireAgainButton,
+                pressed && styles.hireAgainButtonPressed,
+              ]}
             >
-              <Text style={styles.hireAgainLink}>Hire Again</Text>
+              <Ionicons name="person-add" size={14} color={colors.onPrimary} />
+              <Text style={styles.hireAgainLabel}>Hire Again</Text>
             </Pressable>
           ) : undefined
         }
@@ -861,10 +868,26 @@ const styles = StyleSheet.create({
     color: colors.danger,
     lineHeight: 18,
   },
-  hireAgainLink: {
-    fontSize: 14,
+  // Was a bare text link, which read as a caption next to the counterparty's
+  // name rather than as the one action in the header. Bounded and filled
+  // instead — 36 tall plus the Pressable's hitSlop clears a comfortable
+  // target without making the header taller.
+  hireAgainButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    minHeight: 36,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    backgroundColor: colors.primary,
+  },
+  hireAgainButtonPressed: {
+    opacity: 0.85,
+  },
+  hireAgainLabel: {
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.onPrimary,
   },
   error: {
     color: colors.danger,
