@@ -12,9 +12,14 @@ import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-type ButtonSize = 'md' | 'lg';
+type ButtonSize = 'sm' | 'md' | 'lg';
 
 const SIZES: Record<ButtonSize, { height: number; fontSize: number; paddingHorizontal: number }> = {
+  // For a bounded action that has to sit inline with other content (a
+  // screen header, a card's title row) rather than stand alone the way
+  // every other button on the app does — still >=44pt tall for a reliable
+  // touch target.
+  sm: { height: 44, fontSize: 13, paddingHorizontal: 14 },
   md: { height: 52, fontSize: 16, paddingHorizontal: 16 },
   lg: { height: 64, fontSize: 19, paddingHorizontal: 20 },
 };

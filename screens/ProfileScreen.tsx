@@ -326,9 +326,13 @@ export function ProfileScreen() {
         title="Profile"
         right={
           !loading && !isEditing ? (
-            <Pressable onPress={() => setIsEditing(true)} hitSlop={8}>
-              <Text style={styles.editLink}>Edit Profile</Text>
-            </Pressable>
+            <Button
+              title="Edit"
+              variant="secondary"
+              size="sm"
+              icon="create-outline"
+              onPress={() => setIsEditing(true)}
+            />
           ) : undefined
         }
       />
@@ -638,11 +642,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.lg,
     paddingBottom: 0,
     gap: spacing.lg,
-  },
-  editLink: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.primary,
   },
   avatarRow: {
     alignItems: 'center',

@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { Button } from './Button';
 import { Card } from './Card';
 import { PhotoViewer } from './PhotoViewer';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
@@ -104,11 +105,13 @@ export function PastWork({
       <View style={styles.header}>
         <Text style={styles.title}>Past Work</Text>
         {editable && onManage && (
-          <Pressable onPress={onManage} hitSlop={8}>
-            <Text style={styles.manageLink}>
-              {items.length > 0 ? 'Manage' : 'Add photos'}
-            </Text>
-          </Pressable>
+          <Button
+            title={items.length > 0 ? 'Manage' : 'Add photos'}
+            variant="secondary"
+            size="sm"
+            icon="images-outline"
+            onPress={onManage}
+          />
         )}
       </View>
 
@@ -233,11 +236,6 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '700',
     color: colors.text,
-  },
-  manageLink: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: colors.primary,
   },
   loader: {
     marginVertical: spacing.lg,
