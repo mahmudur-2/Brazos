@@ -7,11 +7,20 @@ import { supabase } from '../lib/supabase';
  * Reactions per job are a small dataset (at most one per person per message),
  * so on any realtime change we just refetch the whole set rather than
  * patching individual rows — simpler and cheap at this scale.
+ *
+ * `jobId` may be null: message_reactions is keyed by job, so a direct thread
+ * (phase36) has no reactions to load and none can be added there. The hook
+ * stays mounted and simply returns an empty set rather than the chat screen
+ * having to branch around it.
  */
-export function useReactions(jobId: string) {
+export function useReactions(jobId: string | null) {
   const [reactions, setReactions] = useState<Reaction[]>([]);
 
   const refresh = useCallback(async () => {
+    if (!jobId) {
+      setReactions([]);
+      return;
+    }
     const { data } = await fetchReactionsForJob(jobId);
     setReactions(data);
   }, [jobId]);
@@ -21,6 +30,7 @@ export function useReactions(jobId: string) {
   }, [refresh]);
 
   useEffect(() => {
+    if (!jobId) return;
     const channel = supabase
       .channel(`reactions:job:${jobId}`)
       .on(

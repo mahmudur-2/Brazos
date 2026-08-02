@@ -343,9 +343,10 @@ export function PostJobScreen() {
       return;
     }
 
-    // Hire Again no longer creates a job. It sends a request into the
-    // conversation these two already have; a job only exists if the worker
-    // accepts (or they settle on a counter-offer). See phase18.
+    // A direct offer creates no job. It posts a private offer into whichever
+    // conversation these two have — a shared job's thread, or (phase36) the
+    // pair's direct thread, created on the spot if they have never spoken.
+    // A job only exists if the worker accepts, or they settle on a counter.
     if (isHiring && !isEditing) {
       setSubmitting(true);
       const { error: requestError } = await createJobRequest({
@@ -356,13 +357,14 @@ export function PostJobScreen() {
         location: location.trim(),
         amountCents: budgetCents!,
         photos,
+        videos,
         coords,
         threadJobId: params?.threadJobId ?? null,
       });
       setSubmitting(false);
 
       if (requestError) {
-        await alertAsync('Could not send request', requestError.message);
+        await alertAsync('Could not send offer', requestError.message);
         return;
       }
       playSuccessThenLeave();

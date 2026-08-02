@@ -17,7 +17,7 @@ import { ReportDialog } from '../components/ReportDialog';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
-import { resolveOtherId } from '../lib/conversations';
+import { conversationKey, conversationTarget, resolveOtherId } from '../lib/conversations';
 import { fetchMyPendingRequests } from '../lib/jobRequests';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import {
@@ -32,7 +32,8 @@ import { colors, spacing } from '../lib/theme';
 type SheetTarget = {
   userId: string;
   name: string;
-  jobId: string;
+  /** Null in a direct thread (phase36) — reporting there carries no job. */
+  jobId: string | null;
   blocking: boolean;
   muted: boolean;
 };
@@ -54,14 +55,21 @@ export function MessagesInboxScreen() {
   const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  // Threads with a hire request waiting on THIS user. There are no push
-  // notifications, so this list is the only thing that surfaces a new request
-  // or counter-offer.
+  // Threads with a job offer waiting on THIS user. There are no push
+  // notifications, so this list is the only thing that surfaces a new offer
+  // or counter-offer. Keyed the same way the rows are, so a request in a
+  // direct thread badges its row too.
   const [pendingByThread, setPendingByThread] = useState<Set<string>>(new Set());
 
   const loadPending = useCallback(async () => {
     const { data } = await fetchMyPendingRequests();
-    setPendingByThread(new Set(data.map((r) => r.thread_job_id)));
+    setPendingByThread(
+      new Set(
+        data.map((r) =>
+          r.thread_job_id ? `job:${r.thread_job_id}` : `direct:${r.direct_thread_id}`
+        )
+      )
+    );
   }, []);
 
   useFocusEffect(
@@ -106,9 +114,13 @@ export function MessagesInboxScreen() {
             : isImage
             ? 'Photo sent'
             : c.last_message_content || '…');
-      const lastReadAt = readMap[c.job_id];
+      // A direct thread keeps its read timestamp on the thread row itself
+      // (see phase36), so it comes back on the conversation instead of from
+      // the job-keyed message_reads map.
+      const lastReadAt = c.job_id ? readMap[c.job_id] : c.my_read_at;
       const isMuted = moderation.muted.has(otherId);
-      const awaitingRequest = pendingByThread.has(c.job_id);
+      const key = conversationKey(c);
+      const awaitingRequest = pendingByThread.has(key);
       // Muted conversations still receive messages — they just don't raise the
       // unread indicator (the only "badge" this app currently has).
       const unread =
@@ -120,14 +132,18 @@ export function MessagesInboxScreen() {
       const jobCount = counterpartyJobCounts[otherId] ?? 1;
 
       return {
+        key,
+        target: conversationTarget(c),
         jobId: c.job_id,
         otherId,
         isSelf,
         subtitle: isSelf
           ? null
           : jobCount > 1
-          ? `${jobCount} jobs together`
-          : c.job_title,
+          ? `${jobCount} conversations together`
+          : // A direct thread is not about a job, so there is no job title to
+            // show — say what it is instead of leaving the line blank.
+            c.job_title ?? 'Direct messages',
         name: isSelf ? `${baseName} (You)` : baseName,
         rawName: baseName,
         avatarUrl: other?.avatar_url ?? null,
@@ -229,7 +245,7 @@ export function MessagesInboxScreen() {
       ) : (
         <FlatList
           data={rows}
-          keyExtractor={(item) => item.jobId}
+          keyExtractor={(item) => item.key}
           renderItem={({ item }) => (
             <ConversationRow
               name={item.name}
@@ -241,7 +257,7 @@ export function MessagesInboxScreen() {
               muted={item.muted}
               blocked={item.blocking}
               awaitingRequest={item.awaitingRequest}
-              onPress={() => navigation.navigate('Chat', { jobId: item.jobId })}
+              onPress={() => navigation.navigate('Chat', item.target)}
               onLongPress={
                 item.isSelf
                   ? undefined

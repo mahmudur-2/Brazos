@@ -1,5 +1,6 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Job, OpenJob } from './jobs';
+import type { ChatTarget } from './messages';
 
 // Screens stacked inside the Home tab — posting, plus the "explore/browse
 // open jobs" flow. Find Work is no longer its own tab; BrowseJobs/JobDetail
@@ -34,7 +35,7 @@ export type MyJobsStackParamList = {
   ClientJobDetail: { job: Job };
   WorkerJob: { jobId: string };
   JobDetail: { job: OpenJob };
-  Chat: { jobId: string };
+  Chat: ChatTarget;
   // Registered here too so "Hire Again" on a bid card can open it in place.
   PostJob:
     | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
@@ -47,7 +48,7 @@ export type MyJobsStackNavigation = NativeStackNavigationProp<MyJobsStackParamLi
 // Screens stacked inside the Messages (inbox) tab.
 export type MessagesStackParamList = {
   MessagesInbox: undefined;
-  Chat: { jobId: string };
+  Chat: ChatTarget;
   // "Hire Again" from a past conversation.
   PostJob:
     | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
@@ -95,7 +96,7 @@ export type LegalDocumentRouteParamList = {
 // detail screen or from the inbox). It only needs its own route param shape and
 // goBack(), so its route/nav types are declared standalone rather than tied to
 // either parent stack's full param list.
-export type ChatRouteParamList = { Chat: { jobId: string } };
+export type ChatRouteParamList = { Chat: ChatTarget };
 
 // JobDetail (the worker bid screen) is registered in HomeStack, MyJobsStack,
 // and MapStack — reached from browsing, a hotspot drill-down, etc. Same

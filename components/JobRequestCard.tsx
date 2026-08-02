@@ -1,7 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { formatBudget, JOB_CATEGORY_LABELS } from '../lib/jobs';
+import { formatTimeAgo } from '../lib/time';
 import {
   countersRemaining,
   isOpenRequest,
@@ -149,6 +150,31 @@ export function JobRequestCard({
           </Text>
         ) : null}
 
+        {/* What the work actually is, when the sender attached anything. Kept
+            to thumbnails: this is a card in a chat, not a gallery — the full
+            media lives on the job once the offer is accepted. A video shows
+            its count rather than a frame, since nothing here mounts a player. */}
+        {request && (request.photos.length > 0 || request.videos.length > 0) ? (
+          <View style={styles.mediaRow}>
+            {request.photos.slice(0, 3).map((url) => (
+              <Image key={url} source={{ uri: url }} style={styles.mediaThumb} />
+            ))}
+            {request.videos.length > 0 && (
+              <View style={[styles.mediaThumb, styles.videoThumb]}>
+                <Ionicons name="videocam" size={16} color={colors.primary} />
+                {request.videos.length > 1 && (
+                  <Text style={styles.videoCount}>{request.videos.length}</Text>
+                )}
+              </View>
+            )}
+            {request.photos.length > 3 && (
+              <Text style={styles.mediaMore}>+{request.photos.length - 3}</Text>
+            )}
+          </View>
+        ) : null}
+
+        <Text style={styles.sentAt}>{formatTimeAgo(message.created_at)}</Text>
+
         {settledNote && <Text style={styles.settledNote}>{settledNote}</Text>}
         {waitingNote && <Text style={styles.waitingNote}>{waitingNote}</Text>}
         {openable && <Text style={styles.openHint}>Tap to view the job</Text>}
@@ -263,6 +289,40 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18,
     marginTop: spacing.xs,
+  },
+  mediaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  mediaThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.sm,
+    backgroundColor: colors.neutralBg,
+  },
+  videoThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.primarySoft,
+    flexDirection: 'row',
+    gap: 2,
+  },
+  videoCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  mediaMore: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  sentAt: {
+    fontSize: 11,
+    color: colors.textSubtle,
+    marginTop: spacing.sm,
   },
   settledNote: {
     fontSize: 12,

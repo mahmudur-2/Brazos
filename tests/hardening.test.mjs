@@ -282,3 +282,62 @@ test('unsupported identity and proximity claims are absent', () => {
   assert.doesNotMatch(home, /Nearby open jobs/i);
   assert.doesNotMatch(jobDetail, /Similar jobs nearby/i);
 });
+
+test('direct job offers stay private and server-authorised', () => {
+  const phase36 = read('supabase/phase36_direct_offer_threads.sql');
+  const workerProfile = read('screens/WorkerProfileScreen.tsx');
+
+  // The defect the phase exists to fix: eligibility used to require a shared
+  // completed job, which is what made one profile offer "Send an offer" and
+  // another a "Post a job" consolation.
+  assert.doesNotMatch(
+    phase36,
+    /You can only send a request to a worker who has completed a job for you/i
+  );
+  assert.doesNotMatch(workerProfile, /Direct offers open up once/i);
+  assert.doesNotMatch(workerProfile, /title="Post a job"/i);
+
+  // A private offer must never become a public job row before it is accepted,
+  // and on accept must be created already assigned so it cannot reach the
+  // open-job feed, job_hotspots() or jobs_in_cell().
+  assert.match(phase36, /'assigned', v_req\.worker_id/i);
+  assert.doesNotMatch(phase36, /values \([^)]*'open'[^)]*\)\s*returning id into v_job_id/i);
+
+  // Every write still goes through SECURITY DEFINER functions with a fixed
+  // search_path, revoked from anon and granted only to authenticated.
+  assert.match(phase36, /security definer\s+set search_path = public, pg_temp/i);
+  assert.match(
+    phase36,
+    /revoke all on function public\.create_job_request\([\s\S]*?\) from public, anon;/i
+  );
+  assert.match(
+    phase36,
+    /grant execute on function public\.create_job_request\([\s\S]*?\) to authenticated;/i
+  );
+  assert.match(
+    phase36,
+    /revoke all on function public\.respond_job_request\(uuid, text, integer\) from public, anon;/i
+  );
+  // Thread creation is not a client capability — it only happens as part of
+  // sending an offer.
+  assert.match(
+    phase36,
+    /revoke all on function public\.ensure_direct_thread\(uuid, uuid\) from public, anon, authenticated;/i
+  );
+
+  // A retried accept returns the job it already created rather than making a
+  // second one.
+  assert.match(phase36, /v_req\.status = 'accepted'[\s\S]*?return v_req\.created_job_id;/i);
+
+  // Reading a direct thread's messages requires being one of its two
+  // participants, and sending additionally requires the pair not be blocked.
+  assert.match(
+    phase36,
+    /from public\.direct_threads t[\s\S]*?\(t\.user_a = auth\.uid\(\) or t\.user_b = auth\.uid\(\)\)/i
+  );
+  assert.match(phase36, /not public\.is_blocked_between\(t\.user_a, t\.user_b\)/i);
+
+  // The inbox view must keep running as the caller, so it can never widen
+  // what a user can read.
+  assert.match(phase36, /create view public\.conversations\s+with \(security_invoker = true\)/i);
+});

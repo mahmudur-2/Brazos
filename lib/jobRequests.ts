@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { JobCategory } from './jobs';
+import type { ChatTarget } from './messages';
 
 /** Counters allowed per side before only accept/decline remain. Mirrored by
  *  respond_job_request() in phase18 — the DB is the real enforcement. */
@@ -16,12 +17,17 @@ export type JobRequest = {
   id: string;
   client_id: string;
   worker_id: string;
-  thread_job_id: string;
+  /** The job conversation this negotiation lives in, or null when it lives in
+   *  a direct thread instead (phase36 — a first-time offer to someone you have
+   *  never worked with has no shared job to hang off). */
+  thread_job_id: string | null;
+  direct_thread_id: string | null;
   title: string;
   description: string;
   category: JobCategory;
   location: string | null;
   photos: string[];
+  videos: string[];
   amount_cents: number;
   status: JobRequestStatus;
   /** Whose turn it is. Never act without comparing this to the current user. */
@@ -38,21 +44,27 @@ export function isOpenRequest(status: JobRequestStatus): boolean {
   return status === 'pending' || status === 'countered';
 }
 
+function toUrlArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+}
+
 function mapRow(row: any): JobRequest {
   return {
     ...row,
-    photos: Array.isArray(row.photos)
-      ? row.photos.filter((p: unknown): p is string => typeof p === 'string')
-      : [],
+    photos: toUrlArray(row.photos),
+    videos: toUrlArray(row.videos),
   } as JobRequest;
 }
 
 /** Every request attached to one conversation thread, for rendering its cards. */
-export async function fetchThreadRequests(threadJobId: string) {
+export async function fetchThreadRequests(target: ChatTarget) {
   const { data, error } = await supabase
     .from('job_requests')
     .select('*')
-    .eq('thread_job_id', threadJobId)
+    .eq(
+      target.jobId ? 'thread_job_id' : 'direct_thread_id',
+      target.jobId ?? target.directThreadId
+    )
     .order('created_at', { ascending: true });
 
   return { data: (data ?? []).map(mapRow), error };
@@ -66,15 +78,18 @@ export type NewJobRequest = {
   location: string;
   amountCents: number;
   photos?: string[];
+  videos?: string[];
   coords?: { lat: number; lng: number } | null;
-  /** The conversation to post into. Omitted, the server falls back to the
-   *  most recent completed job shared by the two. */
+  /** The conversation to post into. Omitted, the server falls back to the most
+   *  recent completed job shared by the two, and failing that to the pair's
+   *  direct thread — which it creates if they have never spoken. */
   threadJobId?: string | null;
 };
 
 /**
- * Sends a hire request. Deliberately creates NO job — the job only exists if
- * the worker accepts (see respond_job_request).
+ * Sends a private job offer. Deliberately creates NO job — the job only exists
+ * if the worker accepts (see respond_job_request), and then already assigned,
+ * so an offer can never surface in the open-job feed or on the map.
  */
 export async function createJobRequest(input: NewJobRequest) {
   const { data, error } = await supabase.rpc('create_job_request', {
@@ -88,6 +103,7 @@ export async function createJobRequest(input: NewJobRequest) {
     p_lat: input.coords?.lat ?? null,
     p_lng: input.coords?.lng ?? null,
     p_thread_job_id: input.threadJobId ?? null,
+    p_videos: input.videos ?? [],
   });
 
   return { data: data as string | null, error };
@@ -117,7 +133,8 @@ export async function respondToJobRequest(
 
 export type PendingRequest = {
   id: string;
-  thread_job_id: string;
+  thread_job_id: string | null;
+  direct_thread_id: string | null;
   client_id: string;
   worker_id: string;
   amount_cents: number;

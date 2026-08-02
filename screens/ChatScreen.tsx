@@ -23,6 +23,7 @@ import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { AmountPrompt } from '../components/AmountPrompt';
 import { ChatBubble } from '../components/ChatBubble';
 import { ChatComposer } from '../components/ChatComposer';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobRequestCard } from '../components/JobRequestCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { QuickReplies } from '../components/QuickReplies';
@@ -36,6 +37,12 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { canRehireWorker, fetchJobById, formatBudget } from '../lib/jobs';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
+import {
+  fetchDirectThread,
+  otherParticipant,
+  type DirectThread,
+} from '../lib/directThreads';
+import type { ChatTarget } from '../lib/messages';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
 import {
   canUnsend,
@@ -59,20 +66,29 @@ export function ChatScreen() {
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<ChatRouteParamList, 'Chat'>>();
   const { user } = useAuth();
-  const { job } = useJob(params.jobId);
-  const { messages, loading, error, addLocal } = useChat(params.jobId);
+  // A thread is either a job's conversation or a direct thread between two
+  // people with no job (phase36) — exactly one of these is ever set.
+  const jobId = params.jobId ?? null;
+  const directThreadId = params.directThreadId ?? null;
+  const target = useMemo<ChatTarget>(
+    () => (jobId ? { jobId } : { directThreadId: directThreadId as string }),
+    [jobId, directThreadId]
+  );
+
+  const { job } = useJob(jobId);
+  const { messages, loading, error, addLocal } = useChat(jobId, directThreadId);
   const { byMessage: reactionsByMessage, refresh: refreshReactions } =
-    useReactions(params.jobId);
+    useReactions(jobId);
 
   // Mark this conversation read on entering and again on leaving, so a
   // message that arrives while the chat is open doesn't show as unread later.
   useFocusEffect(
     useCallback(() => {
-      if (user) markConversationRead(params.jobId, user.id);
+      if (user) markConversationRead(target, user.id);
       return () => {
-        if (user) markConversationRead(params.jobId, user.id);
+        if (user) markConversationRead(target, user.id);
       };
-    }, [user, params.jobId])
+    }, [user, target])
   );
 
   const [counterparty, setCounterparty] = useState<Profile | null>(null);
@@ -88,10 +104,31 @@ export function ChatScreen() {
   const [menuTarget, setMenuTarget] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [counterTarget, setCounterTarget] = useState<JobRequest | null>(null);
+  const [confirmResponse, setConfirmResponse] = useState<{
+    request: JobRequest;
+    action: 'accept' | 'decline';
+  } | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [openingJobId, setOpeningJobId] = useState<string | null>(null);
 
-  const { byId: requestsById, refresh: refreshRequests } = useJobRequests(params.jobId);
+  const { byId: requestsById, refresh: refreshRequests } = useJobRequests(
+    jobId,
+    directThreadId
+  );
+
+  // The direct thread's own row, for working out who the other person is when
+  // there is no job to read it from.
+  const [thread, setThread] = useState<DirectThread | null>(null);
+  useEffect(() => {
+    if (!directThreadId) return;
+    let active = true;
+    fetchDirectThread(directThreadId).then(({ data }) => {
+      if (active) setThread(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [directThreadId]);
 
   const recorder = useVoiceRecorder();
 
@@ -110,10 +147,14 @@ export function ChatScreen() {
 
   async function handleSendVoice() {
     const clip = recorder.previewClip;
-    if (!user || !clip) return;
+    // Chat media is stored under `{jobId}/{userId}/…` and its storage policies
+    // authorise on that job — a direct thread has no job id to key a path on,
+    // so attachments stay job conversations only. The composer hides both
+    // controls there; this is the guard behind them.
+    if (!user || !clip || !jobId) return;
     setSending(true);
     const { url, error: uploadError } = await uploadChatAudio(
-      params.jobId,
+      jobId as string,
       user.id,
       clip.uri
     );
@@ -128,7 +169,7 @@ export function ChatScreen() {
     }
 
     const { data, error } = await sendMessage({
-      jobId: params.jobId,
+      target,
       senderId: user.id,
       content: '',
       audioUrl: url,
@@ -147,9 +188,11 @@ export function ChatScreen() {
   const listRef = useRef<FlatList>(null);
 
   const counterpartyId = useMemo(() => {
-    if (!job || !user) return null;
+    if (!user) return null;
+    if (thread) return otherParticipant(thread, user.id);
+    if (!job) return null;
     return resolveOtherId(job, user.id);
-  }, [job, user]);
+  }, [job, thread, user]);
 
   // A job where the client is also the assigned worker (e.g. bid on your own
   // job), or a job with no resolvable second party at all (no one assigned) —
@@ -233,7 +276,7 @@ export function ChatScreen() {
     setReplyTo(null);
     setSending(true);
     const { data, error } = await sendMessage({
-      jobId: params.jobId,
+      target,
       senderId: user.id,
       content,
       replyToId: quoted?.id ?? null,
@@ -321,16 +364,22 @@ export function ChatScreen() {
   // message type — text, photo or voice.
   const messageMenuItems: ActionSheetItem[] = menuTarget
     ? [
-        {
-          key: 'react',
-          label: 'React',
-          icon: 'happy-outline',
-          onPress: () => {
-            const id = menuTarget.id;
-            setMenuTarget(null);
-            setReactionTarget(id);
-          },
-        },
+        // Reactions are stored per job (message_reactions.job_id), so they are
+        // only offered in a job conversation.
+        ...(jobId
+          ? [
+              {
+                key: 'react',
+                label: 'React',
+                icon: 'happy-outline' as const,
+                onPress: () => {
+                  const id = menuTarget.id;
+                  setMenuTarget(null);
+                  setReactionTarget(id);
+                },
+              },
+            ]
+          : []),
         {
           key: 'reply',
           label: 'Reply',
@@ -375,22 +424,25 @@ export function ChatScreen() {
     if (error) await alertAsync('Could not unsend', error.message);
   }
 
-  async function confirmDecline(request: JobRequest) {
-    const ok = await confirmAsync({
-      title: 'Decline this request?',
-      message: 'No job will be created. This cannot be undone.',
-      confirmText: 'Decline',
-      cancelText: 'Cancel',
-      destructive: true,
-    });
-    if (ok) await respondToRequest(request, 'decline');
+  /**
+   * Accept and decline both settle a negotiation for good — accept creates a
+   * real assigned job, decline ends the offer — so each goes through the
+   * in-app confirmation rather than firing on a single tap. The confirm button
+   * disables itself while the RPC is in flight, so a second tap cannot send a
+   * second response.
+   */
+  async function confirmPendingResponse() {
+    const pending = confirmResponse;
+    if (!pending) return;
+    await respondToRequest(pending.request, pending.action);
+    setConfirmResponse(null);
   }
 
   async function handleTemplate(template: string) {
     if (!user || sending) return;
     setSending(true);
     const { data, error } = await sendMessage({
-      jobId: params.jobId,
+      target,
       senderId: user.id,
       content: template,
     });
@@ -403,12 +455,14 @@ export function ChatScreen() {
   }
 
   async function handleSelectReaction(emoji: string) {
-    if (!user || !reactionTarget) return;
+    // message_reactions is keyed by job, so reactions are a job-conversation
+    // feature; the React menu item is hidden in a direct thread.
+    if (!user || !reactionTarget || !jobId) return;
     const messageId = reactionTarget;
     setReactionTarget(null);
     const { error } = await setReaction({
       messageId,
-      jobId: params.jobId,
+      jobId: jobId as string,
       userId: user.id,
       emoji,
     });
@@ -433,10 +487,10 @@ export function ChatScreen() {
   }
 
   async function sendPhoto(asset: ImagePicker.ImagePickerAsset) {
-    if (!user) return;
+    if (!user || !jobId) return; // See handleSendVoice for why.
     setSending(true);
     const { url, error: uploadError } = await uploadChatPhoto(
-      params.jobId,
+      jobId as string,
       user.id,
       asset
     );
@@ -449,7 +503,7 @@ export function ChatScreen() {
       return;
     }
     const { data, error } = await sendMessage({
-      jobId: params.jobId,
+      target,
       senderId: user.id,
       content: '',
       imageUrl: url,
@@ -519,7 +573,7 @@ export function ChatScreen() {
                   hireWorkerName: counterparty.full_name ?? 'this worker',
                   // Post the request into THIS conversation rather than
                   // letting the server pick a thread for us.
-                  threadJobId: params.jobId,
+                  threadJobId: jobId,
                 })
               }
               hitSlop={8}
@@ -586,8 +640,12 @@ export function ChatScreen() {
                       isLatest={latestMessageIdByRequest[item.job_request_id] === item.id}
                       currentUserId={user?.id ?? ''}
                       busy={respondingId === item.job_request_id}
-                      onAccept={() => request && respondToRequest(request, 'accept')}
-                      onDecline={() => request && confirmDecline(request)}
+                      onAccept={() =>
+                        request && setConfirmResponse({ request, action: 'accept' })
+                      }
+                      onDecline={() =>
+                        request && setConfirmResponse({ request, action: 'decline' })
+                      }
                       onCounter={() => request && setCounterTarget(request)}
                       onOpenJob={
                         request?.created_job_id
@@ -702,6 +760,7 @@ export function ChatScreen() {
               onStopRecording={handleStopRecording}
               onSendVoice={handleSendVoice}
               onDiscardVoice={recorder.discard}
+              allowAttachments={!!jobId}
             />
           </>
         )}
@@ -748,10 +807,30 @@ export function ChatScreen() {
         confirmText="Send counter"
         onCancel={() => setCounterTarget(null)}
         onSubmit={(cents) => {
-          const target = counterTarget;
+          const pending = counterTarget;
           setCounterTarget(null);
-          if (target) respondToRequest(target, 'counter', cents);
+          if (pending) respondToRequest(pending, 'counter', cents);
         }}
+      />
+
+      <ConfirmDialog
+        visible={!!confirmResponse}
+        title={
+          confirmResponse?.action === 'accept'
+            ? `Accept this ${formatBudget(confirmResponse.request.amount_cents)} job?`
+            : 'Decline this offer?'
+        }
+        message={
+          confirmResponse?.action === 'accept'
+            ? 'The job is created and assigned to you straight away. It moves into My Jobs and can’t be undone here.'
+            : 'No job will be created. This can’t be undone.'
+        }
+        confirmText={confirmResponse?.action === 'accept' ? 'Accept job' : 'Decline'}
+        cancelText="Cancel"
+        destructive={confirmResponse?.action === 'decline'}
+        loading={!!confirmResponse && respondingId === confirmResponse.request.id}
+        onConfirm={confirmPendingResponse}
+        onCancel={() => setConfirmResponse(null)}
       />
     </SafeAreaView>
   );

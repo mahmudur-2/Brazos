@@ -104,6 +104,22 @@ export async function fetchCurrentUserBanned(userId: string) {
   return { data: data?.banned === true, error };
 }
 
+/**
+ * Whether another account is in good standing — the one thing about someone
+ * else's moderation state a client may ask for. `banned` is not in the public
+ * column list (phase29 revoked it), so this narrow SECURITY DEFINER answer is
+ * the only way to know, and it returns a boolean rather than the reason.
+ *
+ * Treated as "active" when the RPC is missing (an unmigrated database): the
+ * server refuses the action either way, so a false negative here would only
+ * hide a working button.
+ */
+export async function isProfileActive(userId: string) {
+  const { data, error } = await supabase.rpc('is_profile_active', { p_user: userId });
+  if (error) return { data: isMissingRpc(error), error };
+  return { data: data === true, error: null };
+}
+
 /** Fetch a set of profiles by id (for resolving counterparty names in lists). */
 export async function fetchProfilesByIds(ids: string[]) {
   const unique = Array.from(new Set(ids.filter(Boolean)));

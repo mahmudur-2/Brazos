@@ -15,6 +15,7 @@ import { useAuth } from '../hooks/useAuth';
 import {
   completionPercent,
   fetchProfileById,
+  isProfileActive,
   type Profile,
 } from '../lib/profiles';
 import { canRehireWorker, JOB_CATEGORY_LABELS } from '../lib/jobs';
@@ -43,11 +44,22 @@ export function WorkerProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  // Whether this viewer may send this worker a direct offer. The rule is the
-  // database's, not the UI's: create_job_request() only accepts a request to
-  // a worker who has already completed a job for the caller, because the
-  // negotiation has to live in a conversation thread the two already share.
-  const [canOffer, setCanOffer] = useState(false);
+  /**
+   * Whether these two have already completed a job together. This only
+   * chooses the WORDING now — before phase36 it decided whether a direct
+   * offer was possible at all, which is what made one worker's profile offer
+   * "Send an offer" and another's a "Post a job" consolation. Any signed-in
+   * user can offer any active worker work; the pair simply gets no shared
+   * conversation to post into until they have one, and phase36 creates a
+   * direct thread for exactly that case.
+   */
+  const [workedTogether, setWorkedTogether] = useState(false);
+  /**
+   * Banned/suspended accounts can't be transacted with. `banned` is not
+   * publicly readable (phase29), so this asks the narrow RPC instead. Starts
+   * true so the action doesn't flicker out and back in for the normal case.
+   */
+  const [recipientActive, setRecipientActive] = useState(true);
 
   // Guards against both unmount and params.workerId changing again before a
   // request resolves — set true at the start of each effect run, false on
@@ -82,7 +94,10 @@ export function WorkerProfileScreen() {
     if (!user || isSelf) return;
     let active = true;
     canRehireWorker(user.id, params.workerId).then(({ data }) => {
-      if (active) setCanOffer(data);
+      if (active) setWorkedTogether(data);
+    });
+    isProfileActive(params.workerId).then(({ data }) => {
+      if (active) setRecipientActive(data);
     });
     return () => {
       active = false;
@@ -90,6 +105,12 @@ export function WorkerProfileScreen() {
   }, [user, isSelf, params.workerId]);
 
   const name = profile?.full_name ?? params.workerName ?? 'Worker';
+  // Headings address the person, so they use the first name the way a message
+  // to them would; the button stays the same in both cases.
+  const firstName = name.trim().split(/\s+/)[0] || name;
+  // Signed in, not looking at yourself, and the other account is in good
+  // standing. No completed-job history required — that is the whole fix.
+  const canOffer = !!user && !isSelf && recipientActive;
   const ratingCount = profile?.rating_count ?? 0;
   const completion = completionPercent(profile?.completion_rate);
 
@@ -163,44 +184,31 @@ export function WorkerProfileScreen() {
             )}
           </Card>
 
-          {!isSelf &&
-            (canOffer ? (
-              <Card style={styles.hireCard}>
-                <Text style={styles.hireTitle}>Work with {name} again</Text>
-                <Text style={styles.hireText}>
-                  Send {name} a job with a price. It arrives as a request in
-                  your existing conversation — they can accept, decline, or
-                  suggest a different price before anything is booked.
-                </Text>
-                <Button
-                  title="Send an offer"
-                  icon="paper-plane-outline"
-                  onPress={() =>
-                    navigation.navigate('PostJob', {
-                      hireWorkerId: params.workerId,
-                      hireWorkerName: profile?.full_name ?? params.workerName ?? 'this worker',
-                    })
-                  }
-                  style={styles.hireAction}
-                />
-              </Card>
-            ) : (
-              <Card style={styles.hireCard}>
-                <Text style={styles.hireTitle}>Want {name} on a job?</Text>
-                <Text style={styles.hireText}>
-                  Direct offers open up once you’ve completed a job together.
-                  For now, post the job — {name} can bid on it like any other
-                  worker, and you pick who gets it.
-                </Text>
-                <Button
-                  title="Post a job"
-                  variant="secondary"
-                  icon="briefcase-outline"
-                  onPress={() => navigation.navigate('PostJob')}
-                  style={styles.hireAction}
-                />
-              </Card>
-            ))}
+          {canOffer && (
+            <Card style={styles.hireCard}>
+              <Text style={styles.hireTitle}>
+                {workedTogether
+                  ? `Work with ${firstName} again`
+                  : `Send ${firstName} a job offer`}
+              </Text>
+              <Text style={styles.hireText}>
+                {workedTogether
+                  ? `Send ${firstName} a job with a price. It arrives as an offer in your existing conversation — they can accept, decline, or suggest a different price before anything is booked.`
+                  : `Send ${firstName} a job with a price. It goes to them privately — nobody else sees it, and it never appears in open jobs. They can accept, decline, or suggest a different price before anything is booked.`}
+              </Text>
+              <Button
+                title="Send an offer"
+                icon="paper-plane-outline"
+                onPress={() =>
+                  navigation.navigate('PostJob', {
+                    hireWorkerId: params.workerId,
+                    hireWorkerName: profile?.full_name ?? params.workerName ?? 'this worker',
+                  })
+                }
+                style={styles.hireAction}
+              />
+            </Card>
+          )}
 
           <PastWork workerId={params.workerId} />
         </ScrollView>

@@ -42,6 +42,14 @@ type ChatComposerProps = {
    * force all three controls to render for visual comparison on web.
    */
   showCameraAndMic?: boolean;
+  /**
+   * Whether photo and voice attachments are possible in this thread at all.
+   * Chat media is stored under `{jobId}/{userId}/…` and its storage policies
+   * authorise on that job, so a direct thread (phase36 — a conversation with
+   * no job) has no path to key an upload on. Text and offer cards work there;
+   * attachments are hidden rather than offered and then failing.
+   */
+  allowAttachments?: boolean;
 };
 
 export function ChatComposer({
@@ -59,6 +67,7 @@ export function ChatComposer({
   onSendVoice,
   onDiscardVoice,
   showCameraAndMic = Platform.OS !== 'web',
+  allowAttachments = true,
 }: ChatComposerProps) {
   const isArming = recorderPhase === 'pending';
   const isRecording = recorderPhase === 'recording';
@@ -105,7 +114,7 @@ export function ChatComposer({
 
   return (
     <View style={styles.row}>
-      {showCameraAndMic && (
+      {allowAttachments && showCameraAndMic && (
         <Pressable
           onPress={onPickCamera}
           style={styles.iconBtn}
@@ -116,16 +125,18 @@ export function ChatComposer({
         </Pressable>
       )}
 
-      <Pressable
-        onPress={onPickLibrary}
-        style={styles.iconBtn}
-        hitSlop={6}
-        disabled={isArming || isRecording}
-      >
-        <Ionicons name="image-outline" size={ICON_GLYPH_SIZE} color={colors.primary} />
-      </Pressable>
+      {allowAttachments && (
+        <Pressable
+          onPress={onPickLibrary}
+          style={styles.iconBtn}
+          hitSlop={6}
+          disabled={isArming || isRecording}
+        >
+          <Ionicons name="image-outline" size={ICON_GLYPH_SIZE} color={colors.primary} />
+        </Pressable>
+      )}
 
-      {showCameraAndMic && (
+      {allowAttachments && showCameraAndMic && (
         <Pressable
           onPress={isRecording ? onStopRecording : onMicTap}
           style={[styles.iconBtn, (isArming || isRecording) && styles.iconBtnActive]}

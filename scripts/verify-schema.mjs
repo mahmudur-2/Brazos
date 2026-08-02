@@ -381,6 +381,41 @@ const MIGRATIONS = [
         })],
     ],
   },
+  {
+    file: 'phase36_direct_offer_threads.sql',
+    checks: [
+      ['direct_threads table', () => checkColumn('direct_threads', 'id')],
+      ['direct_threads.user_a', () => checkColumn('direct_threads', 'user_a')],
+      ['direct_threads.user_b', () => checkColumn('direct_threads', 'user_b')],
+      ['direct_threads.user_a_read_at', () =>
+        checkColumn('direct_threads', 'user_a_read_at')],
+      ['messages.direct_thread_id', () => checkColumn('messages', 'direct_thread_id')],
+      ['job_requests.direct_thread_id', () =>
+        checkColumn('job_requests', 'direct_thread_id')],
+      ['job_requests.videos', () => checkColumn('job_requests', 'videos')],
+      ['conversations.direct_thread_id', () =>
+        checkColumn('conversations', 'direct_thread_id')],
+      ['conversations.my_read_at', () => checkColumn('conversations', 'my_read_at')],
+      ['rpc mark_direct_thread_read()', () =>
+        checkRpc('mark_direct_thread_read', { p_thread_id: ZERO_UUID })],
+      // The 11-argument signature only resolves once phase36 has replaced
+      // phase18's 10-argument one, so this distinguishes new from old.
+      ['rpc create_job_request() takes p_videos', () =>
+        checkRpc('create_job_request', {
+          p_worker_id: ZERO_UUID,
+          p_title: '',
+          p_description: '',
+          p_category: 'other',
+          p_location: '',
+          p_amount_cents: 1,
+          p_photos: [],
+          p_lat: null,
+          p_lng: null,
+          p_thread_job_id: null,
+          p_videos: [],
+        })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

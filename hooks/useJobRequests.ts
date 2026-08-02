@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchThreadRequests, type JobRequest } from '../lib/jobRequests';
+import { chatTargetKey, type ChatTarget } from '../lib/messages';
 
 /**
  * Live hire-request state for one conversation thread.
@@ -10,8 +11,19 @@ import { fetchThreadRequests, type JobRequest } from '../lib/jobRequests';
  * it's been settled), which lives on job_requests. This keeps that state in
  * sync so a card can't offer a button the server would reject.
  */
-export function useJobRequests(threadJobId: string) {
+export function useJobRequests(jobId: string | null, directThreadId: string | null) {
   const [requests, setRequests] = useState<JobRequest[]>([]);
+
+  const target = useMemo<ChatTarget>(
+    () => (jobId ? { jobId } : { directThreadId: directThreadId as string }),
+    [jobId, directThreadId]
+  );
+  const targetKey = chatTargetKey(target);
+  // job_requests names its thread columns differently from messages, so the
+  // realtime filter is built here rather than reusing chatTargetFilter().
+  const targetFilter = jobId
+    ? `thread_job_id=eq.${jobId}`
+    : `direct_thread_id=eq.${directThreadId}`;
 
   // See hooks/useOpenJobs.ts for why the channel topic needs both a
   // per-instance id and a per-effect-run counter.
@@ -19,9 +31,9 @@ export function useJobRequests(threadJobId: string) {
   const runRef = useRef(0);
 
   const refresh = useCallback(async () => {
-    const { data } = await fetchThreadRequests(threadJobId);
+    const { data } = await fetchThreadRequests(target);
     setRequests(data);
-  }, [threadJobId]);
+  }, [target]);
 
   useEffect(() => {
     refresh();
@@ -32,14 +44,14 @@ export function useJobRequests(threadJobId: string) {
   // the screen was reopened.
   useEffect(() => {
     const channel = supabase
-      .channel(`job-requests:${threadJobId}:${instanceId}:${runRef.current++}`)
+      .channel(`job-requests:${targetKey}:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'job_requests',
-          filter: `thread_job_id=eq.${threadJobId}`,
+          filter: targetFilter,
         },
         () => refresh()
       )
@@ -48,7 +60,7 @@ export function useJobRequests(threadJobId: string) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [threadJobId, instanceId, refresh]);
+  }, [targetKey, targetFilter, instanceId, refresh]);
 
   const byId = useMemo(() => {
     const map: Record<string, JobRequest> = {};

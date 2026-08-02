@@ -1,14 +1,33 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { fetchMessages, resolveMessageMedia, type Message } from '../lib/messages';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import {
+  chatTargetFilter,
+  chatTargetKey,
+  fetchMessages,
+  resolveMessageMedia,
+  type ChatTarget,
+  type Message,
+} from '../lib/messages';
 import { supabase } from '../lib/supabase';
 
 /**
- * Loads a job's chat thread and keeps it live via Supabase realtime, so new
+ * Loads a conversation and keeps it live via Supabase realtime, so new
  * messages from either party appear instantly without a refresh. Realtime
  * requires the `messages` table to be in the supabase_realtime publication
  * (see phase8 SQL); without it, the initial fetch still works.
+ *
+ * Works for both kinds of thread — a job's conversation and a direct thread
+ * between two people (phase36) — since the only difference is which column
+ * selects the rows.
  */
-export function useChat(jobId: string) {
+export function useChat(jobId: string | null, directThreadId: string | null) {
+  // Rebuilt from the two primitive ids rather than taken as an object, so a
+  // caller re-rendering doesn't restart the subscription on every render.
+  const target = useMemo<ChatTarget>(
+    () => (jobId ? { jobId } : { directThreadId: directThreadId as string }),
+    [jobId, directThreadId]
+  );
+  const targetKey = chatTargetKey(target);
+  const targetFilter = chatTargetFilter(target);
   const instanceId = useId();
   const runRef = useRef(0);
   const loadRef = useRef(0);
@@ -19,12 +38,12 @@ export function useChat(jobId: string) {
   const refresh = useCallback(async () => {
     const load = ++loadRef.current;
     setError(null);
-    const { data, error } = await fetchMessages(jobId);
+    const { data, error } = await fetchMessages(target);
     if (load !== loadRef.current) return;
     if (error) setError(error.message);
     else setMessages(data);
     setLoading(false);
-  }, [jobId]);
+  }, [target]);
 
   useEffect(() => {
     setLoading(true);
@@ -37,14 +56,14 @@ export function useChat(jobId: string) {
   useEffect(() => {
     let active = true;
     const channel = supabase
-      .channel(`messages:job:${jobId}:${instanceId}:${runRef.current++}`)
+      .channel(`messages:${targetKey}:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         {
           event: 'INSERT',
           schema: 'public',
           table: 'messages',
-          filter: `job_id=eq.${jobId}`,
+          filter: targetFilter,
         },
         async (payload) => {
           const message = await resolveMessageMedia(payload.new as Message);
@@ -63,7 +82,7 @@ export function useChat(jobId: string) {
           event: 'UPDATE',
           schema: 'public',
           table: 'messages',
-          filter: `job_id=eq.${jobId}`,
+          filter: targetFilter,
         },
         async (payload) => {
           const message = await resolveMessageMedia(payload.new as Message);
@@ -77,7 +96,7 @@ export function useChat(jobId: string) {
       active = false;
       supabase.removeChannel(channel);
     };
-  }, [instanceId, jobId]);
+  }, [instanceId, targetKey, targetFilter]);
 
   /** Append a just-sent message locally so the sender sees it immediately. */
   const addLocal = useCallback((message: Message) => {

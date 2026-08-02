@@ -1,9 +1,36 @@
 import { supabase } from './supabase';
 import { resolveChatMediaUrl } from './storage';
 
+/**
+ * Which conversation a chat screen, message or read receipt belongs to.
+ *
+ * A thread is either a job's conversation (every conversation before phase36)
+ * or a direct thread between two people that exists without any job — the
+ * thing a first-time private offer needs, since there is no shared job to hang
+ * it on yet. Exactly one of the two is ever set; the shape makes the other
+ * impossible to pass by accident.
+ */
+export type ChatTarget =
+  | { jobId: string; directThreadId?: undefined }
+  | { jobId?: undefined; directThreadId: string };
+
+/** A stable string for the target, for realtime channel names and React keys. */
+export function chatTargetKey(target: ChatTarget): string {
+  return target.jobId ? `job:${target.jobId}` : `direct:${target.directThreadId}`;
+}
+
+/** The `column=eq.value` realtime filter that selects this thread's rows. */
+export function chatTargetFilter(target: ChatTarget): string {
+  return target.jobId
+    ? `job_id=eq.${target.jobId}`
+    : `direct_thread_id=eq.${target.directThreadId}`;
+}
+
 export type Message = {
   id: string;
-  job_id: string;
+  /** Null on a direct-thread message — see ChatTarget. */
+  job_id: string | null;
+  direct_thread_id: string | null;
   sender_id: string;
   content: string;
   image_url: string | null;
@@ -61,7 +88,7 @@ export const CHAT_TEMPLATES = [
 ] as const;
 
 const MESSAGE_COLUMNS =
-  'id, job_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, request_event, request_amount_cents, unsent_at, created_at';
+  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, request_event, request_amount_cents, unsent_at, created_at';
 
 /** Replace stored private-media references with short-lived display URLs. */
 export async function resolveMessageMedia(message: Message): Promise<Message> {
@@ -72,12 +99,15 @@ export async function resolveMessageMedia(message: Message): Promise<Message> {
   return { ...message, image_url: imageUrl, audio_url: audioUrl };
 }
 
-/** All messages for a job, oldest first. */
-export async function fetchMessages(jobId: string) {
+/** All messages in one conversation, oldest first. */
+export async function fetchMessages(target: ChatTarget) {
   const { data, error } = await supabase
     .from('messages')
     .select(MESSAGE_COLUMNS)
-    .eq('job_id', jobId)
+    .eq(
+      target.jobId ? 'job_id' : 'direct_thread_id',
+      target.jobId ?? target.directThreadId
+    )
     .order('created_at', { ascending: true });
 
   if (error) return { data: [] as Message[], error };
@@ -88,7 +118,7 @@ export async function fetchMessages(jobId: string) {
 }
 
 export type NewMessageInput = {
-  jobId: string;
+  target: ChatTarget;
   senderId: string;
   content: string;
   imageUrl?: string | null;
@@ -103,7 +133,8 @@ export async function sendMessage(input: NewMessageInput) {
   const { data, error } = await supabase
     .from('messages')
     .insert({
-      job_id: input.jobId,
+      job_id: input.target.jobId ?? null,
+      direct_thread_id: input.target.directThreadId ?? null,
       sender_id: input.senderId,
       content: input.content,
       image_url: input.imageUrl ?? null,
