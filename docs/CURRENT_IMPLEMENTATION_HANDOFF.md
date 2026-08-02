@@ -100,12 +100,13 @@ can be scoped at all. Do not infer a meaning for it from surrounding code.
 ## Phase checklist
 
 - [x] Read requirements PDF in full (prior turn in this conversation)
-- [x] Create this handoff, commit it
+- [x] Create this handoff, commit it — `a734a15`
 - [x] Targeted repository mapping (below)
-- [x] Subphase A — BRAZOS confirmation dialog (bid + delete)
-- [x] Subphase B — own-profile action polish
-- [x] Subphase C — Home/Map/job-list labels & navigation
-- [x] Subphase D — ownership badge + bid-count wording (partial, see notes)
+- [x] Subphase A — BRAZOS confirmation dialog (bid + delete) — `5e3fc10`
+- [x] Subphase B — own-profile action polish — `40ea046`
+- [x] Subphase C — Home/Map/job-list labels & navigation — `c174de3`
+- [x] Subphase D — ownership badge + bid-count wording (partial, see notes) — `713c6fa`
+- [x] **This bounded pass is complete.** Working tree is clean at `713c6fa`.
 - [ ] **Everything in "Deferred requirements" below — next session, only
       after explicit user go-ahead per CLAUDE.md's migration/backend rules**
 
@@ -213,24 +214,35 @@ everything Subphase A needs.
 
 ### Completed work from this session
 
-See "Commits" at the bottom — updated after each subphase lands.
+All four permitted subphases (A–D) are implemented, validated, and
+committed. See "Commits" at the bottom for hashes. Working tree is clean
+at `713c6fa`. No further implementation work is in flight or partially
+done.
 
 ### Exact next action for the post-reset Claude session
 
 1. Read this file in full.
 2. Run `git log --oneline -8` and `git status` to confirm the tree matches
-   what's recorded here.
-3. If all of Subphases A–D show committed below with no "known failure"
-   noted, the bounded pass is done — the next action is to get explicit
-   user direction on which deferred requirement (1, 2/11, 4, 7, 8, or the
+   what's recorded here (should be clean, `713c6fa` as the tip).
+3. This bounded pass is done. The next action is to get explicit user
+   direction on which deferred requirement (1, 2/11, 4, 7, 8, or the
    hotspot-redirect half of 12) to scope next, since every one of them
    needs a real design/architecture decision the user hasn't made yet
    (e.g. requirement 1 needs a decision on video storage/compression;
    requirement 2/11 needs a decision on what the single canonical job
-   data shape actually is before any code changes).
+   data shape actually is before any code changes). Also surface to the
+   user: requirement 3/9 appears to already be implemented as designed
+   (see that entry above) — worth a quick confirmation from the user
+   before assuming there's nothing left to do there.
 4. Do **not** start any item in "Deferred requirements" without the user
    explicitly re-authorizing it in a new message — this session's
    instructions were explicit that those are out of bounds here.
+5. If the user wants general-open-job-card bid counts (part of
+   requirement 12/Subphase D, skipped this session — see "Risks and
+   blockers"), that needs a new batched RPC or a materialized count
+   column — a migration, which requires the user's explicit sign-off
+   per CLAUDE.md's Supabase rules (write the SQL, hand it over, never
+   run it against production directly).
 
 ## Deferred requirements (explicitly out of scope this session)
 
@@ -253,18 +265,26 @@ Per the user's instructions, none of the following were started:
 | Command | When | Result |
 |---|---|---|
 | `git status` / `git rev-parse HEAD` | Session start | Clean, `mainexpo`, `77d6ce8` |
-| `npm run lint` | After Subphase A | *(recorded below once run)* |
-| `npm run lint` | After Subphase B | *(recorded below once run)* |
-| `npm run lint` | After Subphase C | *(recorded below once run)* |
-| `npm run lint` | After Subphase D | *(recorded below once run)* |
+| `npm run lint` (`tsc --noEmit --noUnusedLocals --noUnusedParameters`) | After Subphase A | Clean, no errors |
+| `npm run lint` | After Subphase B | Clean, no errors |
+| `npm run lint` | After Subphase C | Clean, no errors (one fix needed mid-subphase: a cross-tab `navigation.getParent()?.navigate(...)` call in MapScreen needed the same untyped-cast pattern `useJobOwnerActions.ts`'s `onEdit` already uses, since the two-arg `navigate` overload doesn't resolve across stacks) |
+| `npm run lint` | After Subphase D | Clean, no errors |
+| `npm test` (`node --test tests/*.test.mjs`) | After Subphase D | 14 pass, 1 fail — the pre-existing `tests/pwa.test.mjs` config.js-version failure documented below, unrelated to any file this session touched |
+| `git status` | After every subphase commit | Clean each time before starting the next subphase |
 
 No native build, no Supabase schema verification, no full `npm run verify`
 was run — none of this session's changes touch native modules, config, or
 the database, so those checks would not exercise anything that changed.
 **Nothing in this session has been manually tested on a real iPhone/
 Android device or simulator** — that remains outstanding for every
-Subphase A–D change (dialog appearance, button sizing on small iPhone
-widths, Android hardware-back on the new dialog).
+Subphase A–D change, in particular:
+- `ConfirmDialog` appearance/backdrop/Android hardware-back behavior
+- Button `sm` size touch-target feel on a small iPhone (SE-class width)
+- Home screen's reordered worker section spacing
+- Map screen's new header-right "See All Jobs" link not colliding with
+  the title or the map controls below it on a small width
+- The "Your job" badge's wrap/truncation behavior next to a long
+  category+location meta line
 
 ## Known failure (pre-existing, unrelated to this session)
 
@@ -277,4 +297,11 @@ per CLAUDE.md and are deliberately left alone. Not touched this session.
 
 | Hash | Subject |
 |---|---|
-| *(pending)* | docs: add BRAZOS implementation handoff |
+| `a734a15` | docs: add BRAZOS implementation handoff |
+| `5e3fc10` | feat: add BRAZOS marketplace confirmation dialog |
+| `40ea046` | polish: improve own-profile actions |
+| `c174de3` | polish: clarify job discovery navigation |
+| `713c6fa` | feat: show job ownership and bid status |
+
+Baseline was `77d6ce8`. Tip of `mainexpo` after this session is `713c6fa`.
+Working tree is clean.
