@@ -341,3 +341,61 @@ test('direct job offers stay private and server-authorised', () => {
   // what a user can read.
   assert.match(phase36, /create view public\.conversations\s+with \(security_invoker = true\)/i);
 });
+
+test('profile reviews are readable without widening the reviews policy', () => {
+  const phase37 = read('supabase/phase37_profile_reviews_and_photos.sql');
+  const phase6 = read('supabase/phase6_reviews_and_storage.sql');
+
+  // The party-scoped SELECT policy is the reason a reader needs a function at
+  // all; phase37 must not relax it.
+  assert.match(
+    phase6,
+    /create policy "reviews_select_party"[\s\S]*?reviewer_id = auth\.uid\(\) or reviewee_id = auth\.uid\(\)/i
+  );
+  assert.doesNotMatch(phase37, /create policy "reviews_select/i);
+  assert.doesNotMatch(phase37, /grant select on public\.reviews/i);
+
+  // Both readers are security definer with a fixed search_path, require a
+  // signed-in caller, and are granted only to authenticated.
+  for (const fn of ['profile_reviews', 'profile_review_summary']) {
+    const decl = 'create or replace function public\\.' + fn + '\\(';
+    assert.match(
+      phase37,
+      new RegExp(
+        decl + '[\\s\\S]*?security definer[\\s\\S]*?set search_path = public, pg_temp',
+        'i'
+      )
+    );
+    assert.match(
+      phase37,
+      new RegExp('revoke all on function public\\.' + fn + '\\([^)]*\\) from public, anon;', 'i')
+    );
+    assert.match(
+      phase37,
+      new RegExp('grant execute on function public\\.' + fn + '\\([^)]*\\) to authenticated;', 'i')
+    );
+  }
+  const readerBodies = phase37.match(/where r\.reviewee_id = p_user\s+and auth\.uid\(\) is not null/gi) ?? [];
+  assert.equal(readerBodies.length, 2, 'both readers must require a signed-in caller');
+
+  // A private job's title must not leak onto a public reputation page.
+  assert.doesNotMatch(phase37, /j\.title/i);
+
+  // create_review keeps every check phase29 gave it, plus a photo cap.
+  assert.match(phase37, /v_job\.status <> 'completed'/i);
+  assert.match(phase37, /Review parties are invalid/i);
+  assert.match(phase37, /p_rating not between 1 and 5/i);
+  assert.match(phase37, /jsonb_array_length\(v_photos\) > 5/i);
+  assert.match(
+    phase37,
+    /revoke all on function public\.create_review\(uuid, uuid, integer, text, jsonb\)\s+from public, anon;/i
+  );
+
+  // Review photos get their own owner-scoped storage prefix rather than
+  // loosening either existing job-photos branch.
+  assert.match(
+    phase37,
+    /create policy "job_photos_insert_review"[\s\S]*?\(storage\.foldername\(name\)\)\[1\] = 'reviews'[\s\S]*?\(storage\.foldername\(name\)\)\[2\] = auth\.uid\(\)::text/i
+  );
+  assert.doesNotMatch(phase37, /drop policy if exists "job_photos_insert" on/i);
+});

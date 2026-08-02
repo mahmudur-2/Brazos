@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -21,6 +28,7 @@ import {
 import { canRehireWorker, JOB_CATEGORY_LABELS } from '../lib/jobs';
 import type {
   PostJobRouteParamList,
+  ProfileReviewsRouteParamList,
   WorkerProfileRouteParamList,
 } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
@@ -37,7 +45,10 @@ import { colors, radius, spacing } from '../lib/theme';
 export function WorkerProfileScreen() {
   // PostJob is registered alongside WorkerProfile in every stack that can
   // reach this screen, so the offer button below can push it from any of them.
-  const navigation = useNavigation<NativeStackNavigationProp<PostJobRouteParamList>>();
+  const navigation =
+    useNavigation<
+      NativeStackNavigationProp<PostJobRouteParamList & ProfileReviewsRouteParamList>
+    >();
   const { params } = useRoute<RouteProp<WorkerProfileRouteParamList, 'WorkerProfile'>>();
   const { user } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -149,7 +160,26 @@ export function WorkerProfileScreen() {
                   </Text>
                   <VerificationBadge status={profile?.verification_status} />
                 </View>
-                <View style={styles.proofRow}>
+                {/* The rating row is the way into the full reviews list, so it
+                    behaves as a button — with a chevron saying so and enough
+                    vertical hit slop to clear 44pt without pushing the header
+                    layout around. */}
+                <Pressable
+                  onPress={() =>
+                    navigation.navigate('ProfileReviews', {
+                      userId: params.workerId,
+                      name,
+                    })
+                  }
+                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    ratingCount > 0
+                      ? `See all ${ratingCount} reviews for ${name}`
+                      : `See reviews for ${name}`
+                  }
+                  style={({ pressed }) => [styles.proofRow, pressed && styles.proofRowPressed]}
+                >
                   <Ionicons name="star" size={14} color={colors.star} />
                   <Text style={styles.proofStrong}>
                     {ratingCount > 0 ? (profile?.rating_avg ?? 0).toFixed(1) : 'New'}
@@ -159,13 +189,11 @@ export function WorkerProfileScreen() {
                       ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
                       : 'no reviews yet'}
                   </Text>
-                  {completion != null && (
-                    <>
-                      <Text style={styles.dot}>·</Text>
-                      <Text style={styles.proofMuted}>{completion}% completed</Text>
-                    </>
-                  )}
-                </View>
+                  <Ionicons name="chevron-forward" size={13} color={colors.textSubtle} />
+                </Pressable>
+                {completion != null && (
+                  <Text style={styles.proofMuted}>{completion}% completed</Text>
+                )}
               </View>
             </View>
 
@@ -273,6 +301,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
+    alignSelf: 'flex-start',
+  },
+  proofRowPressed: {
+    opacity: 0.6,
   },
   proofStrong: {
     fontSize: 14,
@@ -282,11 +314,6 @@ const styles = StyleSheet.create({
   proofMuted: {
     fontSize: 13,
     color: colors.textMuted,
-  },
-  dot: {
-    fontSize: 13,
-    color: colors.textSubtle,
-    marginHorizontal: 2,
   },
   bio: {
     fontSize: 15,

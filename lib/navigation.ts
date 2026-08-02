@@ -17,6 +17,7 @@ export type HomeStackParamList = {
     | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
+  ProfileReviews: { userId: string; name?: string };
   BrowseJobs: undefined;
   JobDetail: { job: OpenJob };
   /**
@@ -41,6 +42,7 @@ export type MyJobsStackParamList = {
     | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
+  ProfileReviews: { userId: string; name?: string };
 };
 
 export type MyJobsStackNavigation = NativeStackNavigationProp<MyJobsStackParamList>;
@@ -54,6 +56,7 @@ export type MessagesStackParamList = {
     | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
+  ProfileReviews: { userId: string; name?: string };
 };
 
 export type MessagesStackNavigation = NativeStackNavigationProp<MessagesStackParamList>;
@@ -71,6 +74,7 @@ export type MapStackParamList = {
     | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
+  ProfileReviews: { userId: string; name?: string };
 };
 
 export type MapStackNavigation = NativeStackNavigationProp<MapStackParamList>;
@@ -81,6 +85,7 @@ export type ProfileStackParamList = {
   AdminReports: undefined;
   NotificationSettings: undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
+  ProfileReviews: { userId: string; name?: string };
 };
 
 export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParamList>;
@@ -111,6 +116,13 @@ export type JobDetailRouteParamList = { JobDetail: { job: OpenJob } };
 // standalone route-param type rather than being tied to one parent stack.
 export type WorkerProfileRouteParamList = {
   WorkerProfile: { workerId: string; workerName?: string };
+};
+
+// Registered in every stack that can show a profile (including the Profile
+// tab, for the user's own reviews). Same standalone-type treatment as the
+// others: the screen needs its params and goBack(), not the whole stack.
+export type ProfileReviewsRouteParamList = {
+  ProfileReviews: { userId: string; name?: string };
 };
 
 // Only registered in HomeStack today, but given its own route-param type for

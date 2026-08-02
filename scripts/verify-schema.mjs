@@ -416,6 +416,26 @@ const MIGRATIONS = [
         })],
     ],
   },
+  {
+    file: 'phase37_profile_reviews_and_photos.sql',
+    checks: [
+      ['reviews.photos', () => checkColumn('reviews', 'photos')],
+      ['rpc profile_reviews()', () =>
+        checkRpc('profile_reviews', { p_user: ZERO_UUID, p_limit: 1, p_offset: 0 })],
+      ['rpc profile_review_summary()', () =>
+        checkRpc('profile_review_summary', { p_user: ZERO_UUID })],
+      // The 5-argument signature only resolves once phase37 has replaced
+      // phase29's 4-argument one, so this distinguishes new from old.
+      ['rpc create_review() takes p_photos', () =>
+        checkRpc('create_review', {
+          p_job_id: ZERO_UUID,
+          p_reviewee_id: ZERO_UUID,
+          p_rating: 5,
+          p_comment: null,
+          p_photos: [],
+        })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

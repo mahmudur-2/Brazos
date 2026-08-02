@@ -187,6 +187,20 @@ export async function uploadJobAttachment(userId: string, asset: ImagePickerAsse
   return uploadAsset(BUCKET, `postings/${userId}/${unique}.${ext}`, asset);
 }
 
+/**
+ * Upload a photo attached to a review. Same public `job-photos` bucket, under
+ * `reviews/<uid>/…` — a prefix phase37 adds its own narrow insert/delete
+ * policies for, because a review is written by EITHER party and so matches
+ * neither of phase29's existing branches (the poster's own `postings/` folder,
+ * or a job's assigned worker). Writable only by the account in the path.
+ */
+export async function uploadReviewPhoto(userId: string, asset: ImagePickerAsset) {
+  const rawExt = (asset.uri.split('?')[0].split('.').pop() ?? 'jpg').toLowerCase();
+  const ext = rawExt.length <= 4 ? rawExt : 'jpg';
+  const unique = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  return uploadAsset(BUCKET, `reviews/${userId}/${unique}.${ext}`, asset);
+}
+
 /** Container formats a picker can realistically hand back, mapped to the
  *  content type the object is stored with. Anything outside this list is
  *  refused before upload rather than stored with a guessed type. */

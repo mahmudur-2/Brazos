@@ -35,6 +35,7 @@ import { MapScreen } from './screens/MapScreen';
 import { CellJobsScreen } from './screens/CellJobsScreen';
 import { ProfileScreen } from './screens/ProfileScreen';
 import { WorkerProfileScreen } from './screens/WorkerProfileScreen';
+import { ProfileReviewsScreen } from './screens/ProfileReviewsScreen';
 import { WorkerSearchScreen } from './screens/WorkerSearchScreen';
 import { AdminReportsScreen } from './screens/AdminReportsScreen';
 import { NotificationSettingsScreen } from './screens/NotificationSettingsScreen';
@@ -158,6 +159,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="JobDetail" component={JobDetailScreen} />
       <HomeStack.Screen name="WorkerSearch" component={WorkerSearchScreen} />
       <HomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
+      <HomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </HomeStack.Navigator>
   );
 }
@@ -172,6 +174,7 @@ function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="Chat" component={ChatScreen} />
       <MyJobsStack.Screen name="PostJob" component={PostJobScreen} />
       <MyJobsStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
+      <MyJobsStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </MyJobsStack.Navigator>
   );
 }
@@ -183,6 +186,7 @@ function MessagesStackNavigator() {
       <MessagesStack.Screen name="Chat" component={ChatScreen} />
       <MessagesStack.Screen name="PostJob" component={PostJobScreen} />
       <MessagesStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
+      <MessagesStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </MessagesStack.Navigator>
   );
 }
@@ -197,6 +201,7 @@ function ProfileStackNavigator() {
         component={NotificationSettingsScreen}
       />
       <ProfileStack.Screen name="LegalDocument" component={LegalDocumentScreen} />
+      <ProfileStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </ProfileStack.Navigator>
   );
 }
@@ -209,6 +214,7 @@ function MapStackNavigator() {
       <MapStack.Screen name="JobDetail" component={JobDetailScreen} />
       <MapStack.Screen name="PostJob" component={PostJobScreen} />
       <MapStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
+      <MapStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </MapStack.Navigator>
   );
 }

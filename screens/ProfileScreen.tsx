@@ -442,6 +442,28 @@ export function ProfileScreen() {
             )}
             <Text style={styles.email}>{user?.email}</Text>
             <Text style={styles.roleNote}>{profileSummary}</Text>
+            {/* Same destination the rating row on someone else's profile
+                leads to, pointed at this account — so "what have people said
+                about me?" is answerable from your own profile too. */}
+            {!!profile?.rating_count && user && (
+              <Pressable
+                onPress={() =>
+                  navigation.navigate('ProfileReviews', {
+                    userId: user.id,
+                    name: profile.full_name ?? undefined,
+                  })
+                }
+                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={`See all ${profile.rating_count} reviews about you`}
+                style={({ pressed }) => [styles.reviewsLink, pressed && styles.reviewsLinkPressed]}
+              >
+                <Text style={styles.reviewsLinkText}>
+                  See {profile.rating_count === 1 ? 'your review' : 'all your reviews'}
+                </Text>
+                <Ionicons name="chevron-forward" size={13} color={colors.primary} />
+              </Pressable>
+            )}
           </View>
 
           <Card>
@@ -757,6 +779,20 @@ const styles = StyleSheet.create({
   roleNote: {
     fontSize: 13,
     color: colors.textMuted,
+  },
+  reviewsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    marginTop: spacing.sm,
+  },
+  reviewsLinkPressed: {
+    opacity: 0.6,
+  },
+  reviewsLinkText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.primary,
   },
   form: {
     gap: spacing.lg,
