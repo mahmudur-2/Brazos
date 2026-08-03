@@ -21,9 +21,11 @@ import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
+  findWorkers,
   interpretQuery,
-  searchWorkers,
-  WORKER_RESULT_LIMIT,
+  matchReasonText,
+  resultHeading,
+  type RankingMode,
   type WorkerMatch,
 } from '../lib/workerSearch';
 import type { HomeStackNavigation, WorkerSearchRouteParamList } from '../lib/navigation';
@@ -37,7 +39,9 @@ type SearchState =
   | { kind: 'idle' }
   | { kind: 'loading' }
   | { kind: 'error'; message: string }
-  | { kind: 'results'; matches: WorkerMatch[]; categories: string[] };
+  // `mode` is whatever actually ranked these rows, and only the lib decides how
+  // that reads on screen — see resultHeading().
+  | { kind: 'results'; matches: WorkerMatch[]; categories: string[]; mode: RankingMode };
 
 export function WorkerSearchScreen() {
   const navigation = useNavigation<HomeStackNavigation>();
@@ -68,7 +72,7 @@ export function WorkerSearchScreen() {
       setState({ kind: 'loading' });
 
       const categories = category ? [category] : interpretQuery(trimmed);
-      const { data, error } = await searchWorkers({
+      const { data, error, mode } = await findWorkers({
         query: trimmed,
         categories,
         excludeUserId: user?.id ?? null,
@@ -79,7 +83,7 @@ export function WorkerSearchScreen() {
         setState({ kind: 'error', message: error.message });
         return;
       }
-      setState({ kind: 'results', matches: data, categories });
+      setState({ kind: 'results', matches: data, categories, mode });
     },
     [user?.id]
   );
@@ -235,11 +239,7 @@ export function WorkerSearchScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <Text style={styles.resultCount}>
-              {state.matches.length === WORKER_RESULT_LIMIT
-                ? `Top ${WORKER_RESULT_LIMIT} matches`
-                : `${state.matches.length} ${
-                    state.matches.length === 1 ? 'match' : 'matches'
-                  }`}
+              {resultHeading(state.mode, state.matches.length)}
             </Text>
           }
           renderItem={({ item }) => (
@@ -264,9 +264,12 @@ function WorkerResultCard({
   match: WorkerMatch;
   onPress: () => void;
 }) {
-  const { profile, matchedCategories, completedInCategory } = match;
+  const { profile, matchedCategories } = match;
   const name = profile.full_name?.trim() || 'Worker';
   const ratingCount = profile.rating_count ?? 0;
+  // Whatever the ranking can actually support, or nothing at all. Never a
+  // claim about skill, availability or standing that isn't a stored count.
+  const reason = matchReasonText(match);
   // Falls back to what they advertise when the search was by name and nothing
   // intersected, so the card still says what this person does.
   const shownCategories = (
@@ -297,10 +300,9 @@ function WorkerResultCard({
             </Text>
           </View>
 
-          {completedInCategory > 0 && (
+          {reason && (
             <Text style={styles.experience} numberOfLines={1}>
-              {completedInCategory} similar {completedInCategory === 1 ? 'job' : 'jobs'}{' '}
-              completed
+              {reason}
             </Text>
           )}
         </View>

@@ -1,21 +1,40 @@
 import { supabase } from './supabase';
+import { JOB_CATEGORY_LABELS, type JobCategory } from './jobs';
 import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
-import { SKILL_CATEGORIES } from './skillCategories';
+import { SKILL_CATEGORIES, skillCategoryLabel } from './skillCategories';
 
 /**
  * Turning "I need someone to move a queen mattress up three flights" into a
  * ranked list of workers, using only evidence the database actually holds.
  *
- * This is deterministic keyword + category matching over `profiles`, then a
- * weighted rank over real reputation signals. It is NOT semantic search and
- * is deliberately never described as AI anywhere in the UI — nothing here
- * embeds, infers intent, or calls a model. The pieces are separated
- * (interpret -> fetch candidates -> score) so a semantic step could replace
- * interpretQuery() later without touching the rest.
+ * TWO RANKINGS LIVE HERE, and which one ran is always reported back to the UI:
+ *
+ *   1. findWorkers() asks the `worker-search` Edge Function (phase39) to rank
+ *      by meaning: the request is embedded with gte-small and compared against
+ *      one stored document per worker, built from the jobs they have actually
+ *      completed. Reported as mode 'semantic'.
+ *   2. searchWorkers() is the original deterministic keyword + category match,
+ *      unchanged, and is what runs whenever the server path is unavailable for
+ *      any reason at all. Reported as mode 'fallback'.
+ *
+ * The distinction is not cosmetic. Fallback results are ranked by string and
+ * category overlap and must never be presented as anything cleverer than that
+ * — resultHeading() is the single place that wording is decided, so a screen
+ * cannot accidentally label keyword matching as something it is not.
+ *
+ * WHY THE SERVER PATH EXISTS AT ALL (requirements PDF, page 8): `jobs.category`
+ * is the `job_category` enum while `profiles.categories` is the ten-key
+ * SKILL_CATEGORIES text[]. A request about boxes resolves to `packing`, and no
+ * job completed before phase23 is filed under it — so completedInCategory is
+ * structurally 0 for exactly the workers whose finished work is most relevant,
+ * and a bare category checkbox wins. No amount of keyword tuning fixes a
+ * vocabulary mismatch; the two sides have to be compared by meaning.
  *
  * What is deliberately NOT used, because the schema does not hold it:
  *   * distance / service area — `profiles` has no location column at all, and
  *     a job's free-text location is not comparable to anything on a worker.
+ *     This is why the search contract carries no such field: there is no real
+ *     data to put in it, and an estimate would be invented.
  *   * availability / calendars — not stored.
  *   * response time — the column exists but is null for essentially every
  *     account, so ranking on it would be ranking on nothing.
@@ -129,6 +148,25 @@ export function interpretQuery(query: string): string[] {
     .map((s) => s.key);
 }
 
+/** Which of the two rankings produced a result set. Never inferred — the UI is
+ *  told, so fallback results can be labelled honestly. */
+export type RankingMode = 'semantic' | 'fallback';
+
+/** Why the server put a worker in the list. Decided server-side from stored
+ *  evidence; the client only chooses the wording. */
+export type MatchReason =
+  | 'related_completed'
+  | 'similar_work'
+  | 'lists_category'
+  | 'general';
+
+const MATCH_REASONS: readonly string[] = [
+  'related_completed',
+  'similar_work',
+  'lists_category',
+  'general',
+];
+
 export type WorkerMatch = {
   profile: Profile;
   /** Intersection of what was searched for and what the worker advertises. */
@@ -137,6 +175,18 @@ export type WorkerMatch = {
   completedInCategory: number;
   completedTotal: number;
   score: number;
+  /**
+   * How close the worker's stored evidence is to the request, 0-1.
+   *
+   * Only ever set by the server ranking. The deterministic path leaves it
+   * null rather than deriving a number from keyword overlap — a made-up
+   * relevance figure would be indistinguishable from a real one on screen.
+   */
+  relevance?: number | null;
+  reason?: MatchReason | null;
+  /** Categories the worker's COMPLETED work is in, strongest first. Aggregate
+   *  counts only; no job title or caption ever crosses the wire. */
+  evidenceCategories?: string[];
 };
 
 // --- Scoring ---------------------------------------------------------------
@@ -310,4 +360,206 @@ export async function searchWorkers({
   enriched.sort((a, b) => b.score - a.score);
 
   return { data: enriched, error: null };
+}
+
+// --- Server ranking --------------------------------------------------------
+
+/** Past this, the wait is worse than a slightly weaker ranking. The Edge
+ *  Function's own budgets are lower, so this only catches a stalled network. */
+const SERVER_RANK_TIMEOUT_MS = 8000;
+
+/** One row of the `worker-search` contract. Everything the card needs and
+ *  nothing else — no vectors, no job text, no contact details. */
+type ServerMatch = {
+  workerId?: string;
+  fullName?: string | null;
+  avatarUrl?: string | null;
+  verificationStatus?: string | null;
+  ratingAvg?: number | null;
+  ratingCount?: number | null;
+  categories?: string[] | null;
+  matchedCategories?: string[] | null;
+  evidenceCategories?: string[] | null;
+  relatedCompleted?: number | null;
+  completedTotal?: number | null;
+  relevance?: number | null;
+  score?: number | null;
+  reason?: string | null;
+};
+
+/** Resolves to null instead of rejecting, so every failure shape — thrown,
+ *  rejected, or simply never answering — reaches the fallback the same way. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(null), ms);
+    const settle = (value: T | null) => {
+      clearTimeout(timer);
+      resolve(value);
+    };
+    promise.then(settle, () => settle(null));
+  });
+}
+
+function toWorkerMatch(row: ServerMatch): WorkerMatch | null {
+  if (!row?.workerId) return null;
+  return {
+    profile: {
+      id: row.workerId,
+      full_name: row.fullName ?? null,
+      avatar_url: row.avatarUrl ?? null,
+      verification_status: row.verificationStatus ?? null,
+      rating_avg: row.ratingAvg ?? null,
+      rating_count: row.ratingCount ?? null,
+      categories: row.categories ?? [],
+      // Not in the server contract, deliberately — a search result has no
+      // business carrying contact or moderation fields.
+      phone: null,
+      role: null,
+      is_admin: null,
+      banned: null,
+    },
+    matchedCategories: row.matchedCategories ?? [],
+    completedInCategory: row.relatedCompleted ?? 0,
+    completedTotal: row.completedTotal ?? 0,
+    score: typeof row.score === 'number' ? row.score : 0,
+    relevance: typeof row.relevance === 'number' ? row.relevance : null,
+    reason: MATCH_REASONS.includes(row.reason ?? '') ? (row.reason as MatchReason) : null,
+    evidenceCategories: row.evidenceCategories ?? [],
+  };
+}
+
+/**
+ * Ask the server to rank by meaning.
+ *
+ * Returns null for every failure — function missing, not deployed, no signed-in
+ * session, model unavailable, nothing embedded yet, timeout, malformed body —
+ * and the caller falls back. An empty ARRAY is a different answer: it means the
+ * ranking ran and nothing cleared the relevance floor, which is a real result
+ * worth showing rather than a reason to re-run keyword matching.
+ */
+async function rankWorkersOnServer(args: {
+  query: string;
+  categories: string[];
+  limit: number;
+}): Promise<WorkerMatch[] | null> {
+  const response = await withTimeout(
+    supabase.functions.invoke<{ results?: ServerMatch[] }>('worker-search', {
+      body: { query: args.query, categories: args.categories, limit: args.limit },
+    }),
+    SERVER_RANK_TIMEOUT_MS
+  );
+
+  if (!response || response.error) return null;
+  const rows = response.data?.results;
+  if (!Array.isArray(rows)) return null;
+
+  return rows
+    .map(toWorkerMatch)
+    .filter((match): match is WorkerMatch => match !== null);
+}
+
+/**
+ * The one entry point a screen should call.
+ *
+ * Tries server ranking, falls back to the deterministic matcher on any
+ * failure, and always reports which one answered.
+ */
+export async function findWorkers(args: SearchArgs): Promise<{
+  data: WorkerMatch[];
+  error: { message: string } | null;
+  mode: RankingMode;
+}> {
+  const searchedCategories =
+    args.categories && args.categories.length > 0 ? args.categories : interpretQuery(args.query);
+  const trimmed = args.query.trim();
+
+  // A tapped chip on its own has no sentence to compare meanings against —
+  // embedding a single machine key like "yard_work" would compare noise. That
+  // case is exactly what category matching is already good at, so it goes
+  // straight to the deterministic path.
+  if (trimmed.length >= 2) {
+    const ranked = await rankWorkersOnServer({
+      query: trimmed,
+      categories: searchedCategories,
+      limit: args.limit ?? WORKER_RESULT_LIMIT,
+    });
+
+    if (ranked) {
+      // auth.uid() already excludes the caller server-side. This is the
+      // belt-and-braces case where the session the Edge Function saw and the
+      // one this screen has are not the same account.
+      const visible = args.excludeUserId
+        ? ranked.filter((match) => match.profile.id !== args.excludeUserId)
+        : ranked;
+      return { data: visible, error: null, mode: 'semantic' };
+    }
+  }
+
+  const { data, error } = await searchWorkers(args);
+  return { data, error, mode: 'fallback' };
+}
+
+// --- Result copy -----------------------------------------------------------
+// Kept here rather than in the screen so there is exactly one place that
+// decides how each ranking is described, and no screen can promote fallback
+// results by accident.
+
+/**
+ * The list header. "Best matches" is only ever claimed when ranking actually
+ * ran on the server; keyword results are plain "matches".
+ */
+export function resultHeading(mode: RankingMode, count: number): string {
+  const qualifier = mode === 'semantic' ? 'best ' : '';
+  if (count >= WORKER_RESULT_LIMIT) {
+    return `Top ${WORKER_RESULT_LIMIT} ${qualifier}matches`;
+  }
+  return `${count} ${qualifier}${count === 1 ? 'match' : 'matches'}`;
+}
+
+/** Job categories and skill categories share most keys but not all; a job
+ *  category label wins where both exist, since evidence comes from jobs. */
+function evidenceLabel(key: string): string {
+  return JOB_CATEGORY_LABELS[key as JobCategory] ?? skillCategoryLabel(key);
+}
+
+/**
+ * One line of supporting evidence under a result.
+ *
+ * Every branch is a count or a category the database actually holds. Nothing
+ * here can say "expert", "available now" or "best in Brooklyn", because none
+ * of those are stored anywhere — and no branch can quote a job title, because
+ * titles never leave the server (phase39).
+ */
+export function matchReasonText(match: WorkerMatch): string | null {
+  const labels = (
+    match.evidenceCategories && match.evidenceCategories.length > 0
+      ? match.evidenceCategories
+      : match.matchedCategories
+  )
+    .slice(0, 2)
+    .map(evidenceLabel);
+
+  const count = match.completedInCategory;
+
+  switch (match.reason) {
+    case 'related_completed': {
+      const subject = labels.length > 0 ? `${labels[0].toLowerCase()} ` : '';
+      return `Completed ${count} related ${subject}${count === 1 ? 'job' : 'jobs'}`;
+    }
+    case 'similar_work':
+      return labels.length > 0
+        ? `Matched similar ${labels.join(' and ').toLowerCase()} work`
+        : 'Matched similar completed work';
+    case 'lists_category':
+      return labels.length > 0 ? `Lists ${labels.join(' and ')}` : null;
+    default:
+      break;
+  }
+
+  // Deterministic fallback: the sentence the card already carried, driven by
+  // worker_job_stats() rather than by any server explanation.
+  if (count > 0) {
+    return `${count} similar ${count === 1 ? 'job' : 'jobs'} completed`;
+  }
+  return null;
 }
