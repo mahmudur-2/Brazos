@@ -442,6 +442,35 @@ const MIGRATIONS = [
       ['rpc job_bid_counts()', () => checkRpc('job_bid_counts', { p_job_ids: [ZERO_UUID] })],
     ],
   },
+  {
+    // phase39 applies as a single transaction, so any one of these objects
+    // existing proves the whole migration landed. They are listed separately
+    // because a later hand-edit could drop one on its own.
+    file: 'phase39_worker_semantic_matching.sql',
+    checks: [
+      ['rpc match_workers_semantic()', () =>
+        checkRpc('match_workers_semantic', { p_query_embedding: [] })],
+      ['rpc build_worker_semantic_source()', () =>
+        checkRpc('build_worker_semantic_source', { p_worker: ZERO_UUID })],
+      ['rpc refresh_worker_semantic_doc()', () =>
+        checkRpc('refresh_worker_semantic_doc', { p_worker: ZERO_UUID })],
+      ['rpc worker_semantic_refresh_queue()', () =>
+        checkRpc('worker_semantic_refresh_queue', { p_limit: 1 })],
+      ['rpc apply_worker_embeddings()', () =>
+        checkRpc('apply_worker_embeddings', { p_rows: [], p_model: 'gte-small' })],
+      ['rpc worker_semantic_coverage()', () => checkRpc('worker_semantic_coverage', {})],
+      // The embedding store must be unreachable with the publishable key. This
+      // is the half of phase39 an existence probe cannot see: a table that
+      // reads back here would be handing out raw vectors and the text they
+      // were built from.
+      ['worker_semantic_docs revoked', () =>
+        checkColumnRevoked('worker_semantic_docs', 'worker_id')],
+      ['worker_semantic_docs.embedding revoked', () =>
+        checkColumnRevoked('worker_semantic_docs', 'embedding')],
+      ['worker_semantic_docs.source_text revoked', () =>
+        checkColumnRevoked('worker_semantic_docs', 'source_text')],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
