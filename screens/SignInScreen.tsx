@@ -1,70 +1,52 @@
-import { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
-import { AuthField } from '../components/AuthField';
+import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { BrandLogo } from '../components/BrandLogo';
+import { PhoneNumberInput } from '../components/PhoneNumberInput';
 import { useAuth } from '../hooks/useAuth';
-import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authSizes, authSpacing, authType, authColors } from '../lib/authTheme';
+import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import type { AuthStackNavigation } from '../lib/navigation';
-import { isValidEmail } from '../lib/validation';
+import { phoneValidationError } from '../lib/phoneNumber';
 
 /**
- * Sign in.
+ * Sign in — phone first.
  *
- * The credentials here are the ones BRAZOS actually authenticates with:
- * Supabase email + password, via the same AuthContext.login() the previous
- * single-screen AuthScreen called. The reference sheet was drawn against a
- * phone/OTP product BRAZOS does not have — there is no signInWithOtp call, no
- * verify-phone route, and no SMS provider configured — so a phone field on
- * this screen would be a credential that cannot sign anyone in. The phone
- * number keeps its real home on Create account, where it is a stored profile
- * value the existing signUp() already accepts.
+ * The product's intended credential is a phone number, so this is the screen
+ * the flow lands on. BRAZOS does not have the backend for it yet: nothing in
+ * the codebase requests a one-time code, there is no verify-phone route to send
+ * anyone to, and no SMS provider is configured on the Supabase project. Rather
+ * than fake a code screen that could never receive a code, `Continue` validates
+ * the number for real and then says plainly that the text-message step is not
+ * live, pointing at the path that is — email and password, one tap away on
+ * EmailSignIn.
+ *
+ * That keeps this screen honest and non-blocking: nobody is stranded, and when
+ * the SMS phase lands the only change here is what `handleContinue` does with
+ * an already-validated number.
  */
 export function SignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
-  const { login, bannedNotice } = useAuth();
-  const passwordRef = useRef<TextInput>(null);
+  const { bannedNotice } = useAuth();
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
+  const [phoneDigits, setPhoneDigits] = useState('');
+  const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [smsPending, setSmsPending] = useState(false);
 
-  async function handleContinue() {
-    // Guards a double tap that lands between the press and the disabled state
-    // taking effect.
-    if (loading) return;
-
-    setFormError(null);
-    const trimmedEmail = email.trim();
-
-    const nextEmailError = !trimmedEmail
-      ? 'Enter your email address.'
-      : !isValidEmail(trimmedEmail)
-        ? 'Enter a valid email address.'
-        : null;
-    const nextPasswordError = password ? null : 'Enter your password.';
-
-    setEmailError(nextEmailError);
-    setPasswordError(nextPasswordError);
-    if (nextEmailError || nextPasswordError) return;
-
-    setLoading(true);
-    const { error } = await login(trimmedEmail, password);
-    setLoading(false);
-
-    // Nothing typed is cleared on failure — the user fixes one field and
-    // retries rather than starting over.
-    if (error) setFormError(error.message);
+  function handleContinue() {
+    const nextPhoneError = phoneValidationError(country, phoneDigits);
+    setPhoneError(nextPhoneError);
+    // A real number gets the real answer; an incomplete one gets the field
+    // error and nothing else, so the two messages can't stack up.
+    setSmsPending(!nextPhoneError);
   }
 
   return (
-    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()}>
+    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft">
       <View style={styles.body}>
         <BrandLogo size={authSizes.logoAuth} />
 
@@ -73,72 +55,52 @@ export function SignInScreen() {
           Sign in to BRAZOS
         </Text>
         <Text style={styles.subtitle}>
-          Use the email and password connected to your account.
+          Use the phone number connected to your account.
         </Text>
 
         {bannedNotice ? (
           <View style={styles.notice}>
-            <Ionicons name="alert-circle-outline" size={18} color={authColors.danger} />
-            <Text style={styles.noticeText}>
+            <AuthNotice tone="danger">
               This account has been suspended for violating the Brazos community
               rules. Contact support if you think this is a mistake.
-            </Text>
+            </AuthNotice>
           </View>
         ) : null}
 
         <View style={styles.form}>
-          <AuthField
-            label="Email"
-            value={email}
-            onChangeText={(next) => {
-              setEmail(next);
-              if (emailError) setEmailError(null);
-              if (formError) setFormError(null);
+          <PhoneNumberInput
+            country={country}
+            onChangeCountry={setCountry}
+            value={phoneDigits}
+            onChangeValue={(digits) => {
+              setPhoneDigits(digits);
+              if (phoneError) setPhoneError(null);
+              if (smsPending) setSmsPending(false);
             }}
-            error={emailError}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            textContentType="emailAddress"
-            placeholder="you@example.com"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            submitBehavior="submit"
-          />
-          <AuthField
-            ref={passwordRef}
-            label="Password"
-            value={password}
-            onChangeText={(next) => {
-              setPassword(next);
-              if (passwordError) setPasswordError(null);
-              if (formError) setFormError(null);
-            }}
-            error={passwordError}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="current-password"
-            textContentType="password"
-            placeholder="••••••••"
+            error={phoneError}
             returnKeyType="go"
             onSubmitEditing={handleContinue}
           />
 
-          {formError ? (
-            <View style={styles.formError} accessibilityLiveRegion="polite">
-              <Text style={styles.formErrorText}>{formError}</Text>
-            </View>
+          {smsPending ? (
+            <AuthNotice tone="info">
+              Sign-in by text message is not switched on yet. Use your email and
+              password for now — it is the same account.
+            </AuthNotice>
           ) : null}
         </View>
 
         <View style={styles.actions}>
-          <AuthButton title="Continue" onPress={handleContinue} loading={loading} />
           <AuthButton
-            title="Create an account"
+            title="Continue"
+            onPress={handleContinue}
+            accessibilityHint="Continue with this phone number"
+          />
+          <AuthButton
+            title="Use Email Instead"
             variant="ghost"
-            onPress={() => navigation.navigate('CreateAccount')}
-            disabled={loading}
+            onPress={() => navigation.navigate('EmailSignIn')}
+            accessibilityHint="Sign in with your email address and password"
           />
         </View>
       </View>
@@ -168,34 +130,17 @@ const styles = StyleSheet.create({
     marginTop: authSpacing.sm,
   },
   notice: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: authSpacing.sm,
     marginTop: authSpacing.lg,
-    padding: authSpacing.md,
-    borderRadius: authRadius.field,
-    backgroundColor: '#F5E7E4',
-  },
-  noticeText: {
-    ...authType.note,
-    flex: 1,
-    color: authColors.danger,
   },
   form: {
     marginTop: authSpacing.xl,
     gap: authSpacing.lg,
   },
-  formError: {
-    padding: authSpacing.md,
-    borderRadius: authRadius.field,
-    backgroundColor: '#F5E7E4',
-  },
-  formErrorText: {
-    ...authType.note,
-    color: authColors.danger,
-  },
+  // marginTop:'auto' — the extra height on a tall phone becomes space between
+  // the field and the CTAs rather than a gap under them.
   actions: {
-    marginTop: authSpacing.xxl,
+    marginTop: 'auto',
+    paddingTop: authSpacing.xxl,
     gap: authSpacing.md,
   },
 });

@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { authColors } from '../lib/authTheme';
 import type { AuthStackParamList } from '../lib/navigation';
 import { CreateAccountScreen } from './CreateAccountScreen';
+import { EmailSignInScreen } from './EmailSignInScreen';
 import { SignInScreen } from './SignInScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 
@@ -25,6 +26,7 @@ export function AuthFlow() {
     >
       <Stack.Screen name="Welcome" component={WelcomeScreen} />
       <Stack.Screen name="SignIn" component={SignInScreen} />
+      <Stack.Screen name="EmailSignIn" component={EmailSignInScreen} />
       <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
     </Stack.Navigator>
   );

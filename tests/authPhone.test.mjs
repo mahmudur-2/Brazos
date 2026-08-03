@@ -193,10 +193,69 @@ test('the phone field is the only path from the auth flow to the backend', () =>
   // The national field peels a pasted calling code off rather than keeping it.
   assert.match(input, /splitInternational\(text\)/);
   assert.match(input, /onChangeCountry\(international\.country\)/);
+
+  // The national input has to be allowed to shrink. Without minWidth its
+  // intrinsic width wins over flex and the number overflows the row at 320pt.
+  assert.match(input, /minWidth: 0/);
 });
 
-test('both submit handlers refuse to run twice concurrently', () => {
+test('every screen with a phone field starts on the default country', () => {
   for (const path of ['screens/SignInScreen.tsx', 'screens/CreateAccountScreen.tsx']) {
+    const source = read(path);
+    assert.match(source, /useState<Country>\(DEFAULT_COUNTRY\)/, `${path} must default to US`);
+    // The shared field, not a bare TextInput — that is what keeps the calling
+    // code out of the national digits.
+    assert.match(source, /<PhoneNumberInput/, `${path} must use the shared field`);
+    assert.match(
+      source,
+      /phoneValidationError\(country, phoneDigits\)/,
+      `${path} must validate before it acts`
+    );
+  }
+});
+
+test('the async submit handlers refuse to run twice concurrently', () => {
+  for (const path of ['screens/EmailSignInScreen.tsx', 'screens/CreateAccountScreen.tsx']) {
     assert.match(read(path), /if \(loading\) return;/, `${path} must guard double submission`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The phone-first sign-in flow, and the honesty of its interim state
+// ---------------------------------------------------------------------------
+
+test('sign-in is phone first, with email as a routed alternate', () => {
+  const phone = read('screens/SignInScreen.tsx');
+  const email = read('screens/EmailSignInScreen.tsx');
+  const flow = read('screens/AuthFlow.tsx');
+  const routes = read('lib/navigation.ts');
+
+  // Both halves are registered routes, so each keeps its own back behaviour.
+  assert.match(routes, /EmailSignIn: undefined;/);
+  assert.match(flow, /name="SignIn" component=\{SignInScreen\}/);
+  assert.match(flow, /name="EmailSignIn" component=\{EmailSignInScreen\}/);
+
+  // …and each offers the other.
+  assert.match(phone, /title="Use Email Instead"/);
+  assert.match(phone, /navigation\.navigate\('EmailSignIn'\)/);
+  assert.match(email, /title="Use Phone Number Instead"/);
+  // popTo, not navigate: under React Navigation 7 navigate() pushes when the
+  // target isn't current, which would stack a second SignIn over the first and
+  // discard the number already typed there.
+  assert.match(email, /navigation\.popTo\('SignIn'\)/);
+  assert.doesNotMatch(email, /navigation\.navigate\('SignIn'\)/);
+});
+
+test('the phone screen never fakes a session, and email still does the real sign-in', () => {
+  const phone = read('screens/SignInScreen.tsx');
+  const email = read('screens/EmailSignInScreen.tsx');
+
+  // No SMS provider is configured, so this screen must not touch auth at all —
+  // no login(), no signUp(), no OTP call it has no backend for.
+  assert.doesNotMatch(phone, /\blogin\(/, 'the phone screen must not authenticate');
+  assert.doesNotMatch(phone, /signInWithOtp|verifyOtp/, 'there is no OTP backend to call');
+
+  // The one screen that does authenticate still goes through AuthContext.
+  assert.match(email, /const \{ login, bannedNotice \} = useAuth\(\)/);
+  assert.match(email, /await login\(trimmedEmail, password\)/);
 });

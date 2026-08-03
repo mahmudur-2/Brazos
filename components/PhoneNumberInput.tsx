@@ -211,6 +211,12 @@ const styles = StyleSheet.create({
   },
   input: {
     flex: 1,
+    // Without this the field overflows its row on a narrow screen: a web
+    // <input> reports an intrinsic width of ~193pt and `min-width: auto` stops
+    // a flex child shrinking below it, so at 320pt wide the number ran off the
+    // right edge while the bordered wrapper shrank correctly. A no-op on
+    // native, where Yoga already treats the minimum as 0.
+    minWidth: 0,
     height: '100%',
     ...authType.fieldValue,
     color: authColors.ink,

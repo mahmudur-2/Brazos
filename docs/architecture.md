@@ -26,12 +26,23 @@ route-param type instead of being tied to one parent stack.
 Auth and the legal gate sit above the tabs in `RootNavigator`: signed out →
 `AuthFlow`; signed in but documents unaccepted → `LegalGateScreen`.
 
-`AuthFlow` is its own native stack (Welcome → SignIn / CreateAccount) on the
-"Emerald Trust" brand palette in `lib/authTheme.ts`, not the in-app cream one.
-Authentication itself is unchanged — Supabase email + password through
-`AuthContext.login()` / `signUp()`. Phone numbers are collected on Create
-account as the profile value `signUp()` already takes, normalised to E.164 by
-`lib/phoneNumber.ts`; there is no phone-credential or OTP path.
+`AuthFlow` is its own native stack (Welcome → SignIn → EmailSignIn, plus
+CreateAccount) on the "Emerald Trust" brand palette in `lib/authTheme.ts`, not
+the in-app cream one. Authentication itself is unchanged — Supabase email +
+password through `AuthContext.login()` / `signUp()`.
+
+Sign-in is **phone first in presentation only**. `SignInScreen` asks for a
+phone number and validates it, but no SMS provider is configured and there is
+no one-time-code route, so its Continue says so and points at `EmailSignInScreen`
+— which holds the real `login()` call and is the only path that actually
+authenticates. When SMS auth lands, `SignInScreen.handleContinue` is the single
+place that changes. Phone numbers are also collected on Create account as the
+profile value `signUp()` already takes, normalised to E.164 by
+`lib/phoneNumber.ts`.
+
+`AuthScaffold` owns the safe area, keyboard avoidance, max content width and
+the optional `AuthBackdrop` — decorative contour arcs built from bordered
+circles, because neither `react-native-svg` nor a gradient package is installed.
 
 The branded launch animation (`screens/LaunchScreen.tsx`) is **not** a route.
 `LaunchGate` in `App.tsx` renders it as an absolute-fill sibling above the

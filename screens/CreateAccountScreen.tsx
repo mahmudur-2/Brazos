@@ -98,7 +98,7 @@ export function CreateAccountScreen() {
   }
 
   return (
-    <AuthScaffold title="Create account" onBack={() => navigation.goBack()}>
+    <AuthScaffold title="Create account" onBack={() => navigation.goBack()} backdrop="soft">
       <View style={styles.body}>
         <Text style={styles.eyebrow}>CREATE ACCOUNT</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>

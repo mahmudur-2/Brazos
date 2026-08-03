@@ -55,6 +55,19 @@ export const authColors = {
   /** .launch p */
   onDarkMuted: '#CFE2DB',
 
+  // Decorative backdrop (components/AuthBackdrop.tsx). Deliberately expressed
+  // as rgba rather than as flat hexes with an `opacity` on the view: the rings
+  // overlap, and stacking opaque strokes at view-level opacity would darken
+  // every crossing point into a visible seam.
+  /** Contour stroke — the strongest line in the backdrop, still barely there. */
+  artLine: 'rgba(13, 107, 82, 0.09)',
+  /** The outer rings of a contour cluster, fading out from artLine. */
+  artLineFaint: 'rgba(13, 107, 82, 0.05)',
+  /** Warm counterpoint, matched to --gold, for the long sweeping arcs. */
+  artLineGold: 'rgba(200, 161, 91, 0.13)',
+  /** A single soft wash behind a contour cluster, for depth rather than line. */
+  artWash: 'rgba(211, 232, 223, 0.38)',
+
   // .launch-screen's radial-gradient(circle at 75% 20%, #2C8068, #064C3B 42%,
   // #032E24 100%) — reproduced as layered views, no gradient dependency.
   launchGlow: '#2C8068',
@@ -111,13 +124,13 @@ export const authSizes = {
  */
 export const authType = {
   /** .eyebrow — ref 9/800/1.2 */
-  eyebrow: { fontSize: 12, fontWeight: '800', letterSpacing: 1.4 },
+  eyebrow: { fontSize: 13, fontWeight: '800', letterSpacing: 1.6 },
   /** .auth h1 — ref 31/1.05 */
   title: { fontSize: 30, fontWeight: '700', lineHeight: 35 },
   /** .welcome-copy h1 — ref 36/0.98 */
-  display: { fontSize: 36, fontWeight: '700', lineHeight: 38 },
+  display: { fontSize: 38, fontWeight: '800', lineHeight: 42 },
   /** .auth p / .welcome-copy p — ref 14/1.45 */
-  body: { fontSize: 15, lineHeight: 22 },
+  body: { fontSize: 16, lineHeight: 24 },
   /** .field > span — ref 8/800/0.5 */
   fieldLabel: { fontSize: 12, fontWeight: '700', letterSpacing: 0.6 },
   /** .field-value — ref 11 */

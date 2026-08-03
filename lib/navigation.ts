@@ -6,9 +6,14 @@ import type { ChatTarget } from './messages';
 // a session, so it is its own stack rooted at Welcome. The branded launch
 // layer is not a route here — it renders above everything (see LaunchGate in
 // App.tsx) so the destination is already mounted when it fades out.
+// SignIn is the phone-first screen; EmailSignIn is the alternate route it
+// offers, and the one that currently performs the real Supabase sign-in. They
+// are two routes rather than one screen with a toggle so each keeps its own
+// back behaviour and the pair can be reordered when SMS auth lands.
 export type AuthStackParamList = {
   Welcome: undefined;
   SignIn: undefined;
+  EmailSignIn: undefined;
   CreateAccount: undefined;
 };
 

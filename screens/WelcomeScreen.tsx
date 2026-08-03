@@ -8,6 +8,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -23,6 +24,9 @@ const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 // hit-testable from the first frame regardless of their opacity.
 const ENTRANCE_MS = 500;
 const REDUCED_ENTRANCE_MS = 160;
+
+/** Trust-badge glyph, sized to sit on the cap height of the 13pt badge label. */
+const BADGE_ICON = 15;
 
 /** [start, end] within the 0..1 driver, in the order things should arrive. */
 const STAGGER = {
@@ -111,7 +115,7 @@ export function WelcomeScreen() {
   const ringSize = Math.min(220, artHeight * 0.74);
 
   return (
-    <AuthScaffold>
+    <AuthScaffold backdrop="full">
       <View style={[styles.art, { height: artHeight }]}>
         <Animated.View
           style={[
@@ -150,6 +154,7 @@ export function WelcomeScreen() {
             step(STAGGER.badgeA, { rotate: '-7deg' }),
           ]}
         >
+          <Ionicons name="shield-checkmark" size={BADGE_ICON} color={authColors.emerald} />
           <Text style={styles.badgeText}>Verified workers</Text>
         </Animated.View>
 
@@ -161,6 +166,7 @@ export function WelcomeScreen() {
             step(STAGGER.badgeB, { rotate: '8deg' }),
           ]}
         >
+          <Ionicons name="lock-closed" size={BADGE_ICON} color={authColors.emerald} />
           <Text style={styles.badgeText}>Protected payment</Text>
         </Animated.View>
 
@@ -172,12 +178,13 @@ export function WelcomeScreen() {
             step(STAGGER.badgeC),
           ]}
         >
+          <Ionicons name="location" size={BADGE_ICON} color={authColors.emerald} />
           <Text style={styles.badgeText}>Local jobs</Text>
         </Animated.View>
       </View>
 
       <Animated.Text style={[styles.eyebrow, step(STAGGER.eyebrow, { lift: 8 })]}>
-        EMERALD TRUST MARKETPLACE
+        BRAZOS MARKETPLACE
       </Animated.Text>
       <Animated.Text
         style={[styles.headline, step(STAGGER.headline)]}
@@ -227,11 +234,15 @@ const styles = StyleSheet.create({
   },
   badge: {
     position: 'absolute',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
     backgroundColor: authColors.surface,
     borderWidth: 1,
     borderColor: authColors.line,
     borderRadius: authRadius.chip,
-    paddingHorizontal: 14,
+    paddingLeft: 12,
+    paddingRight: 14,
     paddingVertical: 10,
     ...authShadows.card,
   },
