@@ -265,9 +265,18 @@ test('6 · the searching user is excluded server-side, not just in the client', 
 
   // The Edge Function must pass the USER's identity to the ranking call, or
   // auth.uid() would be null (or the service role) and the exclusion useless.
+  // Scoped to the REAL ranking call inside Deno.serve, not the diagnostic
+  // logNearMisses() probe earlier in the file (which also names
+  // match_workers_semantic and is intentionally passed the caller's own
+  // credentials too, but via a variable, not a literal SERVICE_KEY).
   assert.match(edgeFn, /userCredentials\(caller\.token\)/);
+  const realRankingCall = edgeFn.slice(
+    edgeFn.indexOf('let matchRes: Response;'),
+    edgeFn.indexOf('if (!matchRes.ok)')
+  );
+  assert.match(realRankingCall, /'match_workers_semantic'/);
   assert.doesNotMatch(
-    edgeFn.slice(edgeFn.indexOf("'match_workers_semantic'")),
+    realRankingCall,
     /SERVICE_KEY/,
     'ranking must never be called with the service-role key'
   );
@@ -385,19 +394,78 @@ test('10 · missing and stale embeddings are handled without a manual flag', () 
   assert.match(phase39, /exception when others then\s*\n\s*raise notice 'worker semantic refresh skipped/);
 });
 
-test('11 · no relevant results stays a ranked answer, not a fallback', () => {
+test('11 · an empty semantic result falls back rather than displaying a false no-match state', () => {
+  // Reversed from the original design on purpose, after a live deployment
+  // with only 6 (thinly-evidenced) embedded workers showed every one of them
+  // scoring below MIN_SIMILARITY for a query the deterministic matcher could
+  // answer immediately by category. An unmeasured floor plus a small corpus
+  // makes "nothing cleared the bar" far more likely to be a false negative
+  // than a genuine "nobody is relevant" — so it is no longer treated as final.
   assert.deepEqual(rank([{ ...GENERIC, similarity: 0.1 }], { searched: ['packing'] }), []);
 
-  // An empty array must NOT re-trigger keyword matching: that would pad the
-  // page with the very workers the ranking just rejected.
-  assert.match(
-    workerSearch,
-    /if \(ranked\) \{[\s\S]*?return \{ data: visible, error: null, mode: 'semantic' \};/
-  );
-  assert.doesNotMatch(workerSearch, /ranked\.length === 0[\s\S]{0,80}searchWorkers/);
+  // The gate is ranked.length > 0, not just ranked being non-null — an empty
+  // array must fall through exactly like a null (failed) response.
+  assert.match(workerSearch, /if \(ranked && ranked\.length > 0\) \{/);
+  assert.doesNotMatch(workerSearch, /if \(ranked\) \{/);
 
-  // The screen still has a real empty state to show.
+  // And it must actually fall through to the SAME deterministic matcher used
+  // for every other failure — not a second copy, not a different code path.
+  const findWorkersFn = workerSearch.slice(
+    workerSearch.indexOf('export async function findWorkers'),
+    workerSearch.indexOf('// --- Result copy')
+  );
+  assert.match(findWorkersFn, /const \{ data, error \} = await searchWorkers\(args\);/);
+  assert.match(findWorkersFn, /return \{ data, error, mode: 'fallback' \};/);
+
+  // A TRUE "no workers matched" now requires BOTH rankings to come back
+  // empty — that is still a real state, and the screen still has to show it.
   assert.match(screen, /No workers matched/);
+});
+
+test('embedded workers are actually returned when a relevant one exists', () => {
+  // The exact PDF page-8 phrasing this whole feature exists to answer.
+  const QUERY = 'organize boxes in a warehouse';
+  const packer = { ...PACKER, similarity: 0.62 };
+  const unrelated = { ...GENERIC, id: id(5), similarity: 0.12 };
+
+  const ordered = rank([unrelated, packer], { searched: ['packing'] });
+  assert.deepEqual(ordered.map((w) => w.id), [packer.id]);
+  assert.ok(QUERY.includes('boxes'), 'sanity: the fixture matches the query this test names');
+});
+
+test('diagnostic: near-miss scores are logged when the real ranking comes back empty', () => {
+  // This is what actually made the live "No workers matched" report
+  // diagnosable: the previous version had no way to see real cosine
+  // similarity values anywhere Supabase Function Logs could show them.
+  assert.match(edgeFn, /async function logNearMisses\(/);
+  assert.match(edgeFn, /p_min_similarity: 0/);
+
+  const gate = edgeFn.indexOf('if (rows.length === 0) {');
+  const call = edgeFn.slice(gate, edgeFn.indexOf('return json({', gate));
+  assert.match(call, /await logNearMisses\(queryEmbedding, categories, userCredentials\(caller\.token\)\)/);
+
+  // The probe distinguishes "candidates existed but scored low" from "nobody
+  // reached scoring at all" — those point at different bugs (the threshold
+  // vs. the exclusion filters) and must not be logged identically.
+  const probeFn = edgeFn.slice(
+    edgeFn.indexOf('async function logNearMisses'),
+    edgeFn.indexOf('type MatchRow')
+  );
+  assert.match(probeFn, /zero candidates even at floor 0/);
+  assert.match(probeFn, /candidate\(s\) below floor \$\{MIN_SIMILARITY\}/);
+
+  // Never logs anything beyond what match_workers_semantic already returns to
+  // an authenticated caller — no new leak introduced by the diagnostic. Scoped
+  // to the actual logFailure() call sites, since the surrounding function
+  // legitimately discusses "queryEmbedding" and "embedding-null filtering" in
+  // its parameter list and comments.
+  const loggedStrings = [...probeFn.matchAll(/logFailure\(\s*'[^']*',\s*([\s\S]*?)\);/g)].map(
+    (m) => m[1]
+  );
+  assert.ok(loggedStrings.length > 0, 'logNearMisses must actually call logFailure');
+  for (const logged of loggedStrings) {
+    assert.doesNotMatch(logged, /source_text|evidence\b|\bembedding\b/);
+  }
 });
 
 // ===========================================================================

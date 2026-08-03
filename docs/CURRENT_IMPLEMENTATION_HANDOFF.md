@@ -201,6 +201,61 @@ diagnostic detail string; and `session.run()` output is normalised with
 `Array.from()` so a typed array cannot silently break `JSON.stringify`.
 Two new tests fail if the credential pair or the logging is removed.
 
+### Post-deployment fix — Edge Function v3 (empty semantic results)
+
+With v2 deployed, `worker_semantic_coverage()` correctly reported
+`embedded = 6, stale = 0`, but searching still returned **"No workers
+matched."**
+
+**Root cause, established by elimination, not guesswork:** every other stage
+of the pipeline was audited line-by-line against phase39 and confirmed
+correct — RPC argument names, returned column names, the Edge Function's
+response shape vs. the client's `MatchRow`/`ServerMatch` parsers, self-exclusion
+(`p.id <> v_viewer`), banned exclusion, the `embedding is not null` filter, the
+`worker_semantic_docs` → `profiles` join, and category-parameter mapping (which
+only affects scoring, never row inclusion). pgvector's parser was also checked
+against its actual C source and confirmed to accept scientific-notation floats
+via `strtof`, ruling out a suspected vector-literal-formatting bug. None of
+these can produce zero rows while `embedded = 6` and no error was raised.
+**That leaves exactly one place: every embedded candidate's cosine similarity
+scored below `MIN_SIMILARITY` (0.3).** That constant was documented from day
+one as "not a measured one" — this is the first real evidence it is excluding
+legitimate candidates, but no specific number could be defended without
+observing real scores, which is exactly the tooling this pass adds.
+
+*(The separately-reported `worker_semantic_coverage()` → `total = 0` is
+mathematically impossible from the deployed SQL — `count(*)` with no filter
+over the same 6-row table cannot be less than the filtered `embedded` count.
+Most likely a read/reporting artifact. It was confirmed to not gate any code
+path — `readCoverage()`/`hasEmbeddedCorpus` only ever branch on `.embedded` —
+so it cannot be the cause of the empty result and was left alone.)*
+
+**Fixed, without touching phase39 (no SQL defect was found, so no phase40):**
+
+1. **Diagnostic instrumentation** — `logNearMisses()` in the Edge Function. When
+   the real ranking call returns zero rows, it makes one extra call to the
+   *same* `match_workers_semantic()` with `p_min_similarity: 0` (no extra
+   model call — same query embedding) and logs each candidate's real
+   `semantic_score` to Supabase Function Logs. This is the first place actual
+   production similarity numbers become visible anywhere. Next empty search
+   will show either candidates scored just under 0.3 (confirms the floor is
+   the problem, with a number to recalibrate against) or literally nothing
+   even at floor 0 (would point at the exclusion filters instead).
+2. **Fallback policy reversed, deliberately.** `findWorkers()` in
+   `lib/workerSearch.ts` originally treated a clean, empty semantic array as
+   final — "ranked, and nothing cleared the bar" was judged a real answer, not
+   a fallback trigger. That assumption held for a mature, calibrated corpus;
+   it does not hold for a 6-profile corpus against an unmeasured threshold,
+   where it produced exactly this false negative. The gate is now
+   `if (ranked && ranked.length > 0)` — an empty array falls through to the
+   deterministic matcher exactly like a timeout or a 503 would. A true "No
+   workers matched" now requires **both** rankings to come back empty.
+
+Two new tests guard this: one proves `logNearMisses()` fires and only logs
+already-public fields (no `source_text`/`evidence`/embedding leak), one proves
+`ranked.length > 0` is the actual gate (mutation-verified: reverting to
+`if (ranked)` fails it).
+
 ### Known limitations
 
 * **Semantic ranking quality is still unverified on real data.** The ranking

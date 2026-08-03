@@ -432,10 +432,10 @@ function toWorkerMatch(row: ServerMatch): WorkerMatch | null {
  * Ask the server to rank by meaning.
  *
  * Returns null for every failure — function missing, not deployed, no signed-in
- * session, model unavailable, nothing embedded yet, timeout, malformed body —
- * and the caller falls back. An empty ARRAY is a different answer: it means the
- * ranking ran and nothing cleared the relevance floor, which is a real result
- * worth showing rather than a reason to re-run keyword matching.
+ * session, model unavailable, nothing embedded yet, timeout, malformed body.
+ * Returns an empty array when the ranking ran cleanly and nothing cleared the
+ * relevance floor. findWorkers() is the one that decides what to do with
+ * either shape; this function just reports what actually happened.
  */
 async function rankWorkersOnServer(args: {
   query: string;
@@ -462,7 +462,23 @@ async function rankWorkersOnServer(args: {
  * The one entry point a screen should call.
  *
  * Tries server ranking, falls back to the deterministic matcher on any
- * failure, and always reports which one answered.
+ * failure OR on a genuinely empty semantic result, and always reports which
+ * one answered.
+ *
+ * EMPTY SEMANTIC RESULTS FALL BACK TOO — this reverses the original design.
+ * The first version treated `results: []` from a clean server run as a final
+ * answer: "ranked, and nothing cleared the relevance floor" is a defensible
+ * outcome once the corpus is mature and the floor is calibrated against real
+ * data. In practice a freshly-deployed corpus is neither: MIN_SIMILARITY was
+ * shipped as an unmeasured placeholder (see the Edge Function), and a handful
+ * of thinly-evidenced workers can legitimately all miss it even when one of
+ * them is the obvious right answer — which is indistinguishable, from here,
+ * from "nobody is relevant." Treating that as final produced "No workers
+ * matched" for a query a plain category match would have answered instantly.
+ * So an empty semantic array is now handled exactly like a timeout or a 503:
+ * fall through, and let the deterministic matcher's keyword/category read
+ * answer instead. A TRUE "no workers matched" now requires BOTH rankings to
+ * come back empty, which is a claim worth making.
  */
 export async function findWorkers(args: SearchArgs): Promise<{
   data: WorkerMatch[];
@@ -484,7 +500,7 @@ export async function findWorkers(args: SearchArgs): Promise<{
       limit: args.limit ?? WORKER_RESULT_LIMIT,
     });
 
-    if (ranked) {
+    if (ranked && ranked.length > 0) {
       // auth.uid() already excludes the caller server-side. This is the
       // belt-and-braces case where the session the Edge Function saw and the
       // one this screen has are not the same account.

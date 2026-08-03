@@ -52,10 +52,18 @@
 // ---------------------------------------------------------------------------
 // Every failure path returns a non-2xx status. lib/workerSearch.ts treats any
 // non-2xx (and any timeout) as "fall back to deterministic ranking" and labels
-// the results accordingly. This function therefore never invents a result set
-// to avoid erroring — an empty `results` array with mode "semantic" means
-// "ranked, and nothing cleared the bar", which is a different and honest
-// answer from "ranking was unavailable".
+// the results accordingly. This function still never invents a result set to
+// avoid erroring — a genuine `results: []` with mode "semantic" is exactly
+// what gets returned here when ranking ran cleanly and nothing cleared the
+// bar. What CHANGED (see the corpus-empty-vs-underscored regression this file
+// was built to fix): lib/workerSearch.ts no longer treats that empty array as
+// final. An early, thinly-populated corpus makes "nothing cleared
+// MIN_SIMILARITY" far more likely to be a false negative than a true "no
+// worker anywhere is relevant" — so the CLIENT now falls through to the
+// deterministic matcher when the semantic array comes back empty, the same as
+// it would for any other failure. This function's job stays the same either
+// way: answer honestly, and let logNearMisses() (below) put real numbers
+// where anyone can see them when that honest answer is empty.
 // ============================================================================
 
 // Provided by the Edge Runtime; there is no npm package to install for it.
@@ -335,6 +343,65 @@ async function readCoverage(): Promise<Coverage | null> {
   }
 }
 
+/**
+ * When the real ranking call comes back with zero rows, ask the SAME ranking
+ * function again with the floor forced to 0 — same query embedding, same
+ * categories, so this costs one extra round trip and no extra model call —
+ * and log what it finds.
+ *
+ * This is the one place actual cosine similarity numbers reach anywhere the
+ * team can see them. Before this existed, "no workers matched" and "the
+ * pipeline is broken" were indistinguishable from outside the database: both
+ * looked like an empty result. Reading Supabase Function Logs after a search
+ * that came back empty now answers it directly — either real candidates show
+ * up here scored just under MIN_SIMILARITY (the floor is excluding real
+ * evidence, and MIN_SIMILARITY is the thing to reconsider, with a number in
+ * hand instead of a guess), or NOTHING shows up here at all even at floor 0
+ * (which would mean every candidate was removed by self/banned/embedding-null
+ * filtering before similarity was ever computed — a different bug, in the
+ * exclusion logic rather than the threshold).
+ *
+ * Best-effort and never awaited by the caller's response: a failure here must
+ * not turn an honest empty result into a 500.
+ */
+async function logNearMisses(
+  queryEmbedding: number[],
+  categories: string[],
+  credentials: Credentials
+): Promise<void> {
+  try {
+    const res = await rpc(
+      'match_workers_semantic',
+      { p_query_embedding: queryEmbedding, p_categories: categories, p_limit: 10, p_min_similarity: 0 },
+      credentials,
+      8000
+    );
+    if (!res.ok) {
+      logFailure('near_miss_probe', `${res.status}: ${(await res.text()).slice(0, 300)}`);
+      return;
+    }
+    const rows = (await res.json()) as Pick<
+      MatchRow,
+      'worker_id' | 'semantic_score' | 'final_score' | 'reason_code'
+    >[];
+    if (!Array.isArray(rows) || rows.length === 0) {
+      // The floor did not eliminate anyone — nobody reached scoring at all.
+      // Look at self-exclusion / banned / embedding-null in match_workers_semantic().
+      logFailure('near_miss_probe', 'zero candidates even at floor 0 — check exclusion filters, not the threshold');
+      return;
+    }
+    const summary = rows
+      .map((r) => `${r.worker_id.slice(0, 8)}…=${(r.semantic_score ?? 0).toFixed(3)}`)
+      .join(', ');
+    logFailure(
+      'near_miss_probe',
+      `${rows.length} candidate(s) below floor ${MIN_SIMILARITY}: ${summary}`
+    );
+  } catch (err) {
+    logFailure('near_miss_probe', err);
+  }
+}
+
 type MatchRow = {
   worker_id: string;
   full_name: string | null;
@@ -512,6 +579,13 @@ Deno.serve(async (req) => {
   if (!Array.isArray(rows)) {
     logFailure('rank_malformed', 'ranking RPC did not return an array');
     return json({ error: 'rank_malformed' }, 502);
+  }
+
+  if (rows.length === 0) {
+    // Awaited so it actually lands in this invocation's logs, not a future
+    // one — but its own errors are swallowed inside logNearMisses and can
+    // never turn this honest empty result into a failure response.
+    await logNearMisses(queryEmbedding, categories, userCredentials(caller.token));
   }
 
   return json({
