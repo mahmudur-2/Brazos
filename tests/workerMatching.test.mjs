@@ -8,6 +8,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
 const phase39 = read('supabase/phase39_worker_semantic_matching.sql');
+const phase40 = read('supabase/phase40_fix_semantic_match_return_type.sql');
 const edgeFn = read('supabase/functions/worker-search/index.ts');
 const workerSearch = read('lib/workerSearch.ts');
 const screen = read('screens/WorkerSearchScreen.tsx');
@@ -15,12 +16,19 @@ const screen = read('screens/WorkerSearchScreen.tsx');
 // ===========================================================================
 // The ranking model under test
 // ===========================================================================
-// The hybrid blend lives in phase39's match_workers_semantic(), which needs a
-// database and a 384-dimension vector to run. Rather than restate the weights
-// here — where they could quietly disagree with what is actually deployed —
-// they are PARSED OUT OF THE MIGRATION and the assertions below run against
-// whatever the SQL really declares. Change a weight in the SQL and these tests
+// The hybrid blend lives in match_workers_semantic(), which needs a database
+// and a 384-dimension vector to run. Rather than restate the weights here —
+// where they could quietly disagree with what is actually deployed — they are
+// PARSED OUT OF THE MIGRATION and the assertions below run against whatever
+// the SQL really declares. Change a weight in the SQL and these tests
 // evaluate the new one; break the regression and they fail.
+//
+// Read from phase40, not phase39: phase40 replaces match_workers_semantic()
+// wholesale (one column cast fixed, everything else byte-identical — see its
+// header comment), so phase40 is the version actually live in the database.
+// phase39's copy of this one function is historical only, frozen the moment
+// phase40 shipped, exactly like every other already-deployed migration in
+// this repo.
 //
 // What these fixtures cannot test is gte-small's judgement. `similarity` is
 // supplied directly, standing in for the cosine similarity the model would
@@ -31,10 +39,10 @@ const screen = read('screens/WorkerSearchScreen.tsx');
 // All fixtures are synthetic. No production account name or id appears.
 
 function parseWeight(name) {
-  const match = phase39.match(
+  const match = phase40.match(
     new RegExp(`${name}\\s+constant\\s+double precision\\s*:=\\s*([0-9.]+)\\s*;`)
   );
-  assert.ok(match, `phase39 must declare ${name} as a literal so tests can read it`);
+  assert.ok(match, `phase40 must declare ${name} as a literal so tests can read it`);
   return Number(match[1]);
 }
 
@@ -710,6 +718,150 @@ test('every phase39 function is security definer with a fixed search_path', () =
   // Idempotent, and it must not weaken anything that already exists.
   assert.match(phase39, /create table if not exists public\.worker_semantic_docs/);
   assert.doesNotMatch(phase39, /drop table|drop policy(?![^\n]*worker_semantic)|alter table public\.(jobs|profiles|bids|reviews) /i);
+});
+
+// ===========================================================================
+// phase40 · verification_status enum-vs-text return mismatch
+// ===========================================================================
+// THE LIVE FAILURE THIS GUARDS AGAINST. Real Supabase Function Logs, from an
+// actual signed-in search:
+//
+//   [worker-search] rank_failed: 400 42804
+//   "Returned type verification_status does not match expected type text
+//    in column 4" / "structure of query does not match function result type"
+//
+// Postgres error 42804 names the ACTUAL column type first: `profiles.
+// verification_status` is a named enum in the live database (created outside
+// this repo's tracked migrations — no `create type` for it appears anywhere
+// under supabase/), not `text`. phase39 declared column 4 of
+// match_workers_semantic()'s RETURNS TABLE as `text` and selected
+// `p.verification_status` with no cast. `node scripts/verify-schema.mjs`
+// (limit=0, never executes the query body) and the original build's own
+// tests could not have caught this: nothing short of actually running the
+// function's `return query` surfaces a RETURNS TABLE column-type mismatch,
+// which is exactly why it only failed the moment a real search ran it.
+
+/** A RETURNS TABLE column declaration: `name type,` or `name type` (last one,
+ *  no trailing comma). Column TYPE stops at the first comma at parenthesis
+ *  depth 0, so `text[]`, `double precision` and `numeric` all parse correctly
+ *  without needing one pattern per type shape. */
+function parseReturnsTable(sql, functionName) {
+  const start = sql.indexOf(`function public.${functionName}`);
+  assert.ok(start > -1, `must define ${functionName}`);
+  const tableStart = sql.indexOf('returns table (', start);
+  const tableEnd = sql.indexOf('\n)', tableStart);
+  const body = sql.slice(tableStart + 'returns table ('.length, tableEnd);
+  return body
+    .split('\n')
+    .map((line) => line.trim().replace(/,$/, ''))
+    .filter(Boolean)
+    .map((line) => {
+      const [name, ...typeParts] = line.split(/\s+/);
+      return { name, type: typeParts.join(' ') };
+    });
+}
+
+/**
+ * Generalised detector, not a one-off string match: for every column in
+ * match_workers_semantic()'s RETURNS TABLE, find the corresponding SELECT
+ * expression in the query and verify it cannot return a type other than the
+ * one declared. A column sourced from a KNOWN enum-backed base-table column
+ * (only `profiles.verification_status`, documented in phase40's header) must
+ * carry an explicit `::text` cast; anything else — a literal, an aggregate,
+ * an already-cast expression — is accepted as-is. This is the shape of test
+ * that would have failed on phase39 and passes on phase40.
+ */
+function assertNoEnumTextMismatch(sql, label) {
+  const KNOWN_ENUM_BACKED_SOURCES = { verification_status: 'p.verification_status' };
+  const columns = parseReturnsTable(sql, 'match_workers_semantic');
+  assert.ok(columns.length >= 14, `${label}: RETURNS TABLE should have all 14 columns`);
+
+  const fnStart = sql.indexOf('function public.match_workers_semantic');
+  // Comments legitimately narrate WHY a column needs the fix — including the
+  // bare source column name — so they are stripped before scanning for raw,
+  // uncast occurrences. Same helper hardening.test.mjs and the phase39
+  // evidence test already use.
+  const body = sqlCode(sql.slice(fnStart, sql.indexOf('$$;', fnStart)));
+
+  for (const col of columns) {
+    if (col.type !== 'text') continue; // only bare `text` columns are at risk here
+    const source = KNOWN_ENUM_BACKED_SOURCES[col.name];
+    if (!source) continue; // not sourced from a column known to be enum-backed
+    const escaped = source.replace('.', '\\.');
+    const cast = new RegExp(`${escaped}::text\\b`);
+    const bare = new RegExp(`(?<!::text\\s*as\\s+)\\b${escaped}\\b(?!::text)`, 'g');
+    assert.match(
+      body,
+      cast,
+      `${label}: column "${col.name}" is declared text but sourced from enum-backed ${source} with no ::text cast`
+    );
+    // Every occurrence of the raw source expression in the function body must
+    // be the cast form — not just at least one of several.
+    const rawOccurrences = (body.match(bare) ?? []).length;
+    assert.equal(
+      rawOccurrences,
+      0,
+      `${label}: found ${source} used without ::text somewhere in the function — the cast must cover every branch`
+    );
+  }
+}
+
+test('phase40 fixes the verification_status enum-vs-text return mismatch', () => {
+  // Forward-only: a new file, phase39 itself is never edited.
+  assert.doesNotMatch(phase39, /THE FIX\.|phase40/i);
+  assert.match(phase40, /phase40/i);
+
+  // THE regression this migration exists for: phase39, as deployed, has the
+  // bug. This is what proves the detector actually detects something, rather
+  // than trivially passing on any input.
+  assert.throws(
+    () => assertNoEnumTextMismatch(phase39, 'phase39'),
+    /verification_status.*with no ::text cast/s,
+    'the detector must actually fail against the known-broken phase39 definition'
+  );
+
+  // And phase40 must be clean.
+  assertNoEnumTextMismatch(phase40, 'phase40');
+
+  // Signature preserved exactly — same parameters, same defaults, same
+  // RETURNS TABLE shape (name AND type, column for column) as phase39.
+  const sig = (sql) =>
+    sql.slice(
+      sql.indexOf('create or replace function public.match_workers_semantic'),
+      sql.indexOf('language plpgsql', sql.indexOf('function public.match_workers_semantic'))
+    );
+  assert.equal(
+    sig(phase40).replace(/\s+/g, ' ').trim(),
+    sig(phase39).replace(/\s+/g, ' ').trim(),
+    'callable signature and RETURNS TABLE must be byte-identical to phase39'
+  );
+
+  // Ranking formula, thresholds and every exclusion preserved — spot-checked
+  // against the same literals the original tests verify, now sourced from
+  // phase40 (the live definition) instead of phase39 (superseded for this
+  // one function the moment phase40 shipped).
+  assert.match(phase40, /w_semantic     constant double precision := 0\.55;/);
+  assert.match(phase40, /where b\.sim >= v_floor/);
+  assert.match(phase40, /order by b\.final_score desc, b\.sim desc, b\.id asc/);
+  assert.match(phase40, /v_viewer     uuid := auth\.uid\(\);/);
+  assert.match(phase40, /raise exception 'Sign in to search for workers\.'/);
+  assert.match(phase40, /and p\.id <> v_viewer/);
+  assert.match(phase40, /and coalesce\(p\.banned, false\) = false/);
+  assert.match(phase40, /security definer/i);
+  assert.match(phase40, /set search_path = public, extensions, pg_temp/i);
+
+  // Grants preserved: same authorised roles, still revoked from anon/public.
+  assert.match(
+    phase40,
+    /revoke all on function public\.match_workers_semantic\([\s\S]*?\)\s*\n?\s*from public, anon;/
+  );
+  assert.match(
+    phase40,
+    /grant execute on function public\.match_workers_semantic\([\s\S]*?\)\s*\n?\s*to authenticated, service_role;/
+  );
+
+  // No other object touched — this is a single-function correction.
+  assert.doesNotMatch(phase40, /create table|drop table|drop function|alter table/i);
 });
 
 /** Comments in phase39 legitimately name the evidence that was REJECTED and
