@@ -24,7 +24,24 @@ one stack (PostJob, JobDetail, Chat, WorkerProfile) get a standalone
 route-param type instead of being tied to one parent stack.
 
 Auth and the legal gate sit above the tabs in `RootNavigator`: signed out →
-`AuthScreen`; signed in but documents unaccepted → `LegalGateScreen`.
+`AuthFlow`; signed in but documents unaccepted → `LegalGateScreen`.
+
+`AuthFlow` is its own native stack (Welcome → SignIn / CreateAccount) on the
+"Emerald Trust" brand palette in `lib/authTheme.ts`, not the in-app cream one.
+Authentication itself is unchanged — Supabase email + password through
+`AuthContext.login()` / `signUp()`. Phone numbers are collected on Create
+account as the profile value `signUp()` already takes, normalised to E.164 by
+`lib/phoneNumber.ts`; there is no phone-credential or OTP path.
+
+The branded launch animation (`screens/LaunchScreen.tsx`) is **not** a route.
+`LaunchGate` in `App.tsx` renders it as an absolute-fill sibling above the
+whole navigation container, so session restore runs underneath it and the
+destination is already mounted when it crossfades out.
+
+The brand mark in `assets/brand/brazos-b-leaf.png` is the supplied app-icon
+artwork with its opaque white backing replaced by a squircle alpha mask, so the
+emerald tile can sit on both the emerald launch background and ivory. The
+emblem itself is untouched, and the native app icon in `app.json` is unchanged.
 
 ## Two hiring systems, deliberately separate
 

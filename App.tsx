@@ -1,5 +1,5 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
@@ -21,7 +21,9 @@ import type {
   ProfileStackParamList,
 } from './lib/navigation';
 import { colors } from './lib/theme';
-import { AuthScreen } from './screens/AuthScreen';
+import { LaunchCompleteContext } from './lib/launchContext';
+import { AuthFlow } from './screens/AuthFlow';
+import { LaunchScreen } from './screens/LaunchScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { PostJobScreen } from './screens/PostJobScreen';
 import { ClientJobDetailScreen } from './screens/ClientJobDetailScreen';
@@ -324,7 +326,7 @@ function RootNavigator() {
     );
   }
 
-  if (!user) return <AuthScreen />;
+  if (!user) return <AuthFlow />;
 
   // Sits between authentication and the app itself, so it covers both cases
   // with one gate: a brand-new account meets it the moment sign-up completes
@@ -335,6 +337,36 @@ function RootNavigator() {
   }
 
   return <MainTabs />;
+}
+
+/**
+ * Holds the branded launch layer over the whole app while the Supabase session
+ * is restored.
+ *
+ * The layer is deliberately NOT a route: children mount and hydrate underneath
+ * it from the first frame, so hydration overlaps the animation instead of
+ * following it, and whatever the session resolves to is already on screen when
+ * the layer crossfades away. That is what keeps an authenticated user from
+ * catching a frame of the Welcome screen, and what means there is no blank
+ * frame in the handover.
+ *
+ * It renders once per process. Signing out later returns to Welcome without
+ * replaying it; a cold reload in Expo Go is a new process, so it plays again.
+ */
+function LaunchGate({ children }: PropsWithChildren) {
+  const { loading } = useAuth();
+  const [complete, setComplete] = useState(false);
+
+  return (
+    <LaunchCompleteContext.Provider value={complete}>
+      <View style={styles.root}>
+        {children}
+        {complete ? null : (
+          <LaunchScreen sessionReady={!loading} onFinish={() => setComplete(true)} />
+        )}
+      </View>
+    </LaunchCompleteContext.Provider>
+  );
 }
 
 export default function App() {
@@ -361,27 +393,36 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <AuthProvider>
-        <NavigationContainer
-          ref={navigationRef}
-          // A cold-start tap is delivered before this mounts, so the routing
-          // it requested is parked and replayed here.
-          onReady={flushPendingNavigation}
-        >
-          <RootNavigator />
-          {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
-              app.json's userInterfaceStyle, Android's default status bar
-              fill) to the system light/dark setting, which on a dark-mode
-              device rendered as a solid black strip above every screen's
-              light cream content. The app is light-only for now (see the
-              tab bar / Map hardcoding elsewhere), so the status bar matches. */}
-          <StatusBar style="dark" backgroundColor={colors.background} />
-        </NavigationContainer>
+        <LaunchGate>
+          <NavigationContainer
+            ref={navigationRef}
+            // A cold-start tap is delivered before this mounts, so the routing
+            // it requested is parked and replayed here.
+            onReady={flushPendingNavigation}
+          >
+            <RootNavigator />
+            {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
+                app.json's userInterfaceStyle, Android's default status bar
+                fill) to the system light/dark setting, which on a dark-mode
+                device rendered as a solid black strip above every screen's
+                light cream content. The app is light-only for now (see the
+                tab bar / Map hardcoding elsewhere), so the status bar matches.
+                LaunchScreen pushes its own light variant over this while it is
+                up, and unmounting pops back to this one. */}
+            <StatusBar style="dark" backgroundColor={colors.background} />
+          </NavigationContainer>
+        </LaunchGate>
       </AuthProvider>
     </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
+  // Positioning context for the launch layer, which is an absolute-fill
+  // sibling of the whole navigation container.
+  root: {
+    flex: 1,
+  },
   loader: {
     flex: 1,
     alignItems: 'center',

@@ -31,6 +31,11 @@ yarn-error.*
 .claude/
 brazos-review.zip
 
+# Supplied design comps (78MB of PNG/PDF/ZIP). Source material for the auth
+# flow, not something the app builds against — the production copy of the one
+# asset that ships from it lives in assets/brand/.
+design-reference/
+
 # macOS
 .DS_Store
 *.pem

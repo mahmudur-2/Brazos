@@ -2,6 +2,18 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Job, OpenJob } from './jobs';
 import type { ChatTarget } from './messages';
 
+// The signed-out flow. Not a tab: it replaces the whole tab bar until there is
+// a session, so it is its own stack rooted at Welcome. The branded launch
+// layer is not a route here — it renders above everything (see LaunchGate in
+// App.tsx) so the destination is already mounted when it fades out.
+export type AuthStackParamList = {
+  Welcome: undefined;
+  SignIn: undefined;
+  CreateAccount: undefined;
+};
+
+export type AuthStackNavigation = NativeStackNavigationProp<AuthStackParamList>;
+
 // Screens stacked inside the Home tab — posting, plus the "explore/browse
 // open jobs" flow. Find Work is no longer its own tab; BrowseJobs/JobDetail
 // live here now so it's still reachable from Home ("Find Work" button and
