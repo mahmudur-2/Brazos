@@ -5,7 +5,196 @@ the single source of truth for what's done, what's next, and why.
 
 ---
 
-## SESSION 3 — Major implementation pass (current, read this first)
+## SESSION 4 — Semantic worker matching (current, read this first)
+
+**Baseline:** branch `mainexpo`, HEAD `15d88e7`, tree clean.
+**Tip after this session:** the third commit below. Tree clean.
+
+| Hash | Subject |
+|---|---|
+| `ba298a9` | feat: add semantic worker matching storage and server function |
+| `f236a6e` | feat: rank worker search on meaning with a labelled fallback |
+| *(this commit)* | test: guard semantic worker matching and record the handoff |
+
+`stash@{0}` ("WIP international phone input after `5fc25be`") was **not
+applied, popped, dropped or modified** and is still the only stash.
+
+One bounded pass: **Phase 7 — semantic worker matching only.** Phases 6
+(video thumbnails/fullscreen) and 9-remainder (nearest hotspot) were NOT
+touched and remain exactly as Session 3 left them.
+
+### The defect, and why it was not a weighting problem
+
+Requirements PDF page 8: a request to *"organize boxes in a warehouse"*
+ranked a worker with a broad category tick above one whose completed work was
+*"pack a storage unit efficiently"*.
+
+Root cause, confirmed in source: **two different category vocabularies.**
+`jobs.category` is the `job_category` enum; `profiles.categories` is the
+ten-key `SKILL_CATEGORIES` text[]. `interpretQuery()` turns "boxes" into
+`packing`, and `searchWorkers()` then
+
+* shortlists on `profiles.categories && '{packing}'`, and
+* counts completed jobs whose `jobs.category` is in that same set.
+
+`packing` only became a job category in phase23, so **no older completed job
+is filed under it** — `completedInCategory` is structurally 0 for precisely
+the workers whose finished work is most relevant, and a checkbox is all that
+is left to rank on. No keyword tuning fixes that; the two sides have to be
+compared by meaning.
+
+### What was added
+
+| Piece | File |
+|---|---|
+| Migration (NOT DEPLOYED) | `supabase/phase39_worker_semantic_matching.sql` |
+| Edge Function (NOT DEPLOYED) | `supabase/functions/worker-search/index.ts` |
+| Client ranking + fallback | `lib/workerSearch.ts` |
+| Screen integration | `screens/WorkerSearchScreen.tsx` |
+| Tests | `tests/workerMatching.test.mjs` (19) |
+| Schema probe | `scripts/verify-schema.mjs` (phase39 block) |
+
+**Model: `gte-small`, 384 dimensions**, the Supabase Edge Runtime built-in.
+No external AI provider, API key or SDK was added, and `package.json` is
+unchanged.
+
+**One canonical document per worker** (`worker_semantic_docs`), not per job
+and not per portfolio item — one row to keep fresh, one distance operation to
+rank, no two embedding systems to disagree.
+
+**Evidence IN:** completed job titles + categories, portfolio captions +
+categories, advertised categories, public bio.
+**Evidence OUT, deliberately:** job descriptions (phase37 already ruled that a
+completed job's free text is the client's own words about their own home, and
+refused to return even the title), review text, and display names (name
+similarity would leak into relevance as an unearned signal).
+
+Titles are **embedding input only**. `source_text` is returned by exactly one
+function, `worker_semantic_refresh_queue()`, granted to `service_role` alone.
+A result explanation is built client-side from category keys and counts, so it
+structurally cannot quote a client's job title.
+
+### Hybrid weights (phase39 §5, declared as literals on purpose)
+
+| Signal | Weight |
+|---|---|
+| Semantic relevance | 0.55 |
+| Related completed jobs | 0.15 |
+| Rating (confidence-shrunk) | 0.15 |
+| Category compatibility | 0.10 |
+| Overall completed history | 0.05 |
+
+`tests/workerMatching.test.mjs` **parses these out of the SQL** and drives its
+ranking assertions with whatever is actually deployed, so the weights and the
+regression they guarantee cannot drift apart. Verified by mutation: setting
+`w_semantic` to 0.05 and `w_category` to 0.60 fails 4 tests including the
+page-8 regression.
+
+Rating is capped at 0.15 so a well-reviewed but irrelevant worker cannot climb
+over a relevant one — asserted directly, not just by example.
+
+### Staleness
+
+`is_stale` is a **GENERATED column** — `embedding is null or embedded_hash is
+distinct from source_hash` — so it cannot drift the way a hand-set boolean
+would. Triggers on `jobs` / `portfolio_items` / `profiles` recompute
+`source_text` + its md5 hash; changing the hash makes the row stale
+automatically. The old vector is deliberately **not** cleared on refresh, so a
+worker keeps ranking on their slightly-stale document instead of vanishing
+from search. The Edge Function re-embeds only stale rows, capped at 10 per
+invocation with a 4s budget. **No pgmq, pg_net or pg_cron** — none exist in
+this project and a queue would be heavy machinery for one row per worker.
+
+### Fallback
+
+`findWorkers()` is the single entry point. It returns `mode: 'semantic'` or
+`mode: 'fallback'`, and `resultHeading()` in `lib/` is the only thing that
+words it — "Top 12 best matches" vs "Top 12 matches". The screen cannot
+promote fallback results by accident, and `tests/hardening.test.mjs`'s ban on
+"AI"/"semantic" in the screen still passes unmodified.
+
+Falls back on: function not deployed, signed out, model unavailable, empty
+corpus, embedding failure, rank failure, timeout, malformed body.
+**An empty result array is NOT a fallback trigger** — "ranked, and nothing
+cleared the floor" is a real answer, and re-running keyword matching would pad
+the page with the workers the ranking just rejected. `relevance` stays null on
+the fallback path rather than being derived from keyword overlap.
+
+`searchWorkers()` itself is byte-for-byte the same matcher as before.
+
+### Security
+
+* `worker_semantic_docs`: RLS on, **no policies**, all grants revoked from
+  `public, anon, authenticated`. Not in the PostgREST surface at all.
+* All seven functions are `security definer` with
+  `set search_path = public, extensions, pg_temp`.
+* `match_workers_semantic()` is called with the **searching user's JWT**, so
+  `auth.uid()` drives "signed in" and "exclude me" server-side. Granted to
+  `authenticated, service_role`; revoked from `public, anon`.
+* Queue / apply / coverage are `service_role` **only**.
+* The Edge Function validates the JWT against `/auth/v1/user` and rejects a
+  service-role or anon key presented as a user token.
+* No RLS, policy or grant anywhere else was weakened.
+* The service-role key exists only in the Edge Function environment.
+  `tests/workerMatching.test.mjs` asserts `lib/` and `screens/` contain no
+  service-role reference.
+
+### DEPLOYMENT — nothing in this session is deployed
+
+```
+-- 1. Supabase → SQL Editor, paste and run:
+supabase/phase39_worker_semantic_matching.sql
+
+-- 2. One-time backfill (builds documents; vectors come later):
+select public.refresh_worker_semantic_doc(id) from public.profiles;
+```
+
+```bash
+npx supabase functions deploy worker-search
+```
+
+```bash
+node scripts/verify-schema.mjs
+```
+
+Then generate the vectors. The Edge Function tops up 10 stale documents per
+call, so invoke it repeatedly (or just search a few times in the app) until
+coverage reports `stale = 0`:
+
+```bash
+curl -X POST "$SUPABASE_URL/functions/v1/worker-search" \
+  -H "Authorization: Bearer $USER_JWT" \
+  -H "apikey: $SUPABASE_ANON_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"query":"organize boxes in a warehouse","categories":["packing"]}'
+```
+
+Check progress in the SQL editor with
+`select * from public.worker_semantic_coverage();`.
+
+phase39 is **purely additive** — no existing function signature changes — so
+it can be applied before or after an app build without breaking either.
+
+### Known limitations
+
+* **Nothing has been run against a live database or a deployed function.** The
+  ranking tests exercise the blend with supplied similarity values; gte-small's
+  actual judgement on real BRAZOS data is unverified.
+* `MIN_SIMILARITY = 0.3` is a conservative starting floor, not a measured one.
+  gte-small puts unrelated English well above zero, so this likely needs
+  raising once there is real coverage to measure against.
+* No index was added on `jobs (assigned_worker_id) where status = 'completed'`;
+  the per-search `stats` CTE scans completed jobs. Fine at ~90 seed jobs,
+  worth revisiting later.
+* Distance / service area is still absent from the contract because
+  `profiles` has no location column — there is no real data to put in it.
+* Chip-only searches (no typed text) go straight to the deterministic path by
+  design: a single machine key like `yard_work` is not a sentence to compare
+  meanings against.
+
+---
+
+## SESSION 3 — Major implementation pass
 
 **Baseline:** branch `mainexpo`, HEAD `5fc25be`, tree clean.
 **Tip after this session:** `62aceb0`. Tree clean.
@@ -23,12 +212,17 @@ in-repo). Phases below are numbered as the task numbered them.
 | 4 | Profile reviews screen + review photos | **Done** — `19738f6` |
 | 5 | Marketplace confirmation dialogs | **Done** — `83415c3` |
 | 6 | Video thumbnails + fullscreen playback | **NOT STARTED** |
-| 7 | Semantic worker matching | **NOT STARTED** |
+| 7 | Semantic worker matching | **Done in Session 4** — see above |
 | 8 | Profile action polish | **Done** — carried by Session 1 + Phases 3/4 |
 | 9 | Nearby / All Open Jobs discovery | **Partial** — bid counts done `62aceb0`; nearest-hotspot NOT started |
 | 10 | Regression hardening | **Partial** — per-phase guard tests added; no final sweep |
 
-### Migrations written this session (NONE DEPLOYED)
+### Migrations written this session
+
+> **Update (Session 4):** phase35–38 have since been **applied and verified**.
+> `node scripts/verify-schema.mjs` reports every object in phase15–38 present.
+> The "NONE DEPLOYED" warning below is kept for history; it no longer applies.
+> The only undeployed migration is now phase39.
 
 Apply in this order, in the Supabase SQL editor, **before** shipping an app
 build from this branch:
@@ -193,14 +387,12 @@ so cards degrade quietly until phase38 is deployed.
    - `components/JobVideo.tsx` is the single playback component and already
      uses `expo-video` with `nativeControls` / `contentFit="contain"` /
      `allowsFullscreen`. Extend it rather than writing a second player.
-3. **Phase 7 — semantic worker matching.** Not started, largest remaining.
-   Needs pgvector + an embedding store + a Supabase Edge Function + a provider
-   adapter + a hybrid ranking RPC. `tests/hardening.test.mjs` already has
-   "worker search ranks on stored evidence and claims nothing more" — read it
-   before touching `screens/WorkerSearchScreen.tsx`, it constrains the copy.
-   **No embedding provider is configured in this repo today** (checked). The
-   deterministic search must stay as the labelled fallback, and fallback
-   results must not be called AI.
+3. ~~**Phase 7 — semantic worker matching.**~~ **Done in Session 4** — see the
+   Session 4 section at the top of this file. Note for anyone extending it:
+   `tests/hardening.test.mjs`'s "worker search ranks on stored evidence and
+   claims nothing more" still bans "AI"/"semantic" from
+   `screens/WorkerSearchScreen.tsx`, which is why the ranking mode is worded in
+   `lib/workerSearch.ts` (`resultHeading()`) and never in the screen.
 4. **Phase 9 remainder — nearest-hotspot selection.** `hooks/useHotspots.ts`
    returns zone data but there is still no "nearest zone to the user" selector;
    `lib/geolocation.ts` has `resolveCurrentPlace()`. This is new geolocation

@@ -576,11 +576,17 @@ begin
       p.verification_status,
       p.rating_avg,
       p.rating_count,
-      coalesce(p.categories, '{}')::text[] as categories,
-      coalesce(
-        array(select unnest(coalesce(p.categories, '{}')) intersect select unnest(v_categories)),
-        '{}'
-      )::text[] as matched_categories,
+      coalesce(p.categories, '{}'::text[]) as categories,
+      -- ORDER BY, because INTERSECT guarantees no ordering of its own and the
+      -- first entry ends up in the result explanation. Cardinality is all the
+      -- score uses, but the sentence under a card should not change between
+      -- two identical searches.
+      array(
+        select unnest(coalesce(p.categories, '{}'::text[]))
+        intersect
+        select unnest(v_categories)
+        order by 1
+      ) as matched_categories,
       -- Which categories this worker's COMPLETED work is actually in, taken
       -- from the aggregate half of `evidence`. Never any free text, so a result
       -- explanation structurally cannot quote a client's job title.
