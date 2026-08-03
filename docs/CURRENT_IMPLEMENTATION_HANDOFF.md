@@ -175,11 +175,40 @@ Check progress in the SQL editor with
 phase39 is **purely additive** — no existing function signature changes — so
 it can be applied before or after an app build without breaking either.
 
+### Post-deployment fix — Edge Function v2
+
+phase39 and the Edge Function were deployed, and the function then returned
+**503 `corpus_empty` on every request**, with `worker_semantic_coverage()`
+stuck at `embedded = 0, stale = 6, total = 6`.
+
+**Root cause:** `rpc()` sent `apikey: ANON_KEY` together with
+`Authorization: Bearer SERVICE_KEY`. PostgREST resolves the role from that
+pair, so the three service-role RPCs (`worker_semantic_refresh_queue`,
+`apply_worker_embeddings`, `worker_semantic_coverage`) executed as **`anon`**
+— which phase39 §6 explicitly revokes EXECUTE from — and came back 401. Every
+one of those failures was swallowed into a bare `return 0`, so the corpus
+could never be built and the 503 gate fired forever. Nothing was logged, which
+is why Function Logs showed only booted/shutdown.
+
+**The migration was correct and was NOT changed** — the grants are right, the
+function was presenting the wrong credential. No phase40 was needed.
+
+Fixed in the Edge Function only: `apikey` and `Authorization` now always name
+the same identity (`serviceCredentials()` / `userCredentials()`); every
+failure path calls `console.error` through `logFailure()`; the refresh pass
+returns `{applied, queued, failure}` instead of `0`; `corpus_empty` carries a
+diagnostic detail string; and `session.run()` output is normalised with
+`Array.from()` so a typed array cannot silently break `JSON.stringify`.
+Two new tests fail if the credential pair or the logging is removed.
+
 ### Known limitations
 
-* **Nothing has been run against a live database or a deployed function.** The
-  ranking tests exercise the blend with supplied similarity values; gte-small's
-  actual judgement on real BRAZOS data is unverified.
+* **Semantic ranking quality is still unverified on real data.** The ranking
+  tests exercise the blend with supplied similarity values; gte-small's actual
+  judgement on real BRAZOS data has not been measured.
+* The corpus builds at most 10 workers per search, so the first search or two
+  after deployment can still fall back until
+  `worker_semantic_coverage()` reports `embedded > 0`.
 * `MIN_SIMILARITY = 0.3` is a conservative starting floor, not a measured one.
   gte-small puts unrelated English well above zero, so this likely needs
   raising once there is real coverage to measure against.

@@ -263,9 +263,9 @@ test('6 · the searching user is excluded server-side, not just in the client', 
   assert.match(phase39, /and p\.id <> v_viewer/);
   assert.match(phase39, /raise exception 'Sign in to search for workers\.'/);
 
-  // The Edge Function must pass the USER's token to the ranking call, or
+  // The Edge Function must pass the USER's identity to the ranking call, or
   // auth.uid() would be null (or the service role) and the exclusion useless.
-  assert.match(edgeFn, /caller\.token,/);
+  assert.match(edgeFn, /userCredentials\(caller\.token\)/);
   assert.doesNotMatch(
     edgeFn.slice(edgeFn.indexOf("'match_workers_semantic'")),
     /SERVICE_KEY/,
@@ -343,7 +343,7 @@ test('9 · every server failure shape falls back to the deterministic ranking', 
   for (const failure of ['unauthorized', 'embedding_failed', 'corpus_empty', 'rank_failed']) {
     assert.ok(edgeFn.includes(failure), `missing failure path: ${failure}`);
   }
-  assert.match(edgeFn, /return json\(\{ error: 'corpus_empty' \}, 503\);/);
+  assert.match(edgeFn, /return json\(\{ error: 'corpus_empty', detail \}, 503\);/);
 });
 
 test('10 · missing and stale embeddings are handled without a manual flag', () => {
@@ -463,8 +463,87 @@ test('12 · no raw vector or private evidence can reach a client', () => {
 
   // A user token is required, and a service-role key presented as one is not
   // a user.
-  assert.match(edgeFn, /if \(token === SERVICE_KEY \|\| \(ANON_KEY && token === ANON_KEY\)\) return null;/);
+  assert.match(edgeFn, /if \(token === SERVICE_KEY \|\| \(ANON_KEY && token === ANON_KEY\)\)/);
   assert.match(edgeFn, /\/auth\/v1\/user/);
+});
+
+test('service-role RPCs present a consistent credential pair', () => {
+  // THE LIVE FAILURE THIS GUARDS. The first deployment sent
+  // `apikey: ANON_KEY` alongside `Authorization: Bearer SERVICE_KEY`.
+  // PostgREST resolved those calls as `anon`, which phase39 revokes EXECUTE
+  // from, so worker_semantic_refresh_queue / apply_worker_embeddings /
+  // worker_semantic_coverage all returned 401. Every one of those failures was
+  // swallowed into `return 0`, the corpus stayed at embedded = 0 forever, and
+  // the function answered 503 corpus_empty on every request.
+  assert.match(edgeFn, /const serviceCredentials = \(\): Credentials => \(\{ apikey: SERVICE_KEY, bearer: SERVICE_KEY \}\)/);
+
+  // rpc() must take the pair, never reach for a key itself.
+  const rpcFn = edgeFn.slice(edgeFn.indexOf('function rpc('), edgeFn.indexOf('async function requireUser'));
+  assert.match(rpcFn, /apikey: credentials\.apikey/);
+  assert.match(rpcFn, /Authorization: `Bearer \$\{credentials\.bearer\}`/);
+  assert.doesNotMatch(rpcFn, /ANON_KEY \|\| SERVICE_KEY/);
+
+  // The three service_role-only RPCs must all use the service pair.
+  for (const fn of [
+    'worker_semantic_refresh_queue',
+    'apply_worker_embeddings',
+    'worker_semantic_coverage',
+  ]) {
+    const at = edgeFn.indexOf(`'${fn}'`);
+    assert.ok(at > -1, `${fn} must be called`);
+    assert.match(
+      edgeFn.slice(at, at + 400),
+      /serviceCredentials\(\)/,
+      `${fn} is granted to service_role only and must use the service credential pair`
+    );
+  }
+});
+
+test('every failure path is logged so Supabase Logs can name the cause', () => {
+  // The original function put the reason in the response body only, so
+  // Function Logs showed nothing but booted/shutdown.
+  assert.match(edgeFn, /function logFailure\(stage: string, detail: unknown\)/);
+  assert.match(edgeFn, /console\.error\(`\[worker-search\] \$\{stage\}: \$\{message\}`\)/);
+
+  // Each of the three 503 branches, and the silent steps that used to hide the
+  // real cause behind them.
+  for (const stage of [
+    'model_unavailable',
+    'embedding_failed',
+    'corpus_empty',
+    'refresh_queue_rpc',
+    'apply_embeddings_rpc',
+    'coverage_rpc',
+    'rank_failed',
+    'auth',
+  ]) {
+    assert.match(
+      edgeFn,
+      new RegExp(`logFailure\\('${stage}'`),
+      `${stage} must log before it returns`
+    );
+  }
+
+  // corpus_empty has to carry enough detail to tell a broken credential from a
+  // corpus that genuinely has nothing to embed.
+  assert.match(edgeFn, /refresh\(applied=\$\{refresh\.applied\}, queued=\$\{refresh\.queued\}/);
+  assert.match(edgeFn, /coverage\(\$\{coverage \?/);
+});
+
+test('the embedding is normalised to a plain number array', () => {
+  // A typed array would survive Array.isArray() being removed but still break
+  // JSON.stringify — it serialises as {"0":…} rather than [ … ], which fails
+  // apply_worker_embeddings' jsonb_typeof(...) = 'array' guard and the
+  // float8[] cast on p_query_embedding.
+  assert.match(edgeFn, /const vector = Array\.from\(raw \?\? \[\]\);/);
+  assert.match(edgeFn, /vector\.length !== EMBEDDING_DIMENSIONS/);
+  assert.match(edgeFn, /Number\.isFinite\(n\)/);
+
+  // The documented call shape for the built-in model.
+  assert.match(edgeFn, /new Supabase\.ai\.Session\(EMBEDDING_MODEL\)/);
+  assert.match(edgeFn, /session\.run\(text, \{ mean_pool: true, normalize: true \}\)/);
+  assert.match(edgeFn, /const EMBEDDING_MODEL = 'gte-small';/);
+  assert.match(edgeFn, /const EMBEDDING_DIMENSIONS = 384;/);
 });
 
 // ===========================================================================
