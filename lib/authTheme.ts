@@ -82,6 +82,8 @@ export const authRadius = {
   card: 20,
   chip: 17,
   iconButton: 14,
+  /** .otp span 14 -> 16, to stay proportional to the taller cell below. */
+  otpCell: 16,
 } as const;
 
 export const authSpacing = {
@@ -108,6 +110,14 @@ export const authSizes = {
   iconButton: 44,
   /** .auth-logo 52 -> 56. */
   logoAuth: 56,
+  /**
+   * A code cell. The reference's 42x50 renders as a rounded square once the
+   * width is allowed to grow into the row; these are the portrait proportions
+   * the shape is supposed to have — taller than the fields, and capped so six
+   * of them stay a row of slots rather than stretching into tiles.
+   */
+  otpCell: 64,
+  otpCellMaxWidth: 52,
   /** .launch-logo 104. */
   logoLaunch: 104,
   /**
@@ -143,6 +153,13 @@ export const authType = {
   note: { fontSize: 13, lineHeight: 18 },
   /** .top-title strong — ref 15 */
   navTitle: { fontSize: 15, fontWeight: '700' },
+  /**
+   * The same bar, one step up, for a screen whose title is the only thing
+   * naming what the user is doing. Verify phone uses it: it has no brand mark
+   * and no form label, so 15pt read as chrome rather than as the heading of
+   * the step.
+   */
+  navTitleLarge: { fontSize: 17, fontWeight: '700' },
   /** .launch h1 — ref 27/ls 5 */
   wordmark: { fontSize: 30, letterSpacing: 6 },
   /** .launch p — ref 12 */

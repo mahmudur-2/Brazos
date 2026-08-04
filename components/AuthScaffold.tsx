@@ -16,6 +16,11 @@ import { AuthBackdrop, type AuthBackdropVariant } from './AuthBackdrop';
 type AuthScaffoldProps = PropsWithChildren<{
   /** Small centred navigation title, as in the reference's .topbar. */
   title?: string;
+  /**
+   * `large` is one step up the scale, for a screen where the bar title is the
+   * only thing naming the step rather than a label above a form.
+   */
+  titleVariant?: 'default' | 'large';
   onBack?: () => void;
   /**
    * Decorative contour art behind the content. Off by default so a screen has
@@ -38,7 +43,13 @@ type AuthScaffoldProps = PropsWithChildren<{
  * contentContainer grows to fill, so a child can push itself to the bottom
  * with `marginTop: 'auto'` and still scroll when the viewport is too short.
  */
-export function AuthScaffold({ title, onBack, backdrop, children }: AuthScaffoldProps) {
+export function AuthScaffold({
+  title,
+  titleVariant = 'default',
+  onBack,
+  backdrop,
+  children,
+}: AuthScaffoldProps) {
   const showTopBar = Boolean(title || onBack);
 
   return (
@@ -72,7 +83,13 @@ export function AuthScaffold({ title, onBack, backdrop, children }: AuthScaffold
                 ) : (
                   <View style={styles.iconButton} />
                 )}
-                <Text style={styles.topTitle} numberOfLines={1}>
+                <Text
+                  style={[
+                    styles.topTitle,
+                    titleVariant === 'large' && styles.topTitleLarge,
+                  ]}
+                  numberOfLines={1}
+                >
                   {title ?? ''}
                 </Text>
                 {/* Mirrors the back button's width so the title stays optically
@@ -139,6 +156,9 @@ const styles = StyleSheet.create({
     color: authColors.ink,
     flex: 1,
     textAlign: 'center',
+  },
+  topTitleLarge: {
+    ...authType.navTitleLarge,
   },
   contentContainer: {
     flexGrow: 1,

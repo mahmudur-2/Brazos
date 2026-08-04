@@ -698,6 +698,169 @@ test('a full six-digit paste is handled by one input, not six', () => {
   assert.match(otp, /'sms-otp'/);
 });
 
+// ---------------------------------------------------------------------------
+// The keyboard. A regression guard for a real iOS-only failure: UIKit's
+// hitTest ignores views with alpha < 0.01, so an `opacity: 0` overlay input is
+// untouchable on device — and completely fine on the web, which is why a
+// browser pass missed it.
+// ---------------------------------------------------------------------------
+
+test('the code input is transparent, never zero-opacity', () => {
+  const otp = read('components/OtpInput.tsx');
+  const styles = otp.slice(otp.indexOf('const styles'));
+  const inputStyle = styles.slice(styles.indexOf('  input: {'));
+  const body = inputStyle.slice(0, inputStyle.indexOf('  },'));
+
+  // Anchored to a line start so the comment explaining *why* it isn't opacity 0
+  // doesn't count as the thing it warns about.
+  assert.doesNotMatch(
+    body,
+    /^\s*opacity:\s*0/m,
+    'opacity 0 makes the input untouchable on iOS — clear each visible part instead'
+  );
+  assert.match(body, /color: 'transparent'/);
+  assert.match(body, /backgroundColor: 'transparent'/);
+});
+
+test('nothing in the input can stop it taking focus or raising the keyboard', () => {
+  const otp = read('components/OtpInput.tsx');
+  for (const killer of [
+    /display:\s*'none'/,
+    /showSoftInputOnFocus/,
+    /editable=\{false\}/,
+    /focusable=\{false\}/,
+  ]) {
+    assert.doesNotMatch(otp, killer, `${killer} would break focus on native`);
+  }
+  // editable is driven by the caller's busy state, not hardcoded off.
+  assert.match(otp, /editable=\{editable\}/);
+});
+
+test('a tap anywhere on the row reaches focus()', () => {
+  const otp = read('components/OtpInput.tsx');
+  assert.match(otp, /onStartShouldSetResponder=\{\(\) => editable\}/);
+  assert.match(otp, /onResponderRelease=\{\(\) => inputRef\.current\?\.focus\(\)\}/);
+  assert.match(otp, /useImperativeHandle\(ref, \(\) => \(\{ focus: \(\) => inputRef\.current\?\.focus\(\) \}\)/);
+});
+
+test('the keyboard opens after the transition, and returns after every failure', () => {
+  const verify = read('screens/VerifyPhoneScreen.tsx');
+  // autoFocus fires mid-push and iOS drops it; the request has to wait for the
+  // screen to stop moving.
+  // The prop, not the word — the comment above the effect names it too.
+  assert.doesNotMatch(verify, /autoFocus=/, 'autoFocus is dropped mid-transition on iOS');
+  assert.match(verify, /useFocusEffect\(/);
+  assert.match(verify, /InteractionManager\.runAfterInteractions\(focusCode\)/);
+  assert.match(verify, /return \(\) => task\.cancel\(\)/, 'the delayed focus must be cancelled');
+
+  // Every path that leaves the user needing to type again.
+  const calls = (verify.match(/focusCode\(\);/g) ?? []).length;
+  assert.ok(calls >= 3, `expected refocus after incomplete, wrong and resent codes, saw ${calls}`);
+});
+
+test('native keyboard properties are the ones a code field needs', () => {
+  const otp = read('components/OtpInput.tsx');
+  assert.match(otp, /keyboardType="number-pad"/);
+  assert.match(otp, /inputMode="numeric"/);
+  assert.match(otp, /maxLength=\{OTP_LENGTH\}/);
+  assert.match(otp, /autoCorrect=\{false\}/);
+  assert.match(otp, /autoCapitalize="none"/);
+  assert.match(otp, /accessibilityLabel=\{`Verification code, \$\{OTP_LENGTH\} digits`\}/);
+});
+
+// ---------------------------------------------------------------------------
+// Cell geometry, checked as arithmetic rather than as a screenshot
+// ---------------------------------------------------------------------------
+
+/**
+ * Pull a numeric design token out of one named block of lib/authTheme.ts.
+ * Scoped by block because `otpCell` is a height in authSizes and a radius in
+ * authRadius, and an unscoped match would silently take whichever comes first.
+ */
+function token(source, block, name) {
+  const start = source.indexOf(`export const ${block} = {`);
+  assert.ok(start >= 0, `expected a ${block} block`);
+  const body = source.slice(start, source.indexOf('} as const', start));
+  const match = body.match(new RegExp(`\\b${name}:\\s*(\\d+)`));
+  assert.ok(match, `expected ${block}.${name}`);
+  return Number(match[1]);
+}
+
+test('six cells fit every supported width, as portrait slots not squares', () => {
+  const theme = read('lib/authTheme.ts');
+  const otp = read('components/OtpInput.tsx');
+
+  const gutter = token(theme, 'authSpacing', 'gutter');
+  const maxContent = token(theme, 'authSizes', 'maxContentWidth');
+  const cellMax = token(theme, 'authSizes', 'otpCellMaxWidth');
+  const cellHeight = token(theme, 'authSizes', 'otpCell');
+  const radius = token(theme, 'authRadius', 'otpCell');
+  const gap = Number(otp.match(/const CELL_GAP = (\d+)/)[1]);
+
+  // The shape the correction asked for: taller than it is wide.
+  assert.ok(cellHeight > cellMax, 'a cell must be taller than it is wide');
+  assert.ok(cellHeight >= 62 && cellHeight <= 68, `height ${cellHeight} outside 62-68`);
+  assert.ok(gap >= 9 && gap <= 12, `gap ${gap} outside 9-12`);
+  assert.ok(radius >= 15 && radius <= 18, `radius ${radius} outside 15-18`);
+
+  // Exactly what the stylesheet does: flex:1 inside the content column, capped.
+  const widthAt = (screen) => {
+    const content = Math.min(screen, maxContent) - gutter * 2;
+    return Math.min(cellMax, (content - gap * 5) / 6);
+  };
+
+  for (const screen of [320, 390, 430, 1440]) {
+    const w = widthAt(screen);
+    const content = Math.min(screen, maxContent) - gutter * 2;
+    assert.ok(w > 0, `cells collapse at ${screen}`);
+    assert.ok(w * 6 + gap * 5 <= content + 0.5, `the row overflows at ${screen}`);
+  }
+
+  // The reference width is the one the design was drawn at.
+  const at390 = widthAt(390);
+  assert.ok(at390 >= 48 && at390 <= 54, `390pt cell width ${at390} outside 48-54`);
+});
+
+test('the verify title is one step up from the rest of the auth bar', () => {
+  const theme = read('lib/authTheme.ts');
+  const scaffold = read('components/AuthScaffold.tsx');
+  const verify = read('screens/VerifyPhoneScreen.tsx');
+
+  const base = Number(theme.match(/navTitle: \{ fontSize: (\d+)/)[1]);
+  const large = Number(theme.match(/navTitleLarge: \{ fontSize: (\d+)/)[1]);
+  const growth = (large - base) / base;
+  assert.ok(growth > 0.1 && growth < 0.2, `expected ~15% larger, got ${Math.round(growth * 100)}%`);
+
+  assert.match(verify, /titleVariant="large"/);
+  assert.match(scaffold, /titleVariant === 'large' && styles\.topTitleLarge/);
+  // …and only this screen opts in, so Sign in and Create account are untouched.
+  for (const path of ['screens/SignInScreen.tsx', 'screens/CreateAccountScreen.tsx']) {
+    assert.doesNotMatch(read(path), /titleVariant/, `${path} keeps the default bar`);
+  }
+});
+
+test('resend is the danger token when pressable, and muted while counting down', () => {
+  const verify = read('screens/VerifyPhoneScreen.tsx');
+  const styles = verify.slice(verify.indexOf('const styles'));
+
+  const enabled = styles.slice(styles.indexOf('  resendText: {'));
+  assert.match(
+    enabled.slice(0, enabled.indexOf('  },')),
+    /color: authColors\.danger/,
+    'the pressable resend uses the semantic danger token'
+  );
+
+  const waiting = styles.slice(styles.indexOf('  resendTextWaiting: {'));
+  assert.match(
+    waiting.slice(0, waiting.indexOf('  },')),
+    /color: authColors\.muted/,
+    'the countdown stays muted — there is nothing to act on yet'
+  );
+
+  // Not a new hex, and not a signal red: the palette's own restrained brick.
+  assert.match(read('lib/authTheme.ts'), /danger: '#9C3F35'/);
+});
+
 test('mock success never claims a session and says so on screen', () => {
   assert.match(verify, /verified-mock/);
   assert.match(

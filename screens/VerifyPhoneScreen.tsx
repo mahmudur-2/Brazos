@@ -1,6 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  Animated,
+  InteractionManager,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthNotice } from '../components/AuthNotice';
@@ -68,6 +81,36 @@ export function VerifyPhoneScreen() {
 
   const settled = stale || mockVerified;
 
+  const focusCode = useCallback(() => otpRef.current?.focus(), []);
+
+  /**
+   * Open the keyboard once the screen is actually settled.
+   *
+   * `autoFocus` is deliberately not used: it fires while the push transition is
+   * still running, and on iOS a focus requested mid-transition is silently
+   * dropped — the field ends up focused with no keyboard. Waiting for
+   * interactions to finish means the request lands on a screen that has
+   * stopped moving. useFocusEffect rather than useEffect so coming back from
+   * the country picker or a background app re-opens it too.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      if (settled) return;
+
+      // On the web there is no native push animation to wait out, and
+      // react-native-web schedules runAfterInteractions through
+      // requestIdleCallback — which a backgrounded or hidden tab may never
+      // run at all, leaving the field unfocused forever.
+      if (Platform.OS === 'web') {
+        focusCode();
+        return;
+      }
+
+      const task = InteractionManager.runAfterInteractions(focusCode);
+      return () => task.cancel();
+    }, [focusCode, settled])
+  );
+
   // Read the live challenge rather than trusting the route params: after a
   // reload the params survive in navigation state but the challenge does not.
   useEffect(() => {
@@ -132,6 +175,9 @@ export function VerifyPhoneScreen() {
       setNotice(null);
       setError(`Enter all ${OTP_LENGTH} digits.`);
       shake();
+      // An incomplete code is never submitted; the user is put straight back
+      // into the field to finish it.
+      focusCode();
       return;
     }
 
@@ -180,6 +226,9 @@ export function VerifyPhoneScreen() {
       setCode('');
     }
     shake();
+    // Submitting blurs the field on some platforms; a wrong code has to leave
+    // the user able to correct it without hunting for the keyboard again.
+    focusCode();
   }
 
   async function handleResend() {
@@ -204,7 +253,7 @@ export function VerifyPhoneScreen() {
       setDevCode(result.devCode ?? null);
       setCode('');
       setNotice('A new code is on its way. The previous one no longer works.');
-      otpRef.current?.focus();
+      focusCode();
       return;
     }
 
@@ -231,6 +280,7 @@ export function VerifyPhoneScreen() {
   return (
     <AuthScaffold
       title="Verify phone"
+      titleVariant="large"
       onBack={() => leaveChallenge(() => navigation.goBack())}
       backdrop="soft"
     >
@@ -502,11 +552,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Available: the reference's danger token, not the emerald used for every
+  // other link on this surface. Resending is the one control here that
+  // invalidates something — the code already sent — so it reads as a
+  // correction rather than as the next step. #9C3F35 is the palette's own
+  // restrained brick, not a signal red.
   resendText: {
     fontSize: 14,
     fontWeight: '700',
-    color: authColors.emerald,
+    color: authColors.danger,
   },
+  // Counting down: no colour at all, because there is nothing to act on yet.
   resendTextWaiting: {
     color: authColors.muted,
   },

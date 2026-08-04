@@ -1,6 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
-import { authColors, authRadius, authSizes, authSpacing } from '../lib/authTheme';
+import { authColors, authRadius, authSizes } from '../lib/authTheme';
 import { OTP_LENGTH } from '../lib/phoneAuth';
 
 /**
@@ -13,9 +13,18 @@ import { OTP_LENGTH } from '../lib/phoneAuth';
  * autofill and "read the code from a text message" all work because they are
  * just text editing, and assistive technology sees a single labelled field.
  *
- * The input is transparent and stretched over the cells rather than hidden
- * off-screen: it stays hit-testable and, on web, keeps its natural place in
- * the focus order.
+ * HOW THE INPUT IS HIDDEN, and why it is not `opacity: 0`.
+ *
+ * It used to be. That works on the web and is completely dead on iOS: UIKit's
+ * `hitTest(_:with:)` ignores any view whose alpha is below 0.01, so an
+ * `opacity: 0` TextInput is not merely invisible, it is untouchable — taps
+ * fall straight through it and the keyboard never opens. Nothing about that is
+ * visible on Expo web, where a zero-opacity input still receives pointer
+ * events, which is exactly why it survived a browser pass.
+ *
+ * So the input is transparent instead of invisible: alpha stays 1, and the
+ * text, caret, selection and background are individually transparent. It
+ * renders nothing, and it is a real, hit-testable, focusable native input.
  */
 
 export type OtpInputHandle = { focus: () => void };
@@ -29,7 +38,9 @@ type OtpInputProps = {
   onSubmitEditing?: () => void;
 };
 
-const CELL_HEIGHT = authSizes.field + 2;
+// Wide enough to separate the cells, tight enough that six of them plus five
+// gaps still fit inside a 320pt screen's content width without clipping.
+const CELL_GAP = 10;
 
 export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpInput(
   { value, onChangeText, invalid = false, editable = true, onSubmitEditing },
@@ -45,13 +56,18 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
   const activeIndex = Math.min(value.length, OTP_LENGTH - 1);
 
   return (
-    // A plain View, not a Pressable: the input below is an absolute fill over
-    // the whole row and is the last child, so it is already what a tap on any
-    // cell hits. A Pressable here would add nothing and would put a second,
-    // nameless tab stop in front of the field on web (react-native-web gives
-    // every Pressable tabIndex 0, and ignores `focusable`).
     <View style={styles.container}>
-      <View style={styles.cells}>
+      {/* A sibling of the input, not an ancestor of it: the input is declared
+          last, so it sits on top and takes the touch itself (which is what
+          keeps long-press-to-paste working). This responder is the fallback
+          for any pixel the input does not cover, and it is what guarantees a
+          tap anywhere on the row reaches focus() even if the overlay's
+          geometry ever changes. */}
+      <View
+        style={styles.cells}
+        onStartShouldSetResponder={() => editable}
+        onResponderRelease={() => inputRef.current?.focus()}
+      >
         {cells.map((char, index) => (
           <View
             key={index}
@@ -77,18 +93,21 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
         keyboardType="number-pad"
         inputMode="numeric"
         maxLength={OTP_LENGTH}
-        // The caret would sit under the cell glyphs; the active-cell outline is
-        // the cursor here.
+        // The active-cell outline is the cursor here, so the real one — and
+        // the selection highlight behind the transparent glyphs — are hidden
+        // rather than drawn over the cells.
         caretHidden
-        // Pinned to the end so typing always appends and backspace always
-        // removes the last digit, however the user tapped into the field.
-        selection={{ start: value.length, end: value.length }}
+        selectionColor="transparent"
+        autoCorrect={false}
+        autoCapitalize="none"
+        spellCheck={false}
+        // iOS reads the code out of the incoming message with this; Android
+        // uses the autofill hint below.
         textContentType="oneTimeCode"
         autoComplete={Platform.select({
           android: 'sms-otp',
           default: 'one-time-code',
         })}
-        autoCorrect={false}
         returnKeyType="go"
         accessibilityLabel={`Verification code, ${OTP_LENGTH} digits`}
         accessibilityHint="Enter the code sent by text message"
@@ -103,20 +122,20 @@ const styles = StyleSheet.create({
   },
   cells: {
     flexDirection: 'row',
-    gap: authSpacing.sm,
-    // Once the cells hit their 56pt cap they stop filling the row, so the
+    gap: CELL_GAP,
+    // Once the cells hit their width cap they stop filling the row, so the
     // leftover width is split either side rather than left as a notch on the
     // right — visible from about 420pt up, and on a wide web window.
     justifyContent: 'center',
   },
   cell: {
-    // flex, not a fixed 42pt: six fixed cells plus their gaps overflow a 320pt
-    // screen's content width. They shrink instead, and stop growing at 56 so
-    // they can't stretch into a row of tiles on a wide web window.
+    // flex, not a fixed width: six fixed cells plus their gaps overflow a
+    // 320pt screen. They shrink instead, and stop growing at the cap so they
+    // stay portrait slots rather than stretching into rounded squares.
     flex: 1,
-    maxWidth: 56,
-    height: CELL_HEIGHT,
-    borderRadius: authRadius.field,
+    maxWidth: authSizes.otpCellMaxWidth,
+    height: authSizes.otpCell,
+    borderRadius: authRadius.otpCell,
     borderWidth: 1,
     borderColor: authColors.line,
     backgroundColor: authColors.surface,
@@ -133,7 +152,7 @@ const styles = StyleSheet.create({
     borderColor: authColors.danger,
   },
   cellText: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     color: authColors.ink,
   },
@@ -142,11 +161,14 @@ const styles = StyleSheet.create({
   },
   input: {
     ...StyleSheet.absoluteFillObject,
-    // Transparent rather than hidden: `display:none` / off-screen inputs lose
-    // the software keyboard on some Android builds and drop out of the web
-    // focus order entirely. Zero opacity also takes the browser's own focus
-    // ring with it, so nothing is drawn over the cells.
-    opacity: 0,
+    // Transparent, NOT `opacity: 0` — see the module comment. Every visible
+    // part is individually cleared so the view still renders nothing while
+    // staying hit-testable on iOS.
     color: 'transparent',
+    backgroundColor: 'transparent',
+    // Web only in effect: stops the browser drawing its focus ring over the
+    // cells. `outlineStyle: 'none'` is not in React Native's style types;
+    // zero width is the supported way to say the same thing.
+    outlineWidth: 0,
   },
 });
