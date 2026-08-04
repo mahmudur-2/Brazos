@@ -50,23 +50,30 @@ test('the status indicator is a status, not a switch', () => {
   // A Switch here would say "you may turn this on", which is exactly what the
   // user must not be able to do.
   assert.doesNotMatch(gate, /<Switch/, 'a togglable control would misrepresent the gate');
-  assert.match(gate, /name=\{done \? 'checkmark-circle' : 'ellipse-outline'\}/);
+  // Two branches, and neither is a control: a check once done, an empty ring
+  // until then.
+  assert.match(gate, /name="checkmark-circle"/);
+  assert.match(gate, /name="ellipse-outline"/);
+  assert.doesNotMatch(gate, /onPress=\{\(\) => setSeen/, 'nothing may complete a document by tap');
   // Announced as a button that opens the document, not as a checkbox.
   assert.match(gate, /accessibilityHint="Opens this document"/);
 });
 
 test('opening a document does not complete it — only reaching its end does', () => {
-  // Every place the completion state is written. If a press handler ever
-  // appears in this list, tapping a row would be enough to satisfy the gate.
-  const writes = gate.match(/setSeen\(/g) ?? [];
-  assert.equal(writes.length, 2, `expected exactly two writers, saw ${writes.length}`);
+  // Completion is written in exactly one place, and only two things call it —
+  // both of them measurements of the document, not of a press.
+  const writes = gate.match(/setSeen\(\(prev\)/g) ?? [];
+  assert.equal(writes.length, 1, `completion should have one writer, saw ${writes.length}`);
+
+  const callers = gate.match(/markSeen\(/g) ?? [];
+  assert.equal(callers.length, 3, 'markSeen: one definition, two call sites');
 
   for (const fn of ['onScroll', 'onContentSizeChange']) {
     const body = gate.slice(gate.indexOf(`function ${fn}(`));
     assert.match(
       body.slice(0, body.indexOf('\n  }')),
-      /setSeen\(/,
-      `${fn} should be one of the two writers`
+      /markSeen\(/,
+      `${fn} should be one of the two callers`
     );
   }
 
@@ -92,7 +99,8 @@ test('reaching the end is measured with a tolerance, not pixel equality', () => 
 
 test('each document is tracked separately', () => {
   assert.match(gate, /useState<Record<LegalDocumentKey, boolean>>\(\{\s*\n\s*terms: false,\s*\n\s*privacy: false,/);
-  assert.match(gate, /\.\.\.prev, \[tab\]: true/);
+  // Only the named document is written, never both.
+  assert.match(gate, /\.\.\.prev, \[key\]: true/);
   assert.match(gate, /const bothSeen = seen\.terms && seen\.privacy;/);
 });
 
@@ -111,7 +119,7 @@ test('the CTA needs the explicit agreement AND both documents', () => {
   assert.match(gate, /disabled=\{!agreed \|\| !bothSeen\}/);
   // …and the handler re-checks rather than trusting the disabled prop alone.
   const handler = gate.slice(gate.indexOf('async function handleContinue()'));
-  assert.match(handler.slice(0, 200), /if \(!agreed \|\| saving\) return;/);
+  assert.match(handler.slice(0, 200), /if \(!agreed \|\| !bothSeen \|\| saving\) return;/);
 });
 
 test('a double tap cannot record acceptance twice', () => {
@@ -174,8 +182,47 @@ test('a version bump re-prompts, which is what makes this a gate and not a flag'
 // ===========================================================================
 
 test('completion is spelled out, never carried by colour alone', () => {
-  assert.match(gate, /done \? 'Read to the end' : 'Scroll to the end to complete'/);
+  // Visible state, including which document to read next.
+  assert.match(gate, /done \? 'Read to the end' : isNext \? 'Read this next' : 'Not finished'/);
+  // …and the same thing again for a screen reader.
   assert.match(gate, /done \? 'Read to the end\.' : 'Not finished\.'/);
+  assert.match(gate, /`\$\{LEGAL_DOCUMENTS\[key\]\.title\} review complete`/);
+});
+
+// ---------------------------------------------------------------------------
+// Guidance, unlock and the announcements that carry them
+// ---------------------------------------------------------------------------
+
+test('the scroll hint appears, then leaves on its own and on first scroll', () => {
+  assert.match(gate, /Scroll to the end to continue/);
+  // Two ways out, so it can never become something to get past.
+  assert.match(gate, /setTimeout\(\(\) => \{\s*\n\s*if \(mounted\.current\) setGuidanceDismissed\(true\);/);
+  const onScroll = gate.slice(gate.indexOf('function onScroll('));
+  assert.match(onScroll.slice(0, onScroll.indexOf('\n  }')), /setGuidanceDismissed\(true\)/);
+  // It must never take a touch away from the document underneath it.
+  assert.match(gate, /pointerEvents="none"/);
+  assert.match(gate, /accessibilityElementsHidden/);
+});
+
+test('the agreement unlock is announced, and only once', () => {
+  assert.match(gate, /Both documents reviewed\. Agreement is now available\./);
+  assert.match(gate, /if \(!bothSeen \|\| wasUnlocked\.current\) return;/);
+  // Reaching the end of a document announces that document by name.
+  assert.match(gate, /review complete/);
+});
+
+test('the next document is offered explicitly, never forced', () => {
+  assert.match(gate, /title=\{`Review \$\{nextDocument\.title\}`\}/);
+  assert.match(gate, /onPress=\{\(\) => switchTab\(nextDocument\.key\)\}/);
+  // The offer is a button; nothing navigates on its own.
+  assert.doesNotMatch(gate, /useEffect\([^)]*switchTab/);
+});
+
+test('reduced motion still completes every state', () => {
+  // Each animation has a reduced-motion branch that jumps to the end value
+  // rather than being skipped, so no state is only reachable by animating.
+  assert.match(gate, /if \(reducedMotion\) \{\s*\n\s*unlock\.setValue\(1\);/);
+  assert.match(gate, /if \(reducedMotion\) \{\s*\n\s*check\.setValue\(1\);/);
 });
 
 test('the gate is on the auth palette and hardcodes no colour of its own', () => {

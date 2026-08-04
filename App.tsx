@@ -23,6 +23,7 @@ import type {
 import { colors } from './lib/theme';
 import { LaunchCompleteContext } from './lib/launchContext';
 import { AuthFlow } from './screens/AuthFlow';
+import { OnboardingFlow } from './screens/OnboardingFlow';
 import { LaunchScreen } from './screens/LaunchScreen';
 import { HomeScreen } from './screens/HomeScreen';
 import { PostJobScreen } from './screens/PostJobScreen';
@@ -44,6 +45,8 @@ import { NotificationSettingsScreen } from './screens/NotificationSettingsScreen
 import { LegalDocumentScreen } from './screens/LegalDocumentScreen';
 import { LegalGateScreen } from './screens/LegalGateScreen';
 import { useLegalGate } from './hooks/useLegalGate';
+import { useSetupStatus } from './hooks/useSetupStatus';
+import { consumePendingLanding } from './lib/setupLanding';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -232,6 +235,23 @@ function MainTabs() {
   const bottomInset = Math.min(insets.bottom, TAB_BAR_SAFE_BOTTOM);
   const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + bottomInset;
 
+  // "Start in: Find work" lands on the existing BrowseJobs screen inside the
+  // Home tab. It is applied here rather than by Setup because finishing setup
+  // does not navigate — it swaps this whole tree in, and there is no navigator
+  // alive at that moment to point anywhere. Consumed once, so a later remount
+  // cannot yank the user off whatever they had since opened.
+  useEffect(() => {
+    if (consumePendingLanding() !== 'work') return;
+    // One frame, so the tab navigator has finished mounting and the jump lands
+    // on a real stack rather than being dropped.
+    const frame = requestAnimationFrame(() => {
+      if (navigationRef.isReady()) {
+        navigationRef.navigate('Home', { screen: 'BrowseJobs' });
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -313,12 +333,16 @@ function MainTabs() {
 function RootNavigator() {
   const { user, loading } = useAuth();
   const legal = useLegalGate();
+  const setup = useSetupStatus();
 
   // Lives inside NavigationContainer so a tapped notification always has a
   // mounted container to route through.
   usePushNotifications();
 
-  if (loading || (user && legal.state === 'loading')) {
+  // Both gates are resolved before anything authenticated renders. Letting
+  // either answer arrive late is what would show Home for a frame and then
+  // pull it away, so they are waited on together rather than in sequence.
+  if (loading || (user && (legal.state === 'loading' || setup.state === 'loading'))) {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color={colors.primary} />
@@ -328,10 +352,22 @@ function RootNavigator() {
 
   if (!user) return <AuthFlow />;
 
-  // Sits between authentication and the app itself, so it covers both cases
-  // with one gate: a brand-new account meets it the moment sign-up completes
-  // (nothing is usable before it), and an existing account meets it on the
-  // next launch after the documents change.
+  // The one-time step. It fronts the legal gate rather than duplicating it —
+  // the same acceptance state decides both, so finishing setup and satisfying
+  // the gate below are the same event.
+  if (setup.state === 'incomplete') {
+    return (
+      <OnboardingFlow
+        legalComplete={legal.state === 'accepted'}
+        onLegalAccepted={legal.markAccepted}
+        onFinished={setup.markComplete}
+      />
+    );
+  }
+
+  // Still reached on its own for the case setup does not cover: an existing,
+  // long-since-set-up account whose accepted version no longer matches the
+  // current one. That is a blocking re-prompt, not onboarding.
   if (legal.state === 'needs_acceptance') {
     return <LegalGateScreen onAccepted={legal.markAccepted} />;
   }

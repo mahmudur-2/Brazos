@@ -48,6 +48,19 @@ export type VerifyPhoneParams = {
 
 export type AuthStackNavigation = NativeStackNavigationProp<AuthStackParamList>;
 
+// The one-time step between authentication and the app. Its own stack rather
+// than a screen inside AuthFlow, because it is only reachable *with* a
+// session — and because the legal gate has to be a real pushed route here so
+// Setup stays mounted underneath it and its entrance doesn't replay on the
+// way back. LegalGate takes no params: it reads the documents and the
+// acceptance record from lib/legal, which is the only source for either.
+export type OnboardingStackParamList = {
+  Setup: undefined;
+  LegalGate: undefined;
+};
+
+export type OnboardingStackNavigation = NativeStackNavigationProp<OnboardingStackParamList>;
+
 // Screens stacked inside the Home tab — posting, plus the "explore/browse
 // open jobs" flow. Find Work is no longer its own tab; BrowseJobs/JobDetail
 // live here now so it's still reachable from Home ("Find Work" button and

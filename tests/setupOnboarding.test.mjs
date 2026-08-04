@@ -1,0 +1,481 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
+import { dirname, join } from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const read = (path) => readFileSync(join(root, path), 'utf8');
+
+// ===========================================================================
+// The persistence rules, executed rather than restated
+// ===========================================================================
+// lib/setupState.ts is deliberately free of React Native imports so the
+// keying and parsing can be run here. The AsyncStorage half lives in
+// lib/setupStorage.ts and is checked as source below.
+const toDataUrl = (js) =>
+  'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+
+const { DEFAULT_LANDING, isLandingPreference, parseSetupRecord, serializeSetupRecord, setupStorageKey } =
+  await import(toDataUrl(stripTypeScriptTypes(read('lib/setupState.ts'), { mode: 'strip' })));
+
+const app = read('App.tsx');
+const setup = read('screens/SetupScreen.tsx');
+const flow = read('screens/OnboardingFlow.tsx');
+const routes = read('lib/navigation.ts');
+const status = read('hooks/useSetupStatus.ts');
+const perms = read('hooks/useSetupPermissions.ts');
+const storage = read('lib/setupStorage.ts');
+const row = read('components/SetupRow.tsx');
+const choice = read('components/SetupChoiceCard.tsx');
+
+// ---------------------------------------------------------------------------
+// Per-user scoping and safe parsing
+// ---------------------------------------------------------------------------
+
+test('setup completion is scoped to one authenticated user', () => {
+  const a = setupStorageKey('user-a');
+  const b = setupStorageKey('user-b');
+  assert.notEqual(a, b, 'two accounts must not share a key');
+  assert.match(a, /user-a$/);
+  // Namespaced and versioned, so it cannot collide with another feature's
+  // key and a future shape change can simply use a new one.
+  assert.match(a, /^brazos\.setup\.v1\./);
+});
+
+test('one user’s completed setup never applies to another', () => {
+  const stored = { [setupStorageKey('user-a')]: serializeSetupRecord({ completed: true, landing: 'work' }) };
+  // Reading as a different user finds nothing, so that account sees Setup.
+  assert.equal(parseSetupRecord(stored[setupStorageKey('user-b')]), null);
+  assert.deepEqual(parseSetupRecord(stored[setupStorageKey('user-a')]), {
+    completed: true,
+    landing: 'work',
+  });
+});
+
+test('anything unreadable means "not set up", never "set up"', () => {
+  // The safe direction: an extra screen, rather than skipping the legal step.
+  for (const bad of [
+    null,
+    undefined,
+    '',
+    'not json',
+    '{',
+    '[]',
+    '"a string"',
+    '42',
+    'null',
+    JSON.stringify({}),
+    JSON.stringify({ completed: false, landing: 'hire' }),
+    JSON.stringify({ completed: 'yes', landing: 'hire' }),
+    JSON.stringify({ landing: 'hire' }),
+  ]) {
+    assert.equal(parseSetupRecord(bad), null, `${JSON.stringify(bad)} must not read as complete`);
+  }
+});
+
+test('a valid completion with a broken choice keeps the completion', () => {
+  // Losing the preference is cosmetic; losing the completion would re-run the
+  // legal step for someone who already accepted.
+  for (const landing of ['sideways', '', null, 7, undefined]) {
+    assert.deepEqual(parseSetupRecord(JSON.stringify({ completed: true, landing })), {
+      completed: true,
+      landing: DEFAULT_LANDING,
+    });
+  }
+});
+
+test('the record round-trips, and only the two known choices are choices', () => {
+  for (const landing of ['hire', 'work']) {
+    assert.deepEqual(parseSetupRecord(serializeSetupRecord({ completed: true, landing })), {
+      completed: true,
+      landing,
+    });
+    assert.equal(isLandingPreference(landing), true);
+  }
+  for (const not of ['worker', 'customer', 'admin', '', null, {}, 0]) {
+    assert.equal(isLandingPreference(not), false);
+  }
+  // The reference screen shows Hire help pre-selected.
+  assert.equal(DEFAULT_LANDING, 'hire');
+});
+
+// ---------------------------------------------------------------------------
+// Gating
+// ---------------------------------------------------------------------------
+
+test('nothing authenticated renders until both gates have answered', () => {
+  // The flash this prevents: Home mounting on a default, then being pulled
+  // away when the real answer lands a tick later.
+  assert.match(
+    app,
+    /if \(loading \|\| \(user && \(legal\.state === 'loading' \|\| setup\.state === 'loading'\)\)\)/
+  );
+  // Order matters: signed out is answered before either gate is consulted.
+  assert.ok(
+    app.indexOf("if (!user) return <AuthFlow />;") < app.indexOf("setup.state === 'incomplete'"),
+    'the signed-out branch must come first'
+  );
+});
+
+test('an incomplete user gets Setup, a completed one goes straight through', () => {
+  assert.match(app, /if \(setup\.state === 'incomplete'\) \{\s*\n\s*return \(\s*\n\s*<OnboardingFlow/);
+  assert.match(app, /return <MainTabs \/>;/);
+  // The version-bump re-prompt survives as its own branch, after setup.
+  assert.ok(
+    app.indexOf("setup.state === 'incomplete'") < app.indexOf("legal.state === 'needs_acceptance'"),
+    'setup fronts the gate; the bare gate is the leftover case'
+  );
+  assert.match(app, /if \(legal\.state === 'needs_acceptance'\) \{\s*\n\s*return <LegalGateScreen/);
+});
+
+test('a signed-out user is never asked to set anything up', () => {
+  // Mock phone verification creates no session, so `user` stays null and this
+  // is the branch it lands on — Setup is unreachable without a real session.
+  assert.match(status, /if \(!userId\) \{[\s\S]*?setState\('complete'\);/);
+  assert.match(setup, /const \{ user, logout \} = useAuth\(\)/);
+  // No write is even attempted without one.
+  assert.match(setup, /if \(!legalComplete \|\| saving \|\| !user\) return;/);
+});
+
+test('setup status is re-read when the account changes', () => {
+  assert.match(status, /\}, \[userId\]\);/, 'the read must depend on which user is signed in');
+  assert.match(status, /if \(!active\) return;/, 'a late read for a previous user is dropped');
+});
+
+// ---------------------------------------------------------------------------
+// Routes and destinations
+// ---------------------------------------------------------------------------
+
+test('the onboarding stack is two screens and reuses the real legal gate', () => {
+  assert.match(routes, /export type OnboardingStackParamList = \{\s*\n\s*Setup: undefined;\s*\n\s*LegalGate: undefined;/);
+  assert.match(flow, /<Stack\.Screen name="Setup">/);
+  assert.match(flow, /<Stack\.Screen\s*\n\s*name="LegalGate"/);
+  // The existing screen, imported — not a copy of it.
+  assert.match(flow, /import \{ LegalGateScreen \} from '\.\/LegalGateScreen'/);
+  assert.doesNotMatch(flow, /TERMS_OF_SERVICE|PRIVACY_POLICY|MarkdownText/);
+});
+
+test('acceptance is reported up to the one gate the app already reads', () => {
+  // Not tracked in the stack: a second source of truth for "has this user
+  // accepted" is exactly how the two could disagree.
+  assert.match(flow, /onLegalAccepted\(\);/);
+  assert.match(app, /onLegalAccepted=\{legal\.markAccepted\}/);
+  assert.match(app, /legalComplete=\{legal\.state === 'accepted'\}/);
+  assert.doesNotMatch(flow, /useState/, 'the flow holds no legal state of its own');
+});
+
+test('Terms & Privacy opens the route once, and cannot double-push', () => {
+  assert.match(setup, /if \(navigation\.isFocused\(\)\) navigation\.navigate\('LegalGate'\)/);
+  assert.match(setup, /onPress=\{openLegal\}/);
+});
+
+test('the landing choice routes to the existing screens, and creates none', () => {
+  // BrowseJobs already lives in HomeStack; this only navigates to it.
+  assert.match(app, /navigationRef\.navigate\('Home', \{ screen: 'BrowseJobs' \}\)/);
+  assert.match(read('lib/navigation.ts'), /BrowseJobs: undefined;/);
+  assert.match(app, /<HomeStack\.Screen name="BrowseJobs" component=\{BrowseJobsScreen\} \/>/);
+  // Hire help is simply MainTabs' own default tab — nothing to navigate to.
+  assert.match(app, /if \(consumePendingLanding\(\) !== 'work'\) return;/);
+});
+
+test('the landing handoff is consumed once', () => {
+  const landing = read('lib/setupLanding.ts');
+  assert.match(landing, /const landing = pending;\s*\n\s*pending = null;\s*\n\s*return landing;/);
+  // Otherwise a tab remount would yank the user back to BrowseJobs later.
+  assert.match(app, /\}, \[\]\);/);
+  assert.match(app, /return \(\) => cancelAnimationFrame\(frame\);/);
+});
+
+// ---------------------------------------------------------------------------
+// Finish setup
+// ---------------------------------------------------------------------------
+
+test('Finish setup is gated on legal completion and nothing else', () => {
+  assert.match(setup, /const canFinish = legalComplete && !saving;/);
+  assert.match(setup, /disabled=\{!canFinish\}/);
+  // Permissions are deliberately not in that expression.
+  assert.doesNotMatch(setup, /canFinish = .*permission/i);
+  assert.match(setup, /Review Terms & Privacy to finish setup\./);
+});
+
+test('a double tap cannot write twice or navigate twice', () => {
+  assert.match(setup, /if \(!legalComplete \|\| saving \|\| !user\) return;/);
+  assert.match(setup, /loading=\{saving\}/);
+});
+
+test('navigation only ever follows a successful write', () => {
+  const handler = setup.slice(setup.indexOf('async function handleFinish()'));
+  const body = handler.slice(0, handler.indexOf('\n  }'));
+
+  // The failure branch returns before the handoff and before onFinished.
+  assert.match(body, /if \(writeError\) \{[\s\S]*?return;\s*\n\s*\}/);
+  assert.ok(
+    body.indexOf('writeSetupRecord') < body.indexOf('onFinished(landing)'),
+    'the write must precede the transition'
+  );
+  const failure = body.slice(body.indexOf('if (writeError)'), body.indexOf('}\n\n'));
+  assert.doesNotMatch(failure, /onFinished|setPendingLanding/);
+  // A resolve that lands after the screen is gone writes nothing.
+  assert.match(body, /if \(!mounted\.current\) return;/);
+});
+
+test('a failed write keeps the user’s choices and stays retryable', () => {
+  const handler = setup.slice(setup.indexOf('async function handleFinish()'));
+  const body = handler.slice(0, handler.indexOf('\n  }'));
+  assert.doesNotMatch(body, /setLanding\(/, 'the chosen destination survives a failure');
+  assert.match(body, /setSaving\(false\);/);
+  assert.match(setup, /accessibilityLiveRegion="assertive"/);
+});
+
+test('the write is idempotent and reports its own failure', () => {
+  assert.match(storage, /AsyncStorage\.setItem\(setupStorageKey\(userId\), serializeSetupRecord\(record\)\)/);
+  assert.match(storage, /return \{ error: err instanceof Error \? err : new Error\(String\(err\)\) \};/);
+  // A read failure is survivable; a write failure is not silently swallowed.
+  assert.match(storage, /catch \{\s*\n\s*return null;\s*\n\s*\}/);
+});
+
+// ---------------------------------------------------------------------------
+// Permissions
+// ---------------------------------------------------------------------------
+
+test('permissions are read on mount and only ever requested on tap', () => {
+  // iOS spends its one prompt per install; mounting a screen must not burn it.
+  assert.match(perms, /Location\.getForegroundPermissionsAsync\(\)/);
+  assert.match(perms, /Notifications\.getPermissionsAsync\(\)/);
+
+  const mountEffect = perms.slice(perms.indexOf('useEffect(() => {'), perms.indexOf('const requestLocation'));
+  assert.doesNotMatch(mountEffect, /requestForegroundPermissionsAsync|requestPermissionsAsync/);
+});
+
+test('a permission request cannot be started twice', () => {
+  // A ref, not state: the state update has not landed when a second tap
+  // arrives on the same frame.
+  assert.match(perms, /if \(inFlight\.current\.location\) return;/);
+  assert.match(perms, /if \(inFlight\.current\.notifications \|\| Platform\.OS === 'web'\) return;/);
+  assert.match(perms, /inFlight\.current\.location = false;/);
+  assert.match(perms, /inFlight\.current\.notifications = false;/);
+});
+
+test('the four permission states are distinguished, and blocked is one of them', () => {
+  // Denied can be asked again; blocked cannot, and a switch that silently
+  // does nothing is the worst outcome of the three.
+  assert.match(perms, /return canAskAgain \? 'denied' : 'blocked';/);
+  assert.match(setup, /state === 'blocked'/);
+  assert.match(setup, /Turn this on in device Settings/);
+  assert.match(setup, /Not available on this device/);
+});
+
+test('the switch never lies about what the OS will do', () => {
+  // Granted is not interactive: the app cannot revoke a permission it holds.
+  assert.match(setup, /disabled=\{granted \|\| state === 'blocked' \|\| requesting\}/);
+  assert.match(setup, /value=\{granted\}/);
+});
+
+test('an unsupported environment fails safely rather than crashing', () => {
+  assert.match(perms, /if \(Platform\.OS === 'web'\) \{[\s\S]*?setNotifications\('unavailable'\);/);
+  // Every read and request is wrapped; a throw becomes a state, not a crash.
+  assert.ok((perms.match(/catch \{/g) ?? []).length >= 4);
+  assert.match(perms, /if \(active && mounted\.current\)/);
+});
+
+test('permissions never block finishing setup', () => {
+  const handler = setup.slice(setup.indexOf('async function handleFinish()'));
+  assert.doesNotMatch(handler.slice(0, handler.indexOf('\n  }')), /permission/i);
+});
+
+// ---------------------------------------------------------------------------
+// The screen itself
+// ---------------------------------------------------------------------------
+
+test('all three rows are present and share one row component', () => {
+  for (const label of ['Location', 'Notifications', 'Terms & Privacy']) {
+    assert.match(setup, new RegExp(`title="${label.replace('&', '&')}"`), `${label} row`);
+  }
+  assert.match(setup, /Required for nearby jobs and workers/);
+  assert.match(setup, /Messages, bids and arrival updates/);
+  assert.match(setup, /Review both documents to continue/);
+  assert.match(setup, /Terms and Privacy reviewed/);
+  // One component, so the three rows cannot drift apart.
+  assert.match(row, /minHeight: 72/);
+  assert.match(row, /minWidth: 52/);
+});
+
+test('the legal row is a status, never a switch', () => {
+  const legalRow = setup.slice(setup.indexOf('title="Terms & Privacy"'));
+  const block = legalRow.slice(0, legalRow.indexOf('</Animated.View>'));
+  assert.doesNotMatch(block, /<Switch/);
+  assert.match(block, /name="checkmark-circle"/);
+  assert.match(block, /name="chevron-forward"/);
+});
+
+test('the two destination cards are exclusive and default to Hire help', () => {
+  assert.match(setup, /useState<LandingPreference>\(DEFAULT_LANDING\)/);
+  assert.match(setup, /selected=\{landing === 'hire'\}/);
+  assert.match(setup, /selected=\{landing === 'work'\}/);
+  // One value, so two selected cards is not a representable state, and a
+  // rapid switch settles on exactly one.
+  assert.match(setup, /onSelect=\{\(\) => setLanding\('hire'\)\}/);
+  assert.match(setup, /onSelect=\{\(\) => setLanding\('work'\)\}/);
+  assert.match(setup, /accessibilityRole="radiogroup"/);
+  assert.match(choice, /accessibilityRole="radio"/);
+  assert.match(choice, /aria-checked=\{selected\}/);
+});
+
+test('selecting a card changes its colours, never its size', () => {
+  // A border that appeared only when selected would shift the pair on the page.
+  assert.match(choice, /borderWidth: 1,/);
+  const card = choice.slice(choice.indexOf('  card: {'));
+  assert.doesNotMatch(card.slice(0, card.indexOf('  },')), /borderWidth: 0/);
+  assert.match(choice, /cardSelected: \{[\s\S]*?borderColor: authColors\.forest,[\s\S]*?backgroundColor: authColors\.mint,/);
+});
+
+test('what a card looks like cannot drift from what it is', () => {
+  // The regression this guards: an interpolated backgroundColor/borderColor
+  // stops being applied across the re-render that selecting a card causes, so
+  // the card freezes at its first paint — right state, wrong pixels. The
+  // selected look is therefore plain conditional styling, and the animation is
+  // an opacity-only overlay that can only ever be decoration.
+  assert.match(choice, /style=\{\[styles\.card, selected && styles\.cardSelected\]\}/);
+  assert.doesNotMatch(choice, /interpolate\(/, 'no animated colour on this card');
+  assert.match(choice, /style=\{\[styles\.fill, \{ opacity: fade \}\]\}/);
+  assert.match(choice, /pointerEvents="none"/);
+
+  // Same reasoning for the completion pulse on the setup screen.
+  assert.match(setup, /const pulseStyle = \{ opacity: pulse \};/);
+  assert.doesNotMatch(setup, /outputRange: \['rgba/);
+});
+
+test('primary text is the ink token and nothing is a raw hex', () => {
+  for (const path of [
+    'screens/SetupScreen.tsx',
+    'components/SetupRow.tsx',
+    'components/SetupChoiceCard.tsx',
+    'screens/OnboardingFlow.tsx',
+  ]) {
+    assert.doesNotMatch(read(path), /#[0-9A-Fa-f]{6}/, `${path} must use tokens`);
+  }
+  // Titles on the dark ink, supporting copy muted.
+  assert.match(row, /title: \{[\s\S]*?color: authColors\.ink,/);
+  assert.match(row, /subtitle: \{[\s\S]*?color: authColors\.muted,/);
+  assert.match(choice, /title: \{[\s\S]*?color: authColors\.ink,/);
+});
+
+test('the screen scrolls and stays reachable on a short viewport', () => {
+  // AuthScaffold owns the safe area, the scroll fallback and the centred
+  // max-width column, so none of it is re-derived here.
+  assert.match(setup, /<AuthScaffold title="Setup" backdrop="soft">/);
+  assert.match(read('components/AuthScaffold.tsx'), /keyboardShouldPersistTaps="handled"/);
+  assert.match(read('components/AuthScaffold.tsx'), /maxWidth: authSizes\.maxContentWidth/);
+  // The CTA is pushed off the bottom edge rather than pinned to it.
+  assert.match(setup, /marginTop: 'auto'/);
+});
+
+test('a mandatory step still has a way out', () => {
+  // There is nothing behind Setup, so there is no back button — but a user
+  // who cannot finish must not be trapped.
+  assert.doesNotMatch(setup, /onBack=/);
+  assert.match(setup, /onPress=\{\(\) => logout\(\)\}/);
+});
+
+// ---------------------------------------------------------------------------
+// Motion and accessibility
+// ---------------------------------------------------------------------------
+
+test('the entrance is one animation, and never blocks a tap', () => {
+  assert.match(setup, /const enter = useRef\(new Animated\.Value\(0\)\)\.current;/);
+  assert.match(setup, /extrapolate: 'clamp'/);
+  // Opacity and transform only, so it can run on the native driver.
+  assert.match(setup, /useNativeDriver: USE_NATIVE_DRIVER/);
+  // The only thing that opts out of touch is the decorative pulse underlay,
+  // and it sits behind the row rather than over it.
+  assert.equal((setup.match(/pointerEvents="none"/g) ?? []).length, 1);
+  assert.match(setup, /styles\.pulseOverlay/);
+  assert.match(setup, /pulseOverlay: \{\s*\n\s*\.\.\.StyleSheet\.absoluteFillObject/);
+  // It plays once, not again on the way back from the legal gate.
+  assert.match(setup, /if \(reducedMotion === null \|\| entered\.current\) return;/);
+});
+
+test('reduced motion keeps every state reachable', () => {
+  assert.match(setup, /if \(reducedMotion\) \{\s*\n\s*enter\.setValue\(1\);/);
+  assert.match(choice, /if \(reducedMotion\) \{\s*\n\s*fade\.setValue\(to\);/);
+  assert.match(setup, /if \(reducedMotion\) return;/);
+});
+
+test('completion is announced, not only animated', () => {
+  assert.match(setup, /Terms and Privacy complete\. Finish setup is now available\./);
+  assert.match(setup, /AccessibilityInfo\.announceForAccessibility/);
+  // The pulse never runs on arrival for a user who already accepted.
+  assert.match(setup, /if \(legalComplete === wasLegalComplete\.current\) return;/);
+});
+
+test('no animation writes state after the screen is gone', () => {
+  assert.match(setup, /mounted\.current = false;/);
+  assert.match(perms, /mounted\.current = false;/);
+  assert.match(app, /return \(\) => cancelAnimationFrame\(frame\);/);
+});
+
+// ---------------------------------------------------------------------------
+// Static security properties
+// ---------------------------------------------------------------------------
+
+const surface = [
+  'screens/SetupScreen.tsx',
+  'screens/OnboardingFlow.tsx',
+  'components/SetupRow.tsx',
+  'components/SetupChoiceCard.tsx',
+  'hooks/useSetupStatus.ts',
+  'hooks/useSetupPermissions.ts',
+  'lib/setupState.ts',
+  'lib/setupStorage.ts',
+  'lib/setupLanding.ts',
+];
+
+test('nothing here holds a secret or reaches for an admin API', () => {
+  for (const path of surface) {
+    const source = read(path);
+    assert.doesNotMatch(source, /service_role|SERVICE_ROLE/, path);
+    assert.doesNotMatch(source, /TWILIO_[A-Z]|AUTH_TOKEN|ACCOUNT_SID/i, path);
+    assert.doesNotMatch(source, /auth\.admin/, path);
+  }
+});
+
+test('only setup completion and the chosen destination are stored', () => {
+  // Never a credential, a code, a session, or a stand-in for legal acceptance.
+  assert.match(read('lib/setupState.ts'), /completed: record\.completed, landing: record\.landing/);
+  for (const path of surface) {
+    const source = read(path);
+    assert.doesNotMatch(source, /password|otp|token|session/i, `${path} must store none of these`);
+  }
+});
+
+test('legal acceptance is never mirrored locally', () => {
+  // The one durable record stays in legal_acceptances, where the version
+  // check can see it. Matched as usage, not as prose — setupState.ts names
+  // the table in the comment explaining why it stays out of it.
+  for (const path of surface) {
+    const source = read(path);
+    assert.doesNotMatch(source, /acceptCurrentDocuments\(/, path);
+    assert.doesNotMatch(source, /from\('legal_acceptances'\)/, path);
+    assert.doesNotMatch(source, /setItem\([^)]*legal/i, `${path} must not store acceptance`);
+  }
+  assert.match(setup, /legalComplete/, 'the screen reads the state, it does not own it');
+});
+
+test('no schema change, no second profile system, no new client', () => {
+  for (const path of surface) {
+    const source = read(path);
+    assert.doesNotMatch(source, /from '\.\.\/lib\/supabase'|from '\.\/supabase'/, path);
+    assert.doesNotMatch(source, /updateProfile|from\('profiles'\)|\.rpc\(/, path);
+    assert.doesNotMatch(source, /createClient/, path);
+  }
+});
+
+test('the new code carries no escape hatches', () => {
+  for (const path of [...surface, 'App.tsx']) {
+    const source = read(path);
+    assert.doesNotMatch(source, /@ts-ignore|@ts-expect-error|eslint-disable/, path);
+    assert.doesNotMatch(source, /:\s*any\b|as any\b/, `${path} must not widen to any`);
+  }
+});
