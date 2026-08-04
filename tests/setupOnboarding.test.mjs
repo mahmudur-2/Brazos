@@ -245,8 +245,9 @@ test('permissions are read on mount and only ever requested on tap', () => {
   assert.match(perms, /Location\.getForegroundPermissionsAsync\(\)/);
   assert.match(perms, /Notifications\.getPermissionsAsync\(\)/);
 
-  const mountEffect = perms.slice(perms.indexOf('useEffect(() => {'), perms.indexOf('const requestLocation'));
+  const mountEffect = perms.slice(perms.indexOf('useEffect(() => {'), perms.indexOf('const actOnLocation'));
   assert.doesNotMatch(mountEffect, /requestForegroundPermissionsAsync|requestPermissionsAsync/);
+  assert.doesNotMatch(mountEffect, /openAppSettings/, 'mounting must not navigate away either');
 });
 
 test('a permission request cannot be started twice', () => {
@@ -267,10 +268,33 @@ test('the four permission states are distinguished, and blocked is one of them',
   assert.match(setup, /Not available on this device/);
 });
 
-test('the switch never lies about what the OS will do', () => {
-  // Granted is not interactive: the app cannot revoke a permission it holds.
-  assert.match(setup, /disabled=\{granted \|\| state === 'blocked' \|\| requesting\}/);
+test('a permission row is never a dead control', () => {
+  // The regression: once a permission was denied for good, the switch was
+  // disabled and the row did nothing — a control that cannot be operated and
+  // does not say where the real one is.
+  assert.match(perms, /if \(needsSettings\(location\)\) \{\s*\n\s*void openAppSettings\(\);/);
+  assert.match(perms, /if \(needsSettings\(notifications\)\) \{\s*\n\s*void openAppSettings\(\);/);
+  // Granted counts too: the app cannot revoke what it holds, so Settings is
+  // the only place that answer can change.
+  assert.match(perms, /return state === 'granted' \|\| state === 'blocked';/);
+  assert.match(perms, /Linking\.openSettings\(\)/);
+
+  // Row and switch run the same action, so no combination of taps does nothing.
+  assert.match(setup, /onPress=\{interactive \? act : undefined\}/);
+  assert.match(setup, /onValueChange=\{act\}/);
+  assert.match(setup, /disabled=\{requesting\}/);
   assert.match(setup, /value=\{granted\}/);
+});
+
+test('the row says which of the two things a tap will do', () => {
+  assert.match(setup, /opensSettings\s*\n?\s*\?\s*'Opens your device settings'/);
+  assert.match(setup, /`Asks for \$\{title\.toLowerCase\(\)\} permission`/);
+  // Replaced rather than appended, so the hint cannot push the row onto a
+  // cramped second line.
+  assert.match(setup, /state === 'blocked'\s*\n\s*\? settingsHint/);
+  assert.match(setup, /settingsHint="Enable this in device Settings"/);
+  assert.match(setup, /settingsHint="Turn this on in device Settings"/);
+  assert.doesNotMatch(setup, /\$\{subtitle\} ·/, 'no appended hint');
 });
 
 test('an unsupported environment fails safely rather than crashing', () => {
@@ -297,9 +321,11 @@ test('all three rows are present and share one row component', () => {
   assert.match(setup, /Messages, bids and arrival updates/);
   assert.match(setup, /Review both documents to continue/);
   assert.match(setup, /Terms and Privacy reviewed/);
-  // One component, so the three rows cannot drift apart.
+  // One component, so the three rows cannot drift apart — and every subtitle
+  // is sized to hold one line, so no row stands taller than its neighbours.
   assert.match(row, /minHeight: 72/);
-  assert.match(row, /minWidth: 52/);
+  assert.match(row, /minWidth: 46/);
+  assert.match(row, /fontSize: 12,\s*\n\s*lineHeight: 16\.5,/);
 });
 
 test('the legal row is a status, never a switch', () => {
@@ -365,11 +391,26 @@ test('primary text is the ink token and nothing is a raw hex', () => {
 test('the screen scrolls and stays reachable on a short viewport', () => {
   // AuthScaffold owns the safe area, the scroll fallback and the centred
   // max-width column, so none of it is re-derived here.
-  assert.match(setup, /<AuthScaffold title="Setup" backdrop="soft">/);
+  assert.match(setup, /<AuthScaffold title="Setup" titleVariant="large" backdrop="soft">/);
   assert.match(read('components/AuthScaffold.tsx'), /keyboardShouldPersistTaps="handled"/);
   assert.match(read('components/AuthScaffold.tsx'), /maxWidth: authSizes\.maxContentWidth/);
   // The CTA is pushed off the bottom edge rather than pinned to it.
   assert.match(setup, /marginTop: 'auto'/);
+});
+
+test('the bar title is a step up, and the CTA a step down', () => {
+  const theme = read('lib/authTheme.ts');
+  const base = Number(theme.match(/navTitle: \{ fontSize: (\d+)/)[1]);
+  const large = Number(theme.match(/navTitleLarge: \{ fontSize: (\d+)/)[1]);
+  assert.ok(large > base, 'the Setup title must be larger than the default bar');
+  assert.match(setup, /titleVariant="large"/);
+
+  // Semibold, not the default bold: the button sits under a lot of quiet copy.
+  assert.match(setup, /weight="semibold"/);
+  assert.match(read('components/AuthButton.tsx'), /labelSemibold: \{\s*\n\s*fontWeight: '600',/);
+  // …and the shared button was extended, not forked.
+  assert.match(read('components/AuthButton.tsx'), /weight\?: 'bold' \| 'semibold';/);
+  assert.equal((read('components/AuthButton.tsx').match(/export function AuthButton/g) ?? []).length, 1);
 });
 
 test('a mandatory step still has a way out', () => {

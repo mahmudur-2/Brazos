@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -65,6 +66,15 @@ type LegalGateScreenProps = {
 export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
   const { logout } = useAuth();
   const reducedMotion = useReducedMotion();
+
+  // Everything on this screen is fixed height except the reader, which takes
+  // what is left — so on a short device the reader is what collapses. At
+  // 568pt it fell to under a fifth of the screen, which is the "tiny window"
+  // this layout exists to avoid. Below the threshold the chrome gives up its
+  // decoration (the intro line, some type scale, some padding) so the
+  // document keeps a usable height instead.
+  const { height: windowHeight } = useWindowDimensions();
+  const compact = windowHeight < 700;
 
   const [tab, setTab] = useState<LegalDocumentKey>('terms');
   const [agreed, setAgreed] = useState(false);
@@ -223,12 +233,17 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.eyebrow}>BEFORE YOU START</Text>
-          <Text style={styles.title} maxFontSizeMultiplier={1.4}>
+          <Text style={[styles.title, compact && styles.titleCompact]} maxFontSizeMultiplier={1.4}>
             Terms & Privacy
           </Text>
-          <Text style={styles.subtitle}>
-            Read both documents to the end, then confirm below.
-          </Text>
+          {/* The rows below already say which document is outstanding, and the
+              footer says what unlocks the agreement — so this line is the
+              first thing to go when height is scarce. */}
+          {compact ? null : (
+            <Text style={styles.subtitle}>
+              Read both documents to the end, then confirm below.
+            </Text>
+          )}
         </View>
 
         {/*
@@ -249,6 +264,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
               active={tab === required.key}
               isNext={nextDocument?.key === required.key}
               divider={index > 0}
+              compact={compact}
               reducedMotion={reducedMotion === true}
               onPress={() => switchTab(required.key)}
             />
@@ -282,7 +298,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
           </Animated.View>
         </View>
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, compact && styles.footerCompact]}>
           {/* When one document is done and the other isn't, the next step is
               named explicitly rather than left for the user to infer from a
               tick. Nothing moves them automatically. */}
@@ -333,6 +349,7 @@ export function LegalGateScreen({ onAccepted }: LegalGateScreenProps) {
 
           <AuthButton
             title="Agree and continue"
+            weight="semibold"
             onPress={handleContinue}
             disabled={!agreed || !bothSeen}
             loading={saving}
@@ -368,6 +385,7 @@ function DocumentStatusRow({
   active,
   isNext,
   divider,
+  compact,
   reducedMotion,
   onPress,
 }: {
@@ -377,6 +395,7 @@ function DocumentStatusRow({
   active: boolean;
   isNext: boolean;
   divider: boolean;
+  compact: boolean;
   reducedMotion: boolean;
   onPress: () => void;
 }) {
@@ -402,14 +421,25 @@ function DocumentStatusRow({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.statusRow, divider && styles.statusRowDivider, active && styles.statusRowActive]}
+      style={[
+        styles.statusRow,
+        compact && styles.statusRowCompact,
+        divider && styles.statusRowDivider,
+        active && styles.statusRowActive,
+      ]}
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
       accessibilityLabel={`${title}. ${done ? 'Read to the end.' : 'Not finished.'}`}
       accessibilityHint="Opens this document"
     >
-      <View style={[styles.statusIcon, done && styles.statusIconDone]}>
-        <Ionicons name={icon} size={19} color={done ? authColors.emerald : authColors.muted} />
+      <View
+        style={[styles.statusIcon, compact && styles.statusIconCompact, done && styles.statusIconDone]}
+      >
+        <Ionicons
+          name={icon}
+          size={compact ? 17 : 19}
+          color={done ? authColors.emerald : authColors.muted}
+        />
       </View>
 
       <View style={styles.statusText}>
@@ -455,9 +485,13 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: authSpacing.gutter,
   },
+  // Every value above the document is deliberately tight. This screen has one
+  // job — let someone read two documents — and the intro competing with the
+  // reader for height was the whole problem: the text got a third of the
+  // screen while the chrome explaining it got the rest.
   header: {
-    paddingTop: authSpacing.lg,
-    gap: authSpacing.xs,
+    paddingTop: authSpacing.xs,
+    gap: 2,
   },
   eyebrow: {
     ...authType.eyebrow,
@@ -466,14 +500,19 @@ const styles = StyleSheet.create({
   title: {
     ...authType.title,
     color: authColors.ink,
-    marginTop: authSpacing.xs,
+    marginTop: 2,
+  },
+  titleCompact: {
+    fontSize: 23,
+    lineHeight: 27,
   },
   subtitle: {
-    ...authType.body,
+    fontSize: 14,
+    lineHeight: 19,
     color: authColors.muted,
   },
   statusCard: {
-    marginTop: authSpacing.lg,
+    marginTop: authSpacing.md - 2,
     borderRadius: authRadius.card,
     borderWidth: 1,
     borderColor: authColors.line,
@@ -484,12 +523,18 @@ const styles = StyleSheet.create({
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: authSpacing.md,
-    // Comfortably past the 44pt minimum, and identical for both rows so the
-    // list reads as one block rather than two stacked controls.
-    minHeight: 64,
-    paddingHorizontal: authSpacing.lg - 2,
-    paddingVertical: authSpacing.md,
+    gap: authSpacing.md - 2,
+    // Still past the 44pt touch minimum, and identical for both rows so the
+    // list reads as one block — but no taller than it has to be, because
+    // every point here is a point the document does not get.
+    minHeight: 48,
+    paddingHorizontal: authSpacing.md + 2,
+    paddingVertical: authSpacing.sm,
+  },
+  // Still a 44pt target — the floor, not a suggestion.
+  statusRowCompact: {
+    minHeight: 44,
+    paddingVertical: 5,
   },
   statusRowDivider: {
     borderTopWidth: 1,
@@ -499,12 +544,16 @@ const styles = StyleSheet.create({
     backgroundColor: authColors.mint,
   },
   statusIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: authRadius.iconButton - 2,
+    width: 34,
+    height: 34,
+    borderRadius: authRadius.iconButton - 4,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: authColors.bg,
+  },
+  statusIconCompact: {
+    width: 30,
+    height: 30,
   },
   statusIconDone: {
     backgroundColor: authColors.mint2,
@@ -521,12 +570,15 @@ const styles = StyleSheet.create({
     color: authColors.ink,
   },
   statusSubtitle: {
-    ...authType.note,
+    fontSize: 12,
+    lineHeight: 16,
     color: authColors.muted,
   },
+  // flex:1 — the reader takes every point the fixed blocks above and below
+  // do not, so tightening those is what makes it grow.
   docWrapper: {
     flex: 1,
-    marginTop: authSpacing.lg,
+    marginTop: authSpacing.md - 2,
   },
   docScroll: {
     flex: 1,
@@ -564,9 +616,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: authColors.forest,
   },
+  // Sits lower and less cramped than before: a wider gap above it separates
+  // the controls from the reader, and a real inset underneath keeps Sign out
+  // off the home indicator instead of hard against it.
   footer: {
-    paddingVertical: authSpacing.lg,
-    gap: authSpacing.md,
+    paddingTop: authSpacing.lg,
+    paddingBottom: authSpacing.xl - 2,
+    gap: authSpacing.md + 2,
+  },
+  footerCompact: {
+    paddingTop: authSpacing.md,
+    paddingBottom: authSpacing.md,
+    gap: authSpacing.sm + 2,
   },
   helper: {
     ...authType.note,

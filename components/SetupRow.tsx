@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { useRef } from 'react';
 import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { authColors, authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authColors, authRadius, authSpacing } from '../lib/authTheme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -106,11 +106,12 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: authSpacing.md + 2,
+    gap: authSpacing.md,
     // One height for all three rows. Comfortably past the 44pt minimum, and
-    // tall enough that a two-line subtitle does not change it.
+    // reached by every row because the subtitles are sized to fit on one line
+    // — a row that wrapped stood 11pt taller than its neighbours.
     minHeight: 72,
-    paddingHorizontal: authSpacing.lg,
+    paddingHorizontal: authSpacing.md + 2,
     paddingVertical: authSpacing.md,
   },
   rowPressed: {
@@ -144,13 +145,19 @@ const styles = StyleSheet.create({
     color: authColors.ink,
   },
   subtitle: {
-    ...authType.note,
+    // Under the note scale, which is what lets the longest of these
+    // ("Required for nearby jobs and workers") hold one line at 390pt. It
+    // still wraps at large system text sizes, and the row simply grows —
+    // the fixed height is for the default case, not a clamp on the text.
+    fontSize: 12,
+    lineHeight: 16.5,
     color: authColors.muted,
   },
   // Fixed width so all three controls line up on one right edge whatever
-  // they are — a switch, a check, or a chevron.
+  // they are — a switch, a check, or a chevron. No wider than the switch
+  // actually needs, because every point here comes out of the subtitle.
   control: {
-    minWidth: 52,
+    minWidth: 46,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },

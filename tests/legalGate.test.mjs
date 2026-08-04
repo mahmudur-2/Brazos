@@ -234,9 +234,24 @@ test('the gate is on the auth palette and hardcodes no colour of its own', () =>
 test('the screen still owns its safe area and stays readable on a wide window', () => {
   assert.match(gate, /edges=\{\['top', 'bottom', 'left', 'right'\]\}/);
   assert.match(gate, /maxWidth: authSizes\.maxContentWidth/);
-  // Touch targets.
-  assert.match(gate, /minHeight: 64/);
+  // Touch targets survive the tighter layout: the roomy row is 48, and the
+  // compact variant sits exactly on the 44pt floor, never under it.
+  assert.match(gate, /minHeight: 48/);
+  assert.match(gate, /statusRowCompact: \{\s*\n\s*minHeight: 44/);
   assert.ok((gate.match(/minHeight: 44/g) ?? []).length >= 2);
+});
+
+test('the reader is what grows, and the chrome is what gives way', () => {
+  // The document container takes whatever the fixed blocks leave, so the fix
+  // for a cramped reader is tightening them — not resizing the reader.
+  assert.match(gate, /docWrapper: \{\s*\n\s*flex: 1,/);
+  // Below the height where everything cannot fit, the intro line and some
+  // type scale are dropped rather than letting the reader collapse.
+  assert.match(gate, /const compact = windowHeight < 700;/);
+  assert.match(gate, /\{compact \? null : \(/);
+  assert.match(gate, /compact && styles\.titleCompact/);
+  assert.match(gate, /compact && styles\.statusRowCompact/);
+  assert.match(gate, /compact && styles\.footerCompact/);
 });
 
 test('shared components used by other screens were not repainted for this one', () => {

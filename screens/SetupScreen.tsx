@@ -178,7 +178,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
   const canFinish = legalComplete && !saving;
 
   return (
-    <AuthScaffold title="Setup" backdrop="soft">
+    <AuthScaffold title="Setup" titleVariant="large" backdrop="soft">
       <View style={styles.body}>
         <Animated.View style={stagger(0, 0.42)}>
           <Text style={styles.eyebrow}>FINAL SETUP</Text>
@@ -193,12 +193,14 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
             icon="location-outline"
             title="Location"
             subtitle="Required for nearby jobs and workers"
+            settingsHint="Enable this in device Settings"
             permission={permissions.location}
           />
           <PermissionSetupRow
             icon="notifications-outline"
             title="Notifications"
             subtitle="Messages, bids and arrival updates"
+            settingsHint="Turn this on in device Settings"
             permission={permissions.notifications}
             divider
           />
@@ -269,6 +271,7 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
 
           <AuthButton
             title="Finish setup"
+            weight="semibold"
             onPress={handleFinish}
             disabled={!canFinish}
             loading={saving}
@@ -296,35 +299,49 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
 }
 
 /**
- * A permission row whose control tells the truth about the OS.
+ * A permission row that stays useful in every state the OS can be in.
  *
- * The interesting case is `blocked`: the switch is off, tapping it cannot help
- * because the platform will not prompt again, and pretending otherwise is the
- * failure this is written to avoid. It says so instead. `granted` is likewise
- * not interactive — the app cannot revoke a permission it was given, so a
- * switch that appeared to turn it off would be a lie.
+ * The failure this replaces: once a permission was denied for good, the switch
+ * was disabled and the row did nothing. The user was left holding a control
+ * that could not be operated and was not told where the real one lives. That
+ * is a dead control, and it is worse than no control.
+ *
+ * Now there is one action per row and it always leads somewhere. While the OS
+ * will still prompt, tapping asks. Once it won't — denied for good, or granted,
+ * which the app equally cannot undo — tapping opens Settings, which is the
+ * only place the answer can actually change. The subtitle says which of those
+ * is about to happen, so nothing has to be guessed from the switch alone.
+ *
+ * Both the row and the switch run the same action, so there is no combination
+ * of taps that does nothing.
  */
 function PermissionSetupRow({
   icon,
   title,
   subtitle,
+  settingsHint,
   permission,
   divider,
 }: {
   icon: React.ComponentProps<typeof SetupRow>['icon'];
   title: string;
   subtitle: string;
+  /** Shown instead of the subtitle once Settings is the only way through. */
+  settingsHint: string;
   permission: PermissionRow;
   divider?: boolean;
 }) {
-  const { state, requesting, request } = permission;
+  const { state, requesting, act, opensSettings } = permission;
   const granted = state === 'granted';
+  const interactive = state !== 'unknown' && state !== 'unavailable';
 
+  // Replaced, not appended: the old version tacked the hint onto the end with
+  // a separator, which pushed every affected row onto a cramped second line.
   const detail =
     state === 'blocked'
-      ? `${subtitle} · Turn this on in device Settings`
+      ? settingsHint
       : state === 'unavailable'
-        ? `${subtitle} · Not available on this device`
+        ? 'Not available on this device'
         : subtitle;
 
   return (
@@ -334,7 +351,15 @@ function PermissionSetupRow({
       subtitle={detail}
       done={granted}
       divider={divider}
-      accessibilityLabel={`${title}. ${detail}`}
+      onPress={interactive ? act : undefined}
+      accessibilityLabel={`${title}. ${granted ? 'Allowed.' : 'Not allowed.'} ${detail}`}
+      accessibilityHint={
+        !interactive
+          ? undefined
+          : opensSettings
+            ? 'Opens your device settings'
+            : `Asks for ${title.toLowerCase()} permission`
+      }
       control={
         state === 'unknown' ? (
           <ActivityIndicator color={authColors.placeholder} />
@@ -343,9 +368,11 @@ function PermissionSetupRow({
         ) : (
           <Switch
             value={granted}
-            // Only a permission the OS will still prompt for is actionable.
-            disabled={granted || state === 'blocked' || requesting}
-            onValueChange={() => request()}
+            // Never disabled while the row is interactive: flicking it always
+            // does the same useful thing the row does. It snaps back when the
+            // real answer did not change, which is the honest outcome.
+            disabled={requesting}
+            onValueChange={act}
             trackColor={{ false: authColors.line, true: authColors.forest }}
             thumbColor={authColors.surface}
             ios_backgroundColor={authColors.line}

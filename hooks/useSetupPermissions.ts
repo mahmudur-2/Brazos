@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 
@@ -31,8 +31,35 @@ export type PermissionRow = {
   state: PermissionState;
   /** True while an OS prompt is open, so the row can't be tapped twice. */
   requesting: boolean;
-  request: () => void;
+  /**
+   * The single thing tapping this row does. It prompts when the OS will still
+   * prompt, and otherwise opens Settings — which is the only place the answer
+   * can actually change once the system has stopped asking. A control that
+   * did nothing in that state would be the worst of the options.
+   */
+  act: () => void;
+  /** True when `act` will leave the app for Settings rather than prompt. */
+  opensSettings: boolean;
 };
+
+/**
+ * Whether the OS still has anything to say. `granted` is included because the
+ * app cannot revoke a permission it holds — Settings is the only route to
+ * turning one back off, so that is where the row sends you.
+ */
+function needsSettings(state: PermissionState): boolean {
+  return state === 'granted' || state === 'blocked';
+}
+
+async function openAppSettings(): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    await Linking.openSettings();
+  } catch {
+    // Nothing useful to offer if the platform refuses; the row's own copy
+    // already names Settings as the place to go.
+  }
+}
 
 function toState(status: string, canAskAgain: boolean): PermissionState {
   if (status === 'granted') return 'granted';
@@ -101,8 +128,14 @@ export function useSetupPermissions(): {
     };
   }, []);
 
-  const requestLocation = useCallback(() => {
+  const actOnLocation = useCallback(() => {
     if (inFlight.current.location) return;
+    if (location === 'unavailable') return;
+    if (needsSettings(location)) {
+      void openAppSettings();
+      return;
+    }
+
     inFlight.current.location = true;
     setRequesting((prev) => ({ ...prev, location: true }));
 
@@ -117,10 +150,16 @@ export function useSetupPermissions(): {
         if (mounted.current) setRequesting((prev) => ({ ...prev, location: false }));
       }
     })();
-  }, []);
+  }, [location]);
 
-  const requestNotifications = useCallback(() => {
+  const actOnNotifications = useCallback(() => {
     if (inFlight.current.notifications || Platform.OS === 'web') return;
+    if (notifications === 'unavailable') return;
+    if (needsSettings(notifications)) {
+      void openAppSettings();
+      return;
+    }
+
     inFlight.current.notifications = true;
     setRequesting((prev) => ({ ...prev, notifications: true }));
 
@@ -135,14 +174,20 @@ export function useSetupPermissions(): {
         if (mounted.current) setRequesting((prev) => ({ ...prev, notifications: false }));
       }
     })();
-  }, []);
+  }, [notifications]);
 
   return {
-    location: { state: location, requesting: requesting.location, request: requestLocation },
+    location: {
+      state: location,
+      requesting: requesting.location,
+      act: actOnLocation,
+      opensSettings: needsSettings(location),
+    },
     notifications: {
       state: notifications,
       requesting: requesting.notifications,
-      request: requestNotifications,
+      act: actOnNotifications,
+      opensSettings: needsSettings(notifications),
     },
   };
 }
