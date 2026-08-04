@@ -36,6 +36,7 @@ const {
   formatNational,
   fromE164,
   isNanp,
+  maskE164,
   nationalDigits,
   phoneValidationError,
   splitInternational,
@@ -181,14 +182,19 @@ test('a stored E.164 value round-trips back into the field', () => {
 // ---------------------------------------------------------------------------
 
 test('the phone field is the only path from the auth flow to the backend', () => {
+  // Both create-account halves: the phone-first screen that requests a code,
+  // and the email screen that still performs the real signUp().
   const createAccount = read('screens/CreateAccountScreen.tsx');
+  const emailCreateAccount = read('screens/EmailCreateAccountScreen.tsx');
   const input = read('components/PhoneNumberInput.tsx');
 
   // Normalised before it is handed over — never the raw field value.
-  assert.match(createAccount, /const phone = toE164\(country, phoneDigits\)/);
-  assert.match(createAccount, /signUp\(trimmedEmail, password, trimmedName, phone\)/);
-  assert.match(createAccount, /phoneValidationError\(country, phoneDigits\)/);
-  assert.match(createAccount, /useState<Country>\(DEFAULT_COUNTRY\)/);
+  for (const source of [createAccount, emailCreateAccount]) {
+    assert.match(source, /const phone = toE164\(country, phoneDigits\)/);
+    assert.match(source, /phoneValidationError\(country, phoneDigits\)/);
+    assert.match(source, /useState<Country>\(DEFAULT_COUNTRY\)/);
+  }
+  assert.match(emailCreateAccount, /signUp\(trimmedEmail, password, trimmedName, phone\)/);
 
   // The national field peels a pasted calling code off rather than keeping it.
   assert.match(input, /splitInternational\(text\)/);
@@ -200,7 +206,11 @@ test('the phone field is the only path from the auth flow to the backend', () =>
 });
 
 test('every screen with a phone field starts on the default country', () => {
-  for (const path of ['screens/SignInScreen.tsx', 'screens/CreateAccountScreen.tsx']) {
+  for (const path of [
+    'screens/SignInScreen.tsx',
+    'screens/CreateAccountScreen.tsx',
+    'screens/EmailCreateAccountScreen.tsx',
+  ]) {
     const source = read(path);
     assert.match(source, /useState<Country>\(DEFAULT_COUNTRY\)/, `${path} must default to US`);
     // The shared field, not a bare TextInput — that is what keeps the calling
@@ -215,7 +225,12 @@ test('every screen with a phone field starts on the default country', () => {
 });
 
 test('the async submit handlers refuse to run twice concurrently', () => {
-  for (const path of ['screens/EmailSignInScreen.tsx', 'screens/CreateAccountScreen.tsx']) {
+  for (const path of [
+    'screens/SignInScreen.tsx',
+    'screens/EmailSignInScreen.tsx',
+    'screens/CreateAccountScreen.tsx',
+    'screens/EmailCreateAccountScreen.tsx',
+  ]) {
     assert.match(read(path), /if \(loading\) return;/, `${path} must guard double submission`);
   }
 });
@@ -250,12 +265,41 @@ test('the phone screen never fakes a session, and email still does the real sign
   const phone = read('screens/SignInScreen.tsx');
   const email = read('screens/EmailSignInScreen.tsx');
 
-  // No SMS provider is configured, so this screen must not touch auth at all —
-  // no login(), no signUp(), no OTP call it has no backend for.
-  assert.doesNotMatch(phone, /\blogin\(/, 'the phone screen must not authenticate');
-  assert.doesNotMatch(phone, /signInWithOtp|verifyOtp/, 'there is no OTP backend to call');
+  // The phone screen requests a code and routes; it authenticates nobody
+  // itself, and it goes through the provider boundary rather than reaching for
+  // supabase.auth — which is what lets the mock stand in for the real thing.
+  assert.doesNotMatch(phone, /\blogin\(|\bsignUp\(/, 'the phone screen must not authenticate');
+  assert.doesNotMatch(phone, /supabase\.auth/, 'it must go through lib/phoneAuth, not the client');
+  assert.match(phone, /phoneAuth\.requestOtp\(/);
 
   // The one screen that does authenticate still goes through AuthContext.
   assert.match(email, /const \{ login, bannedNotice \} = useAuth\(\)/);
   assert.match(email, /await login\(trimmedEmail, password\)/);
+});
+
+// ---------------------------------------------------------------------------
+// Masking, for the verify screen's "Sent to …" line
+// ---------------------------------------------------------------------------
+
+test('a number is named back with only its last four digits', () => {
+  // Enough to recognise your own number and catch a typo; not enough to be
+  // worth reading over a shoulder.
+  assert.equal(maskE164('+13473200610'), '+1 ••• ••• 0610');
+  assert.equal(maskE164('+447911123456'), '+44 ••••••3456');
+
+  // The visible tail is always exactly the last four digits.
+  for (const value of ['+13473200610', '+447911123456', '+3161234567']) {
+    const masked = maskE164(value);
+    assert.ok(masked.endsWith(value.slice(-4)), `${masked} should end in the real last four`);
+    const revealed = masked.replace(/[^\d]/g, '');
+    assert.equal(
+      revealed.length,
+      // calling code + four; nothing else survives.
+      value.slice(-4).length + masked.slice(1, masked.indexOf(' ')).length,
+      `${masked} must reveal only the dial code and the last four`
+    );
+  }
+
+  // Not E.164 in the first place: shown as-is rather than mangled.
+  assert.equal(maskE164('347-320-0610'), '347-320-0610');
 });

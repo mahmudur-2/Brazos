@@ -1,20 +1,49 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Job, OpenJob } from './jobs';
 import type { ChatTarget } from './messages';
+import type { PhoneAuthIntent, PhoneProfileDraft } from './phoneAuth/types';
 
 // The signed-out flow. Not a tab: it replaces the whole tab bar until there is
 // a session, so it is its own stack rooted at Welcome. The branded launch
 // layer is not a route here — it renders above everything (see LaunchGate in
 // App.tsx) so the destination is already mounted when it fades out.
-// SignIn is the phone-first screen; EmailSignIn is the alternate route it
-// offers, and the one that currently performs the real Supabase sign-in. They
-// are two routes rather than one screen with a toggle so each keeps its own
-// back behaviour and the pair can be reordered when SMS auth lands.
+// The flow is phone-first and paired: SignIn/CreateAccount take a number and
+// route to VerifyPhone, while EmailSignIn/EmailCreateAccount hold the email +
+// password forms that actually authenticate until SMS is switched on. Each
+// half is its own route rather than a toggle inside one screen, so each keeps
+// its own back behaviour and neither loses what the user typed in the other.
 export type AuthStackParamList = {
   Welcome: undefined;
   SignIn: undefined;
   EmailSignIn: undefined;
   CreateAccount: undefined;
+  EmailCreateAccount: undefined;
+  VerifyPhone: VerifyPhoneParams;
+};
+
+/**
+ * What the verify-phone screen is handed when a code request succeeds.
+ *
+ * Note what is NOT here: the code itself. Route params are held in navigation
+ * state, restored on remount and readable by anything that can reach the
+ * navigator, so the only thing routed is the challenge's *identity* — the
+ * screen reads the live challenge back from the provider (mock mode's
+ * development code included) rather than carrying a credential through the
+ * navigation tree.
+ */
+export type VerifyPhoneParams = {
+  /** E.164, already normalised by lib/phoneNumber.ts. */
+  phone: string;
+  /** Display only — '+1 ••• ••• 0610', from maskE164(). */
+  maskedPhone: string;
+  /** Sign-in and sign-up challenges are never interchangeable. */
+  intent: PhoneAuthIntent;
+  challengeId: string;
+  /** Epoch ms, or null when the server owns the expiry. */
+  expiresAt: number | null;
+  resendAvailableAt: number;
+  /** Sign-up only: what the create-account screen collected, pre-auth. */
+  profileDraft?: PhoneProfileDraft;
 };
 
 export type AuthStackNavigation = NativeStackNavigationProp<AuthStackParamList>;

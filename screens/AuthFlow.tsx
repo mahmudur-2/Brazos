@@ -2,8 +2,10 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { authColors } from '../lib/authTheme';
 import type { AuthStackParamList } from '../lib/navigation';
 import { CreateAccountScreen } from './CreateAccountScreen';
+import { EmailCreateAccountScreen } from './EmailCreateAccountScreen';
 import { EmailSignInScreen } from './EmailSignInScreen';
 import { SignInScreen } from './SignInScreen';
+import { VerifyPhoneScreen } from './VerifyPhoneScreen';
 import { WelcomeScreen } from './WelcomeScreen';
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
@@ -28,6 +30,11 @@ export function AuthFlow() {
       <Stack.Screen name="SignIn" component={SignInScreen} />
       <Stack.Screen name="EmailSignIn" component={EmailSignInScreen} />
       <Stack.Screen name="CreateAccount" component={CreateAccountScreen} />
+      <Stack.Screen name="EmailCreateAccount" component={EmailCreateAccountScreen} />
+      {/* Reached only from SignIn or CreateAccount, and only once the provider
+          has issued a challenge — the screen itself re-checks that the
+          challenge in its params is still live. */}
+      <Stack.Screen name="VerifyPhone" component={VerifyPhoneScreen} />
     </Stack.Navigator>
   );
 }

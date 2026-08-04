@@ -1,75 +1,69 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
+import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
-import { useAuth } from '../hooks/useAuth';
 import { authColors, authRadius, authSpacing, authType } from '../lib/authTheme';
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
-import { alertAsync } from '../lib/dialog';
 import type { AuthStackNavigation } from '../lib/navigation';
-import { phoneValidationError, toE164 } from '../lib/phoneNumber';
-import { isValidEmail } from '../lib/validation';
+import { maskE164, phoneValidationError, toE164 } from '../lib/phoneNumber';
+import { phoneAuth } from '../lib/phoneAuth';
 
 /**
- * Create account.
+ * Create account — phone first.
  *
  * Deliberately has no large centred brand mark: the reference option sheet
  * showed one, and it made the screen top-heavy. The back button, the small
- * navigation title, the eyebrow and the headline carry the hierarchy instead,
- * and the space the logo would have taken is spread through the vertical
- * rhythm rather than collapsed out of it.
+ * navigation title, the eyebrow and the headline carry the hierarchy instead.
  *
- * Email and password are here because they are what the real signUp() takes —
- * the same four values (email, password, full name, phone) the previous
- * AuthScreen collected. The phone number is normalised to E.164 before it is
- * handed over, so the profiles row gets one canonical format.
+ * Two values, both of which the account will need anyway: a name and a number.
+ * No email, no password — a phone signup that quietly collected a password
+ * would be a second credential nobody asked for. The email/password form still
+ * exists, one tap away on EmailCreateAccount, and is what actually registers
+ * anyone until SMS is switched on.
+ *
+ * Nothing is written anywhere at this point. The name travels to VerifyPhone as
+ * a draft and only becomes a profile once a real session exists — no hosted row
+ * is created ahead of authentication, and in mock mode none is created at all.
  */
 export function CreateAccountScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
-  const { signUp } = useAuth();
   const phoneRef = useRef<TextInput>(null);
-  const emailRef = useRef<TextInput>(null);
-  const passwordRef = useRef<TextInput>(null);
 
   const [fullName, setFullName] = useState('');
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
 
   const [nameError, setNameError] = useState<string | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   async function handleCreateAccount() {
     // Guards a double tap landing between the press and the disabled state.
     if (loading) return;
 
-    setFormError(null);
+    setNotice(null);
     const trimmedName = fullName.trim();
-    const trimmedEmail = email.trim();
 
     const nextNameError = trimmedName ? null : 'Enter your full name.';
     const nextPhoneError = phoneValidationError(country, phoneDigits);
-    const nextEmailError = !trimmedEmail
-      ? 'Enter your email address.'
-      : !isValidEmail(trimmedEmail)
-        ? 'Enter a valid email address.'
-        : null;
-    const nextPasswordError = password ? null : 'Choose a password.';
 
     setNameError(nextNameError);
     setPhoneError(nextPhoneError);
-    setEmailError(nextEmailError);
-    setPasswordError(nextPasswordError);
-    if (nextNameError || nextPhoneError || nextEmailError || nextPasswordError) return;
+    if (nextNameError || nextPhoneError) return;
 
     const phone = toE164(country, phoneDigits);
     if (!phone) {
@@ -77,24 +71,27 @@ export function CreateAccountScreen() {
       return;
     }
 
+    const profileDraft = { fullName: trimmedName };
+
     setLoading(true);
-    const { error } = await signUp(trimmedEmail, password, trimmedName, phone);
+    const result = await phoneAuth.requestOtp({ phone, intent: 'sign-up', profileDraft });
+    if (!mounted.current) return;
     setLoading(false);
 
-    // Nothing valid is cleared on failure.
-    if (error) {
-      setFormError(error.message);
+    if (result.status === 'challenge-sent') {
+      navigation.navigate('VerifyPhone', {
+        phone: result.phone,
+        maskedPhone: maskE164(result.phone),
+        intent: 'sign-up',
+        challengeId: result.challengeId,
+        expiresAt: result.expiresAt,
+        resendAvailableAt: result.resendAvailableAt,
+        profileDraft,
+      });
       return;
     }
 
-    // Preserved from the previous AuthScreen: with email confirmation on there
-    // is no session yet, so the user has to be told where to go next. With it
-    // off, AuthContext's session listener has already routed them into the app
-    // and this screen is gone before the dialog matters.
-    await alertAsync(
-      'Check your email',
-      'If email confirmation is enabled, confirm your address to finish signing up.'
-    );
+    setNotice(result.message);
   }
 
   return (
@@ -116,7 +113,7 @@ export function CreateAccountScreen() {
             onChangeText={(next) => {
               setFullName(next);
               if (nameError) setNameError(null);
-              if (formError) setFormError(null);
+              if (notice) setNotice(null);
             }}
             error={nameError}
             autoCapitalize="words"
@@ -129,64 +126,22 @@ export function CreateAccountScreen() {
           />
 
           <PhoneNumberInput
+            ref={phoneRef}
             country={country}
             onChangeCountry={setCountry}
             value={phoneDigits}
             onChangeValue={(digits) => {
               setPhoneDigits(digits);
               if (phoneError) setPhoneError(null);
-              if (formError) setFormError(null);
+              if (notice) setNotice(null);
             }}
             error={phoneError}
-            returnKeyType="next"
-            onSubmitEditing={() => emailRef.current?.focus()}
-          />
-
-          <AuthField
-            ref={emailRef}
-            label="Email"
-            value={email}
-            onChangeText={(next) => {
-              setEmail(next);
-              if (emailError) setEmailError(null);
-              if (formError) setFormError(null);
-            }}
-            error={emailError}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            textContentType="emailAddress"
-            placeholder="you@example.com"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            submitBehavior="submit"
-          />
-
-          <AuthField
-            ref={passwordRef}
-            label="Password"
-            value={password}
-            onChangeText={(next) => {
-              setPassword(next);
-              if (passwordError) setPasswordError(null);
-              if (formError) setFormError(null);
-            }}
-            error={passwordError}
-            secureTextEntry
-            autoCapitalize="none"
-            autoComplete="new-password"
-            textContentType="newPassword"
-            placeholder="••••••••"
+            editable={!loading}
             returnKeyType="go"
             onSubmitEditing={handleCreateAccount}
           />
 
-          {formError ? (
-            <View style={styles.formError} accessibilityLiveRegion="polite">
-              <Text style={styles.formErrorText}>{formError}</Text>
-            </View>
-          ) : null}
+          {notice ? <AuthNotice tone="info">{notice}</AuthNotice> : null}
         </View>
 
         <View style={styles.privacy}>
@@ -204,6 +159,14 @@ export function CreateAccountScreen() {
             title="Create account"
             onPress={handleCreateAccount}
             loading={loading}
+            accessibilityHint="Send a verification code to this phone number"
+          />
+          <AuthButton
+            title="Use Email Instead"
+            variant="ghost"
+            onPress={() => navigation.navigate('EmailCreateAccount')}
+            disabled={loading}
+            accessibilityHint="Sign up with an email address and password"
           />
         </View>
       </View>
@@ -235,15 +198,6 @@ const styles = StyleSheet.create({
     marginTop: authSpacing.xxl,
     gap: authSpacing.xl - 4,
   },
-  formError: {
-    padding: authSpacing.md,
-    borderRadius: authRadius.field,
-    backgroundColor: '#F5E7E4',
-  },
-  formErrorText: {
-    ...authType.note,
-    color: authColors.danger,
-  },
   privacy: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -261,5 +215,6 @@ const styles = StyleSheet.create({
   actions: {
     marginTop: 'auto',
     paddingTop: authSpacing.xxl,
+    gap: authSpacing.md,
   },
 });
