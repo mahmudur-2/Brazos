@@ -121,3 +121,89 @@ repo's actual lint is `npm run lint` (`tsc --noUnusedLocals
 **Why:** the repo rule is that Expo is never started from this session; the
 LAN URL is handed over instead. Static gates (typecheck, strict lint, 178/179
 tests — the one failure pre-existing and documented) are what was verified.
+
+---
+
+## Screen 48 — Worker Home ("Find jobs")
+
+### D15. Redesigned `BrowseJobsScreen` in place; it stays a pushed route
+**Fork:** the atlas treats Worker Home as a top-level tab. Today
+`BrowseJobsScreen` is a pushed route inside `HomeStack`.
+**Chosen:** redesign it where it is. No route, tab or param-list change.
+**Why:** deferred — promoting it to a tab is the Phase 3 mode-split, and D2
+already committed to not restructuring the tab bar mid-redesign.
+
+### D16. No back chevron; the avatar badge takes that corner
+**Fork:** the reference puts an avatar badge top-left, where this screen
+currently has a back button.
+**Chosen:** follow the reference. The avatar opens the Profile tab.
+**Why:** back is preserved three other ways — the iOS edge-swipe gesture
+(native-stack default), Android hardware back, and the visible tab bar, where
+tapping **Home** pops this stack to its root. So the reference's header costs
+no navigability.
+
+### D17. The "Online" status is omitted
+**Fork:** the brief says to wire the status to "the existing go-online/offline
+toggle". There is no such toggle, and no availability or presence model
+anywhere in the project — `lib/workerSearch.ts` states this directly
+("availability / calendars — not stored").
+**Chosen:** omit it rather than render static text.
+**Why:** deferred (availability schema is Phase 5). A pill that always reads
+"Online" would tell a worker they are visible and available when no such state
+exists — the same class of fabrication as D9's "high demand". Building it
+properly needs a migration, which is out of scope for a screen redesign.
+
+### D18. Distance is omitted; the banner says "AVAILABLE NOW", not "NEAR YOU"
+**Chosen:** no per-job distance, no "Under 3 mi" filter chip, and the banner
+label drops the proximity claim.
+**Why:** exact job coordinates live in `job_locations`, readable only by the
+poster and the assigned worker (D9). The feed is every open job, not a
+geographically scoped one, so "near you" would assert proximity the data
+cannot support.
+
+### D19. Card tags are category, bid count and posted-age — no "% fit", no time slot
+**Chosen:** drop the reference's "98% fit" and "Today, 4 PM" tags.
+**Why:** no job-to-worker fit score exists (the semantic matcher ranks workers
+for a query, not jobs for a worker), and `jobs` has no schedule/arrival-window
+column. The brief explicitly rules out fabricating the fit score. The three
+tags kept are all real.
+
+### D20. Banner's second pill is "N posted today", not "N fit your schedule"
+**Why:** same missing schedule data as D17/D19. "Posted today" is real,
+derived from `created_at`, and keeps the reference's two-pill composition.
+The skills pill is hidden entirely when the worker has advertised no
+categories — "0 match your skills" on an empty profile reads as a market
+problem when it is an unfilled profile.
+
+### D21. Filters and sort run on real columns only
+**Chosen:** chips are **Best fit** (ranks the worker's advertised categories
+first), **Today** (`created_at`), **$100+** (`budget_cents >= 10000`). The
+top-right button opens the existing `ActionSheet` with the three sort modes.
+**Why:** every one maps to a column the schema has. The sort sheet reuses an
+existing component rather than introducing a Filters screen, which does not
+exist and would be new architecture.
+
+### D22. `WorkerJobCard` is a new component, not a `BrowseJobCard` variant
+**Why:** `BrowseJobCard` is also rendered by the map drill-down
+(`CellJobsScreen`) and the similar-jobs strip on `JobDetailScreen`. Giving it
+a second layout would put a branch in a component three screens depend on, to
+serve one of them. `BrowseJobCard` is left untouched.
+
+### D23. `BrowseJobCardSkeleton` deleted
+**Why:** `BrowseJobsScreen` was its only consumer, so this redesign orphaned
+it. Strict lint does not flag unused *exports*, so it was found by hand.
+
+### D24. The bottom tab bar is NOT made floating
+**Fork:** the reference shows a floating rounded nav bar with a visible margin,
+distinct from Customer Home's flush bar.
+**Chosen:** leave the tab bar exactly as the Customer Home pass reskinned it.
+**Why:** the tab bar belongs to the tab navigator, not to this screen — making
+it floating would change it on *every* tab screen, including Customer Home,
+which the brief wants to look different. Per-screen `tabBarStyle` overrides
+would be new cross-screen machinery for a visual detail. Deferred to the Phase
+3 mode-split, which is where two genuinely different navs become possible.
+Logged as a known deviation from the reference.
+
+### D25. `greetingFor()` moved to `lib/time.ts`
+**Why:** both Home screens need it. Extracting beats a second copy; `lib/time`
+already owns the other date/time formatters.

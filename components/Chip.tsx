@@ -25,8 +25,12 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
  *              on a surface (Home's "Switch to Worker").
  * - `soft`     sage fill, no border. A non-interactive tag; pass no `onPress`
  *              and it renders as static text rather than a dead button.
+ * - `filter`   the two-state feed control: sage when off, solid forest when
+ *              on. Distinct from `default`'s selected state, which fills with
+ *              `primary` — this one carries the Emerald `forest` so a row of
+ *              filters matches the screen chrome around it.
  */
-type ChipVariant = 'default' | 'service' | 'outlineGold' | 'soft';
+type ChipVariant = 'default' | 'service' | 'outlineGold' | 'soft' | 'filter';
 
 type ChipProps = {
   label: string;
@@ -61,6 +65,7 @@ export function Chip({
   accessibilityHint,
 }: ChipProps) {
   const small = size === 'sm';
+  const isFilter = variant === 'filter';
 
   // Resolved once, so the icon and the label can never disagree about which
   // variant is being rendered.
@@ -70,7 +75,9 @@ export function Chip({
       ? colors.forest
       : variant === 'soft'
         ? colors.emerald
-        : (accentColor ?? colors.textMuted);
+        : isFilter
+          ? colors.ink
+          : (accentColor ?? colors.textMuted);
 
   const labelColor = selected
     ? colors.onPrimary
@@ -78,7 +85,9 @@ export function Chip({
       ? colors.forest
       : variant === 'soft'
         ? colors.emerald
-        : colors.textMuted;
+        : isFilter
+          ? colors.ink
+          : colors.textMuted;
 
   const content = (
     <>
@@ -97,7 +106,10 @@ export function Chip({
     small && styles.chipSmall,
     variant === 'outlineGold' && styles.chipOutlineGold,
     variant === 'soft' && styles.chipSoft,
-    selected && styles.chipSelected,
+    isFilter && styles.chipFilter,
+    // Order matters: the filter variant's own selected fill has to win over
+    // both its unselected sage and `default`'s primary fill.
+    selected && (isFilter ? styles.chipFilterSelected : styles.chipSelected),
     style,
   ];
 
@@ -147,6 +159,14 @@ const styles = StyleSheet.create({
   chipSoft: {
     backgroundColor: colors.mint,
     borderColor: colors.mint,
+  },
+  chipFilter: {
+    backgroundColor: colors.mint,
+    borderColor: colors.mint,
+  },
+  chipFilterSelected: {
+    backgroundColor: colors.forest,
+    borderColor: colors.forest,
   },
   pressed: {
     opacity: 0.85,

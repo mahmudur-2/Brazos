@@ -30,6 +30,7 @@ import {
   type OpenJob,
 } from '../lib/jobs';
 import { HOME_QUICK_SERVICES, MORE_SERVICES } from '../lib/skillCategories';
+import { greetingFor } from '../lib/time';
 import type { HomeStackNavigation } from '../lib/navigation';
 import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
 
@@ -38,13 +39,6 @@ const BRAND_MARK = require('../assets/brand/brazos-b-leaf.png');
 /** Deliberately small. This is a taste of what's open nearby, not the feed —
  *  the full list is one tap away behind "View all". */
 const PREVIEW_COUNT = 3;
-
-function greetingFor(date: Date): string {
-  const hour = date.getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
 
 /**
  * How many other open jobs in this job's category were posted today.
