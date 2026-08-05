@@ -34,7 +34,7 @@ import { greetingFor } from '../lib/time';
 import type { HomeStackNavigation } from '../lib/navigation';
 import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
 
-const BRAND_MARK = require('../assets/brand/brazos-b-leaf.png');
+const BRAND_MARK = require('../assets/brand/app-icon-v2.png');
 
 /** Deliberately small. This is a taste of what's open nearby, not the feed —
  *  the full list is one tap away behind "View all". */
@@ -143,10 +143,20 @@ export function HomeScreen() {
       >
         {/* --- Header ---------------------------------------------------- */}
         <View style={styles.header}>
-          {/* Absolutely positioned so the title is centred against the whole
-              width, the way the reference has it, rather than against the
-              space the pill leaves over. */}
-          <Text style={styles.headerTitle} maxFontSizeMultiplier={1.3}>
+          {/* flex:1 rather than absolute-fill-and-centre-on-the-whole-row:
+              an absolutely positioned title centred on the FULL header width
+              looks right in the static reference mock, but on a real device
+              the pill's rendered width (icon + "Switch to Worker" + padding)
+              eats into that same centre band, and the two never knew about
+              each other's space — the overlap this replaces. flex:1 gives the
+              title the leftover space next to the pill, still centred within
+              that space, and numberOfLines/flexShrink let it give way rather
+              than draw on top of the pill at any width or type scale. */}
+          <Text
+            style={styles.headerTitle}
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
+          >
             Home
           </Text>
           <View style={styles.headerAction}>
@@ -253,29 +263,45 @@ export function HomeScreen() {
 
         {/* --- Hero CTA -------------------------------------------------- */}
         <View style={styles.heroCard}>
-          <View style={styles.heroTop}>
+          <View style={styles.heroBody}>
             <View style={styles.heroCopy}>
               <Text style={styles.heroEyebrow}>FASTEST WAY TO START</Text>
               <Text style={styles.heroHeadline} maxFontSizeMultiplier={1.3}>
                 Describe the job. BRAZOS handles the rest.
               </Text>
             </View>
-            <Image
-              source={BRAND_MARK}
-              style={styles.heroMark}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
+
+            <Pressable
+              onPress={() => navigation.navigate('PostJob')}
+              style={({ pressed }) => [styles.heroButton, pressed && styles.heroButtonPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Post a job"
+            >
+              <Text style={styles.heroButtonText}>Post a job</Text>
+            </Pressable>
           </View>
 
-          <Pressable
-            onPress={() => navigation.navigate('PostJob')}
-            style={({ pressed }) => [styles.heroButton, pressed && styles.heroButtonPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Post a job"
-          >
-            <Text style={styles.heroButtonText}>Post a job</Text>
-          </Pressable>
+          {/* The real app icon (design-reference/emerald-auth-v1/"app icon
+              v2.png"), rendered whole and unmodified — not recomposed from a
+              rounded-square view + a positioned glyph. Its own background
+              green is close enough to `forest` that its square edge all but
+              disappears against the card, which is why this reads as a
+              floating mark rather than a badge with a visible boundary.
+              Absolutely positioned as a sibling of the padded heroBody, not a
+              flow child of it, because the reference bleeds it to within a
+              few points of the card's own corner — noticeably closer than
+              heroBody's own edge padding allows a normal flex child to sit.
+              Position/size measured directly from
+              design-reference/emerald-auth-v1/postbarexample.png (the
+              specified target crop): the badge measures ~25% of the card's
+              width, right edge flush with the card, top edge only ~2% of the
+              card's height down — see docs/emerald-v2/DECISIONS.md. */}
+          <Image
+            source={BRAND_MARK}
+            style={styles.heroMark}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
         </View>
 
         {/* --- Open near you --------------------------------------------- */}
@@ -489,23 +515,29 @@ const styles = StyleSheet.create({
   },
 
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     minHeight: 48,
-    justifyContent: 'center',
   },
   headerTitle: {
-    ...StyleSheet.absoluteFillObject,
+    // The pill's real width is unknown until it renders, so the title can't
+    // reserve space for it up front — flex:1 just takes whatever the pill
+    // doesn't, and textAlign centres within that. On a wide screen this reads
+    // as dead-centre same as the reference; on a narrow one the title shifts
+    // slightly left of true centre rather than sitting under the pill.
+    flex: 1,
     textAlign: 'center',
-    textAlignVertical: 'center',
     fontFamily: fonts.display,
     fontSize: 25,
     fontWeight: '700',
     color: colors.forest,
-    // The pill sits above this in z-order; without it the invisible full-width
-    // text box would swallow taps meant for the pill.
-    pointerEvents: 'none',
-    lineHeight: 48,
   },
   headerAction: {
+    // Never yields width to the title — a shrinking pill would clip its own
+    // label before the title gets a chance to.
+    flexShrink: 0,
     alignItems: 'flex-end',
   },
 
@@ -592,17 +624,23 @@ const styles = StyleSheet.create({
   heroCard: {
     borderRadius: radius.xl,
     backgroundColor: colors.forest,
+    // Clips the badge to the card's own rounded corner if its bleed ever
+    // pushes a pixel past the edge, rather than letting it overhang onto
+    // whatever sits behind the card.
+    overflow: 'hidden',
+  },
+  // Holds everything that keeps the card's normal edge padding — the badge
+  // deliberately does not live in here (see heroMark).
+  heroBody: {
     padding: spacing.xl,
     gap: spacing.lg,
   },
-  heroTop: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.md,
-  },
   heroCopy: {
-    flex: 1,
     gap: spacing.sm,
+    // Reserves room across the two headline lines so they wrap clear of the
+    // badge bleeding off the top-right corner instead of running under it —
+    // sized from the badge's own footprint (heroMark), not guessed.
+    paddingRight: 64,
   },
   heroEyebrow: {
     fontSize: 12,
@@ -618,8 +656,11 @@ const styles = StyleSheet.create({
     color: colors.white,
   },
   heroMark: {
-    width: 68,
-    height: 68,
+    position: 'absolute',
+    top: 4,
+    right: 0,
+    width: 84,
+    height: 84,
   },
   heroButton: {
     minHeight: 56,

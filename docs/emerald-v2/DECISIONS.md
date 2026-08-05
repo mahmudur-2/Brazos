@@ -207,3 +207,146 @@ Logged as a known deviation from the reference.
 ### D25. `greetingFor()` moved to `lib/time.ts`
 **Why:** both Home screens need it. Extracting beats a second copy; `lib/time`
 already owns the other date/time formatters.
+
+---
+
+## Post-ship fixes — Customer Home header, hero banner, Launch screen
+
+### D26. Header overlap fixed by switching the title from absolute-fill-centred to flex:1
+**Bug (user-reported):** "Home" and the "Switch to Worker" pill collided on
+real device widths.
+**Root cause, confirmed by measurement, not guessed:** `headerTitle` used
+`StyleSheet.absoluteFillObject` to centre "Home" against the *entire* header
+row width, independent of the pill's own rendered width. The reference mock's
+390pt canvas has room for both with no knowledge of each other; a real
+device's content padding (`spacing.xl`=24 each side) plus the pill's actual
+rendered width (icon + "Switch to Worker" + padding, ~109-160pt depending on
+width) leaves too little room, and the two elements' boxes overlap.
+**Chosen:** `header` becomes a flex row (`justifyContent: 'space-between'`),
+`headerTitle` takes `flex: 1` with centred text and `numberOfLines={1}`,
+`headerAction` gets `flexShrink: 0`.
+**Verified, not just code-reviewed:** live `getBoundingClientRect()` on the
+running app (auth bypassed locally for inspection only, reverted before
+commit — see D14's precedent) at both 375x812 and 320x568: title's right edge
+stayed 45px clear of the pill's left edge at both widths.
+**Trade-off, logged per the standing rule:** the title is no longer
+dead-centre on the full screen width — it centres within the space left of
+the pill, which shifts it slightly left of true centre. This is the
+correctness-over-exact-centring trade the fix instructions asked for; there
+is no left-side element to counterbalance the pill for true centring without
+a measured spacer, which was judged unnecessary complexity for a static
+"Home" string that will never itself overflow.
+
+### D27. Hero banner monogram: real `app-icon-v2.png` file, restructured to bleed past the card's padding
+**Bug (user-reported):** the B-monogram had been "implemented wrong twice";
+explicit instruction to stop recomposing it from primitives and instead
+render `app_icon_v2.png` whole and unmodified, sized/positioned to match
+`design-reference/emerald-auth-v1/postbarexample.png`.
+**Investigation:** the file exists at
+`design-reference/emerald-auth-v1/app icon v2.png` (space-separated name).
+Copied to `assets/brand/app-icon-v2.png` following the existing kebab-case
+asset convention. The prior implementation (committed in `ac65d2a`) already
+rendered a real image (`brazos-b-leaf.png`) via a plain `<Image
+resizeMode="contain">` — not primitives — so "wrong twice" was a sizing/
+positioning defect, not a recreate-from-scratch one.
+**Measured, not eyeballed:** used `pngjs` (already in `node_modules`) to find
+the badge's pixel bounding box in `postbarexample.png` two ways — direct
+gold-glyph detection (unreliable alone, since the badge's own dark-green
+backing nearly matches the card's `forest` fill and doesn't separate
+algorithmically) and a scale-inferred method (compare the gold glyph's size
+in the 1254x1254 source icon to its size in the target crop, then apply that
+scale factor to the full icon canvas and to the glyph's own margins within
+it). Result: badge is roughly 24.8% of the card's width, right edge flush
+with the card's right edge, top edge only roughly 2% of the card's height
+down from the card's top — i.e. bleeding almost to the card's own corner,
+well inside the card's normal `padding: spacing.xl` (24pt) that a flex child
+would otherwise respect.
+**Chosen:** restructured `heroCard` — padding moved into a new `heroBody`
+wrapper (holds the eyebrow/headline/button); the badge is now a sibling
+`Image`, absolutely positioned (`top: 4, right: 0, width: 84, height: 84`)
+against the card's true edge, not the padded content box. `heroCard` gained
+`overflow: 'hidden'` as a clipping safety net. `heroCopy` gained
+`paddingRight: 64` so the two-line headline wraps clear of the badge instead
+of running under it.
+**Verified via live DOM measurement** (same bypass-and-revert technique as
+D26): badge rendered at 84x84 inside a 342-wide card (24.6% — target was
+24.8%), right edge exactly flush with the card's right edge (366=366, 0px
+gap), top inset 4px. Headline/eyebrow text boxes' right edge (278) stayed 4px
+clear of the badge's left edge (282) — no overlap. Image `complete: true`,
+natural size 1254x1254 — confirmed loading the real file, not a broken image.
+
+### D28. Launch screen: swapped the badge to `app-icon-v2.png` via a new `BrandLogo` override prop; safe-area and background-pattern edges audited and found correct, unchanged
+**Bug (user-reported):** "edges are visibly off" on `LaunchScreen`; asked to
+check corner radius on the icon badge, safe-area/edge padding, and whether
+the background pattern clips/seams at the screen edges — and to look before
+guessing which one is wrong.
+**Investigated all three, in order, before changing anything:**
+1. **Safe-area/edge padding** — measured the launch root's live
+   `getBoundingClientRect()`: exactly `(0, 0, viewportWidth, viewportHeight)`
+   at 390x844, matching `StyleSheet.absoluteFillObject`'s intent. The atlas
+   reference (`design-reference/01_launch.png`) also shows the green
+   full-bleed under the status bar. **No bug found — left unchanged.**
+2. **Background pattern edge coverage** — read the live
+   `getBoundingClientRect()` of all 8 `RadialGlow` layers and all 5
+   `WaveLines` circles; every value matched the hand-computed geometry from
+   source (e.g. the largest glow layer spans -340.5 to 925.5 on a 390-wide
+   screen — comfortably overflowing both edges by design, clipped cleanly by
+   `root`'s `overflow: 'hidden'`). **No clipping/seam bug found in the
+   layout math — left unchanged.** (A separate, unrelated finding from this
+   same investigation is logged below.)
+3. **Icon badge corner radius** — measured via `pngjs` alpha-channel
+   scanning (find where each row's alpha crosses from transparent to opaque
+   at the shape's flat top edge, which locates the corner radius directly):
+   `brazos-b-leaf.png` (`BrandLogo`'s current default, used by `LaunchScreen`)
+   measures roughly 21.5% of its canvas width; `app-icon-v2.png` (the asset
+   named in the prior banner-fix instruction, already established as
+   authoritative for this pass) measures roughly 18.7% — a real, visible
+   difference, and exactly the place the user pointed ("the icon badge's
+   corners specifically"). **This is the actual bug.**
+**Chosen fix:** rather than change `BrandLogo`'s shared default asset (it is
+also used by `SignInScreen` and `EmailSignInScreen`, screens this task never
+named — changing the default would regress them unrequested), added an
+optional `source` override prop to `BrandLogo` and pass `app-icon-v2.png`
+from `LaunchScreen` only. Least regression risk and fewest files touched of
+the options considered (the alternative — bypassing `BrandLogo` entirely and
+inlining a second `<Image>` in `LaunchScreen` — would have duplicated the
+sizing/shadow logic `BrandLogo` already owns).
+**Verified via live DOM measurement:** confirmed the launch badge's `<img>`
+src now includes `app-icon-v2`, `complete: true`, natural size 1254x1254, at
+the same position/size the old asset rendered at (only the source changed,
+so position/size math is provably unaffected).
+**Unrelated finding, explicitly not fixed (out of scope):** while measuring
+the launch screen, found that on this web preview, `LaunchScreen`'s entire
+entrance animation (logo scale/fade, wordmark rise, tagline rise, wave-line
+fade-in) is permanently frozen at its pre-animation starting values — the
+effect that starts the `Animated.parallel(...)` is gated on
+`if (reducedMotion === null) return;`, and `reducedMotion` (from
+`useReducedMotion()`) never resolves away from `null` on `react-native-web`
+in this environment, so `.start()` is never called. This is very likely a
+web-preview-only artifact (native `AccessibilityInfo` is well-supported on
+iOS/Android, where this hook almost certainly resolves normally) and is
+unrelated to the three edge/corner/padding concerns this task named. **Not
+fixed** — different bug, outside this task's scope, and touching
+`useReducedMotion.ts` risks the frozen web/PWA surface CLAUDE.md protects.
+Flagged here for awareness; worth a dedicated look if the web build is ever a
+real target again.
+
+### D29. Verification method for D26-D28: temporary, fully-reverted local-only bypasses
+All three fixes above needed to see the actual authenticated/timed screens to
+verify against a real DOM, not just re-read the code. Two temporary edits were
+made, confirmed via `git diff` to be the *only* change in their file, and
+reverted (one via a direct edit undo, one via `git checkout --`) before this
+log entry was written — neither reached a commit:
+- `App.tsx`'s `RootNavigator` was temporarily short-circuited to
+  `return <MainTabs />;` so Home/Worker Home could be inspected without a
+  signed-in session (no credentials were entered anywhere).
+- `LaunchScreen.tsx`'s `MIN_VISIBLE` was temporarily raised from `1120` to
+  `120000` so the launch layer could be inspected before its own timer
+  dismissed it.
+Screenshots were unavailable throughout (the Browser pane's compositor needs
+the pane displayed on the user's side, which it wasn't) — verification used
+`getBoundingClientRect()`/`getComputedStyle()` measurements instead, which is
+sufficient for layout/geometry claims (position, size, overlap) but cannot
+confirm pixel-level color/rendering fidelity. That gap is why D28's
+corner-radius comparison used the *source PNG files* directly (via `pngjs`)
+rather than trying to eyeball rendered pixels.
