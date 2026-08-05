@@ -61,40 +61,114 @@ const CATEGORY_KEYWORDS: Record<string, string[]> = {
   moving: [
     'move', 'moving', 'mover', 'movers', 'relocate', 'relocation', 'haul',
     'hauling', 'truck', 'mattress', 'couch', 'sofa', 'flight', 'flights',
-    'stairs', 'upstairs', 'load', 'unload', 'lifting', 'heavy',
+    'stairs', 'upstairs', 'load', 'unload', 'lifting', 'heavy', 'junk',
+    'dispose', 'disposal', 'removal', 'storage', 'apartment',
   ],
   packing: [
     'pack', 'packing', 'unpack', 'unpacking', 'wrap', 'wrapping', 'boxes',
-    'declutter',
+    'declutter', 'organize', 'organizing', 'organization', 'closet', 'sort',
+    'label', 'tidying',
   ],
   furniture_assembly: [
-    'assemble', 'assembly', 'ikea', 'flatpack', 'bookshelf', 'shelves',
-    'crib', 'dresser', 'wardrobe', 'bedframe',
+    'assemble', 'assembly', 'furniture', 'ikea', 'flatpack', 'bookshelf',
+    'shelves', 'shelf', 'crib', 'dresser', 'wardrobe', 'bedframe', 'desk',
+    'table', 'chair', 'build',
   ],
   cleaning: [
     'clean', 'cleaning', 'cleaner', 'tidy', 'vacuum', 'mop', 'scrub',
-    'housekeeping', 'maid', 'dusting',
+    'housekeeping', 'maid', 'dusting', 'dust', 'carpet', 'upholstery',
+    'window', 'windows', 'wash', 'washing', 'pressure', 'powerwash',
+    'sanitize', 'bathroom', 'kitchen', 'mildew',
   ],
   handyman: [
-    'fix', 'repair', 'handyman', 'leak', 'leaky', 'plumbing', 'plumber',
-    'electrical', 'electrician', 'faucet', 'drywall', 'patch', 'broken',
-    'door', 'hinge',
+    'fix', 'repair', 'repairs', 'handyman', 'leak', 'leaky', 'leaking',
+    'plumbing', 'plumber', 'electrical', 'electrician', 'faucet', 'drywall',
+    'patch', 'broken', 'door', 'hinge', 'sink', 'toilet', 'drain', 'clog',
+    'clogged', 'pipe', 'pipes', 'outlet', 'outlets', 'wiring', 'fixture',
+    'fixtures', 'appliance', 'dishwasher', 'dryer', 'install',
+    'installation', 'pest', 'rodent', 'exterminator', 'termite',
   ],
   yard_work: [
     'yard', 'lawn', 'mow', 'mowing', 'garden', 'gardening', 'landscaping',
-    'leaves', 'hedge', 'weeds', 'weeding', 'snow', 'shovel',
+    'landscape', 'leaves', 'hedge', 'hedges', 'weeds', 'weeding', 'snow',
+    'shovel', 'shoveling', 'gutter', 'gutters', 'trim', 'trimming', 'prune',
+    'pruning', 'mulch', 'planting', 'outdoor',
   ],
   dog_walking: [
     'dog', 'dogs', 'puppy', 'walk', 'walking', 'pet', 'pets', 'cat', 'cats',
-    'sitter', 'sitting', 'feed',
+    'sitter', 'sitting', 'feed', 'feeding', 'boarding', 'litter',
   ],
   errands: [
     'errand', 'errands', 'grocery', 'groceries', 'delivery', 'deliver',
-    'pickup', 'shopping', 'courier', 'pharmacy',
+    'pickup', 'shopping', 'courier', 'pharmacy', 'assistant', 'dropoff',
+    'prescription',
   ],
-  tv_mounting: ['tv', 'television', 'mount', 'mounting', 'bracket', 'wallmount'],
-  painting: ['paint', 'painting', 'painter', 'repaint', 'primer', 'wall', 'walls'],
+  tv_mounting: [
+    'tv', 'television', 'mount', 'mounting', 'bracket', 'wallmount', 'hang',
+    'hanging', 'picture', 'pictures', 'mirror', 'monitor', 'soundbar',
+  ],
+  painting: [
+    'paint', 'painting', 'painter', 'repaint', 'primer', 'wall', 'walls',
+    'ceiling', 'interior', 'touchup', 'stain', 'caulk',
+  ],
 };
+
+/**
+ * Multi-word phrases that name a service almost unambiguously.
+ *
+ * These exist because the single words they are built from are individually
+ * weak or actively misleading — "pressure" and "washing" each drift, "pressure
+ * washing" does not; "junk" alone could be decluttering, "junk removal" is a
+ * haul-away. A phrase hit is worth more than the sum of its tokens for exactly
+ * that reason.
+ */
+const CATEGORY_PHRASES: Record<string, string[]> = {
+  moving: ['junk removal', 'moving help', 'move out', 'move in'],
+  packing: ['home organization', 'packing and unpacking'],
+  furniture_assembly: ['furniture assembly', 'flat pack'],
+  cleaning: [
+    'pressure washing', 'power washing', 'deep clean', 'carpet cleaning',
+    'window washing', 'upholstery cleaning', 'move out clean',
+  ],
+  handyman: [
+    'light fixture', 'garbage disposal', 'pest control', 'drywall repair',
+    'appliance installation', 'water heater', 'ceiling fan',
+  ],
+  yard_work: ['snow removal', 'gutter cleaning', 'leaf removal', 'lawn care'],
+  dog_walking: ['dog walking', 'pet sitting', 'dog sitting'],
+  errands: ['personal assistant', 'grocery run'],
+  tv_mounting: ['tv mounting', 'wall mount', 'picture hanging', 'shelf hanging'],
+  painting: ['interior painting', 'accent wall'],
+};
+
+/**
+ * How many categories each keyword belongs to, computed once at module load.
+ *
+ * A word filed under three categories says roughly a third as much about any
+ * one of them as a word filed under exactly one — "trim" (hedges or paintwork)
+ * should not carry the weight of "ikea". Deriving this from the map rather
+ * than hand-maintaining a weight table means adding a keyword automatically
+ * re-prices every category that shares it.
+ */
+const KEYWORD_BREADTH: Map<string, number> = (() => {
+  const breadth = new Map<string, number>();
+  for (const keywords of Object.values(CATEGORY_KEYWORDS)) {
+    for (const keyword of keywords) {
+      breadth.set(keyword, (breadth.get(keyword) ?? 0) + 1);
+    }
+  }
+  return breadth;
+})();
+
+/** Words that carry no service signal and would only add fuzzy-match noise. */
+const STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'need', 'needs', 'needed',
+  'want', 'have', 'has', 'are', 'was', 'you', 'your', 'our', 'get', 'got',
+  'can', 'will', 'would', 'please', 'some', 'any', 'all', 'also', 'but',
+  'not', 'from', 'into', 'out', 'off', 'over', 'under', 'about', 'just',
+  'very', 'really', 'help', 'someone', 'somebody', 'looking', 'look', 'like',
+  'new', 'old', 'big', 'small', 'today', 'tomorrow', 'asap', 'soon',
+]);
 
 /** Category keys, in the order SKILL_CATEGORIES lists them — used as the tie
  *  break so equal keyword scores resolve the same way every time. */
@@ -103,13 +177,107 @@ const CATEGORY_ORDER = SKILL_CATEGORIES.map((c) => c.key);
 /** Longest a raw query is allowed to be before it is treated as a paste. */
 const MAX_QUERY_LENGTH = 120;
 
-function tokenize(query: string): string[] {
+/** Lowercased, punctuation-flattened, length-capped. Shared by the token and
+ *  the phrase pass so the two can't disagree about what the query says. */
+function normalizeQuery(query: string): string {
   return query
     .toLowerCase()
     .slice(0, MAX_QUERY_LENGTH)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean);
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
+
+/**
+ * Whether two words are within `max` edits of each other, counting a swap of
+ * two adjacent characters as ONE edit rather than two.
+ *
+ * That last part is the reason this is Damerau-Levenshtein (optimal string
+ * alignment) and not plain Levenshtein: transposition is far and away the most
+ * common real typing error — "leakign", "recieve" — and plain Levenshtein
+ * prices it at 2, the same as two unrelated substitutions. Charging it 1
+ * is what lets the edit budget below stay at a single edit, which is what
+ * keeps genuinely different words ("washing" vs "walking", "leaking" vs
+ * "cleaning" — both distance 2) out of each other's results.
+ *
+ * Three rolling rows rather than the full matrix, with a length pre-check and
+ * a per-row early exit; this runs once per (token, keyword) pair, so the
+ * constant factor is the whole cost.
+ */
+function withinEditDistance(a: string, b: string, max: number): boolean {
+  if (Math.abs(a.length - b.length) > max) return false;
+
+  let twoBack: number[] = [];
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+
+  for (let i = 1; i <= a.length; i++) {
+    const curr = new Array<number>(b.length + 1);
+    curr[0] = i;
+    let rowBest = i;
+
+    for (let j = 1; j <= b.length; j++) {
+      const substitution = prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1);
+      let best = Math.min(prev[j] + 1, curr[j - 1] + 1, substitution);
+
+      // Adjacent transposition: "ab" typed where "ba" was meant.
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        best = Math.min(best, twoBack[j - 2] + 1);
+      }
+
+      curr[j] = best;
+      if (best < rowBest) rowBest = best;
+    }
+
+    // Every later row can only grow, so once the best cell in a row is over
+    // budget the answer is settled.
+    if (rowBest > max) return false;
+    twoBack = prev;
+    prev = curr;
+  }
+
+  return prev[b.length] <= max;
+}
+
+/** Exact beats prefix beats typo, and the gaps are wide enough that a real
+ *  word always outranks a plausible misspelling of a different one. */
+const MATCH_EXACT = 1;
+const MATCH_PREFIX = 0.85;
+const MATCH_STEM = 0.75;
+const MATCH_FUZZY = 0.55;
+
+/**
+ * How well one typed word matches one keyword, 0 when it does not.
+ *
+ * The length guards matter more than the weights: a two-character keyword that
+ * prefix-matches would let "tv" claim "tvidsomething", and a one-edit typo
+ * allowance on a four-letter word turns half the dictionary into a match for
+ * the other half.
+ */
+function matchQuality(token: string, keyword: string): number {
+  if (token === keyword) return MATCH_EXACT;
+
+  // "movers" reaches "move". Guarded so only keywords long enough to be a
+  // meaningful head can absorb a longer word.
+  if (keyword.length >= 4 && token.startsWith(keyword)) return MATCH_PREFIX;
+  // "clean" reaches "cleaning" — the same relationship the other way round.
+  if (token.length >= 4 && keyword.startsWith(token)) return MATCH_STEM;
+
+  // Typos, only on words long enough that a single edit is unlikely to spell
+  // a genuinely different word. Two edits are allowed only once a word is long
+  // enough for that to still be a small proportion of it — at seven letters it
+  // is not, and letting it through is what made "leaking" match "cleaning".
+  const budget = token.length >= 9 ? 2 : token.length >= 5 ? 1 : 0;
+  if (budget > 0 && withinEditDistance(token, keyword, budget)) return MATCH_FUZZY;
+
+  return 0;
+}
+
+/** A phrase is worth more than a lone keyword because it is far less likely to
+ *  be a coincidence — see CATEGORY_PHRASES. */
+const PHRASE_SCORE = 1.6;
+
+/** Below this a category is a stray fuzzy hit rather than a reading of the
+ *  request, and surfacing it would be worse than returning nothing. */
+const MIN_CATEGORY_SCORE = 0.3;
 
 /**
  * Which service categories a free-text request is about, best first.
@@ -121,28 +289,49 @@ function tokenize(query: string): string[] {
  * show everything" rather than "no results".
  */
 export function interpretQuery(query: string): string[] {
-  const tokens = new Set(tokenize(query));
-  if (tokens.size === 0) return [];
+  const normalized = normalizeQuery(query);
+  if (!normalized) return [];
 
-  const scored: { key: string; hits: number }[] = [];
+  const tokens = [...new Set(normalized.split(' '))].filter(
+    (token) => token.length >= 2 && !STOPWORDS.has(token)
+  );
+  if (tokens.length === 0) return [];
+
+  const scored: { key: string; score: number }[] = [];
+
   for (const [key, keywords] of Object.entries(CATEGORY_KEYWORDS)) {
-    let hits = 0;
-    for (const keyword of keywords) {
-      // Whole word, or a whole word that starts with it — "movers" reaches
-      // "move" but "remove" does not.
-      for (const token of tokens) {
-        if (token === keyword || token.startsWith(keyword)) {
-          hits++;
-          break;
-        }
+    let score = 0;
+
+    // Each typed word contributes at most once per category, via its single
+    // best keyword. Scoring per keyword instead — which is what this used to
+    // do — let one word count twice ("cleaning" hitting both 'clean' and
+    // 'cleaning') and quietly handed every category with a long keyword list
+    // an advantage that had nothing to do with the request.
+    for (const token of tokens) {
+      let best = 0;
+      for (const keyword of keywords) {
+        const quality = matchQuality(token, keyword);
+        if (quality === 0) continue;
+
+        const weight = quality / (KEYWORD_BREADTH.get(keyword) ?? 1);
+        if (weight > best) best = weight;
+        // Nothing can beat an unambiguous exact hit, so stop looking.
+        if (best === MATCH_EXACT) break;
       }
+      score += best;
     }
-    if (hits > 0) scored.push({ key, hits });
+
+    for (const phrase of CATEGORY_PHRASES[key] ?? []) {
+      if (normalized.includes(phrase)) score += PHRASE_SCORE;
+    }
+
+    if (score >= MIN_CATEGORY_SCORE) scored.push({ key, score });
   }
 
   return scored
     .sort(
-      (a, b) => b.hits - a.hits || CATEGORY_ORDER.indexOf(a.key) - CATEGORY_ORDER.indexOf(b.key)
+      (a, b) =>
+        b.score - a.score || CATEGORY_ORDER.indexOf(a.key) - CATEGORY_ORDER.indexOf(b.key)
     )
     .slice(0, 3)
     .map((s) => s.key);

@@ -102,16 +102,17 @@ const TAB_LABEL_FONT_SIZE = 12;
 //
 //   icon glyph box   32   (Ionicons renders in a Text box ~size + 3, NOT 29)
 //   label            16   (marginTop 2 + lineHeight 14)
-//   dot               7   (marginTop 3 + size 4)
 //   paddingBottom     3   (TAB_BOTTOM_GAP)
 //   ------------------------
-//   total            58
+//   total            51
 //
-// so the slot must be >= 58, i.e. the bar >= 68. 70 is that plus 2px of
-// slack. The bar was 55 (a 45px slot) for several iterations, which is where
-// the icons-crossing-the-hairline bug came from: 58 into 45 overflows by 13,
-// and because tabItemContent packs to flex-end the overflow went out the TOP,
-// through the hairline.
+// so the slot must be >= 51, i.e. the bar >= 61. 70 leaves deliberate slack:
+// the bar was 55 (a 45px slot) for several iterations, which is where the
+// icons-crossing-the-hairline bug came from, and because tabItemContent packs
+// to flex-end any overflow goes out the TOP, through the hairline. The
+// Emerald reskin removed a 7px active dot from this stack, which only widened
+// the margin — the height is left where it is rather than re-tightened around
+// the exact content, since nothing is gained by sitting close to that edge.
 //
 // Careful with the icon line: react-native-web collapses the label's <Text>
 // layout box to ~1px instead of 14, which made the old 55/45 combination
@@ -131,10 +132,6 @@ const TAB_BOTTOM_GAP = 3;
 // their own (the Math.min below), since they need less, not more.
 const TAB_BAR_SAFE_BOTTOM = 16;
 
-// Reused, not reinvented — the same tokens Button.tsx's primary variant and
-// the rating-star UI already use, so the tab bar can't drift from them.
-const TAB_DOT_SIZE = 4;
-
 // Deliberately hardcoded, NOT sourced from useThemeColors() — that hook's
 // useColorScheme() dependency was forcing MainTabs' screenOptions (and this
 // style object) to recompute on every system light/dark flip. Android has a
@@ -147,13 +144,18 @@ const TAB_DOT_SIZE = 4;
 // An opaque background makes that whole bug class structurally impossible
 // regardless of timing, on top of removing the theme dependency itself.
 // Values below reuse the app's existing light-palette tokens (not new hex
-// literals) so this can't silently drift from Button.tsx's primary green or
-// the rating-star gold. Proper light/dark tab bar theming comes later.
+// literals) so this can't silently drift. Proper light/dark tab bar theming
+// comes later.
+//
+// Emerald reskin: the active tint is now `forest` (the atlas's deep green,
+// which is also what the Home screen's own chrome uses) rather than `primary`,
+// and the hairline is the ordinary border rather than gold — the reference
+// separates the bar with a plain hairline and carries the accent colour on the
+// active item itself, not on the edge.
 const TAB_BAR_BACKGROUND = colors.surface;
-const TAB_HAIRLINE_COLOR = colors.star;
-const TAB_ACTIVE_COLOR = colors.primary;
+const TAB_HAIRLINE_COLOR = colors.border;
+const TAB_ACTIVE_COLOR = colors.forest;
 const TAB_INACTIVE_COLOR = colors.textMuted;
-const TAB_DOT_COLOR = colors.star;
 
 function HomeStackNavigator() {
   return (
@@ -283,9 +285,6 @@ function MainTabs() {
               >
                 {label}
               </Text>
-              <View
-                style={[styles.tabItemDot, { opacity: focused ? 1 : 0 }]}
-              />
             </View>
           );
         },
@@ -479,12 +478,5 @@ const styles = StyleSheet.create({
     fontSize: TAB_LABEL_FONT_SIZE,
     lineHeight: TAB_LABEL_FONT_SIZE + 2,
     marginTop: 2,
-  },
-  tabItemDot: {
-    width: TAB_DOT_SIZE,
-    height: TAB_DOT_SIZE,
-    borderRadius: TAB_DOT_SIZE / 2,
-    marginTop: 3,
-    backgroundColor: TAB_DOT_COLOR,
   },
 });

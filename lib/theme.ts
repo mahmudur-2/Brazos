@@ -1,8 +1,18 @@
-import { Platform, type ViewStyle } from 'react-native';
+import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 
 /**
  * Brazos design system — "Forest and earth".
  * Deep forest green primary on a warm cream background, grounded and natural.
+ *
+ * The `forest`/`gold`/`mint`/`ink` tokens below are the Emerald Trust palette,
+ * lifted verbatim from the atlas stylesheet's `:root` block
+ * (design-reference/emerald-auth-v1/.../style.css) — the same values
+ * lib/authTheme.ts already carries for the auth surface. They live here too so
+ * in-app screens rendering on the Emerald design (Home first) draw from the
+ * one in-app token file rather than importing the auth surface's tokens or
+ * hardcoding hexes. This is deliberately NOT a third palette: `primary` and
+ * friends are untouched, and every existing screen keeps rendering exactly as
+ * it did.
  */
 
 export const colors = {
@@ -15,6 +25,23 @@ export const colors = {
   // Rating-star gold. Kept as an explicit token (not tied to status/primary)
   // since gold stars are a near-universal convention independent of theme.
   star: '#F59E0B',
+
+  // --- Emerald Trust palette (atlas :root) -------------------------------
+  /** --forest — the deep green behind the Home hero CTA and display titles. */
+  forest: '#064C3B',
+  /** --emerald — lighter accent green for glyphs sitting on cream. */
+  emerald: '#0D6B52',
+  /** --gold — sparkle accents, small-caps eyebrows, the brand monogram. */
+  gold: '#C8A15B',
+  /** --gold-soft — the blush/sand wash behind decorative artwork. */
+  goldSoft: '#F3E7CE',
+  /** --mint — sage fill for category tag pills. */
+  mint: '#E5F1EC',
+  /** --mint2 — one step deeper than mint, for borders on sage surfaces. */
+  mint2: '#D3E8DF',
+  /** --ink — the near-black used for display headlines. Distinct from `text`,
+   *  which carries a green tint that reads muted at display sizes. */
+  ink: '#13201B',
 
   text: '#1F2E22',
   textMuted: '#6B7566',
@@ -63,6 +90,19 @@ export const darkColors: ColorPalette = {
   onPrimary: '#F4F1E8',
   star: '#F59E0B',
 
+  // Emerald tokens, lifted for dark surfaces. `forest` stays a fill colour
+  // rather than being brightened: it is the colour of a filled card, and a
+  // card that lightens in dark mode inverts the depth it exists to create.
+  // `gold`/`mint`/`ink` are the ones that must move, since they are used as
+  // content on, or tint behind, that fill.
+  forest: '#0B3B2E',
+  emerald: '#4E9E82',
+  gold: '#D9B978',
+  goldSoft: '#2C2617',
+  mint: '#1C2E27',
+  mint2: '#263D34',
+  ink: '#F1EDE1',
+
   text: '#F1EDE1',
   textMuted: '#9CB09E',
   textSubtle: '#6E8272',
@@ -102,6 +142,24 @@ export const radius = {
   pill: 999,
 } as const;
 
+/**
+ * The display serif used for Emerald headlines (Home's "Take a task off your
+ * plate.", section titles, the hero CTA).
+ *
+ * No custom font is loaded anywhere in this app, deliberately — see
+ * LaunchScreen's wordmark comment: bundling one for a handful of headlines
+ * buys a font-loading flash on the very screens that most need to paint
+ * instantly. These are the platform serifs, resolved the same way the launch
+ * wordmark already resolves them, so the two can't drift.
+ */
+export const fonts = {
+  display: Platform.select({
+    ios: 'Georgia',
+    android: 'serif',
+    default: 'Georgia, "Times New Roman", serif',
+  }) as TextStyle['fontFamily'],
+} as const;
+
 export const typography = {
   title: { fontSize: 28, fontWeight: '800', color: colors.text },
   heading: { fontSize: 22, fontWeight: '700', color: colors.text },
@@ -135,4 +193,4 @@ export const shadows: Record<'card' | 'raised', ViewStyle> = {
   }) as ViewStyle,
 };
 
-export const theme = { colors, spacing, radius, typography, shadows } as const;
+export const theme = { colors, spacing, radius, typography, fonts, shadows } as const;

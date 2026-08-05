@@ -916,3 +916,77 @@ test('the deterministic matcher is unchanged and still the fallback', () => {
   // must not be embedded on its own.
   assert.match(workerSearch, /if \(trimmed\.length >= 2\) \{/);
 });
+
+// ===========================================================================
+// Free-text interpretation (interpretQuery)
+// ===========================================================================
+// interpretQuery turns what the customer typed on Home into service
+// categories. It is pure, but it lives in a module that constructs the
+// Supabase client at import time, and this suite has no build step to import
+// TypeScript through — so these guard the properties of the matcher at the
+// source level, the same way every other assertion in this file does.
+//
+// The behaviour they stand in for was verified directly against the compiled
+// module: single intent, multi-intent ("sink leaking AND yard mowed" ->
+// handyman + yard_work), transposition typos ("leakign", "cleanning"), and
+// that pure noise returns nothing.
+
+test('free-text interpretation scores each typed word once per category', () => {
+  // Per-KEYWORD counting let one typed word score twice for the same category
+  // ("cleaning" hitting both 'clean' and 'cleaning') and handed every category
+  // with a long keyword list an advantage unrelated to the request. The fix is
+  // a best-match-per-token inner loop, so the shape has to stay this way.
+  assert.match(workerSearch, /for \(const token of tokens\) \{\s*\n\s*let best = 0;/);
+  assert.match(workerSearch, /if \(weight > best\) best = weight;/);
+  assert.match(workerSearch, /score \+= best;/);
+});
+
+test('ambiguous keywords are priced down by how many categories share them', () => {
+  // A word filed under three categories must not carry the weight of one filed
+  // under exactly one. Derived from the map rather than a hand-kept table, so
+  // adding a keyword automatically re-prices everything that shares it.
+  assert.match(workerSearch, /KEYWORD_BREADTH/);
+  assert.match(workerSearch, /quality \/ \(KEYWORD_BREADTH\.get\(keyword\) \?\? 1\)/);
+});
+
+test('typo tolerance counts a transposition as one edit and stays bounded', () => {
+  // Damerau, not plain Levenshtein: transposition is the most common real
+  // typing error and plain Levenshtein prices it the same as two unrelated
+  // substitutions.
+  assert.match(workerSearch, /a\[i - 1\] === b\[j - 2\] && a\[i - 2\] === b\[j - 1\]/);
+
+  // The budget is what keeps genuinely different words apart. "leaking" and
+  // "cleaning" are two edits apart, as are "washing" and "walking" — allowing
+  // two edits below nine characters matched all of them to each other.
+  assert.match(
+    workerSearch,
+    /token\.length >= 9 \? 2 : token\.length >= 5 \? 1 : 0/
+  );
+});
+
+test('free-text interpretation ignores filler and needs a real signal', () => {
+  // Without a stopword list, "the"/"and"/"need" become fuzzy-match fodder.
+  assert.match(workerSearch, /const STOPWORDS = new Set\(\[/);
+  assert.match(workerSearch, /!STOPWORDS\.has\(token\)/);
+
+  // And a lone weak fuzzy hit must not be enough to surface a category.
+  assert.match(workerSearch, /MIN_CATEGORY_SCORE/);
+  assert.match(workerSearch, /if \(score >= MIN_CATEGORY_SCORE\)/);
+});
+
+test('multi-word service phrases outrank their individual words', () => {
+  // "pressure"/"washing" each drift; "pressure washing" does not. The phrase
+  // pass is what stops "wall" (painting) beating "wall mount" (tv_mounting).
+  assert.match(workerSearch, /const CATEGORY_PHRASES: Record<string, string\[\]>/);
+  assert.match(workerSearch, /if \(normalized\.includes\(phrase\)\) score \+= PHRASE_SCORE;/);
+  assert.ok(
+    workerSearch.includes("'pressure washing'") && workerSearch.includes("'junk removal'"),
+    'expected the phrase table to cover the services the Other sheet offers'
+  );
+});
+
+test('free-text interpretation still returns at most three categories', () => {
+  // The contract callers rely on: best first, capped, and an empty list when
+  // nothing matched (which means "search by name", not "no results").
+  assert.match(workerSearch, /\.slice\(0, 3\)\s*\n\s*\.map\(\(s\) => s\.key\);/);
+});
