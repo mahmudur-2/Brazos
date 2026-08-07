@@ -42,6 +42,10 @@ export const colors = {
   /** --ink — the near-black used for display headlines. Distinct from `text`,
    *  which carries a green tint that reads muted at display sizes. */
   ink: '#13201B',
+  /** Exact warm surface used by the approved Customer Home reference. */
+  homeBackground: '#FAF5F1',
+  /** The blue-slate secondary text used by the approved Customer Home reference. */
+  homeSlate: '#526477',
 
   text: '#1F2E22',
   textMuted: '#6B7566',
@@ -74,6 +78,18 @@ export const colors = {
 // palette) can hold different hex values with the same shape.
 export type ColorPalette = { [K in keyof typeof colors]: string };
 
+/** Customer-facing Emerald Trust mapping for shared controls. Defaults remain
+ * `colors` everywhere else; screens opt into this palette explicitly. */
+export const emeraldColors: ColorPalette = {
+  ...colors,
+  primary: colors.forest,
+  primaryDark: colors.forest,
+  primarySoft: colors.mint,
+  text: colors.ink,
+  border: colors.mint2,
+  neutralBg: colors.mint,
+};
+
 /**
  * Dark-mode variant of the forest/earth palette, same shape as `colors`.
  * Primary green is lifted in luminance versus the light palette — the light
@@ -102,6 +118,8 @@ export const darkColors: ColorPalette = {
   mint: '#1C2E27',
   mint2: '#263D34',
   ink: '#F1EDE1',
+  homeBackground: '#10170F',
+  homeSlate: '#9CB09E',
 
   text: '#F1EDE1',
   textMuted: '#9CB09E',

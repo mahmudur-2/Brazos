@@ -64,13 +64,13 @@ export type OnboardingStackNavigation = NativeStackNavigationProp<OnboardingStac
 // Screens stacked inside the Home tab — posting, plus the "explore/browse
 // open jobs" flow. Find Work is no longer its own tab; BrowseJobs/JobDetail
 // live here now so it's still reachable from Home ("Find Work" button and
-// the "See all" link on the nearby-jobs preview).
+// the "Find work" link on the live-marketplace preview).
 export type HomeStackParamList = {
   HomeMain: undefined;
   /**
-   * Doubles as the "Hire Again" flow: when hireWorkerId is present the form
-   * creates the job already assigned to that worker instead of opening it for
-   * bidding.
+   * Doubles as the direct-offer flow: when hireWorkerId is present the form
+   * sends a private job request. It creates no job until that worker accepts
+   * the request (or a counteroffer), so it never leaks into public bidding.
    */
   PostJob:
     | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
@@ -167,9 +167,10 @@ export type ChatRouteParamList = { Chat: ChatTarget };
 // standalone-type treatment as Chat, for the same reason.
 export type JobDetailRouteParamList = { JobDetail: { job: OpenJob } };
 
-// PostJob is registered in HomeStack, MyJobsStack and MessagesStack (posting
-// normally, plus "Hire Again" from a bid card or a past conversation). Same
-// standalone-type treatment as Chat/JobDetail.
+// PostJob is registered in HomeStack, MyJobsStack, MessagesStack and MapStack
+// (posting normally, editing from any customer detail entry point, plus "Hire
+// Again" from a bid card or a past job conversation). Same standalone-type
+// treatment as Chat/JobDetail.
 // WorkerProfile is registered in every stack that can surface another user
 // (a bid card, a chat counterparty), so like Chat/JobDetail/PostJob it gets a
 // standalone route-param type rather than being tied to one parent stack.

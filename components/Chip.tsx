@@ -22,7 +22,7 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
  *              green rather than reading as secondary text.
  * - `outlineGold` transparent fill behind a thin gold hairline. Used for the
  *              one control that sits on the page's own background rather than
- *              on a surface (Home's "Switch to Worker").
+ *              on a surface (Home's "Find work").
  * - `soft`     sage fill, no border. A non-interactive tag; pass no `onPress`
  *              and it renders as static text rather than a dead button.
  * - `filter`   the two-state feed control: sage when off, solid forest when
@@ -76,7 +76,7 @@ export function Chip({
       : variant === 'soft'
         ? colors.emerald
         : isFilter
-          ? colors.ink
+          ? (accentColor ?? colors.ink)
           : (accentColor ?? colors.textMuted);
 
   const labelColor = selected
@@ -103,6 +103,7 @@ export function Chip({
 
   const shape = [
     styles.chip,
+    onPress && styles.chipInteractive,
     small && styles.chipSmall,
     variant === 'outlineGold' && styles.chipOutlineGold,
     variant === 'soft' && styles.chipSoft,
@@ -147,6 +148,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.sm + 2,
     gap: spacing.xs,
+  },
+  chipInteractive: {
+    minHeight: 44,
   },
   chipSelected: {
     backgroundColor: colors.primary,

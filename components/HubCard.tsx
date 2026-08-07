@@ -53,7 +53,12 @@ export function HubCard({
   const showImage = !!thumbnailUrl && !imageFailed;
 
   return (
-    <Card onPress={onPress}>
+    <Card onPress={onPress} style={styles.card}>
+      <View style={styles.statusRow}>
+        <StatusBadge status={status} />
+        {timeLabel ? <Text style={styles.time}>{timeLabel}</Text> : null}
+      </View>
+
       <View style={styles.headerRow}>
         {showImage ? (
           <Image
@@ -66,11 +71,11 @@ export function HubCard({
           />
         ) : (
           <View style={[styles.thumb, styles.iconCircle, { backgroundColor: accent.bg }]}>
-            <Ionicons name={icon} size={20} color={accent.icon} />
+            <Ionicons name={icon} size={24} color={accent.icon} />
           </View>
         )}
         <View style={styles.headerText}>
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={styles.title} numberOfLines={2}>
             {title}
           </Text>
           {metaLine ? (
@@ -82,17 +87,18 @@ export function HubCard({
             {subtitle}
           </Text>
         </View>
-        <StatusBadge status={status} />
       </View>
 
       <View style={styles.footerRow}>
-        <Text style={styles.price} numberOfLines={1}>
-          {priceLabel ? `${priceLabel} ` : ''}
-          {formatBudget(priceCents)}
-        </Text>
-        <View style={styles.footerRight}>
-          {timeLabel ? <Text style={styles.time}>{timeLabel}</Text> : null}
-          <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+        <View style={styles.priceWrap}>
+          {priceLabel ? <Text style={styles.priceLabel}>{priceLabel}</Text> : null}
+          <Text style={styles.price} numberOfLines={1}>
+            {formatBudget(priceCents)}
+          </Text>
+        </View>
+        <View style={styles.detailsAffordance}>
+          <Text style={styles.detailsText}>View details</Text>
+          <Ionicons name="arrow-forward" size={16} color={colors.forest} />
         </View>
       </View>
     </Card>
@@ -100,15 +106,28 @@ export function HubCard({
 }
 
 const styles = StyleSheet.create({
+  card: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+    padding: spacing.lg,
+  },
+  statusRow: {
+    minHeight: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
   },
   thumb: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+    width: 60,
+    height: 60,
+    borderRadius: radius.lg,
     backgroundColor: colors.neutralBg,
   },
   iconCircle: {
@@ -118,12 +137,13 @@ const styles = StyleSheet.create({
   },
   headerText: {
     flex: 1,
-    gap: 2,
+    gap: 3,
   },
   title: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: 18,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: colors.ink,
   },
   subtitle: {
     fontSize: 13,
@@ -133,24 +153,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.mint2,
+    gap: spacing.md,
+  },
+  priceWrap: {
+    flexShrink: 1,
+    gap: 1,
+  },
+  priceLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: colors.textMuted,
   },
   price: {
     flexShrink: 1,
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: 19,
+    fontWeight: '800',
+    color: colors.forest,
   },
-  footerRight: {
+  detailsAffordance: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.mint,
   },
   time: {
     fontSize: 12,
-    color: colors.textSubtle,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  detailsText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.forest,
   },
 });

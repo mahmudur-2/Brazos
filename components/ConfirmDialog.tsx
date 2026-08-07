@@ -1,6 +1,6 @@
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { Button } from './Button';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import { colors, radius, shadows, spacing, type ColorPalette } from '../lib/theme';
 
 type ConfirmDialogProps = {
   visible: boolean;
@@ -14,6 +14,7 @@ type ConfirmDialogProps = {
   loading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  palette?: ColorPalette;
 };
 
 /**
@@ -33,6 +34,7 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
+  palette = colors,
 }: ConfirmDialogProps) {
   return (
     <Modal
@@ -49,14 +51,22 @@ export function ConfirmDialog({
     >
       <View style={styles.backdrop}>
         <View style={styles.centerWrap}>
-          <View style={styles.sheet}>
-            <Text style={styles.title}>{title}</Text>
-            {message ? <Text style={styles.message}>{message}</Text> : null}
+          <View
+            style={[
+              styles.sheet,
+              { backgroundColor: palette.surface, borderColor: palette.border },
+            ]}
+          >
+            <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
+            {message ? (
+              <Text style={[styles.message, { color: palette.textMuted }]}>{message}</Text>
+            ) : null}
 
             <View style={styles.actions}>
               <Button
                 title={confirmText}
                 variant={destructive ? 'destructive' : 'primary'}
+                palette={palette}
                 onPress={onConfirm}
                 loading={loading}
                 disabled={loading}
@@ -64,6 +74,7 @@ export function ConfirmDialog({
               <Button
                 title={cancelText}
                 variant="secondary"
+                palette={palette}
                 onPress={onCancel}
                 disabled={loading}
               />
@@ -86,21 +97,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   sheet: {
-    backgroundColor: colors.surface,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.border,
     padding: spacing.xl,
     ...shadows.raised,
   },
   title: {
     fontSize: 19,
     fontWeight: '800',
-    color: colors.text,
   },
   message: {
     fontSize: 14,
-    color: colors.textMuted,
     marginTop: spacing.sm,
     lineHeight: 20,
   },

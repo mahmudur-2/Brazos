@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchJobsAssignedToWorker, fetchJobsByClient, type Job } from '../lib/jobs';
 import { fetchPendingBidsByWorker, type PendingBid } from '../lib/bids';
 import { fetchProfilesByIds } from '../lib/profiles';
@@ -19,16 +19,22 @@ export function useMyJobsHub() {
   const [names, setNames] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Focus, pull-to-refresh, and retry may overlap. Only the newest request is
+  // allowed to publish its result into the hub.
+  const runRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!user) {
+      runRef.current += 1;
       setPosted([]);
       setWorking([]);
       setPendingBids([]);
+      setNames({});
+      setError(null);
       setLoading(false);
       return;
     }
-    setError(null);
+    const runId = ++runRef.current;
 
     const [postedRes, workingRes, bidsRes] = await Promise.all([
       fetchJobsByClient(user.id),
@@ -36,12 +42,13 @@ export function useMyJobsHub() {
       fetchPendingBidsByWorker(user.id),
     ]);
 
-    const firstError = postedRes.error || workingRes.error || bidsRes.error;
-    if (firstError) setError(firstError.message);
+    if (runId !== runRef.current) return;
 
-    setPosted(postedRes.data);
-    setWorking(workingRes.data);
-    setPendingBids(bidsRes.data);
+    // A failed category returns an empty fallback array. Keep the last-known
+    // successful rows for only that category instead of erasing valid data.
+    if (!postedRes.error) setPosted(postedRes.data);
+    if (!workingRes.error) setWorking(workingRes.data);
+    if (!bidsRes.error) setPendingBids(bidsRes.data);
 
     // Resolve counterparty names: assigned workers on posted jobs, clients on
     // working jobs and pending-bid jobs.
@@ -51,18 +58,26 @@ export function useMyJobsHub() {
       ...bidsRes.data.map((b) => b.job?.client_id),
     ].filter((id): id is string => !!id);
 
-    const { data: profiles } = await fetchProfilesByIds(ids);
+    const { data: profiles, error: profilesError } = await fetchProfilesByIds(ids);
+    if (runId !== runRef.current) return;
     const map: Record<string, string | null> = {};
     for (const p of profiles) map[p.id] = p.full_name;
-    setNames(map);
+    if (!profilesError) {
+      // Merge so names belonging to a temporarily failed job category remain
+      // available beside its preserved last-known cards.
+      setNames((current) => ({ ...current, ...map }));
+    }
 
+    const firstError = postedRes.error || workingRes.error || bidsRes.error || profilesError;
+    setError(firstError?.message ?? null);
     setLoading(false);
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
-    setLoading(true);
-    refresh();
-  }, [refresh]);
+    return () => {
+      runRef.current += 1;
+    };
+  }, []);
 
   return { posted, working, pendingBids, names, loading, error, refresh };
 }

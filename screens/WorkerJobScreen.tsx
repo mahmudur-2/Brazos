@@ -486,6 +486,7 @@ export function WorkerJobScreen() {
 
               {user && (
                 <ReviewSection
+                  key={`${job.id}:${user.id}`}
                   jobId={job.id}
                   reviewerId={user.id}
                   revieweeId={job.client_id}

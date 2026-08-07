@@ -1,4 +1,4 @@
-import { useEffect, useState, type RefObject } from 'react';
+import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -24,7 +24,7 @@ import {
   type Review,
 } from '../lib/reviews';
 import { deleteJobPhoto, uploadReviewPhoto } from '../lib/storage';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
 
 // Reviews render as a short quoted block wherever they're shown (this same
 // card once submitted, a worker's profile) — plenty of room for real
@@ -46,6 +46,7 @@ type ReviewSectionProps = {
    * something the card owns itself.
    */
   scrollRef?: RefObject<ScrollView | null>;
+  palette?: ColorPalette;
 };
 
 export function ReviewSection({
@@ -56,9 +57,12 @@ export function ReviewSection({
   prompt,
   onSubmitted,
   scrollRef,
+  palette = colors,
 }: ReviewSectionProps) {
   const [existing, setExisting] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -68,6 +72,32 @@ export function ReviewSection({
   // actually in storage can ever be referenced by the review.
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photosRef = useRef<string[]>([]);
+  const uploadingPhotoRef = useRef(false);
+  const mountedRef = useRef(true);
+  const submittingRef = useRef(false);
+  const uploadsCommittedRef = useRef(false);
+  // Every review-photo upload made by this mounted form stays here until the
+  // review is committed, even if the user removes it from the visible draft.
+  const draftPhotosRef = useRef<Set<string>>(new Set());
+
+  function cleanupDraftPhotos() {
+    for (const url of draftPhotosRef.current) {
+      deleteJobPhoto(url).then(({ error }) => {
+        if (error) console.error('[ReviewSection] orphan photo cleanup failed', error);
+      });
+    }
+  }
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      // If a review write is still running, its result owns cleanup: deleting
+      // first could leave a successful review pointing at missing files.
+      if (!uploadsCommittedRef.current && !submittingRef.current) cleanupDraftPhotos();
+    };
+  }, []);
 
   /**
    * On both screens that host it, this card is the LAST thing in the scroll
@@ -102,19 +132,24 @@ export function ReviewSection({
 
   useEffect(() => {
     let active = true;
-    fetchMyReviewForJob(reviewerId, jobId).then(({ data }) => {
+    setExisting(null);
+    setLoadError(null);
+    setLoading(true);
+    fetchMyReviewForJob(reviewerId, jobId).then(({ data, error }) => {
       if (active) {
-        setExisting(data);
+        if (error) setLoadError(error.message);
+        else setExisting(data);
         setLoading(false);
       }
     });
     return () => {
       active = false;
     };
-  }, [reviewerId, jobId]);
+  }, [reviewerId, jobId, loadAttempt]);
 
   async function pickPhotos() {
-    const remaining = MAX_REVIEW_PHOTOS - photos.length;
+    if (submittingRef.current || uploadingPhotoRef.current) return;
+    const remaining = MAX_REVIEW_PHOTOS - photosRef.current.length;
     if (remaining <= 0) return;
 
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -123,20 +158,36 @@ export function ReviewSection({
       allowsMultipleSelection: true,
       selectionLimit: remaining,
     });
-    if (result.canceled || result.assets.length === 0) return;
+    if (!mountedRef.current || result.canceled || result.assets.length === 0) return;
 
+    uploadingPhotoRef.current = true;
     setUploadingPhoto(true);
     const uploaded: string[] = [];
     let failures = 0;
     for (const asset of result.assets.slice(0, remaining)) {
       const { url, error } = await uploadReviewPhoto(reviewerId, asset);
       if (error || !url) failures++;
-      else uploaded.push(url);
+      else if (!mountedRef.current) {
+        // The picker/upload can finish after navigation removed this form.
+        // This URL was never rendered or committed, so delete it immediately.
+        deleteJobPhoto(url).then(({ error: cleanupError }) => {
+          if (cleanupError) {
+            console.error('[ReviewSection] late upload cleanup failed', cleanupError);
+          }
+        });
+      } else {
+        draftPhotosRef.current.add(url);
+        uploaded.push(url);
+      }
     }
+    uploadingPhotoRef.current = false;
+    if (!mountedRef.current) return;
     setUploadingPhoto(false);
 
     if (uploaded.length > 0) {
-      setPhotos((prev) => [...prev, ...uploaded].slice(0, MAX_REVIEW_PHOTOS));
+      const next = [...photosRef.current, ...uploaded].slice(0, MAX_REVIEW_PHOTOS);
+      photosRef.current = next;
+      setPhotos(next);
     }
     if (failures > 0) {
       await alertAsync(
@@ -149,28 +200,56 @@ export function ReviewSection({
   /** Nothing staged here is referenced by a review yet, so removing it is
    *  always safe to clean up from storage immediately. */
   function removePhoto(url: string) {
-    setPhotos((prev) => prev.filter((p) => p !== url));
+    if (submittingRef.current) return;
+    const next = photosRef.current.filter((photo) => photo !== url);
+    photosRef.current = next;
+    setPhotos(next);
     deleteJobPhoto(url).then(({ error }) => {
       if (error) console.error('[ReviewSection] deleteJobPhoto failed', error);
+      else draftPhotosRef.current.delete(url);
     });
   }
 
   async function handleSubmit() {
+    if (submittingRef.current) return;
     if (rating < 1) {
       await alertAsync('Add a rating', 'Please tap a star rating from 1 to 5.');
       return;
     }
     // A photo still uploading would be dropped by the write below.
-    if (uploadingPhoto) return;
+    if (uploadingPhotoRef.current) return;
 
+    submittingRef.current = true;
     setSubmitting(true);
+    const submittedPhotos = [...photosRef.current];
     const { data, error } = await createReview(reviewerId, {
       jobId,
       revieweeId,
       rating,
       comment,
-      photos,
+      photos: submittedPhotos,
     });
+    if (!error) {
+      uploadsCommittedRef.current = true;
+      const committed = new Set(submittedPhotos);
+      // A photo removed from the draft may have had a failed first delete.
+      // Retry any such unreferenced upload once the review is safely stored.
+      for (const url of draftPhotosRef.current) {
+        if (committed.has(url)) continue;
+        deleteJobPhoto(url).then(({ error: cleanupError }) => {
+          if (cleanupError) {
+            console.error('[ReviewSection] removed photo cleanup failed', cleanupError);
+          } else {
+            draftPhotosRef.current.delete(url);
+          }
+        });
+      }
+    }
+    submittingRef.current = false;
+    if (!mountedRef.current) {
+      if (error) cleanupDraftPhotos();
+      return;
+    }
     setSubmitting(false);
 
     if (error) {
@@ -183,22 +262,43 @@ export function ReviewSection({
 
   if (loading) {
     return (
-      <Card>
-        <ActivityIndicator color={colors.primary} />
+      <Card palette={palette}>
+        <ActivityIndicator color={palette.primary} />
+      </Card>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Card palette={palette} style={styles.errorCard}>
+        <Ionicons name="alert-circle-outline" size={24} color={palette.danger} />
+        <Text style={[styles.errorTitle, { color: palette.text }]}>
+          Couldn’t load your review
+        </Text>
+        <Text style={[styles.errorText, { color: palette.textMuted }]}>{loadError}</Text>
+        <Button
+          title="Try again"
+          variant="secondary"
+          palette={palette}
+          onPress={() => setLoadAttempt((attempt) => attempt + 1)}
+          style={styles.errorAction}
+        />
       </Card>
     );
   }
 
   if (existing) {
     return (
-      <Card>
+      <Card palette={palette}>
         <View style={styles.doneHeader}>
-          <Ionicons name="checkmark-circle" size={20} color={colors.success} />
-          <Text style={styles.doneTitle}>Your review</Text>
+          <Ionicons name="checkmark-circle" size={20} color={palette.success} />
+          <Text style={[styles.doneTitle, { color: palette.text }]}>Your review</Text>
         </View>
         <StarRating value={existing.rating} size={22} />
         {existing.comment ? (
-          <Text style={styles.doneComment}>“{existing.comment}”</Text>
+          <Text style={[styles.doneComment, { color: palette.textMuted }]}>
+            “{existing.comment}”
+          </Text>
         ) : null}
         {existing.photos.length > 0 && (
           <ScrollViewRN
@@ -212,23 +312,27 @@ export function ReviewSection({
             ))}
           </ScrollViewRN>
         )}
-        <Text style={styles.doneNote}>Thanks for rating {revieweeName}.</Text>
+        <Text style={[styles.doneNote, { color: palette.textSubtle }]}>
+          Thanks for rating {revieweeName}.
+        </Text>
       </Card>
     );
   }
 
   return (
-    <Card>
-      <Text style={styles.title}>{prompt}</Text>
+    <Card palette={palette}>
+      <Text style={[styles.title, { color: palette.text }]}>{prompt}</Text>
       <View style={styles.stars}>
-        <StarRating value={rating} onChange={setRating} />
+        <StarRating value={rating} onChange={submitting ? undefined : setRating} />
       </View>
       <TextField
+        palette={palette}
         label="Comment (optional)"
         value={comment}
         onChangeText={setComment}
         hint={`${comment.length}/${MAX_COMMENT_LENGTH}`}
         maxLength={MAX_COMMENT_LENGTH}
+        editable={!submitting}
         placeholder={`Share how it went with ${revieweeName}…`}
         autoCapitalize="sentences"
         multiline
@@ -251,7 +355,8 @@ export function ReviewSection({
               <Pressable
                 style={styles.photoRemove}
                 onPress={() => removePhoto(url)}
-                hitSlop={6}
+                disabled={submitting}
+                hitSlop={7}
                 accessibilityRole="button"
                 accessibilityLabel="Remove photo"
               >
@@ -272,10 +377,11 @@ export function ReviewSection({
               : `Add another (${photos.length}/${MAX_REVIEW_PHOTOS})`
           }
           variant="secondary"
+          palette={palette}
           icon="images-outline"
           onPress={pickPhotos}
           loading={uploadingPhoto}
-          disabled={uploadingPhoto}
+          disabled={uploadingPhoto || submitting}
           style={styles.addPhotos}
         />
       )}
@@ -283,8 +389,9 @@ export function ReviewSection({
       <Button
         title="Submit review"
         onPress={handleSubmit}
+        palette={palette}
         loading={submitting}
-        disabled={uploadingPhoto}
+        disabled={uploadingPhoto || submitting}
         style={styles.submit}
       />
     </Card>
@@ -312,6 +419,26 @@ const styles = StyleSheet.create({
   submit: {
     marginTop: spacing.md,
   },
+  errorCard: {
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  errorTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.text,
+    textAlign: 'center',
+  },
+  errorText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  errorAction: {
+    alignSelf: 'stretch',
+    marginTop: spacing.sm,
+  },
   photoScroll: {
     marginTop: spacing.md,
   },
@@ -331,9 +458,9 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: spacing.xs,
     right: spacing.xs,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: 'rgba(31,46,34,0.6)',
     alignItems: 'center',
     justifyContent: 'center',

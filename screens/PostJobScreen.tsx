@@ -12,7 +12,13 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  StackActions,
+  useNavigation,
+  usePreventRemove,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
@@ -22,6 +28,7 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
+import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   categoryAccent,
   createJob,
@@ -46,7 +53,7 @@ import {
   uploadJobVideo,
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, emeraldColors, radius, shadows, spacing } from '../lib/theme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 const MAX_PHOTOS = 5;
@@ -68,9 +75,33 @@ const MAX_TITLE_LENGTH = 80;
 // fit a specific layout.
 const MAX_DESCRIPTION_LENGTH = 500;
 
+const POST_STEPS = [
+  {
+    label: 'Describe',
+    title: 'What needs doing?',
+    subtitle: 'A clear title and a few useful details help workers decide quickly.',
+  },
+  {
+    label: 'Media',
+    title: 'Show the task',
+    subtitle: 'Photos and short clips are optional, but they can make the task clearer.',
+  },
+  {
+    label: 'Location',
+    title: 'Where is the job?',
+    subtitle: 'Share the area or neighborhood workers should use when considering the job.',
+  },
+  {
+    label: 'Review',
+    title: 'Review and publish',
+    subtitle: 'Check the details below. You can still go back without losing your work.',
+  },
+] as const;
+
 export function PostJobScreen() {
-  // Registered in three stacks (Home, MyJobs, Messages) for the Hire Again
-  // entry points, so its types are standalone rather than tied to one stack.
+  // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
+  // and Hire Again entry points, so its types are standalone rather than tied
+  // to one stack.
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<PostJobRouteParamList, 'PostJob'>>();
   const { user } = useAuth();
@@ -103,6 +134,7 @@ export function PostJobScreen() {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [step, setStep] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   // The amount an offer is about to be sent at, held while the confirmation
   // is open. Null means nothing is pending.
@@ -110,17 +142,43 @@ export function PostJobScreen() {
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const successOpacity = useRef(new Animated.Value(0)).current;
-  // Tracks the pending post-success setTimeout so it can be cancelled if the
-  // screen unmounts before it fires (e.g. the user backs out manually during
-  // the animation) — otherwise its callback still runs and calls setState +
-  // navigation.navigate() against a screen that's no longer mounted.
-  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reducedMotion = useReducedMotion();
+  // Render-state disabling is useful feedback, but the ref is the actual
+  // guard against two fast taps entering an async write before React paints.
+  const submittingRef = useRef(false);
+  // Uploads begin before the job is saved. Track only files added during this
+  // visit so backing out can clean them up without touching edit-mode media.
+  const sessionUploadsRef = useRef<Set<string>>(new Set());
+  const uploadsCommittedRef = useRef(false);
+  const screenMountedRef = useRef(true);
+
+  function cleanupSessionUploads() {
+    for (const url of sessionUploadsRef.current) {
+      deleteJobPhoto(url).then(({ error }) => {
+        if (error) console.error('[PostJobScreen] orphan media cleanup failed', error);
+      });
+    }
+  }
 
   useEffect(() => {
+    screenMountedRef.current = true;
     return () => {
-      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
+      screenMountedRef.current = false;
+      // Never race a still-running RPC by deleting files it may successfully
+      // commit. The async write paths clean these up after a failed result if
+      // the screen was removed while the request was in flight.
+      if (!uploadsCommittedRef.current && !submittingRef.current) cleanupSessionUploads();
+      successScale.stopAnimation();
+      successOpacity.stopAnimation();
     };
-  }, []);
+  }, [successOpacity, successScale]);
+
+  // Header Back, Android Back, and the iOS edge gesture all mean the same
+  // thing inside the wizard: move back one step. A write in flight cannot be
+  // removed from the stack, which also protects its referenced uploads.
+  usePreventRemove(submitting || (step > 0 && !showSuccess), () => {
+    if (!submitting) setStep((current) => Math.max(0, current - 1));
+  });
 
   // Photo URLs this job already had saved when editing started. Removing one
   // of these from the picker is a draft change — the underlying file must
@@ -138,7 +196,7 @@ export function PostJobScreen() {
     let active = true;
 
     (async () => {
-      const [{ data: job, error }, { data: loc }] = await Promise.all([
+      const [{ data: job, error }, { data: loc, error: locationError }] = await Promise.all([
         fetchJobById(editJobId),
         fetchJobLocation(editJobId),
       ]);
@@ -148,6 +206,18 @@ export function PostJobScreen() {
         await alertAsync(
           'Could not load job',
           error?.message ?? 'This job may have been deleted.'
+        );
+        navigation.goBack();
+        return;
+      }
+
+      // Saving null coordinates intentionally removes a job_locations row.
+      // If this read failed, stop instead of turning a transient fetch problem
+      // into silent deletion of the poster's existing map pin.
+      if (locationError) {
+        await alertAsync(
+          'Could not load job location',
+          'Please try editing again so the existing map location stays intact.'
         );
         navigation.goBack();
         return;
@@ -172,8 +242,11 @@ export function PostJobScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editJobId]);
 
-  function playSuccessThenLeave() {
+  function playSuccess() {
+    successScale.setValue(reducedMotion ? 1 : 0.4);
+    successOpacity.setValue(reducedMotion ? 1 : 0);
     setShowSuccess(true);
+    if (reducedMotion) return;
     Animated.parallel([
       Animated.spring(successScale, {
         toValue: 1,
@@ -187,36 +260,44 @@ export function PostJobScreen() {
         useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
+  }
 
-    successTimeoutRef.current = setTimeout(() => {
-      successTimeoutRef.current = null;
-      setShowSuccess(false);
-      successScale.setValue(0.4);
-      successOpacity.setValue(0);
-      setTitle('');
-      setDescription('');
-      setCategory(null);
-      setLocation('');
-      setCoords(null);
-      setBudget('');
-      setPhotos([]);
-      setVideos([]);
-      if (isEditing) {
-        // Pop back to the hub instead of goBack(): this screen was pushed
-        // from ClientJobDetailScreen, which only holds the pre-edit job as a
-        // route param and won't reflect the changes just saved.
-        navigation.navigate('MyJobsHub' as never);
-      } else {
-        // Return to Home, then jump to the My Jobs hub tab to see the new post.
-        navigation.goBack();
-        navigation.getParent()?.navigate('MyJobs' as never);
+  function leaveAfterSuccess(viewMyJobs: boolean) {
+    setShowSuccess(false);
+    if (isEditing) {
+      // Edit can be launched from Home, My Jobs, or Map. Returning to the
+      // originating detail route works in every stack, and its focus hook
+      // immediately reloads the canonical saved row.
+      navigation.goBack();
+      return;
+    }
+    if (isHiring) {
+      navigation.goBack();
+      return;
+    }
+
+    const parent = navigation.getParent();
+    // Unwind the source stack too. Otherwise a post launched from discovery
+    // remains hidden at the top of Home and reappears when the tab is revisited.
+    navigation.dispatch(StackActions.popToTop());
+    if (!parent) return;
+    const navigateTab = parent.navigate as (name: string, params?: object) => void;
+    navigateTab(
+      viewMyJobs ? 'MyJobs' : 'Home',
+      {
+        screen: viewMyJobs ? 'MyJobsHub' : 'HomeMain',
+        // React Navigation 7 otherwise appends another copy of the root route.
+        // Pop to the existing root so device Back cannot reveal the completed
+        // posting wizard or the stale discovery screen that launched it.
+        pop: true,
       }
-    }, 1200);
+    );
   }
 
   async function handleUseCurrentLocation() {
     setLocating(true);
     const result = await resolveCurrentPlace();
+    if (!screenMountedRef.current) return;
     setLocating(false);
 
     if (!result.ok) {
@@ -234,10 +315,14 @@ export function PostJobScreen() {
       mediaTypes: ['images'],
       quality: 0.7,
     });
-    if (result.canceled || !result.assets[0]) return;
+    if (!screenMountedRef.current || result.canceled || !result.assets[0]) return;
 
     setUploadingPhoto(true);
     const { url, error } = await uploadJobAttachment(user.id, result.assets[0]);
+    if (!screenMountedRef.current) {
+      if (url) void deleteJobPhoto(url);
+      return;
+    }
     setUploadingPhoto(false);
 
     if (error || !url) {
@@ -247,6 +332,7 @@ export function PostJobScreen() {
       );
       return;
     }
+    sessionUploadsRef.current.add(url);
     setPhotos((prev) => [...prev, url]);
   }
 
@@ -260,7 +346,7 @@ export function PostJobScreen() {
       // the duration test below — this just stops the obvious case earlier.
       videoMaxDuration: MAX_VIDEO_DURATION_MS / 1000,
     });
-    if (result.canceled || !result.assets[0]) return;
+    if (!screenMountedRef.current || result.canceled || !result.assets[0]) return;
 
     const asset = result.assets[0];
 
@@ -278,6 +364,10 @@ export function PostJobScreen() {
 
     setUploadingVideo(true);
     const { url, error } = await uploadJobVideo(user.id, asset);
+    if (!screenMountedRef.current) {
+      if (url) void deleteJobPhoto(url);
+      return;
+    }
     setUploadingVideo(false);
 
     // Only a successful upload is added to the list, so the job can never be
@@ -289,6 +379,7 @@ export function PostJobScreen() {
       );
       return;
     }
+    sessionUploadsRef.current.add(url);
     setVideos((prev) => [...prev, url]);
   }
 
@@ -301,6 +392,7 @@ export function PostJobScreen() {
     if (originalVideosRef.current.has(url)) return;
     deleteJobPhoto(url).then(({ error }) => {
       if (error) console.error('[PostJobScreen] deleteJobPhoto (video) failed', error);
+      else sessionUploadsRef.current.delete(url);
     });
   }
 
@@ -313,6 +405,7 @@ export function PostJobScreen() {
     if (originalPhotosRef.current.has(url)) return;
     deleteJobPhoto(url).then(({ error }) => {
       if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
+      else sessionUploadsRef.current.delete(url);
     });
   }
 
@@ -327,8 +420,9 @@ export function PostJobScreen() {
     // handleSubmit validated all of these before opening the confirmation;
     // re-checking keeps this callable on its own terms rather than depending
     // on that having happened.
-    if (!user || !hireWorkerId || !category) return;
+    if (!user || !hireWorkerId || !category || submittingRef.current) return;
 
+    submittingRef.current = true;
     setSubmitting(true);
     const { error: requestError } = await createJobRequest({
       workerId: hireWorkerId,
@@ -342,18 +436,30 @@ export function PostJobScreen() {
       coords,
       threadJobId: params?.threadJobId ?? null,
     });
-    setSubmitting(false);
-    setConfirmOfferCents(null);
+    submittingRef.current = false;
 
     if (requestError) {
+      if (!screenMountedRef.current) {
+        cleanupSessionUploads();
+        return;
+      }
+      setSubmitting(false);
+      setConfirmOfferCents(null);
       await alertAsync('Could not send offer', requestError.message);
       return;
     }
-    playSuccessThenLeave();
+    uploadsCommittedRef.current = true;
+    if (!screenMountedRef.current) return;
+    setSubmitting(false);
+    setConfirmOfferCents(null);
+    maybePromptForPush(
+      'Get told the moment they accept, decline, or counter your offer.'
+    );
+    playSuccess();
   }
 
   async function handleSubmit() {
-    if (!user) return;
+    if (!user || submittingRef.current) return;
 
     if (!title.trim() || !description.trim() || !category || !location.trim()) {
       await alertAsync(
@@ -392,6 +498,7 @@ export function PostJobScreen() {
       return;
     }
 
+    submittingRef.current = true;
     setSubmitting(true);
     const { error, locationError } = isEditing
       ? await updateJob(editJobId!, {
@@ -414,19 +521,27 @@ export function PostJobScreen() {
           videos,
           coords,
         });
-    setSubmitting(false);
+    submittingRef.current = false;
 
     if (error) {
+      if (!screenMountedRef.current) {
+        cleanupSessionUploads();
+        return;
+      }
+      setSubmitting(false);
       await alertAsync(isEditing ? 'Could not save changes' : 'Could not post job', error.message);
       return;
     }
+    uploadsCommittedRef.current = true;
+    if (!screenMountedRef.current) return;
+    setSubmitting(false);
     if (locationError) {
       // The job saved fine; only the map pin is missing. Include the real
       // reason (already logged in createJob/updateJob) so it's actually
       // diagnosable instead of just "something went wrong".
       await alertAsync(
         'Saved, but without a map pin',
-        `Your job is live, but we couldn't save its location for the map: ${locationError.message}`
+        `${isEditing ? 'Your changes were saved' : 'Your job is live'}, but we couldn't save its location for the map: ${locationError.message}`
       );
     }
 
@@ -454,26 +569,70 @@ export function PostJobScreen() {
     // existing job isn't the same moment. Deliberately not awaited so the
     // success animation isn't held up behind a dialog.
     if (!isEditing) {
-      maybePromptForPush(
-        isHiring
-          ? 'Get told the moment they accept, decline, or counter your offer.'
-          : 'Get told the moment a worker bids on your job.'
-      );
+      maybePromptForPush('Get told the moment a worker bids on your job.');
     }
 
-    playSuccessThenLeave();
+    playSuccess();
   }
+
+  async function handleContinue() {
+    if (step === 0 && (!title.trim() || !description.trim() || !category)) {
+      await alertAsync(
+        'Complete this step',
+        'Add a title, description, and category before continuing.'
+      );
+      return;
+    }
+    if (step === 2 && !location.trim()) {
+      await alertAsync('Add an area', 'Enter the area or neighborhood where the job is located.');
+      return;
+    }
+    setStep((current) => Math.min(current + 1, POST_STEPS.length - 1));
+  }
+
+  function handleBack() {
+    if (submittingRef.current) return;
+    if (step > 0) {
+      setStep((current) => Math.max(0, current - 1));
+      return;
+    }
+    navigation.goBack();
+  }
+
+  const currentStep = POST_STEPS[step];
+  const currentStepTitle =
+    step === POST_STEPS.length - 1
+      ? isEditing
+        ? 'Review your changes'
+        : isHiring
+          ? 'Review and send'
+          : currentStep.title
+      : currentStep.title;
+  const currentStepSubtitle =
+    step === 1 && isHiring
+      ? 'Photos and short clips are optional, but they can make your request clearer.'
+      : step === POST_STEPS.length - 1 && (isEditing || isHiring)
+        ? 'Check the details below. You can still go back without losing your work.'
+        : currentStep.subtitle;
+  const reviewBudgetCents = dollarsToCents(budget);
+  const reviewBudget =
+    reviewBudgetCents != null && !Number.isNaN(reviewBudgetCents)
+      ? formatBudget(reviewBudgetCents)
+      : isHiring
+        ? 'Required before sending'
+        : 'Open to bids';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScreenHeader
-        title={isEditing ? 'Edit Job' : isHiring ? 'Hire Again' : 'Post a Job'}
-        onBack={() => navigation.goBack()}
+        title={isEditing ? 'Edit Job' : isHiring ? 'Send an Offer' : 'Post a Job'}
+        onBack={handleBack}
+        palette={emeraldColors}
       />
 
       {loadingJob ? (
         <View style={styles.loadingWrap}>
-          <ActivityIndicator size="large" color={colors.primary} />
+          <ActivityIndicator size="large" color={colors.emerald} />
         </View>
       ) : (
       <KeyboardAvoidingView
@@ -485,57 +644,115 @@ export function PostJobScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          <View style={styles.stepIntro}>
+            <Text style={styles.stepEyebrow}>
+              STEP {step + 1} OF {POST_STEPS.length}
+            </Text>
+            <Text style={styles.stepTitle}>{currentStepTitle}</Text>
+            <Text style={styles.stepSubtitle}>{currentStepSubtitle}</Text>
+
+            <View
+              style={styles.progressRow}
+              accessible
+              accessibilityLabel={`Step ${step + 1} of ${POST_STEPS.length}: ${currentStep.label}`}
+            >
+              {POST_STEPS.map((item, index) => (
+                <View key={item.label} style={styles.progressItem}>
+                  <View
+                    style={[
+                      styles.progressSegment,
+                      index <= step && styles.progressSegmentActive,
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.progressLabel,
+                      index === step && styles.progressLabelActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.label}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
           {isHiring && (
             <View style={styles.hireBanner}>
-              <Ionicons name="person-add-outline" size={18} color={colors.primary} />
+              <Ionicons name="person-add-outline" size={18} color={colors.emerald} />
               <Text style={styles.hireBannerText}>
                 {hireWorkerName} will get this as a request in your chat. They can accept, decline, or suggest a different price.
               </Text>
             </View>
           )}
 
-          <TextField
-            label="Title"
-            value={title}
-            onChangeText={setTitle}
-            hint={`${title.length}/${MAX_TITLE_LENGTH}`}
-            maxLength={MAX_TITLE_LENGTH}
-            placeholder="e.g. Walk my dog on weekday mornings"
-            autoCapitalize="sentences"
-          />
+          {step === 0 && (
+            <View style={styles.stepFields}>
+              <TextField
+                palette={emeraldColors}
+                label="Title"
+                value={title}
+                onChangeText={setTitle}
+                hint={`${title.length}/${MAX_TITLE_LENGTH}`}
+                maxLength={MAX_TITLE_LENGTH}
+                placeholder="e.g. Walk my dog on weekday mornings"
+                autoCapitalize="sentences"
+              />
 
-          <TextField
-            label="Description"
-            value={description}
-            onChangeText={setDescription}
-            hint={`${description.length}/${MAX_DESCRIPTION_LENGTH}`}
-            maxLength={MAX_DESCRIPTION_LENGTH}
-            placeholder="Describe what you need done…"
-            autoCapitalize="sentences"
-            multiline
-            numberOfLines={4}
-            style={styles.multiline}
-          />
+              <TextField
+                palette={emeraldColors}
+                label="Description"
+                value={description}
+                onChangeText={setDescription}
+                hint={`${description.length}/${MAX_DESCRIPTION_LENGTH}`}
+                maxLength={MAX_DESCRIPTION_LENGTH}
+                placeholder="Describe what you need done…"
+                autoCapitalize="sentences"
+                multiline
+                numberOfLines={4}
+                style={styles.multiline}
+              />
+            </View>
+          )}
 
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>
-              Photos (optional) · {photos.length}/{MAX_PHOTOS}
-            </Text>
+          {step === 1 && (
+            <View style={styles.stepFields}>
+              <View style={styles.infoCard}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.emerald} />
+                </View>
+                <Text style={styles.infoText}>
+                  Media appears with your {isHiring ? 'request' : 'job'} so workers can
+                  understand the task. Avoid faces, documents, or anything private.
+                </Text>
+              </View>
+
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>
+                  Photos (optional) · {photos.length}/{MAX_PHOTOS}
+                </Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.photoRow}
               keyboardShouldPersistTaps="handled"
             >
-              {photos.map((url) => (
+              {photos.map((url, index) => (
                 <View key={url} style={styles.photoWrap}>
-                  <Pressable onPress={() => setViewerUri(url)}>
+                  <Pressable
+                    onPress={() => setViewerUri(url)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View photo ${index + 1}`}
+                  >
                     <Image source={{ uri: url }} style={styles.photo} />
                   </Pressable>
                   <Pressable
                     style={styles.photoRemove}
                     onPress={() => removePhoto(url)}
-                    hitSlop={6}
+                    hitSlop={7}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove photo ${index + 1}`}
                   >
                     <Ionicons name="close" size={14} color={colors.onPrimary} />
                   </Pressable>
@@ -547,25 +764,27 @@ export function PostJobScreen() {
                   style={styles.addTile}
                   onPress={handleAddPhoto}
                   disabled={uploadingPhoto}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a job photo"
                 >
                   {uploadingPhoto ? (
-                    <ActivityIndicator size="small" color={colors.primary} />
+                    <ActivityIndicator size="small" color={colors.emerald} />
                   ) : (
-                    <Ionicons name="add" size={28} color={colors.primary} />
+                    <Ionicons name="add" size={28} color={colors.emerald} />
                   )}
                 </Pressable>
               )}
-            </ScrollView>
-          </View>
+                </ScrollView>
+              </View>
 
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>
-              Video (optional) · {videos.length}/{MAX_VIDEOS}
-            </Text>
-            <Text style={styles.fieldHint}>
-              Up to {MAX_VIDEO_DURATION_MS / 1000} seconds each. A short clip
-              explains an awkward job faster than a paragraph.
-            </Text>
+              <View style={styles.field}>
+                <Text style={styles.fieldLabel}>
+                  Video (optional) · {videos.length}/{MAX_VIDEOS}
+                </Text>
+                <Text style={styles.fieldHint}>
+                  Up to {MAX_VIDEO_DURATION_MS / 1000} seconds each. A short clip
+                  explains an awkward job faster than a paragraph.
+                </Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -578,13 +797,13 @@ export function PostJobScreen() {
               {videos.map((url, index) => (
                 <View key={url} style={styles.photoWrap}>
                   <View style={styles.videoTile}>
-                    <Ionicons name="play-circle" size={30} color={colors.primary} />
+                    <Ionicons name="play-circle" size={30} color={colors.emerald} />
                     <Text style={styles.videoTileText}>Clip {index + 1}</Text>
                   </View>
                   <Pressable
                     style={styles.photoRemove}
                     onPress={() => removeVideo(url)}
-                    hitSlop={6}
+                    hitSlop={7}
                     accessibilityLabel={`Remove clip ${index + 1}`}
                   >
                     <Ionicons name="close" size={14} color={colors.onPrimary} />
@@ -597,94 +816,250 @@ export function PostJobScreen() {
                   style={styles.addTile}
                   onPress={handleAddVideo}
                   disabled={uploadingVideo}
+                  accessibilityRole="button"
+                  accessibilityLabel="Add a job video"
                 >
                   {uploadingVideo ? (
                     <>
-                      <ActivityIndicator size="small" color={colors.primary} />
+                      <ActivityIndicator size="small" color={colors.emerald} />
                       <Text style={styles.uploadingText}>Uploading…</Text>
                     </>
                   ) : (
-                    <Ionicons name="videocam-outline" size={26} color={colors.primary} />
+                    <Ionicons name="videocam-outline" size={26} color={colors.emerald} />
                   )}
                 </Pressable>
               )}
-            </ScrollView>
-          </View>
-
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>Category</Text>
-            <View style={styles.chips}>
-              {JOB_CATEGORIES.map((c) => (
-                <Chip
-                  key={c}
-                  label={JOB_CATEGORY_LABELS[c]}
-                  icon={JOB_CATEGORY_ICONS[c]}
-                  accentColor={categoryAccent(c).bg}
-                  selected={category === c}
-                  onPress={() => setCategory(c)}
-                />
-              ))}
+                </ScrollView>
+              </View>
             </View>
-          </View>
+          )}
 
-          <View style={styles.locationRow}>
-            <View style={styles.locationField}>
+          {step === 0 && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Category</Text>
+              <View style={styles.chips}>
+                {JOB_CATEGORIES.map((c) => (
+                  <Chip
+                    key={c}
+                    label={JOB_CATEGORY_LABELS[c]}
+                    icon={JOB_CATEGORY_ICONS[c]}
+                    accentColor={categoryAccent(c).bg}
+                    variant="filter"
+                    selected={category === c}
+                    onPress={() => setCategory(c)}
+                  />
+                ))}
+              </View>
+            </View>
+          )}
+
+          {step === 2 && (
+            <View style={styles.stepFields}>
+              <View style={styles.locationRow}>
+                <View style={styles.locationField}>
+                  <TextField
+                    palette={emeraldColors}
+                    label="Area or neighborhood"
+                    value={location}
+                    onChangeText={(text) => {
+                      setLocation(text);
+                      // Typing over a resolved place invalidates its coordinates.
+                      if (coords) setCoords(null);
+                    }}
+                    placeholder="e.g. Sheepshead Bay, Brooklyn"
+                    autoCapitalize="words"
+                  />
+                </View>
+                <Pressable
+                  onPress={handleUseCurrentLocation}
+                  disabled={locating}
+                  style={({ pressed }) => [
+                    styles.locationBtn,
+                    pressed && styles.locationBtnPressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Use my current location"
+                >
+                  {locating ? (
+                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                  ) : (
+                    <Ionicons name="location" size={20} color={colors.onPrimary} />
+                  )}
+                </Pressable>
+              </View>
+
+              <View style={styles.infoCard}>
+                <View style={styles.infoIcon}>
+                  <Ionicons name="location-outline" size={20} color={colors.emerald} />
+                </View>
+                <Text style={styles.infoText}>
+                  Your listing shows the area you enter. When a map point is available,
+                  its precise coordinates stay in protected job-location data.
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {step === 3 && (
+            <View style={styles.stepFields}>
               <TextField
-                label="Location"
-                value={location}
-                onChangeText={(text) => {
-                  setLocation(text);
-                  // Typing over a resolved place invalidates its coordinates.
-                  if (coords) setCoords(null);
-                }}
-                placeholder="e.g. Sheepshead Bay, Brooklyn"
-                autoCapitalize="words"
+                palette={emeraldColors}
+                label={isHiring ? 'Your offer ($)' : 'Budget ($) (optional)'}
+                value={budget}
+                onChangeText={setBudget}
+                placeholder="e.g. 50"
+                keyboardType="numeric"
+                hint={
+                  isHiring
+                    ? `${hireWorkerName} can accept or suggest a different price.`
+                    : 'Leave blank if you want workers to propose a price.'
+                }
               />
+
+              <View style={styles.reviewCard}>
+                <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
+                <Text style={styles.reviewTitle}>{title.trim()}</Text>
+                <Text style={styles.reviewDescription} numberOfLines={4}>
+                  {description.trim()}
+                </Text>
+
+                <View style={styles.reviewDivider} />
+
+                <View style={styles.reviewRow}>
+                  <View style={styles.reviewIcon}>
+                    <Ionicons name="grid-outline" size={18} color={colors.emerald} />
+                  </View>
+                  <View style={styles.reviewText}>
+                    <Text style={styles.reviewLabel}>Category</Text>
+                    <Text style={styles.reviewValue} numberOfLines={1}>
+                      {category ? JOB_CATEGORY_LABELS[category] : 'Not selected'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.reviewRow}>
+                  <View style={styles.reviewIcon}>
+                    <Ionicons name="location-outline" size={19} color={colors.emerald} />
+                  </View>
+                  <View style={styles.reviewText}>
+                    <Text style={styles.reviewLabel}>Area</Text>
+                    <Text style={styles.reviewValue} numberOfLines={2}>
+                      {location.trim()}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.reviewRow}>
+                  <View style={styles.reviewIcon}>
+                    <Ionicons name="images-outline" size={18} color={colors.emerald} />
+                  </View>
+                  <View style={styles.reviewText}>
+                    <Text style={styles.reviewLabel}>Media</Text>
+                    <Text style={styles.reviewValue}>
+                      {photos.length} {photos.length === 1 ? 'photo' : 'photos'} ·{' '}
+                      {videos.length} {videos.length === 1 ? 'clip' : 'clips'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.reviewRow}>
+                  <View style={styles.reviewIcon}>
+                    <Ionicons name="wallet-outline" size={18} color={colors.emerald} />
+                  </View>
+                  <View style={styles.reviewText}>
+                    <Text style={styles.reviewLabel}>{isHiring ? 'Offer' : 'Budget'}</Text>
+                    <Text style={styles.reviewValue}>{reviewBudget}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <View style={styles.publishNotice}>
+                <Ionicons name="checkmark-circle-outline" size={20} color={colors.emerald} />
+                <Text style={styles.publishNoticeText}>
+                  {isHiring
+                    ? `Only ${hireWorkerName} receives this request.`
+                    : isEditing
+                      ? 'Saving updates this existing job for workers browsing BRAZOS.'
+                    : 'Publishing makes this job visible to workers browsing BRAZOS.'}
+                </Text>
+              </View>
             </View>
-            <Pressable
-              onPress={handleUseCurrentLocation}
-              disabled={locating}
-              style={styles.locationBtn}
-              accessibilityLabel="Use my current location"
-            >
-              {locating ? (
-                <ActivityIndicator size="small" color={colors.onPrimary} />
-              ) : (
-                <Ionicons name="location" size={20} color={colors.onPrimary} />
-              )}
-            </Pressable>
-          </View>
+          )}
 
-          <TextField
-            label={isHiring ? 'Your offer ($)' : 'Budget ($) (Optional)'}
-            value={budget}
-            onChangeText={setBudget}
-            placeholder="e.g. 50"
-            keyboardType="numeric"
-          />
-
-          <Button
-            // "Send Request", not "Hire" — the worker still has to agree, so a
-            // label implying the hire already happened would misdescribe it.
-            title={isEditing ? 'Save changes' : isHiring ? 'Send Request' : 'Post job'}
-            onPress={handleSubmit}
-            loading={submitting}
-            style={styles.submit}
-          />
         </ScrollView>
+
+        <View style={styles.footer}>
+          {step > 0 && (
+            <Button
+              title="Back"
+              variant="secondary"
+              palette={emeraldColors}
+              onPress={handleBack}
+              disabled={submitting}
+              style={styles.footerBack}
+            />
+          )}
+          <Button
+            // "Send request", not "Hire": the worker still has to agree.
+            title={
+              step < POST_STEPS.length - 1
+                ? 'Continue'
+                : isEditing
+                  ? 'Save changes'
+                  : isHiring
+                    ? 'Send request'
+                    : 'Publish job'
+            }
+            onPress={step < POST_STEPS.length - 1 ? handleContinue : handleSubmit}
+            palette={emeraldColors}
+            loading={submitting}
+            disabled={uploadingPhoto || uploadingVideo}
+            style={styles.footerPrimary}
+          />
+        </View>
       </KeyboardAvoidingView>
       )}
 
       {showSuccess && (
-        <Animated.View style={[styles.successOverlay, { opacity: successOpacity }]}>
+        <Animated.View
+          style={[styles.successOverlay, { opacity: successOpacity }]}
+          accessibilityViewIsModal
+        >
           <Animated.View
             style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
           >
-            <Ionicons name="checkmark" size={56} color={colors.onPrimary} />
+            <Ionicons name="checkmark" size={48} color={colors.onPrimary} />
           </Animated.View>
-          <Text style={styles.successText}>
-            {isEditing ? 'Job updated!' : isHiring ? 'Request sent!' : 'Job posted!'}
+          <Text style={styles.successEyebrow}>
+            {isEditing ? 'CHANGES SAVED' : isHiring ? 'REQUEST SENT' : 'JOB PUBLISHED'}
           </Text>
+          <Text style={styles.successTitle}>
+            {isEditing ? 'Your job is updated.' : isHiring ? 'Your request is on its way.' : 'Your job is live.'}
+          </Text>
+          <Text style={styles.successBody}>
+            {isEditing
+              ? 'Workers will now see the latest details.'
+              : isHiring
+                ? `${hireWorkerName} can accept, decline, or suggest a different price in chat.`
+                : 'Workers can now review the details and send you bids.'}
+          </Text>
+          <View style={styles.successActions}>
+            <Button
+              title={isEditing ? 'Back to job' : isHiring ? 'Done' : 'View my jobs'}
+              onPress={() => leaveAfterSuccess(true)}
+              palette={emeraldColors}
+              style={styles.successButton}
+            />
+            {!isEditing && !isHiring && (
+              <Button
+                title="Back to home"
+                variant="secondary"
+                palette={emeraldColors}
+                onPress={() => leaveAfterSuccess(false)}
+                style={styles.successButton}
+              />
+            )}
+          </View>
         </Animated.View>
       )}
 
@@ -705,6 +1080,7 @@ export function PostJobScreen() {
         confirmText="Send offer"
         cancelText="Cancel"
         loading={submitting}
+        palette={emeraldColors}
         onConfirm={() => confirmOfferCents != null && sendOffer(confirmOfferCents)}
         onCancel={() => setConfirmOfferCents(null)}
       />
@@ -726,23 +1102,77 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xl,
+    gap: spacing.xl,
+  },
+  stepIntro: {
+    gap: spacing.sm,
+  },
+  stepEyebrow: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: colors.emerald,
+  },
+  stepTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  stepSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textMuted,
+    maxWidth: 420,
+  },
+  progressRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
+  progressItem: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  progressSegment: {
+    height: 4,
+    borderRadius: radius.pill,
+    backgroundColor: colors.mint2,
+  },
+  progressSegmentActive: {
+    backgroundColor: colors.emerald,
+  },
+  progressLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textSubtle,
+  },
+  progressLabelActive: {
+    color: colors.forest,
+    fontWeight: '800',
+  },
+  stepFields: {
     gap: spacing.lg,
   },
   hireBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: spacing.sm,
-    backgroundColor: colors.primarySoft,
-    borderRadius: radius.md,
-    padding: spacing.md,
+    backgroundColor: colors.mint,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    padding: spacing.lg,
   },
   hireBannerText: {
     flex: 1,
     fontSize: 13,
-    color: colors.primary,
+    color: colors.forest,
     fontWeight: '600',
-    lineHeight: 18,
+    lineHeight: 19,
   },
   multiline: {
     height: 110,
@@ -754,8 +1184,8 @@ const styles = StyleSheet.create({
   },
   fieldLabel: {
     fontSize: 13,
-    fontWeight: '600',
-    color: colors.text,
+    fontWeight: '700',
+    color: colors.ink,
   },
   fieldHint: {
     fontSize: 12,
@@ -764,10 +1194,10 @@ const styles = StyleSheet.create({
     marginTop: -spacing.xs,
   },
   videoTile: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.md,
-    backgroundColor: colors.primarySoft,
+    width: 88,
+    height: 88,
+    borderRadius: radius.lg,
+    backgroundColor: colors.mint,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 2,
@@ -775,12 +1205,12 @@ const styles = StyleSheet.create({
   videoTileText: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.forest,
   },
   uploadingText: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.emerald,
     marginTop: spacing.xs,
   },
   photoRow: {
@@ -791,18 +1221,18 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   photo: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutralBg,
+    width: 88,
+    height: 88,
+    borderRadius: radius.lg,
+    backgroundColor: colors.mint,
   },
   photoRemove: {
     position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    top: -7,
+    right: -7,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
@@ -810,13 +1240,13 @@ const styles = StyleSheet.create({
     borderColor: colors.background,
   },
   addTile: {
-    width: 76,
-    height: 76,
-    borderRadius: radius.md,
+    width: 88,
+    height: 88,
+    borderRadius: radius.lg,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: colors.emerald,
     borderStyle: 'dashed',
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.mint,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -834,15 +1264,128 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: radius.md,
-    backgroundColor: colors.primary,
+    width: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    backgroundColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  submit: {
-    marginTop: spacing.sm,
+  locationBtnPressed: {
+    opacity: 0.82,
+  },
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.mint,
+  },
+  infoIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.surface,
+  },
+  infoText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.forest,
+  },
+  reviewCard: {
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  reviewEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1,
+    color: colors.emerald,
+  },
+  reviewTitle: {
+    fontSize: 20,
+    lineHeight: 25,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  reviewDescription: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: colors.textMuted,
+  },
+  reviewDivider: {
+    height: 1,
+    backgroundColor: colors.mint2,
+  },
+  reviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  reviewIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.md,
+    backgroundColor: colors.mint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reviewText: {
+    flex: 1,
+    gap: 2,
+  },
+  reviewLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: colors.textMuted,
+  },
+  reviewValue: {
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  publishNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  publishNoticeText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textMuted,
+  },
+  footer: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.md,
+    paddingBottom: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.mint2,
+    backgroundColor: colors.surface,
+  },
+  footerBack: {
+    minWidth: 104,
+    borderRadius: radius.lg,
+  },
+  footerPrimary: {
+    flex: 1,
+    borderRadius: radius.lg,
   },
   successOverlay: {
     position: 'absolute',
@@ -850,22 +1393,50 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(244,241,232,0.97)',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.lg,
+    gap: spacing.md,
+    padding: spacing.xl,
+    zIndex: 10,
   },
   successCircle: {
-    width: 104,
-    height: 104,
+    width: 88,
+    height: 88,
     borderRadius: radius.pill,
-    backgroundColor: colors.success,
+    backgroundColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.md,
   },
-  successText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.text,
+  successEyebrow: {
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+    color: colors.emerald,
+  },
+  successTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    color: colors.ink,
+    textAlign: 'center',
+  },
+  successBody: {
+    maxWidth: 360,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+  successActions: {
+    width: '100%',
+    maxWidth: 360,
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+  },
+  successButton: {
+    width: '100%',
+    borderRadius: radius.lg,
   },
 });

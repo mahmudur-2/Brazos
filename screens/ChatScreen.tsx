@@ -249,10 +249,13 @@ export function ChatScreen() {
   const isBlocked = relation.blocking || relation.blockedBy;
 
   // "Hire Again" only ever shows to the client side of a past completed job —
-  // a worker never sees it for their client.
+  // a worker never sees it for their client. It also requires a job-backed
+  // chat: create_job_request can target that job thread, but has no parameter
+  // for a direct-thread id and would otherwise place the offer in an older job.
   const [canRehire, setCanRehire] = useState(false);
   useEffect(() => {
-    if (!user || !counterpartyId || counterpartyId === user.id) return;
+    setCanRehire(false);
+    if (!jobId || !user || !counterpartyId || counterpartyId === user.id) return;
     let active = true;
     canRehireWorker(user.id, counterpartyId).then(({ data }) => {
       if (active) setCanRehire(data);
@@ -260,7 +263,7 @@ export function ChatScreen() {
     return () => {
       active = false;
     };
-  }, [user, counterpartyId]);
+  }, [jobId, user, counterpartyId]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -565,7 +568,7 @@ export function ChatScreen() {
             : undefined
         }
         right={
-          canRehire && counterparty ? (
+          canRehire && counterparty && jobId ? (
             <Pressable
               onPress={() =>
                 (navigation as any).navigate('PostJob', {

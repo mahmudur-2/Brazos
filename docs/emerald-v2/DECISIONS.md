@@ -350,3 +350,36 @@ sufficient for layout/geometry claims (position, size, overlap) but cannot
 confirm pixel-level color/rendering fidelity. That gap is why D28's
 corner-radius comparison used the *source PNG files* directly (via `pngjs`)
 rather than trying to eyeball rendered pixels.
+
+### D30. M3 Customer Core: in-place Emerald presentation over the existing marketplace loop
+**Chosen:** redesign the current `HomeScreen`, `WorkerSearchScreen`,
+`PostJobScreen`, `MyJobsHubScreen`, `ClientJobDetailScreen`, `HubCard`, and
+`BidWorkerCard` rather than introduce parallel V2 routes or services. The
+existing Supabase RPC boundaries, edit/direct-offer branches, route names,
+combined customer/worker My Jobs feed, bid acceptance, messaging, evidence,
+and review flows remain authoritative.
+
+`PostJobScreen` now presents its existing form state as four internal steps
+(Describe, Media, Location, Review). This is UI progression only: it does not
+add schema fields or change `create_job`, `update_job_details`, or
+`create_job_request`. Session-only uploads are cleaned up when an unfinished
+post is abandoned, and successful submission now waits for an explicit next
+action instead of forcing a timed navigation.
+
+**Small supported gaps added:** keyboard avoidance on customer search surfaces,
+retry/missing/empty states, focus and pull refresh for bids, job lifecycle
+clarity, posting-media visibility to the owner, truthful review-count labels,
+duplicate-write guards, and actionable My Jobs empty states.
+
+**Explicitly deferred beyond M3:** scheduling or arrival windows, min/max
+budgets, BRAZOS estimates, availability/distance/fit claims, open-bid
+counteroffers, payments/holds/tips, live tracking, mode-specific tab
+architecture, and separate Atlas routes for every customer job state. The
+current schema and providers cannot support those claims honestly, and adding
+them here would cross into later milestones or paid-service work.
+
+Direct-thread **Hire Again** is also deferred: the current request RPC can
+target a job conversation but cannot target a direct-thread id. The header
+action is therefore shown only in job-backed chats (and remains available from
+supported worker/profile entry points) instead of risking an offer appearing
+in the wrong older conversation.
