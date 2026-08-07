@@ -245,7 +245,13 @@ test('job videos reuse the owned posting path and never autoplay', () => {
 
   // Playback is native-controlled and never starts itself.
   const videoCode = jobVideo.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.match(videoCode, /currentTime = 0\.5/);
+  assert.match(videoCode, /nativeControls=\{false\}/);
+  assert.match(videoCode, /contentFit="cover"/);
   assert.match(videoCode, /nativeControls/);
+  assert.match(videoCode, /fullscreenOptions=\{\{ enable: true \}\}/);
+  assert.match(videoCode, /enterFullscreen\(\)/);
+  assert.match(videoCode, /Play video fullscreen/);
   assert.doesNotMatch(videoCode, /\.play\(\)/);
   assert.doesNotMatch(videoCode, /autoPlay|shouldPlay/i);
 

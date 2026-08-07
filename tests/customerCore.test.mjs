@@ -133,6 +133,21 @@ test('Customer job detail keeps evidence and honest lifecycle recovery states', 
   assert.match(chat, /canRehire && counterparty && jobId/);
 });
 
+test('Worker job detail uses the real photo gallery and an honest verification state', async () => {
+  const detail = codeOnly(await read('screens/JobDetailScreen.tsx'));
+
+  assert.match(detail, /const VERIFICATION_LABEL = 'Unverified'/);
+  assert.match(detail, /const galleryPhotos = job\.photos \?\? \[\]/);
+  assert.match(detail, /pagingEnabled/);
+  assert.match(detail, /onMomentumScrollEnd/);
+  assert.match(detail, /setActivePhotoIndex/);
+  assert.match(detail, /<PhotoViewer/);
+  assert.match(detail, /<JobVideo/);
+  assert.match(detail, /handleTakeListedPrice/);
+  assert.match(detail, /handleSubmit/);
+  assert.doesNotMatch(detail, /\bVerified\b/);
+});
+
 test('Customer Home retains approved Emerald reference copy without adding paid-service claims', async () => {
   const sources = await Promise.all([
     read('screens/HomeScreen.tsx'),

@@ -35,6 +35,7 @@ import {
 import { HOME_QUICK_SERVICES, MORE_SERVICES } from '../lib/skillCategories';
 import { greetingFor } from '../lib/time';
 import type { HomeStackNavigation } from '../lib/navigation';
+import { useHomeDesignSettings } from '../lib/homeDesignStudio';
 import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
 
 const POST_MARK = require('../assets/brand/customer-home-post-mark-hd.png');
@@ -66,6 +67,7 @@ export function HomeScreen() {
   const { jobs, loading, error, refresh } = useOpenJobs();
   const navigation = useNavigation<HomeStackNavigation>();
   const reducedMotion = useReducedMotion();
+  const design = useHomeDesignSettings();
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -141,7 +143,10 @@ export function HomeScreen() {
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[
+            styles.content,
+            { paddingHorizontal: design.screenPadding, gap: design.sectionGap },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
@@ -171,14 +176,26 @@ export function HomeScreen() {
                 </Pressable>
               </View>
 
-              <Text style={styles.headline} maxFontSizeMultiplier={1.25}>
+              <Text
+                style={[
+                  styles.headline,
+                  {
+                    fontSize: design.heroFontSize,
+                    lineHeight: Math.round(design.heroFontSize * (45 / 39)),
+                  },
+                ]}
+                maxFontSizeMultiplier={1.25}
+              >
                 Take a task off your plate.
               </Text>
             </View>
           </View>
 
           <Pressable
-            style={styles.searchField}
+            style={[
+              styles.searchField,
+              { minHeight: design.searchHeight, borderRadius: design.searchRadius },
+            ]}
             onPress={() => searchRef.current?.focus()}
             accessibilityRole="search"
           >
@@ -252,7 +269,14 @@ export function HomeScreen() {
               </View>
               <Pressable
                 onPress={() => navigation.navigate('PostJob')}
-                style={({ pressed }) => [styles.heroButton, pressed && styles.heroButtonPressed]}
+                style={({ pressed }) => [
+                  styles.heroButton,
+                  {
+                    minHeight: design.ctaHeight,
+                    borderRadius: design.ctaRadius,
+                  },
+                  pressed && styles.heroButtonPressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Post a job"
               >
@@ -364,6 +388,7 @@ function OpenJobCard({
   similarToday: number;
   onPress: () => void;
 }) {
+  const design = useHomeDesignSettings();
   const accent = categoryAccent(job.category);
   const [thumbFailed, setThumbFailed] = useState(false);
   const thumbUrl = jobThumbnailUrl(job);
@@ -380,7 +405,11 @@ function OpenJobCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.jobCard, pressed && styles.jobCardPressed]}
+      style={({ pressed }) => [
+        styles.jobCard,
+        { borderRadius: design.jobCardRadius },
+        pressed && styles.jobCardPressed,
+      ]}
       accessibilityRole="button"
       accessibilityLabel={job.title}
     >

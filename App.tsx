@@ -1,6 +1,6 @@
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState, type PropsWithChildren } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -47,6 +47,7 @@ import { LegalGateScreen } from './screens/LegalGateScreen';
 import { useLegalGate } from './hooks/useLegalGate';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { consumePendingLanding } from './lib/setupLanding';
+import { HomeDesignStudio } from './dev-tools/HomeDesignStudio';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -156,6 +157,12 @@ const TAB_BAR_BACKGROUND = colors.surface;
 const TAB_HAIRLINE_COLOR = colors.border;
 const TAB_ACTIVE_COLOR = colors.forest;
 const TAB_INACTIVE_COLOR = colors.textMuted;
+
+const SHOW_HOME_DESIGN_STUDIO =
+  __DEV__ &&
+  Platform.OS === 'web' &&
+  typeof window !== 'undefined' &&
+  new URLSearchParams(window.location.search).get('studio') === 'home';
 
 function HomeStackNavigator() {
   return (
@@ -369,6 +376,14 @@ function RootNavigator() {
   // current one. That is a blocking re-prompt, not onboarding.
   if (legal.state === 'needs_acceptance') {
     return <LegalGateScreen onAccepted={legal.markAccepted} />;
+  }
+
+  if (SHOW_HOME_DESIGN_STUDIO) {
+    return (
+      <HomeDesignStudio>
+        <MainTabs />
+      </HomeDesignStudio>
+    );
   }
 
   return <MainTabs />;

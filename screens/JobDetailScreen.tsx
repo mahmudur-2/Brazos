@@ -9,8 +9,9 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
@@ -24,10 +25,8 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
-import { useBidCount } from '../hooks/useBidCount';
 import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useOpenJobs } from '../hooks/useOpenJobs';
-import { jobStage } from '../lib/jobStage';
 import {
   categoryAccent,
   dollarsToCents,
@@ -42,6 +41,10 @@ import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
+
+// There is no identity-verification provider yet. Keep this explicit rather
+// than presenting a trust signal the product cannot currently substantiate.
+const VERIFICATION_LABEL = 'Unverified';
 
 export function JobDetailScreen() {
   // Registered in three different stacks (Home, MyJobs, Map) — like Chat, its
@@ -68,11 +71,14 @@ export function JobDetailScreen() {
   const [checking, setChecking] = useState(true);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [confirmBidVisible, setConfirmBidVisible] = useState(false);
+  const [activePhotoIndex, setActivePhotoIndex] = useState(0);
+  const { width: screenWidth } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   const isOwnJob = !!user && job.client_id === user.id;
-  const bidCount = useBidCount(job.id);
-  const stage = jobStage(job.status, bidCount, isOwnJob);
   const accent = categoryAccent(job.category);
+  const galleryPhotos = job.photos ?? [];
+  const heroHeight = Math.min(340, Math.max(260, Math.round(screenWidth * 0.82)));
 
   // Content otherwise stops dead after the two cards below, leaving a blank
   // scroll area down to the tab bar. Reuses the same open-jobs feed Home's
@@ -105,6 +111,12 @@ export function JobDetailScreen() {
       active = false;
     };
   }, [user, job.id, isOwnJob]);
+
+  // A retained JobDetail route may be re-targeted from a similar-job card.
+  // Always lead with that job's poster-selected first photo.
+  useEffect(() => {
+    setActivePhotoIndex(0);
+  }, [job.id]);
 
   /**
    * Shared tail of both bid paths. Everything that decides whether the bid is
@@ -231,9 +243,7 @@ export function JobDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScreenHeader title="Job details" onBack={() => navigation.goBack()} />
-
+    <SafeAreaView style={styles.safe} edges={['bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -243,9 +253,56 @@ export function JobDetailScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          {/* One consolidated card: identity, the evolving stage badge, the
-              details, and (for an eligible poster) the manage actions. */}
-          <Card>
+          {galleryPhotos.length > 0 ? (
+            <View style={[styles.heroMedia, { height: heroHeight }]}>
+              <ScrollView
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(event) => {
+                  const nextIndex = Math.round(event.nativeEvent.contentOffset.x / screenWidth);
+                  setActivePhotoIndex(
+                    Math.max(0, Math.min(nextIndex, galleryPhotos.length - 1))
+                  );
+                }}
+              >
+                {galleryPhotos.map((url, index) => (
+                  <Pressable
+                    key={url}
+                    style={{ width: screenWidth, height: heroHeight }}
+                    onPress={() => setViewerUri(url)}
+                    accessibilityRole="imagebutton"
+                    accessibilityLabel={`Open photo ${index + 1} of ${galleryPhotos.length}`}
+                  >
+                    <Image source={{ uri: url }} style={styles.heroPhoto} resizeMode="cover" />
+                  </Pressable>
+                ))}
+              </ScrollView>
+
+              <Pressable
+                onPress={() => navigation.goBack()}
+                style={[styles.heroBack, { top: insets.top + spacing.sm }]}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+              >
+                <Ionicons name="chevron-back" size={28} color={colors.white} />
+              </Pressable>
+
+              {galleryPhotos.length > 1 ? (
+                <View style={styles.photoCount} pointerEvents="none">
+                  <Text style={styles.photoCountText}>
+                    {activePhotoIndex + 1}/{galleryPhotos.length}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <ScreenHeader title="Job details" onBack={() => navigation.goBack()} />
+          )}
+
+          <View style={styles.detailContent}>
+            <View style={styles.detailSurface}>
             <View style={styles.jobHeader}>
               <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
                 <Ionicons
@@ -258,19 +315,22 @@ export function JobDetailScreen() {
                 <Text style={styles.category}>
                   {JOB_CATEGORY_LABELS[job.category] ?? job.category}
                 </Text>
-                <Text style={styles.time}>{formatTimeAgo(job.created_at)}</Text>
+                <Text style={styles.time}>Posted {formatTimeAgo(job.created_at)}</Text>
               </View>
-              <StatusBadge status={stage.statusKey} label={stage.label} />
+              <View style={styles.unverifiedBadge}>
+                <Ionicons name="shield-outline" size={15} color={colors.neutral} />
+                <Text style={styles.unverifiedText}>{VERIFICATION_LABEL}</Text>
+              </View>
             </View>
 
             <Text style={styles.title}>{job.title}</Text>
 
             <View style={styles.detailRow}>
-              <Ionicons name="location-outline" size={16} color={colors.textMuted} />
+              <Ionicons name="location-outline" size={20} color={colors.textMuted} />
               <Text style={styles.detailText}>{job.location ?? 'No location set'}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Ionicons name="cash-outline" size={16} color={colors.textMuted} />
+              <Ionicons name="cash-outline" size={20} color={colors.textMuted} />
               <Text style={styles.detailText}>
                 {job.budget_cents != null
                   ? `${formatBudget(job.budget_cents)} budget`
@@ -278,60 +338,38 @@ export function JobDetailScreen() {
               </Text>
             </View>
 
-            {job.description ? (
-              <Text style={styles.description}>{job.description}</Text>
-            ) : null}
+            {job.description ? <Text style={styles.description}>{job.description}</Text> : null}
 
-            {job.photos?.length > 0 && (
+            {job.videos?.length > 0 ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.photoRow}
-                style={styles.photoScroll}
-              >
-                {job.photos.map((url) => (
-                  <Pressable key={url} onPress={() => setViewerUri(url)}>
-                    <Image source={{ uri: url }} style={styles.photo} />
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-
-            {job.videos?.length > 0 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.photoRow}
-                style={styles.photoScroll}
+                contentContainerStyle={styles.videoRow}
               >
                 {job.videos.map((url, index) => (
                   <JobVideo
                     key={url}
                     uri={url}
-                    label={job.videos.length > 1 ? `Clip ${index + 1}` : 'Watch clip'}
+                    label={job.videos.length > 1 ? `Watch clip ${index + 1}` : 'Watch clip'}
                   />
                 ))}
               </ScrollView>
-            )}
+            ) : null}
 
-            {isOwnJob && (
-              <JobOwnerActions
-                jobId={job.id}
-                posterId={job.client_id}
-                status={job.status}
-              />
-            )}
-          </Card>
+            {isOwnJob ? (
+              <JobOwnerActions jobId={job.id} posterId={job.client_id} status={job.status} />
+            ) : null}
+            </View>
 
           {isOwnJob ? (
-            <Card style={styles.noticeCard}>
+            <Card style={[styles.noticeCard, styles.secondaryCard]}>
               <Ionicons name="information-circle-outline" size={20} color={colors.textMuted} />
               <Text style={styles.noticeText}>This is your job — you can’t bid on it.</Text>
             </Card>
           ) : checking ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
           ) : existingBid ? (
-            <Card>
+            <Card style={styles.secondaryCard}>
               <View style={styles.bidHeader}>
                 <Text style={styles.sectionTitle}>Your bid</Text>
                 <StatusBadge status={existingBid.status} />
@@ -350,15 +388,24 @@ export function JobDetailScreen() {
                   number and no inventing a pitch. Still an ordinary bid the
                   poster has to accept. */}
               {job.budget_cents != null && (
-                <Card>
-                  <Text style={styles.sectionTitle}>Take it at the listed price</Text>
-                  <Text style={styles.quickBidText}>
-                    Send {formatBudget(job.budget_cents)} as your bid, exactly
-                    as posted. The client still picks who gets the job.
-                  </Text>
+                <Card style={[styles.listedPriceCard, styles.secondaryCard]}>
+                  <Text style={styles.priceEyebrow}>Take it at the listed price</Text>
+                  <View style={styles.listedPriceInfo}>
+                    <View style={styles.priceIcon}>
+                      <Ionicons name="cash-outline" size={22} color={colors.primary} />
+                    </View>
+                    <View style={styles.priceCopy}>
+                      <Text style={styles.listedPriceTitle}>
+                        You’ll offer {formatBudget(job.budget_cents)}
+                      </Text>
+                      <Text style={styles.quickBidText}>
+                        Sends the listed-price bid. The client still chooses who gets the job.
+                      </Text>
+                    </View>
+                  </View>
                   <Button
                     title={`I’ll do it for ${formatBudget(job.budget_cents)}`}
-                    icon="checkmark-circle-outline"
+                    icon="sparkles"
                     onPress={handleTakeListedPrice}
                     loading={takingListedPrice}
                     disabled={submitting}
@@ -367,7 +414,7 @@ export function JobDetailScreen() {
                 </Card>
               )}
 
-              <Card>
+              <Card style={styles.secondaryCard}>
                 <Text style={styles.sectionTitle}>
                   {job.budget_cents != null ? 'Or name your own price' : 'Place a bid'}
                 </Text>
@@ -401,7 +448,7 @@ export function JobDetailScreen() {
           )}
 
           {similarJobs.length > 0 && (
-            <View style={styles.similarSection}>
+            <View style={[styles.similarSection, styles.secondarySection]}>
               <Text style={styles.similarTitle}>Similar open jobs</Text>
               <View style={styles.similarList}>
                 {similarJobs.map((sj) => (
@@ -414,6 +461,7 @@ export function JobDetailScreen() {
               </View>
             </View>
           )}
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -448,8 +496,53 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
+    paddingBottom: spacing.xxl,
+    gap: 0,
+  },
+  heroMedia: {
+    backgroundColor: colors.neutralBg,
+    overflow: 'hidden',
+  },
+  heroPhoto: {
+    width: '100%',
+    height: '100%',
+    backgroundColor: colors.neutralBg,
+  },
+  heroBack: {
+    position: 'absolute',
+    left: spacing.lg,
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+  },
+  photoCount: {
+    position: 'absolute',
+    left: spacing.lg,
+    bottom: spacing.lg,
+    minWidth: 48,
+    minHeight: 30,
+    paddingHorizontal: spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: radius.pill,
+    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+  },
+  photoCountText: {
+    color: colors.white,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  detailContent: {
     gap: spacing.lg,
+    backgroundColor: colors.surface,
+  },
+  detailSurface: {
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
+    backgroundColor: colors.surface,
   },
   jobHeader: {
     flexDirection: 'row',
@@ -458,9 +551,9 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
+    width: 54,
+    height: 54,
+    borderRadius: radius.lg,
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
@@ -470,52 +563,66 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   category: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
     color: colors.text,
   },
   time: {
     fontSize: 13,
     color: colors.textMuted,
   },
+  unverifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm + 2,
+    paddingVertical: spacing.sm - 1,
+    borderRadius: radius.pill,
+    backgroundColor: colors.neutralBg,
+  },
+  unverifiedText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.neutral,
+  },
   title: {
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.ink,
+    marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
   detailRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    marginBottom: spacing.xs + 2,
+    marginTop: spacing.sm,
   },
   detailText: {
-    fontSize: 15,
+    flex: 1,
+    fontSize: 16,
     color: colors.textMuted,
   },
   description: {
-    fontSize: 15,
+    fontSize: 16,
     color: colors.text,
-    lineHeight: 22,
-    marginTop: spacing.md,
+    lineHeight: 24,
+    marginTop: spacing.lg,
   },
-  photoScroll: {
-    marginTop: spacing.md,
-  },
-  photoRow: {
+  videoRow: {
     gap: spacing.sm,
-  },
-  photo: {
-    width: 120,
-    height: 120,
-    borderRadius: radius.md,
-    backgroundColor: colors.neutralBg,
+    marginTop: spacing.lg,
   },
   noticeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  secondaryCard: {
+    marginHorizontal: spacing.lg,
+  },
+  secondarySection: {
+    marginHorizontal: spacing.lg,
   },
   noticeText: {
     flex: 1,
@@ -525,6 +632,43 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 17,
     fontWeight: '700',
+    color: colors.text,
+  },
+  listedPriceCard: {
+    gap: spacing.md,
+  },
+  priceEyebrow: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.7,
+    textTransform: 'uppercase',
+  },
+  listedPriceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.homeBackground,
+  },
+  priceIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.mint,
+  },
+  priceCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  listedPriceTitle: {
+    fontSize: 17,
+    fontWeight: '800',
     color: colors.text,
   },
   similarSection: {
@@ -541,13 +685,12 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   quickBidText: {
-    fontSize: 14,
+    fontSize: 13,
     color: colors.textMuted,
-    lineHeight: 20,
-    marginTop: spacing.xs,
+    lineHeight: 19,
   },
   quickBidAction: {
-    marginTop: spacing.lg,
+    marginTop: spacing.xs,
   },
   form: {
     gap: spacing.lg,
