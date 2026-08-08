@@ -7,33 +7,35 @@ import { useAuth } from '../hooks/useAuth';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 import {
   categoryAccent,
-  formatBidCount,
   formatBudget,
-  formatPendingBidCount,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
-import { formatTimeAgo } from '../lib/time';
 
-const THUMB_SIZE = 76;
+const THUMB_SIZE = 84;
 
 /**
  * A job as a worker evaluating it sees it: what the work is, roughly where,
- * what it pays, and a single obvious way in.
+ * what it pays, and its bid status — matched to design-reference/
+ * 48_worker_home.png's compact horizontal card. No "View job" button: the
+ * whole card is the tap target, so a screen full of these doesn't burn
+ * height on a repeated CTA.
  *
  * Deliberately a separate component from BrowseJobCard rather than a variant
  * of it. BrowseJobCard is also rendered by the map drill-down and the
  * "similar jobs" strip on job detail; giving it a second layout would put a
  * branch in a component three screens depend on, to serve one of them.
  *
- * Two things the reference card shows that are NOT rendered here, because
- * nothing in the schema backs them: a distance ("1.2 mi" — exact job
- * coordinates live in `job_locations`, readable only by the poster and the
- * assigned worker) and a fit percentage ("98% fit" — no job-to-worker fit
- * score exists; the semantic matcher ranks workers for a query, not jobs for
- * a worker). The tags that are shown are all real.
+ * Reference elements NOT rendered here, because nothing backs them:
+ *   - A distance ("1.2 mi") — exact job coordinates live in `job_locations`,
+ *     readable only by the poster and the assigned worker.
+ *   - A fit percentage ("98% fit") — no job-to-worker fit score exists.
+ *   - A favorite/heart toggle — there is no saved-jobs table.
+ *   - "posted X ago" — present on the old vertical card, dropped here to
+ *     match the reference's exact field list (title, category, location,
+ *     bid status, optional Break the ice); still on JobDetail if needed.
  */
 export function WorkerJobCard({
   job,
@@ -42,7 +44,8 @@ export function WorkerJobCard({
 }: {
   job: OpenJob;
   /** Undefined means not known yet (or phase38's batched RPC isn't deployed).
-   *  The tag is omitted rather than guessed at. */
+   *  Both the bid-status line and Break the ice are omitted rather than
+   *  guessed at when this is undefined — see bidLabel below. */
   bidCount?: number;
   onPress: () => void;
 }) {
@@ -55,80 +58,84 @@ export function WorkerJobCard({
   const thumbUrl = jobThumbnailUrl(job);
   const showImage = !!thumbUrl && !imageFailed;
 
-  return (
-    <View style={styles.card}>
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [styles.head, pressed && styles.headPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={job.title}
-      >
-        {showImage ? (
-          <Image
-            source={{ uri: thumbUrl }}
-            style={styles.thumb}
-            resizeMode="cover"
-            onError={() => setImageFailed(true)}
-            accessible
-            accessibilityLabel={`Photo for ${job.title}`}
-          />
-        ) : (
-          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: accent.bg }]}>
-            <Ionicons name={icon} size={30} color={accent.icon} />
-          </View>
-        )}
+  // "So far" matches the reference's exact wording ("2 bids so far") without
+  // changing lib/jobs.ts's shared formatBidCount() — that string is also used
+  // on the poster's own views, which this card has no reason to touch.
+  const bidLabel =
+    bidCount == null ? null : bidCount === 0 ? 'No bids yet' : `${bidCount} ${bidCount === 1 ? 'bid' : 'bids'} so far`;
+  // The actual zero-bid condition, not inferred from the label text — never
+  // shown for a job's own poster, and never shown when the count isn't known.
+  const showBreakIce = !isOwn && bidCount === 0;
 
-        <View style={styles.headText}>
-          <Text style={styles.title} numberOfLines={2}>
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={job.title}
+    >
+      {showImage ? (
+        <Image
+          source={{ uri: thumbUrl }}
+          style={styles.thumb}
+          resizeMode="cover"
+          onError={() => setImageFailed(true)}
+          accessible
+          accessibilityLabel={`Photo for ${job.title}`}
+        />
+      ) : (
+        <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: accent.bg }]}>
+          <Ionicons name={icon} size={26} color={accent.icon} />
+        </View>
+      )}
+
+      <View style={styles.info}>
+        <View style={styles.titleRow}>
+          <Text style={styles.title} numberOfLines={1}>
             {job.title}
           </Text>
-          {job.location ? (
-            <Text style={styles.place} numberOfLines={1}>
-              {job.location}
-            </Text>
-          ) : null}
-        </View>
-
-        <Text style={styles.price} numberOfLines={1}>
-          {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
-        </Text>
-      </Pressable>
-
-      <View style={styles.tags}>
-        {isOwn ? <Chip label="Your job" variant="soft" size="sm" /> : null}
-        <Chip
-          label={JOB_CATEGORY_LABELS[job.category] ?? job.category}
-          variant="soft"
-          size="sm"
-        />
-        {bidCount != null ? (
           <Chip
-            label={isOwn ? formatPendingBidCount(bidCount) : formatBidCount(bidCount)}
+            label={JOB_CATEGORY_LABELS[job.category] ?? job.category}
             variant="soft"
             size="sm"
+            style={styles.categoryChip}
           />
+          {isOwn ? <Chip label="Your job" variant="soft" size="sm" /> : null}
+        </View>
+
+        {job.location ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              {job.location}
+            </Text>
+          </View>
         ) : null}
-        <Chip label={formatTimeAgo(job.created_at)} variant="soft" size="sm" />
+
+        {bidLabel ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="people-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              {bidLabel}
+            </Text>
+          </View>
+        ) : null}
+
+        {showBreakIce ? (
+          <View style={styles.breakIce}>
+            <Ionicons name="sparkles" size={12} color={colors.gold} />
+            <Text style={styles.breakIceText}>Break the ice</Text>
+          </View>
+        ) : null}
       </View>
 
-      {/* A real nudge, not a fabricated stat — bidCount === 0 is exactly the
-          case where being first genuinely is the opportunity. */}
-      {!isOwn && bidCount === 0 ? (
-        <View style={styles.breakIce}>
-          <Ionicons name="sparkles" size={13} color={colors.gold} />
-          <Text style={styles.breakIceText}>Break the ice</Text>
-        </View>
-      ) : null}
-
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={`View job: ${job.title}`}
-      >
-        <Text style={styles.ctaText}>View job</Text>
-      </Pressable>
-    </View>
+      <View style={styles.payBlock}>
+        <Text style={styles.payCaption}>EST. PAY</Text>
+        <Text style={styles.payValue} numberOfLines={1}>
+          {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
+        </Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -137,38 +144,28 @@ export function WorkerJobCard({
 export function WorkerJobCardSkeleton() {
   return (
     <View style={styles.card}>
-      <View style={styles.head}>
-        <Skeleton style={styles.thumb} />
-        <View style={styles.headText}>
-          <Skeleton style={styles.skeletonLine} />
-          <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
-        </View>
+      <Skeleton style={styles.thumb} />
+      <View style={styles.info}>
+        <Skeleton style={styles.skeletonLine} />
+        <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
       </View>
-      <View style={styles.tags}>
-        <Skeleton style={styles.skeletonTag} />
-        <Skeleton style={styles.skeletonTag} />
-      </View>
-      <View style={styles.ctaSkeleton} />
+      <Skeleton style={styles.skeletonPay} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
     borderRadius: radius.lg,
     backgroundColor: colors.surface,
     padding: spacing.md,
-    gap: spacing.md,
     ...shadows.card,
   },
-  head: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    borderRadius: radius.md,
-  },
-  headPressed: {
-    opacity: 0.9,
+  cardPressed: {
+    opacity: 0.92,
   },
   thumb: {
     width: THUMB_SIZE,
@@ -180,60 +177,63 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headText: {
+  info: {
     flex: 1,
-    gap: 3,
+    gap: 4,
+    // Keeps content clear of the pay block regardless of title/chip length.
+    minWidth: 0,
   },
-  title: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.ink,
-    lineHeight: 23,
-  },
-  place: {
-    fontSize: 14,
-    color: colors.textMuted,
-  },
-  price: {
-    // Capped so a long title keeps most of the row rather than being squeezed
-    // by "$1,250".
-    maxWidth: 92,
-    fontSize: 20,
-    fontWeight: '800',
-    color: colors.forest,
-    textAlign: 'right',
-  },
-  tags: {
+  titleRow: {
     flexDirection: 'row',
+    alignItems: 'center',
     flexWrap: 'wrap',
     gap: spacing.xs + 2,
+  },
+  title: {
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  categoryChip: {
+    flexShrink: 0,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  metaText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   breakIce: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginTop: -spacing.xs,
   },
   breakIceText: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.gold,
   },
-  cta: {
-    minHeight: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.mint2,
-    alignItems: 'center',
-    justifyContent: 'center',
+  payBlock: {
+    alignItems: 'flex-end',
+    // Capped so a long title keeps most of the row rather than being
+    // squeezed by "$1,250".
+    maxWidth: 88,
   },
-  ctaPressed: {
-    backgroundColor: colors.mint2,
-  },
-  ctaText: {
-    fontSize: 16,
+  payCaption: {
+    fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.6,
+    color: colors.textMuted,
+  },
+  payValue: {
+    marginTop: 2,
+    fontSize: 20,
+    fontWeight: '800',
     color: colors.forest,
   },
   skeletonLine: {
@@ -242,15 +242,11 @@ const styles = StyleSheet.create({
   },
   skeletonLineShort: {
     width: '60%',
+    marginTop: spacing.xs,
   },
-  skeletonTag: {
-    width: 78,
-    height: 24,
-    borderRadius: radius.pill,
-  },
-  ctaSkeleton: {
-    minHeight: 52,
-    borderRadius: radius.md,
-    backgroundColor: colors.mint,
+  skeletonPay: {
+    width: 48,
+    height: 32,
+    borderRadius: radius.sm,
   },
 });
