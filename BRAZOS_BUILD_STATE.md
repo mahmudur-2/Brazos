@@ -2,16 +2,11 @@
 Updated: 2026-08-08
 
 ## Current phase
-Phase 2 — Mode & navigation hardening. **PARTIAL.** All code-side work is
-complete and all code-side gates are green (tsc clean; 212/214 tests pass with
-only the two documented pre-existing failures; 25 new mode tests added, all
-passing). Two manual steps are outstanding and are the ONLY things between
-here and PASS:
-1. Apply `supabase/phase42_active_mode.sql` in the Supabase SQL Editor, then
-   re-run `node scripts/verify-schema.mjs` (it currently reports phase42's two
-   RPCs MISSING, which is correct — an agent never applies migrations).
-2. Real-device verification of the mode switch and the six safe-area fixes —
-   see "Manual verification still required" below.
+Phase 2 — Mode & navigation hardening. **PASS / CLOSED.** All gates green,
+including migration application (verified via `verify-schema.mjs`, not a SQL
+Editor message) and real-device verification of the mode switch, both
+performed by the user. Next exact task: Phase 3 — Data foundation (see "Exact
+next task" at the bottom).
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -28,10 +23,14 @@ here and PASS:
   RatingStars/Skeleton, StepHeader/MediaGrid/Sheet, EmptyState + all five
   template states, bottom scroll/nav clearance — no clipping, overflow,
   safe-area, font, or layout regressions observed.
-- [~] 2 mode/nav · commit `e8cbb92` · ModeProvider + switchMode(),
-  typed Customer/Worker trees, ModeShell + ModeGuard, phase42 migration
-  (written, NOT applied), BottomNav + JobCard primitives, six-screen
-  safe-area fix. **PARTIAL** pending migration + device verification.
+- [x] 2 mode/nav · commits `e8cbb92`, `1696ec3`, plus this closure commit ·
+  ModeProvider + switchMode(), typed Customer/Worker trees, ModeShell +
+  ModeGuard, phase42 migration (applied + verify-schema green), BottomNav +
+  JobCard primitives, six-screen safe-area fix. **PASS** — manually verified
+  by the user: schema applied and confirmed via `verify-schema.mjs` (not a
+  SQL Editor message), real Expo device mode-switch checklist all green (see
+  Phase log entry below / "Manual verification" section for the checklist
+  covered).
 - [ ] 3 data ·
   [ ] 4 post · [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
@@ -149,9 +148,9 @@ under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 ## Migrations applied (verify-schema green)
-**phase42 (`phase42_active_mode.sql`) is WRITTEN, NOT APPLIED.** It is covered
-by `verify-schema.mjs` and currently reports MISSING. Apply it in the SQL
-Editor and re-run the script; only a green run counts.
+phase42 (`phase42_active_mode.sql`): **applied by the user via the Supabase
+SQL Editor, then confirmed via a green `node scripts/verify-schema.mjs` run**
+(all three phase42 checks OK) — 2026-08-08.
 
 phase15 through phase39: all confirmed live via `node scripts/verify-schema.mjs`
 (clean run, 2026-08-08). phase40/phase41 are not covered by the script
@@ -182,15 +181,13 @@ the script this pass.
   brittle assertion, not a real regression in the screen. Neither was
   introduced here and neither was fixed here (out of Phase 1 scope).
 - ~~Nav-bar/safe-area duplicate-bottom-inset bug live in 6 screens.~~
-  **Fixed in Phase 2** by hand (not cherry-picked), and now guarded by
-  `tests/layout.test.mjs`. Still needs the on-device eyeball listed under
-  "Manual verification still required".
-- **Mode switch now mounts a whole navigator tree inside the overlay's
-  500→700ms window**, where it used to push a single screen. Deterministic on
-  paper (the swap is synchronous state, the tree renders on the next commit),
-  but the paint budget is tighter than before. Explicitly on the device
-  checklist; if a white frame shows on low-end Android, the fix is the
-  overlay's `FALL_START_MS`, not a sleep in `switchMode()`.
+  **Fixed in Phase 2** by hand (not cherry-picked), guarded by
+  `tests/layout.test.mjs`, and confirmed clean on a real device at closure.
+- ~~Mode switch mounts a whole navigator tree inside the overlay's 500→700ms
+  window, where it used to push a single screen — risk of a white/unpainted
+  frame on a slow device.~~ **Confirmed clean on a real device at closure.**
+  If a white frame ever does show up on a lower-end device than was tested,
+  the fix is the overlay's `FALL_START_MS`, not a sleep in `switchMode()`.
 - **Switching mode resets every tab's stack**, including an open chat or a
   half-filled Post-a-job wizard. That is §F's required behaviour ("resets
   navigation stacks"), and the wizard already warns before losing progress —
@@ -204,8 +201,8 @@ the script this pass.
 
 ## Gate status
 
-Phase 2 (2026-08-08):
-- **tsc**: PASS — `npm run lint` exits 0, clean.
+Phase 2 closure (2026-08-08):
+- **tsc**: PASS — `npm run lint` exits 0, clean. Re-confirmed at closure.
 - **eslint**: NOT RUN — still not installed, no config. Unchanged from Phase 1.
 - **tests**: 212/214 PASS. The same 2 pre-existing failures, zero new. 25 new
   tests in `tests/mode.test.mjs`, all passing. Three existing guard tests were
@@ -215,25 +212,35 @@ Phase 2 (2026-08-08):
   `ui/primitives/BottomNav.tsx` (byte-identical, moved file) and gained a new
   assertion covering all nine tab-contained screens' `edges`; `setupOnboarding`
   asserts the landing choice now resolves a MODE rather than parking a
-  navigate. Every original assertion's intent is preserved.
-- **verify-schema**: **FAIL, expected.** phase15–phase39 all OK; phase42's
-  `get_my_active_mode()` and `set_active_mode()` report MISSING because the
-  migration has not been applied — agents never apply migrations. Re-run after
-  applying it; that run is what closes this gate.
+  navigate. Every original assertion's intent is preserved. Re-confirmed at
+  closure.
+- **verify-schema**: **PASS.** phase15–phase42 all OK, including phase42's
+  `get_my_active_mode()`, `set_active_mode()`, and the
+  `profiles.active_mode not publicly readable` privacy check. The migration
+  was applied by the user via the SQL Editor; this run (not that editor's own
+  "Success" message) is the proof.
 - **locked screens**: PASS. Screens 01–06 byte-identical (git hashes compared
   before and after). 07 (`HomeScreen`) and 48 (`BrowseJobsScreen`) changed by
   wiring only — imports, the navigation type parameter, and the bodies of the
   switch/browse handlers. No JSX structure, style, token, string, layout or
   prop change; `git diff` contains no style-object or JSX-attribute edits other
-  than two `onPress` handler names.
-- **mode-smoke**: PASS by reasoning + source-level tests; PENDING on device.
-  Cross-tree `navigate()` is a compile error (asserted by
-  `tests/mode.test.mjs`, and by tsc rejecting the old call sites before they
-  were rewritten).
-- **rls-probe**: N/A — no policy change. phase42 adds no grant on `profiles`
-  and `verify-schema` asserts `active_mode` stays unreadable with the
-  publishable key.
-- **device/simulator**: **PENDING** — see "Manual verification still required".
+  than two `onPress` handler names. Real-device visual check at closure found
+  no regression.
+- **mode-smoke**: **PASS.** Cross-tree `navigate()` is a compile error
+  (asserted by `tests/mode.test.mjs`, and by tsc rejecting the old call sites
+  before they were rewritten). Confirmed on a real Expo device: mode
+  persistence across restart, both switch directions, tab re-press in both
+  modes, rapid double-tap, all four shared tabs from both modes, no loop, no
+  white frame during the transition. See "Manual verification performed"
+  above for the full checklist.
+- **rls-probe**: N/A this phase — no policy change. phase42 adds no grant on
+  `profiles`, and `verify-schema` confirms `active_mode` stays unreadable with
+  the publishable key.
+- **device/simulator**: **PASS.** Manually verified by the user on a real
+  Expo device — see "Manual verification performed" above for the full
+  checklist. This closes the last open item from Phase 2.
+
+**Phase 2 gate: fully green. Phase 2 is closed.**
 
 Phase 1 closure (2026-08-08):
 - **tsc**: PASS — `npm run lint` (`tsc --noEmit --noUnusedLocals
@@ -354,42 +361,35 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   now asserts the absence of `edges={['top', 'bottom']}` across all nine
   tab-contained screens, so the regression cannot come back silently.
 
-## Manual verification still required (Phase 2 → PASS)
+## Manual verification performed (Phase 2 closure, 2026-08-08)
 
-**Supabase (do this first):**
-1. Paste `supabase/phase42_active_mode.sql` into the Supabase SQL Editor and
-   run it. It is idempotent — safe to run twice.
-2. Run `node scripts/verify-schema.mjs`. Expected: `phase42_active_mode.sql`
-   shows OK for `get_my_active_mode()`, `set_active_mode()`, and
-   `profiles.active_mode not publicly readable`, and the script exits 0. A SQL
-   Editor "Success" message is not proof; only a green verify run is.
+**Supabase — done by the user:**
+1. `supabase/phase42_active_mode.sql` applied via the Supabase SQL Editor.
+2. `node scripts/verify-schema.mjs` re-run by the agent afterward and
+   confirmed green: `phase42_active_mode.sql` shows OK for
+   `get_my_active_mode()`, `set_active_mode()`, and
+   `profiles.active_mode not publicly readable`; script exits 0. This is the
+   proof — the SQL Editor's own "Success" message was not treated as one.
 
-**On the running Expo device (agents never start Expo here):**
-1. Sign in. Confirm the app opens in Customer Mode (or whichever mode you last
-   chose) with no flash of the other tree.
-2. Customer Home → re-press the Home tab from another tab and from a pushed
-   screen. It must land on Customer Home every time.
-3. Customer Home → "View all" and a Live Nearby card. Both must show the
-   "Switch to Worker Mode?" confirm. Decline → nothing moves.
-4. Accept it. The emerald panel plays once, and Worker Home is underneath when
-   it retreats — **watch specifically for a white/unpainted frame as the panel
-   falls**, since the swap now mounts a whole tree rather than pushing one
-   screen. Repeat the switch 3× each way on the slowest device available.
-5. Worker Home → re-press the Home tab. It must land on Worker Home, never
-   Customer Home.
-6. Worker Home → "Switch to Customer" pill → confirm → Customer Home.
-7. Kill and relaunch the app. It must reopen in the mode you left it in.
-   Then switch mode, kill, relaunch again, and confirm it persisted.
-8. Double-tap a switch pill fast — exactly one confirm, one transition.
-9. From both modes, open Map / My Jobs / Messages / Profile and confirm each
-   works and shows the same bottom bar in the same place.
-10. Safe-area check on the six fixed screens (Post a job, Worker search,
-    Worker profile, Profile reviews, Map → cell jobs, Profile → Admin reports
-    if you are an admin): no blank cream band above the tab bar, no content
-    hidden behind it.
-11. Profile → "Component catalog (dev)" → new BottomNav and JobCard sections:
-    the customer cards must read EST. PRICE with no bid button, the worker
-    cards EST. PAY with the bid button, distance and "Break the ice".
+**Real Expo device — done by the user, all PASS:**
+1. Session restores directly into the persisted mode, no opposite-mode flash.
+2. Customer Home tab always returns to Customer Home.
+3. Worker Home tab always returns to Worker Home.
+4. Customer → Worker switch confirms, transitions, and lands correctly.
+5. Worker → Customer switch confirms, transitions, and lands correctly.
+6. Mode persists across kill/relaunch.
+7. Rapid/double-tap on a switch pill produces exactly one confirm and one
+   transition — no duplicates.
+8. Shared Map / My Jobs / Messages / Profile tabs work correctly in both
+   modes, same bottom bar in the same place.
+9. No redirect/navigation loops observed.
+10. No white/unpainted frame during the mode transition (the specific risk
+    flagged in Known issues below, given the transition now mounts a whole
+    tree instead of pushing one screen) — confirmed clean.
+11. Safe-area/bottom-nav checks pass on the six screens fixed this phase.
+12. Component Catalog's new BottomNav and JobCard sections confirmed correct
+    (EST. PRICE / no bid button in customer perspective, EST. PAY / bid button
+    / distance / "Break the ice" in worker perspective).
 
 ## Deferred out of Phase 2 (with the phase that owns each)
 
@@ -412,8 +412,8 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   two values exactly.
 
 ## Exact next task (Phase 3 — Data foundation)
-Per BRAZOS_MASTER_PLAN.md §J, Phase 3 (LARGE), and only after Phase 2 is closed
-by the two manual steps above. In order:
+Per BRAZOS_MASTER_PLAN.md §J, Phase 3 (LARGE). Phase 2 is closed; this is the
+next task, not yet started. In order:
 1. Canonical status enums as numbered migrations (§H's five state machines),
    then regenerate/introduce database types — they do not exist at all today
    (`jobs.status` is a plain `string`; raw literals throughout `lib/`).
