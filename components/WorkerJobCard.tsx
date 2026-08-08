@@ -111,6 +111,15 @@ export function WorkerJobCard({
         <Chip label={formatTimeAgo(job.created_at)} variant="soft" size="sm" />
       </View>
 
+      {/* A real nudge, not a fabricated stat — bidCount === 0 is exactly the
+          case where being first genuinely is the opportunity. */}
+      {!isOwn && bidCount === 0 ? (
+        <View style={styles.breakIce}>
+          <Ionicons name="sparkles" size={13} color={colors.gold} />
+          <Text style={styles.breakIceText}>Break the ice</Text>
+        </View>
+      ) : null}
+
       <Pressable
         onPress={onPress}
         style={({ pressed }) => [styles.cta, pressed && styles.ctaPressed]}
@@ -198,6 +207,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs + 2,
+  },
+  breakIce: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: -spacing.xs,
+  },
+  breakIceText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.gold,
   },
   cta: {
     minHeight: 52,

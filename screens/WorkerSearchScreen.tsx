@@ -96,8 +96,17 @@ export function WorkerSearchScreen() {
       setState({ kind: 'loading' });
 
       const categories = category ? [category] : interpretQuery(trimmed);
+      // findWorkers() only asks the server's best-match ranking to run when
+      // there's an actual sentence to compare meanings against — a bare chip
+      // tap sends no typed text, so without this it never got that ranking at
+      // all and could only ever find workers who had literally checked this
+      // exact category box. The category's own label ("TV Mounting") is real
+      // language, not a raw enum key, so it's a legitimate phrase to embed —
+      // this is what lets a worker with the right completed-job history but a
+      // different advertised tag still surface.
+      const searchText = trimmed || (category ? skillCategoryLabel(category) : '');
       const { data, error, mode } = await findWorkers({
-        query: trimmed,
+        query: searchText,
         categories,
         excludeUserId: user?.id ?? null,
       });

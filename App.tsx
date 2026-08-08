@@ -22,6 +22,7 @@ import type {
 } from './lib/navigation';
 import { colors } from './lib/theme';
 import { LaunchCompleteContext } from './lib/launchContext';
+import { ModeTransitionProvider } from './components/ModeTransitionOverlay';
 import { AuthFlow } from './screens/AuthFlow';
 import { OnboardingFlow } from './screens/OnboardingFlow';
 import { LaunchScreen } from './screens/LaunchScreen';
@@ -444,23 +445,29 @@ export default function App() {
     <SafeAreaProvider>
       <AuthProvider>
         <LaunchGate>
-          <NavigationContainer
-            ref={navigationRef}
-            // A cold-start tap is delivered before this mounts, so the routing
-            // it requested is parked and replayed here.
-            onReady={flushPendingNavigation}
-          >
-            <RootNavigator />
-            {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
-                app.json's userInterfaceStyle, Android's default status bar
-                fill) to the system light/dark setting, which on a dark-mode
-                device rendered as a solid black strip above every screen's
-                light cream content. The app is light-only for now (see the
-                tab bar / Map hardcoding elsewhere), so the status bar matches.
-                LaunchScreen pushes its own light variant over this while it is
-                up, and unmounting pops back to this one. */}
-            <StatusBar style="dark" backgroundColor={colors.background} />
-          </NavigationContainer>
+          {/* Sits between the launch layer and the navigator so the mode-switch
+              panel covers every screen — including the tab bar — while the
+              destination Home is swapped in underneath it. */}
+          <ModeTransitionProvider>
+            <NavigationContainer
+              ref={navigationRef}
+              // A cold-start tap is delivered before this mounts, so the
+              // routing it requested is parked and replayed here.
+              onReady={flushPendingNavigation}
+            >
+              <RootNavigator />
+              {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
+                  app.json's userInterfaceStyle, Android's default status bar
+                  fill) to the system light/dark setting, which on a dark-mode
+                  device rendered as a solid black strip above every screen's
+                  light cream content. The app is light-only for now (see the
+                  tab bar / Map hardcoding elsewhere), so the status bar
+                  matches. LaunchScreen pushes its own light variant over this
+                  while it is up, and unmounting pops back to this one. The
+                  mode-switch panel does the same for its own duration. */}
+              <StatusBar style="dark" backgroundColor={colors.background} />
+            </NavigationContainer>
+          </ModeTransitionProvider>
         </LaunchGate>
       </AuthProvider>
     </SafeAreaProvider>

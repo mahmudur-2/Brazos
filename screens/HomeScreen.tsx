@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from '../components/Chip';
+import { useModeTransition } from '../components/ModeTransitionOverlay';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
 import { Skeleton } from '../components/Skeleton';
 import { useAuth } from '../hooks/useAuth';
@@ -30,7 +31,6 @@ import {
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
-  type JobCategory,
   type OpenJob,
 } from '../lib/jobs';
 import { HOME_QUICK_SERVICES, MORE_SERVICES } from '../lib/skillCategories';
@@ -69,6 +69,7 @@ export function HomeScreen() {
   const navigation = useNavigation<HomeStackNavigation>();
   const reducedMotion = useReducedMotion();
   const design = useHomeDesignSettings();
+  const { start: startModeSwitch, busy: switching } = useModeTransition();
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -109,24 +110,34 @@ export function HomeScreen() {
     navigation.navigate('BrowseJobs');
   }
 
+  // Same destination as goToFindWork above, but as the deliberate mode switch:
+  // the emerald panel covers the screen and the navigation runs underneath it.
+  // "View all" keeps the plain push — browsing open jobs is not a mode change.
+  function switchToWorker() {
+    startModeSwitch({
+      destination: 'worker',
+      onSwitch: () => navigation.navigate('BrowseJobs'),
+    });
+  }
+
   function openJob(job: OpenJob) {
     navigation.navigate('JobDetail', { job });
   }
 
-  // The one job-draft entry point Home offers: the "Post a job" CTA, a
-  // tapped category chip, and whatever the customer already typed in the
-  // search field all land here instead of each keeping separate draft state,
-  // so there is exactly one place a fresh post actually gets created.
-  function startJobDraft(categoryKey?: string) {
+  // The "Post a job" CTA's own entry point — carries over whatever the
+  // customer already typed in the search field so a fresh post doesn't start
+  // blank. Category chips are a separate action (searchCategory below): they
+  // find matching workers, not start a job draft.
+  function startJobDraft() {
     navigation.navigate('PostJob', {
-      initialCategory: categoryKey as JobCategory | undefined,
       initialDescription: query.trim() || undefined,
     });
   }
 
-  // Typed search still finds workers directly — the category chips below are
-  // the ones that changed meaning (job draft, not worker lookup); this Enter/
-  // search-icon path is untouched.
+  function searchCategory(categoryKey: string) {
+    navigation.navigate('WorkerSearch', { category: categoryKey });
+  }
+
   function submitSearch() {
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -171,18 +182,27 @@ export function HomeScreen() {
             />
             <View style={styles.introCopy}>
               <View style={styles.introTopLine}>
-                <Text style={styles.greeting} numberOfLines={1}>
-                  {greetingFor(new Date())}
-                  {firstName ? `, ${firstName}` : ''}
-                </Text>
+                <View style={styles.greetingBlock}>
+                  <Text style={styles.greeting} numberOfLines={1}>
+                    {greetingFor(new Date())}
+                    {firstName ? ',' : ''}
+                  </Text>
+                  {firstName ? (
+                    <Text style={styles.greeting} numberOfLines={1}>
+                      {firstName}
+                    </Text>
+                  ) : null}
+                </View>
                 <Pressable
-                  onPress={goToFindWork}
+                  onPress={switchToWorker}
+                  disabled={switching}
                   style={({ pressed }) => [styles.modeSwitch, pressed && styles.modeSwitchPressed]}
                   accessibilityRole="button"
                   accessibilityLabel="Switch to Worker"
                   accessibilityHint="Opens the jobs you can bid on"
+                  accessibilityState={{ disabled: switching }}
                 >
-                  <Ionicons name="people" size={23} color={colors.forest} />
+                  <Ionicons name="build" size={23} color={colors.forest} />
                   <Text style={styles.modeSwitchText}>Switch to Worker</Text>
                 </Pressable>
               </View>
@@ -198,6 +218,9 @@ export function HomeScreen() {
                 maxFontSizeMultiplier={1.25}
               >
                 Take a task off your plate.
+              </Text>
+              <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
+                Describe it. Hire help. Get it handled.
               </Text>
             </View>
           </View>
@@ -250,8 +273,11 @@ export function HomeScreen() {
                     label={service.label}
                     icon={service.icon}
                     variant="service"
-                    style={rowIndex === 1 ? styles.compactServiceChip : undefined}
-                    onPress={() => startJobDraft(service.key)}
+                    style={[
+                      styles.goldOutlineChip,
+                      rowIndex === 1 && styles.compactServiceChip,
+                    ]}
+                    onPress={() => searchCategory(service.key)}
                     accessibilityHint={`Find ${service.label.toLowerCase()} help`}
                   />
                 ))}
@@ -260,7 +286,7 @@ export function HomeScreen() {
                     label="Other"
                     icon="chevron-down"
                     variant="service"
-                    style={styles.compactServiceChip}
+                    style={[styles.goldOutlineChip, styles.compactServiceChip, styles.otherChip]}
                     onPress={() => setMoreOpen(true)}
                     accessibilityLabel="Other services"
                     accessibilityHint="Opens the full list of services"
@@ -378,7 +404,7 @@ export function HomeScreen() {
         services={MORE_SERVICES}
         onSelect={(categoryKey) => {
           setMoreOpen(false);
-          startJobDraft(categoryKey);
+          searchCategory(categoryKey);
         }}
         onClose={() => setMoreOpen(false)}
       />
@@ -512,7 +538,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  greeting: { flexShrink: 1, fontSize: 17, fontWeight: '500', color: colors.homeSlate },
+  greetingBlock: { flexShrink: 1, gap: 2 },
+  greeting: { fontSize: 18, fontWeight: '500', color: colors.homeSlate },
   modeSwitch: {
     flexShrink: 0,
     flexDirection: 'row',
@@ -525,15 +552,25 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
     backgroundColor: colors.surface,
   },
-  modeSwitchPressed: { opacity: 0.82 },
+  // Phase 1's tactile answer to the tap — the press state itself, so the
+  // feedback lands on touch-down rather than after an animation starts.
+  modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
   headline: {
     maxWidth: '73%',
     fontFamily: fonts.display,
     fontSize: 39,
     lineHeight: 45,
-    fontWeight: '700',
+    fontWeight: '600',
+    letterSpacing: -0.3,
     color: colors.ink,
+  },
+  heroSubtitle: {
+    maxWidth: '73%',
+    marginTop: spacing.sm,
+    fontSize: 16,
+    fontWeight: '500',
+    color: colors.homeSlate,
   },
   homeHeroArt: { position: 'absolute', zIndex: 0, width: 112, height: 124, right: -6, top: 47 },
   searchField: {
@@ -553,7 +590,15 @@ const styles = StyleSheet.create({
   searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
   serviceRows: { gap: spacing.sm },
   serviceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
+  // Same gold hairline as the "Switch to Worker" pill above, so the quick-
+  // service row reads as part of the same control family.
+  goldOutlineChip: { borderWidth: 1.25, borderColor: colors.gold },
   compactServiceChip: { paddingHorizontal: 10 },
+  // Fills whatever room is left in row 2 next to House Cleaning/TV Mounting —
+  // flexShrink keeps it from forcing a wrap to a 3rd row if space is tight,
+  // flexGrow claims any leftover space when there's room to spare, so it's
+  // always as wide as it can be without ever leaving this row.
+  otherChip: { flexGrow: 1, flexShrink: 1, justifyContent: 'center' },
   heroCard: {
     borderRadius: 22,
     backgroundColor: colors.forest,
