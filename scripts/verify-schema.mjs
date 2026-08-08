@@ -529,12 +529,52 @@ const MIGRATIONS = [
     ],
   },
   // phase44_backfill_bids_to_job_offers.sql and
-  // phase45_job_requests_to_job_offers.DRAFT.sql are deliberately NOT checked
-  // here. Both are pure data migrations: they add no schema object, so there
-  // is nothing for an existence probe to find, and row counts are not visible
-  // through RLS with the publishable key. Each file verifies itself instead —
-  // it recounts source and destination rows at the end and raises, rolling the
-  // whole transaction back, if they disagree.
+  // phase45_job_requests_to_job_offers.sql are deliberately NOT given groups of
+  // their own. Both are essentially data migrations: they add no probeable
+  // schema object, and row counts are not visible through RLS with the
+  // publishable key. Each file verifies itself instead — it recounts source and
+  // destination rows at the end and raises, rolling the whole transaction back,
+  // if they disagree.
+  //
+  // phase45's one piece of schema is the `draft` value it adds to the
+  // job_status enum, which no PostgREST probe can see either. It is covered
+  // transitively and reliably: phase46 REFUSES TO INSTALL if that value is
+  // missing (its section 1 raises), so the phase46 sentinel below existing is
+  // proof that phase45 ran first.
+  {
+    // ---------------------------------------------------------------------
+    // PHASE 3B. Same sentinel mechanism as phase43 above: PENDING while
+    // unapplied, mandatory the moment it lands, never a false PASS.
+    //
+    // The six legacy shims (create_bid, accept_bid, create_job_request,
+    // respond_job_request, job_bid_count, job_bid_counts) are deliberately NOT
+    // listed here as new checks. They keep their existing names and are still
+    // covered by the phase18/29/30/36/38 groups above, which continue to
+    // require them — which is the correct contract, because phase46 keeps them
+    // present and working rather than dropping them. When the deprecation
+    // trigger fires and they are finally removed, those groups are what has to
+    // be updated, deliberately, in that phase.
+    // ---------------------------------------------------------------------
+    file: 'phase46_offer_rpcs_and_rls.sql',
+    sentinel: ['rpc job_offer_rpcs_enabled()', () => checkRpc('job_offer_rpcs_enabled', {})],
+    checks: [
+      ['rpc create_offer()', () => checkRpc('create_offer', { p_amount_cents: 1 })],
+      ['rpc counter_offer()', () =>
+        checkRpc('counter_offer', { p_offer_id: ZERO_UUID, p_amount_cents: 1 })],
+      ['rpc decline_offer()', () => checkRpc('decline_offer', { p_offer_id: ZERO_UUID })],
+      ['rpc accept_offer()', () => checkRpc('accept_offer', { p_offer_id: ZERO_UUID })],
+      ['rpc my_pending_offers()', () => checkRpc('my_pending_offers', {})],
+      ['rpc job_offer_count()', () => checkRpc('job_offer_count', { p_job_id: ZERO_UUID })],
+      ['rpc job_offer_counts()', () =>
+        checkRpc('job_offer_counts', { p_job_ids: [ZERO_UUID] })],
+      ['messages.job_offer_id', () => checkColumn('messages', 'job_offer_id')],
+      // Still unreachable with the publishable key after phase46: the SELECT
+      // policy and grant are for `authenticated` only, so anon must stay shut
+      // out. This is the check that would catch a grant widened by mistake.
+      ['job_offers still not readable by anon', () =>
+        checkColumnRevoked('job_offers', 'id')],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

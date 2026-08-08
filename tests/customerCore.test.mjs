@@ -33,13 +33,13 @@ test('Customer Core keeps the existing route and service boundaries', async () =
 
   assert.match(postJob, /await createJob\(/);
   assert.match(postJob, /await updateJob\(/);
-  assert.match(postJob, /await createJobRequest\(/);
+  assert.match(postJob, /await createDirectOffer\(/);
   assert.match(postJob, /uploadJobAttachment/);
   assert.match(postJob, /uploadJobVideo/);
   assert.match(search, /await findWorkers\(/);
   assert.match(search, /runId !== runRef\.current/);
   assert.match(hub, /useMyJobsHub\(\)/);
-  assert.match(detail, /await acceptBid\(/);
+  assert.match(detail, /await acceptOffer\(/);
 });
 
 test('Post Job is a guarded four-step presentation over the existing form state', async () => {
@@ -101,9 +101,9 @@ test('My Jobs exposes recovery and a real Post Job route without dropping worker
 test('Customer job detail keeps evidence and honest lifecycle recovery states', async () => {
   const [detailSource, bidCardSource, detailHook, bidHook, reviewSection, chat] = await Promise.all([
     read('screens/ClientJobDetailScreen.tsx'),
-    read('components/BidWorkerCard.tsx'),
+    read('components/OfferCard.tsx'),
     read('hooks/useJobDetail.ts'),
-    read('hooks/useJobBids.ts'),
+    read('hooks/useJobOffers.ts'),
     read('components/ReviewSection.tsx'),
     read('screens/ChatScreen.tsx'),
   ]);
@@ -127,9 +127,9 @@ test('Customer job detail keeps evidence and honest lifecycle recovery states', 
   assert.match(detailHook, /setMissing\(false\)/);
   assert.match(detailHook, /runId !== runRef\.current/);
   assert.match(bidHook, /useFocusEffect/);
-  assert.match(bidHook, /setBids\(\[\]\)/);
+  assert.match(bidHook, /setOffers\(\[\]\)/);
   assert.match(bidCard, /review['"]? : ['"]reviews|review' : 'reviews/);
-  assert.match(bidCard, /bid\.status === 'pending'/);
+  assert.match(bidCard, /offer\.status === 'pending'/);
   assert.doesNotMatch(bidCard, /ratingCount === 1 \? 'job' : 'jobs'/);
   assert.match(reviewSection, /Couldn’t load your review/);
   assert.match(reviewSection, /cleanupDraftPhotos/);
@@ -163,7 +163,7 @@ test('Customer Home retains approved Emerald reference copy without adding paid-
     read('screens/WorkerSearchScreen.tsx'),
     read('screens/MyJobsHubScreen.tsx'),
     read('screens/ClientJobDetailScreen.tsx'),
-    read('components/BidWorkerCard.tsx'),
+    read('components/OfferCard.tsx'),
   ]);
   const customerCode = codeOnly(sources.join('\n'));
 

@@ -18,7 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { BidWorkerCard } from '../components/BidWorkerCard';
+import { OfferCard } from '../components/OfferCard';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
 import { JobProgress } from '../components/JobProgress';
@@ -30,19 +30,19 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { StatusBadge } from '../components/StatusBadge';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
-import { useJobBids } from '../hooks/useJobBids';
+import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { alertAsync } from '../lib/dialog';
 import {
-  acceptBid,
-  bestValueBidId,
-  BID_SORT_OPTIONS,
-  sortBids,
-  type BidSort,
-  type BidWithWorker,
-} from '../lib/bids';
+  acceptOffer,
+  bestValueOfferId,
+  OFFER_SORT_OPTIONS,
+  sortOffers,
+  type OfferSort,
+  type OfferWithWorker,
+} from '../lib/offers';
 import { jobStage } from '../lib/jobStage';
 import {
   categoryAccent,
@@ -70,11 +70,11 @@ export function ClientJobDetailScreen() {
   const { job, missing, refresh: refreshJob } = useOwnedJobDetail(params.job);
 
   const { user } = useAuth();
-  const { bids, loading, error, refresh: refreshBids } = useJobBids(job.id);
-  const [sort, setSort] = useState<BidSort>('value');
+  const { offers: bids, loading, error, refresh: refreshBids } = useJobOffers(job.id);
+  const [sort, setSort] = useState<OfferSort>('value');
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
-  const [pendingAccept, setPendingAccept] = useState<BidWithWorker | null>(null);
+  const [pendingAccept, setPendingAccept] = useState<OfferWithWorker | null>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [acceptedName, setAcceptedName] = useState('');
   const [worker, setWorker] = useState<Profile | null>(null);
@@ -194,8 +194,8 @@ export function ClientJobDetailScreen() {
     };
   }, [user]);
 
-  const sortedBids = useMemo(() => sortBids(pendingBids, sort), [pendingBids, sort]);
-  const bestId = useMemo(() => bestValueBidId(pendingBids), [pendingBids]);
+  const sortedBids = useMemo(() => sortOffers(pendingBids, sort), [pendingBids, sort]);
+  const bestId = useMemo(() => bestValueOfferId(pendingBids), [pendingBids]);
 
   async function onRefresh() {
     const runId = ++refreshRunRef.current;
@@ -254,23 +254,20 @@ export function ClientJobDetailScreen() {
   /**
    * Accepting a bid assigns the job and closes every other bid on it, so it
    * goes through the in-app confirmation rather than firing on one tap. The
-   * confirm button disables itself while accept_bid() is in flight, so a
+   * confirm button disables itself while accept_offer() is in flight, so a
    * second tap cannot send a second accept.
    */
-  function confirmAccept(bid: BidWithWorker) {
+  function confirmAccept(bid: OfferWithWorker) {
     if (!bid.worker || acceptingId || acceptingRef.current) return;
     setPendingAccept(bid);
   }
 
-  async function doAccept(bid: BidWithWorker) {
+  async function doAccept(bid: OfferWithWorker) {
     if (!bid.worker || acceptingRef.current) return;
     const acceptedJobId = job.id;
     acceptingRef.current = true;
     setAcceptingId(bid.id);
-    const { error } = await acceptBid({
-      jobId: job.id,
-      bidId: bid.id,
-    });
+    const { error } = await acceptOffer(bid.id);
     acceptingRef.current = false;
     if (!screenMountedRef.current) return;
     setAcceptingId(null);
@@ -536,7 +533,7 @@ export function ClientJobDetailScreen() {
               </View>
               {pendingBids.length > 1 && (
                 <SegmentedControl
-                  options={BID_SORT_OPTIONS}
+                  options={OFFER_SORT_OPTIONS}
                   value={sort}
                   onChange={setSort}
                   palette={emeraldColors}
@@ -545,9 +542,10 @@ export function ClientJobDetailScreen() {
 
               <View style={styles.bidList}>
                 {sortedBids.map((bid) => (
-                  <BidWorkerCard
+                  <OfferCard
                     key={bid.id}
-                    bid={bid}
+                    variant="list"
+                    offer={bid}
                     palette={emeraldColors}
                     isBestValue={bid.id === bestId && pendingBids.length > 1}
                     canAccept={canAccept}

@@ -35,7 +35,7 @@ import {
   JOB_CATEGORY_LABELS,
   type OpenJob,
 } from '../lib/jobs';
-import { createBid, fetchMyBidForJob, type Bid } from '../lib/bids';
+import { createMarketplaceOffer, fetchMyOfferForJob, type Offer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
@@ -67,7 +67,7 @@ export function JobDetailScreen() {
   // either is in flight, and repeated taps on the listed-price button cannot
   // stack a second create_bid call behind the first.
   const [takingListedPrice, setTakingListedPrice] = useState(false);
-  const [existingBid, setExistingBid] = useState<Bid | null>(null);
+  const [existingBid, setExistingBid] = useState<Offer | null>(null);
   const [checking, setChecking] = useState(true);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [confirmBidVisible, setConfirmBidVisible] = useState(false);
@@ -101,7 +101,7 @@ export function JobDetailScreen() {
       setChecking(false);
       return;
     }
-    fetchMyBidForJob(user.id, job.id).then(({ data }) => {
+    fetchMyOfferForJob(user.id, job.id).then(({ data }) => {
       if (active) {
         setExistingBid(data);
         setChecking(false);
@@ -126,7 +126,7 @@ export function JobDetailScreen() {
   async function placeBid(amountCents: number, pitch: string) {
     if (!user) return false;
 
-    const { data, error } = await createBid(user.id, {
+    const { data: offerId, error } = await createMarketplaceOffer({
       jobId: job.id,
       amountCents,
       message: pitch,
@@ -142,13 +142,19 @@ export function JobDetailScreen() {
       // already bid — resync so the form is replaced by the real bid rather
       // than inviting another attempt.
       if (error.code === '23505') {
-        const { data: mine } = await fetchMyBidForJob(user.id, job.id);
+        const { data: mine } = await fetchMyOfferForJob(user.id, job.id);
         setExistingBid(mine);
       }
       return false;
     }
 
-    if (data) setExistingBid(data);
+    // create_offer() returns the new offer's id, not the row — job_offers is
+    // RLS-locked to SELECT, so the authoritative row is read back rather than
+    // assembled client-side from what was just sent.
+    if (offerId) {
+      const { data: mine } = await fetchMyOfferForJob(user.id, job.id);
+      setExistingBid(mine);
+    }
     return true;
   }
 

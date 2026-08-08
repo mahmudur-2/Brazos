@@ -50,12 +50,13 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
 
     let active = true;
 
+    // The owner is asking "can I still edit or delete this?", which turns on
+    // whether anyone has engaged with the job. job_offer_count() answers that
+    // for any viewer without needing RLS to return the rows themselves, and it
+    // counts root offers so a countered negotiation still reads as one.
     async function loadCount() {
-      const { count, error } = await supabase
-        .from('bids')
-        .select('id', { count: 'exact', head: true })
-        .eq('job_id', jobId);
-      if (active && !error) setBidCount(count ?? 0);
+      const { data, error } = await supabase.rpc('job_offer_count', { p_job_id: jobId });
+      if (active && !error) setBidCount(typeof data === 'number' ? data : 0);
     }
     loadCount();
 
@@ -63,12 +64,12 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
       .channel(`job-owner-actions:${jobId}:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'bids', filter: `job_id=eq.${jobId}` },
+        { event: 'INSERT', schema: 'public', table: 'job_offers', filter: `job_id=eq.${jobId}` },
         loadCount
       )
       .on(
         'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'bids', filter: `job_id=eq.${jobId}` },
+        { event: 'DELETE', schema: 'public', table: 'job_offers', filter: `job_id=eq.${jobId}` },
         loadCount
       )
       .subscribe();

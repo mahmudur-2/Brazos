@@ -305,9 +305,16 @@ header as Gate 2.
 They have no job row and never will, and `job_offers.job_id` is NOT NULL, so
 migrating them would mean fabricating a job for a negotiation that never
 produced one. Their history remains in `messages`, which is the historical log
-by design. **Open question for Phase 3B:** whether `job_offers` should carry
-dead negotiations at all — if yes, `job_id` has to become nullable, which is a
-model change, not a backfill detail.
+by design.
+
+**RESOLVED in Phase 3B (final, not a gap):** legacy dead `job_requests` stay
+unmigrated and `job_offers.job_id` stays NOT NULL — but this is a statement
+about *legacy* rows only, not a rule about terminal offers. Going forward
+`job_offers` retains its own terminal rows normally (`accepted`, `declined`,
+`withdrawn`, `expired`, `superseded`), because each of those belongs to a real
+draft or public job and is structured negotiation history by design. The
+asymmetry exists solely because pre-unification dead requests have no job to
+attach to, and inventing one would be fabricating marketplace data.
 
 ---
 
@@ -421,14 +428,118 @@ types precisely so that swap is mechanical).
 
 ---
 
-## 10. Application order
+## 10. RLS on `job_offers` (Phase 3B — locked)
+
+```sql
+create policy "job_offers_select_party"
+  on public.job_offers for select
+  to authenticated
+  using (customer_id = auth.uid() or worker_id = auth.uid());
+
+grant select on public.job_offers to authenticated;
+revoke insert, update, delete on public.job_offers from public, anon, authenticated;
+```
+
+**One predicate, two behaviours.** `customer_id` is the job's owner, so a job
+owner matches every offer on their job — that is what makes the compare-offers
+surface work — while a competing worker matches only on `worker_id` and sees
+exclusively their own chain. There is no second policy to keep in sync.
+
+**`customer_id` on marketplace bids — confirmed.** It is populated on bid rows
+too, and always equals the job's `client_id`: phase43 declares it `NOT NULL`
+and pins it constant down a chain via the composite inheritance FK, phase44
+sourced it from `jobs.client_id` for all 25 migrated bids, and phase46's
+`create_offer()` sets it from the locked job row. Phase 3A flagged that nothing
+*enforced* the equality, leaving the policy resting on RPC discipline; phase46
+closes that with `job_offers_customer_owns_job_fkey`, so it is now a schema
+guarantee. No stop condition was hit.
+
+**No write policies at all.** Every mutation goes through
+`create_offer` / `counter_offer` / `decline_offer` / `accept_offer`, each of
+which validates `auth.uid()`, validates participant/owner authorization,
+validates the lifecycle state before acting, takes row locks, sets an explicit
+`search_path`, and carries an explicit `grant execute … to authenticated`
+(phase32 revoked the default). There is no client-side fallback path anywhere —
+`lib/acceptBidCompatibility.ts` was deleted with this phase.
+
+**Aggregate counts deliberately bypass RLS.** `job_offer_count` /
+`job_offer_counts` are `security definer` for the reason phase15 recorded: RLS
+would silently under-count for a browsing worker, and a bare integer exposes no
+amount, message or identity.
+
+**Lock order is `jobs` then `job_offers`, everywhere.** `accept_offer` updates
+every sibling offer on a job, so two concurrent accepts holding one offer row
+each would reach for the other's and deadlock. Serialising on the job row first
+makes that impossible, and it matches what `accept_bid()` already did.
+`counter_offer` follows the same order because it writes `jobs.budget_cents`.
+
+---
+
+## 11. Deprecation — the six legacy shims
+
+phase46 keeps `create_bid`, `accept_bid`, `create_job_request`,
+`respond_job_request`, `job_bid_count` and `job_bid_counts` alive under their
+exact original names, parameter lists and return types, with bodies that
+operate on `job_offers`. BRAZOS ships as an installed Expo binary; dropping
+them would break bidding and hiring on every phone that has not updated.
+
+**These are temporary. They are removed in the first phase that ships a version
+gate** — Expo update-gating or a store-side forced update — which is Phase 3C
+or later. That is the trigger: *the next phase that can enforce a minimum app
+version*, not a date, and not "eventually". They must not become a permanent
+second implementation, and they cannot drift into one: every shim delegates and
+none contains negotiation logic of its own.
+
+Removing them is a deliberate, self-contained task: drop the six functions, and
+update the phase18/29/30/36/38 groups in `scripts/verify-schema.mjs`, which
+currently require them to exist and are what would otherwise turn red.
+
+**One asymmetry, evidence-based.** A function shim cannot cover a table SELECT,
+and old builds read `bids` and `job_requests` directly.
+
+- `bids` — 25 live rows, real usage. `create_bid`/`accept_bid` therefore also
+  mirror into `bids` (same ids, which phase44 already guaranteed), so old builds
+  keep reading their own bids. **This is a deliberate, temporary exception to
+  "stop writing to the frozen tables"**, taken because the alternative is a
+  silent read break on live installs — the exact thing the shims were approved
+  to prevent. Nothing in the new app reads the mirror; `job_offers` is the only
+  source of truth. It retires with the shims.
+- `job_requests` — 0 live, 0 accepted, 1 dead legacy row (measured 2026-08-08).
+  No mirror is written. An old build can still send a direct offer but will not
+  render the resulting negotiation card. With zero production usage this is a
+  documented degradation, not a break, and mirroring a mutating single-row
+  negotiation would have meant re-implementing phase18's counter bookkeeping.
+
+---
+
+## 12. Application order
 
 | # | File | State | Notes |
 |---|---|---|---|
-| 1 | `phase43_job_offers_foundation.sql` | **final** | Structure only. One transaction. Zero behaviour change in the running app. |
-| 2 | `phase44_backfill_bids_to_job_offers.sql` | **final** | Data only. Idempotent; re-run at Phase 3B cutover to pick up bids written in between. |
-| 3 | `phase45_job_requests_to_job_offers.DRAFT.sql` | **held** | Blocked on §6's row-level check *and* on Phase 3B's UI. Cannot be run by accident. |
+| 1 | `phase43_job_offers_foundation.sql` | **APPLIED** 2026-08-08 | Structure only. Verified by a green `verify-schema` run, not a SQL Editor message. |
+| 2 | `phase44_backfill_bids_to_job_offers.sql` | **APPLIED** 2026-08-08 | 25/25 bids migrated, 24/24 accepted links set. |
+| 3 | `phase45_job_requests_to_job_offers.sql` | **final, not applied** | Gates cleared (§6). Must be applied BEFORE phase46. |
+| 4 | `phase46_offer_rpcs_and_rls.sql` | **final, not applied** | RPCs, RLS, shims, composite FK. Must be applied AFTER phase45. |
 
-Nothing in 1 or 2 changes what the app does: no RPC body, no policy except a
-strict narrowing of `jobs_select_open`, and both `bids` and `job_requests`
-remain authoritative until Phase 3B moves the writers.
+**Why 45 before 46, and not the other way round.** The default instinct is to
+put RPCs and RLS in place before data lands. Checked against the real
+dependency, the order is forced the other way: phase45 adds the `draft` value
+to the `job_status` enum and commits it, and phase46's `accept_offer()`
+references that value. Postgres refuses to use an enum value whose adding
+transaction has not committed, so phase46 cannot even be created first — its
+section 1 raises a clear error if the value is missing rather than failing
+obscurely later.
+
+The usual argument for RPCs-first does not apply here anyway: with
+`live_total = 0` and `accepted_total = 0`, phase45 migrates no rows and
+materializes no draft jobs on today's data. There is no window in which
+unreadable data sits waiting for a policy.
+
+**There is no phase47.** Everything Phase 3B needs fits in phase46 as one
+transaction, and splitting it would create an ordering problem rather than
+solve one: the RLS policy, the composite FK and the RPCs are interdependent
+(the policy's correctness depends on the FK; the shims depend on the RPCs), so
+a partial application is worse than none. phase46 is one `begin`/`commit` with
+its sentinel created last, so it either lands whole or not at all.
+
+Nothing in 1 or 2 changed what the app does. phase46 is the cutover.

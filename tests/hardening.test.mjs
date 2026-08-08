@@ -1,17 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync as fsExistsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
+const existsSync = (path) => fsExistsSync(join(root, path));
 
 const migration = read('supabase/phase29_security_hardening.sql');
 const executeGrants = read('supabase/phase32_function_execute_privileges.sql');
 const profiles = read('lib/profiles.ts');
 const jobs = read('lib/jobs.ts');
-const bids = read('lib/bids.ts');
+const offers = read('lib/offers.ts');
 const reviews = read('lib/reviews.ts');
 const storage = read('lib/storage.ts');
 const pushHook = read('hooks/usePushNotifications.ts');
@@ -73,29 +74,33 @@ test('job, bid, and review protected writes use server-validated RPCs', () => {
   assert.doesNotMatch(jobs, /\.from\('jobs'\)\s*\.update\(/);
   assert.doesNotMatch(jobs, /\.from\('jobs'\)\s*\.insert\(/);
   assert.doesNotMatch(jobs, /\.select\(['"]\*[,)]/);
-  assert.match(bids, /\.rpc\('create_bid'/);
-  assert.match(bids, /\.rpc\('accept_bid'/);
-  assert.doesNotMatch(bids, /\.from\('bids'\)\s*\.(?:insert|update)\(/);
+  assert.match(offers, /\.rpc\('create_offer'/);
+  assert.match(offers, /\.rpc\('accept_offer'/);
+  assert.match(offers, /\.rpc\('counter_offer'/);
+  assert.match(offers, /\.rpc\('decline_offer'/);
+  // Every mutation is an RPC. phase46 grants authenticated SELECT only on
+  // job_offers, so a direct write would be rejected by the database — this
+  // asserts the client never even tries, and never touches the frozen tables.
+  assert.doesNotMatch(offers, /\.from\('job_offers'\)\s*\.(?:insert|update|delete)\(/);
+  assert.doesNotMatch(offers, /\.from\('bids'\)/);
+  assert.doesNotMatch(offers, /\.from\('job_requests'\)/);
   assert.match(reviews, /\.rpc\('create_review'/);
   assert.doesNotMatch(reviews, /\.from\('reviews'\)\s*\.insert\(/);
 });
 
-test('missing accept_bid deployments have a constrained compatibility path', async () => {
-  const [bidsSource, compatibility, phase30] = await Promise.all([
-    read('lib/bids.ts'),
-    read('lib/acceptBidCompatibility.ts'),
-    read('supabase/phase30_accept_bid_rpc.sql'),
-  ]);
+// The accept_bid compatibility path is deliberately GONE (Phase 3B).
+// lib/acceptBidCompatibility.ts was deleted with accept_offer(): there is no
+// RPC left for it to fall back from, and its non-atomic read-then-update had a
+// real TOCTOU race. This asserts the absence rather than dropping the coverage
+// — a reintroduced client-side write path would fail here.
+test('offer acceptance has no client-side fallback write path', async () => {
+  const offersSource = read('lib/offers.ts');
 
-  assert.match(bidsSource, /error\?\.code === 'PGRST202'/);
-  assert.match(bidsSource, /acceptBidWithoutRpc\(params\)/);
-  assert.match(compatibility, /\.select\('id, worker_id, amount_cents, status'\)/);
-  assert.doesNotMatch(compatibility, /workerId|amountCents/);
-  assert.match(compatibility, /\.eq\('status', 'open'\)/);
-  assert.match(compatibility, /const rollback = async/);
-  assert.match(phase30, /create or replace function public\.accept_bid\(/i);
-  assert.match(phase30, /where id = p_job_id\s+for update;/i);
-  assert.match(phase30, /notify pgrst, 'reload schema'/i);
+  assert.doesNotMatch(offersSource, /PGRST202/);
+  assert.doesNotMatch(offersSource, /acceptBidWithoutRpc/);
+  assert.doesNotMatch(offersSource, /\.from\('job_offers'\)\s*\.(?:insert|update|delete)\(/);
+  assert.match(offersSource, /\.rpc\('accept_offer'/);
+  assert.strictEqual(existsSync('lib/acceptBidCompatibility.ts'), false);
 });
 
 test('missing transition_job_status deployments have a constrained compatibility path', async () => {

@@ -106,7 +106,7 @@ export type { JobCardProps } from './JobCard';
 //                  logic already exists and is verified in lib/storage.ts;
 //                  what is missing is the UI around it, and its shape is set
 //                  by the post-a-job wizard that Phase 4 builds.
-//  WorkerCard      Phase 5/9. components/BidWorkerCard.tsx already fills both
+//  WorkerCard      Phase 5/9. components/OfferCard.tsx already fills both
 //  BidCard         roles for today's screens; splitting or renaming it now
 //                  would churn a working component with no new consumer.
 //  ChecklistCard   Phase 6. No checklist schema exists.

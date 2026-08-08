@@ -1,37 +1,22 @@
-import { useEffect, useState } from 'react';
-import { fetchBidCounts } from '../lib/bids';
-
 /**
- * Bid counts for a list of jobs, keyed by job id.
+ * DEPRECATED — kept solely as a facade so the LOCKED screens stay byte-identical.
  *
- * Plural sibling of useBidCount: the same count, fetched once for a whole
- * page rather than once per card (see phase38 for why a `bids` embed cannot
- * be used here at all). Returns an empty map until the first read lands, and
- * an empty map — not zeroes — if the RPC is unavailable, so a card can tell
- * "no bids" apart from "not known yet" and simply omit the line.
+ * Phase 3B unified bids and job requests into `job_offers`, and the real hook
+ * is now `useOfferCounts`. This file is not a second implementation: it is a
+ * re-export under the old name.
+ *
+ * WHY IT SURVIVES THE RENAME
+ * `screens/HomeScreen.tsx` (screen 07) and `screens/BrowseJobsScreen.tsx`
+ * (screen 48) import `useBidCounts`, and both are LOCKED — untouchable in this
+ * phase, including their import lines. Renaming the file would have forced an
+ * edit to both. Keeping the old name costs one line and keeps `git diff` on
+ * those two screens empty, which is the point of the lock.
+ *
+ * The counts are marketplace bids only, which is exactly what those two feeds
+ * show: job_offer_count() counts root offers where offer_type =
+ * 'marketplace_bid', so a direct offer never inflates a public job's badge.
+ *
+ * Remove when the locked screens are next deliberately revised, and switch
+ * their imports to `useOfferCounts` then.
  */
-export function useBidCounts(jobIds: string[]) {
-  const [counts, setCounts] = useState<Record<string, number>>({});
-  // Effects compare dependencies by identity, and the caller rebuilds this
-  // array on every render; keying on the ids themselves stops the fetch from
-  // re-running on every unrelated re-render.
-  const key = jobIds.join(',');
-
-  useEffect(() => {
-    let active = true;
-    const ids = key ? key.split(',') : [];
-    if (ids.length === 0) {
-      setCounts({});
-      return;
-    }
-    fetchBidCounts(ids).then(({ data, error }) => {
-      if (!active) return;
-      setCounts(error ? {} : data);
-    });
-    return () => {
-      active = false;
-    };
-  }, [key]);
-
-  return counts;
-}
+export { useOfferCounts as useBidCounts } from './useOfferCounts';

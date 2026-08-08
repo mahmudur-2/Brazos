@@ -48,7 +48,23 @@ export type Message = {
    * the thread reads correctly as history even after the request moves on.
    */
   job_request_id: string | null;
-  request_event: 'created' | 'countered' | 'accepted' | 'declined' | 'closed' | null;
+  /**
+   * The offer revision this message records (phase46). Successor to
+   * job_request_id, which stays populated on rows written before the
+   * unification so historical threads keep rendering. Read this first and
+   * fall back to job_request_id — see offerIdOf() in lib/offers.ts.
+   */
+  job_offer_id: string | null;
+  request_event:
+    | 'created'
+    | 'countered'
+    | 'accepted'
+    | 'declined'
+    | 'closed'
+    | 'withdrawn'
+    | 'expired'
+    | 'superseded'
+    | null;
   request_amount_cents: number | null;
   /**
    * Unsend (phase25). Set once the sender unsends this message — content,
@@ -88,7 +104,7 @@ export const CHAT_TEMPLATES = [
 ] as const;
 
 const MESSAGE_COLUMNS =
-  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, request_event, request_amount_cents, unsent_at, created_at';
+  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
 
 /** Replace stored private-media references with short-lived display URLs. */
 export async function resolveMessageMedia(message: Message): Promise<Message> {

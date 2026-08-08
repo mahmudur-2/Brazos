@@ -137,7 +137,9 @@ export function mapJobRow(row: any): Job {
     budget_cents: row.budget_cents ?? null,
     status: row.status,
     created_at: row.created_at,
-    bid_count: row.bids?.[0]?.count ?? 0,
+    // job_offers since phase46; `bids` is read for rows fetched by any query
+    // still using the frozen embed, so neither shape renders a blank count.
+    bid_count: row.job_offers?.[0]?.count ?? row.bids?.[0]?.count ?? 0,
     assigned_worker_id: row.assigned_worker_id ?? null,
     final_amount_cents: row.final_amount_cents ?? null,
     completion_photo_url: row.completion_photo_url ?? null,
@@ -420,15 +422,28 @@ export async function canRehireWorker(clientId: string, workerId: string) {
 }
 
 /**
- * Fetch all jobs posted by `clientId`, newest first, with a bid count.
- * jobs<->bids has two FKs (bids.job_id and jobs.accepted_bid_id), so the
- * embed must be disambiguated to the bids.job_id relationship.
+ * Fetch all jobs posted by `clientId`, newest first, with an offer count.
+ * jobs<->job_offers has two FKs (job_offers.job_id and jobs.accepted_offer_id),
+ * so the embed must be disambiguated to the job_offers.job_id relationship —
+ * the same disambiguation the bids embed needed before the unification.
+ *
+ * DRAFT/DIRECT JOBS ARE EXCLUDED UNTIL THEY ARE ACCEPTED. A direct offer
+ * creates a real `jobs` row up front (that is where its title, media and
+ * location live), but until someone accepts it, it is a negotiation the
+ * customer has sent — not a job they have posted. Without this filter, every
+ * outgoing offer would appear in My Jobs as a phantom entry that no screen
+ * explains. This is Gate 2 from the architecture decision doc, and it has to
+ * ship before phase45 lands any draft row.
+ *
+ * Once accepted, the job becomes `assigned` and shows up normally, which is
+ * why the filter keys on status rather than on visibility alone.
  */
 export async function fetchJobsByClient(clientId: string) {
   const { data, error } = await supabase
     .from('jobs')
-    .select(`${JOB_COLUMNS}, bids!bids_job_id_fkey(count)`)
+    .select(`${JOB_COLUMNS}, job_offers!job_offers_job_id_fkey(count)`)
     .eq('client_id', clientId)
+    .not('status', 'eq', 'draft')
     .order('created_at', { ascending: false });
 
   return { data: (data ?? []).map(mapJobRow), error };
@@ -438,7 +453,7 @@ export async function fetchJobsByClient(clientId: string) {
 export async function fetchJobsAssignedToWorker(workerId: string) {
   const { data, error } = await supabase
     .from('jobs')
-    .select(`${JOB_COLUMNS}, bids!bids_job_id_fkey(count)`)
+    .select(`${JOB_COLUMNS}, job_offers!job_offers_job_id_fkey(count)`)
     .eq('assigned_worker_id', workerId)
     .order('created_at', { ascending: false });
 
@@ -449,7 +464,7 @@ export async function fetchJobsAssignedToWorker(workerId: string) {
 export async function fetchJobById(jobId: string) {
   const { data, error } = await supabase
     .from('jobs')
-    .select(`${JOB_COLUMNS}, bids!bids_job_id_fkey(count)`)
+    .select(`${JOB_COLUMNS}, job_offers!job_offers_job_id_fkey(count)`)
     .eq('id', jobId)
     .maybeSingle();
 

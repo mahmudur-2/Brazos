@@ -379,7 +379,7 @@ export type WorkerMatch = {
 };
 
 // --- Scoring ---------------------------------------------------------------
-// Same conventions as bidValueScore() in lib/bids.ts: a worker with no
+// Same conventions as offerValueScore() in lib/offers.ts: a worker with no
 // reputation data yet scores neutral, never zero, so a brand-new account is
 // not buried below one with a bad record. Weights sum to 1.
 

@@ -43,7 +43,7 @@ import {
   type Job,
   type JobCategory,
 } from '../lib/jobs';
-import { createJobRequest } from '../lib/jobRequests';
+import { createDirectOffer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { resolveCurrentPlace } from '../lib/geolocation';
@@ -435,7 +435,7 @@ export function PostJobScreen() {
 
     submittingRef.current = true;
     setSubmitting(true);
-    const { error: requestError } = await createJobRequest({
+    const { error: requestError } = await createDirectOffer({
       workerId: hireWorkerId,
       title: title.trim(),
       description: description.trim(),

@@ -24,7 +24,7 @@ import { AmountPrompt } from '../components/AmountPrompt';
 import { ChatBubble } from '../components/ChatBubble';
 import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { JobRequestCard } from '../components/JobRequestCard';
+import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { QuickReplies } from '../components/QuickReplies';
 import { ReactionPicker } from '../components/ReactionPicker';
@@ -51,8 +51,14 @@ import {
   unsendMessage,
   type Message,
 } from '../lib/messages';
-import { respondToJobRequest, type JobRequest } from '../lib/jobRequests';
-import { useJobRequests } from '../hooks/useJobRequests';
+import {
+  acceptOffer,
+  counterOffer,
+  declineOffer,
+  offerIdOf,
+  type OfferWithJob,
+} from '../lib/offers';
+import { useThreadOffers } from '../hooks/useJobOffers';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
 import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
@@ -103,18 +109,19 @@ export function ChatScreen() {
   // Long-press target for the message menu (React / Reply).
   const [menuTarget, setMenuTarget] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [counterTarget, setCounterTarget] = useState<JobRequest | null>(null);
+  const [counterTarget, setCounterTarget] = useState<OfferWithJob | null>(null);
   const [confirmResponse, setConfirmResponse] = useState<{
-    request: JobRequest;
+    request: OfferWithJob;
     action: 'accept' | 'decline';
   } | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [openingJobId, setOpeningJobId] = useState<string | null>(null);
 
-  const { byId: requestsById, refresh: refreshRequests } = useJobRequests(
-    jobId,
-    directThreadId
-  );
+  const {
+    byId: requestsById,
+    offers: threadOffers,
+    refresh: refreshRequests,
+  } = useThreadOffers(messages);
 
   // The direct thread's own row, for working out who the other person is when
   // there is no job to read it from.
@@ -212,7 +219,8 @@ export function ChatScreen() {
   const latestMessageIdByRequest = useMemo(() => {
     const map: Record<string, string> = {};
     for (const m of messages) {
-      if (m.job_request_id) map[m.job_request_id] = m.id;
+      const offerId = offerIdOf(m);
+      if (offerId) map[offerId] = m.id;
     }
     return map;
   }, [messages]);
@@ -297,17 +305,25 @@ export function ChatScreen() {
   }
 
   async function respondToRequest(
-    request: JobRequest,
+    request: OfferWithJob,
     action: 'accept' | 'decline' | 'counter',
     amountCents?: number
   ) {
     if (respondingId) return;
     setRespondingId(request.id);
-    const { error } = await respondToJobRequest(request.id, action, amountCents);
+    // One RPC per action rather than an action string the server has to
+    // re-parse. Each validates the turn, the lifecycle state and the counter
+    // cap itself, so a stale card cannot produce an invalid transition.
+    const { error } =
+      action === 'accept'
+        ? await acceptOffer(request.id)
+        : action === 'decline'
+          ? await declineOffer(request.id)
+          : await counterOffer(request.id, amountCents ?? 0);
     setRespondingId(null);
 
     if (error) {
-      await alertAsync('Could not update request', error.message);
+      await alertAsync('Could not update offer', error.message);
       // The RPC rejects stale turns, so resync rather than leaving the card
       // showing actions that no longer apply.
       await refreshRequests();
@@ -317,7 +333,7 @@ export function ChatScreen() {
     await refreshRequests();
     if (action === 'accept') {
       await alertAsync(
-        'Request accepted',
+        'Offer accepted',
         'The job is now assigned and has moved into My Jobs.'
       );
     }
@@ -330,11 +346,14 @@ export function ChatScreen() {
    * Jobs stack regardless of which tab Chat itself was reached from, so this
    * always goes through the tab-level parent rather than the local stack.
    */
-  async function openAcceptedJob(request: JobRequest) {
-    if (!request.created_job_id || !user || openingJobId) return;
-    const jobId = request.created_job_id;
+  async function openAcceptedJob(request: OfferWithJob) {
+    if (!user || openingJobId) return;
+    // Under the unified model the job always exists — a direct offer creates
+    // it as a draft up front — so there is no nullable created_job_id to
+    // guard, only the offer having actually been accepted.
+    const jobId = request.job_id;
 
-    if (user.id === request.client_id) {
+    if (user.id === request.customer_id) {
       // The client's screen needs the full job row (bids, status, etc.), not
       // just the id, so it's fetched before navigating.
       setOpeningJobId(request.id);
@@ -627,8 +646,9 @@ export function ChatScreen() {
             renderItem={({ item }) => {
               // A hire-request event renders as a negotiation card instead of
               // an ordinary bubble — same thread, no separate screen.
-              if (item.job_request_id) {
-                const request = requestsById[item.job_request_id];
+              const offerId = offerIdOf(item);
+              if (offerId) {
+                const request = requestsById[offerId];
                 const isOwn = item.sender_id === user?.id;
                 return (
                   <View
@@ -637,12 +657,17 @@ export function ChatScreen() {
                       isOwn ? styles.requestRowOwn : styles.requestRowOther,
                     ]}
                   >
-                    <JobRequestCard
+                    <OfferCard
+                      variant="thread"
                       message={item}
-                      request={request}
-                      isLatest={latestMessageIdByRequest[item.job_request_id] === item.id}
+                      offer={request}
+                      chain={threadOffers.filter(
+                        (o) => o.root_offer_id === request?.root_offer_id
+                      )}
+                      job={request?.job ?? null}
+                      isLatest={latestMessageIdByRequest[offerId] === item.id}
                       currentUserId={user?.id ?? ''}
-                      busy={respondingId === item.job_request_id}
+                      busy={respondingId === offerId}
                       onAccept={() =>
                         request && setConfirmResponse({ request, action: 'accept' })
                       }
@@ -651,7 +676,7 @@ export function ChatScreen() {
                       }
                       onCounter={() => request && setCounterTarget(request)}
                       onOpenJob={
-                        request?.created_job_id
+                        request?.status === 'accepted'
                           ? () => openAcceptedJob(request)
                           : undefined
                       }

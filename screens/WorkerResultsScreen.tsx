@@ -5,7 +5,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
-import { useBidCounts } from '../hooks/useBidCounts';
+import { useOfferCounts } from '../hooks/useOfferCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { resolveCurrentPlace } from '../lib/geolocation';
@@ -51,7 +51,7 @@ export function WorkerResultsScreen() {
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
   const { profile } = useProfile();
   const { jobs, loading: jobsLoading, error: jobsError } = useOpenJobs();
-  const bidCounts = useBidCounts(useMemo(() => jobs.map((j) => j.id), [jobs]));
+  const bidCounts = useOfferCounts(useMemo(() => jobs.map((j) => j.id), [jobs]));
 
   const myCategories = useMemo(
     () => new Set(profile?.categories ?? []),

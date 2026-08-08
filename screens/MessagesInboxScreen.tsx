@@ -18,7 +18,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
 import { conversationKey, conversationTarget, resolveOtherId } from '../lib/conversations';
-import { fetchMyPendingRequests } from '../lib/jobRequests';
+import { fetchMyPendingOffers } from '../lib/offers';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import {
   blockUser,
@@ -62,7 +62,7 @@ export function MessagesInboxScreen() {
   const [pendingByThread, setPendingByThread] = useState<Set<string>>(new Set());
 
   const loadPending = useCallback(async () => {
-    const { data } = await fetchMyPendingRequests();
+    const { data } = await fetchMyPendingOffers();
     setPendingByThread(
       new Set(
         data.map((r) =>

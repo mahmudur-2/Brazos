@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchJobsAssignedToWorker, fetchJobsByClient, type Job } from '../lib/jobs';
-import { fetchPendingBidsByWorker, type PendingBid } from '../lib/bids';
+import { fetchPendingOffersByWorker, type PendingOffer } from '../lib/offers';
 import { fetchProfilesByIds } from '../lib/profiles';
 import { useAuth } from './useAuth';
 
@@ -8,14 +8,14 @@ import { useAuth } from './useAuth';
  * Aggregates everything for the My Jobs hub:
  *  - posted: jobs the user posted as a client
  *  - working: jobs the user is the assigned worker on
- *  - pendingBids: the user's bids that are still pending
+ *  - pendingBids: the user's offers that are still live
  * Plus a name map (userId -> full_name) for showing counterparty names.
  */
 export function useMyJobsHub() {
   const { user } = useAuth();
   const [posted, setPosted] = useState<Job[]>([]);
   const [working, setWorking] = useState<Job[]>([]);
-  const [pendingBids, setPendingBids] = useState<PendingBid[]>([]);
+  const [pendingBids, setPendingBids] = useState<PendingOffer[]>([]);
   const [names, setNames] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export function useMyJobsHub() {
     const [postedRes, workingRes, bidsRes] = await Promise.all([
       fetchJobsByClient(user.id),
       fetchJobsAssignedToWorker(user.id),
-      fetchPendingBidsByWorker(user.id),
+      fetchPendingOffersByWorker(user.id),
     ]);
 
     if (runId !== runRef.current) return;
@@ -51,7 +51,7 @@ export function useMyJobsHub() {
     if (!bidsRes.error) setPendingBids(bidsRes.data);
 
     // Resolve counterparty names: assigned workers on posted jobs, clients on
-    // working jobs and pending-bid jobs.
+    // working jobs and live-offer jobs.
     const ids = [
       ...postedRes.data.map((j) => j.assigned_worker_id),
       ...workingRes.data.map((j) => j.client_id),

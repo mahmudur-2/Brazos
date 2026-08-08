@@ -2,13 +2,17 @@
 Updated: 2026-08-08
 
 ## Current phase
-Phase 3A — Unified offer data model + schema foundation. **CODE COMPLETE,
-NOT APPLIED.** Migration files are written and reviewed; none has been run
-against the remote database, which is the correct end state for 3A (the brief
-says output files only). `verify-schema.mjs` reports phase43's checks as
-PENDING / NOT APPLIED and every prior phase as OK — see "Gate status".
-Next exact task: apply phase43 + phase44, re-run the verifier, then Phase 3B
-(see "Exact next task" at the bottom).
+Phase 3B — Offer RPCs, RLS and application integration. **CODE-COMPLETE.**
+**Phase 3 overall is PARTIAL, not CLOSED.**
+
+phase43 and phase44 are applied and verified live. phase45 and phase46 are
+written, finalized and NOT applied — `verify-schema.mjs` reports every
+phase0–44 check OK and all ten phase46 checks as PENDING / NOT APPLIED.
+
+Phase 3 closes only when all three of these are true, and none of them has
+happened yet: (1) phase45 then phase46 applied manually in that order,
+(2) a post-apply `verify-schema` run showing full PASS with zero PENDING,
+(3) a real-device regression pass. See "Exact next task".
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -33,7 +37,7 @@ Next exact task: apply phase43 + phase44, re-run the verifier, then Phase 3B
   SQL Editor message), real Expo device mode-switch checklist all green (see
   Phase log entry below / "Manual verification" section for the checklist
   covered).
-- [~] 3 data · **3A PARTIAL** (this commit) · `job_offers` unification decided
+- [~] 3 data · **3A + 3B code-complete, phase 3 still PARTIAL** · `job_offers` unification decided
   and written: phase43 (structure, final), phase44 (bids backfill, final),
   phase45 (job_requests materialization, **DRAFT / held**). Decision doc:
   `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`. Nothing applied
@@ -201,20 +205,31 @@ per the master plan and were not built.
 under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
-## Migrations written but NOT applied (Phase 3A)
-- `phase43_job_offers_foundation.sql` — **final, ready to apply.** Structure
-  only, one transaction, sentinel (`job_offers_enabled()`) created last.
-- `phase44_backfill_bids_to_job_offers.sql` — **final, apply after phase43.**
-  Data only; idempotent; recounts and rolls itself back on any mismatch.
-- `phase45_job_requests_to_job_offers.DRAFT.sql` — **HELD, do not apply.**
-  Blocked on two gates: (1) the requirement-3 live-row check, which needs
-  database access this repo's publishable key does not have — the query to run
-  is in the decision doc; (2) sequencing behind Phase 3B's UI, because
-  `fetchJobsByClient()` has no status filter, so materializing draft jobs would
-  put phantom entries in every affected customer's My Jobs. The file refuses
-  to run without `set brazos.phase45_verified = 'yes'`.
+## Migrations written but NOT applied (Phase 3B)
+Apply in this order. Numeric order is also dependency order here.
+
+1. `phase45_job_requests_to_job_offers.sql` — **final.** Adds the `draft`
+   job_status value and commits it, then converts job_requests. With
+   live_total = 0 / accepted_total = 0 it migrates no rows on today's data;
+   its guards re-assert every requirement-3 condition at apply time so a row
+   created between now and the run cannot slip past.
+2. `phase46_offer_rpcs_and_rls.sql` — **final.** RPCs, RLS, composite FK,
+   realtime, and the six legacy shims. MUST follow phase45: accept_offer()
+   references `draft`, and Postgres refuses to use an enum value whose adding
+   transaction has not committed. Section 1 raises a clear error if run early.
+
+There is no phase47 — everything fits in phase46 as one transaction, and the
+policy, FK and RPCs are interdependent enough that a partial application would
+be worse than none.
 
 ## Migrations applied (verify-schema green)
+phase43 (`phase43_job_offers_foundation.sql`) + phase44
+(`phase44_backfill_bids_to_job_offers.sql`): **applied by the user via the
+Supabase SQL Editor and confirmed by a green `node scripts/verify-schema.mjs`
+run** — all six phase43 checks flipped from PENDING to OK on their own, which
+is the sentinel mechanism working as designed. phase44 confirmed separately by
+row counts: 25/25 bids migrated, 24/24 accepted links set — 2026-08-08.
+
 phase42 (`phase42_active_mode.sql`): **applied by the user via the Supabase
 SQL Editor, then confirmed via a green `node scripts/verify-schema.mjs` run**
 (all three phase42 checks OK) — 2026-08-08.
@@ -225,6 +240,25 @@ phase15 through phase39: all confirmed live via `node scripts/verify-schema.mjs`
 indirectly, since `BrowseJobsScreen`/`WorkerResultsScreen` call it successfully
 in the running app per source inspection; not independently re-verified via
 the script this pass.
+
+## Phase 3B test changes (deliberate, itemised)
+
+Baseline stays 212/214. Nothing lost coverage; assertions moved to the code
+that replaced what they pointed at.
+
+- `hardening.test.mjs` — "missing accept_bid deployments have a constrained
+  compatibility path" **replaced** by "offer acceptance has no client-side
+  fallback write path". The old test asserted the behaviour of
+  `lib/acceptBidCompatibility.ts`, which this phase deletes on purpose; the
+  new test asserts its absence and that `lib/offers.ts` contains no PGRST202
+  fallback and no direct write, so reintroducing one fails here.
+- `hardening.test.mjs` — the marketplace-writes test now reads
+  `lib/offers.ts` and requires all four offer RPCs plus no direct write to
+  `job_offers`, `bids` or `job_requests`.
+- `customerCore.test.mjs` — five assertions retargeted from deleted files to
+  their replacements: `createJobRequest`→`createDirectOffer`,
+  `acceptBid`→`acceptOffer`, `BidWorkerCard.tsx`→`OfferCard.tsx`,
+  `useJobBids.ts`→`useJobOffers.ts`, `setBids`→`setOffers`.
 
 ## Known issues
 - ~~Device verification of the Phase 1 catalog was NOT performed by the
@@ -271,6 +305,29 @@ the script this pass.
 - `components/SectionHeader.tsx` is dead code (never imported) — left in place per Phase 0 policy, candidate for Phase 13 deletion.
 
 ## Gate status
+
+Phase 3B (2026-08-08) — code-complete, phase45/46 not applied:
+- **tsc**: PASS — `npm run lint` exits 0, clean.
+- **eslint**: NOT RUN — still not installed, no config. Unchanged.
+- **tests**: **212/214 PASS — same total, same two pre-existing failures, zero
+  unexplained new ones.** Six assertions were deliberately retargeted and one
+  test deliberately replaced; see "Phase 3B test changes" below.
+- **verify-schema**: **PASS (pre-apply state, as specified).** Every phase0–44
+  check OK, all ten phase46 checks `PENDING — NOT APPLIED`, exit 0. Post-apply
+  contract: those ten become mandatory automatically and must all read OK.
+- **locked screens**: PASS — `HomeScreen.tsx` and `BrowseJobsScreen.tsx`
+  untouched, not even their imports. `hooks/useBidCounts.ts` survives as a
+  one-line deprecated re-export of `useOfferCounts` specifically so both stay
+  byte-identical.
+- **mode-smoke**: N/A — no navigation or mode change. OfferCard reads
+  `useModePerspective()` rather than taking a perspective prop.
+- **rls-probe**: N/A this session — phase46's policies are unapplied. Re-run
+  after applying, and specifically confirm a second worker cannot read another
+  worker's offer on the same job.
+- **device/simulator**: **NOT RUN — required before Phase 3 can close.**
+
+**Phase 3B gate: green for everything that can be checked before the
+migrations are applied. Phase 3 is NOT closed.**
 
 Phase 3A (2026-08-08) — code complete, migrations not applied:
 - **tsc**: PASS — `npm run lint` exits 0, clean.
@@ -509,33 +566,33 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   enum. `AppMode` is a hand-written union today, matching the DB constraint's
   two values exactly.
 
-## Exact next task (Phase 3B — apply, then RLS + guarded transitions)
+## Exact next task (apply Phase 3B, then close Phase 3)
 
-Phase 3A is code complete. Items 2 and 3 of the old Phase 3 list are done
-(privacy split via `job_locations`; the `job_offers` unification decided and
-written). What remains, in order:
+Phase 3B is code-complete. Nothing below has been done, and none of it can be
+done from an agent session.
 
-1. **User applies `phase43_job_offers_foundation.sql`** via the Supabase SQL
-   Editor, then `phase44_backfill_bids_to_job_offers.sql`, reading phase44's
-   NOTICE lines. Then re-run `node scripts/verify-schema.mjs` — the six
-   phase43 checks must flip from PENDING to OK on their own. Only that green
-   run counts as applied; the SQL Editor's "Success" message does not.
-2. **Run the requirement-3 live-row query** (in
-   `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md` §6) and report the
-   counts. Every column must be 0 except the three totals. phase45 stays held
-   until this passes AND the draft-job UI (or a `fetchJobsByClient()` status
-   filter) exists.
-3. **Sign-off needed before 3B writes any RPC:** the one-active-chain vs.
-   one-bid-ever decision (§4 of the decision doc). It loosens live behaviour
-   and is reversible in one line, but only cheaply so *before* data lands.
-4. RLS baseline for `job_offers` (it currently has RLS on with **zero
-   policies**, so it is unreadable by design), plus the missing
-   targeted-worker policy on `jobs` noted in Known issues.
-5. RPCs `accept_offer` / `advance_job_status`; move `create_bid`,
-   `accept_bid`, `create_job_request`, `respond_job_request` onto
-   `job_offers`; rename/drop `bids_job_id_fkey` and `jobs.accepted_bid_id`
-   alongside their callers; delete `lib/acceptBidCompatibility.ts`.
-6. The §H.1 job-lifecycle enum (`draft → published → …`) — 3A added only the
-   `draft` value phase45 needs, and only inside that held file.
-7. Regenerate database types (still do not exist), replace raw status
-   literals in touched code, retarget `StatusPill`'s local unions.
+1. **Apply `supabase/phase45_job_requests_to_job_offers.sql`** in the Supabase
+   SQL Editor. Read its NOTICE lines.
+2. **Apply `supabase/phase46_offer_rpcs_and_rls.sql`.** Must be second — it
+   raises a clear error if phase45 has not run, because `accept_offer()`
+   references the `draft` enum value phase45 commits.
+3. **Re-run `node scripts/verify-schema.mjs`.** All ten phase46 checks must
+   flip from PENDING to OK on their own. Only that green run counts as applied;
+   the SQL Editor's "Success" message does not.
+4. **Real-device regression pass**, at minimum: place a bid; the poster sees it
+   and the count is right; accept it and confirm the job assigns and every
+   other offer is superseded; send a direct offer from a worker profile;
+   counter it from the other side and confirm the turn flips live; accept it;
+   confirm My Jobs shows no phantom draft entry at any point.
+5. **RLS probe**: confirm a second worker cannot read another worker's offer on
+   the same job, and that the job owner can read all of them.
+
+**Only after 1–5 is Phase 3 CLOSED.** Until then it stays PARTIAL.
+
+Then Phase 4 (Post-a-job vertical slice). Carry forward, not part of Phase 3:
+- The six legacy shims are removed in the first phase that ships a version gate
+  (§11 of the decision doc), which also requires updating the phase18/29/30/36/38
+  groups in `verify-schema.mjs`.
+- Generated database types still do not exist; regenerate once a service-role
+  or local-Postgres path is approved, then retarget `StatusPill`'s local unions.
+- The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5).

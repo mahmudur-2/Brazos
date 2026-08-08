@@ -1,29 +1,29 @@
 -- ============================================================================
 -- BRAZOS V2 · Phase 45 · migrate `job_requests` into `job_offers`
 --
---                    *** DRAFT — NOT FINALIZED. DO NOT APPLY. ***
+-- FINALIZED 2026-08-08. Apply FIRST, before phase46. Safe to re-run.
 --
--- The `.DRAFT.sql` suffix and the interlock in section 0 are both deliberate:
--- this file cannot be run by pasting it into the SQL Editor. Two things must
--- happen first, and neither can be done from an agent session.
+-- Both Phase 3A gates are cleared:
 --
--- GATE 1 — the requirement-3 live-row check (see the architecture decision
---   doc, "Requirement 3"). The STRUCTURAL half is complete and PASSES: every
---   NOT NULL, no-default column on `jobs` and `job_locations` is derivable
---   from `job_requests` data, proven by the fact that respond_job_request()
---   already performs exactly this insert in production. The ROW-LEVEL half —
---   do the live rows actually satisfy it — has NOT been performed, because it
---   needs database access this repository's publishable key does not have.
---   Run the verification query in the architecture decision doc and read the
---   result before going further.
+-- GATE 1 — the requirement-3 live-row check. STRUCTURAL half already passed in
+--   3A (every NOT NULL, no-default column on `jobs`/`job_locations` is
+--   derivable from `job_requests`, proven by respond_job_request() performing
+--   this exact insert in production). ROW-LEVEL half run by the user against
+--   the live database on 2026-08-08: live_total = 0, accepted_total = 0,
+--   not_migrated_total = 1, every hard-stop column 0, and both
+--   chain-fidelity counts 0. The guards in section 2 re-assert all of it at
+--   apply time, so a row created between then and the run cannot slip past.
 --
--- GATE 2 — sequencing behind Phase 3B's UI. Applying this file makes a
---   draft/direct `jobs` row exist for every live direct offer. lib/jobs.ts's
---   fetchJobsByClient() selects a client's jobs with NO status filter, so the
---   moment this runs, every customer with a live outgoing offer sees a
---   phantom entry in My Jobs that no screen explains. This file must not be
---   applied until Phase 3B ships the surfaces that render a draft job, or
---   until fetchJobsByClient() excludes them.
+-- GATE 2 — sequencing behind the UI. lib/jobs.ts's fetchJobsByClient() now
+--   excludes unaccepted direct drafts, and that fix ships in the same commit
+--   sequence as this file. With live_total = 0 there is additionally no
+--   existing row that could produce a phantom My Jobs entry.
+--
+-- APPLY ORDER: phase45 THEN phase46. Section 1 adds the `draft` value to the
+--   job_status enum and commits it; phase46's accept_offer() references that
+--   value, and Postgres refuses to use an enum value added by a transaction
+--   that has not yet committed. That dependency, not convention, is what fixes
+--   the order.
 --
 -- ---------------------------------------------------------------------------
 -- WHAT IT DOES, WHEN IT IS EVENTUALLY RUN
@@ -56,28 +56,17 @@
 --   disagree by even one, the whole migration aborts rather than guessing.
 -- ============================================================================
 
--- 0. Interlock ---------------------------------------------------------------
+-- 0. Preconditions -----------------------------------------------------------
 --
--- Running this file requires the operator to assert, in the same session, that
--- both gates above are cleared, by issuing this ONCE before pasting the file:
---
---     set brazos.phase45_verified = 'yes';
---
--- Session-scoped deliberately (`set`, not `set local`) — this file spans three
--- transactions because ALTER TYPE ... ADD VALUE forces a commit boundary, and
--- a transaction-local setting would not survive it. It is not a password; it
--- is a speed bump that makes an accidental paste impossible and a deliberate
--- run self-documenting.
+-- The DRAFT interlock that stood here in Phase 3A is removed: both gates it
+-- guarded are cleared (see the header). The dependency checks below stay —
+-- they guard against running the files out of order, which is a different
+-- failure and still possible.
 
 begin;
 
 do $$
 begin
-  if coalesce(current_setting('brazos.phase45_verified', true), '') <> 'yes' then
-    raise exception
-      'phase45 is a DRAFT and is not cleared to run. Complete the requirement-3 live-row check and Phase 3B''s UI sequencing first, then re-run after: set brazos.phase45_verified = ''yes'';';
-  end if;
-
   if to_regclass('public.job_offers') is null then
     raise exception 'phase43_job_offers_foundation.sql has not been applied — run it first.';
   end if;
@@ -119,10 +108,6 @@ declare
   v_bad integer;
   v_detail text;
 begin
-  if coalesce(current_setting('brazos.phase45_verified', true), '') <> 'yes' then
-    raise exception 'phase45 interlock not set for this transaction.';
-  end if;
-
   -- Unmapped status values.
   select string_agg(distinct r.status, ', ') into v_detail
     from public.job_requests r
@@ -145,10 +130,28 @@ begin
   -- Participants must differ (job_offers_parties_distinct). job_requests has
   -- its own job_requests_no_self CHECK, so this should be vacuous — asserted
   -- because "should be" is not "is".
+  --
+  -- Scoped to the rows this migration actually converts. A declined/closed
+  -- legacy row is never read, never written and never becomes an offer, so a
+  -- defect in one is not a reason to block a migration that does not touch it.
   select count(*) into v_bad
-    from public.job_requests r where r.client_id = r.worker_id;
+    from public.job_requests r
+   where r.client_id = r.worker_id
+     and r.status in ('pending', 'countered', 'accepted');
   if v_bad > 0 then
-    raise exception '% job_request(s) have client_id = worker_id.', v_bad;
+    raise exception
+      '% live/accepted job_request(s) have client_id = worker_id.', v_bad;
+  end if;
+
+  -- Same scoping, same reason: amount and title are only load-bearing for a
+  -- row that becomes an offer or a job.
+  select count(*) into v_bad
+    from public.job_requests r
+   where r.status in ('pending', 'countered', 'accepted')
+     and (r.amount_cents <= 0 or btrim(coalesce(r.title, '')) = '' or r.category is null);
+  if v_bad > 0 then
+    raise exception
+      '% live/accepted job_request(s) have a non-positive amount, an empty title, or no category — none can be populated without inventing data.', v_bad;
   end if;
 
   -- Every LIVE request needs exactly one 'created' event to root its chain.
