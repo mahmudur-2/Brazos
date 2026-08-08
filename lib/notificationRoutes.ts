@@ -22,7 +22,13 @@ const TAB_FOR_SCREEN: Record<string, string> = {
   Chat: 'Messages',
   ClientJobDetail: 'MyJobs',
   WorkerJob: 'MyJobs',
-  JobDetail: 'Home',
+  // The worker bid screen. Routed through the SHARED MyJobs tab, not Home:
+  // since Phase 2, Home is the mode-defining tab and only the worker tree's
+  // Home stack registers JobDetail, so a customer-mode tap on this tab would
+  // silently land on Customer Home instead. MyJobs is mounted in both trees
+  // and registers JobDetail in both, so the link resolves in either mode.
+  // §F's real answer is a mode segment in the payload, which Phase 12 owns.
+  JobDetail: 'MyJobs',
   ProfileMain: 'Profile',
 };
 
@@ -103,7 +109,7 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
 
   // JobDetail takes an OpenJob, which is a strict subset of Job's fields.
   navigateWhenReady(() =>
-    navigationRef.navigate('Home', {
+    navigationRef.navigate('MyJobs', {
       screen: 'JobDetail',
       params: { job: job as OpenJob },
     })

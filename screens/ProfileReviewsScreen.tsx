@@ -106,7 +106,7 @@ export function ProfileReviewsScreen() {
   const total = summary?.total ?? 0;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title={firstName ? `${firstName}’s reviews` : 'Reviews'}
         onBack={() => navigation.goBack()}

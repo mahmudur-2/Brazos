@@ -635,7 +635,7 @@ export function PostJobScreen() {
         : 'Open to bids';
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title={isEditing ? 'Edit Job' : isHiring ? 'Send an Offer' : 'Post a Job'}
         onBack={handleBack}

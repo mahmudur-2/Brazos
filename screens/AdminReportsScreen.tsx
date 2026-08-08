@@ -112,7 +112,7 @@ export function AdminReportsScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title="Reports"
         subtitle="Moderation queue"

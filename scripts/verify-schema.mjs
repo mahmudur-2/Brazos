@@ -471,6 +471,23 @@ const MIGRATIONS = [
         checkColumnRevoked('worker_semantic_docs', 'source_text')],
     ],
   },
+  {
+    file: 'phase42_active_mode.sql',
+    checks: [
+      // get_my_active_mode() is `language sql` and selects profiles.active_mode
+      // directly, so Postgres refuses to create it unless that column exists.
+      // The function being here is therefore proof the COLUMN landed too —
+      // which matters, because active_mode is deliberately not publicly
+      // readable and so cannot be probed with checkColumn().
+      ['rpc get_my_active_mode()', () => checkRpc('get_my_active_mode', {})],
+      ['rpc set_active_mode()', () => checkRpc('set_active_mode', { p_mode: 'customer' })],
+      // The privacy half: which mode someone is in is nobody else's business,
+      // so active_mode must NOT be in phase29's public column grant. A column
+      // that reads back here means the grant was widened.
+      ['profiles.active_mode not publicly readable', () =>
+        checkColumnRevoked('profiles', 'active_mode')],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

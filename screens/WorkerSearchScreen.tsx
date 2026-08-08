@@ -40,7 +40,10 @@ import {
   type RankingMode,
   type WorkerMatch,
 } from '../lib/workerSearch';
-import type { HomeStackNavigation, WorkerSearchRouteParamList } from '../lib/navigation';
+import type {
+  CustomerHomeStackNavigation,
+  WorkerSearchRouteParamList,
+} from '../lib/navigation';
 import {
   colors,
   emeraldColors as EMERALD_PALETTE,
@@ -65,7 +68,7 @@ type SearchState =
   | { kind: 'results'; matches: WorkerMatch[]; categories: string[]; mode: RankingMode };
 
 export function WorkerSearchScreen() {
-  const navigation = useNavigation<HomeStackNavigation>();
+  const navigation = useNavigation<CustomerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerSearchRouteParamList, 'WorkerSearch'>>();
   const { user } = useAuth();
   const { height: windowHeight } = useWindowDimensions();
@@ -166,7 +169,7 @@ export function WorkerSearchScreen() {
     state.kind === 'results' ? state.categories : pinnedCategory ? [pinnedCategory] : [];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title="Find help"
         onBack={() => navigation.goBack()}

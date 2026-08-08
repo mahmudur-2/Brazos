@@ -126,7 +126,7 @@ export function WorkerProfileScreen() {
   const completion = completionPercent(profile?.completion_rate);
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Profile" onBack={() => navigation.goBack()} />
 
       {loading ? (

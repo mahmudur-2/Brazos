@@ -1,3 +1,4 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Job, JobCategory, OpenJob } from './jobs';
 import type { ChatTarget } from './messages';
@@ -61,11 +62,37 @@ export type OnboardingStackParamList = {
 
 export type OnboardingStackNavigation = NativeStackNavigationProp<OnboardingStackParamList>;
 
-// Screens stacked inside the Home tab — posting, plus the "explore/browse
-// open jobs" flow. Find Work is no longer its own tab; BrowseJobs/JobDetail
-// live here now so it's still reachable from Home ("Find Work" button and
-// the "Find work" link on the live-marketplace preview).
-export type HomeStackParamList = {
+// ===========================================================================
+// The mode split (BRAZOS_MASTER_PLAN.md §F, enforcement mechanism 1)
+// ===========================================================================
+//
+// There used to be one `HomeStackParamList` shared by Customer Home and Worker
+// Home, which is exactly why a customer tapping "View all" landed in the
+// worker marketplace: the two modes were the same stack, so nothing could
+// object. They are now two stacks with two types.
+//
+// The rule this buys: a screen types its navigation against the tree it lives
+// in, so `navigate('BrowseJobs')` from customer code is a compile error rather
+// than a mode leak, and `navigate('WorkerSearch')` from worker code likewise.
+// tsc is the enforcement — no lint rule, no code review, no runtime check.
+//
+// The Home tab is the mode-defining tab. The other four (Map, MyJobs,
+// Messages, Profile) are deliberately SHARED, one implementation each, mounted
+// in both trees: a Brazos account is simultaneously a customer and a worker on
+// different jobs, so its inbox, its job hub, its map and its profile are the
+// same surfaces in both modes. Duplicating them would be duplicating screens
+// to no end (§F "preserve shared routes"; §P.3 "do not create a second version
+// of an existing component or screen").
+
+/**
+ * The Home tab in CUSTOMER mode: posting a job and finding workers.
+ *
+ * Note what is absent, and cannot be reached from here: `BrowseJobs` (Worker
+ * Home), `WorkerResults` (the worker job feed) and `JobDetail` (the worker bid
+ * screen). Those are worker surfaces — EST. PAY, bid CTAs, payout figures —
+ * and a customer route into them is the leak §F exists to make impossible.
+ */
+export type CustomerHomeStackParamList = {
   HomeMain: undefined;
   /**
    * Doubles as the direct-offer flow: when hireWorkerId is present the form
@@ -88,13 +115,30 @@ export type HomeStackParamList = {
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string };
-  BrowseJobs: undefined;
-  JobDetail: { job: OpenJob };
   /**
    * Worker search. Opened blank from Home's search field, or pre-run with a
    * typed query / a tapped service chip.
    */
   WorkerSearch: { query?: string; category?: string } | undefined;
+};
+
+export type CustomerHomeStackNavigation =
+  NativeStackNavigationProp<CustomerHomeStackParamList>;
+
+/**
+ * The Home tab in WORKER mode: the job marketplace.
+ *
+ * `BrowseJobs` is Worker Home (atlas 48) and is this stack's ROOT, not a screen
+ * pushed onto the customer stack. That is the whole fix for "the Home tab sends
+ * worker users back to Customer Home" — popping this stack to its root lands on
+ * Worker Home, so the default tab-re-press behaviour is now correct instead of
+ * needing the listener that used to intercept it.
+ */
+export type WorkerHomeStackParamList = {
+  BrowseJobs: undefined;
+  JobDetail: { job: OpenJob };
+  WorkerProfile: { workerId: string; workerName?: string };
+  ProfileReviews: { userId: string; name?: string };
   /**
    * The spacious Worker job list — "View all", the two availability-card
    * filter pills, and Worker Home's own search bar all land here with a
@@ -113,7 +157,8 @@ export type HomeStackParamList = {
   };
 };
 
-export type HomeStackNavigation = NativeStackNavigationProp<HomeStackParamList>;
+export type WorkerHomeStackNavigation =
+  NativeStackNavigationProp<WorkerHomeStackParamList>;
 
 // Screens stacked inside the unified My Jobs hub tab. All job detail/progress
 // screens live here so hub cards navigate within the same stack.
@@ -216,6 +261,34 @@ export type ProfileStackParamList = {
 };
 
 export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParamList>;
+
+// ===========================================================================
+// The two tab trees
+// ===========================================================================
+//
+// Exactly one of these is mounted at a time (navigation/ModeShell.tsx), which
+// is §F's enforcement mechanism 2: a screen from the other tree cannot render
+// because it is not there. They carry the same five tabs in the same order so
+// the bottom bar is visually identical in both modes — only the Home tab's
+// stack differs, which is what "mode" means in navigation terms.
+
+/** The customer tree. §F's `CustomerParamList`. */
+export type CustomerParamList = {
+  Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
+  Map: NavigatorScreenParams<MapStackParamList> | undefined;
+  MyJobs: NavigatorScreenParams<MyJobsStackParamList> | undefined;
+  Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
+};
+
+/** The worker tree. §F's `WorkerParamList`. */
+export type WorkerParamList = {
+  Home: NavigatorScreenParams<WorkerHomeStackParamList> | undefined;
+  Map: NavigatorScreenParams<MapStackParamList> | undefined;
+  MyJobs: NavigatorScreenParams<MyJobsStackParamList> | undefined;
+  Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
+};
 
 // LegalDocument is only registered in ProfileStack, but gets a standalone
 // route-param type for the same reason as Chat/JobDetail: the screen only

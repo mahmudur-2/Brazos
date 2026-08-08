@@ -4,11 +4,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import {
   Avatar,
+  BOTTOM_NAV_TABS,
+  BottomNavPreview,
   Button,
   Card,
   Chip,
   EmptyState,
   Input,
+  JobCard,
   ListRow,
   MediaGrid,
   MoneyText,
@@ -25,6 +28,8 @@ import {
   type PaymentStatus,
 } from '../ui/primitives';
 import { ScreenStateView, type ScreenState } from '../ui/templates';
+import { ModePreview } from '../modes';
+import type { OpenJob } from '../lib/jobs';
 import { colors, layout, radius, spacing, type as typeScale } from '../ui/tokens';
 
 /**
@@ -81,6 +86,36 @@ const PAYMENT_STATUSES: PaymentStatus[] = [
   'refunded',
   'partially_refunded',
 ];
+
+/**
+ * Catalog fixtures for JobCard. Obviously-fake copy and a fixed timestamp, so
+ * nobody can mistake this for marketplace data — CLAUDE.md forbids inventing
+ * marketplace data, and a catalog row that reads like a real listing is exactly
+ * how a screenshot of it ends up somewhere it shouldn't.
+ */
+const CATALOG_JOB: OpenJob = {
+  id: 'catalog-job-1',
+  client_id: 'catalog-client',
+  title: 'Example job — replace a kitchen faucet',
+  description: 'Catalog fixture. Not a real posting.',
+  category: 'handyman',
+  location: 'Example neighborhood',
+  budget_cents: 18000,
+  status: 'open',
+  created_at: new Date('2026-08-08T12:00:00Z').toISOString(),
+  photos: [],
+  videos: [],
+};
+
+const CATALOG_JOB_NO_BUDGET: OpenJob = {
+  ...CATALOG_JOB,
+  id: 'catalog-job-2',
+  title:
+    'Example job with a title long enough to wrap onto a second line and prove the card still lines up',
+  category: 'cleaning',
+  location: null,
+  budget_cents: null,
+};
 
 const SCREEN_STATES: { label: string; state: Exclude<ScreenState, { kind: 'ready' }> }[] = [
   { label: 'loading (skeleton)', state: { kind: 'loading', rows: 2 } },
@@ -299,6 +334,65 @@ export function ComponentCatalog() {
           </View>
         </Section>
 
+        {/* --- Phase 2 primitives ------------------------------------------ */}
+
+        <Section title="BottomNav — tab states">
+          <Text style={styles.note}>
+            The real bar is drawn by React Navigation from bottomNavScreenOptions(); this preview
+            uses the same item renderer and constants, so a change to one shows here. Identical in
+            both modes by design — only the Home tab’s stack differs.
+          </Text>
+          {BOTTOM_NAV_TABS.map((tab) => (
+            <View key={tab.key} style={styles.navBox}>
+              <Text style={styles.navCaption}>active: {tab.label}</Text>
+              <BottomNavPreview activeKey={tab.key} />
+            </View>
+          ))}
+          <View style={styles.navBox}>
+            <Text style={styles.navCaption}>with a notched device’s bottom inset (34pt reported)</Text>
+            <BottomNavPreview activeKey="Home" insetBottom={34} />
+          </View>
+        </Section>
+
+        <Section title="JobCard — customer perspective">
+          <Text style={styles.note}>
+            EST. PRICE, no bid affordance, no distance. The perspective comes from ModeContext —
+            these two sections differ only in which mode they are previewed under, not in any prop.
+          </Text>
+          <ModePreview mode="customer">
+            <View style={styles.cardStack}>
+              <JobCard job={CATALOG_JOB} onPress={() => {}} bidCount={0} onBid={() => {}} />
+              <JobCard job={CATALOG_JOB_NO_BUDGET} onPress={() => {}} isOwn bidCount={3} />
+            </View>
+          </ModePreview>
+        </Section>
+
+        <Section title="JobCard — worker perspective">
+          <Text style={styles.note}>
+            EST. PAY, the bidding affordance, the exact radius distance, and the “Break the ice”
+            state on a job with no bids yet. Same component, same props.
+          </Text>
+          <ModePreview mode="worker">
+            <View style={styles.cardStack}>
+              <JobCard
+                job={CATALOG_JOB}
+                onPress={() => {}}
+                bidCount={0}
+                distanceMiles={1.4}
+                onBid={() => {}}
+              />
+              <JobCard
+                job={CATALOG_JOB_NO_BUDGET}
+                onPress={() => {}}
+                bidCount={3}
+                distanceMiles={4.8}
+                onBid={() => {}}
+              />
+              <JobCard job={CATALOG_JOB} onPress={() => {}} isOwn bidCount={2} onBid={() => {}} />
+            </View>
+          </ModePreview>
+        </Section>
+
         <Section title="Template states (all five)">
           <View style={styles.row}>
             {SCREEN_STATES.map((entry, index) => (
@@ -432,5 +526,26 @@ const styles = StyleSheet.create({
   footer: {
     ...typeScale.sub,
     color: colors.muted,
+  },
+  note: {
+    ...typeScale.sub,
+    color: colors.muted,
+  },
+  navBox: {
+    gap: spacing.xs,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.line,
+    overflow: 'hidden',
+    paddingTop: spacing.sm,
+    backgroundColor: colors.bg,
+  },
+  navCaption: {
+    ...typeScale.caption,
+    color: colors.muted,
+    paddingHorizontal: spacing.md,
+  },
+  cardStack: {
+    gap: layout.cardGap,
   },
 });

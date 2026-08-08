@@ -16,7 +16,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from '../components/Chip';
-import { useModeTransition } from '../components/ModeTransitionOverlay';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
 import { Skeleton } from '../components/Skeleton';
 import { useAuth } from '../hooks/useAuth';
@@ -35,7 +34,8 @@ import {
 } from '../lib/jobs';
 import { HOME_QUICK_SERVICES, MORE_SERVICES } from '../lib/skillCategories';
 import { greetingFor } from '../lib/time';
-import type { HomeStackNavigation } from '../lib/navigation';
+import type { CustomerHomeStackNavigation } from '../lib/navigation';
+import { useMode } from '../modes';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
 import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
 
@@ -66,10 +66,10 @@ export function HomeScreen() {
   const { profile } = useProfile();
   const { user } = useAuth();
   const { jobs, loading, error, refresh } = useOpenJobs();
-  const navigation = useNavigation<HomeStackNavigation>();
+  const navigation = useNavigation<CustomerHomeStackNavigation>();
   const reducedMotion = useReducedMotion();
   const design = useHomeDesignSettings();
-  const { start: startModeSwitch, busy: switching } = useModeTransition();
+  const { switchMode, switching } = useMode();
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -106,23 +106,36 @@ export function HomeScreen() {
     ],
   };
 
-  function goToFindWork() {
-    navigation.navigate('BrowseJobs');
-  }
-
-  // Same destination as goToFindWork above, but as the deliberate mode switch:
-  // the emerald panel covers the screen and the navigation runs underneath it.
-  // "View all" keeps the plain push — browsing open jobs is not a mode change.
-  function switchToWorker() {
-    startModeSwitch({
-      destination: 'worker',
-      onSwitch: () => navigation.navigate('BrowseJobs'),
+  // PHASE 2 WIRING (no visual change to this LOCKED screen).
+  //
+  // "View all" and the Live Nearby cards both used to push worker surfaces
+  // (Worker Home / the worker bid screen) onto the customer's own Home stack —
+  // the "customer View All crosses into worker behaviour" leak. Those routes no
+  // longer exist in CustomerHomeStackParamList, so this is now a compile-time
+  // guarantee, not a convention.
+  //
+  // Until Phase 8 builds the customer-safe MarketJobPreview route (§E/§F), the
+  // honest behaviour for a customer asking to see the open-job marketplace is
+  // §F's cross-mode rule: never switch silently, always confirm. switchMode()
+  // is the only path, so the panel plays, the mode persists, and the stacks
+  // reset — none of which the old plain push did.
+  function browseOpenJobs() {
+    void switchMode('worker', {
+      confirm: {
+        title: 'Switch to Worker Mode?',
+        message:
+          'Browsing every open job happens in Worker Mode, where you can bid on them. Your posted jobs stay exactly where they are.',
+        confirmText: 'Switch',
+      },
     });
   }
 
-  function openJob(job: OpenJob) {
-    navigation.navigate('JobDetail', { job });
+  // The mode-switch pill. Same deliberate switch as before — now through the
+  // one authoritative switchMode() rather than a navigate() dressed up as one.
+  function switchToWorker() {
+    void switchMode('worker');
   }
+
 
   // The "Post a job" CTA's own entry point — carries over whatever the
   // customer already typed in the search field so a fresh post doesn't start
@@ -348,7 +361,7 @@ export function HomeScreen() {
                 <Text style={styles.mapPillText}>View map</Text>
               </Pressable>
               <Pressable
-                onPress={goToFindWork}
+                onPress={browseOpenJobs}
                 style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
                 accessibilityRole="button"
                 accessibilityLabel="View all open jobs"
@@ -388,7 +401,7 @@ export function HomeScreen() {
                     isOwn={!!user && user.id === job.client_id}
                     bidCount={bidCounts[job.id]}
                     similarToday={similarPostedToday(jobs, job)}
-                    onPress={() => openJob(job)}
+                    onPress={browseOpenJobs}
                   />
                 ))}
               </View>

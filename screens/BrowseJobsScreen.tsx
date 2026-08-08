@@ -16,7 +16,6 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { FadeIn } from '../components/FadeIn';
-import { useModeTransition } from '../components/ModeTransitionOverlay';
 import { PulseDot } from '../components/PulseDot';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useBidCounts } from '../hooks/useBidCounts';
@@ -27,7 +26,8 @@ import { resolveCurrentPlace } from '../lib/geolocation';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
 import { formatBudget, jobMatchesSkills, type OpenJob } from '../lib/jobs';
 import { greetingFor } from '../lib/time';
-import type { HomeStackNavigation } from '../lib/navigation';
+import type { WorkerHomeStackNavigation } from '../lib/navigation';
+import { useMode } from '../modes';
 import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
@@ -75,10 +75,10 @@ function startOfComparableJobs(jobs: OpenJob[], categories: Set<string>): OpenJo
  *   - A favorite/heart toggle on each card — there is no saved-jobs table.
  */
 export function BrowseJobsScreen() {
-  const navigation = useNavigation<HomeStackNavigation>();
+  const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { profile } = useProfile();
   const { jobs, loading, error, refresh } = useOpenJobs();
-  const { start: startModeSwitch, busy: switching } = useModeTransition();
+  const { switchMode, switching } = useMode();
   const { availability, setAvailability } = useWorkerAvailability();
   const [refreshing, setRefreshing] = useState(false);
   const [query, setQuery] = useState('');
@@ -164,15 +164,16 @@ export function BrowseJobsScreen() {
     setRefreshing(false);
   }
 
-  // Worker Home is pushed above Customer Home in this same stack, so the
-  // return trip is a pop — Customer Home is already mounted underneath and
-  // keeps its scroll position and loaded feed. Runs under the emerald panel.
-  // Availability is untouched by this — it is a separate, local preference.
+  // PHASE 2 WIRING (no visual change to this LOCKED screen).
+  //
+  // Worker Home used to be a route pushed above Customer Home on one shared
+  // stack, so "switch to Customer" was a popToTop() — which meant the Home
+  // tab's own re-press could perform the same pop and silently change mode.
+  // It is now the root of its own tree, and switchMode() swaps trees: the
+  // confirmation, the persisted active_mode and the stack reset all come with
+  // it. Availability is untouched by this — it is a separate preference.
   function switchToCustomer() {
-    startModeSwitch({
-      destination: 'customer',
-      onSwitch: () => navigation.popToTop(),
-    });
+    void switchMode('customer');
   }
 
   function submitSearch() {

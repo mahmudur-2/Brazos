@@ -15,10 +15,12 @@
  *
  * §I's cap: "~25 — hard cap; adding a 26th requires a justification line in
  * BUILD_STATE". §I's own enumerated list is 26 items; the justification line
- * is recorded in BRAZOS_BUILD_STATE.md. Of those 26, 17 are available here.
- * The remaining 9 are deliberately NOT built in Phase 1 — each is blocked on
- * a later phase's context, and building a speculative shape now is how you get
- * a primitive nobody can use. See the DEFERRED block at the bottom.
+ * is recorded in BRAZOS_BUILD_STATE.md. Of those 26, 19 are available here —
+ * Phase 1 shipped 17, and Phase 2 added the two that were blocked on
+ * ModeContext (BottomNav, JobCard). The remaining 7 are deliberately still
+ * unbuilt: each is blocked on a later phase's context, and building a
+ * speculative shape now is how you get a primitive nobody can use. See the
+ * DEFERRED block at the bottom.
  */
 
 // --- Re-exported existing implementations (consolidated, not duplicated) ---
@@ -71,21 +73,35 @@ export { StepHeader } from './StepHeader';
 export { MediaGrid } from './MediaGrid';
 export type { MediaItem } from './MediaGrid';
 
+// --- Built in Phase 2 (the two Phase 1 deferred on ModeContext) -----------
+
+/**
+ * §I "BottomNav". The tab bar's whole visual language in one place, consumed by
+ * both navigator trees and by the dev catalog. React Navigation still draws the
+ * real bar — see the file header for why that is deliberate rather than a
+ * shortcut.
+ */
+export {
+  BOTTOM_NAV_TABS,
+  BottomNavItem,
+  BottomNavPreview,
+  bottomNavHeight,
+  bottomNavScreenOptions,
+  TAB_BAR_CONTENT_HEIGHT,
+  TAB_BAR_SAFE_BOTTOM,
+  type BottomNavTabKey,
+} from './BottomNav';
+
+/** §I "JobCard (mode-aware)". Perspective comes from ModeContext; there is no
+ *  prop for it, by design. */
+export { JobCard } from './JobCard';
+export type { JobCardProps } from './JobCard';
+
 // --- DEFERRED, with the phase each is genuinely blocked on ----------------
 //
 // Not oversights. Each of these needs context Phase 1 does not have, and §L
 // forbids implementing future business logic to complete a primitive.
 //
-//  BottomNav       Phase 2. The tab bar belongs to the navigator, not a
-//                  component library, and Phase 2 makes it mode-aware.
-//                  Extracting it now would touch the chrome that renders on
-//                  LOCKED screens 07/48 for no gain.
-//  JobCard         Phase 2. §I requires its perspective to come from
-//                  ModeContext ("never a hand-passed prop"). ModeContext does
-//                  not exist yet — building JobCard first would either invent
-//                  that context early or bake in the prop §I forbids.
-//                  components/WorkerJobCard.tsx + BrowseJobCard.tsx serve
-//                  today's screens meanwhile.
 //  MediaUploader   Phase 4, which lists it explicitly. The failure-safe upload
 //                  logic already exists and is verified in lib/storage.ts;
 //                  what is missing is the UI around it, and its shape is set

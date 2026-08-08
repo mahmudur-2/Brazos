@@ -12,13 +12,16 @@ import { resolveCurrentPlace } from '../lib/geolocation';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
 import { jobMatchesSkills, type OpenJob } from '../lib/jobs';
 import { geocodeQuery } from '../lib/reverseGeocode';
-import type { HomeStackNavigation, HomeStackParamList } from '../lib/navigation';
+import type {
+  WorkerHomeStackNavigation,
+  WorkerHomeStackParamList,
+} from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
 
 /** Kept in sync with BrowseJobsScreen's own "within 5 miles" pill. */
 export const NEARBY_RADIUS_MILES = 5;
 
-const MODE_TITLES: Record<HomeStackParamList['WorkerResults']['mode'], string> = {
+const MODE_TITLES: Record<WorkerHomeStackParamList['WorkerResults']['mode'], string> = {
   all: 'Available Jobs',
   skills: 'Skill Matches',
   nearby: `Jobs Within ${NEARBY_RADIUS_MILES} Miles`,
@@ -44,8 +47,8 @@ type GeoState = 'loading' | 'ready' | 'denied' | 'unavailable';
  * on zero results, and is never labeled "within N miles" when it does.
  */
 export function WorkerResultsScreen() {
-  const navigation = useNavigation<HomeStackNavigation>();
-  const { params } = useRoute<RouteProp<HomeStackParamList, 'WorkerResults'>>();
+  const navigation = useNavigation<WorkerHomeStackNavigation>();
+  const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
   const { profile } = useProfile();
   const { jobs, loading: jobsLoading, error: jobsError } = useOpenJobs();
   const bidCounts = useBidCounts(useMemo(() => jobs.map((j) => j.id), [jobs]));
@@ -211,7 +214,7 @@ export function WorkerResultsScreen() {
 }
 
 function emptyTitle(
-  mode: HomeStackParamList['WorkerResults']['mode'],
+  mode: WorkerHomeStackParamList['WorkerResults']['mode'],
   geoState: GeoState,
   jobsError: string | null
 ): string {
@@ -225,7 +228,7 @@ function emptyTitle(
 }
 
 function emptyBody(
-  mode: HomeStackParamList['WorkerResults']['mode'],
+  mode: WorkerHomeStackParamList['WorkerResults']['mode'],
   geoMessage: string | null,
   query?: string
 ): string {

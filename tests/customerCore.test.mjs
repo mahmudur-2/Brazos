@@ -9,17 +9,25 @@ function codeOnly(source) {
 }
 
 test('Customer Core keeps the existing route and service boundaries', async () => {
-  const [app, navigation, postJob, search, hub, detail] = await Promise.all([
-    read('App.tsx'),
-    read('lib/navigation.ts'),
-    read('screens/PostJobScreen.tsx'),
-    read('screens/WorkerSearchScreen.tsx'),
-    read('screens/MyJobsHubScreen.tsx'),
-    read('screens/ClientJobDetailScreen.tsx'),
-  ]);
+  // Phase 2 moved route registration out of App.tsx into the two mode trees
+  // plus the stacks they share. The boundary being asserted is unchanged —
+  // these routes must still exist and still be declared in lib/navigation.ts —
+  // only the file that registers them moved.
+  const [customerRoot, workerRoot, shared, navigation, postJob, search, hub, detail] =
+    await Promise.all([
+      read('navigation/CustomerRoot.tsx'),
+      read('navigation/WorkerRoot.tsx'),
+      read('navigation/sharedStacks.tsx'),
+      read('lib/navigation.ts'),
+      read('screens/PostJobScreen.tsx'),
+      read('screens/WorkerSearchScreen.tsx'),
+      read('screens/MyJobsHubScreen.tsx'),
+      read('screens/ClientJobDetailScreen.tsx'),
+    ]);
 
+  const registrations = customerRoot + workerRoot + shared;
   for (const route of ['PostJob', 'WorkerSearch', 'MyJobsHub', 'ClientJobDetail']) {
-    assert.match(app, new RegExp(`name=["']${route}["']`));
+    assert.match(registrations, new RegExp(`name=["']${route}["']`));
     assert.match(navigation, new RegExp(`\\b${route}\\b`));
   }
 

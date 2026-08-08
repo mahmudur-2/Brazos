@@ -171,21 +171,35 @@ test('Terms & Privacy opens the route once, and cannot double-push', () => {
   assert.match(setup, /onPress=\{openLegal\}/);
 });
 
-test('the landing choice routes to the existing screens, and creates none', () => {
-  // BrowseJobs already lives in HomeStack; this only navigates to it.
-  assert.match(app, /navigationRef\.navigate\('Home', \{ screen: 'BrowseJobs' \}\)/);
+test('the landing choice resolves a mode, and creates no screen', () => {
+  // Phase 2: "Start in: Find work" is a MODE choice, not a one-shot navigate.
+  // It used to push BrowseJobs onto the shared customer Home stack, which is
+  // the same mechanism that made mode a navigation illusion. Worker Home is
+  // now the root of the worker tree, and the landing preference simply decides
+  // which tree the app opens in.
+  assert.match(read('modes/types.ts'), /export function modeFromLanding\(landing: 'hire' \| 'work'\)/);
+  assert.match(read('modes/ModeProvider.tsx'), /modeFromLanding\(landingPreference\)/);
   assert.match(read('lib/navigation.ts'), /BrowseJobs: undefined;/);
-  assert.match(app, /<HomeStack\.Screen name="BrowseJobs" component=\{BrowseJobsScreen\} \/>/);
-  // Hire help is simply MainTabs' own default tab — nothing to navigate to.
-  assert.match(app, /if \(consumePendingLanding\(\) !== 'work'\) return;/);
+  assert.match(
+    read('navigation/WorkerRoot.tsx'),
+    /<WorkerHomeStack\.Screen name="BrowseJobs" component=\{BrowseJobsScreen\} \/>/
+  );
+  // Hire help is simply DEFAULT_MODE — nothing to navigate to, as before.
+  assert.match(read('modes/types.ts'), /export const DEFAULT_MODE: AppMode = 'customer';/);
 });
 
-test('the landing handoff is consumed once', () => {
+test('the landing handoff is consumed once, before anything can await', () => {
   const landing = read('lib/setupLanding.ts');
   assert.match(landing, /const landing = pending;\s*\n\s*pending = null;\s*\n\s*return landing;/);
-  // Otherwise a tab remount would yank the user back to BrowseJobs later.
-  assert.match(app, /\}, \[\]\);/);
-  assert.match(app, /return \(\) => cancelAnimationFrame\(frame\);/);
+  // Read synchronously at the top of the resolution effect: an await before it
+  // would let a second pass interleave and take the same one-shot value.
+  const provider = read('modes/ModeProvider.tsx');
+  assert.ok(
+    provider.indexOf('consumePendingLanding()') < provider.indexOf('await Promise.all'),
+    'the landing must be taken before the first await'
+  );
+  // And exactly one consumer exists, so a remount cannot replay it.
+  assert.equal(provider.split('consumePendingLanding()').length - 1, 1);
 });
 
 // ---------------------------------------------------------------------------
@@ -454,7 +468,10 @@ test('completion is announced, not only animated', () => {
 test('no animation writes state after the screen is gone', () => {
   assert.match(setup, /mounted\.current = false;/);
   assert.match(perms, /mounted\.current = false;/);
-  assert.match(app, /return \(\) => cancelAnimationFrame\(frame\);/);
+  // App.tsx's requestAnimationFrame landing jump is gone with the mechanism it
+  // served (see "the landing choice resolves a mode"); the equivalent guard is
+  // now the resolution effect's own `active` flag.
+  assert.match(read('modes/ModeProvider.tsx'), /if \(!active\) return;/);
 });
 
 // ---------------------------------------------------------------------------
