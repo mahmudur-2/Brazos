@@ -48,7 +48,7 @@ export function PulseDot({ color, size = 10 }: { color: string; size?: number })
       { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1.3] }) },
     ],
   };
-  const haloSize = size * 1.4;
+  const haloSize = size * 1.8;
 
   return (
     <View style={[styles.wrap, { width: haloSize, height: haloSize }]}>

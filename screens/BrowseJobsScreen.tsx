@@ -38,7 +38,7 @@ import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 const WORKER_HOME_TOOLBOX = require('../assets/brand/worker-home-toolbox.png');
 /** height / width of worker-home-toolbox.png (395x320), for aspectRatio. */
 const TOOLBOX_ASPECT_RATIO = 320 / 395;
-const TOOLBOX_WIDTH = 132;
+const TOOLBOX_WIDTH = 136;
 
 // The same bright green Customer Home's "Live Nearby" indicator uses
 // (HomeScreen.tsx's liveDot) — one shared "this is live" green.
@@ -267,31 +267,33 @@ export function BrowseJobsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Search"
         >
-          <Ionicons name="arrow-forward-circle" size={26} color={colors.emerald} />
+          <Ionicons name="arrow-forward-circle" size={22} color={colors.emerald} />
         </Pressable>
       </View>
 
       {/* --- Availability + earnings ------------------------------------------- */}
       <View style={styles.banner}>
         <View style={styles.bannerColumns}>
-          <View style={styles.bannerCol}>
-            <Text style={styles.bannerEyebrow}>AVAILABLE NOW</Text>
-            <View style={styles.availabilityRow}>
-              <Text style={styles.bannerBig} numberOfLines={1} maxFontSizeMultiplier={1.2}>
-                {isOffline ? 'Offline' : 'Online'}
-              </Text>
-              <Switch
-                value={!isOffline}
-                onValueChange={(next) => setAvailability(next ? 'online' : 'offline')}
-                trackColor={{ true: AVAILABILITY_ONLINE_COLOR, false: 'rgba(255,255,255,0.28)' }}
-                thumbColor={colors.white}
-                ios_backgroundColor="rgba(255,255,255,0.28)"
-                accessibilityLabel="Availability"
-                accessibilityHint={isOffline ? 'Currently offline. Turns availability on.' : 'Currently online. Turns availability off.'}
-              />
+          <View style={styles.bannerColLeft}>
+            <View style={styles.bannerColTopBlock}>
+              <Text style={styles.bannerEyebrow}>AVAILABLE NOW</Text>
+              <View style={styles.availabilityRow}>
+                <Text style={styles.bannerBig} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                  {isOffline ? 'Offline' : 'Online'}
+                </Text>
+                <Switch
+                  value={!isOffline}
+                  onValueChange={(next) => setAvailability(next ? 'online' : 'offline')}
+                  trackColor={{ true: AVAILABILITY_ONLINE_COLOR, false: 'rgba(255,255,255,0.28)' }}
+                  thumbColor={colors.white}
+                  ios_backgroundColor="rgba(255,255,255,0.28)"
+                  accessibilityLabel="Availability"
+                  accessibilityHint={isOffline ? 'Currently offline. Turns availability on.' : 'Currently online. Turns availability off.'}
+                />
+              </View>
             </View>
             <View style={styles.statusRow}>
-              <PulseDot color={statusColor} size={9} />
+              <PulseDot color={statusColor} size={10} />
               <Text style={styles.bannerColLabel} numberOfLines={1}>
                 {isOffline ? 'Not visible to customers' : 'Visible to customers'}
               </Text>
@@ -300,12 +302,20 @@ export function BrowseJobsScreen() {
 
           <View style={styles.bannerDivider} />
 
-          <View style={styles.bannerCol}>
-            <Text style={styles.bannerEyebrow}>POTENTIAL EARNINGS</Text>
-            <Text style={styles.bannerBig} numberOfLines={1} maxFontSizeMultiplier={1.2}>
-              {stats.count === 0 ? '$0' : formatBudget(stats.cents)}
-            </Text>
-            <Text style={styles.bannerColLabel} numberOfLines={2}>
+          <View style={styles.bannerColRight}>
+            <View style={styles.bannerColTopBlock}>
+              <Text style={[styles.bannerEyebrow, styles.bannerEyebrowTwoLine]}>
+                {'POTENTIAL\nEARNINGS'}
+              </Text>
+              <Text
+                style={[styles.bannerBig, styles.bannerAmountOverride]}
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.2}
+              >
+                {stats.count === 0 ? '$0' : formatBudget(stats.cents)}
+              </Text>
+            </View>
+            <Text style={[styles.bannerColLabel, styles.bannerJobsLabelSpacing]} numberOfLines={2}>
               {`across ${stats.count} ${stats.count === 1 ? 'job' : 'jobs'}`}
             </Text>
           </View>
@@ -318,7 +328,7 @@ export function BrowseJobsScreen() {
             accessibilityRole="button"
             accessibilityLabel={matchLabel}
           >
-            <Ionicons name="sparkles" size={13} color={colors.white} />
+            <Ionicons name="sparkles" size={18} color={colors.white} />
             <Text style={styles.bannerPillText} numberOfLines={1}>
               {matchLabel}
             </Text>
@@ -329,7 +339,7 @@ export function BrowseJobsScreen() {
             accessibilityRole="button"
             accessibilityLabel={nearbyLabel}
           >
-            <Ionicons name="location" size={13} color={colors.white} />
+            <Ionicons name="location" size={18} color={colors.white} />
             <Text style={styles.bannerPillText} numberOfLines={1}>
               {nearbyLabel}
             </Text>
@@ -346,7 +356,7 @@ export function BrowseJobsScreen() {
               mount in this same render pass, so their loops start together
               and stay in sync. Always the "marketplace is live" green,
               independent of the worker's own online/offline toggle. */}
-          <PulseDot color={AVAILABILITY_ONLINE_COLOR} size={9} />
+          <PulseDot color={AVAILABILITY_ONLINE_COLOR} size={10} />
           <Text style={styles.sectionTitle}>Available Jobs</Text>
         </View>
         <Pressable
@@ -422,16 +432,15 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    // Same literal 20 Customer Home's own content padding/rhythm uses
-    // (HomeScreen.tsx), not the spacing.lg (16) token — matching its exact
-    // breathing room rather than a nearby-but-different value.
     paddingHorizontal: 20,
     // MainTabs owns the bottom safe-area inset below this scene.
     paddingBottom: spacing.lg,
-    gap: 20,
+    // Also the header -> first-card gap; sectionHeader's own marginBottom
+    // adds a bit more on top of this specific transition (see below).
+    gap: spacing.lg,
   },
   header: {
-    gap: 20,
+    gap: spacing.lg,
     paddingTop: spacing.sm,
   },
 
@@ -459,7 +468,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: radius.pill,
     borderWidth: 1.25,
-    borderColor: colors.gold,
+    // Matches the button's own icon/text color (colors.forest) rather than
+    // the gold accent used elsewhere on this screen.
+    borderColor: colors.forest,
     backgroundColor: colors.surface,
   },
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
@@ -485,10 +496,9 @@ const styles = StyleSheet.create({
   },
   headline: {
     fontFamily: fonts.display,
-    // A step closer to Customer Home's 39 — kept short of it since this
-    // headline sits beside the toolbox art rather than alone with the full
-    // content width Customer Home's does.
-    fontSize: 34,
+    // Deliberately well short of Customer Home's 39 — this headline sits
+    // beside the toolbox art, not alone with the full content width.
+    fontSize: 33,
     lineHeight: 39,
     fontWeight: '700',
     color: colors.ink,
@@ -499,16 +509,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '500',
     color: colors.homeSlate,
+    // Small breathing room below "Get paid." — heroCopy's own gap (4) was
+    // too tight against the two-line headline above it.
+    marginTop: 6,
   },
 
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    // Matches Customer Home's search bar exactly (HomeScreen.tsx: minHeight
-    // 70, paddingHorizontal 18) — same control, same screen family.
-    minHeight: 70,
-    paddingHorizontal: 18,
+    // Related to Customer Home's search bar (same pill shape, same control
+    // family) without being an exact clone — Worker Home's own content
+    // doesn't need the full 70.
+    minHeight: 63,
+    paddingHorizontal: 16,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.mint2,
@@ -517,61 +531,129 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 17,
+    fontSize: 16,
     color: colors.ink,
     paddingVertical: 0,
   },
   searchDivider: {
     width: 1,
-    height: 32,
+    height: 26,
     backgroundColor: colors.border,
   },
 
   banner: {
     borderRadius: radius.xl,
     backgroundColor: colors.forest,
-    // Bumped from spacing.lg (16) — this card was the most compressed
-    // element on the screen; a dashboard panel needs real margin.
-    padding: spacing.xl,
-    gap: spacing.md,
+    // Split from a single `padding: spacing.xl` so the bottom can shrink
+    // independently — the card's top/sides are locked, only its bottom
+    // padding is trimmed (~5dp) to match the Photoshop reference's shorter
+    // overall card without moving the top edge.
+    paddingTop: spacing.xl,
+    paddingHorizontal: spacing.xl,
+    paddingBottom: 19,
+    gap: spacing.sm,
+    // Separation before "Available Jobs" — reduced from spacing.md (12) to
+    // pull that section up to match the Photoshop reference.
+    marginBottom: 7,
   },
   bannerColumns: {
     flexDirection: 'row',
     alignItems: 'stretch',
   },
-  bannerCol: {
-    flex: 1,
-    gap: 4,
+  // No `gap` here — availabilityRow/statusRow each carry their own marginTop
+  // instead, so spacing above/below the toggle row can differ from spacing
+  // above/below the visibility row rather than being forced uniform.
+  //
+  // Left/right are no longer an even 50/50 split. The left column's content
+  // (bold 34px "Online" + a full-width native Switch) is inherently wider
+  // than the right column's ($ amount, numerals), and an even split was
+  // starving the left side of room — that's what kept forcing the toggle up
+  // against the divider no matter how much the divider's own gutter or the
+  // row's internal gap were trimmed. Giving the left column real extra
+  // width fixes the actual cause instead of continuing to squeeze margins.
+  bannerColLeft: {
+    flex: 1.15,
+  },
+  bannerColRight: {
+    flex: 0.85,
+  },
+  // A fixed floor under each column's eyebrow + "big" row, well above what
+  // either naturally needs — guarantees the row that follows (statusRow /
+  // the jobs label) starts at the exact same y in both columns regardless of
+  // the 1-line vs 2-line eyebrow or font-size differences between them. More
+  // reliable than matching marginTop values by hand, which kept drifting.
+  bannerColTopBlock: {
+    minHeight: 64,
   },
   bannerDivider: {
     width: 1,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    marginHorizontal: spacing.lg,
+    // Swapped from 12/8 — that combination still read as right-skewed.
+    // marginLeft controls the divider's own x-position (smaller = further
+    // left, closer to the toggle); marginRight only affects the right
+    // column's start. Less on the left, more on the right shifts the line
+    // left without approaching the switch, which now has real clearance
+    // from bannerColLeft's extra flex width.
+    marginLeft: spacing.sm,
+    marginRight: spacing.md,
+    // bannerColumns stretches this to the tallest column's height; this
+    // margin eats into that stretched height from the bottom only (top
+    // position is untouched, since there's no marginTop), shortening the
+    // divider without needing to know either column's exact height.
+    marginBottom: 10,
   },
   bannerEyebrow: {
+    // 11, not 12 — at 12 "POTENTIAL EARNINGS" was wrapping to a second line
+    // in the right column; this is the largest size that reliably stays on
+    // one line at this column width.
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 0.6,
     color: colors.gold,
   },
+  // "POTENTIAL EARNINGS" only — forces the deterministic two-line break
+  // ("POTENTIAL" / "EARNINGS") with a tight lineHeight so the pair reads as
+  // one label rather than two unrelated lines.
+  bannerEyebrowTwoLine: {
+    lineHeight: 13,
+  },
+  // Root cause of the toggle overlapping the divider: this row had
+  // `justifyContent: 'space-between'` inside `bannerCol`, a flex column
+  // whose default `alignItems: 'stretch'` makes every child row fill the
+  // full column width — space-between then pushed the switch to that
+  // stretched row's far edge, right next to the divider. Fixed by sizing
+  // the row to its own content (flex-start + a fixed gap) so the switch
+  // sits immediately next to "Online" instead of at the column boundary.
   availabilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    // Room enough for the switch without pushing the column's own width.
-    maxWidth: 150,
+    // Back to a normal, comfortable reading gap — bannerColLeft's extra flex
+    // width means this no longer has to be squeezed to stay clear of the
+    // divider.
+    gap: spacing.sm,
+    marginTop: 8,
   },
   bannerBig: {
-    fontSize: 30,
-    lineHeight: 35,
+    fontSize: 34,
+    lineHeight: 39,
     fontWeight: '800',
     color: colors.white,
+  },
+  // Applied on top of bannerBig for the dollar figure only — same fontSize/
+  // weight/color as before (not resized this pass); marginTop cut from 8 to
+  // 0 to pull it up snugly against the two-line eyebrow above it.
+  bannerAmountOverride: {
+    fontSize: 31,
+    lineHeight: 36,
+    marginTop: 0,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
+    // Same value as bannerJobsLabelSpacing below — both rows now follow an
+    // identical-height bannerColTopBlock, so an identical marginTop here
+    // keeps them level with each other.
     marginTop: 8,
   },
   bannerColLabel: {
@@ -579,10 +661,21 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     color: 'rgba(255,255,255,0.78)',
   },
+  // Right column only — the left column gets this same alignment from
+  // statusRow's own marginTop; the right column has no such wrapper row, so
+  // it's added here instead of on bannerColLabel itself (shared by both).
+  // Same value as statusRow.marginTop — both now follow an identical-height
+  // bannerColTopBlock, so this keeps the two rows level with each other.
+  bannerJobsLabelSpacing: {
+    marginTop: 8,
+  },
   bannerPills: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.md,
+    // On top of `banner`'s own gap (spacing.xs) above — total space above
+    // the pills cut well down from before so the taller pill below expands
+    // mostly upward, keeping the pills' bottom edge roughly where it was.
+    marginTop: 2,
   },
   bannerPill: {
     flex: 1,
@@ -590,6 +683,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
+    // Restored from the compacted 34 — the Photoshop reference is
+    // noticeably taller than that compressed pass.
+    minHeight: 44,
     // A translucent white lift rather than a second flat green: it keeps the
     // pill readable on the banner without introducing another token.
     backgroundColor: 'rgba(255,255,255,0.14)',
@@ -598,7 +694,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
   },
   bannerPillText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     color: colors.white,
   },
@@ -608,9 +704,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    // The header's own 20 gap already separates this from the banner above —
-    // no extra nudge needed, matching how Customer Home's equivalent row
-    // relies purely on its parent `section` gap (HomeScreen.tsx).
+    // Explicit, not left to FlatList's contentContainerStyle gap alone: that
+    // gap's behavior across the ListHeaderComponent -> first-data-row
+    // boundary is less reliable than between ordinary siblings, and this is
+    // exactly the transition that read as cramped. marginBottom guarantees
+    // real clearance before the first job card regardless.
+    marginBottom: spacing.xs,
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -619,7 +718,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   sectionTitle: {
-    // Matches Customer Home's "Live Nearby" section title exactly.
+    // Matches Customer Home's "Live Nearby" title (22) again.
     fontSize: 22,
     fontWeight: '700',
     color: colors.ink,
@@ -632,7 +731,7 @@ const styles = StyleSheet.create({
     minHeight: 36,
   },
   viewAllText: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.forest,
   },
