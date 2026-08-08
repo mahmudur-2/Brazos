@@ -465,7 +465,7 @@ export function PostJobScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title={isEditing ? 'Edit Job' : isHiring ? 'Hire Again' : 'Post a Job'}
         onBack={() => navigation.goBack()}

@@ -90,7 +90,7 @@ export function CellJobsScreen() {
   const displayCount = loading ? params.count : jobs.length;
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title="Jobs in this zone"
         subtitle={`${displayCount} open ${displayCount === 1 ? 'job' : 'jobs'} nearby`}

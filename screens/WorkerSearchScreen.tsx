@@ -121,7 +121,7 @@ export function WorkerSearchScreen() {
     state.kind === 'results' ? state.categories : pinnedCategory ? [pinnedCategory] : [];
 
   return (
-    <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Find help" onBack={() => navigation.goBack()} />
 
       <View style={styles.searchRow}>
