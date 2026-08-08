@@ -23,6 +23,16 @@
 --
 --   job_hotspots()/jobs_in_cell() are UNTOUCHED — still there for the map's
 --   density view. This migration doesn't remove or alter them.
+--
+--   FIX (first run rejected by Postgres): jobs.photos/jobs.videos are jsonb
+--   (phase13/phase34 — arrays of storage URLs stored as a JSON array, not a
+--   Postgres text[]), but this function's RETURNS TABLE originally declared
+--   them as text[]. `j.photos`/`j.videos` in the SELECT were always the
+--   right jsonb values; only the declared return type was wrong, hence
+--   "42P13: return type mismatch ... Final statement returns jsonb instead
+--   of text[] at column 10". No client change needed: PostgREST serializes
+--   both shapes as a plain JSON array over the wire, and lib/jobs.ts's
+--   toPhotoArray() already just checks Array.isArray() on whatever arrives.
 -- ============================================================================
 
 create or replace function public.jobs_within_radius(
@@ -40,8 +50,8 @@ returns table (
   budget_cents integer,
   status text,
   created_at timestamptz,
-  photos text[],
-  videos text[],
+  photos jsonb,
+  videos jsonb,
   distance_miles double precision
 )
 language sql

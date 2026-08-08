@@ -249,7 +249,7 @@ export function BrowseJobsScreen() {
 
       {/* --- Search ---------------------------------------------------------- */}
       <View style={styles.searchField}>
-        <Ionicons name="search" size={19} color={colors.textMuted} />
+        <Ionicons name="search" size={22} color={colors.textMuted} />
         <TextInput
           style={styles.searchInput}
           value={query}
@@ -267,7 +267,7 @@ export function BrowseJobsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Search"
         >
-          <Ionicons name="arrow-forward-circle" size={22} color={colors.emerald} />
+          <Ionicons name="arrow-forward-circle" size={26} color={colors.emerald} />
         </Pressable>
       </View>
 
@@ -342,7 +342,11 @@ export function BrowseJobsScreen() {
       {/* --- Available Jobs ------------------------------------------------- */}
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
-          <View style={styles.sectionDot} />
+          {/* Same PulseDot instance/timing as the visibility dot above — both
+              mount in this same render pass, so their loops start together
+              and stay in sync. Always the "marketplace is live" green,
+              independent of the worker's own online/offline toggle. */}
+          <PulseDot color={AVAILABILITY_ONLINE_COLOR} size={9} />
           <Text style={styles.sectionTitle}>Available Jobs</Text>
         </View>
         <Pressable
@@ -418,13 +422,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
+    // Same literal 20 Customer Home's own content padding/rhythm uses
+    // (HomeScreen.tsx), not the spacing.lg (16) token — matching its exact
+    // breathing room rather than a nearby-but-different value.
+    paddingHorizontal: 20,
     // MainTabs owns the bottom safe-area inset below this scene.
     paddingBottom: spacing.lg,
-    gap: spacing.md,
+    gap: 20,
   },
   header: {
-    gap: spacing.md,
+    gap: 20,
     paddingTop: spacing.sm,
   },
 
@@ -439,7 +446,8 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   greeting: {
-    fontSize: 17,
+    // Matches Customer Home's greeting exactly (HomeScreen.tsx).
+    fontSize: 18,
     color: colors.textMuted,
   },
   modeSwitch: {
@@ -469,7 +477,7 @@ const styles = StyleSheet.create({
   },
   heroCopy: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   heroArt: {
     width: TOOLBOX_WIDTH,
@@ -477,8 +485,11 @@ const styles = StyleSheet.create({
   },
   headline: {
     fontFamily: fonts.display,
-    fontSize: 32,
-    lineHeight: 37,
+    // A step closer to Customer Home's 39 — kept short of it since this
+    // headline sits beside the toolbox art rather than alone with the full
+    // content width Customer Home's does.
+    fontSize: 34,
+    lineHeight: 39,
     fontWeight: '700',
     color: colors.ink,
   },
@@ -494,8 +505,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: 56,
-    paddingHorizontal: spacing.lg,
+    // Matches Customer Home's search bar exactly (HomeScreen.tsx: minHeight
+    // 70, paddingHorizontal 18) — same control, same screen family.
+    minHeight: 70,
+    paddingHorizontal: 18,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.mint2,
@@ -504,21 +517,23 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 17,
     color: colors.ink,
     paddingVertical: 0,
   },
   searchDivider: {
     width: 1,
-    height: 22,
+    height: 32,
     backgroundColor: colors.border,
   },
 
   banner: {
     borderRadius: radius.xl,
     backgroundColor: colors.forest,
-    padding: spacing.lg,
-    gap: spacing.sm,
+    // Bumped from spacing.lg (16) — this card was the most compressed
+    // element on the screen; a dashboard panel needs real margin.
+    padding: spacing.xl,
+    gap: spacing.md,
   },
   bannerColumns: {
     flexDirection: 'row',
@@ -526,7 +541,7 @@ const styles = StyleSheet.create({
   },
   bannerCol: {
     flex: 1,
-    gap: 2,
+    gap: 4,
   },
   bannerDivider: {
     width: 1,
@@ -543,7 +558,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 2,
+    marginTop: 6,
     // Room enough for the switch without pushing the column's own width.
     maxWidth: 150,
   },
@@ -557,7 +572,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    marginTop: 4,
+    marginTop: 8,
   },
   bannerColLabel: {
     fontSize: 12,
@@ -567,19 +582,19 @@ const styles = StyleSheet.create({
   bannerPills: {
     flexDirection: 'row',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    marginTop: spacing.md,
   },
   bannerPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 5,
+    gap: 6,
     // A translucent white lift rather than a second flat green: it keeps the
     // pill readable on the banner without introducing another token.
     backgroundColor: 'rgba(255,255,255,0.14)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs + 3,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
     borderRadius: radius.pill,
   },
   bannerPillText: {
@@ -593,7 +608,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-    marginTop: spacing.xs,
+    // The header's own 20 gap already separates this from the banner above —
+    // no extra nudge needed, matching how Customer Home's equivalent row
+    // relies purely on its parent `section` gap (HomeScreen.tsx).
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -601,15 +618,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     flexShrink: 1,
   },
-  sectionDot: {
-    width: 9,
-    height: 9,
-    borderRadius: radius.pill,
-    backgroundColor: AVAILABILITY_ONLINE_COLOR,
-  },
   sectionTitle: {
-    fontSize: 19,
-    fontWeight: '800',
+    // Matches Customer Home's "Live Nearby" section title exactly.
+    fontSize: 22,
+    fontWeight: '700',
     color: colors.ink,
   },
   viewAll: {
