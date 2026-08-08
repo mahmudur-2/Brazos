@@ -1,8 +1,17 @@
 import { Platform, type ViewStyle } from 'react-native';
+import { brand } from '../ui/tokens';
 
 /**
  * Design tokens for the "Emerald Trust" launch/auth surface (Launch, Welcome,
  * Sign in, Create account).
+ *
+ * PHASE 1 (2026-08-08): the seven shared Emerald hues below now come from
+ * `brand` in ui/tokens.ts — the one authoritative palette definition — rather
+ * than being restated here. Values are unchanged (Phase 0 verified these were
+ * already byte-identical), so the LOCKED auth screens 01-06 render exactly as
+ * before. The auth-surface-only values (sand, launch gradient stops, backdrop
+ * rgba strokes, onDark) stay here, because that is what they are: specific to
+ * this surface, not app-wide tokens.
  *
  * These are NOT a second design system: they exist because the auth flow is the
  * one part of the app that renders on the emerald/ivory brand palette rather
@@ -19,26 +28,14 @@ import { Platform, type ViewStyle } from 'react-native';
  */
 
 export const authColors = {
+  // forest, emerald, gold, goldSoft, mint, mint2, ink — from ui/tokens.ts.
+  ...brand,
   /** --bg */
   bg: '#F6F3EA',
   /** --surface */
   surface: '#FFFFFF',
-  /** --ink */
-  ink: '#13201B',
   /** --muted */
   muted: '#6E7771',
-  /** --forest — primary fill for CTAs and the small brand chrome. */
-  forest: '#064C3B',
-  /** --emerald — accent for eyebrows, icons, focus rings. */
-  emerald: '#0D6B52',
-  /** --mint */
-  mint: '#E5F1EC',
-  /** --mint2 */
-  mint2: '#D3E8DF',
-  /** --gold — the launch wordmark, matched to the supplied logo's gold. */
-  gold: '#C8A15B',
-  /** --gold-soft */
-  goldSoft: '#F3E7CE',
   /** --line */
   line: '#DDE2DD',
   /** --danger */

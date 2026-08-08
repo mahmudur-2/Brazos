@@ -1,4 +1,5 @@
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
+import { brand } from '../ui/tokens';
 
 /**
  * Brazos design system — "Forest and earth".
@@ -13,6 +14,16 @@ import { Platform, type TextStyle, type ViewStyle } from 'react-native';
  * hardcoding hexes. This is deliberately NOT a third palette: `primary` and
  * friends are untouched, and every existing screen keeps rendering exactly as
  * it did.
+ *
+ * PHASE 1 (2026-08-08): those seven Emerald hues are no longer written out
+ * here as literals — they are spread from `brand` in ui/tokens.ts, which is
+ * now the one authoritative definition of the palette. The VALUES are
+ * unchanged (Phase 0 verified this file's copies were already byte-identical
+ * to §I's), so every screen including the LOCKED 01-07/48 renders exactly as
+ * before; there is simply one definition of "forest" in the repo now instead
+ * of three. Everything below `brand` — `primary`, the status pairs, the
+ * neutral scale — is this file's own older in-app language and is deliberately
+ * left alone: new screens build on ui/tokens.ts, legacy screens keep this.
  */
 
 export const colors = {
@@ -27,21 +38,10 @@ export const colors = {
   star: '#F59E0B',
 
   // --- Emerald Trust palette (atlas :root) -------------------------------
-  /** --forest — the deep green behind the Home hero CTA and display titles. */
-  forest: '#064C3B',
-  /** --emerald — lighter accent green for glyphs sitting on cream. */
-  emerald: '#0D6B52',
-  /** --gold — sparkle accents, small-caps eyebrows, the brand monogram. */
-  gold: '#C8A15B',
-  /** --gold-soft — the blush/sand wash behind decorative artwork. */
-  goldSoft: '#F3E7CE',
-  /** --mint — sage fill for category tag pills. */
-  mint: '#E5F1EC',
-  /** --mint2 — one step deeper than mint, for borders on sage surfaces. */
-  mint2: '#D3E8DF',
-  /** --ink — the near-black used for display headlines. Distinct from `text`,
-   *  which carries a green tint that reads muted at display sizes. */
-  ink: '#13201B',
+  // Spread from ui/tokens.ts's `brand` rather than restated: forest, emerald,
+  // gold, goldSoft, mint, mint2, ink. `brand` is `as const`, so each keeps its
+  // literal type here exactly as when they were written out inline.
+  ...brand,
   /** Exact warm surface used by the approved Customer Home reference. */
   homeBackground: '#FAF5F1',
   /** The blue-slate secondary text used by the approved Customer Home reference. */
