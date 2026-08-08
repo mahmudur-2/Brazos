@@ -205,6 +205,14 @@ export type ProfileStackParamList = {
   NotificationSettings: undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
   ProfileReviews: { userId: string; name?: string };
+  /**
+   * The dev-only design-system catalog (BRAZOS_MASTER_PLAN.md §I). The route is
+   * only REGISTERED under `__DEV__` in App.tsx and its entry point in
+   * ProfileScreen is gated the same way, so a production build has no path to
+   * it at all. It stays in the param list because the type has to exist for
+   * the dev-only navigate() call to typecheck; declaring a type ships nothing.
+   */
+  ComponentCatalog: undefined;
 };
 
 export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParamList>;

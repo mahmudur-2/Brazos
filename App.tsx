@@ -50,6 +50,7 @@ import { useLegalGate } from './hooks/useLegalGate';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { consumePendingLanding } from './lib/setupLanding';
 import { HomeDesignStudio } from './dev-tools/HomeDesignStudio';
+import { ComponentCatalog } from './dev-tools/ComponentCatalog';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -219,6 +220,13 @@ function ProfileStackNavigator() {
       />
       <ProfileStack.Screen name="LegalDocument" component={LegalDocumentScreen} />
       <ProfileStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
+      {/* The design-system catalog (BRAZOS_MASTER_PLAN.md §I). Registered only
+          under __DEV__, so a production bundle has no route to it at all —
+          hidden by absence rather than by a hidden entry point. Its row in
+          ProfileScreen is gated on the same flag. */}
+      {__DEV__ ? (
+        <ProfileStack.Screen name="ComponentCatalog" component={ComponentCatalog} />
+      ) : null}
     </ProfileStack.Navigator>
   );
 }

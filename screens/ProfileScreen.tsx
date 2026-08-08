@@ -606,6 +606,20 @@ export function ProfileScreen() {
               <Text style={styles.settingsLabel}>Privacy Policy</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Pressable>
+
+            {/* Dev-only entry to the design-system catalog. The route itself is
+                only registered under __DEV__ in App.tsx, so this row and its
+                destination disappear together in a production build. */}
+            {__DEV__ && (
+              <Pressable
+                style={[styles.settingsRow, styles.settingsRowDivider]}
+                onPress={() => navigation.navigate('ComponentCatalog')}
+              >
+                <Ionicons name="color-palette-outline" size={20} color={colors.textMuted} />
+                <Text style={styles.settingsLabel}>Component catalog (dev)</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+              </Pressable>
+            )}
           </Card>
 
           {/* Deliberately NOT a Button like Log out below — same pill shape
