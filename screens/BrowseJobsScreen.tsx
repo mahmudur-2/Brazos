@@ -24,7 +24,7 @@ import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { useWorkerAvailability } from '../hooks/useWorkerAvailability';
 import { resolveCurrentPlace } from '../lib/geolocation';
-import { cellsWithinMiles, fetchHotspots } from '../lib/hotspots';
+import { fetchJobsWithinRadius } from '../lib/hotspots';
 import { formatBudget, jobMatchesSkills, type OpenJob } from '../lib/jobs';
 import { greetingFor } from '../lib/time';
 import type { HomeStackNavigation } from '../lib/navigation';
@@ -144,11 +144,13 @@ export function BrowseJobsScreen() {
         setNearbyState('unavailable');
         return;
       }
-      const { data: cells } = await fetchHotspots();
+      // Exact Haversine distance against real job coordinates (phase41's
+      // jobs_within_radius RPC) — the same query the results screen runs, so
+      // this count can never drift from what tapping the pill shows.
+      const { data } = await fetchJobsWithinRadius(here.place.lat, here.place.lng, NEARBY_RADIUS_MILES);
       if (!active) return;
-      const near = cellsWithinMiles(cells, here.place.lat, here.place.lng, NEARBY_RADIUS_MILES);
       setNearbyCoords({ lat: here.place.lat, lng: here.place.lng, label: here.place.label });
-      setNearbyCount(near.reduce((sum, cell) => sum + cell.job_count, 0));
+      setNearbyCount(data.length);
       setNearbyState('ready');
     })();
     return () => {

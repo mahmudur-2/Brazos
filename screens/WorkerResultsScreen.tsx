@@ -9,7 +9,7 @@ import { useBidCounts } from '../hooks/useBidCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { resolveCurrentPlace } from '../lib/geolocation';
-import { cellsWithinMiles, fetchHotspots, fetchOpenJobsInCells } from '../lib/hotspots';
+import { fetchJobsWithinRadius } from '../lib/hotspots';
 import { jobMatchesSkills, type OpenJob } from '../lib/jobs';
 import { geocodeQuery } from '../lib/reverseGeocode';
 import type { HomeStackNavigation, HomeStackParamList } from '../lib/navigation';
@@ -36,11 +36,12 @@ type GeoState = 'loading' | 'ready' | 'denied' | 'unavailable';
  *
  * "nearby" and "search" resolve a center point (the worker's current
  * location, or the searched area geocoded via Nominatim — see
- * lib/reverseGeocode.ts) and use the hotspot grid-cell RPCs to find real open
- * jobs around it: individual job coordinates aren't readable by a browsing
- * worker at all (phase12 removed them from `jobs` entirely), so the cell
- * system is the one real, privacy-respecting signal available. See
- * lib/hotspots.ts for the full reasoning.
+ * lib/reverseGeocode.ts) and call jobs_within_radius() (phase41), a
+ * security-definer RPC that computes real Haversine distance against each
+ * job's exact stored coordinates server-side and returns only public fields
+ * + the computed distance — never a job's raw lat/lng. "nearby" always uses
+ * exactly NEARBY_RADIUS_MILES; "search" only widens past it (5 -> 10 -> 15)
+ * on zero results, and is never labeled "within N miles" when it does.
  */
 export function WorkerResultsScreen() {
   const navigation = useNavigation<HomeStackNavigation>();
@@ -98,10 +99,17 @@ export function WorkerResultsScreen() {
         return;
       }
 
-      const { data: cells } = await fetchHotspots();
-      const near = cellsWithinMiles(cells, center.lat, center.lng, NEARBY_RADIUS_MILES);
-      const { data } = await fetchOpenJobsInCells(near);
-      if (!active) return;
+      // "nearby" is always exactly the stated radius. "search" alone may
+      // widen on zero results — never mislabeled as "within 5 miles" when it
+      // does, since only the nearby mode's title says that.
+      const radii = params.mode === 'search' ? [5, 10, 15] : [NEARBY_RADIUS_MILES];
+      let data: OpenJob[] = [];
+      for (const radius of radii) {
+        const result = await fetchJobsWithinRadius(center.lat, center.lng, radius);
+        if (!active) return;
+        data = result.data;
+        if (data.length > 0) break;
+      }
       setGeoJobs(data);
       setResolvedLabel(center.label ?? null);
       setGeoState('ready');

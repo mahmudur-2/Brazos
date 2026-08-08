@@ -189,6 +189,39 @@ export function milesBetween(lat1: number, lng1: number, lat2: number, lng2: num
   return EARTH_RADIUS_MILES * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** An open job as jobs_within_radius() returns it — real fields plus a
+ *  server-computed distance. Never a job's raw stored coordinates. */
+export type NearbyJob = OpenJob & { distance_miles: number };
+
+/**
+ * Exact job-level distance, server-side — Worker Home's "X within N miles"
+ * pill and its results screen both call this, so a stated radius claim is
+ * backed by real Haversine distance against job_locations (phase12's
+ * RLS-locked exact-coordinate table), not hotspot-cell membership. See
+ * supabase/phase41_jobs_within_radius.sql for the RPC itself: it never
+ * returns any job's raw lat/lng, only public fields + distance_miles, and a
+ * job with no job_locations row (no precise coordinates recorded) is
+ * excluded by the RPC's own join rather than guessed at.
+ */
+export async function fetchJobsWithinRadius(
+  lat: number,
+  lng: number,
+  radiusMiles: number
+): Promise<{ data: NearbyJob[]; error: { message: string } | null }> {
+  const { data, error } = await supabase.rpc('jobs_within_radius', {
+    p_lat: lat,
+    p_lng: lng,
+    p_radius_miles: radiusMiles,
+  });
+  if (error) return { data: [], error };
+
+  const rows: NearbyJob[] = (data ?? []).map((row: any) => ({
+    ...toOpenJob(row),
+    distance_miles: row.distance_miles,
+  }));
+  return { data: rows, error: null };
+}
+
 /**
  * Hotspot cells whose center falls within `miles` of a point. This is the
  * one privacy-respecting way to answer "jobs near X" on the client: a job's
