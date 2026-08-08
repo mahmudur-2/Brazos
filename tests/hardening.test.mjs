@@ -120,7 +120,16 @@ test('the bids compatibility mirror is a trigger-driven projection only', async 
   // the file's header explains that, so this asserts the REPLACEMENT shape
   // rather than the absence of a phrase that legitimately appears in prose.)
   assert.match(phase47, /delete from public\.bids/i);
-  assert.match(phase47, /on conflict \(id\) do update/i);
+  // UPDATE-then-INSERT, NOT an upsert: bids_notify is AFTER INSERT, so the
+  // branch has to be visible rather than resting on ON CONFLICT trigger
+  // semantics. An existing chain updates silently; a new chain inserts once.
+  assert.match(phase47, /update public\.bids/i);
+  assert.match(phase47, /if not found then\s+insert into public\.bids/i);
+  assert.doesNotMatch(phase47, /on conflict \(id\) do update/i);
+  // The delete must never reach a row a job still names as its accepted bid.
+  assert.match(phase47, /not exists \(select 1 from public\.jobs j where j\.accepted_bid_id = b\.id\)/i);
+  // And the migration must verify, not assume, that nothing cascades off bids.
+  assert.match(phase47, /confdeltype = 'c'/);
 
   // The shims must no longer write bids themselves.
   const shims = phase47.slice(phase47.indexOf('4. create_bid()'));

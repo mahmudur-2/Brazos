@@ -60,6 +60,41 @@ begin
   end if;
 end $$;
 
+-- 1a. The delete-then-upsert's one unverified assumption, verified ------------
+--
+-- Section 2 DELETEs from `bids`. That is only safe if nothing cascades off
+-- bids(id). The initial schema predates this repository's migrations — there is
+-- no `create table public.bids` anywhere under supabase/ — so the referential
+-- actions of anything pointing AT it (jobs.accepted_bid_id in particular)
+-- cannot be read off a file. Rather than reason about reachability and hope,
+-- this asks the catalog at apply time.
+--
+-- A cascading inbound FK would mean deleting a stale mirror row could delete
+-- the referencing row — for jobs.accepted_bid_id, an entire job. That is not a
+-- risk worth carrying on an inference, so this refuses to install instead.
+
+do $$
+declare
+  v_bad text;
+begin
+  select string_agg(
+           c.conname || ' on ' || c.conrelid::regclass::text || ' (on delete ' ||
+           case c.confdeltype when 'c' then 'cascade' when 'n' then 'set null'
+                              when 'd' then 'set default' when 'r' then 'restrict'
+                              else 'no action' end || ')',
+           ', ')
+    into v_bad
+  from pg_constraint c
+  where c.contype = 'f'
+    and c.confrelid = 'public.bids'::regclass
+    and c.confdeltype = 'c';   -- 'c' = ON DELETE CASCADE
+
+  if v_bad is not null then
+    raise exception
+      'Refusing to install: a foreign key CASCADES off public.bids(id) — %. This migration deletes stale mirror rows, which would take the referencing row with them. Resolve that FK first.', v_bad;
+  end if;
+end $$;
+
 -- 2. The projection ----------------------------------------------------------
 --
 -- Split into a plain function plus a thin trigger wrapper, so section 6's
@@ -88,7 +123,7 @@ end $$;
 --     deterministic answer. The link structure does. A chain is a linked list,
 --     so it has exactly one leaf.
 --
---   * DELETE-then-upsert, so a settled chain's row can never collide with a new
+--   * DELETE-then-UPDATE-or-INSERT, so a settled chain's row can never collide
 --     chain's insert on that unconditional unique index. That collision is the
 --     precise root cause of the dropped rows described in the header.
 --
@@ -143,23 +178,45 @@ begin
   end)::public.bid_status;
 
   -- Clear any other legacy row for this pair first — a previous settled
-  -- chain's row, or a pre-unification row with a different id — so the upsert
+  -- chain's row, or a pre-unification row with a different id — so the insert
   -- below cannot lose to phase1's unconditional unique (job_id, worker_id).
-  delete from public.bids
-   where job_id = v_root.job_id
-     and worker_id = v_root.worker_id
-     and id <> v_root.id;
+  --
+  -- Guarded against jobs.accepted_bid_id. Section 1a already refuses to install
+  -- if anything CASCADES off bids(id), but a SET NULL or RESTRICT action would
+  -- still either erase a historical pointer or fail the write, so a row some
+  -- job still names as its accepted bid is left alone regardless. In practice
+  -- this predicate should never exclude anything — create_offer() refuses a new
+  -- chain unless the job is 'open', and a job with an accepted_bid_id is not —
+  -- but "should never" is not a reason to leave the door open.
+  delete from public.bids b
+   where b.job_id = v_root.job_id
+     and b.worker_id = v_root.worker_id
+     and b.id <> v_root.id
+     and not exists (select 1 from public.jobs j where j.accepted_bid_id = b.id);
 
   -- Identity (id, message, created_at) from the root; live terms from the leaf.
-  insert into public.bids (id, job_id, worker_id, amount_cents, message, status, created_at)
-  values (
-    v_root.id, v_root.job_id, v_root.worker_id,
-    v_leaf.amount_cents, v_root.message, v_status, v_root.created_at
-  )
-  on conflict (id) do update
-    set amount_cents = excluded.amount_cents,
-        message      = excluded.message,
-        status       = excluded.status;
+  --
+  -- UPDATE-then-INSERT rather than INSERT ... ON CONFLICT DO UPDATE, and the
+  -- reason is notifications, not style. phase20's bids_notify is AFTER INSERT.
+  -- An upsert's update path fires AFTER UPDATE and not AFTER INSERT, so it
+  -- would in fact behave correctly — but that is a subtlety a reader has to
+  -- know, and getting it wrong means every counter, decline and accept pushes
+  -- "new bid" to the customer again. Branching explicitly makes the answer
+  -- visible on the page: an existing chain is an UPDATE and is silent; a
+  -- genuinely new chain is an INSERT and notifies exactly once.
+  update public.bids
+     set amount_cents = v_leaf.amount_cents,
+         message      = v_root.message,
+         status       = v_status
+   where id = v_root.id;
+
+  if not found then
+    insert into public.bids (id, job_id, worker_id, amount_cents, message, status, created_at)
+    values (
+      v_root.id, v_root.job_id, v_root.worker_id,
+      v_leaf.amount_cents, v_root.message, v_status, v_root.created_at
+    );
+  end if;
 end;
 $$;
 
@@ -410,3 +467,42 @@ grant execute on function public.bids_projection_enabled() to authenticated;
 notify pgrst, 'reload schema';
 
 commit;
+
+-- ---------------------------------------------------------------------------
+-- Post-apply confirmation, in the RESULTS GRID.
+--
+-- Section 6's before/after counts go to RAISE NOTICE, which Supabase's SQL
+-- Editor prints in a separate messages/logs strip that auto-collapses and is
+-- easy to miss entirely. This runs after COMMIT so the confirmation lands
+-- somewhere unmissable. drift_remaining must be 0.
+--
+-- The BEFORE number cannot be recovered once the repair has run. To capture it,
+-- run this on its own BEFORE applying the file above:
+--
+--   with chain as (
+--     select r.id as root_id, r.job_id, r.worker_id,
+--            leaf.amount_cents as live_amount,
+--            (case leaf.status
+--               when 'pending' then 'pending' when 'accepted' then 'accepted'
+--               when 'withdrawn' then 'withdrawn' else 'rejected'
+--             end)::public.bid_status as live_status
+--     from (select distinct root_offer_id from public.job_offers
+--            where offer_type = 'marketplace_bid') o
+--     join public.job_offers r on r.id = o.root_offer_id
+--     join lateral (
+--       select l.* from public.job_offers l
+--        where l.root_offer_id = o.root_offer_id
+--          and not exists (select 1 from public.job_offers c
+--                           where c.parent_offer_id = l.id)
+--        limit 1) leaf on true)
+--   select count(*) as drifted_before
+--   from chain left join public.bids b on b.id = chain.root_id
+--   where b.id is null or b.status <> chain.live_status
+--      or b.amount_cents <> chain.live_amount;
+-- ---------------------------------------------------------------------------
+
+select
+  (select count(*) from public.v_bids_projection_drift)            as drift_remaining,
+  (select count(distinct root_offer_id) from public.job_offers
+    where offer_type = 'marketplace_bid')                          as chains_projected,
+  (select count(*) from public.bids)                               as legacy_bid_rows;
