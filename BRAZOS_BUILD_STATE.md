@@ -2,8 +2,10 @@
 Updated: 2026-08-08
 
 ## Current phase
-Phase 1 — Design system foundation. **COMPLETE.** Next exact task: Phase 2 —
-Mode & navigation hardening (see "Exact next task" at the bottom).
+Phase 1 — Design system foundation. **PASS / CLOSED.** All gates green,
+including manual real-device verification (see Gate status). Next exact
+task: Phase 2 — Mode & navigation hardening (see "Exact next task" at the
+bottom).
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -12,8 +14,14 @@ Mode & navigation hardening (see "Exact next task" at the bottom).
   tags resolved, `verify-schema.mjs` run clean, `f3e75d0` evaluated (needed,
   not obsolete, not cherry-picked — see Known issues). Zero application-code
   changes.
-- [x] 1 design system · `ui/tokens.ts` + 17 primitives + 4 templates + dev
-  catalog. Locked screens byte-identical; shared brand values proven unchanged.
+- [x] 1 design system · commits `13af291`, `8f0738c`, plus this closure commit ·
+  `ui/tokens.ts` + 17 primitives + 4 templates + dev catalog. Locked screens
+  byte-identical; shared brand values proven unchanged. **PASS** — manually
+  verified on a real Expo iOS device by the user: typography/spacing/colors,
+  buttons/inputs, chips/segmented tabs/status pills, ListRow/Avatar/
+  RatingStars/Skeleton, StepHeader/MediaGrid/Sheet, EmptyState + all five
+  template states, bottom scroll/nav clearance — no clipping, overflow,
+  safe-area, font, or layout regressions observed.
 - [ ] 2 mode/nav · [ ] 3 data ·
   [ ] 4 post · [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
@@ -138,13 +146,12 @@ in the running app per source inspection; not independently re-verified via
 the script this pass.
 
 ## Known issues
-- **Device verification of the Phase 1 catalog was NOT performed by the agent.**
-  The repo rule (and DECISIONS.md D14) is that Expo is never started from an
-  agent session; the LAN URL is handed to the user instead. A dev server was
-  already running on port 8081 during Phase 1, but the catalog was not
-  observed rendering on a device or simulator. Everything claimed about Phase 1
-  rests on strict typecheck + the existing test suite, not on a screenshot.
-  To check it: reload the app, then Profile tab → "Component catalog (dev)".
+- ~~Device verification of the Phase 1 catalog was NOT performed by the
+  agent.~~ **Resolved 2026-08-08**: user manually verified the catalog on a
+  real Expo iOS device (Profile tab → "Component catalog (dev)") per the
+  repo rule that Expo is never started from an agent session. Result: PASS —
+  see the Phase log entry above for the checklist covered. No layout, safe-area,
+  font, clipping, or overflow regressions observed.
 - **ESLint was not run and is not installed.** `npx eslint .` would have to
   install the package (it is in neither `dependencies` nor `devDependencies`)
   and would then fail for lack of any config file — confirmed again this phase,
@@ -168,19 +175,26 @@ the script this pass.
 - `components/SectionHeader.tsx` is dead code (never imported) — left in place per Phase 0 policy, candidate for Phase 13 deletion.
 
 ## Gate status
-End of Phase 1 (2026-08-08):
+Phase 1 closure (2026-08-08):
 - **tsc**: PASS — `npm run lint` (`tsc --noEmit --noUnusedLocals
-  --noUnusedParameters`) exits 0, clean.
-- **eslint**: NOT RUN — not installed, no config. See Known issues.
+  --noUnusedParameters`) exits 0, clean. Re-confirmed at closure.
+- **eslint**: NOT RUN — not installed, no config file in repo; installing it
+  was explicitly out of scope. Consistent with DECISIONS.md D13.
 - **tests**: 187/189 PASS, 2 pre-existing failures, zero new. Baseline
-  re-measured at HEAD to confirm.
+  re-measured at HEAD (stash/pop) to confirm neither was introduced by
+  Phase 1; re-confirmed at closure.
 - **verify-schema**: PASS as of Phase 0; not re-run (Phase 1 touched no DB).
 - **locked screens**: PASS — screens 01–07 and 48 byte-identical (`git diff`
   empty across all 11 files), and the shared brand token values they depend on
-  proven unchanged against HEAD by a scripted 14-value comparison.
+  proven unchanged against HEAD by a scripted 14-value comparison. Re-confirmed
+  at closure.
 - **mode-smoke**: N/A — the mode split does not exist yet (Phase 2 deliverable).
 - **rls-probe**: N/A this phase — no policy or schema change.
-- **device/simulator**: NOT PERFORMED. See Known issues.
+- **device/simulator**: **PASS.** Manually verified by the user on a real
+  Expo iOS device (not a simulator) — see the Phase log entry above for the
+  full checklist. This closes the one open item from the earlier report.
+
+**Phase 1 gate: fully green. Phase 1 is closed.**
 
 ## Exact next task (Phase 2 — Mode & navigation hardening)
 Per BRAZOS_MASTER_PLAN.md §J. In order:
