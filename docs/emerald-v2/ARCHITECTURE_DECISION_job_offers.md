@@ -1,11 +1,13 @@
 # ARCHITECTURE DECISION — the unified `job_offers` model
 
-**Phase:** 3A (Data foundation, part 1 of 3)
-**Date:** 2026-08-08
-**Status:** decided; phase43/phase44 finalized, phase45 held (see §6)
+**Phase:** 3A + 3B (Data foundation)
+**Date:** 2026-08-08 (§11 corrected same day, after phase46 was applied)
+**Status:** phase43–46 APPLIED and verified live; phase47 written, not applied
 **Files:** `supabase/phase43_job_offers_foundation.sql`,
 `supabase/phase44_backfill_bids_to_job_offers.sql`,
-`supabase/phase45_job_requests_to_job_offers.DRAFT.sql`
+`supabase/phase45_job_requests_to_job_offers.sql`,
+`supabase/phase46_offer_rpcs_and_rls.sql`,
+`supabase/phase47_bids_projection_trigger.sql`
 
 ---
 
@@ -494,21 +496,62 @@ Removing them is a deliberate, self-contained task: drop the six functions, and
 update the phase18/29/30/36/38 groups in `scripts/verify-schema.mjs`, which
 currently require them to exist and are what would otherwise turn red.
 
-**One asymmetry, evidence-based.** A function shim cannot cover a table SELECT,
-and old builds read `bids` and `job_requests` directly.
+**How `bids` is kept current — a projection, not a mirror.**
 
-- `bids` — 25 live rows, real usage. `create_bid`/`accept_bid` therefore also
-  mirror into `bids` (same ids, which phase44 already guaranteed), so old builds
-  keep reading their own bids. **This is a deliberate, temporary exception to
-  "stop writing to the frozen tables"**, taken because the alternative is a
-  silent read break on live installs — the exact thing the shims were approved
-  to prevent. Nothing in the new app reads the mirror; `job_offers` is the only
-  source of truth. It retires with the shims.
-- `job_requests` — 0 live, 0 accepted, 1 dead legacy row (measured 2026-08-08).
-  No mirror is written. An old build can still send a direct offer but will not
-  render the resulting negotiation card. With zero production usage this is a
-  documented degradation, not a break, and mirroring a mutating single-row
-  negotiation would have meant re-implementing phase18's counter bookkeeping.
+A function shim cannot cover a table SELECT, and old builds read `bids`
+directly. phase46 handled that by writing to `bids` from inside `create_bid()`
+and `accept_bid()`. **That was wrong and is superseded by phase47.** Those two
+functions are only two of the six paths that mutate `job_offers`; a current
+build calls `create_offer`, `counter_offer`, `decline_offer` and
+`accept_offer` directly, so in a mixed fleet the mirror was stale as soon as
+anyone updated — a new-build bid was invisible to an old-build customer, a
+countered chain still showed `pending` at the original price, an accepted job
+still showed an open bid list, and a second chain's row was silently dropped by
+`on conflict do nothing` colliding with phase1's unconditional
+`unique (job_id, worker_id)`. All of it read as authoritative, which made it
+worse than no mirror at all.
+
+phase47 replaces it with one `AFTER INSERT OR UPDATE` trigger on
+`job_offers`:
+
+- keyed on `root_offer_id`, so the legacy row's id is stable for the whole
+  negotiation and an old client that captured a bid id keeps resolving it;
+- `marketplace_bid` only — direct offers never wrote to `bids` and must not
+  start, since everything in that table is assumed to be public competition;
+- amount and status come from the chain's **leaf** (the row nothing claims as a
+  parent), never from the row that fired the trigger and never from a
+  `created_at` sort — `counter_offer()` supersedes the parent and inserts the
+  child in one transaction, so both carry an identical `now()` and a timestamp
+  ordering has no deterministic answer;
+- status maps `declined|expired|superseded → rejected`, `withdrawn → withdrawn`,
+  `accepted → accepted`, `pending → pending`. `superseded` only reaches the leaf
+  when a *different* chain won the job, which in legacy vocabulary is exactly
+  "rejected"; within a chain a superseded row always has a child;
+- delete-then-upsert, so a settled chain's row can never block a new chain's
+  insert on that unconditional unique index.
+
+**It cannot drift**, because there is no way to change `job_offers` without it
+running. **No recursion**, by enumeration: it writes `bids`; the only trigger on
+`bids` is phase20's `bids_notify`, which writes `notification_outbox`; nothing
+is triggered on `notification_outbox`; nothing anywhere writes back to
+`job_offers`.
+
+It also restores a notification phase46 had silently lost: `notify_on_bid()` is
+an AFTER INSERT trigger on `bids`, so a bid placed on a new build produced no
+row and therefore no "new bid" push. phase47's repair pass disables that trigger
+while reprojecting historical chains, so the backfill cannot emit pushes for
+bids placed days ago.
+
+Direction is unchanged and still strict: `job_offers → bids`, one-way, never
+read back. `lib/offers.ts` never references `bids`, and phase29 revoked
+`insert, update` on it from every client role with no DELETE policy, so no
+client can write it under any circumstance.
+
+**`job_requests` gets no projection.** 0 live rows, 0 accepted, 1 dead legacy row
+(measured 2026-08-08). There is no user to protect, and mirroring a mutating
+single-row negotiation would mean re-implementing phase18's counter
+bookkeeping. An old build can still send a direct offer but will not render the
+negotiation card — a documented degradation with zero production impact.
 
 ---
 
@@ -518,8 +561,9 @@ and old builds read `bids` and `job_requests` directly.
 |---|---|---|---|
 | 1 | `phase43_job_offers_foundation.sql` | **APPLIED** 2026-08-08 | Structure only. Verified by a green `verify-schema` run, not a SQL Editor message. |
 | 2 | `phase44_backfill_bids_to_job_offers.sql` | **APPLIED** 2026-08-08 | 25/25 bids migrated, 24/24 accepted links set. |
-| 3 | `phase45_job_requests_to_job_offers.sql` | **final, not applied** | Gates cleared (§6). Must be applied BEFORE phase46. |
-| 4 | `phase46_offer_rpcs_and_rls.sql` | **final, not applied** | RPCs, RLS, shims, composite FK. Must be applied AFTER phase45. |
+| 3 | `phase45_job_requests_to_job_offers.sql` | **APPLIED** 2026-08-08 | Gates cleared (§6). Applied before phase46, as required. |
+| 4 | `phase46_offer_rpcs_and_rls.sql` | **APPLIED** 2026-08-08 | RPCs, RLS, shims, composite FK. All ten verifier checks flipped to OK. |
+| 5 | `phase47_bids_projection_trigger.sql` | **final, not applied** | Replaces phase46's two-call-site `bids` mirror with a trigger-driven projection, and repairs any drift it left. |
 
 **Why 45 before 46, and not the other way round.** The default instinct is to
 put RPCs and RLS in place before data lands. Checked against the real
@@ -535,11 +579,13 @@ The usual argument for RPCs-first does not apply here anyway: with
 materializes no draft jobs on today's data. There is no window in which
 unreadable data sits waiting for a policy.
 
-**There is no phase47.** Everything Phase 3B needs fits in phase46 as one
-transaction, and splitting it would create an ordering problem rather than
-solve one: the RLS policy, the composite FK and the RPCs are interdependent
-(the policy's correctness depends on the FK; the shims depend on the RPCs), so
-a partial application is worse than none. phase46 is one `begin`/`commit` with
-its sentinel created last, so it either lands whole or not at all.
+**phase47 exists for a reason that was not visible when phase46 was written.**
+The original plan said everything fit in phase46, and structurally it did. What
+phase47 fixes is a defect found by review AFTER phase46 was applied (§11): the
+`bids` compatibility mirror was written from two call sites and therefore
+drifted on four of the six paths that mutate `job_offers`. phase46 is not
+edited — it is applied and is now historical record, the same rule phase43/44
+follow — so the trigger, the superseded shim bodies and the drift repair ship
+as a new numbered migration.
 
 Nothing in 1 or 2 changed what the app does. phase46 is the cutover.

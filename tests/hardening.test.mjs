@@ -93,6 +93,41 @@ test('job, bid, and review protected writes use server-validated RPCs', () => {
 // RPC left for it to fall back from, and its non-atomic read-then-update had a
 // real TOCTOU race. This asserts the absence rather than dropping the coverage
 // — a reintroduced client-side write path would fail here.
+// The frozen `bids` table is kept current by a PROJECTION, not by writes
+// scattered through the compatibility shims. phase46 did the latter and it
+// drifted on four of the six paths that mutate job_offers; phase47 replaced it.
+// These assertions are what stop a future edit from reintroducing a second
+// writer, which is the exact shape of the original bug.
+test('the bids compatibility mirror is a trigger-driven projection only', async () => {
+  const phase47 = read('supabase/phase47_bids_projection_trigger.sql');
+
+  // One projection, driven by the source of truth.
+  assert.match(phase47, /create trigger job_offers_mirror_bids\s+after insert or update on public\.job_offers/i);
+  assert.match(phase47, /create or replace function public\.project_offer_chain_to_bids\(/i);
+
+  // Marketplace bids only — direct offers never wrote to bids and must not start.
+  assert.match(phase47, /offer_type <> 'marketplace_bid'/);
+
+  // Current revision is the chain LEAF, not the newest timestamp: a counter
+  // supersedes its parent and inserts the child in one transaction, so both
+  // carry an identical now() and a created_at sort is not deterministic.
+  assert.match(phase47, /not exists \(\s*select 1 from public\.job_offers c where c\.parent_offer_id = o\.id\s*\)/i);
+  assert.doesNotMatch(phase47, /order by .*created_at desc.*limit 1/i);
+
+  // Delete-then-upsert, so a settled chain cannot block a new one on bids'
+  // unconditional unique (job_id, worker_id).
+  // (A bare "on conflict do nothing" is what silently dropped rows in phase46;
+  // the file's header explains that, so this asserts the REPLACEMENT shape
+  // rather than the absence of a phrase that legitimately appears in prose.)
+  assert.match(phase47, /delete from public\.bids/i);
+  assert.match(phase47, /on conflict \(id\) do update/i);
+
+  // The shims must no longer write bids themselves.
+  const shims = phase47.slice(phase47.indexOf('4. create_bid()'));
+  assert.doesNotMatch(shims, /insert into public\.bids/i);
+  assert.doesNotMatch(shims, /update public\.bids/i);
+});
+
 test('offer acceptance has no client-side fallback write path', async () => {
   const offersSource = read('lib/offers.ts');
 

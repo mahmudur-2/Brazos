@@ -5,14 +5,15 @@ Updated: 2026-08-08
 Phase 3B — Offer RPCs, RLS and application integration. **CODE-COMPLETE.**
 **Phase 3 overall is PARTIAL, not CLOSED.**
 
-phase43 and phase44 are applied and verified live. phase45 and phase46 are
-written, finalized and NOT applied — `verify-schema.mjs` reports every
-phase0–44 check OK and all ten phase46 checks as PENDING / NOT APPLIED.
+phase43, 44, 45 and 46 are all applied and verified live (all ten phase46
+checks flipped to OK on their own). **phase47 is written and NOT applied** — it
+replaces phase46's two-call-site `bids` mirror with a trigger-driven
+projection and repairs any drift that mirror left. `verify-schema.mjs` shows
+every phase0–46 check OK and phase47's two as PENDING.
 
-Phase 3 closes only when all three of these are true, and none of them has
-happened yet: (1) phase45 then phase46 applied manually in that order,
-(2) a post-apply `verify-schema` run showing full PASS with zero PENDING,
-(3) a real-device regression pass. See "Exact next task".
+Phase 3 closes only when: (1) phase47 applied, (2) post-apply verify-schema
+full PASS with zero PENDING, (3) a real-device regression pass. None has
+happened. See "Exact next task".
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -205,24 +206,23 @@ per the master plan and were not built.
 under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
-## Migrations written but NOT applied (Phase 3B)
-Apply in this order. Numeric order is also dependency order here.
+## Migrations written but NOT applied
 
-1. `phase45_job_requests_to_job_offers.sql` — **final.** Adds the `draft`
-   job_status value and commits it, then converts job_requests. With
-   live_total = 0 / accepted_total = 0 it migrates no rows on today's data;
-   its guards re-assert every requirement-3 condition at apply time so a row
-   created between now and the run cannot slip past.
-2. `phase46_offer_rpcs_and_rls.sql` — **final.** RPCs, RLS, composite FK,
-   realtime, and the six legacy shims. MUST follow phase45: accept_offer()
-   references `draft`, and Postgres refuses to use an enum value whose adding
-   transaction has not committed. Section 1 raises a clear error if run early.
-
-There is no phase47 — everything fits in phase46 as one transaction, and the
-policy, FK and RPCs are interdependent enough that a partial application would
-be worse than none.
+`phase47_bids_projection_trigger.sql` — **final.** Replaces phase46's `bids`
+mirror with an AFTER INSERT OR UPDATE trigger on `job_offers`, supersedes the
+`create_bid`/`accept_bid` bodies so nothing writes `bids` by hand any more,
+adds the `v_bids_projection_drift` diagnostic view, and reprojects every
+marketplace chain to repair drift. The repair is unconditional and idempotent,
+so it does not depend on knowing the drift count in advance; it aborts if any
+row is still drifted afterwards.
 
 ## Migrations applied (verify-schema green)
+phase45 (`phase45_job_requests_to_job_offers.sql`) + phase46
+(`phase46_offer_rpcs_and_rls.sql`): **applied by the user via the Supabase SQL
+Editor**, phase45 first as the enum dependency requires. Confirmed by a green
+`node scripts/verify-schema.mjs` run — all ten phase46 checks flipped from
+PENDING to OK on their own — 2026-08-08.
+
 phase43 (`phase43_job_offers_foundation.sql`) + phase44
 (`phase44_backfill_bids_to_job_offers.sql`): **applied by the user via the
 Supabase SQL Editor and confirmed by a green `node scripts/verify-schema.mjs`
@@ -566,33 +566,32 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   enum. `AppMode` is a hand-written union today, matching the DB constraint's
   two values exactly.
 
-## Exact next task (apply Phase 3B, then close Phase 3)
+## Exact next task (apply phase47, then close Phase 3)
 
-Phase 3B is code-complete. Nothing below has been done, and none of it can be
-done from an agent session.
+phase43–46 are live. Everything below is manual and none of it has been done.
 
-1. **Apply `supabase/phase45_job_requests_to_job_offers.sql`** in the Supabase
-   SQL Editor. Read its NOTICE lines.
-2. **Apply `supabase/phase46_offer_rpcs_and_rls.sql`.** Must be second — it
-   raises a clear error if phase45 has not run, because `accept_offer()`
-   references the `draft` enum value phase45 commits.
-3. **Re-run `node scripts/verify-schema.mjs`.** All ten phase46 checks must
-   flip from PENDING to OK on their own. Only that green run counts as applied;
-   the SQL Editor's "Success" message does not.
-4. **Real-device regression pass**, at minimum: place a bid; the poster sees it
-   and the count is right; accept it and confirm the job assigns and every
-   other offer is superseded; send a direct offer from a worker profile;
-   counter it from the other side and confirm the turn flips live; accept it;
-   confirm My Jobs shows no phantom draft entry at any point.
-5. **RLS probe**: confirm a second worker cannot read another worker's offer on
-   the same job, and that the job owner can read all of them.
+1. **Optional pre-check** — measure the drift phase47 will repair:
+   `select count(*) from public.v_bids_projection_drift;` will not work yet
+   (the view ships in phase47). To see it beforehand, run the standalone audit
+   query recorded in the Phase 3B report, or simply apply phase47 and read its
+   `drifted rows BEFORE = n, AFTER = 0` NOTICE — it prints the same number.
+2. **Apply `supabase/phase47_bids_projection_trigger.sql`.** Read the NOTICE
+   lines. It aborts and rolls back if any chain is still drifted afterwards.
+3. **Re-run `node scripts/verify-schema.mjs`.** Both phase47 checks must flip
+   from PENDING to OK on their own. Only that green run counts as applied.
+4. **Real-device regression pass**: bid → poster sees it and the count is right
+   → accept → job assigns and rival offers settle; direct offer from a worker
+   profile → counter from the other side → turn flips live → accept; My Jobs
+   never shows a phantom draft.
+5. **RLS probe**: a second worker cannot read another worker's offer on the same
+   job; the job owner can read all of them.
 
-**Only after 1–5 is Phase 3 CLOSED.** Until then it stays PARTIAL.
+**Only after 2–5 is Phase 3 CLOSED.** Until then it stays PARTIAL.
 
-Then Phase 4 (Post-a-job vertical slice). Carry forward, not part of Phase 3:
-- The six legacy shims are removed in the first phase that ships a version gate
-  (§11 of the decision doc), which also requires updating the phase18/29/30/36/38
-  groups in `verify-schema.mjs`.
-- Generated database types still do not exist; regenerate once a service-role
-  or local-Postgres path is approved, then retarget `StatusPill`'s local unions.
+Carry forward, not part of Phase 3:
+- The six legacy shims, the projection trigger, and
+  `v_bids_projection_drift` all retire together in the first phase that ships
+  a version gate (§11 of the decision doc), which also means updating the
+  phase18/29/30/36/38 groups in `verify-schema.mjs`.
+- Generated database types still do not exist.
 - The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5).

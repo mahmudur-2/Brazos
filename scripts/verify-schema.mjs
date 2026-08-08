@@ -575,6 +575,25 @@ const MIGRATIONS = [
         checkColumnRevoked('job_offers', 'id')],
     ],
   },
+  {
+    // phase47 replaces phase46's two-call-site `bids` mirror with a trigger on
+    // job_offers. Neither the trigger nor the superseded function BODIES are
+    // visible to a PostgREST probe — create_bid/accept_bid already existed and
+    // would answer identically before and after — so the sentinel is doing the
+    // real work here, as it does for phase43. It is created last inside
+    // phase47's single transaction, including after the repair pass, so its
+    // presence proves the reprojection ran and found zero remaining drift
+    // (section 6 raises and rolls back otherwise).
+    file: 'phase47_bids_projection_trigger.sql',
+    sentinel: ['rpc bids_projection_enabled()', () => checkRpc('bids_projection_enabled', {})],
+    checks: [
+      // The drift view joins across every user's offers, so it must not be
+      // reachable with the publishable key. Supabase's default privileges
+      // would otherwise hand a new view in `public` to anon.
+      ['v_bids_projection_drift not readable', () =>
+        checkColumnRevoked('v_bids_projection_drift', 'root_offer_id')],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
