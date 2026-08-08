@@ -1,184 +1,242 @@
-# 00 — Executive Summary: BRAZOS → Emerald Trust V2 Audit
+# 00 — Executive Summary: BRAZOS Phase 0 Repository Audit
 
-Audit date: 2026-08-04.
+Audit date: 2026-08-08. Executed per `BRAZOS_MASTER_PLAN.md` §B, as Phase 0 of
+the master plan (§J). Supersedes the 2026-08-04 executive summary below this
+line's predecessor for every claim revised here; that pass's file-by-file
+evidence for anything **not** revised below is still accurate and is not
+re-derived from scratch. See `docs/emerald-v2/SCREEN_CROSSWALK.md` and
+`docs/emerald-v2/DESIGN_SYSTEM_STATUS.md` for the full detail this summary
+condenses.
 
 ## Branch and working-tree status
 
-**Branch:** `feature/setup-onboarding-v1` (HEAD `0b1f170`), **not**
-`mainexpo` — the branch CLAUDE.md names as required. This deviation was
-flagged to the user before this audit proceeded; the user explicitly
-authorized auditing this branch as-is. It is flagged again here because it
-governs everything else in this summary: this branch, not `mainexpo`, is
-where the newest and most atlas-relevant work (the auth/onboarding redesign)
-actually lives. **Working tree: clean**, no uncommitted changes, before or
-after this audit — the only new files this audit produced are the
-`docs/emerald-v2/*.md` documents themselves.
+**Branch:** `v2` (HEAD `24bd550`), created directly from
+`feature/emerald-v2-fidelity` HEAD `f295a65` — confirmed the correct,
+authorized baseline (user-directed; `mainexpo` is an older, less-developed
+branch missing the entire Emerald redesign). Working tree: clean before and
+after this audit; the only changes are the `docs/emerald-v2/*.md` files
+listed at the end of this document, plus `BRAZOS_BUILD_STATE.md`.
 
-## Current architecture summary
+## Reality check
 
-Expo SDK 54 / React Native 0.81.5 / React 19, TypeScript, Supabase as the
-entire backend (`@supabase/supabase-js`, no other server). Navigation is
-`@react-navigation` — one signed-out auth stack, a two-screen onboarding
-stack, and **a single five-tab bottom bar** (Home / Map / My Jobs / Messages
-/ Profile) shared by every signed-in user. There is no customer/worker mode
-split anywhere in the app today — that is the single largest structural gap
-against the Emerald atlas, not a missing screen here or there.
+The app is expected to build and run: `node scripts/verify-schema.mjs`
+passes clean (every checked object — phase15 through phase39 tables/columns/
+RPCs — exists in the live database; phase40/41 remain outside the script's
+coverage, a known pre-existing gap, not a new one). No TypeScript/lint run
+was performed in this pass (not requested; `npm run verify` is unchanged
+tooling per `package.json`).
 
-## What already works
+**Bottom-nav/safe-area bug — confirmed still live in 6 of 7 originally-
+affected screens.** `mainexpo`'s only unique commit, `f3e75d0` ("remove
+duplicate bottom safe-area inset on tab-contained screens"), patched
+`AdminReportsScreen`, `BrowseJobsScreen`, `CellJobsScreen`, `PostJobScreen`,
+`ProfileReviewsScreen`, `WorkerProfileScreen`, `WorkerSearchScreen` to drop
+`edges={['top', 'bottom']}` → `edges={['top']}` on their `SafeAreaView`,
+because `MainTabs` (`App.tsx`) already folds `insets.bottom` into the tab
+bar's own height, so reserving it a second time shows as a blank cream band.
+Direct grep of the current `v2` source shows:
 
-The marketplace vertical is real and RPC-hardened, not a prototype shell:
-job posting, browsing, bidding, bid acceptance, job-status transitions,
-completion photo/video evidence, reviews with photos, text/photo/voice
-messaging, direct job offers (a phase36 fix that removed a structural gating
-bug), and semantic worker search (phase39/40, backed by 29 regression tests
-including a guard that its deterministic fallback is byte-for-byte
-unchanged) — all confirmed by direct source trace to real Supabase RPCs, not
-just UI. `npm run typecheck`, `npm run lint` (strict, unused-symbol
-checking), and `npm test` (172/173, one pre-existing unrelated failure) are
-all clean on this branch. Separately, and more relevant to the atlas
-specifically: the auth/onboarding redesign on this branch already implements
-atlas Screens 01–06 (Launch through Setup) to a near-atlas visual and
-structural standard, confirmed by a direct PNG comparison for Welcome and
-Setup — this is materially further along than the task's framing ("Screen 06
-is the next screen under consideration") suggested going in.
+| Screen | Current `edges` prop | Bug present? |
+|---|---|---|
+| `BrowseJobsScreen.tsx` | `['top']` | No — already correct, independently arrived at through the Worker Home Emerald rebuild |
+| `AdminReportsScreen.tsx` | `['top', 'bottom']` | **Yes** |
+| `CellJobsScreen.tsx` | `['top', 'bottom']` | **Yes** |
+| `PostJobScreen.tsx` | `['top', 'bottom']` | **Yes** |
+| `ProfileReviewsScreen.tsx` | `['top', 'bottom']` | **Yes** |
+| `WorkerProfileScreen.tsx` | `['top', 'bottom']` | **Yes** |
+| `WorkerSearchScreen.tsx` | `['top', 'bottom']` | **Yes** |
 
-## What is incomplete
+**f3e75d0 verdict: NOT obsolete, NOT safe to cherry-pick verbatim.** The
+underlying bug reproduces identically in 6 of the 7 files. It is not
+obsolete. But a direct cherry-pick is not recommended: `PostJobScreen.tsx`
+and `WorkerSearchScreen.tsx` have been substantially rewritten since the
+patch was authored (different line counts/structure entirely — see
+`SCREEN_CROSSWALK.md`), so the patch will likely fail to apply or apply to
+the wrong lines. **Recommendation:** re-apply the same one-line fix
+(`edges={['top', 'bottom']}` → `edges={['top']}`) fresh, by hand, to the 6
+files above, in Phase 2 ("fix the bottom-nav breakage here if Phase 0
+confirmed it" — master plan §J, Phase 2). This is a trivial, low-risk fix
+once Phase 2 is underway; it is not applied now because Phase 0 is
+read-only.
 
-Two different kinds of incompleteness, worth keeping separate:
+## What already works (confirmed this pass, current `v2` state)
 
-1. **Genuinely missing product surface**, confirmed absent: AI Concierge (3
-   screens), any payment/checkout/earnings/payout surface (7 screens),
-   services & pricing, availability, live worker tracking/route, a shared
-   work checklist, saved workers (unconfirmed either way), tips, and a
-   dedicated in-app notification feed (the backend outbox already exists;
-   no screen reads it).
-2. **Existing functionality that simply hasn't been re-skinned or re-shaped**
-   into the atlas's screen boundaries yet — most of the Customer posting
-   flow (Screens 12–15), bid comparison (27–30), and both public profile
-   screens (22/63) are functionally complete today but merged into fewer,
-   differently-organized screens than the atlas specifies. This is UI/IA
-   work over working logic, not new product.
+The marketplace core remains real and RPC-hardened, and the Emerald redesign
+has gone further than the 2026-08-04 snapshot in ways that matter for
+sequencing later phases:
 
-The full 66-row breakdown, with a status and classification for each, is in
-[02_SCREEN_CROSSWALK.md](02_SCREEN_CROSSWALK.md).
+- **Screens 01–07 and 48 are genuinely finished to a locked-worthy
+  standard.** Customer Home and Worker Home are both full Emerald redesigns
+  (hero art, serif display type, forest/gold/mint palette, live data feeds),
+  not placeholders. `BRAZOS_MASTER_PLAN.md` correctly locks them.
+- **Radius search is real**, not a stub: `jobs_within_radius()`
+  (`supabase/phase41_jobs_within_radius.sql`) does true Haversine
+  great-circle distance against `job_locations`' exact coordinates,
+  `security definer`, phase32-compliant explicit grant, never returns raw
+  lat/lng of a job the caller doesn't own. Both `BrowseJobsScreen` (Worker
+  Home) and `WorkerResultsScreen` (new) call it. The older
+  `job_hotspots()`/`jobs_in_cell()` grid-cell system is untouched and still
+  serves the map's density view — the two coexist deliberately, not in
+  conflict.
+- **Bid acceptance and job-request response are atomic**, via
+  `security definer` RPCs that take row locks (`accept_bid`,
+  `respond_job_request`, `transition_job_status`) — confirmed by direct SQL
+  read this pass, not just by the existence of a test file.
+- **RLS posture holds**: `profiles`/`jobs`/`bids`/`reviews`/`job_locations`
+  have zero direct client INSERT/UPDATE/DELETE grants; every write goes
+  through a validated RPC; `notification_outbox` and `worker_semantic_docs`
+  have RLS on with zero policies (server/service-role-only, correct for data
+  that must never be directly queryable); `job_locations` is party-scoped
+  (client + assigned worker only), matching the address-privacy pattern the
+  master plan requires — this pattern already exists and just needs
+  preserving, not building.
+- **Storage uploads are failure-safe** by construction: a single
+  `upsert: true` PUT per file, so a failed request never deletes or
+  corrupts the previous object. (One narrow, non-blocking gap: an avatar
+  re-uploaded with a different file extension orphans the old file — no
+  cleanup call exists for avatars the way `deleteJobPhoto` exists for job
+  photos. Worth a small fix whenever avatar upload is next touched, not
+  urgent.)
+- **Post-job wizard is now a real 4-step flow** (Describe/Media/Location/
+  Review), still correctly creating no `jobs` row until the final publish
+  step — an improvement over the 2026-08-04 "merged into one screen" state.
 
-## Highest-risk areas
+## What is incomplete or newly-confirmed-gap (this pass)
 
-1. **Mode persistence has no home.** The Setup screen's "Start in" choice is
-   a one-time, device-local navigation hint (`AsyncStorage`, consumed once)
-   — not a durable mode. Building the atlas's dual-navigation architecture
-   on top of this without first deciding where "mode" actually lives would
-   create rework. See [05](05_DATA_AND_STATE_MODEL_PLAN.md).
-2. **The mode-split navigation change itself (Phase 3) touches the root
-   navigator every signed-in user hits** — the single highest
-   regression-risk phase in the whole plan, by construction, not by guesswork.
-3. **Payments are entirely unbuilt**, and the atlas has money-language rules
-   (never say "paid" for authorized/held funds) that this repo's existing
-   `budget_cents`-integer-money discipline is well-positioned to extend
-   correctly, but only once a provider and fee model are chosen — a product
-   decision, not an engineering one.
-4. **Live-deployment verification gap.** `scripts/verify-schema.mjs` checks
-   phases 15–39 only; phases 1–14 and phase 40 have no live-existence check
-   at all, and `supabase/tests/phase29_security_contract.sql` is stale
-   (asserts a signature phase37 already replaced). Cheap to fix, currently
-   unfixed.
-5. **Two open schema design questions** flagged rather than guessed at:
-   whether open-job bid counteroffers reuse the existing `job_requests`
-   negotiation mechanism or need their own, and whether the existing
-   moderation `reports` table is extended for job disputes or a parallel
-   table is added.
+1. **The customer/worker "mode" is a navigation illusion, not the target
+   architecture.** `ModeTransitionOverlay` provides a genuinely polished
+   branded transition, and `HomeScreen`/`BrowseJobsScreen` both wire into it
+   via `useModeTransition()` — but underneath, there is still exactly one
+   five-tab bar (`Home`/`Map`/`MyJobs`/`Messages`/`Profile`), shared by
+   everyone. "Switching to Worker" pushes `BrowseJobs` onto the *same*
+   `HomeStack`; the Home tab's re-press handler infers "we're in worker
+   mode" by checking whether `BrowseJobs` is present on that stack
+   (`App.tsx`, `tabPress` listener). There is no `CustomerParamList`/
+   `WorkerParamList` type split, no `ModeProvider`, no `switchMode()`, and
+   no `profiles.active_mode`/`mode_preference` column anywhere (confirmed by
+   repo-wide grep — the only hits are documentation references, none in
+   code). **This is real, substantial Phase 2/3 work, not wiring on top of
+   something that already exists** — treat the existing mode-switch UX as
+   valuable prior art (the overlay, the destination-mount timing) to
+   preserve and re-home under the real architecture, not as a shortcut that
+   shrinks Phase 2.
+2. **Draft persistence does not exist.** `PostJobScreen`'s 4-step wizard
+   state is plain `useState`, no `AsyncStorage` reference anywhere in the
+   file — an app kill mid-post loses everything. The master plan's Phase 4
+   DoD ("drafts survive app kill") is not yet met and has real work ahead of
+   it, not a check-the-box item.
+3. **A concrete race condition exists in the bid-acceptance compatibility
+   fallback**, newly confirmed this pass by direct code read.
+   `lib/acceptBidCompatibility.ts`'s `acceptBidWithoutRpc()` — which only
+   runs if the `accept_bid` RPC ever drops out of PostgREST's schema cache
+   (`PGRST202`) — does a read-then-multi-step-conditional-update sequence
+   with **no row lock**, unlike the atomic RPC it's a fallback for. Two
+   concurrent callers hitting this exact path simultaneously could
+   interleave. It is explicitly labeled compatibility-only and is unlikely
+   to be exercised in practice (the RPC is deployed and confirmed live by
+   `verify-schema.mjs`), but it is live, reachable code with no test
+   covering its concurrency behavior — worth a tracked note, not an
+   emergency fix.
+4. **A marketing/capability mismatch, not previously flagged**:
+   `WelcomeScreen.tsx` renders a "Protected payment" badge with a lock icon.
+   No payment, checkout, escrow, or ledger system exists anywhere in the
+   codebase (confirmed by exhaustive grep this pass — the only "payment"
+   hits are `lib/legal/termsOfService.ts` explicitly disclaiming that Brazos
+   processes any payments). This is a product/copy decision, not an
+   engineering one — flag to the user before Phase 4/8 rather than silently
+   resolving it either direction.
+5. **Scheduling/arrival-window field confirmed absent** from the post
+   wizard (previously only suspected, per the 2026-08-04 audit). Atlas
+   Screen 14 needs a real schema field, not just a UI section.
+6. **Dead code**: `components/SectionHeader.tsx` exists, exports a working
+   component, and is never imported anywhere in the repo. Left in place per
+   Phase 0 policy (list-only, no deletion); candidate for Phase 13.
 
-## Largest opportunities for reuse
+## VERIFY DURING REPOSITORY AUDIT — all tags resolved
 
-The entire marketplace core (§ above), the phone-auth provider-adapter
-pattern (`lib/phoneAuth/` — mock/supabase/disabled, chosen by an env var,
-screens never branch on mode directly) as the **direct template** for every
-other deferred integration in [06](06_DEFERRED_INTEGRATIONS.md), and the
-`useSetupPermissions.ts` three/four-state permission model as the reference
-pattern for every future OS-permission screen the atlas requires (location
-tracking, camera access, notifications).
+Per `BRAZOS_MASTER_PLAN.md`, every tag below is now resolved:
 
-## Atlas-package limitations
+| VERIFY item | Resolution |
+|---|---|
+| Router (expo-router vs react-navigation) | **react-navigation** (`@react-navigation/native` + `bottom-tabs` + `native-stack`). Plan adapts to this; never switch routers. |
+| Server-state/cache layer | **None exists.** No TanStack Query, no other cache library in `package.json`. Server state is per-hook (`useJob`, `useJobDetail`, `useMyJobsHub`, `useConversations`, etc.), each doing its own fetch/refetch/realtime-subscribe. TanStack Query remains the master plan's one pre-approved addition, to be added in Phase 1 if the team chooses to close this gap then. |
+| Radius-search mechanism | **Real Haversine RPC** (`jobs_within_radius()`, phase41), not PostGIS, not client-side filtering. The older `job_hotspots()`/`jobs_in_cell()` grid-cell RPCs remain in parallel for map density and are untouched. |
+| Media-table structure | **Per-domain**, not polymorphic: `jobs.photos`/`jobs.videos`/`jobs.completion_photos`/`jobs.completion_videos` (jsonb array columns), `reviews.photos` (jsonb), `portfolio_items.photo_url` (single column, one row per image). No single generic media table exists. |
+| Scheduled-function/cron pattern | **On-read-check only** — no edge-function/cron pattern found anywhere in `supabase/` or `scripts/`. The master plan's 72h auto-approve (§H.5) will need to be built as an on-read check first, per the plan's own fallback language. |
+| Nav-bar/safe-area bug | **Confirmed still live** in 6 of 7 originally-patched screens (see Reality Check above); fix in Phase 2. |
+| Auth implementation | **Email/password is the only real session-creating path** (`lib/AuthContext.tsx`, direct Supabase `auth.signUp`/`signInWithPassword`). Phone auth is a working, tested, provider-adapter-shaped mock (`lib/phoneAuth/`) — `EXPO_PUBLIC_PHONE_AUTH_MODE` env var selects `mock`/`supabase`/`disabled`; the real Supabase provider exists in code but is dormant/unprovisioned. E.164 normalization is real and tested (`lib/phoneNumber.ts`). |
+| Messaging/realtime | **Real**, via Supabase Realtime `postgres_changes` on the `messages` table, filtered per-conversation (job or direct-thread) plus a second unfiltered inbox-level channel relying on RLS for scoping. Chat media is private, signed-URL-resolved (6h TTL), never a public URL. |
+| Payment implementation | **Does not exist at any layer** — no table, no ledger, no provider, no UI beyond a single unbacked "Protected payment" marketing badge on `WelcomeScreen` (see gap #4 above). Confirmed via exhaustive grep, not just absence-of-evidence. |
+| Generated DB types | **Do not exist.** No `database.types.ts` or equivalent anywhere in the repo. `jobs.status` and similar fields are typed as plain `string` in `lib/jobs.ts`; status comparisons use raw string literals (`'open'`, `'completed'`, etc.) throughout the data layer — the master plan's "no string literals for statuses" rule is not yet upheld anywhere and is real Phase 3 work. |
+| Open-job bid counteroffer vs. job_requests mechanism | **Still two genuinely separate systems**, confirmed by direct SQL/code read this pass (`bids` table for public competitive bidding, no counter mechanism on it; `job_requests` for private negotiation, with a real 3-counters-per-side turn-taking counteroffer mechanism). The master plan's Phase 3 "job_offers unification or a mapping layer" decision remains open and should be made deliberately, not assumed — this audit does not decide it. |
+| `reports` table vs. new dispute table | **Still unresolved**, unchanged from 2026-08-04 — `reports` exists (moderation-focused: no-show/unsafe/harassment/scam/other) but is not confirmed wired to the job-completion "report an issue" path. Product decision, not re-derived here. |
+| Saved workers presence | **Still UNKNOWN** — not confirmed present or absent this pass either; grep before Phase 5/9 work touches it. |
 
-The supplied package is richer than the task's framing assumed: alongside
-the PDF, `README.md`, and `screen_map.json`, `design-reference/` also
-contains all 66 full-resolution PNGs directly (not just inside the nested
-`_extracted/` folder, which additionally has a working HTML
-gallery/prototype). This audit used the PDF's text (cross-confirmed
-identical in content to `screen_map.json`) for all 66 screens' purpose/
-actions/transitions, and spot-checked 2 of 66 PNGs (Welcome, Setup) for exact
-visual comparison. **The remaining 64 screens' colors/spacing/type are
-VISUAL DETAIL UNVERIFIED** — the crosswalk and design-system plan say so
-explicitly rather than inventing hex values.
+## KEEP / FIX / CONSOLIDATE / REMOVE LATER / ADD
 
-## Recommended implementation order
+**KEEP as-is (do not rebuild, do not restyle):**
+- Screens 01–07, 48 (locked). The entire marketplace RPC layer (`create_job`,
+  `update_job_details`, `accept_bid`, `transition_job_status`,
+  `create_job_request`, `respond_job_request`, `create_review`, and their
+  RLS/grant posture). `job_locations`' privacy-split pattern. The
+  `lib/phoneAuth/` provider-adapter shape (template for every future
+  deferred integration). `jobs_within_radius()` and the older hotspot
+  RPCs — keep both, they serve different UI needs. `lib/storage.ts`'s
+  upload-is-upsert failure-safety pattern.
 
-Per [07_PHASED_IMPLEMENTATION_PLAN.md](07_PHASED_IMPLEMENTATION_PLAN.md):
-Phase 0 (close cheap verification gaps) → Phase 1 (design-system tokens,
-starting from the already-close auth surface) → Phase 2 (resolve the mode-
-persistence decision) → Phase 3 (mode-split navigation + the posting/bidding
-vertical slice, which functionally already exists) → Phases 4–6 (completion/
-trust/messaging, in any order the user prefers) → Phase 7 (AI Concierge,
-after manual posting stays reliable — it already is) → Phase 8 (all
-production integrations, gated on product/legal decisions, never bundled).
+**FIX:**
+- The 6-screen safe-area regression (Phase 2, see above).
+- Avatar re-upload extension-change orphaning a stale file (small, whenever
+  avatar upload is next touched).
+- `WelcomeScreen`'s unbacked "Protected payment" badge (product decision:
+  remove the claim, or scope it as real work before Phase 4/8).
 
-## Top 10 decisions that must remain consistent throughout V2
+**CONSOLIDATE (Phase 1, per `DESIGN_SYSTEM_STATUS.md`):**
+- `lib/theme.ts` + `lib/authTheme.ts` into one token source. Core brand
+  colors (forest/emerald/gold/goldSoft/mint/mint2/ink) already match
+  `BRAZOS_MASTER_PLAN.md` §I exactly and should be preserved verbatim;
+  radii and type scale do not match §I's target values and need
+  reconciling; background/muted/border/danger are close-but-not-exact and
+  are a judgment call, not an error.
+- `Button`/`AuthButton`, `TextField`/`AuthField` — two palette-scoped
+  families each, consolidate per §I's primitive list once Phase 1 tokens
+  land.
+- `BrowseJobCard`/`WorkerJobCard` into a real `ModeContext`-driven `JobCard`
+  once `ModeContext` exists (Phase 2 dependency).
 
-1. One account, two **modes** — never a role field, never a second
-   authentication identity. Already correctly unenforced at the schema
-   level; keep it that way.
-2. Money is integer cents everywhere (`budget_cents`, `amount_cents`,
-   `final_amount_cents`), formatted only through the existing formatter —
-   already upheld throughout, including in every net-new payment/tip/payout
-   table this plan proposes.
-3. A job is only ever assigned by the database, through `accept_bid()` or
-   `respond_job_request()` — never client-set. Already true; every future
-   RPC must follow the same shape.
-4. Bids and job requests stay two separate systems — do not merge them to
-   "simplify" the open-job counteroffer question in
-   [05](05_DATA_AND_STATE_MODEL_PLAN.md); resolve it as its own decision.
-5. Every new deferred/paid integration gets a provider-adapter interface
-   before it gets a UI screen, following `lib/phoneAuth/`'s exact shape —
-   this is not a suggestion, it is the only pattern this codebase has
-   actually proven works.
-6. Never claim a trust signal that isn't real — no fabricated ratings,
-   reviews, verification, or "paid" language for authorized/held funds.
-   Already correctly upheld (`VerificationBadge` is honestly labeled
-   UI-only; nothing found fabricates review data).
-7. Exact job location and any future live-tracking coordinate data stay off
-   the Realtime publication and behind a narrow SECURITY DEFINER function —
-   `job_locations`' existing pattern must be repeated exactly for Screens
-   33/56, not reinvented.
-8. Never weaken an existing RLS policy or grant to ship a feature faster —
-   add a narrow new SECURITY DEFINER function instead. Already the
-   established pattern across all 40 migration phases; CLAUDE.md already
-   states this rule explicitly.
-9. Migrations are hand-written, sequential, idempotent SQL files handed to
-   the user to run — never executed against production by an agent, and
-   every new function needs an explicit `grant execute` (the phase32
-   lesson).
-10. Route names are preserved, not renamed to match atlas slugs — the atlas
-    slugs are documentation, not a code contract; renaming working routes is
-    pure regression risk with zero functional benefit.
+**REMOVE LATER (Phase 13, not now):**
+- `components/SectionHeader.tsx` (confirmed dead — never imported).
 
-## Direct assessment: incremental refactor, not rewrite
-
-**Incrementally refactor. Do not rewrite.** This is not a hedge —
-`npm run typecheck`/`lint`/`test` are clean, the marketplace vertical is
-RPC-hardened end to end with real regression tests guarding the security
-posture, and the newest work on this exact branch already tracks the atlas
-closely for the first six screens. A rewrite would discard a working,
-tested, security-hardened backend and a genuinely-advanced onboarding
-redesign to rebuild what already works. The real gap — dual-mode navigation
-and the payment/trust surfaces the atlas adds — is additive work layered
-onto this foundation, not a reason to discard it.
+**ADD (net-new, no existing equivalent to extend):**
+- The dual-navigator mode-split architecture itself (Phase 2/3) —
+  `ModeProvider`, `switchMode()`, typed `CustomerParamList`/
+  `WorkerParamList`, `profiles.active_mode` column.
+- Draft persistence for `PostJobScreen` (Phase 4).
+- Generated DB types + canonical status enums (Phase 3).
+- A real dev component catalog (Phase 1).
+- `MoneyText`, `ChecklistCard`, `EvidenceGallery`, `ServiceCard`,
+  `EmptyState`, `MediaGrid` shared components (as their respective phases
+  need them — mostly Phase 4+, not Phase 1).
+- Payment/ledger schema and sandbox adapter (Phase 4/8, per master plan).
+- Scheduling/arrival-window field on `jobs` (Phase 3/4 migration).
 
 ## Recommended immediate next task
 
-[09_SETUP_IMPLEMENTATION_HANDOFF.md](09_SETUP_IMPLEMENTATION_HANDOFF.md) /
-[10_NEXT_CLAUDE_PROMPT.md](10_NEXT_CLAUDE_PROMPT.md): a bounded token-
-verification pass on the already-built Setup/LegalGate screens against the
-real atlas source, explicitly **not** touching the mode-persistence question
-(that's Phase 2, a separate decision). This is deliberately the smallest
-possible next step, not the mode-split work — that comes after the user
-decides how mode should be stored.
+Per `BRAZOS_MASTER_PLAN.md` §J/§K: **Phase 1 — Design system foundation.**
+Start from `DESIGN_SYSTEM_STATUS.md`'s "What Phase 1 genuinely needs to
+build vs. what already exists" section — most of the primitive roles already
+have a working component to extend/rename, and the core brand colors are
+already correct; the real Phase 1 work is the radii/type-scale reconciliation,
+one consolidated token file, and the dev catalog.
+
+## Documents produced/updated this pass
+
+- `docs/emerald-v2/SCREEN_CROSSWALK.md` (new — supersedes `02_SCREEN_CROSSWALK.md` for revised rows)
+- `docs/emerald-v2/DESIGN_SYSTEM_STATUS.md` (new)
+- `docs/emerald-v2/00_EXECUTIVE_SUMMARY.md` (this file, rewritten in place)
+- `BRAZOS_BUILD_STATE.md` (updated separately)
+
+The numbered docs `01`–`10` and `DECISIONS.md` (2026-08-04) are left
+unmodified as historical reference; their claims not explicitly revised
+above or in `SCREEN_CROSSWALK.md`/`DESIGN_SYSTEM_STATUS.md` remain accurate
+and load-bearing.
