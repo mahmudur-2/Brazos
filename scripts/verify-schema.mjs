@@ -488,6 +488,53 @@ const MIGRATIONS = [
         checkColumnRevoked('profiles', 'active_mode')],
     ],
   },
+  {
+    // ---------------------------------------------------------------------
+    // PHASE 3A. Unlike every group above, this one is NOT expected to be
+    // applied yet: the migration files are written and reviewed but have not
+    // been run against the remote database. The `sentinel` below is what
+    // makes that distinction honest rather than a weakened check.
+    //
+    //   sentinel MISSING -> the migration has not been applied. Every check
+    //                       in this group reports PENDING and none of them
+    //                       counts toward the failure total. Nothing is
+    //                       marked as passing.
+    //   sentinel PRESENT -> the migration HAS been applied. Every check
+    //                       becomes mandatory, exactly like the groups above,
+    //                       and a missing object fails the run.
+    //
+    // The flip is automatic and cannot be gamed by editing a flag: the only
+    // way to reach the mandatory state is for phase43 to actually have run.
+    // job_offers_enabled() is created as the LAST object inside phase43's
+    // single transaction, so its presence proves the whole file committed —
+    // which is also why the parts of phase43 that no PostgREST probe can see
+    // (the two enums, every constraint, the widened messages CHECK, and the
+    // visibility predicate added to the three discovery RPCs) need no probe
+    // of their own. Probing those RPCs for mere existence would be worse than
+    // useless here: they all exist BEFORE the migration, so such a check
+    // would report green against an unmigrated database.
+    // ---------------------------------------------------------------------
+    file: 'phase43_job_offers_foundation.sql',
+    sentinel: ['rpc job_offers_enabled()', () => checkRpc('job_offers_enabled', {})],
+    checks: [
+      ['jobs.visibility', () => checkColumn('jobs', 'visibility')],
+      ['jobs.accepted_offer_id', () => checkColumn('jobs', 'accepted_offer_id')],
+      ['job_locations.address_line', () => checkColumn('job_locations', 'address_line')],
+      ['job_locations.access_notes', () => checkColumn('job_locations', 'access_notes')],
+      // phase43 enables RLS on job_offers with zero policies and revokes every
+      // grant, so the table must be unreachable with the publishable key.
+      // Phase 3B grants deliberately; until then a readable job_offers would
+      // mean both sides' private negotiation amounts were world-readable.
+      ['job_offers not readable', () => checkColumnRevoked('job_offers', 'id')],
+    ],
+  },
+  // phase44_backfill_bids_to_job_offers.sql and
+  // phase45_job_requests_to_job_offers.DRAFT.sql are deliberately NOT checked
+  // here. Both are pure data migrations: they add no schema object, so there
+  // is nothing for an existence probe to find, and row counts are not visible
+  // through RLS with the publishable key. Each file verifies itself instead —
+  // it recounts source and destination rows at the end and raises, rolling the
+  // whole transaction back, if they disagree.
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
@@ -503,9 +550,34 @@ if (!control.ok) {
 console.log('control check (jobs.photos): OK — probe is working\n');
 
 let missing = 0;
+let pending = 0;
 for (const migration of MIGRATIONS) {
   console.log(migration.file);
+
+  // A group with a sentinel is one whose migration may legitimately not be
+  // applied yet. Ask the sentinel first; it decides whether this group's
+  // checks are mandatory or merely expected-missing. A group without one is
+  // mandatory, exactly as it always was.
+  let applied = true;
+  if (migration.sentinel) {
+    const [sentinelLabel, runSentinel] = migration.sentinel;
+    const s = await runSentinel();
+    applied = s.ok;
+    if (applied) {
+      console.log(`  OK       ${sentinelLabel}${s.note ? `  [${s.note}]` : ''}`);
+    } else {
+      pending++;
+      console.log(`  PENDING  ${sentinelLabel}  — NOT APPLIED (${s.detail})`);
+    }
+  }
+
   for (const [label, run] of migration.checks) {
+    if (!applied) {
+      // Reported, counted as pending, never counted as passing.
+      pending++;
+      console.log(`  PENDING  ${label}  — EXPECTED MISSING until the migration is applied`);
+      continue;
+    }
     const r = await run();
     if (r.ok) {
       console.log(`  OK       ${label}${r.note ? `  [${r.note}]` : ''}`);
@@ -518,8 +590,15 @@ for (const migration of MIGRATIONS) {
 }
 
 if (missing === 0) {
-  console.log('All checked objects exist in the live database.');
+  console.log('All REQUIRED objects exist in the live database.');
 } else {
   console.log(`${missing} object(s) missing — run the SQL file(s) listed above.`);
+}
+if (pending > 0) {
+  console.log(
+    `${pending} check(s) PENDING — their migration is not applied yet. This is ` +
+      'not a failure; the checks become mandatory automatically once the ' +
+      'migration lands.'
+  );
 }
 process.exit(missing === 0 ? 0 : 1);

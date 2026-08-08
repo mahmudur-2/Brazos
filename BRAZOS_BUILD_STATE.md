@@ -2,11 +2,13 @@
 Updated: 2026-08-08
 
 ## Current phase
-Phase 2 — Mode & navigation hardening. **PASS / CLOSED.** All gates green,
-including migration application (verified via `verify-schema.mjs`, not a SQL
-Editor message) and real-device verification of the mode switch, both
-performed by the user. Next exact task: Phase 3 — Data foundation (see "Exact
-next task" at the bottom).
+Phase 3A — Unified offer data model + schema foundation. **CODE COMPLETE,
+NOT APPLIED.** Migration files are written and reviewed; none has been run
+against the remote database, which is the correct end state for 3A (the brief
+says output files only). `verify-schema.mjs` reports phase43's checks as
+PENDING / NOT APPLIED and every prior phase as OK — see "Gate status".
+Next exact task: apply phase43 + phase44, re-run the verifier, then Phase 3B
+(see "Exact next task" at the bottom).
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -31,7 +33,13 @@ next task" at the bottom).
   SQL Editor message), real Expo device mode-switch checklist all green (see
   Phase log entry below / "Manual verification" section for the checklist
   covered).
-- [ ] 3 data ·
+- [~] 3 data · **3A PARTIAL** (this commit) · `job_offers` unification decided
+  and written: phase43 (structure, final), phase44 (bids backfill, final),
+  phase45 (job_requests materialization, **DRAFT / held**). Decision doc:
+  `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`. Nothing applied
+  remotely; no RPC body, RLS policy (except a strict narrowing of
+  `jobs_select_open`), or UI changed. 3B = RLS + `accept_offer` /
+  `advance_job_status` + retire `bids`/`job_requests`.
   [ ] 4 post · [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
@@ -56,7 +64,7 @@ locked-worthy — not placeholders.
 - messaging/realtime: real, via Supabase Realtime `postgres_changes` on `messages`, per-conversation + inbox-level channels; chat media private, signed-URL-resolved (6h TTL)
 - payment implementation: **does not exist at any layer** — no table, ledger, provider, or real UI; one unbacked "Protected payment" marketing badge on `WelcomeScreen` flagged as a product/copy gap
 - generated DB types: **do not exist** — `jobs.status` etc. typed as plain `string`; raw string-literal status comparisons throughout `lib/`
-- open-job bid counteroffer vs. job_requests mechanism: **still two separate systems**, confirmed unchanged; unification decision remains open, not made by this audit
+- open-job bid counteroffer vs. job_requests mechanism: **RESOLVED in Phase 3A (2026-08-08) — unify into `job_offers`.** `job_requests` and `bids` are both retired in Phase 3B. Full reasoning, the `offer_type`/`parent_offer_id` shape, the uniqueness design and the one-bid-ever-vs-one-active-chain decision are in `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`
 - reports table vs. new dispute table: **still unresolved**, unchanged from 2026-08-04
 - saved workers presence: **still UNKNOWN** — check before Phase 5/9
 
@@ -76,6 +84,52 @@ locked-worthy — not placeholders.
   dual-navigator architecture — not a shortcut that reduces Phase 2's scope.
   Phase 2 is still the full structural build (ModeProvider, switchMode(),
   typed param lists, `profiles.active_mode`).
+
+### Phase 3A decisions (2026-08-08)
+
+Full argument for each: `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`.
+
+- **`bids` + `job_requests` → one `job_offers` table.** phase18's separation
+  argument (only one side has counters) is obsolete now that §H.2 gives the
+  public side counters too; phase33 is live proof that `job_requests`'
+  duplicated job fields drift out of sync with `jobs` and break users.
+- **No `kind = 'counter'`.** `offer_type` (`marketplace_bid` | `direct_offer`)
+  is set once on the root; a counter is identified structurally by having a
+  `parent_offer_id`. Inheritance of job/type/participants/root down a chain is
+  enforced by a composite self-referencing FK, not by a trigger or by code —
+  so "offer_type never changes within a chain" is a schema guarantee.
+- **No separate negotiation-chain table.** The only thing it would hold is the
+  tuple the composite FK already pins. Rejected for lack of evidence it was
+  needed, as the brief required.
+- **PRODUCT CHANGE, NEEDS SIGN-OFF: one ACTIVE chain per (job, worker), not
+  one bid ever.** `bids`' unconditional `unique (job_id, worker_id)` cannot
+  survive counter chains in any form, so the only question was how far to
+  loosen. Under one-chain-ever, §H.2's new `withdrawn` and `expired` states
+  would permanently bar a worker from a job they are still eligible for —
+  Phase 5 is chartered to build both. Reversible in one line (append
+  `and parent_offer_id is null` to `job_offers_one_live_bid_per_worker`).
+- **phase18's per-pair direct-offer cap is preserved,** not repealed —
+  otherwise phase45 would have silently dropped an existing anti-spam rule.
+- **`job_private_details` = extend `job_locations`, not a new table.** phase12
+  already implements §G's exact privacy shape and RLS; phase43 adds
+  `address_line` + `access_notes` to it. Renaming it would break phase12/18/
+  29/36/41 and three live RPCs.
+- **`notification_prefs.bids` / `.hire_requests` are NOT merged** — routed by
+  `offer_type`. `bids OR hire_requests` was rejected: it silently opts users
+  into a category they never chose. Recorded only; Phase 12 implements.
+- **`jobs.accepted_bid_id` NOT renamed** — the rename conflicts with the
+  "don't touch lifecycle RPC bodies" guardrail (`accept_bid()` and
+  `acceptBidCompatibility.ts` both write it). `accepted_offer_id` added
+  alongside instead; Phase 3B flips writers and drops the old column.
+- **`bids_job_id_fkey` NOT renamed** — `lib/bids.ts` and `lib/jobs.ts` name it
+  in embed hints; renaming breaks them at runtime with no client change
+  shipped this phase.
+- **No hand-written DB types.** `supabase gen types` needs the CLI plus a local
+  Postgres or a service-role connection — none present, and adding either is a
+  flaggable new dependency. Nothing in 3A needs to compile against the new
+  schema, so inventing unions now would create a second source of truth.
+  Authoritative regeneration deferred to immediately after the Phase 3
+  migrations are applied.
 
 ### Phase 1 design-system decisions (2026-08-08)
 
@@ -147,6 +201,19 @@ per the master plan and were not built.
 under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
+## Migrations written but NOT applied (Phase 3A)
+- `phase43_job_offers_foundation.sql` — **final, ready to apply.** Structure
+  only, one transaction, sentinel (`job_offers_enabled()`) created last.
+- `phase44_backfill_bids_to_job_offers.sql` — **final, apply after phase43.**
+  Data only; idempotent; recounts and rolls itself back on any mismatch.
+- `phase45_job_requests_to_job_offers.DRAFT.sql` — **HELD, do not apply.**
+  Blocked on two gates: (1) the requirement-3 live-row check, which needs
+  database access this repo's publishable key does not have — the query to run
+  is in the decision doc; (2) sequencing behind Phase 3B's UI, because
+  `fetchJobsByClient()` has no status filter, so materializing draft jobs would
+  put phantom entries in every affected customer's My Jobs. The file refuses
+  to run without `set brazos.phase45_verified = 'yes'`.
+
 ## Migrations applied (verify-schema green)
 phase42 (`phase42_active_mode.sql`): **applied by the user via the Supabase
 SQL Editor, then confirmed via a green `node scripts/verify-schema.mjs` run**
@@ -194,12 +261,43 @@ the script this pass.
   but it is a real, deliberate behaviour change worth knowing about.
 - `PostJobScreen` draft state is in-memory only (no `AsyncStorage`) — lost on app kill. Real gap against Phase 4's DoD.
 - No scheduling/arrival-window field on `jobs` — confirmed absent (previously only suspected).
-- `lib/acceptBidCompatibility.ts`'s `acceptBidWithoutRpc()` fallback (only runs on `PGRST202`, i.e. if `accept_bid` RPC ever drops from PostgREST's schema cache) does a non-atomic read-then-multi-step-update with no row lock — a real TOCTOU race, unlikely to be exercised since the RPC is confirmed live, but untested for concurrency.
+- `lib/acceptBidCompatibility.ts`'s `acceptBidWithoutRpc()` fallback (only runs on `PGRST202`, i.e. if `accept_bid` RPC ever drops from PostgREST's schema cache) does a non-atomic read-then-multi-step-update with no row lock — a real TOCTOU race, unlikely to be exercised since the RPC is confirmed live, but untested for concurrency. **Phase 3A verdict: not dead code** — `lib/bids.ts:2,196` and `tests/hardening.test.mjs:86,91` reference it, so it was left in place and marked in-file for **mandatory removal in Phase 3B**, when `accept_offer()` replaces `accept_bid()` and it has nothing left to fall back from.
+- **`fetchJobsByClient()` (`lib/jobs.ts`) has no status filter** — it returns every job a client owns. Harmless today; it becomes a real defect the moment draft/direct jobs exist, so it is one of the two gates holding phase45. Fix it (or ship the draft-job UI) before applying that migration.
+- **A worker cannot read the job a direct offer refers to before accepting it.** `jobs_select_assigned_worker` needs `assigned_worker_id`, which a live direct offer has not set. Phase 3B must add a policy for the targeted worker, or the offer surfaces will render an unreadable job.
+- **Declined/closed `job_requests` have no migration path** into `job_offers` — they never produced a job row and `job_offers.job_id` is NOT NULL. phase45 deliberately skips them rather than fabricating a job. Phase 3B decides whether `job_offers` should carry dead negotiations at all (if yes, `job_id` must become nullable — a model change).
+- **`bids` carries duplicate `public`- and `authenticated`-role RLS policies** (`workers view own bids` ≈ `bids_select_own`, `job owner views bids on their job` ≈ `bids_select_job_owner`) — leftovers from a role migration. The `public` pair is strictly weaker (no `is_profile_active(worker_id)` term) and, being permissive, ORs with the stricter pair, so the stricter one currently adds nothing. Untouched in 3A per the brief; Phase 3B's RLS consolidation should drop the `public` pair.
 - Avatar re-upload with a changed file extension orphans the old storage object (no cleanup call, unlike `deleteJobPhoto` for job photos).
 - `WelcomeScreen` shows a "Protected payment" marketing badge; no payment system exists anywhere in the codebase. Flag to user before Phase 4/8.
 - `components/SectionHeader.tsx` is dead code (never imported) — left in place per Phase 0 policy, candidate for Phase 13 deletion.
 
 ## Gate status
+
+Phase 3A (2026-08-08) — code complete, migrations not applied:
+- **tsc**: PASS — `npm run lint` exits 0, clean.
+- **eslint**: NOT RUN — still not installed, no config. Unchanged.
+- **tests**: **212/214 PASS — identical to the Phase 2 baseline.** The same two
+  pre-existing failures (`pwa.test.mjs` frozen-web version string,
+  `setupOnboarding.test.mjs` CRLF mis-slice), zero new failures, zero new
+  tests. Phase 3A adds no TypeScript, so the suite is unchanged by design.
+- **verify-schema**: **PASS (pre-migration state, as specified).** Every
+  phase15–phase42 check reports OK; all six phase43 checks report
+  `PENDING — NOT APPLIED`; exit code 0. The script now supports a per-group
+  `sentinel`: while the sentinel RPC is absent the group's checks are reported
+  as pending and excluded from the failure total; the moment phase43 is applied
+  the same checks become mandatory automatically. No earlier check was
+  weakened and no missing object is reported as passing.
+- **locked screens**: N/A — Phase 3A changed no screen. The only TypeScript
+  edit in the phase is a doc comment in `lib/acceptBidCompatibility.ts`.
+- **mode-smoke**: N/A — no navigation or mode change.
+- **rls-probe**: N/A this phase — no policy is applied. phase43 contains
+  exactly one policy statement, a strict narrowing of `jobs_select_open`
+  (adds `visibility = 'open_market'`), and it is unapplied. Re-run the probe
+  after applying phase43.
+- **device/simulator**: N/A — nothing user-visible changed.
+
+**Phase 3A gate: green for what 3A is allowed to do.** It is deliberately NOT
+a phase closure: Phase 3 closes when 3B's RLS, `accept_offer` /
+`advance_job_status` and the applied migrations are verified.
 
 Phase 2 closure (2026-08-08):
 - **tsc**: PASS — `npm run lint` exits 0, clean. Re-confirmed at closure.
@@ -411,21 +509,33 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   enum. `AppMode` is a hand-written union today, matching the DB constraint's
   two values exactly.
 
-## Exact next task (Phase 3 — Data foundation)
-Per BRAZOS_MASTER_PLAN.md §J, Phase 3 (LARGE). Phase 2 is closed; this is the
-next task, not yet started. In order:
-1. Canonical status enums as numbered migrations (§H's five state machines),
-   then regenerate/introduce database types — they do not exist at all today
-   (`jobs.status` is a plain `string`; raw literals throughout `lib/`).
-2. The `job_private_details` privacy split, with a backfill from whatever
-   address data currently sits on `jobs`/`job_locations`. Note `job_locations`
-   already implements this pattern correctly and is marked KEEP — extend it,
-   do not rebuild it.
-3. Decide the still-open `job_offers` unification question (bids vs.
-   job_requests are two separate systems today; Phase 0 deliberately did not
-   decide it). Record the decision here before writing the migration.
-4. RPCs `advance_job_status` / `accept_offer`, RLS baseline, storage bucket
-   policies, extend `verify-schema.mjs` for all of it.
-5. Replace raw status string literals in touched code with the generated enums,
-   and retarget `StatusPill`'s local unions at them (Phase 1 shipped them as
-   local types precisely so this swap is mechanical).
+## Exact next task (Phase 3B — apply, then RLS + guarded transitions)
+
+Phase 3A is code complete. Items 2 and 3 of the old Phase 3 list are done
+(privacy split via `job_locations`; the `job_offers` unification decided and
+written). What remains, in order:
+
+1. **User applies `phase43_job_offers_foundation.sql`** via the Supabase SQL
+   Editor, then `phase44_backfill_bids_to_job_offers.sql`, reading phase44's
+   NOTICE lines. Then re-run `node scripts/verify-schema.mjs` — the six
+   phase43 checks must flip from PENDING to OK on their own. Only that green
+   run counts as applied; the SQL Editor's "Success" message does not.
+2. **Run the requirement-3 live-row query** (in
+   `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md` §6) and report the
+   counts. Every column must be 0 except the three totals. phase45 stays held
+   until this passes AND the draft-job UI (or a `fetchJobsByClient()` status
+   filter) exists.
+3. **Sign-off needed before 3B writes any RPC:** the one-active-chain vs.
+   one-bid-ever decision (§4 of the decision doc). It loosens live behaviour
+   and is reversible in one line, but only cheaply so *before* data lands.
+4. RLS baseline for `job_offers` (it currently has RLS on with **zero
+   policies**, so it is unreadable by design), plus the missing
+   targeted-worker policy on `jobs` noted in Known issues.
+5. RPCs `accept_offer` / `advance_job_status`; move `create_bid`,
+   `accept_bid`, `create_job_request`, `respond_job_request` onto
+   `job_offers`; rename/drop `bids_job_id_fkey` and `jobs.accepted_bid_id`
+   alongside their callers; delete `lib/acceptBidCompatibility.ts`.
+6. The §H.1 job-lifecycle enum (`draft → published → …`) — 3A added only the
+   `draft` value phase45 needs, and only inside that held file.
+7. Regenerate database types (still do not exist), replace raw status
+   literals in touched code, retarget `StatusPill`'s local unions.

@@ -20,6 +20,14 @@ type BidAcceptanceError = {
 };
 
 /**
+ * MANDATORY REMOVAL IN PHASE 3B. This file is not dead code today — `lib/bids.ts`
+ * imports and calls it, and `tests/hardening.test.mjs` asserts both — so Phase 3A
+ * deliberately left it in place rather than changing behaviour. It must go when
+ * `accept_bid()` is replaced by `accept_offer()` (§H.2), because at that point
+ * there is no RPC for it to fall back from, and the non-atomic
+ * read-then-multi-step-update below is a real TOCTOU race with no row lock. See
+ * docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md §9.
+ *
  * Compatibility path for projects where phase30 has not reached PostgREST's
  * schema cache yet. It is called only for PGRST202 (missing accept_bid RPC).
  *
