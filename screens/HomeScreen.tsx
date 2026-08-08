@@ -30,6 +30,7 @@ import {
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
+  type JobCategory,
   type OpenJob,
 } from '../lib/jobs';
 import { HOME_QUICK_SERVICES, MORE_SERVICES } from '../lib/skillCategories';
@@ -112,10 +113,20 @@ export function HomeScreen() {
     navigation.navigate('JobDetail', { job });
   }
 
-  function searchCategory(categoryKey: string) {
-    navigation.navigate('WorkerSearch', { category: categoryKey });
+  // The one job-draft entry point Home offers: the "Post a job" CTA, a
+  // tapped category chip, and whatever the customer already typed in the
+  // search field all land here instead of each keeping separate draft state,
+  // so there is exactly one place a fresh post actually gets created.
+  function startJobDraft(categoryKey?: string) {
+    navigation.navigate('PostJob', {
+      initialCategory: categoryKey as JobCategory | undefined,
+      initialDescription: query.trim() || undefined,
+    });
   }
 
+  // Typed search still finds workers directly — the category chips below are
+  // the ones that changed meaning (job draft, not worker lookup); this Enter/
+  // search-icon path is untouched.
   function submitSearch() {
     const trimmed = query.trim();
     if (!trimmed) return;
@@ -240,7 +251,7 @@ export function HomeScreen() {
                     icon={service.icon}
                     variant="service"
                     style={rowIndex === 1 ? styles.compactServiceChip : undefined}
-                    onPress={() => searchCategory(service.key)}
+                    onPress={() => startJobDraft(service.key)}
                     accessibilityHint={`Find ${service.label.toLowerCase()} help`}
                   />
                 ))}
@@ -268,7 +279,7 @@ export function HomeScreen() {
                 </Text>
               </View>
               <Pressable
-                onPress={() => navigation.navigate('PostJob')}
+                onPress={() => startJobDraft()}
                 style={({ pressed }) => [
                   styles.heroButton,
                   {
@@ -367,7 +378,7 @@ export function HomeScreen() {
         services={MORE_SERVICES}
         onSelect={(categoryKey) => {
           setMoreOpen(false);
-          searchCategory(categoryKey);
+          startJobDraft(categoryKey);
         }}
         onClose={() => setMoreOpen(false)}
       />

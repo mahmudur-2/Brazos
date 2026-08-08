@@ -1,5 +1,5 @@
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { Job, OpenJob } from './jobs';
+import type { Job, JobCategory, OpenJob } from './jobs';
 import type { ChatTarget } from './messages';
 import type { PhoneAuthIntent, PhoneProfileDraft } from './phoneAuth/types';
 
@@ -73,7 +73,18 @@ export type HomeStackParamList = {
    * the request (or a counteroffer), so it never leaks into public bidding.
    */
   PostJob:
-    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        /** Carried from Home's search field / a tapped category chip so a
+         *  fresh post starts pre-filled instead of blank. Ignored in edit
+         *  and hire-again modes, which load their own values. */
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string };
@@ -98,7 +109,18 @@ export type MyJobsStackParamList = {
   Chat: ChatTarget;
   // Registered here too so "Hire Again" on a bid card can open it in place.
   PostJob:
-    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        /** Carried from Home's search field / a tapped category chip so a
+         *  fresh post starts pre-filled instead of blank. Ignored in edit
+         *  and hire-again modes, which load their own values. */
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string };
@@ -112,7 +134,18 @@ export type MessagesStackParamList = {
   Chat: ChatTarget;
   // "Hire Again" from a past conversation.
   PostJob:
-    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        /** Carried from Home's search field / a tapped category chip so a
+         *  fresh post starts pre-filled instead of blank. Ignored in edit
+         *  and hire-again modes, which load their own values. */
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string };
@@ -130,7 +163,18 @@ export type MapStackParamList = {
   // Registered so "Edit job" works when a job's own poster reaches its
   // detail screen via a Map/zone drill-down, not just from My Jobs.
   PostJob:
-    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        /** Carried from Home's search field / a tapped category chip so a
+         *  fresh post starts pre-filled instead of blank. Ignored in edit
+         *  and hire-again modes, which load their own values. */
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string };
@@ -194,6 +238,17 @@ export type WorkerSearchRouteParamList = {
 
 export type PostJobRouteParamList = {
   PostJob:
-    | { hireWorkerId?: string; hireWorkerName?: string; editJobId?: string; threadJobId?: string }
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        /** Carried from Home's search field / a tapped category chip so a
+         *  fresh post starts pre-filled instead of blank. Ignored in edit
+         *  and hire-again modes, which load their own values. */
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
     | undefined;
 };

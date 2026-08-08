@@ -40,6 +40,7 @@ import {
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   updateJob,
+  type Job,
   type JobCategory,
 } from '../lib/jobs';
 import { createJobRequest } from '../lib/jobRequests';
@@ -121,9 +122,15 @@ export function PostJobScreen() {
   const isEditing = !!editJobId;
   const [loadingJob, setLoadingJob] = useState(isEditing);
 
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<JobCategory | null>(null);
+  // Home's "Post a job" CTA, search field, and category chips all funnel into
+  // this one screen rather than each having their own draft flow — these seed
+  // a fresh post with whatever the customer already entered there. Ignored by
+  // edit mode, which overwrites them from the saved job right below.
+  const [title, setTitle] = useState(params?.initialTitle ?? '');
+  const [description, setDescription] = useState(params?.initialDescription ?? '');
+  const [category, setCategory] = useState<JobCategory | null>(
+    params?.initialCategory ?? null
+  );
   const [location, setLocation] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
@@ -134,6 +141,10 @@ export function PostJobScreen() {
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // The row `createJob` actually saved, so the success state can show real
+  // published details instead of restating the form. Fresh posts only —
+  // edit/hire-again success doesn't reference a newly created job.
+  const [publishedJob, setPublishedJob] = useState<Job | null>(null);
   const [step, setStep] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   // The amount an offer is about to be sent at, held while the confirmation
@@ -500,7 +511,7 @@ export function PostJobScreen() {
 
     submittingRef.current = true;
     setSubmitting(true);
-    const { error, locationError } = isEditing
+    const { data: savedJob, error, locationError } = isEditing
       ? await updateJob(editJobId!, {
           title: title.trim(),
           description: description.trim(),
@@ -570,6 +581,7 @@ export function PostJobScreen() {
     // success animation isn't held up behind a dialog.
     if (!isEditing) {
       maybePromptForPush('Get told the moment a worker bids on your job.');
+      if (savedJob) setPublishedJob(savedJob);
     }
 
     playSuccess();
@@ -1025,6 +1037,10 @@ export function PostJobScreen() {
           style={[styles.successOverlay, { opacity: successOpacity }]}
           accessibilityViewIsModal
         >
+        <ScrollView
+          contentContainerStyle={styles.successScrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <Animated.View
             style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
           >
@@ -1043,6 +1059,58 @@ export function PostJobScreen() {
                 ? `${hireWorkerName} can accept, decline, or suggest a different price in chat.`
                 : 'Workers can now review the details and send you bids.'}
           </Text>
+
+          {publishedJob && !isEditing && !isHiring && (
+            <View style={[styles.reviewCard, styles.successSummaryCard]}>
+              <Text style={styles.reviewEyebrow}>PUBLISHED</Text>
+              <Text style={styles.reviewTitle} numberOfLines={2}>
+                {publishedJob.title}
+              </Text>
+
+              <View style={styles.reviewDivider} />
+
+              <View style={styles.reviewRow}>
+                <View style={styles.reviewIcon}>
+                  <Ionicons name="grid-outline" size={18} color={colors.emerald} />
+                </View>
+                <View style={styles.reviewText}>
+                  <Text style={styles.reviewLabel}>Category</Text>
+                  <Text style={styles.reviewValue} numberOfLines={1}>
+                    {JOB_CATEGORY_LABELS[publishedJob.category]}
+                  </Text>
+                </View>
+              </View>
+
+              {publishedJob.location ? (
+                <View style={styles.reviewRow}>
+                  <View style={styles.reviewIcon}>
+                    <Ionicons name="location-outline" size={19} color={colors.emerald} />
+                  </View>
+                  <View style={styles.reviewText}>
+                    <Text style={styles.reviewLabel}>Area</Text>
+                    <Text style={styles.reviewValue} numberOfLines={2}>
+                      {publishedJob.location}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              <View style={styles.reviewRow}>
+                <View style={styles.reviewIcon}>
+                  <Ionicons name="wallet-outline" size={18} color={colors.emerald} />
+                </View>
+                <View style={styles.reviewText}>
+                  <Text style={styles.reviewLabel}>Budget</Text>
+                  <Text style={styles.reviewValue}>
+                    {publishedJob.budget_cents != null
+                      ? formatBudget(publishedJob.budget_cents)
+                      : 'Open to bids'}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
           <View style={styles.successActions}>
             <Button
               title={isEditing ? 'Back to job' : isHiring ? 'Done' : 'View my jobs'}
@@ -1060,6 +1128,7 @@ export function PostJobScreen() {
               />
             )}
           </View>
+        </ScrollView>
         </Animated.View>
       )}
 
@@ -1394,11 +1463,14 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: colors.background,
+    zIndex: 10,
+  },
+  successScrollContent: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,
     padding: spacing.xl,
-    zIndex: 10,
   },
   successCircle: {
     width: 88,
@@ -1428,6 +1500,11 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.textMuted,
     textAlign: 'center',
+  },
+  successSummaryCard: {
+    width: '100%',
+    maxWidth: 360,
+    marginTop: spacing.lg,
   },
   successActions: {
     width: '100%',
