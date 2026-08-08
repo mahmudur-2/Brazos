@@ -302,6 +302,15 @@ export function jobThumbnailUrl(job: { photos?: string[] | null }): string | nul
   return job.photos?.[0] ?? null;
 }
 
+/**
+ * Whether a job is in a category the worker advertises. One predicate for
+ * Worker Home's "X match your skills" count and the results screen it opens
+ * to, so the two can never disagree — see BrowseJobsScreen/WorkerResultsScreen.
+ */
+export function jobMatchesSkills(job: { category: JobCategory }, categories: Set<string>): boolean {
+  return categories.has(job.category);
+}
+
 /** Create an open job and its optional exact location in one transaction. */
 export async function createJob(_clientId: string, input: NewJobInput) {
   const { data, error } = await supabase

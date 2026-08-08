@@ -30,6 +30,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { PostJobScreen } from './screens/PostJobScreen';
 import { ClientJobDetailScreen } from './screens/ClientJobDetailScreen';
 import { BrowseJobsScreen } from './screens/BrowseJobsScreen';
+import { WorkerResultsScreen } from './screens/WorkerResultsScreen';
 import { JobDetailScreen } from './screens/JobDetailScreen';
 import { WorkerJobScreen } from './screens/WorkerJobScreen';
 import { MyJobsHubScreen } from './screens/MyJobsHubScreen';
@@ -171,6 +172,7 @@ function HomeStackNavigator() {
       <HomeStack.Screen name="HomeMain" component={HomeScreen} />
       <HomeStack.Screen name="PostJob" component={PostJobScreen} />
       <HomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
+      <HomeStack.Screen name="WorkerResults" component={WorkerResultsScreen} />
       <HomeStack.Screen name="JobDetail" component={JobDetailScreen} />
       <HomeStack.Screen name="WorkerSearch" component={WorkerSearchScreen} />
       <HomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
@@ -316,7 +318,31 @@ function MainTabs() {
         },
       })}
     >
-      <Tab.Screen name="Home" component={HomeStackNavigator} />
+      <Tab.Screen
+        name="Home"
+        component={HomeStackNavigator}
+        listeners={({ navigation, route }) => ({
+          // Tapping the already-active tab's own icon defaults to popping its
+          // stack all the way to the first screen (Customer Home) — which
+          // would silently switch mode out of Worker Home. "BrowseJobs"
+          // anywhere in this stack means mode is "worker" (pushed there by
+          // the mode-switch transition, see ModeTransitionOverlay); re-press
+          // the Home tab in that case pops back to Worker Home specifically,
+          // not past it. "Switch to Customer" remains the only intentional
+          // mode change. Switching TO the Home tab from elsewhere is left
+          // untouched — that already preserves whichever screen was on top.
+          tabPress: (e) => {
+            if (!navigation.isFocused()) return;
+            const nestedState = (route as { state?: { routes?: { name: string }[] } }).state;
+            const stackRoutes = nestedState?.routes ?? [];
+            const inWorkerMode = stackRoutes.some((r) => r.name === 'BrowseJobs');
+            if (inWorkerMode) {
+              e.preventDefault();
+              navigation.navigate('Home', { screen: 'BrowseJobs' });
+            }
+          },
+        })}
+      />
       <Tab.Screen
         name="Map"
         component={MapStackNavigator}

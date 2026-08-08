@@ -13,6 +13,7 @@ import {
   jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
+import { formatTimeAgo } from '../lib/time';
 
 const THUMB_SIZE = 84;
 
@@ -41,6 +42,7 @@ export function WorkerJobCard({
   job,
   bidCount,
   onPress,
+  variant = 'compact',
 }: {
   job: OpenJob;
   /** Undefined means not known yet (or phase38's batched RPC isn't deployed).
@@ -48,6 +50,10 @@ export function WorkerJobCard({
    *  guessed at when this is undefined — see bidLabel below. */
   bidCount?: number;
   onPress: () => void;
+  /** 'full' adds the "posted X ago" line, for the more spacious Worker
+   *  Results screen — Home stays 'compact' (its own default) to match the
+   *  reference's exact field list there. */
+  variant?: 'compact' | 'full';
 }) {
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
@@ -117,6 +123,15 @@ export function WorkerJobCard({
             <Ionicons name="people-outline" size={13} color={colors.textMuted} />
             <Text style={styles.metaText} numberOfLines={1}>
               {bidLabel}
+            </Text>
+          </View>
+        ) : null}
+
+        {variant === 'full' ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              Posted {formatTimeAgo(job.created_at)}
             </Text>
           </View>
         ) : null}
@@ -221,8 +236,8 @@ const styles = StyleSheet.create({
   payBlock: {
     alignItems: 'flex-end',
     // Capped so a long title keeps most of the row rather than being
-    // squeezed by "$1,250".
-    maxWidth: 88,
+    // squeezed by "$1,250" at the bumped 26px size.
+    maxWidth: 104,
   },
   payCaption: {
     fontSize: 10,
@@ -231,8 +246,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   payValue: {
-    marginTop: 2,
-    fontSize: 20,
+    marginTop: 3,
+    fontSize: 26,
+    lineHeight: 30,
     fontWeight: '800',
     color: colors.forest,
   },

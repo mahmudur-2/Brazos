@@ -203,6 +203,59 @@ async function probeRingForNeighbourhood(
 }
 
 /**
+ * Forward geocoding — "Cobble Hill" / a zip code / a street address → a
+ * point. Same Nominatim service this file already uses for the reverse
+ * direction (no new dependency, no API key), just its `/search` endpoint.
+ *
+ * Used by Worker Home's search bar to resolve an area query into a center
+ * point for the nearby-jobs cell lookup (see lib/hotspots.ts) — Worker Home
+ * has no coordinates of its own to search from otherwise. Returns null for
+ * anything Nominatim can't place (including plain service words like
+ * "Cleaning" — a caller should treat that as "not an area", not an error),
+ * network failure, or timeout; never throws.
+ */
+export async function geocodeQuery(
+  query: string
+): Promise<{ label: string; lat: number; lng: number } | null> {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), NOMINATIM_TIMEOUT_MS);
+
+  try {
+    const url =
+      `https://nominatim.openstreetmap.org/search?format=jsonv2` +
+      `&q=${encodeURIComponent(trimmed)}&addressdetails=1&limit=1`;
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': USER_AGENT, Accept: 'application/json' },
+    });
+    if (!response.ok) return null;
+
+    const results = (await response.json()) as Array<{
+      lat: string;
+      lon: string;
+      address?: NominatimAddress;
+    }>;
+    const top = results[0];
+    if (!top) return null;
+
+    const lat = Number(top.lat);
+    const lng = Number(top.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+    const label = top.address ? formatArea(top.address) : trimmed;
+    return { label: label || trimmed, lat, lng };
+  } catch (err) {
+    console.error('[reverseGeocode] geocodeQuery failed', err);
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
  * Resolves coordinates to a "Neighborhood, Borough, ST" label, or null if
  * Nominatim is unreachable. Callers are expected to fall back to a coarser
  * source (the on-device geocoder) when this returns null.

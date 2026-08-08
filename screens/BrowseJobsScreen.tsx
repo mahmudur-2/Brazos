@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  Animated,
-  Easing,
   FlatList,
   Image,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -15,72 +14,65 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
+import * as Location from 'expo-location';
 import { FadeIn } from '../components/FadeIn';
 import { useModeTransition } from '../components/ModeTransitionOverlay';
+import { PulseDot } from '../components/PulseDot';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useBidCounts } from '../hooks/useBidCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { useWorkerAvailability } from '../hooks/useWorkerAvailability';
-import { alertAsync } from '../lib/dialog';
-import { formatBudget, type OpenJob } from '../lib/jobs';
+import { resolveCurrentPlace } from '../lib/geolocation';
+import { cellsWithinMiles, fetchHotspots } from '../lib/hotspots';
+import { formatBudget, jobMatchesSkills, type OpenJob } from '../lib/jobs';
 import { greetingFor } from '../lib/time';
 import type { HomeStackNavigation } from '../lib/navigation';
 import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
+import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
 // Cropped directly out of design-reference/48_worker_home.png (the circular
-// backdrop + toolbox + leaf, background keyed to transparent the same way
-// ModeTransitionOverlay's brand mark was) rather than approximated with
-// icons — no toolbox artwork exists anywhere else in the project's assets.
+// backdrop + toolbox + leaf, background keyed to transparent) rather than
+// approximated with icons — no toolbox artwork exists anywhere else in the
+// project's assets.
 const WORKER_HOME_TOOLBOX = require('../assets/brand/worker-home-toolbox.png');
 /** height / width of worker-home-toolbox.png (395x320), for aspectRatio. */
 const TOOLBOX_ASPECT_RATIO = 320 / 395;
 const TOOLBOX_WIDTH = 132;
 
-// The same bright green Customer Home's "Live Nearby" indicator already uses
-// (HomeScreen.tsx's liveDot) — one shared "this is live" green rather than a
-// third shade next to `colors.success`'s more muted olive.
+// The same bright green Customer Home's "Live Nearby" indicator uses
+// (HomeScreen.tsx's liveDot) — one shared "this is live" green.
 const AVAILABILITY_ONLINE_COLOR = '#0DBC5A';
+const PREVIEW_COUNT = 4;
 
-type SortMode = 'fit' | 'newest' | 'pay';
+type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
 
-const SORT_LABELS: Record<SortMode, string> = {
-  fit: 'Best fit',
-  newest: 'Newest first',
-  pay: 'Highest paid',
-};
-
-function startOfToday(): number {
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
-  return midnight.getTime();
+function startOfComparableJobs(jobs: OpenJob[], categories: Set<string>): OpenJob[] {
+  const byNewest = (a: OpenJob, b: OpenJob) =>
+    new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  return [...jobs].sort((a, b) => {
+    const aFits = jobMatchesSkills(a, categories) ? 1 : 0;
+    const bFits = jobMatchesSkills(b, categories) ? 1 : 0;
+    return bFits - aFits || byNewest(a, b);
+  });
 }
 
 /**
  * Worker Home — the Emerald atlas's screen 48, "Find jobs".
  *
- * Rebuilt to sit close to design-reference/48_worker_home.png: header,
- * hero + toolbox art, search, the two-column availability/earnings card, and
- * compact horizontal job cards all follow that reference directly. The same
- * `useOpenJobs` feed, batched bid counts, pull-to-refresh, sorting, and the
- * same `JobDetail` destination on tap are unchanged underneath.
+ * Header, hero, search, the availability/earnings card, and a compact
+ * preview of the open-jobs feed, close to design-reference/48_worker_home.png.
+ * "View all", both filter pills, and the search bar all hand off to
+ * WorkerResultsScreen with a different `mode` rather than duplicating list/
+ * filter logic four times — see that screen for the skill-match and
+ * nearby-jobs implementation, which this screen's own pill counts reuse
+ * exactly (lib/jobs.ts's jobMatchesSkills, lib/hotspots.ts's cell-radius
+ * lookup) so a count here can never disagree with what tapping it shows.
  *
  * Reference elements NOT rendered, because nothing backs them:
- *   - A per-job distance / "Jobs within 5 miles" — exact job coordinates
- *     live in `job_locations`, readable only by the poster and the assigned
- *     worker. The matching chip says "Jobs near you" instead of a specific,
- *     invented mile radius.
  *   - "X fit your schedule" — no schedule/calendar data exists on a job or a
- *     profile. That chip shows the real count of jobs posted today instead
- *     (same calendar-flavored icon, honest number).
+ *     profile.
  *   - A favorite/heart toggle on each card — there is no saved-jobs table.
- *
- * "Today" / "$100+" / "Best fit" no longer clutter this screen as visible
- * chips — Best fit is still the default sort; all three are reachable via
- * "View all", which opens the same sort sheet rather than being a dead link
- * to a browse screen that doesn't exist separately from this one.
  */
 export function BrowseJobsScreen() {
   const navigation = useNavigation<HomeStackNavigation>();
@@ -89,11 +81,7 @@ export function BrowseJobsScreen() {
   const { start: startModeSwitch, busy: switching } = useModeTransition();
   const { availability, setAvailability } = useWorkerAvailability();
   const [refreshing, setRefreshing] = useState(false);
-
   const [query, setQuery] = useState('');
-  const [sort, setSort] = useState<SortMode>('fit');
-  const [sortOpen, setSortOpen] = useState(false);
-  const [availabilityOpen, setAvailabilityOpen] = useState(false);
 
   // One batched read for the whole page — see phase38 for why a per-card count
   // is neither correct (RLS under-counts) nor affordable (N+1).
@@ -101,60 +89,72 @@ export function BrowseJobsScreen() {
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
 
-  /** What this worker advertises. Drives both the "best fit" sort and the
-   *  banner's skills count — one source, so the two cannot disagree. */
+  /** What this worker advertises. Drives the skill-match pill and preview
+   *  ordering — the same predicate WorkerResultsScreen's "skills" mode uses,
+   *  so the count here can never disagree with what tapping it shows. */
   const myCategories = useMemo(
     () => new Set(profile?.categories ?? []),
     [profile?.categories]
   );
   const hasSkills = myCategories.size > 0;
+  const skillMatchCount = useMemo(
+    () => jobs.filter((job) => jobMatchesSkills(job, myCategories)).length,
+    [jobs, myCategories]
+  );
 
-  // Banner figures are read from the WHOLE open feed, not the filtered view:
-  // they describe the opportunity available, and having them jump every time
-  // search narrows the list would make them read as a result count instead.
   const stats = useMemo(() => {
-    const midnight = startOfToday();
     let cents = 0;
-    let matching = 0;
-    let today = 0;
+    for (const job of jobs) cents += job.budget_cents ?? 0;
+    return { cents, count: jobs.length };
+  }, [jobs]);
 
-    for (const job of jobs) {
-      cents += job.budget_cents ?? 0;
-      if (myCategories.has(job.category)) matching++;
-      if (new Date(job.created_at).getTime() >= midnight) today++;
-    }
+  // Home shows a taste of the feed, not the whole marketplace — "View all"
+  // is the real full list (WorkerResultsScreen, mode "all").
+  const previewJobs = useMemo(
+    () => startOfComparableJobs(jobs, myCategories).slice(0, PREVIEW_COUNT),
+    [jobs, myCategories]
+  );
 
-    return { cents, matching, today, count: jobs.length };
-  }, [jobs, myCategories]);
+  // "Within 5 miles" needs the worker's real position. Checked silently on
+  // mount (getForegroundPermissionsAsync never prompts) so Home never pops a
+  // permission dialog just for being opened — only an explicit tap into the
+  // nearby results screen (which calls resolveCurrentPlace and may prompt)
+  // does that. Coordinates are carried into that navigation so the results
+  // screen filters the exact same center point rather than re-resolving GPS
+  // and risking a different cell set.
+  const [nearbyState, setNearbyState] = useState<NearbyState>('checking');
+  const [nearbyCount, setNearbyCount] = useState(0);
+  const [nearbyCoords, setNearbyCoords] = useState<{ lat: number; lng: number; label?: string } | null>(
+    null
+  );
 
-  const visible = useMemo(() => {
-    const text = query.trim().toLowerCase();
-
-    const filtered = text
-      ? jobs.filter((job) =>
-          `${job.title} ${job.location ?? ''}`.toLowerCase().includes(text)
-        )
-      : jobs;
-
-    const byNewest = (a: OpenJob, b: OpenJob) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-
-    // Sorted on a copy — `jobs` belongs to the hook, and sorting it in place
-    // would mutate state other screens read from the same cache.
-    return [...filtered].sort((a, b) => {
-      if (sort === 'pay') {
-        // A job with no budget is not "cheapest", it is unknown — it sorts to
-        // the bottom rather than competing with real numbers.
-        return (b.budget_cents ?? -1) - (a.budget_cents ?? -1) || byNewest(a, b);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      if (!active) return;
+      if (status !== 'granted') {
+        setNearbyState('unavailable');
+        return;
       }
-      if (sort === 'fit') {
-        const aFits = myCategories.has(a.category) ? 1 : 0;
-        const bFits = myCategories.has(b.category) ? 1 : 0;
-        return bFits - aFits || byNewest(a, b);
+      setNearbyState('loading');
+      const here = await resolveCurrentPlace();
+      if (!active) return;
+      if (!here.ok) {
+        setNearbyState('unavailable');
+        return;
       }
-      return byNewest(a, b);
-    });
-  }, [jobs, query, sort, myCategories]);
+      const { data: cells } = await fetchHotspots();
+      if (!active) return;
+      const near = cellsWithinMiles(cells, here.place.lat, here.place.lng, NEARBY_RADIUS_MILES);
+      setNearbyCoords({ lat: here.place.lat, lng: here.place.lng, label: here.place.label });
+      setNearbyCount(near.reduce((sum, cell) => sum + cell.job_count, 0));
+      setNearbyState('ready');
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function onRefresh() {
     setRefreshing(true);
@@ -173,67 +173,48 @@ export function BrowseJobsScreen() {
     });
   }
 
-  // Same honest "not yet" the customer-side search field uses, rather than a
-  // mic icon that silently does nothing.
-  async function explainVoice() {
-    await alertAsync(
-      'Voice search is coming',
-      'Voice input is not switched on yet. Type what you need for now.'
-    );
+  function submitSearch() {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    navigation.navigate('WorkerResults', { mode: 'search', query: trimmed });
   }
 
-  const sortItems: ActionSheetItem[] = (['fit', 'newest', 'pay'] as SortMode[]).map(
-    (mode) => ({
-      key: mode,
-      label: SORT_LABELS[mode],
-      icon:
-        mode === 'fit'
-          ? 'ribbon-outline'
-          : mode === 'newest'
-            ? 'time-outline'
-            : 'cash-outline',
-      onPress: () => {
-        setSort(mode);
-        setSortOpen(false);
-      },
-    })
-  );
-
-  const availabilityItems: ActionSheetItem[] = [
-    {
-      key: 'online',
-      label: 'Online',
-      icon: 'radio-button-on',
-      onPress: () => {
-        setAvailability('online');
-        setAvailabilityOpen(false);
-      },
-    },
-    {
-      key: 'offline',
-      label: 'Offline',
-      icon: 'radio-button-off',
-      onPress: () => {
-        setAvailability('offline');
-        setAvailabilityOpen(false);
-      },
-    },
-  ];
+  function openNearby() {
+    navigation.navigate('WorkerResults', {
+      mode: 'nearby',
+      lat: nearbyCoords?.lat,
+      lng: nearbyCoords?.lng,
+      label: nearbyCoords?.label,
+    });
+  }
 
   const isOffline = availability === 'offline';
   const statusColor = isOffline ? colors.danger : AVAILABILITY_ONLINE_COLOR;
   const matchLabel = hasSkills
-    ? `${stats.matching} ${stats.matching === 1 ? 'job matches' : 'jobs match'} your skills`
+    ? `${skillMatchCount} match your skills`
     : 'Add skills to see matches';
+  const nearbyLabel =
+    nearbyState === 'ready'
+      ? `${nearbyCount} within ${NEARBY_RADIUS_MILES} miles`
+      : nearbyState === 'unavailable'
+        ? 'Enable location'
+        : `Within ${NEARBY_RADIUS_MILES} miles`;
 
   const header = (
     <View style={styles.header}>
       {/* --- Greeting + Switch pill ------------------------------------- */}
       <View style={styles.greetingRow}>
-        <Text style={styles.greeting} numberOfLines={1}>
-          {greetingFor(new Date())}
-          {firstName ? `, ${firstName}` : ''}
-        </Text>
+        <View style={styles.greetingBlock}>
+          <Text style={styles.greeting} numberOfLines={1}>
+            {greetingFor(new Date())}
+            {firstName ? ',' : ''}
+          </Text>
+          {firstName ? (
+            <Text style={styles.greeting} numberOfLines={1}>
+              {firstName}
+            </Text>
+          ) : null}
+        </View>
         <Pressable
           onPress={switchToCustomer}
           disabled={switching}
@@ -252,7 +233,7 @@ export function BrowseJobsScreen() {
       <View style={styles.heroRow}>
         <View style={styles.heroCopy}>
           <Text style={styles.headline} maxFontSizeMultiplier={1.3}>
-            Get hired. Get paid.
+            {'Get hired.\nGet paid.'}
           </Text>
           <Text style={styles.subtitle}>Grow your reputation.</Text>
         </View>
@@ -271,6 +252,7 @@ export function BrowseJobsScreen() {
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
+          onSubmitEditing={submitSearch}
           placeholder="Search for jobs or areas"
           placeholderTextColor={colors.textMuted}
           autoCapitalize="sentences"
@@ -278,13 +260,12 @@ export function BrowseJobsScreen() {
         />
         <View style={styles.searchDivider} />
         <Pressable
-          onPress={explainVoice}
+          onPress={submitSearch}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Voice search"
-          accessibilityHint="Voice input is not available yet"
+          accessibilityLabel="Search"
         >
-          <Ionicons name="mic-outline" size={20} color={colors.emerald} />
+          <Ionicons name="arrow-forward-circle" size={22} color={colors.emerald} />
         </Pressable>
       </View>
 
@@ -293,22 +274,22 @@ export function BrowseJobsScreen() {
         <View style={styles.bannerColumns}>
           <View style={styles.bannerCol}>
             <Text style={styles.bannerEyebrow}>AVAILABLE NOW</Text>
-            <Pressable
-              onPress={() => setAvailabilityOpen(true)}
-              style={({ pressed }) => [styles.availabilityRow, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Change availability"
-              accessibilityHint={`Currently ${isOffline ? 'offline' : 'online'}. Opens Online/Offline options.`}
-            >
+            <View style={styles.availabilityRow}>
               <Text style={styles.bannerBig} numberOfLines={1} maxFontSizeMultiplier={1.2}>
                 {isOffline ? 'Offline' : 'Online'}
               </Text>
-              <View style={styles.availabilityChevron}>
-                <Ionicons name="chevron-down" size={16} color={colors.forest} />
-              </View>
-            </Pressable>
+              <Switch
+                value={!isOffline}
+                onValueChange={(next) => setAvailability(next ? 'online' : 'offline')}
+                trackColor={{ true: AVAILABILITY_ONLINE_COLOR, false: 'rgba(255,255,255,0.28)' }}
+                thumbColor={colors.white}
+                ios_backgroundColor="rgba(255,255,255,0.28)"
+                accessibilityLabel="Availability"
+                accessibilityHint={isOffline ? 'Currently offline. Turns availability on.' : 'Currently online. Turns availability off.'}
+              />
+            </View>
             <View style={styles.statusRow}>
-              <PulsingStatusDot color={statusColor} />
+              <PulseDot color={statusColor} size={9} />
               <Text style={styles.bannerColLabel} numberOfLines={1}>
                 {isOffline ? 'Not visible to customers' : 'Visible to customers'}
               </Text>
@@ -320,35 +301,37 @@ export function BrowseJobsScreen() {
           <View style={styles.bannerCol}>
             <Text style={styles.bannerEyebrow}>POTENTIAL EARNINGS</Text>
             <Text style={styles.bannerBig} numberOfLines={1} maxFontSizeMultiplier={1.2}>
-              {stats.count === 0 ? '—' : formatBudget(stats.cents)}
+              {stats.count === 0 ? '$0' : formatBudget(stats.cents)}
             </Text>
             <Text style={styles.bannerColLabel} numberOfLines={2}>
-              {stats.count === 0
-                ? 'No open jobs yet'
-                : `across ${stats.count} ${stats.count === 1 ? 'job' : 'jobs'}`}
+              {`across ${stats.count} ${stats.count === 1 ? 'job' : 'jobs'}`}
             </Text>
           </View>
         </View>
 
         <View style={styles.bannerPills}>
-          <View style={styles.bannerPill}>
+          <Pressable
+            onPress={() => navigation.navigate('WorkerResults', { mode: 'skills' })}
+            style={({ pressed }) => [styles.bannerPill, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={matchLabel}
+          >
             <Ionicons name="sparkles" size={13} color={colors.white} />
             <Text style={styles.bannerPillText} numberOfLines={1}>
               {matchLabel}
             </Text>
-          </View>
-          <View style={styles.bannerPill}>
+          </Pressable>
+          <Pressable
+            onPress={openNearby}
+            style={({ pressed }) => [styles.bannerPill, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={nearbyLabel}
+          >
             <Ionicons name="location" size={13} color={colors.white} />
             <Text style={styles.bannerPillText} numberOfLines={1}>
-              Jobs near you
+              {nearbyLabel}
             </Text>
-          </View>
-          <View style={styles.bannerPill}>
-            <Ionicons name="calendar" size={13} color={colors.white} />
-            <Text style={styles.bannerPillText} numberOfLines={1}>
-              {stats.today} posted today
-            </Text>
-          </View>
+          </Pressable>
         </View>
       </View>
 
@@ -361,11 +344,10 @@ export function BrowseJobsScreen() {
           <Text style={styles.sectionTitle}>Available Jobs</Text>
         </View>
         <Pressable
-          onPress={() => setSortOpen(true)}
+          onPress={() => navigation.navigate('WorkerResults', { mode: 'all' })}
           style={({ pressed }) => [styles.viewAll, pressed && styles.pressed]}
           accessibilityRole="button"
-          accessibilityLabel="View all and sort jobs"
-          accessibilityHint={`Currently sorted by ${SORT_LABELS[sort].toLowerCase()}`}
+          accessibilityLabel="View all available jobs"
         >
           <Text style={styles.viewAllText}>View all</Text>
           <Ionicons name="arrow-forward" size={16} color={colors.forest} />
@@ -389,7 +371,7 @@ export function BrowseJobsScreen() {
       ) : (
         <FadeIn style={styles.flex}>
           <FlatList
-            data={visible}
+            data={previewJobs}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
               <WorkerJobCard
@@ -404,105 +386,28 @@ export function BrowseJobsScreen() {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
             }
             showsVerticalScrollIndicator={false}
-            initialNumToRender={6}
-            windowSize={11}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <View style={styles.emptyIcon}>
                   <Ionicons name="search" size={30} color={colors.forest} />
                 </View>
-                <Text style={styles.emptyTitle}>
-                  {jobs.length === 0 ? 'No open jobs right now' : 'Nothing matches that search'}
-                </Text>
+                <Text style={styles.emptyTitle}>No open jobs right now</Text>
                 <Text style={styles.emptyText}>
-                  {jobs.length === 0
-                    ? 'New jobs appear here automatically as clients post them.'
-                    : 'Try a different word, or clear search to see everything.'}
+                  New jobs appear here automatically as clients post them.
                 </Text>
               </View>
             }
           />
         </FadeIn>
       )}
-
-      <ActionSheet
-        visible={sortOpen}
-        title="Sort jobs"
-        subtitle={SORT_LABELS[sort]}
-        items={sortItems}
-        onClose={() => setSortOpen(false)}
-      />
-      <ActionSheet
-        visible={availabilityOpen}
-        title="Availability"
-        subtitle={isOffline ? 'Offline' : 'Online'}
-        items={availabilityItems}
-        onClose={() => setAvailabilityOpen(false)}
-      />
     </SafeAreaView>
-  );
-}
-
-/**
- * The availability dot beside "Visible/Not visible to customers" — a gentle
- * breathing pulse, not a blinking alert. Opacity + scale only, driven
- * natively (useNativeDriver), so this runs on the UI thread and causes no
- * React re-render anywhere else on screen — the job list below is never
- * touched by it.
- */
-function PulsingStatusDot({ color }: { color: string }) {
-  const reducedMotion = useReducedMotion();
-  const pulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (reducedMotion === null) return;
-    pulse.stopAnimation();
-    if (reducedMotion) {
-      pulse.setValue(0);
-      return;
-    }
-    // 500ms up + 500ms down = one ~1000ms breathing cycle.
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, {
-          toValue: 1,
-          duration: 500,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulse, {
-          toValue: 0,
-          duration: 500,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [pulse, reducedMotion]);
-
-  return (
-    <Animated.View
-      style={[
-        styles.statusDot,
-        {
-          backgroundColor: color,
-          opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.65] }),
-          transform: [
-            { scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] }) },
-          ],
-        },
-      ]}
-    />
   );
 }
 
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    // Matches Customer Home's exact background token, not the app-wide
-    // default — one design system, same ivory across both Homes.
+    // Matches Customer Home's exact background token — one design system.
     backgroundColor: colors.homeBackground,
   },
   // The FadeIn wrapper has to pass the SafeAreaView's height down to the
@@ -527,8 +432,11 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
-  greeting: {
+  greetingBlock: {
     flexShrink: 1,
+    gap: 2,
+  },
+  greeting: {
     fontSize: 17,
     color: colors.textMuted,
   },
@@ -632,17 +540,10 @@ const styles = StyleSheet.create({
   availabilityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    justifyContent: 'space-between',
     marginTop: 2,
-    alignSelf: 'flex-start',
-  },
-  availabilityChevron: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.white,
+    // Room enough for the switch without pushing the column's own width.
+    maxWidth: 150,
   },
   bannerBig: {
     fontSize: 30,
@@ -654,12 +555,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    marginTop: 2,
-  },
-  statusDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
+    marginTop: 4,
   },
   bannerColLabel: {
     fontSize: 12,
@@ -668,18 +564,19 @@ const styles = StyleSheet.create({
   },
   bannerPills: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: spacing.sm,
     marginTop: spacing.xs,
   },
   bannerPill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
     // A translucent white lift rather than a second flat green: it keeps the
     // pill readable on the banner without introducing another token.
     backgroundColor: 'rgba(255,255,255,0.14)',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs + 3,
     borderRadius: radius.pill,
   },

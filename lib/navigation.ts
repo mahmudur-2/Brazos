@@ -95,6 +95,22 @@ export type HomeStackParamList = {
    * typed query / a tapped service chip.
    */
   WorkerSearch: { query?: string; category?: string } | undefined;
+  /**
+   * The spacious Worker job list — "View all", the two availability-card
+   * filter pills, and Worker Home's own search bar all land here with a
+   * different `mode` rather than each getting a near-duplicate screen.
+   */
+  WorkerResults: {
+    mode: 'all' | 'skills' | 'nearby' | 'search';
+    query?: string;
+    /** For "nearby": the already-resolved center point from Home's own pill,
+     *  so this screen filters the exact same coordinates rather than calling
+     *  the GPS again and risking a different (if nearly identical) cell set.
+     *  Falls back to resolving fresh if omitted. */
+    lat?: number;
+    lng?: number;
+    label?: string;
+  };
 };
 
 export type HomeStackNavigation = NativeStackNavigationProp<HomeStackParamList>;

@@ -176,6 +176,62 @@ export async function fetchJobsInCell(ilat: number, ilng: number) {
   return { data: hydrateError ? rows : hydrated, error: null };
 }
 
+const EARTH_RADIUS_MILES = 3958.8;
+
+/** Great-circle distance between two points, in miles. */
+export function milesBetween(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return EARTH_RADIUS_MILES * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Hotspot cells whose center falls within `miles` of a point. This is the
+ * one privacy-respecting way to answer "jobs near X" on the client: a job's
+ * own exact coordinates were removed from the `jobs` table entirely (phase12)
+ * and live in `job_locations`, readable only by its poster and assigned
+ * worker — job_hotspots()'s cell centers are the closest real geographic
+ * signal an open-jobs browse can see. At the 0.27mi cell size, a cell
+ * qualifying by its center is never meaningfully further than the requested
+ * radius plus a fraction of a mile.
+ */
+export function cellsWithinMiles(
+  cells: HotspotCell[],
+  lat: number,
+  lng: number,
+  miles: number
+): HotspotCell[] {
+  return cells.filter((cell) => milesBetween(lat, lng, cell.cell_lat, cell.cell_lng) <= miles);
+}
+
+/**
+ * The real open jobs inside a set of cells, deduped by id. One `jobs_in_cell`
+ * call per cell, run in parallel and bounded by how many cells actually fall
+ * in the requested radius — never the whole board's cells, and never called
+ * on every Home render (only when a caller actually needs the job list, not
+ * just the count — see cellsWithinMiles + summed job_count for that).
+ */
+export async function fetchOpenJobsInCells(
+  cells: HotspotCell[]
+): Promise<{ data: OpenJob[]; error: { message: string } | null }> {
+  if (cells.length === 0) return { data: [], error: null };
+
+  const results = await Promise.all(cells.map((cell) => fetchJobsInCell(cell.ilat, cell.ilng)));
+
+  const firstError = results.find((r) => r.error)?.error ?? null;
+  const byId = new Map<string, OpenJob>();
+  for (const result of results) {
+    for (const job of result.data) byId.set(job.id, job);
+  }
+  // Partial failure still returns whatever cells succeeded — one bad cell
+  // shouldn't blank out an otherwise-real result set.
+  return { data: Array.from(byId.values()), error: byId.size === 0 ? firstError : null };
+}
+
 /** Human-readable category summary for a cell, e.g. "Cleaning · Handyman · +2". */
 export function summarizeCategories(
   categories: Record<string, number>,
