@@ -8,18 +8,36 @@ Phase 3B — Offer RPCs, RLS and application integration. **CODE-COMPLETE.**
 phase43–47 are all applied and verified live. **phase48 is written and NOT
 applied** — it rewrites `v_bids_projection_drift`, which phase47 got wrong.
 
-Evidence gathered so far:
-- **Shim + projection validation: PASS** (2026-08-08). A SQL harness drove the
-  compat shims through bid, rival bid, counter, accept, decline and reopen. All
-  checks passed, including "exactly one bid_received per genuine new chain, zero
-  per counter or accept". Ran in a subtransaction and rolled back clean.
-- **Device regression: IN PROGRESS.** Found one real defect (`51e5c38`) and one
-  phantom (stale bundle). Blocked at Part 1 step 6 until the fix is on the device.
-- **RLS probe: NOT RUN** — still `exit 2, 3 skipped` for want of credentials.
+Closure evidence — three of four complete (2026-08-08):
 
-Phase 3 closes only when: (1) phase48 applied, (2) post-apply verify-schema full
-PASS with zero PENDING, (3) the device pass completed, (4) the RLS probe clean.
-See "Exact next task".
+- **Shim + projection validation: PASS.** A SQL harness drove the compat shims
+  through bid, rival bid, counter, accept, decline and reopen — six checks
+  including the corrected 6b (every `bids` row matches its own chain's leaf) and
+  6c (every pending chain has a row). Notification assertions included: exactly
+  one `bid_received` per genuine new chain, **zero** per counter or accept. Ran
+  inside a subtransaction, rolled back clean, no probe rows left behind.
+- **RLS probe: PASS.** `scripts/rls-probe-offers.mjs` — **5 passed, 0 failed,
+  0 skipped, "RLS probe clean."** Reported by the user, who supplied the three
+  account credentials (the agent has only the publishable key and cannot run
+  the authenticated cases). Confirms anon reads neither table, worker A cannot
+  see worker B's offer on a shared job through `job_offers` **or** the frozen
+  `bids` mirror, and the job's owner sees both.
+- **Device regression: PASS**, reported by the user on a real device.
+  - *Part 1* — bid → rival bid → poster sees both → accept → rival settles
+    rejected → worker sees the job under working. All steps confirmed.
+  - *Part 2* — direct offer → B counters → **live turn flip confirmed on C's
+    device with no refresh** (phase46's `job_offers` realtime publication doing
+    its job) → C accepts. **Both phantom My Jobs checks clean: absent before
+    acceptance, present exactly once after.**
+  - Found two issues along the way: one real regression (the OfferCard
+    perspective gate, fixed in `51e5c38`) and one phantom (a stale Metro
+    bundle, no code defect). See Known issues.
+  - Part 3 (old-build compat) was covered by the SQL harness above rather than
+    a pre-cutover binary — recorded as such, not as a device-verified compat pass.
+- **phase48 applied: NOT YET.** The one remaining item.
+
+Phase 3 closes when phase48 is applied and a post-apply `verify-schema` run
+shows zero PENDING. Nothing else is outstanding. See "Exact next task".
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -641,31 +659,28 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   enum. `AppMode` is a hand-written union today, matching the DB constraint's
   two values exactly.
 
-## Exact next task (apply phase48, then close Phase 3)
+## Exact next task (apply phase48 — then Phase 3 CLOSES)
 
-phase43–47 are live. None of the below has been done.
+The RLS probe, the device regression pass and the shim/projection harness are
+all complete and green. **One item remains.**
 
-1. **Apply `supabase/phase48_bids_drift_view_rewrite.sql`.** Read the Results
-   grid it returns after COMMIT: `repairable_drift` must be 0, `orphan_rows`
-   should be 0 (if not, inspect by hand — legacy rows with no chain behind them,
-   which the projection cannot clean up).
+1. **Apply `supabase/phase48_bids_drift_view_rewrite.sql`.** It writes no data
+   and touches no trigger — one `create or replace view`, one marker function,
+   three read-only counts. Read the Results grid it returns after COMMIT:
+   `repairable_drift` and `orphan_rows` should both be 0. It does not abort if
+   they are not; the repair in that case is to re-run phase47, which is safe
+   again once this view stops reporting settled-chain false positives.
 2. **Re-run `node scripts/verify-schema.mjs`.** Both phase48 checks must flip
-   from PENDING to OK on their own. Only that green run counts as applied.
-3. **Finish the device pass** from Part 1 step 6, with `51e5c38` or later on the
-   device. Confirm the bundle first — one of this pass's two findings was a
-   stale bundle, not a defect.
-4. **Run the RLS probe** between steps 5 and 7, while both bids are pending:
-   `scripts/rls-probe-offers.mjs` with the three PROBE_* credential pairs. It
-   currently exits 2 with 3 skipped; skipped is not a pass.
+   from PENDING to OK on their own, leaving **zero PENDING**. Only that green
+   run counts as applied — not the SQL Editor's "Success".
+3. **Then Phase 3 is CLOSED** and the closure commit gets written.
 
-**Only after 1–4 is Phase 3 CLOSED.** Until then it stays PARTIAL.
-
-Then Phase 4 (Post-a-job vertical slice). Carry forward, not part of Phase 3:
+Carried forward into later phases, not part of Phase 3:
 - The six legacy shims, the projection trigger,
   `project_offer_chain_to_bids()` and `v_bids_projection_drift` all retire
   together in the first phase that ships a version gate (§11 of the decision
   doc), which also means updating the phase18/29/30/36/38 verifier groups.
 - Generated database types still do not exist.
 - The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5).
-- The latent `PostJob`/`WorkerHomeStack` navigation gap (see Known issues) —
-  a navigation-phase change, not Phase 3.
+- The latent `PostJob` / `WorkerHomeStack` navigation gap (Known issues) — a
+  navigation-phase change.
