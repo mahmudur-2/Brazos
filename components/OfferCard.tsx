@@ -9,7 +9,6 @@ import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
 import { formatBudget, JOB_CATEGORY_LABELS } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import { completionPercent } from '../lib/profiles';
-import { useModePerspective } from '../modes';
 import {
   countersRemaining,
   isOpenOffer,
@@ -25,13 +24,23 @@ import type { Message } from '../lib/messages';
  * were two components for one concept because bids and hire requests used to
  * be two tables.
  *
- * PERSPECTIVE IS NOT A PROP. Like JobCard, this reads useModePerspective(), so
- * there is no way for a caller to render worker affordances on a customer
- * surface by passing the wrong value — CLAUDE.md's rule, made mechanical.
+ * `variant` is placement: `list` is the stacked card the customer compares
+ * offers in, `thread` is the inline card a conversation renders per event.
+ * Both read the same Offer.
  *
- * `variant` is placement, not perspective: `list` is the stacked card the
- * customer compares offers in, `thread` is the inline card a conversation
- * renders per event. Both read the same Offer.
+ * THIS COMPONENT IS DELIBERATELY PERSPECTIVE-FREE, and that is a correction.
+ * An earlier version read useModePerspective() and hid the accept affordance
+ * whenever the app was in worker mode. That was wrong, and it broke a real
+ * flow: `ClientJobDetail` lives in navigation/sharedStacks.tsx and is mounted
+ * in BOTH trees, so an account looking at a job THEY posted from the shared My
+ * Jobs tab while in worker mode lost the Accept button entirely.
+ *
+ * The rule CLAUDE.md states is that when a component varies by perspective it
+ * must read ModeContext rather than take a prop — not that every component has
+ * to vary. Nothing here does. Who may accept is ownership, which the screen
+ * already resolves and passes as `canAccept`; whose turn it is is `awaiting_id`
+ * on the offer. Mode is a third, unrelated axis, and conflating it with the
+ * first two is what caused the bug.
  */
 
 type ListProps = {
@@ -103,16 +112,15 @@ function OfferListCard({
   onLongPressAvatar,
   palette = colors,
 }: ListProps) {
-  const perspective = useModePerspective();
-  const isWorker = perspective === 'worker';
   const worker = offer.worker;
   const name = worker?.full_name ?? 'Worker';
   const ratingCount = worker?.rating_count ?? 0;
   const completion = completionPercent(worker?.completion_rate);
   const isAccepted = offer.status === 'accepted';
-  // Accepting is a customer action. In worker perspective this card is a
-  // read-only record of an offer, never an accept affordance.
-  const canAcceptThisOffer = !isWorker && canAccept && offer.status === 'pending';
+  // Who may accept is ownership, not mode: the screen resolves it and passes
+  // it in. Gating this on the app's current mode instead is what hid the
+  // button on the shared My Jobs stack — see the note at the top of the file.
+  const canAcceptThisOffer = canAccept && offer.status === 'pending';
 
   return (
     <Card palette={palette} style={[styles.card, isBestValue && styles.bestValueCard]}>
@@ -167,8 +175,8 @@ function OfferListCard({
         </Pressable>
 
         <View style={styles.priceBlock}>
-          {/* Customer surfaces never show worker payout wording, and this card
-              only ever renders on one. */}
+          {/* This card only ever renders on the job owner's own screen, so the
+              label is the price they would pay — never worker payout wording. */}
           <Text style={styles.priceLabel}>OFFER</Text>
           <Text style={styles.price}>{formatBudget(offer.amount_cents)}</Text>
         </View>

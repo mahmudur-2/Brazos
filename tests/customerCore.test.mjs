@@ -130,6 +130,12 @@ test('Customer job detail keeps evidence and honest lifecycle recovery states', 
   assert.match(bidHook, /setOffers\(\[\]\)/);
   assert.match(bidCard, /review['"]? : ['"]reviews|review' : 'reviews/);
   assert.match(bidCard, /offer\.status === 'pending'/);
+  // The accept affordance must NOT be gated on the app's current mode.
+  // ClientJobDetail is mounted in BOTH navigator trees (sharedStacks), so an
+  // owner viewing their own job while in worker mode would lose the button.
+  // Ownership is what decides this, and the screen already passes it in.
+  assert.doesNotMatch(bidCard, /useModePerspective/);
+  assert.match(bidCard, /const canAcceptThisOffer = canAccept &&/);
   assert.doesNotMatch(bidCard, /ratingCount === 1 \? 'job' : 'jobs'/);
   assert.match(reviewSection, /Couldn’t load your review/);
   assert.match(reviewSection, /cleanupDraftPhotos/);
