@@ -86,14 +86,19 @@ begin
   select released_at into v_released_at from public.payments
   where job_id = (select v from probe where k='job_done') and kind = 'job_payment';
 
+  -- The sweep takes EVERY released row the payee holds — persistent seeds
+  -- (the d1 review fixture) may legitimately contribute more than the one
+  -- this proof released, so the count is scoped to the proof's own job.
   for v_row in select * from public.sandbox_cash_out() loop
-    v_swept := v_swept + 1;
     if v_row.status <> 'paid_out' or v_row.paid_out_at is null then
       raise exception 'B: swept row not honestly paid_out';
     end if;
+    if v_row.job_id = (select v from probe where k='job_done') then
+      v_swept := v_swept + 1;
+    end if;
   end loop;
   if v_swept <> 1 then
-    raise exception 'B: expected exactly 1 released row swept, got %', v_swept;
+    raise exception 'B: expected the proof''s released row swept exactly once, got %', v_swept;
   end if;
 
   -- released_at survives the sweep; held rows untouched.
