@@ -686,7 +686,7 @@ export function arrivalWindowLabel(job: {
  * direct-offer negotiation, not a posting), `completed` is finished work.
  */
 export async function fetchClientJobStats(clientId: string) {
-  const [postedRes, completedRes] = await Promise.all([
+  const [postedRes, completedRes, cancelledRes] = await Promise.all([
     supabase
       .from('jobs')
       .select('id', { count: 'exact', head: true })
@@ -697,11 +697,22 @@ export async function fetchClientJobStats(clientId: string) {
       .select('id', { count: 'exact', head: true })
       .eq('client_id', clientId)
       .eq('status', 'completed'),
+    // Phase 10's simple reliability signal: how often this poster's jobs end
+    // cancelled. Counted, never estimated; rendered only when non-zero.
+    supabase
+      .from('jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('status', 'cancelled'),
   ]);
 
   return {
-    data: { posted: postedRes.count ?? 0, completed: completedRes.count ?? 0 },
-    error: postedRes.error ?? completedRes.error,
+    data: {
+      posted: postedRes.count ?? 0,
+      completed: completedRes.count ?? 0,
+      cancelled: cancelledRes.count ?? 0,
+    },
+    error: postedRes.error ?? completedRes.error ?? cancelledRes.error,
   };
 }
 

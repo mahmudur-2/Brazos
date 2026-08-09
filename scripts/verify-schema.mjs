@@ -754,6 +754,17 @@ const MIGRATIONS = [
         checkRpc('update_my_profile', { p_patch: {} })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 54. Review integrity — a policy swap has no PostgREST-probeable
+    // shape (the phase19 situation), so the sentinel carries the group; it is
+    // created last in the same transaction as the policy.
+    // -----------------------------------------------------------------------
+    file: 'phase54_review_integrity.sql',
+    sentinel: ['rpc review_integrity_enabled()', () =>
+      checkRpc('review_integrity_enabled', {})],
+    checks: [],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

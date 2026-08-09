@@ -342,3 +342,29 @@ Commit: the phase-9 closure commit; tag `phase-9`.
 
 **Production apply queue after this phase (in order):** phase51, phase52,
 phase53 — then verify-schema green against production.
+
+## Phase 10 — decisions (2026-08-09)
+
+Commit: the phase-10 closure commit; tag `phase-10`.
+
+**Decided autonomously (§8 / addendum §2):**
+
+1. **The DoD was already satisfied** — phase29's create_review() +
+   INSERT-revoke + the phase6 unique constraint enforce one-review-per-
+   completed-job with the correct counterparty, and the recompute trigger
+   keeps aggregates true. Proven (phase10-proof: refusals with the RIGHT
+   reasons, aggregates moving, direct insert still revoked) rather than
+   assumed. phase54 therefore ships as DEFENSE IN DEPTH: the reachable-only-
+   if-regranted INSERT policy now states the full rule. Its header says
+   exactly this — no invented gap.
+2. **Reliability signal = counted cancelled jobs** on the poster card,
+   rendered only when non-zero (no "0 cancelled" noise on every profile).
+   No new schema; three exact counts.
+3. Worker-written text reviews of customers: out of scope per master plan
+   (the legacy worker→client ReviewSection remains as-was).
+
+**NEEDS REVIEW:** nothing flagged — the phase was verification-heavy and
+additive.
+
+**Production apply queue after this phase (in order):** phase51, phase52,
+phase53, phase54.

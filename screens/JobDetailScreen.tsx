@@ -119,7 +119,11 @@ export function JobDetailScreen() {
   // customer-side trust signals screen 51 shows a browsing worker. Rendered
   // only once loaded; nothing is fabricated while they're in flight.
   const [poster, setPoster] = useState<Profile | null>(null);
-  const [posterStats, setPosterStats] = useState<{ posted: number; completed: number } | null>(
+  const [posterStats, setPosterStats] = useState<{
+    posted: number;
+    completed: number;
+    cancelled: number;
+  } | null>(
     null
   );
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -537,6 +541,9 @@ export function JobDetailScreen() {
                           {posterStats.posted}{' '}
                           {posterStats.posted === 1 ? 'job' : 'jobs'} posted ·{' '}
                           {posterStats.completed} completed
+                          {posterStats.cancelled > 0
+                            ? ` · ${posterStats.cancelled} cancelled`
+                            : ''}
                         </Text>
                       ) : null}
                     </View>

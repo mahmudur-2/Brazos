@@ -1,7 +1,23 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 9 closed)
+Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 10 closed)
 
 ## Current phase
+Phase 10 — Reviews & reputation (SMALL). **BUILT AND PROOF PASSED (7
+assertions).** The audit's real finding: the DoD ("one review per completed
+job enforced in DB") was ALREADY true — phase29 revoked direct INSERT and
+create_review() enforces party/completed/counterparty; the phase6 unique
+constraint gives one-per-job; the recompute trigger keeps rating_avg/count
+in sync (proven moving 0→1, avg 5.00). phase54 adds defense-in-depth: the
+INSERT policy now states the full rule so the table stays honest even if a
+future migration re-grants INSERT. New reliability signal: cancelled counts
+in fetchClientJobStats, rendered on the poster card only when non-zero.
+Review+tip flow and §9 ordering unchanged from Phase 6 (re-guarded). Gate:
+tsc/lint clean, 261/263 (same 2 baseline failures, +3 guards),
+verify-schema green incl. phase54 sentinel, phase10-proof 7 PASS
+zero-residue (incl. direct-insert-stays-revoked). Physical check rides the
+Phase 6 checklist's review/tip steps; no new taps needed.
+
+Previous:
 Phase 9 — Profiles, portfolio & worker self-service. **BUILT AND PROOF
 PASSED (8 assertions); physical pass PENDING.** phase53 on staging:
 worker_services (owner-managed, drafts owner-only, NULL price = "Ask for a
@@ -166,7 +182,11 @@ Active-work lifecycle slice. See "Exact next task".
   PaymentMethods screens, WorkerProfile trust sections. Gate: tsc/lint
   clean, 258/260, verify-schema green, phase9-proof 8 PASS. **PHYSICAL
   PASS: PENDING.**
-  [ ] 10 reviews · [ ] 11 earnings ·
+- [x] 10 reviews · the phase-10 closure commit, tag `phase-10` · phase54
+  defense-in-depth policy (create_review already enforced the DoD — proven),
+  cancelled-count reliability signal. Gate: tsc/lint clean, 261/263,
+  verify-schema green, phase10-proof 7 PASS.
+  [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
 
