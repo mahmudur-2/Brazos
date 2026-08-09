@@ -21,6 +21,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { Button } from '../components/Button';
+import { MarketJobPreview } from '../components/MarketJobPreview';
 import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
@@ -30,6 +31,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useOpenJobDetail } from '../hooks/useJobDetail';
+import { useMode } from '../modes';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import {
   arrivalWindowLabel,
@@ -99,6 +101,9 @@ export function JobDetailScreen() {
   // back from PostJob.
   const { job, missing } = useOpenJobDetail(params.job);
   const { user } = useAuth();
+  // §10: perspective comes from ModeContext — see the customer-mode delegation
+  // to MarketJobPreview below.
+  const { mode } = useMode();
 
   // Guards the one inline bid path left on this screen (the listed-price
   // quick bid) so repeated taps cannot stack a second create_offer call.
@@ -307,6 +312,17 @@ export function JobDetailScreen() {
       return;
     }
     (navigation as any).navigate('Chat', { directThreadId: threadId });
+  }
+
+  // §10 (Phase 8): this screen is registered in the SHARED Map and MyJobs
+  // stacks, so a customer-mode user can genuinely arrive here. Rendering the
+  // worker surface (EST. PAY, bid CTAs) to them was the documented
+  // reachability leak — closed HERE, at the screen, so no navigation path
+  // can bypass it. Their own job keeps the owner view below.
+  if (!missing && mode === 'customer' && !isOwnJob) {
+    return (
+      <MarketJobPreview job={job} poster={poster} onBack={() => navigation.goBack()} />
+    );
   }
 
   // The canonical read came back empty: the poster deleted the job while this

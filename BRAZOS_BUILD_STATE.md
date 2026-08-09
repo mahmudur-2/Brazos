@@ -1,18 +1,25 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 7 closed)
+Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 8 closed)
 
 ## Current phase
-Phase 7 — Messaging. **BUILT AND AUTOMATED-PROOF PASSED (10 assertions);
-physical two-device pass PENDING** (2026-08-09, autonomous run). The existing
-messaging system (phase8/9/16/25/36: realtime, media, voice, unsend, direct
-threads, read markers) was audited COMPLETE for screens 40/41/61/62 and
-deliberately KEPT — Phase 7 closed its one real gap: **offer-scoped pre-hire
-chat**. phase52 (applied + verified on staging) makes the pair's direct
-thread exist from the first offer between two users (AFTER INSERT trigger on
-job_offers + backfill); the offer surfaces (BidDetail customer-side, the
-own-bid card worker-side) open that thread; quick replies are now
-mode-specific through ModeContext. Job-thread chat stays client + assigned
-worker ONLY — bidders never share a room. See "Phase 7 — what was built".
+Phase 8 — Discovery breadth. **BUILT AND PROOF PASSED; physical pass
+PENDING** (2026-08-09, autonomous run). No schema change — the phase41
+Haversine radius RPC was kept and PROVEN correct against controlled fixtures
+(phase8-proof: 5mi/25mi boundaries, true distances ±0.25mi, no raw
+coordinates in the RPC's declared row type, grid/radius agreement). Built:
+**the §10 leak closure** — JobDetailScreen now delegates customer-mode
+viewers to the new customer-safe MarketJobPreview (EST. PRICE, approximate
+location, zero worker vocabulary — guarded by test) and SubmitBid refuses
+customer mode at the screen, so no navigation path renders worker surfaces
+to a customer; **worker job filters (screen 50)** — lib/jobFilters pure
+model + JobFilterSheet over WorkerResultsScreen (categories, budget floor
+with the no-budget-survives rule, newest/pay/distance sorts, badge, clear).
+Deferred with reasons: map swipe-card rework, Rebook 08, Explore-services 17
+as distinct screens (see DECISIONS). See "Phase 8 — what was built".
+
+Phase 7 — Messaging: closed (tag `phase-7`), proof 10 PASS; physical pass
+PENDING. phase52 offer-scoped pre-hire chat (trigger + backfill), chat
+entries on both offer surfaces, mode-specific quick replies.
 
 Phase 6 — Active-work lifecycle slice: closed (tag `phase-6`), automated
 proof 28 PASS; physical pass PENDING. phase51 on staging. Built: arrival
@@ -125,7 +132,14 @@ Active-work lifecycle slice. See "Exact next task".
   Gate: tsc/lint clean, 245/247 tests (same 2 baseline failures),
   verify-schema green, offers probe 6/6, phase7-proof 10 PASS zero-residue.
   **PHYSICAL TWO-DEVICE PASS: PENDING** (autonomous run, §11).
-  [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
+- [x] 8 discovery · the two phase-8 commits, tag `phase-8` · §10 leak closed
+  (MarketJobPreview + SubmitBid guard, both at the screen), worker job
+  filters (lib/jobFilters + JobFilterSheet on WorkerResults), radius RPC
+  proven against controlled fixtures. No schema change. Map rework/Rebook/
+  Explore-17 deferred with reasons. Gate: tsc/lint clean, 252/254 tests
+  (same 2 baseline failures), verify-schema green, phase8-proof 3 PASS.
+  **PHYSICAL PASS: PENDING** (autonomous run, §11).
+  [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
 
@@ -1668,23 +1682,95 @@ Phase 6 checklist (W = Wren/worker mode, C = Casey/customer mode).
    if available: Messages tab must show NOTHING of the Casey↔Wren thread.
 8. Re-run seed-phase-7 → Casey's thread unread again (reset works).
 
-## Exact next task (Phase 8 — Discovery breadth)
+## Phase 8 — what was built (2026-08-09, autonomous run)
 
-Per BRAZOS_MASTER_PLAN.md §J Phase 8 (LARGE), screens 08, 17–21, 49, 50,
-MarketJobPreview. The run continues without stopping at this boundary.
+**No schema change.** The phase41 `jobs_within_radius()` was audited and
+kept; its correctness is now PROVEN, not assumed (scripts/phase8-proof.sql
+against scripts/seed-phase-8.sql's controlled fixtures at 2/4/20 miles):
+5-mile search returns exactly the two near jobs, 25-mile all three, measured
+distances 2.00/4.01 mi, the RPC's declared row type carries no raw
+coordinates (checked against the catalog), and job_hotspots() covers the
+same seeded area (grid/radius agreement).
 
-- **Goal:** explore services/workers, search results, filters, list/map
-  discovery with radius, saved/rebook surfaces.
-- **Reuse:** existing browse/map/radius code — `jobs_within_radius()`
-  (phase41 Haversine over job_locations), `job_hotspots()`/`jobs_in_cell()`
-  grid RPCs, WorkerSearch/WorkerResults screens. Audit-first: read
-  SCREEN_CROSSWALK rows for 08/17–21/49/50 before building.
-- **§10 authorization:** Phase 8 is explicitly authorized to close the
-  SubmitBid/JobDetail customer-mode reachability leak via MarketJobPreview
-  (the customer-safe job browse). NOT a §7 fork unless it demands identity/
-  ModeContext/navigation architecture changes.
-- **DoD:** radius/filter correctness against seeded data; list/map parity;
-  ModeGuard confirms zero worker CTAs in customer browse; virtualized lists;
-  gate clean.
-- **Carried forward:** Phase 6 + 7 physical checklists PENDING; production
-  apply queue = phase51, phase52 (in order, then verify-schema).
+**§10 leak closure (the phase's spine):**
+- `components/MarketJobPreview.tsx` — the customer-safe rendering of an open
+  job: EST. PRICE (budget vocabulary), approximate `location` string only,
+  posting media, poster identity, and ONE action — switchMode()'s confirmed
+  switch. Zero worker vocabulary, enforced by a comment-stripping guard test.
+- `screens/JobDetailScreen.tsx` — delegates to MarketJobPreview whenever
+  reached in customer mode on someone else's job. Closed AT THE SCREEN: no
+  navigation path (map drill-down, MyJobs, retained route) can bypass it.
+- `screens/SubmitBidScreen.tsx` — refuses customer mode outright with the
+  same confirmed-switch affordance.
+
+**Worker job filters (screen 50):**
+- `lib/jobFilters.ts` — pure model: category set, budget floor (a job with
+  NO stated budget always survives a floor — an open negotiation is not a
+  low budget), newest/pay/distance sorts (no-budget can never rank
+  best-paying; rows without distance sink). Unit-tested in node.
+- `components/JobFilterSheet.tsx` over the ui Sheet primitive; wired into
+  WorkerResultsScreen (header badge, filtered-empty state with clear,
+  distance sort offered only in geo modes). Filters apply AFTER the mode
+  picks its base set, so a filtered "nearby" list stays honestly within its
+  stated radius.
+
+**Deferred, with reasons (recorded in DECISIONS):** the pannable-map
+swipe-card rework (19/49), Rebook 08 as a screen, Explore-services 17 as a
+distinct screen.
+
+## Phase 8 gate (2026-08-09)
+
+- tsc/lint clean · `npm test`: **252/254 — same 2 documented baseline
+  failures**, +7 new guards (tests/discovery.test.mjs).
+- verify-schema: green (no schema change; phase51/52 groups still green).
+- `scripts/phase8-proof.sql`: **3 PASS** (radius boundaries, distance
+  honesty + no-raw-coordinates, grid/radius agreement). Offers RLS probe
+  last ran 6/6 this session; no policy or grant changed in Phase 8.
+
+## Phase 8 — physical checklist (the user's closing pass, PENDING)
+
+Seed: phase-6 seed, then `psql -X -v ON_ERROR_STOP=1 -f
+scripts/seed-phase-8.sql "$SUPABASE_DB_URL_STAGING"`. W = Wren (worker),
+C = Casey (customer).
+
+1. **W** · Home → View all → filter icon → select Cleaning → Show jobs →
+   only cleaning jobs remain ("Deep-clean a two-bed apartment" among them);
+   header badge shows 1.
+2. **W** · filters → min budget $50+ → the $40 cleaning job drops, the
+   no-budget "Rehang a sagging gate" stays visible.
+3. **W** · filters → sort Highest budget → "Clear the back fence line" ($90)
+   leads; no-budget jobs sit at the bottom.
+4. **W** · near Waco with location on: Home → the "within 5 miles" pill →
+   expect the 2mi and 4mi seeded jobs, NOT the 20mi one; filter sheet now
+   offers "Closest first"; picking it orders 2mi before 4mi.
+5. **W** · clear filters from the empty/filtered state → full list returns.
+6. **C** (customer mode) · Map tab → drill into a Waco cell → open a seeded
+   job → expect the CUSTOMER-SAFE preview: "EST. PRICE", "approximate area",
+   NO bid button, no payout figures; the only action is "Switch to Worker
+   Mode to bid", which asks before switching.
+7. **C** · confirm the switch → lands in Worker Mode; reopen the same job →
+   full worker detail with bid entry returns.
+8. Cold-start check: reopen the app in customer mode and deep-open any open
+   job from Map again — preview, never the bid surface.
+
+## Exact next task (Phase 9 — Profiles, portfolio & worker self-service)
+
+Per BRAZOS_MASTER_PLAN.md §J Phase 9 (MEDIUM), screens 22–25, 43–46, 63–66.
+The run continues without stopping at this boundary.
+
+- **Goal:** workers fully manage their public presence; customers get the
+  trust surfaces. **DB:** portfolio drafts/publish, services/pricing,
+  availability, verification status field. **FE:** WorkerProfile 22/63
+  (isOwner), PortfolioGallery 23/Manager 65, PortfolioProject 24,
+  ServiceDetail 25, ServicesPricing 64, AvailabilityVerification 66,
+  EditProfile 44 (failure-safe avatar), PaymentMethods 45 (sandbox),
+  SavedWorkers 46, profile hub 43 polish.
+- **Reuse:** existing profile/portfolio code (portfolio_items table,
+  WorkerProfileScreen, ProfileScreen). Audit-first via crosswalk rows.
+- **Fold in:** Rebook 08 (deferred from Phase 8) belongs with SavedWorkers
+  46 — one past-workers surface with hire-again.
+- **DoD:** worker edits services/portfolio/availability → customer sees the
+  changes; avatar failure preserves the old photo; drafts invisible
+  publicly; gate clean.
+- **Carried forward:** Phase 6/7/8 physical checklists PENDING; production
+  apply queue = phase51, phase52.

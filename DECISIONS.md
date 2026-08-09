@@ -258,3 +258,51 @@ Commit: the phase-7 closure commit; tag `phase-7`.
 
 **Production apply queue after this phase (in order, human step):**
 phase51, then phase52, then verify-schema green against production.
+
+## Phase 8 — decisions (2026-08-09)
+
+Commits: the two phase-8 commits; tag `phase-8`.
+
+**Decided autonomously (§8 / addendum §2):**
+
+1. **The §10 leak is closed AT THE SCREEN, not at call sites.** JobDetail
+   (registered in the shared Map/MyJobs stacks) checks ModeContext and
+   delegates customers to MarketJobPreview; SubmitBid refuses customer mode
+   itself. Rationale: a screen-level guard cannot be bypassed by any present
+   or future navigation path, needs zero call-site edits, and matches the
+   "perspective comes from ModeContext" rule. No identity/ModeContext/
+   navigation architecture was changed — per §10 this is NOT a §7 fork.
+2. **MarketJobPreview is a component JobDetail renders, not a new route.**
+   Route consolidation (§4): same route, mode-guarded content; the preview
+   cannot be deep-linked around because it IS the job route in customer mode.
+3. **Filters are client-side over already-fetched feeds** (lib/jobFilters
+   pure model). No new DB indexes: feeds are already bounded lists and the
+   filter runs in-memory; DB-side filtering can ride a later phase if feed
+   sizes demand it. The no-budget-survives-a-floor rule and the
+   no-budget-never-best-paying sort rule are deliberate honesty choices.
+4. **phase41 radius RPC kept, and proven rather than trusted** — the DoD's
+   "radius correctness against seeded data" is phase8-proof against
+   controlled 2/4/20-mile fixtures, including a catalog check that the RPC's
+   row type exposes no raw coordinates.
+5. **DEFERRED — map swipe-card rework (19/49):** the hotspot/cell flow is
+   real, device-proven, and platform-split (HotspotMap.web.tsx is on the
+   frozen web surface). A pannable-map + swipe-card rebuild is high-churn UI
+   against absent mockups with a frozen-surface hazard. The leak half (map →
+   job in customer mode) IS closed via MarketJobPreview; grid/radius
+   agreement is proven in phase8-proof §C.
+6. **DEFERRED — Rebook 08 as a screen:** its natural entry points (Customer
+   Home 07) are LOCKED, and hire-again already exists on bid cards, chat and
+   completed jobs. Folded into Phase 9's SavedWorkers 46 surface.
+7. **DEFERRED — Explore services 17 as a distinct screen:** locked Home's
+   category chips + WorkerSearch({category}) already cover the product
+   surface; a separate grid screen would have no reachable entry point.
+
+**NEEDS REVIEW:**
+
+- Deferrals 5–7 above are product-scope judgment calls; each is reversible
+  as an additive later slice.
+- MIN_BUDGET_PRESETS ($25/$50/$100) and the JobFilterSheet control set are
+  numbers/controls I chose; trivially adjustable.
+
+**Production apply queue after this phase:** unchanged — phase51, phase52
+(Phase 8 shipped no migration).
