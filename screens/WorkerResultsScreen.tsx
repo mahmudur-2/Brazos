@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { JobFilterSheet } from '../components/JobFilterSheet';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useOfferCounts } from '../hooks/useOfferCounts';
@@ -10,6 +11,12 @@ import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
+import {
+  DEFAULT_JOB_FILTERS,
+  activeJobFilterCount,
+  applyJobFilters,
+  type JobFilterModel,
+} from '../lib/jobFilters';
 import { jobMatchesSkills, type OpenJob } from '../lib/jobs';
 import { geocodeQuery } from '../lib/reverseGeocode';
 import type {
@@ -63,6 +70,13 @@ export function WorkerResultsScreen() {
   const [geoJobs, setGeoJobs] = useState<OpenJob[]>([]);
   const [geoMessage, setGeoMessage] = useState<string | null>(null);
   const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
+  // Screen 50 (Phase 8): one filter model over whichever feed this mode
+  // shows. Applied AFTER the mode picks its base set, so a filtered nearby
+  // list is still genuinely "within N miles".
+  const [filters, setFilters] = useState<JobFilterModel>(DEFAULT_JOB_FILTERS);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Distance sort only means something when rows carry distance_miles.
+  const distanceAvailable = params.mode === 'nearby' || params.mode === 'search';
 
   useEffect(() => {
     if (!needsGeo) return;
@@ -125,13 +139,12 @@ export function WorkerResultsScreen() {
   }, [needsGeo, params.mode, params.query]);
 
   const results = useMemo(() => {
+    let base: OpenJob[];
     if (params.mode === 'skills') {
-      return jobs.filter((job) => jobMatchesSkills(job, myCategories));
-    }
-    if (params.mode === 'nearby') {
-      return geoJobs;
-    }
-    if (params.mode === 'search') {
+      base = jobs.filter((job) => jobMatchesSkills(job, myCategories));
+    } else if (params.mode === 'nearby') {
+      base = geoJobs;
+    } else if (params.mode === 'search') {
       const text = (params.query ?? '').trim().toLowerCase();
       const textMatches = text
         ? jobs.filter((job) =>
@@ -144,10 +157,14 @@ export function WorkerResultsScreen() {
       const merged = new Map<string, OpenJob>();
       for (const job of textMatches) merged.set(job.id, job);
       for (const job of geoJobs) merged.set(job.id, job);
-      return Array.from(merged.values());
+      base = Array.from(merged.values());
+    } else {
+      base = jobs;
     }
-    return jobs;
-  }, [params.mode, params.query, jobs, myCategories, geoJobs]);
+    return applyJobFilters(base, filters);
+  }, [params.mode, params.query, jobs, myCategories, geoJobs, filters]);
+
+  const filterCount = activeJobFilterCount(filters);
 
   const loading = jobsLoading || geoState === 'loading';
 
@@ -164,6 +181,24 @@ export function WorkerResultsScreen() {
         title={MODE_TITLES[params.mode]}
         subtitle={subtitle}
         onBack={() => navigation.goBack()}
+        right={
+          <Pressable
+            onPress={() => setFiltersOpen(true)}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={
+              filterCount > 0 ? `Filters, ${filterCount} active` : 'Filters'
+            }
+            style={styles.filterButton}
+          >
+            <Ionicons name="options-outline" size={20} color={colors.ink} />
+            {filterCount > 0 ? (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{filterCount}</Text>
+              </View>
+            ) : null}
+          </Pressable>
+        }
       />
 
       {loading ? (
@@ -189,26 +224,53 @@ export function WorkerResultsScreen() {
           initialNumToRender={8}
           windowSize={11}
           ListEmptyComponent={
-            <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons
-                  name={
-                    geoState === 'denied' || geoState === 'unavailable'
-                      ? 'location-outline'
-                      : 'search'
-                  }
-                  size={30}
-                  color={colors.forest}
-                />
+            filterCount > 0 ? (
+              <View style={styles.empty}>
+                <View style={styles.emptyIcon}>
+                  <Ionicons name="options-outline" size={30} color={colors.forest} />
+                </View>
+                <Text style={styles.emptyTitle}>No jobs match your filters</Text>
+                <Text style={styles.emptyText}>
+                  Loosen a filter, or clear them to see everything again.
+                </Text>
+                <Pressable
+                  onPress={() => setFilters(DEFAULT_JOB_FILTERS)}
+                  accessibilityRole="button"
+                  style={styles.clearFilters}
+                >
+                  <Text style={styles.clearFiltersText}>Clear filters</Text>
+                </Pressable>
               </View>
-              <Text style={styles.emptyTitle}>{emptyTitle(params.mode, geoState, jobsError)}</Text>
-              <Text style={styles.emptyText}>
-                {emptyBody(params.mode, geoMessage, params.query)}
-              </Text>
-            </View>
+            ) : (
+              <View style={styles.empty}>
+                <View style={styles.emptyIcon}>
+                  <Ionicons
+                    name={
+                      geoState === 'denied' || geoState === 'unavailable'
+                        ? 'location-outline'
+                        : 'search'
+                    }
+                    size={30}
+                    color={colors.forest}
+                  />
+                </View>
+                <Text style={styles.emptyTitle}>{emptyTitle(params.mode, geoState, jobsError)}</Text>
+                <Text style={styles.emptyText}>
+                  {emptyBody(params.mode, geoMessage, params.query)}
+                </Text>
+              </View>
+            )
           }
         />
       )}
+
+      <JobFilterSheet
+        visible={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        value={filters}
+        onApply={setFilters}
+        distanceAvailable={distanceAvailable}
+      />
     </SafeAreaView>
   );
 }
@@ -284,5 +346,40 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  filterButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.emerald,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  filterBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: colors.onPrimary,
+  },
+  clearFilters: {
+    marginTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  clearFiltersText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.emerald,
   },
 });
