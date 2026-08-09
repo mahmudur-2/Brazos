@@ -1,7 +1,29 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 8 closed)
+Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 9 closed)
 
 ## Current phase
+Phase 9 — Profiles, portfolio & worker self-service. **BUILT AND PROOF
+PASSED (8 assertions); physical pass PENDING.** phase53 on staging:
+worker_services (owner-managed, drafts owner-only, NULL price = "Ask for a
+quote" never $0), saved_workers (private to the saver BOTH directions),
+portfolio_items.published (drafts; default true so installed builds
+unchanged), profiles.accepting_work/availability_note (column-granted,
+written only through the widened update_my_profile allowlist). Screens:
+ServicesPricing (64+66 consolidated: services manager + availability toggle
++ honest no-KYC verification), SavedWorkers (46 + Rebook 08 fold-in, in
+ProfileStack with WorkerProfile/PostJob riding along), PaymentMethods (45,
+honest sandbox — no fake cards), WorkerProfile gained availability/services/
+save sections. Avatar failure-safety verified pre-existing. Deferred:
+PortfolioProject 24 (single-photo items make a story screen empty — revisit
+when multi-photo projects exist). Gate: tsc/lint clean, 258/260 tests (same
+2 baseline failures, +6 guards), verify-schema green incl. phase53,
+phase9-proof 8 PASS zero-residue. Physical checklist: seed phase-6 then
+scripts/seed-phase-9.sql; walk Profile→Services & availability (add/draft/
+publish/price), Casey views Wren's profile (sees published only, saves
+Wren), Saved & past workers (rows, Hire→PostJob prefilled), toggle
+"taking new work" off → Casey sees the truth line.
+
+Previous phase:
 Phase 8 — Discovery breadth. **BUILT AND PROOF PASSED; physical pass
 PENDING** (2026-08-09, autonomous run). No schema change — the phase41
 Haversine radius RPC was kept and PROVEN correct against controlled fixtures
@@ -139,7 +161,12 @@ Active-work lifecycle slice. See "Exact next task".
   Explore-17 deferred with reasons. Gate: tsc/lint clean, 252/254 tests
   (same 2 baseline failures), verify-schema green, phase8-proof 3 PASS.
   **PHYSICAL PASS: PENDING** (autonomous run, §11).
-  [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
+- [x] 9 profiles · the phase-9 closure commit, tag `phase-9` · phase53
+  (services/saved/drafts/availability), ServicesPricing + SavedWorkers +
+  PaymentMethods screens, WorkerProfile trust sections. Gate: tsc/lint
+  clean, 258/260, verify-schema green, phase9-proof 8 PASS. **PHYSICAL
+  PASS: PENDING.**
+  [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
 

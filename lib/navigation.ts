@@ -295,6 +295,28 @@ export type ProfileStackParamList = {
   ProfileMain: undefined;
   AdminReports: undefined;
   NotificationSettings: undefined;
+  /** Screens 64+66 (Phase 9): the worker's services & pricing manager with
+   *  the availability toggle and the honest verification state. */
+  ServicesPricing: undefined;
+  /** Screen 46 + the Rebook 08 fold-in (Phase 9): saved + past workers. */
+  SavedWorkers: undefined;
+  /** Screen 45 (Phase 9): the sandbox payment-methods surface. */
+  PaymentMethods: undefined;
+  /** Phase 9 — SavedWorkers surfaces other users, so WorkerProfile and the
+   *  PostJob hire-again entry ride along (the standing every-stack-that-
+   *  surfaces-a-user rule). */
+  WorkerProfile: { workerId: string; workerName?: string };
+  PostJob:
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
+    | undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
   ProfileReviews: { userId: string; name?: string };
   /**

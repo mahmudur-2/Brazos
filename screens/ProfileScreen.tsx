@@ -589,6 +589,34 @@ export function ProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Pressable>
 
+            {/* Phase 9 — worker self-service + customer trust surfaces. */}
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('ServicesPricing')}
+            >
+              <Ionicons name="pricetag-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Services & availability</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('SavedWorkers')}
+            >
+              <Ionicons name="bookmark-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Saved & past workers</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('PaymentMethods')}
+            >
+              <Ionicons name="card-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Payment methods</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
             <Pressable
               style={[styles.settingsRow, styles.settingsRowDivider]}
               onPress={() => navigation.navigate('LegalDocument', { document: 'terms' })}

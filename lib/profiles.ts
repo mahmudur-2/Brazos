@@ -25,6 +25,11 @@ export type Profile = {
   // hasn't been run yet — both default to false/absent.
   is_admin?: boolean | null;
   banned?: boolean | null;
+  // Availability (phase53, screen 66). Display truth only — nothing blocks a
+  // customer from offering; the worker declines as usual. Optional for the
+  // pre-migration window; absent reads as "accepting".
+  accepting_work?: boolean | null;
+  availability_note?: string | null;
 };
 
 export type ProfileUpdate = {
@@ -34,10 +39,12 @@ export type ProfileUpdate = {
   bio?: string | null;
   language?: string;
   categories?: string[];
+  accepting_work?: boolean;
+  availability_note?: string | null;
 };
 
 export const PUBLIC_PROFILE_COLUMNS =
-  'id, full_name, avatar_url, role, verification_status, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time';
+  'id, full_name, avatar_url, role, verification_status, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time, accepting_work, availability_note';
 
 const SELF_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, phone, is_admin, banned`;
 

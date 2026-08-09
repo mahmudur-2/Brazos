@@ -306,3 +306,39 @@ Commits: the two phase-8 commits; tag `phase-8`.
 
 **Production apply queue after this phase:** unchanged — phase51, phase52
 (Phase 8 shipped no migration).
+
+## Phase 9 — decisions (2026-08-09)
+
+Commit: the phase-9 closure commit; tag `phase-9`.
+
+**Decided autonomously (§8 / addendum §2):**
+
+1. **Screens 64+66 consolidated into one ServicesPricing surface** (services
+   manager + availability toggle + honest verification state). Verification
+   copy says plainly there is no KYC provider — no fake trust signals.
+2. **worker_services uses the portfolio_items treatment** (owner direct RLS
+   DML, published-or-owner SELECT) rather than RPCs — a worker's own public
+   presence, no money/lifecycle authority. NULL price = "Ask for a quote",
+   constrained > 0 otherwise, never rendered $0.
+3. **saved_workers is private in BOTH directions** — a worker cannot see who
+   saved them (partial-visibility would be a growth feature, not a truth).
+4. **portfolio_items.published defaults TRUE** so installed builds' inserts
+   and every existing row keep today's behavior; the SELECT policy narrowed
+   to published-or-owner (drafts invisible publicly — DoD).
+5. **Availability lives on profiles as two column-granted fields** written
+   only through update_my_profile (allowlist widened by exactly those two
+   keys; validations enforced server-side, proven in phase9-proof D).
+   Display truth only — nothing blocks offers to an unavailable worker.
+6. **WorkerProfile/PostJob registered in ProfileStack** (SavedWorkers
+   surfaces users — the standing rule).
+7. **DEFERRED — PortfolioProject 24:** portfolio items are single photos
+   with captions; a "project story" screen over one photo adds nothing.
+   Revisit when multi-photo projects exist.
+8. **Avatar failure-safety verified pre-existing** (ProfileScreen keeps the
+   old photo and says so on upload failure) — guarded by test now.
+
+**NEEDS REVIEW:** decision 3 (mutual invisibility of saves) and decision 1
+(64+66 as one screen) are product judgment calls, reversible additively.
+
+**Production apply queue after this phase (in order):** phase51, phase52,
+phase53 — then verify-schema green against production.

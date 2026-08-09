@@ -734,6 +734,26 @@ const MIGRATIONS = [
       checkRpc('offer_scoped_chat_enabled', {})],
     checks: [],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 53. Worker self-service: worker_services, saved_workers,
+    // portfolio drafts, availability columns. profiles/portfolio columns are
+    // behind auth (column grants / RLS), so — the phase50 situation — the
+    // sentinel proves them transitively while the probes assert what the
+    // publishable key CAN see: the new tables stay sealed to anon.
+    // -----------------------------------------------------------------------
+    file: 'phase53_worker_self_service.sql',
+    sentinel: ['rpc worker_self_service_enabled()', () =>
+      checkRpc('worker_self_service_enabled', {})],
+    checks: [
+      ['worker_services not readable by anon', () =>
+        checkColumnRevoked('worker_services', 'id')],
+      ['saved_workers not readable by anon', () =>
+        checkColumnRevoked('saved_workers', 'user_id')],
+      ['rpc update_my_profile() still callable shape', () =>
+        checkRpc('update_my_profile', { p_patch: {} })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

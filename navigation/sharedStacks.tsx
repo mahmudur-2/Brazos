@@ -24,9 +24,12 @@ import { MessagesInboxScreen } from '../screens/MessagesInboxScreen';
 import { MyJobsHubScreen } from '../screens/MyJobsHubScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
+import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ReviewAndTipScreen } from '../screens/ReviewAndTipScreen';
+import { SavedWorkersScreen } from '../screens/SavedWorkersScreen';
+import { ServicesPricingScreen } from '../screens/ServicesPricingScreen';
 import { RouteArrivalScreen } from '../screens/RouteArrivalScreen';
 import { TrackWorkerScreen } from '../screens/TrackWorkerScreen';
 import { WorkChecklistScreen } from '../screens/WorkChecklistScreen';
@@ -136,6 +139,12 @@ export function ProfileStackNavigator() {
       />
       <ProfileStack.Screen name="LegalDocument" component={LegalDocumentScreen} />
       <ProfileStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
+      {/* Phase 9 — worker self-service + the customer people surface. */}
+      <ProfileStack.Screen name="ServicesPricing" component={ServicesPricingScreen} />
+      <ProfileStack.Screen name="SavedWorkers" component={SavedWorkersScreen} />
+      <ProfileStack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
+      <ProfileStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
+      <ProfileStack.Screen name="PostJob" component={PostJobScreen} />
       {/* The design-system catalog (BRAZOS_MASTER_PLAN.md §I). Registered only
           under __DEV__, so a production bundle has no route to it at all —
           hidden by absence rather than by a hidden entry point. Its row in
