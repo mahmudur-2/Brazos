@@ -261,30 +261,22 @@ that replaced what they pointed at.
   `useJobBids.ts`→`useJobOffers.ts`, `setBids`→`setOffers`.
 
 ## Known issues
-- **UNEXPLAINED: 'PostJob' NAVIGATE failed from CUSTOMER Home** (2026-08-08,
-  Phase 3B device pass). The customer tapped "Post a job" on Customer Home with
-  an empty search box and got `The action 'NAVIGATE' with payload
-  {"name":"PostJob","params":{}} was not handled by any navigator`.
-  - The empty payload matches `HomeScreen.tsx:141` exactly:
-    `initialDescription: query.trim() || undefined` serializes to `{}` when the
-    search box is blank. So the call site is identified with confidence.
-  - **The source at HEAD cannot produce this failure.** `PostJob` is registered
-    unconditionally at `navigation/CustomerRoot.tsx:42` as a direct sibling of
-    `HomeMain` in `CustomerHomeStack`, and `HomeScreen` takes
-    `useNavigation<CustomerHomeStackNavigation>()` on that same stack. There is
-    no conditional registration and no nested navigator in between.
-  - **Leading hypothesis: the device was running a stale JS bundle**, not the
-    code at HEAD — most likely a Metro cache or a bundle predating Phase 2's
-    navigator split, when routes were registered in `App.tsx` and
-    `HomeStackParamList` still existed. NOT CONFIRMED.
-  - **Discriminating test:** from Customer Home, tap a category chip
-    (`searchCategory` -> `WorkerSearch`, a sibling in the same stack). If that
-    also fails, the whole stack is stale and it is a bundle problem. If
-    `WorkerSearch` works while `PostJob` does not, the source is genuinely
-    wrong somewhere and this needs real investigation.
-  - My first diagnosis of this incident — the WorkerHomeStack gap below — was
-    WRONG: it does not apply to the customer tree. Recorded so a future session
-    does not inherit it.
+- **RESOLVED (stale Metro bundle, no source defect): 'PostJob' NAVIGATE failed
+  from Customer Home** (2026-08-08, Phase 3B device pass). Tapping "Post a job"
+  threw `The action 'NAVIGATE' with payload {"name":"PostJob","params":{}} was
+  not handled by any navigator`. **Restarting Expo fixed it. No code change was
+  made and none was needed.**
+  - Call site was identified with confidence — `HomeScreen.tsx:141`, where
+    `initialDescription: query.trim() || undefined` serializes to `{}` on a
+    blank search box — but the source at HEAD cannot produce the failure:
+    `PostJob` is registered unconditionally at `navigation/CustomerRoot.tsx:42`
+    as a direct sibling of `HomeMain`, and `HomeScreen` is typed to that same
+    stack. That contradiction is what pointed at the bundle rather than the code.
+  - **Lesson for future device passes: confirm the running bundle before
+    reporting a navigation defect.** Of the two "bugs" this pass surfaced, one
+    (the OfferCard accept gate) was real in the source and one was a stale
+    bundle. Reading the source first is what separated them — a symptom that
+    the code provably cannot produce is a bundle problem until shown otherwise.
 - **LATENT (found by inspection, not the cause of the above): `PostJob` is not
   registered in `WorkerHomeStack`**, so navigating to it from anywhere inside
   the worker Home tab would throw the same error.
