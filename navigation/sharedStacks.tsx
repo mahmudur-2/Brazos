@@ -24,6 +24,7 @@ import { MapScreen } from '../screens/MapScreen';
 import { MessagesInboxScreen } from '../screens/MessagesInboxScreen';
 import { MyJobsHubScreen } from '../screens/MyJobsHubScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
+import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
@@ -145,6 +146,7 @@ export function ProfileStackNavigator() {
       <ProfileStack.Screen name="SavedWorkers" component={SavedWorkersScreen} />
       <ProfileStack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
       <ProfileStack.Screen name="Earnings" component={EarningsScreen} />
+      <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
       <ProfileStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <ProfileStack.Screen name="PostJob" component={PostJobScreen} />
       {/* The design-system catalog (BRAZOS_MASTER_PLAN.md §I). Registered only

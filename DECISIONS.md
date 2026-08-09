@@ -393,3 +393,34 @@ Commit: the phase-11 closure commit; tag `phase-11`.
 
 **Production apply queue after this phase (in order):** phase51, phase52,
 phase53, phase54, phase55.
+
+## Phase 12 — decisions (2026-08-09)
+
+Commit: the phase-12 closure commit; tag `phase-12`.
+
+**Decided autonomously (§8 / addendum §2):**
+
+1. **One event log, two consumers.** The master plan said "notifications
+   table"; phase20's notification_outbox already IS that table (deduped,
+   prefs-gated, trigger-fed). phase56 opens it to its recipient instead of
+   creating a parallel feed table — one source of truth.
+2. **should_notify recreated minus ONLY the push-token gate** (an event
+   belongs in the feed with no device registered; every pref/mute/block/ban
+   gate kept byte-identical). Consequence: outbox rows now accumulate for
+   token-less users — acceptable for a no-op delivery build; a delivery
+   phase can prune sent/expired rows.
+3. **Recipient write surface = exactly read_at** (table UPDATE revoked, one
+   column granted back; proven).
+4. **Tap-through lands in the SHARED tabs** (MyJobs/Messages exist
+   identically in both modes), so §F needs no switch-confirm for any payload
+   the triggers currently write. Mode-segmented deep links (brazos://c|w/…)
+   remain for a later phase when payloads target mode-specific homes.
+5. Push-token registration (phase20 + lib/pushNotifications) verified
+   pre-existing; delivery stays a no-op — no credentials, honestly labeled.
+
+**NEEDS REVIEW:** decision 2's growth trade-off; decision 4's deferral of
+mode-segmented deep links.
+
+**Production apply queue — FINAL (in order):** phase51, phase52, phase53,
+phase54, phase55, phase56 — then `node scripts/verify-schema.mjs` against
+production must be fully green.

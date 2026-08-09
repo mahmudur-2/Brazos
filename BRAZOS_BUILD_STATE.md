@@ -1,7 +1,29 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 11 closed)
+Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 12 closed. RUN
+COMPLETE; Phase 13 is human-led and was NOT begun.)
 
 ## Current phase
+Phase 12 — Notifications (screen 42). **BUILT AND PROOF PASSED (4
+assertions).** Discovery: phase20 had already built the whole pipeline
+(notification_outbox with dedupe + prefs-gated enqueue, triggers on
+messages/status/negotiation/reviews/nearby, push_tokens, and a no-op
+delivery — nothing sends, honestly). phase56 turns those SAME rows into the
+recipient's in-app feed: read_at + recipient-only SELECT + UPDATE revoked
+then read_at column-granted back (proven: delivery columns refuse);
+should_notify recreated minus ONLY the push-token gate (every pref/mute/
+block/ban gate byte-identical) so events land in the feed without a device;
+two missing Phase-6 events wired (payment released → payee, dispute opened
+→ worker, both deduped). NotificationsScreen (ProfileStack + Profile row):
+feed, unread count, mark one/all read, tap-through into the SHARED
+MyJobs/Messages tabs — identical in both modes, so no silent mode switch
+exists or is needed (§F). The old phase20 verify checks flipped to
+sealed-probes (the outbox is no longer anon-readable — deliberate).
+Gate: tsc/lint clean, 269/271 (same 2 baseline failures, +5 guards),
+verify-schema green, phase12-proof 4 PASS zero-residue. Physical: Profile→
+Notification feed after any Phase 6/7 walk — rows appear, unread dot
+clears, taps land.
+
+Previous:
 Phase 11 — Earnings & money surfaces (59+60 consolidated). **BUILT AND
 PROOF PASSED (5 assertions).** phase55 on staging: payments.paid_out_at +
 sandbox_cash_out() (payee-only sweep of released rows → paid_out; zero rows
@@ -207,7 +229,11 @@ Active-work lifecycle slice. See "Exact next task".
 - [x] 11 earnings · the phase-11 closure commit, tag `phase-11` · phase55
   cash-out, pure wallet math, EarningsScreen. Gate: tsc/lint clean, 264/266,
   verify-schema green, phase11-proof 5 PASS.
-  [ ] 12 notifications · [ ] 13 hardening
+- [x] 12 notifications · the phase-12 closure commit, tag `phase-12` ·
+  phase56 feed over the phase20 outbox, two Phase-6 events wired,
+  NotificationsScreen. Gate: tsc/lint clean, 269/271, verify-schema green,
+  phase12-proof 4 PASS. **RUN 6–12 COMPLETE.**
+  [ ] 13 hardening (HUMAN-LED — not begun, per the run charter)
 (mark with commit hash + one-line note when done)
 
 ## Locked

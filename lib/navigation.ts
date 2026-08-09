@@ -304,6 +304,8 @@ export type ProfileStackParamList = {
   PaymentMethods: undefined;
   /** Screens 59+60 (Phase 11): the ledger-derived wallet + simulated cash-out. */
   Earnings: undefined;
+  /** Screen 42 (Phase 12): the in-app event feed over the phase20/56 outbox. */
+  Notifications: undefined;
   /** Phase 9 — SavedWorkers surfaces other users, so WorkerProfile and the
    *  PostJob hire-again entry ride along (the standing every-stack-that-
    *  surfaces-a-user rule). */

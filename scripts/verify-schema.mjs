@@ -180,14 +180,20 @@ const MIGRATIONS = [
         checkColumn('notification_prefs', 'nearby_radius_miles')],
       ['notification_prefs.home_lat', () => checkColumn('notification_prefs', 'home_lat')],
       ['notification_prefs.home_lng', () => checkColumn('notification_prefs', 'home_lng')],
-      ['notification_outbox table', () => checkColumn('notification_outbox', 'id')],
-      ['notification_outbox.recipient_id', () =>
-        checkColumn('notification_outbox', 'recipient_id')],
-      ['notification_outbox.category', () =>
-        checkColumn('notification_outbox', 'category')],
-      ['notification_outbox.dedupe_key', () =>
-        checkColumn('notification_outbox', 'dedupe_key')],
-      ['notification_outbox.status', () => checkColumn('notification_outbox', 'status')],
+      // phase56 sealed the outbox to anon (it became the recipient-scoped
+      // in-app feed), so these five flipped from open-probe to sealed-probe:
+      // existence is proven transitively by this group's own RPC checks plus
+      // the phase56 sentinel; what a publishable key must see is a refusal.
+      ['notification_outbox sealed to anon', () =>
+        checkColumnRevoked('notification_outbox', 'id')],
+      ['notification_outbox.recipient_id sealed', () =>
+        checkColumnRevoked('notification_outbox', 'recipient_id')],
+      ['notification_outbox.category sealed', () =>
+        checkColumnRevoked('notification_outbox', 'category')],
+      ['notification_outbox.dedupe_key sealed', () =>
+        checkColumnRevoked('notification_outbox', 'dedupe_key')],
+      ['notification_outbox.status sealed', () =>
+        checkColumnRevoked('notification_outbox', 'status')],
       ['rpc register_push_token()', () =>
         checkRpc('register_push_token', { p_token: '', p_platform: 'unknown' })],
       ['rpc should_notify()', () =>
@@ -775,6 +781,20 @@ const MIGRATIONS = [
       checkRpc('sandbox_cash_out_enabled', {})],
     checks: [
       ['rpc sandbox_cash_out()', () => checkRpc('sandbox_cash_out', {})],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 56. The notification feed over the phase20 outbox. The table is
+    // recipient-scoped behind auth, so anon probes assert the seal; the
+    // trigger/policy work rides the sentinel.
+    // -----------------------------------------------------------------------
+    file: 'phase56_notification_feed.sql',
+    sentinel: ['rpc notification_feed_enabled()', () =>
+      checkRpc('notification_feed_enabled', {})],
+    checks: [
+      ['notification_outbox not readable by anon', () =>
+        checkColumnRevoked('notification_outbox', 'id')],
     ],
   },
 ];
