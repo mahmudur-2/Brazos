@@ -100,9 +100,11 @@ test('the checkout is visibly sandbox, confirmed before funding, and double-tap 
 
   // The on-screen label, not just a code comment (06_DEFERRED rule).
   assert.match(checkout, /SANDBOX — development build\. No real money/);
-  // The §H.3 explanation rows: authorize, hold, release-later.
+  // The §H.3 explanation rows: authorize, hold, and (since Phase 6) the
+  // honest release story — approval or the 72h clock, frozen by a report.
   assert.match(checkout, /Nothing is charged/);
-  assert.match(checkout, /funds can never leave protection/);
+  assert.match(checkout, /happens only after you approve the completed work/);
+  assert.match(checkout, /automatically 72 hours/);
   // Confirmation with the exact consequence, then the guarded funding call.
   assert.match(checkout, /This authorizes the sandbox amount and places it in protected\/held state/);
   assert.match(checkout, /No real money is being charged in this development build/);
@@ -119,19 +121,22 @@ test('Job Confirmed renders only over a genuinely held payment', async () => {
   assert.match(confirmed, /nothing has been released/i);
 });
 
-test('nothing in Phase 5 can label money released or paid', async () => {
+test('money can only be labelled released where the ledger truthfully is', async () => {
+  // Phase 6 note (2026-08-09, itemised in DECISIONS.md): this guard's Phase-5
+  // form asserted release could not exist AT ALL — that was Phase 5's
+  // deliberately narrow world. Phase 6 built the release path, so the guard
+  // now protects what is permanent about §H.3: released wording appears only
+  // on surfaces that gate on the ledger's real released state, and the
+  // pre-release surfaces still cannot claim it at all.
+
   // The only sources of payment captions are the fixed maps.
   const moneyText = await read('ui/primitives/MoneyText.tsx');
   assert.match(moneyText, /"Paid" never appears before/);
   assert.doesNotMatch(moneyText, /caption[?]?:\s*string/);
 
-  // No Phase-5 surface hand-writes a released/paid claim.
-  for (const file of [
-    'screens/CheckoutScreen.tsx',
-    'screens/JobConfirmedScreen.tsx',
-    'screens/ClientJobDetailScreen.tsx',
-    'screens/WorkerJobScreen.tsx',
-  ]) {
+  // The pre-release surfaces (checkout, the held celebration) still cannot
+  // hand-write a released/paid claim — nothing is released there, ever.
+  for (const file of ['screens/CheckoutScreen.tsx', 'screens/JobConfirmedScreen.tsx']) {
     const source = await read(file);
     assert.doesNotMatch(
       source,
@@ -140,12 +145,22 @@ test('nothing in Phase 5 can label money released or paid', async () => {
     );
   }
 
-  // And no client code can reach past held: the only payment RPCs anywhere
-  // are the two sandbox calls. A release/payout RPC CALL appearing in lib/
-  // or screens/ means someone built Phase 6's money path early — fail loudly.
+  // The lifecycle surfaces may say released — but only behind isReleased()
+  // over the ledger row, and they must read it through the clock-running
+  // job_payment_state() so the label can never outrun the database.
+  for (const file of [
+    'screens/ClientJobDetailScreen.tsx',
+    'screens/WorkerJobScreen.tsx',
+  ]) {
+    const source = await read(file);
+    assert.match(source, /isReleased\(/, `${file} must gate released copy on the ledger`);
+    assert.match(source, /fetchJobPaymentState\(/, `${file} must read through job_payment_state`);
+  }
+
+  // The pre-release surfaces still cannot CALL a release/payout path — the
+  // adapter (covered by tests/lifecycle.test.mjs) is the only door.
   for (const file of [
     'lib/payments.ts',
-    'lib/adapters/payments.ts',
     'screens/CheckoutScreen.tsx',
     'screens/JobConfirmedScreen.tsx',
   ]) {

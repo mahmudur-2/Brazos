@@ -37,7 +37,8 @@ import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
+import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
+import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { alertAsync } from '../lib/dialog';
 import {
@@ -86,6 +87,9 @@ export function ClientJobDetailScreen() {
   // The job's sandbox ledger row (phase50). Loaded on focus so returning from
   // Checkout immediately reflects authorized/held truthfully.
   const [payment, setPayment] = useState<Payment | null>(null);
+  // The open issue report, if any (phase51) — it freezes release and reroutes
+  // the completed-job section to the approval surface.
+  const [openDispute, setOpenDispute] = useState<JobDispute | null>(null);
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
   // The exact service address (job_private_details). This is the poster's own
@@ -172,16 +176,22 @@ export function ClientJobDetailScreen() {
     setAvatarUri(null);
     setWorkerError(null);
     setPayment(null);
+    setOpenDispute(null);
   }, [job.id]);
 
-  // The ledger row, re-read on every focus: Checkout is one push away and the
-  // money label here must follow what actually happened there.
+  // The ledger row, re-read on every focus: Checkout and the approval flow are
+  // one push away and the money label here must follow what actually happened
+  // there. job_payment_state() (phase51) also runs the 72h auto-release check
+  // on the way — the on-read pattern; there is no cron.
   useFocusEffect(
     useCallback(() => {
       let active = true;
       if (job.status === 'open' || job.status === 'cancelled') return;
-      fetchJobPayment(job.id).then(({ data, error }) => {
+      fetchJobPaymentState(job.id).then(({ data, error }) => {
         if (active && !error) setPayment(data);
+      });
+      fetchOpenJobDispute(job.id).then(({ data, error }) => {
+        if (active && !error) setOpenDispute(data);
       });
       return () => {
         active = false;
@@ -733,6 +743,19 @@ export function ClientJobDetailScreen() {
               />
             )}
 
+            {/* Phase 6 — the static tracking surface (screen 33): where the
+                worker is in the confirmed → done march, from their own
+                declarations. Meaningless once the job is completed. */}
+            {job.assigned_worker_id &&
+              (job.status === 'assigned' || job.status === 'in_progress') && (
+                <Button
+                  title="Track worker"
+                  variant="secondary"
+                  palette={emeraldColors}
+                  onPress={() => navigation.navigate('TrackWorker', { job })}
+                />
+              )}
+
             {/* The money truth for this job (phase50 ledger). Labels come from
                 MoneyText's fixed §H.3 captions — never hand-written here. */}
             {job.status === 'assigned' ? (
@@ -859,7 +882,67 @@ export function ClientJobDetailScreen() {
             )}
 
             {job.status === 'completed' ? (
-              user && job.assigned_worker_id ? (
+              // Phase 6, §9 ordering: with a payment on the job, approval
+              // comes FIRST — release the held funds (or report an issue) on
+              // screen 36, review & tip on screen 37 only after release. A
+              // legacy job that completed without any payment keeps the old
+              // inline review, since there is nothing to release.
+              payment ? (
+                openDispute ? (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>Issue reported</Text>
+                    <Text style={styles.noticeText}>
+                      {DISPUTE_REASON_LABELS[openDispute.reason]} — the payment
+                      stays held while your report is open.
+                    </Text>
+                    <Button
+                      title="Manage your report"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('ApproveOrDispute', { job })}
+                    />
+                  </Card>
+                ) : isHeld(payment) ? (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>The work is done — your call</Text>
+                    <Text style={styles.noticeText}>
+                      Review what {workerName} submitted, then approve to release
+                      the held funds or report an issue. With no response, the
+                      funds release automatically after 72 hours.
+                    </Text>
+                    <Button
+                      title="Review & approve the work"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('ApproveOrDispute', { job })}
+                    />
+                  </Card>
+                ) : isReleased(payment) ? (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>Payment released</Text>
+                    <Text style={styles.noticeText}>
+                      All settled with {workerName}. Leave a review — and a tip,
+                      if you’d like.
+                    </Text>
+                    <Button
+                      title="Review & tip"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('ReviewAndTip', { job })}
+                    />
+                  </Card>
+                ) : (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>Payment unfinished</Text>
+                    <Text style={styles.noticeText}>
+                      The job is complete but the payment never reached
+                      protection. Finish checkout to protect and then release it.
+                    </Text>
+                    <Button
+                      title="Finish checkout"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('Checkout', { job })}
+                    />
+                  </Card>
+                )
+              ) : user && job.assigned_worker_id ? (
                 <ReviewSection
                   key={`${job.id}:${user.id}`}
                   jobId={job.id}
@@ -1100,6 +1183,15 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
     lineHeight: 21,
+  },
+  approvalCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  approvalTitle: {
+    ...typography.heading,
+    color: colors.ink,
   },
   sectionTitle: {
     ...typography.heading,

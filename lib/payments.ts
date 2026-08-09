@@ -55,12 +55,18 @@ export type Payment = {
   status: PaymentStatus;
   authorized_at: string | null;
   held_at: string | null;
+  /** When the row left held for released (phase51). Tips are born released
+   *  and stamp it at insert. Null until then. */
+  released_at: string | null;
+  /** 'approved' = the customer approved the work; 'auto_approved' = the 72h
+   *  on-read clock ran out (phase51). Null for tips and unreleased rows. */
+  release_reason: 'approved' | 'auto_approved' | null;
   created_at: string;
   updated_at: string;
 };
 
 const PAYMENT_COLUMNS =
-  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, created_at, updated_at';
+  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, created_at, updated_at';
 
 /** True while the row is live money state rather than failed/voided debris —
  *  the same predicate phase50's one-active-payment index enforces. */
@@ -69,9 +75,16 @@ export function isActivePayment(payment: Pick<Payment, 'status'>): boolean {
 }
 
 /** True once funds are protected. §H.3: "held" is the ONLY state the app may
- *  describe as protected, and Phase 5's terminal state. */
+ *  describe as protected. Since phase51, approval (or the 72h clock) can move
+ *  a held payment to released — see isReleased. */
 export function isHeld(payment: Pick<Payment, 'status'>): boolean {
   return payment.status === 'held';
+}
+
+/** True once funds have left protection toward the worker — released or
+ *  already paid out. The ONLY states the app may describe as released. */
+export function isReleased(payment: Pick<Payment, 'status'>): boolean {
+  return payment.status === 'released' || payment.status === 'paid_out';
 }
 
 /**
@@ -86,6 +99,40 @@ export async function fetchJobPayment(jobId: string) {
     .select(PAYMENT_COLUMNS)
     .eq('job_id', jobId)
     .eq('kind', 'job_payment')
+    .not('status', 'in', '(failed,voided)')
+    .maybeSingle();
+
+  return { data: data as Payment | null, error };
+}
+
+/**
+ * The same active job_payment row, read through job_payment_state() so the
+ * 72h auto-release clock is checked on the way (phase51's on-read pattern —
+ * there is no cron). The lifecycle surfaces use THIS; fetchJobPayment stays
+ * for reads where running the clock would be surprising.
+ */
+export async function fetchJobPaymentState(jobId: string) {
+  const { data, error } = await supabase.rpc('job_payment_state', {
+    p_job_id: jobId,
+  });
+
+  // The RPC returns NULL (not an error) when checkout never ran. PostgREST
+  // serialises that as a row of nulls or nothing depending on version, so
+  // key off the id.
+  const row = (data ?? null) as Payment | null;
+  return { data: row && row.id ? row : null, error };
+}
+
+/**
+ * The job's tip row (kind='tip'), or null when none was given. Same RLS as
+ * the job payment: only the two parties can see it.
+ */
+export async function fetchJobTip(jobId: string) {
+  const { data, error } = await supabase
+    .from('payments')
+    .select(PAYMENT_COLUMNS)
+    .eq('job_id', jobId)
+    .eq('kind', 'tip')
     .not('status', 'in', '(failed,voided)')
     .maybeSingle();
 

@@ -128,6 +128,16 @@ export type Job = {
    * why nothing here ever assumes one exists.
    */
   completion_videos: string[];
+  /**
+   * Static arrival declarations (phase51) — set once by mark_worker_arrival(),
+   * never cleared. There is no live location anywhere. Null on jobs worked
+   * before phase51 or where the worker skipped the taps.
+   */
+  en_route_at: string | null;
+  arrived_at: string | null;
+  /** When the job reached `completed` (phase51). Starts the 72h auto-release
+   *  clock. Null for jobs completed before phase51 — their clock never runs. */
+  completed_at: string | null;
 };
 
 /** `photos` is jsonb; tolerate null/legacy rows and non-array values. */
@@ -162,6 +172,9 @@ export function mapJobRow(row: any): Job {
     videos: toPhotoArray(row.videos),
     completion_photos: toPhotoArray(row.completion_photos),
     completion_videos: toPhotoArray(row.completion_videos),
+    en_route_at: row.en_route_at ?? null,
+    arrived_at: row.arrived_at ?? null,
+    completed_at: row.completed_at ?? null,
   };
 }
 
@@ -277,7 +290,7 @@ export function toOpenJob(row: any): OpenJob {
 const OPEN_JOB_COLUMNS =
   'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
 const JOB_COLUMNS =
-  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos`;
+  `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, completed_at`;
 
 /** Fetch all jobs with status 'open', newest first (worker browse feed). */
 export async function fetchOpenJobs() {
@@ -558,6 +571,20 @@ export async function updateJobStatus(
     return transitionJobStatusWithoutRpc({ jobId, status, photoUrls, videoUrls });
   }
   return { error };
+}
+
+/**
+ * The assigned worker declares a static arrival moment on an assigned job
+ * (phase51's mark_worker_arrival — screens 33/56). Monotonic and idempotent
+ * server-side; 'arrived' backfills en_route so the pair can never read
+ * arrived-but-never-en-route. There is no live location anywhere.
+ */
+export async function markWorkerArrival(jobId: string, step: 'en_route' | 'arrived') {
+  const { data, error } = await supabase
+    .rpc('mark_worker_arrival', { p_job_id: jobId, p_step: step })
+    .single();
+
+  return { data: data ? mapJobRow(data) : null, error };
 }
 
 /** Parse a dollar string from a form into integer cents, or null if empty.

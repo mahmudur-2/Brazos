@@ -6,6 +6,7 @@ import type {
   ProfileStackParamList,
 } from '../lib/navigation';
 import { AdminReportsScreen } from '../screens/AdminReportsScreen';
+import { ApproveOrDisputeScreen } from '../screens/ApproveOrDisputeScreen';
 import { BidDetailScreen } from '../screens/BidDetailScreen';
 import { BidSentScreen } from '../screens/BidSentScreen';
 import { CellJobsScreen } from '../screens/CellJobsScreen';
@@ -25,6 +26,10 @@ import { NotificationSettingsScreen } from '../screens/NotificationSettingsScree
 import { PostJobScreen } from '../screens/PostJobScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
+import { ReviewAndTipScreen } from '../screens/ReviewAndTipScreen';
+import { RouteArrivalScreen } from '../screens/RouteArrivalScreen';
+import { TrackWorkerScreen } from '../screens/TrackWorkerScreen';
+import { WorkChecklistScreen } from '../screens/WorkChecklistScreen';
 import { WorkerJobScreen } from '../screens/WorkerJobScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { ComponentCatalog } from '../dev-tools/ComponentCatalog';
@@ -76,6 +81,13 @@ export function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="Counteroffer" component={CounterofferScreen} />
       <MyJobsStack.Screen name="Checkout" component={CheckoutScreen} />
       <MyJobsStack.Screen name="JobConfirmed" component={JobConfirmedScreen} />
+      {/* Phase 6 — the active-work lifecycle. Worker side: arrival + checklist;
+          customer side: tracking, approval/release, and post-release review. */}
+      <MyJobsStack.Screen name="RouteArrival" component={RouteArrivalScreen} />
+      <MyJobsStack.Screen name="WorkChecklist" component={WorkChecklistScreen} />
+      <MyJobsStack.Screen name="TrackWorker" component={TrackWorkerScreen} />
+      <MyJobsStack.Screen name="ApproveOrDispute" component={ApproveOrDisputeScreen} />
+      <MyJobsStack.Screen name="ReviewAndTip" component={ReviewAndTipScreen} />
       <MyJobsStack.Screen name="Chat" component={ChatScreen} />
       <MyJobsStack.Screen name="PostJob" component={PostJobScreen} />
       <MyJobsStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />

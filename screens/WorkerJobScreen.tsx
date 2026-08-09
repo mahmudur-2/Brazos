@@ -40,7 +40,9 @@ import {
   updateJobStatus,
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
+import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
+import { fetchOpenJobDispute } from '../lib/disputes';
+import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import {
   deleteJobPhoto,
@@ -107,17 +109,23 @@ export function WorkerJobScreen() {
   const isWorker = !!user && job?.assigned_worker_id === user.id;
   const clientName = client?.full_name ?? 'the client';
 
-  // The job's sandbox ledger row (phase50): the hired worker is the payee, so
-  // RLS grants this read, and the card below shows the honest §H.3 state —
-  // held is held, never "paid". Re-read on focus so the customer funding
-  // checkout on their side shows up when the worker returns here.
+  // The job's sandbox ledger row: the hired worker is the payee, so RLS
+  // grants this read, and the card below shows the honest §H.3 state — held
+  // is held, released is released, never "paid" beyond the truth. Read
+  // through job_payment_state() (phase51) so the 72h auto-release clock is
+  // checked whenever the worker looks. Re-read on focus so the customer's
+  // checkout/approval on their side shows up when the worker returns here.
   const [payment, setPayment] = useState<Payment | null>(null);
+  const [issueOpen, setIssueOpen] = useState(false);
   useFocusEffect(
     useCallback(() => {
       let active = true;
       if (!job || job.status === 'open') return;
-      fetchJobPayment(job.id).then(({ data, error: paymentError }) => {
+      fetchJobPaymentState(job.id).then(({ data, error: paymentError }) => {
         if (active && !paymentError) setPayment(data);
+      });
+      fetchOpenJobDispute(job.id).then(({ data, error: disputeError }) => {
+        if (active && !disputeError) setIssueOpen(!!data);
       });
       return () => {
         active = false;
@@ -363,13 +371,25 @@ export function WorkerJobScreen() {
           {isWorker && payment ? (
             <Card style={styles.paymentCard}>
               <Text style={styles.paymentEyebrow}>
-                {isHeld(payment) ? 'PAYMENT PROTECTED · SANDBOX' : 'PAYMENT · SANDBOX'}
+                {isReleased(payment)
+                  ? 'PAYMENT RELEASED · SANDBOX'
+                  : isHeld(payment)
+                    ? 'PAYMENT PROTECTED · SANDBOX'
+                    : 'PAYMENT · SANDBOX'}
               </Text>
               <MoneyText cents={payment.amount_cents} state={payment.status} />
               <Text style={styles.paymentNote}>
-                {isHeld(payment)
-                  ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
-                  : 'Sandbox build — payment states here are development records, not real money.'}
+                {isReleased(payment)
+                  ? payment.release_reason === 'auto_approved'
+                    ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
+                    : `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`
+                  : isHeld(payment)
+                    ? job.status === 'completed'
+                      ? issueOpen
+                        ? `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`
+                        : `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`
+                      : `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
+                    : 'Sandbox build — payment states here are development records, not real money.'}
               </Text>
             </Card>
           ) : null}
@@ -390,19 +410,48 @@ export function WorkerJobScreen() {
               </Text>
             </Card>
           ) : job.status === 'assigned' ? (
-            <Card>
-              <Text style={styles.actionTitle}>Ready to start?</Text>
-              <Text style={styles.actionText}>
-                Mark the job in progress when you begin the work.
-              </Text>
-              <Button
-                title="Start job"
-                onPress={handleStart}
-                loading={working}
-                style={styles.action}
-              />
-            </Card>
+            <>
+              <Card>
+                <Text style={styles.actionTitle}>
+                  {JOB_LIFECYCLE_LABELS[deriveJobLifecycle({ job, payment })]}
+                </Text>
+                <Text style={styles.actionText}>
+                  Let {clientName} know you’re on the way and when you arrive —
+                  two simple status taps, no location tracking.
+                </Text>
+                <Button
+                  title="Route & arrival"
+                  variant="secondary"
+                  onPress={() => navigation.navigate('RouteArrival', { jobId: job.id })}
+                  style={styles.action}
+                />
+                <Button
+                  title="Work checklist"
+                  variant="secondary"
+                  onPress={() => navigation.navigate('WorkChecklist', { jobId: job.id })}
+                  style={styles.action}
+                />
+              </Card>
+              <Card>
+                <Text style={styles.actionTitle}>Ready to start?</Text>
+                <Text style={styles.actionText}>
+                  Mark the job in progress when you begin the work.
+                </Text>
+                <Button
+                  title="Start job"
+                  onPress={handleStart}
+                  loading={working}
+                  style={styles.action}
+                />
+              </Card>
+            </>
           ) : job.status === 'in_progress' ? (
+            <>
+            <Button
+              title="Work checklist"
+              variant="secondary"
+              onPress={() => navigation.navigate('WorkChecklist', { jobId: job.id })}
+            />
             <Card>
               <Text style={styles.actionTitle}>Finish up</Text>
               <Text style={styles.actionText}>
@@ -489,6 +538,7 @@ export function WorkerJobScreen() {
                 style={styles.action}
               />
             </Card>
+            </>
           ) : job.status === 'completed' ? (
             <>
               {completionPhotosOf(job).length > 0 || completionVideosOf(job).length > 0 ? (

@@ -1,9 +1,25 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (Phase 5 session — autonomous DB access)
+Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 6 closed)
 
 ## Current phase
-Phase 5 — Bidding & hiring slice. **FULL SCOPE BUILT AND AUTOMATED-PROOF
-PASSED; awaiting the physical two-device pass** (2026-08-09). phase50
+Phase 6 — Active-work lifecycle slice. **FULL SCOPE BUILT AND AUTOMATED-PROOF
+PASSED (28 assertions); physical two-device pass PENDING** (2026-08-09,
+autonomous run — §11 rule: pending physical verification does not stop
+progression). phase51 applied and verified on STAGING (this run's database is
+staging only; production apply is a human step listed at run end). Built:
+static arrival tracking (mark_worker_arrival), work checklist, disputes with
+release freeze, sandbox_release_job_payment (the first path past `held`),
+72h on-read auto-release (job_payment_state), review-time tip, and screens
+33/36/37/56/57 over the existing 34/35/55/58 surfaces. `lib/jobLifecycle.ts`
+is the ONE lifecycle derivation point (run addendum §1) — the §H.1 enum stays
+deferred and "confirmed" stays derived as assigned + held. See "Phase 6 —
+what was built".
+
+Phase 5 remains AUTOMATED-PROOF PASSED / physical pass pending, unchanged —
+its checklist below still stands for the user's device session. The Phase 6
+checklist chains onto the same seeded accounts.
+
+Previous phase context (Phase 5 session record) follows unchanged: phase50
 applied and verified (sandbox payments ledger over the pre-repo scaffold
 table, withdraw_offer, 7-day offer expiry, expiry gates in all four
 negotiation RPC bodies). OfferComposer is the one offer-terms form (52
@@ -88,7 +104,14 @@ Active-work lifecycle slice. See "Exact next task".
   PROOF: PASS (27 assertions, rolled back, zero residue) · PHYSICAL
   TWO-DEVICE CONFIRMATION: NOT RUN** — closing needs the user's on-device
   pass. See "Phase 5" sections below.
-  [ ] 6 lifecycle · [ ] 7 messaging ·
+- [x] 6 lifecycle · commits `30a20e1` (db) + the phase-6 closure commit, tag
+  `phase-6` · phase51 on staging (arrival timestamps, checklist, disputes,
+  release, auto-release, tip), lib/jobLifecycle derivation point, screens
+  33/36/37/56/57, §9 review-behind-approve rewiring of ClientJobDetail.
+  Gate: tsc/lint clean, 240/242 tests (same 2 baseline failures),
+  verify-schema green, RLS probe 6/6, phase6-proof 28 PASS zero-residue.
+  **PHYSICAL TWO-DEVICE PASS: PENDING** (autonomous run, §11).
+  [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
@@ -1410,7 +1433,120 @@ leak — and withdraw/decline: on a fresh bid, B taps Withdraw (bid card
 returns to "Write a bid"), A declines another bid (it leaves the pending
 list and cannot be accepted).
 
-## Exact next task (Phase 6 — Active-work lifecycle slice)
+## Phase 6 — what was built (2026-08-09, autonomous run)
+
+All work against STAGING (`brazos-staging`); production untouched. The run's
+staging bootstrap (ACL repair + full migration replay + green verify) is
+recorded in DECISIONS.md "RUN RESUMED".
+
+**Database (supabase/phase51_active_work_lifecycle.sql, applied + verified):**
+- `jobs.en_route_at` / `arrived_at` — §9's whole tracking scope: static,
+  monotonic, worker-declared moments via `mark_worker_arrival(job, step)`
+  (assigned status only; arrived backfills en_route; idempotent). NO live
+  location anywhere. `jobs.completed_at` — stamped by transition_job_status
+  (same signature, body re-created), starts the auto-release clock.
+- `job_checklist_items` — worker-owned direct RLS DML (the message_reads
+  treatment), both parties read, writes close outside assigned/in_progress.
+- `job_disputes` + `dispute_status`/`dispute_reason` enums — RPC-only writes
+  (`open_job_dispute` / `withdraw_job_dispute`), one open per job (partial
+  unique), SELECT for the two parties. An open dispute freezes BOTH release
+  paths. Refused once released.
+- `sandbox_release_job_payment` — the third sandbox RPC (§9): held→released,
+  payer-only, completed-only, dispute-frozen, idempotent-on-released,
+  `released_at` + `release_reason='approved'`.
+- `job_payment_state` — party-only payment read that runs the 72h on-read
+  auto-release (`release_reason='auto_approved'`); the repo's no-cron rule.
+- `sandbox_tip_worker` — one tip per job (partial unique index), only after
+  release, $0.01–$1,000, born `released`. payments gained `released_at`,
+  `release_reason` (CHECK'd).
+
+**Client:**
+- `lib/jobLifecycle.ts` — THE derivation point (run addendum §1):
+  pending_payment/confirmed/en_route/arrived/in_progress/awaiting_approval/
+  disputed/completed from status+payment+timestamps+dispute. TRACK_STEPS +
+  trackStepIndex for the timeline surfaces. When §H.1 finally lands, this one
+  file is the swap point.
+- `lib/checklist.ts`, `lib/disputes.ts`; `lib/payments.ts` gained
+  released_at/release_reason, isReleased(), fetchJobPaymentState(),
+  fetchJobTip(); `lib/jobs.ts` gained the three timestamps + markWorkerArrival.
+- Payment adapter widened: releaseJobPayment + tipWorker (sandbox = the RPCs,
+  disabled = refuse). Refund/payout still deliberately absent.
+- Screens: RouteArrival 56 (DetailScreen), WorkChecklist 57 (FormScreen),
+  TrackWorker 33 (DetailScreen timeline), ApproveOrDispute 36 (FormScreen —
+  approve/release, report-issue form, withdraw), ReviewAndTip 37 (gated on
+  released; ReviewSection + tip presets/custom). All in MyJobsStack.
+- Rewired: WorkerJobScreen (arrival/checklist entries, release-aware payment
+  card, reads via job_payment_state), ClientJobDetailScreen (Track worker
+  button; completed section now forks on the payment: approve CTA / dispute
+  card / review CTA / legacy inline review only when no payment exists),
+  CheckoutScreen copy updated (release now exists, honestly described).
+
+**Deliberately NOT built (recorded):** completion_records table (evidence
+stays on jobs.completion_* — no parallel system), checklist item caps, live
+maps/ETA, dispute resolution (admin/human, later phase), MyJobsHub card
+changes, review timing enforced in DB (Phase 10 owns review hardening).
+
+## Phase 6 gate (2026-08-09)
+
+- tsc `--noEmit`: clean · lint (`--noUnusedLocals --noUnusedParameters`): clean
+- `npm test`: **240 pass / 2 fail — exactly the two documented baseline
+  failures** (PWA config.js version string; setupOnboarding CRLF mis-slice),
+  signatures identical to the §0 baseline. +10 new phase-6 guards
+  (tests/lifecycle.test.mjs). Two Phase-5 guards in sandboxCheckout.test.mjs
+  were updated deliberately (release now exists) — itemised in DECISIONS.md.
+- `node scripts/verify-schema.mjs`: green incl. phase51 group (12 checks).
+- `scripts/rls-probe-offers.mjs`: **6 passed / 0 failed / 0 skipped** with the
+  seeded identities.
+- `scripts/phase6-proof.sql`: **28 PASS**, single transaction as three real
+  identities through RLS, ROLLBACK, zero residue (sections A–H: fixtures via
+  real RPCs, arrival auth+monotonicity, checklist RLS both directions,
+  completed_at stamping, dispute freeze incl. the auto clock, payer-only
+  idempotent release, tip gates, 72h auto-release fired + recorded).
+
+## Phase 6 — physical checklist (the user's closing pass, PENDING)
+
+Seed first: `psql -X -v ON_ERROR_STOP=1 -f scripts/seed-phase-6.sql
+"$SUPABASE_DB_URL_STAGING"` (re-runnable; resets the fixtures). Accounts
+(password `brazos-test-1234`): `phase6.customer@brazos.test` (Casey),
+`phase6.worker@brazos.test` (Wren). App `.env` must point at staging.
+
+Device W = signed in as Wren (Worker mode), device C = Casey (Customer mode).
+
+1. **W** · My Jobs → "Assemble a bookshelf" → expect status Confirmed card,
+   payment card "Funds held in protection", buttons Route & arrival / Work
+   checklist / Start job.
+2. **W** · Route & arrival → expect the exact address (1400 S 5th St), the
+   9 AM–12 PM window, both steps unchecked → tap "I'm on my way" → step 1
+   checks, button becomes "I've arrived".
+3. **C** · My Jobs → same job → Track worker → expect timeline Hired ✓ +
+   "On the way" ✓ with a timestamp, "no live location" notice visible.
+4. **W** · "I've arrived" → C pull-refresh Track worker → Arrived ✓.
+5. **W** · back → Work checklist → add "Unbox parts", "Attach shelves" →
+   check off "Unbox parts" → expect 1 of 2 done.
+6. **W** · Start job → status In progress. Route & arrival now read-only
+   ("arrival is behind you").
+7. **W** · checklist → check off the second item → Finish up → add 1 photo →
+   Mark complete.
+8. **C** · job detail → expect "The work is done — your call" card → Review &
+   approve → expect the completion photo, held payment card, Approve & release
+   + Report an issue.
+9. **C** · Report an issue → pick "Work is incomplete" + details → Send →
+   expect the red Issue reported card; the pinned button is now Withdraw
+   report. **W** · job → expect the payment note saying an issue holds the
+   funds.
+10. **C** · Withdraw report (confirm) → back to Approve & release → confirm →
+    expect replace to Review & tip with "PAYMENT RELEASED · SANDBOX".
+11. **C** · leave 5★ review with a comment → submit → expect the quoted
+    review card. Tip $5 → confirm → expect the tip row "Released to worker".
+    Tap $10 again → expect the SAME $5 tip (one per job).
+12. **W** · job → expect payment card "Released to worker · released on
+    approval" wording and (Phase 5 card) review section for the client.
+13. **C** · My Jobs → "Mount a closet shelf" (the pre-completed fixture) →
+    Review & approve → Approve & release → Review & tip works end-to-end
+    without the walk (shortcut QA).
+14. Re-run the seed script → both jobs reset to their starting states.
+
+## Exact next task (Phase 6 — was, now superseded; kept for context)
 
 Per BRAZOS_MASTER_PLAN.md §J, Phase 6 (LARGE), screens 33–37, 55–58.
 Blocked on Phase 5's device verification per §K's critical path
@@ -1451,3 +1587,27 @@ approval flow and a deliberate widening of the payment adapter.
   navigation-phase change, deliberately NOT fixed by registering the route
   in the worker tree. Re-confirmed untouched this phase (SubmitBid/BidSent
   were registered by the JobDetail rule, which does not touch PostJob).
+
+## Exact next task (Phase 7 — Messaging)
+
+Per BRAZOS_MASTER_PLAN.md §J Phase 7 (MEDIUM), screens 40/41/61/62. The
+autonomous run (AUTONOMOUS_RUN.md + the 2026-08-09 user addendum in
+DECISIONS.md) continues without stopping at this boundary.
+
+- **Goal:** realtime job-linked chat between the pair; Inbox + Chat as V2
+  templates; both modes' thin routes; media messages; job-context header;
+  mode-specific quick replies; unread counts.
+- **DB:** conversation auto-create when an offer first links two users —
+  messaging allowed once an offer/bid exists between the pair (pre-hire chat
+  is OFFER-scoped; addresses never auto-inserted). Read markers exist
+  (message_reads, phase9). Note the existing system is already real:
+  messages + Realtime postgres_changes + conversations view + direct threads
+  (phase36). Phase 7 is mostly consolidation onto templates + offer-scoped
+  pre-hire chat + probes — reuse, don't rebuild.
+- **DoD:** two-device realtime chat with media; participants-only RLS proven
+  by probe; unread counts correct; gate clean.
+- **Carried forward from Phase 6:** physical checklist above is PENDING;
+  seeded staging accounts phase6.* exist for reuse; production apply list so
+  far = phase51 (after human review).
+- Start by reading SCREEN_CROSSWALK rows 40/41/61/62 and the existing
+  lib/messages.ts + MessagesInboxScreen/ChatScreen before writing anything.

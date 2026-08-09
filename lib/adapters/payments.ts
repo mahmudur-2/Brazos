@@ -20,10 +20,10 @@ import type { Payment } from '../payments';
  *   disabled  — fail-closed. Every call refuses with the same message, so a
  *               build without a payment mode cannot half-work.
  *
- * Deliberately ABSENT from the interface: release, refund, payout. The
- * deferred-integrations table sketches them for a future provider, but an
- * interface method nothing implements is an invitation to fake it — Phase 6
- * widens this boundary when approval actually releases funds.
+ * Phase 6 widened the boundary with release (the customer's approval moving
+ * held -> released, server-enforced) and the review-time tip. Still
+ * deliberately ABSENT: refund and payout — nothing implements them yet, and
+ * an interface method nothing implements is an invitation to fake it.
  */
 
 import { resolvePaymentsMode, type PaymentsMode } from './paymentsMode';
@@ -45,6 +45,14 @@ export type PaymentProvider = {
   authorizeJobPayment(jobId: string): Promise<PaymentResult>;
   /** Move the job's authorized payment to `held`. Idempotent on held. */
   protectJobPayment(jobId: string): Promise<PaymentResult>;
+  /**
+   * The customer's approval: move the held payment to `released`. The server
+   * enforces ownership, completed status, the dispute freeze, and idempotency
+   * on released — navigation order is not an authorization boundary.
+   */
+  releaseJobPayment(jobId: string): Promise<PaymentResult>;
+  /** One review-time tip per completed job, only after release. */
+  tipWorker(jobId: string, amountCents: number): Promise<PaymentResult>;
 };
 
 const resolution = resolvePaymentsMode({
@@ -69,6 +77,15 @@ function createSandboxPaymentProvider(): PaymentProvider {
     getMode: () => 'sandbox',
     authorizeJobPayment: (jobId) => call('sandbox_authorize_job_payment', jobId),
     protectJobPayment: (jobId) => call('sandbox_hold_job_payment', jobId),
+    releaseJobPayment: (jobId) => call('sandbox_release_job_payment', jobId),
+    tipWorker: async (jobId, amountCents) => {
+      const { data, error } = await supabase.rpc('sandbox_tip_worker', {
+        p_job_id: jobId,
+        p_amount_cents: amountCents,
+      });
+      if (error) return { data: null, error: { message: error.message } };
+      return { data: (data ?? null) as Payment | null, error: null };
+    },
   };
 }
 
@@ -81,6 +98,8 @@ function createDisabledPaymentProvider(message: string): PaymentProvider {
     getMode: () => 'disabled',
     authorizeJobPayment: refuse,
     protectJobPayment: refuse,
+    releaseJobPayment: refuse,
+    tipWorker: refuse,
   };
 }
 

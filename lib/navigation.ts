@@ -192,6 +192,19 @@ export type MyJobsStackParamList = {
   Checkout: { job: Job };
   /** Screen 32 — rendered only after funds are genuinely held. */
   JobConfirmed: { job: Job };
+  /** Screen 56 — the worker's static arrival declarations (Phase 6). No live
+   *  location exists anywhere; these are two one-way taps. */
+  RouteArrival: { jobId: string };
+  /** Screen 57 — the worker's job checklist (Phase 6). */
+  WorkChecklist: { jobId: string };
+  /** Screen 33 — the customer's static "where things stand" timeline (Phase 6). */
+  TrackWorker: { job: Job };
+  /** Screen 36 — approve the finished work (releasing held funds) or report
+   *  an issue that freezes release. Authorization is server-side (phase51). */
+  ApproveOrDispute: { job: Job };
+  /** Screen 37 — review & tip, reachable only after release per the §9
+   *  ordering (release first, then review). */
+  ReviewAndTip: { job: Job };
   Chat: ChatTarget;
   // Registered here too so "Hire Again" on a bid card can open it in place.
   PostJob:

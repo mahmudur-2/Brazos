@@ -227,7 +227,7 @@ export function CheckoutScreen() {
                 <ExplainRow
                   icon="checkmark-done-outline"
                   strong="Release"
-                  text="happens only after you approve the completed work. That approval step arrives in a later milestone — in this build, funds can never leave protection."
+                  text="happens only after you approve the completed work — or automatically 72 hours after completion if you don’t respond. Reporting an issue holds the funds instead."
                 />
               </View>
             ),
@@ -269,7 +269,7 @@ export function CheckoutScreen() {
       <ConfirmDialog
         visible={confirmVisible}
         title={`Protect ${formatBudget(amountCents)} for this job?`}
-        message="This authorizes the sandbox amount and places it in protected/held state. No real money is being charged in this development build. Funds stay held until you approve the finished work in a later milestone — nothing is released today."
+        message="This authorizes the sandbox amount and places it in protected/held state. No real money is being charged in this development build. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done."
         confirmText="Authorize & protect"
         cancelText="Not now"
         loading={funding}
