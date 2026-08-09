@@ -797,6 +797,17 @@ const MIGRATIONS = [
         checkColumnRevoked('notification_outbox', 'id')],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 57 (hardening run). notify_on_message gains the direct-thread
+    // branch — a trigger-function body change with no probeable shape, so
+    // the sentinel carries it (the phase48 situation).
+    // -----------------------------------------------------------------------
+    file: 'phase57_direct_thread_message_notifications.sql',
+    sentinel: ['rpc direct_thread_notifications_enabled()', () =>
+      checkRpc('direct_thread_notifications_enabled', {})],
+    checks: [],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
