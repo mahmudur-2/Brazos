@@ -96,6 +96,16 @@ export type Job = {
   budget_cents: number | null;
   status: string;
   created_at: string;
+  /** Editable MIN/MAX budget range (phase49). Older jobs have neither and
+   *  carry only the single budget_cents; new posts mirror the ceiling into
+   *  budget_cents so legacy readers keep working. */
+  budget_min_cents: number | null;
+  budget_max_cents: number | null;
+  /** Scheduling (phase49): the chosen day plus a local wall-clock arrival
+   *  window. All nullable — "flexible" is a real, common answer. */
+  scheduled_date: string | null;
+  arrival_start_hour: number | null;
+  arrival_end_hour: number | null;
   bid_count: number;
   assigned_worker_id: string | null;
   final_amount_cents: number | null;
@@ -137,6 +147,11 @@ export function mapJobRow(row: any): Job {
     budget_cents: row.budget_cents ?? null,
     status: row.status,
     created_at: row.created_at,
+    budget_min_cents: row.budget_min_cents ?? null,
+    budget_max_cents: row.budget_max_cents ?? null,
+    scheduled_date: row.scheduled_date ?? null,
+    arrival_start_hour: row.arrival_start_hour ?? null,
+    arrival_end_hour: row.arrival_end_hour ?? null,
     // job_offers since phase46; `bids` is read for rows fetched by any query
     // still using the frozen embed, so neither shape renders a blank count.
     bid_count: row.job_offers?.[0]?.count ?? row.bids?.[0]?.count ?? 0,
@@ -180,6 +195,21 @@ export type NewJobInput = {
   category: JobCategory;
   location: string;
   budgetCents: number | null;
+  /** MIN/MAX budget range (screen 15). The server mirrors the ceiling into
+   *  the legacy single budget_cents; callers pass whichever the poster set. */
+  budgetMinCents?: number | null;
+  budgetMaxCents?: number | null;
+  /** YYYY-MM-DD, or null for "flexible" (screen 14). */
+  scheduledDate?: string | null;
+  /** Local wall-clock arrival window, both-or-neither (screen 14). */
+  arrivalStartHour?: number | null;
+  arrivalEndHour?: number | null;
+  /**
+   * Exact service address. Private by construction: it is stored only in
+   * job_locations (the job_private_details surface — phase12 RLS: owner +
+   * hired worker), never on the public jobs row.
+   */
+  addressLine?: string | null;
   /** Public URLs of photos attached to the posting (max 5, enforced in UI). */
   photos?: string[];
   /** Public URLs of short videos attached to the posting (max 2). */
@@ -201,6 +231,11 @@ export type OpenJob = {
   category: JobCategory;
   location: string | null;
   budget_cents: number | null;
+  budget_min_cents: number | null;
+  budget_max_cents: number | null;
+  scheduled_date: string | null;
+  arrival_start_hour: number | null;
+  arrival_end_hour: number | null;
   status: string;
   created_at: string;
   photos: string[];
@@ -216,6 +251,13 @@ export function toOpenJob(row: any): OpenJob {
     category: row.category,
     location: row.location ?? null,
     budget_cents: row.budget_cents ?? null,
+    // Absent from queries that predate phase49 (e.g. the map drill-down RPC's
+    // projection) and correctly null there — same fallback rule as photos.
+    budget_min_cents: row.budget_min_cents ?? null,
+    budget_max_cents: row.budget_max_cents ?? null,
+    scheduled_date: row.scheduled_date ?? null,
+    arrival_start_hour: row.arrival_start_hour ?? null,
+    arrival_end_hour: row.arrival_end_hour ?? null,
     status: row.status,
     created_at: row.created_at,
     // jobs_in_cell() (the map drill-down RPC) doesn't select photos, so this
@@ -233,7 +275,7 @@ export function toOpenJob(row: any): OpenJob {
 // from silently reopening this class of leak if a new sensitive column is
 // ever added to `jobs`.
 const OPEN_JOB_COLUMNS =
-  'id, client_id, title, description, category, location, budget_cents, status, created_at, photos, videos';
+  'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
 const JOB_COLUMNS =
   `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos`;
 
@@ -326,6 +368,12 @@ export async function createJob(_clientId: string, input: NewJobInput) {
       p_lat: input.coords?.lat ?? null,
       p_lng: input.coords?.lng ?? null,
       p_videos: input.videos ?? [],
+      p_budget_min_cents: input.budgetMinCents ?? null,
+      p_budget_max_cents: input.budgetMaxCents ?? null,
+      p_scheduled_date: input.scheduledDate ?? null,
+      p_arrival_start_hour: input.arrivalStartHour ?? null,
+      p_arrival_end_hour: input.arrivalEndHour ?? null,
+      p_address_line: input.addressLine ?? null,
     })
     .single();
 
@@ -355,6 +403,12 @@ export async function updateJob(jobId: string, input: NewJobInput) {
       p_lat: input.coords?.lat ?? null,
       p_lng: input.coords?.lng ?? null,
       p_videos: input.videos ?? [],
+      p_budget_min_cents: input.budgetMinCents ?? null,
+      p_budget_max_cents: input.budgetMaxCents ?? null,
+      p_scheduled_date: input.scheduledDate ?? null,
+      p_arrival_start_hour: input.arrivalStartHour ?? null,
+      p_arrival_end_hour: input.arrivalEndHour ?? null,
+      p_address_line: input.addressLine ?? null,
     })
     .single();
 
@@ -376,15 +430,26 @@ export async function deleteJob(jobId: string) {
   return { error };
 }
 
-/** The exact coordinates saved for one job, if any (client/assigned worker only, per RLS). */
+export type JobPrivateLocation = {
+  /** Nullable since phase49: a typed address has no GPS fix. Paired — lat and
+   *  lng are always both set or both null. */
+  lat: number | null;
+  lng: number | null;
+  /** The exact service address (job_private_details). Owner + hired worker
+   *  only, enforced by phase12's RLS — this read simply comes back empty for
+   *  anyone else. */
+  address_line: string | null;
+};
+
+/** The exact location saved for one job, if any (client/assigned worker only, per RLS). */
 export async function fetchJobLocation(jobId: string) {
   const { data, error } = await supabase
     .from('job_locations')
-    .select('lat, lng')
+    .select('lat, lng, address_line')
     .eq('job_id', jobId)
     .maybeSingle();
 
-  return { data: data as { lat: number; lng: number } | null, error };
+  return { data: data as JobPrivateLocation | null, error };
 }
 
 /**
@@ -515,6 +580,102 @@ export function formatBudget(cents: number | null): string {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
   })}`;
+}
+
+/**
+ * One budget line for any job shape, range-aware. "$50–$80" when a real range
+ * exists, a single figure when the range collapses (or the job predates
+ * phase49 and has only budget_cents), and formatBudget's own "No budget set"
+ * when the poster left it open. Screens that want different open-budget copy
+ * branch before calling, exactly as they already do for budget_cents.
+ */
+export function budgetRangeLabel(job: {
+  budget_cents: number | null;
+  budget_min_cents?: number | null;
+  budget_max_cents?: number | null;
+}): string {
+  const min = job.budget_min_cents ?? null;
+  const max = job.budget_max_cents ?? null;
+  if (min != null && max != null && min !== max) {
+    return `${formatBudget(min)}–${formatBudget(max)}`;
+  }
+  return formatBudget(max ?? min ?? job.budget_cents);
+}
+
+/** True when the job carries any stated budget figure at all. */
+export function hasBudget(job: {
+  budget_cents: number | null;
+  budget_min_cents?: number | null;
+  budget_max_cents?: number | null;
+}): boolean {
+  return (
+    job.budget_cents != null || job.budget_min_cents != null || job.budget_max_cents != null
+  );
+}
+
+/** "8 AM" / "12 PM" / "12 AM" — hour 24 wraps to midnight ("until 12 AM"). */
+function formatHour(hour: number): string {
+  const h = hour % 24;
+  const suffix = h < 12 ? 'AM' : 'PM';
+  const display = h % 12 === 0 ? 12 : h % 12;
+  return `${display} ${suffix}`;
+}
+
+/**
+ * "Tue, Aug 12 · 8 AM–11 AM", either half alone when only one was chosen, or
+ * null when the poster left timing fully flexible. The date is parsed as
+ * plain local calendar parts — never through the Date-from-ISO-string
+ * constructor, which would shift "2026-08-12" a day for viewers west of UTC.
+ */
+export function arrivalWindowLabel(job: {
+  scheduled_date?: string | null;
+  arrival_start_hour?: number | null;
+  arrival_end_hour?: number | null;
+}): string | null {
+  let dateLabel: string | null = null;
+  if (job.scheduled_date) {
+    const [y, m, d] = job.scheduled_date.split('-').map(Number);
+    if (y && m && d) {
+      dateLabel = new Date(y, m - 1, d).toLocaleDateString('en-US', {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+      });
+    }
+  }
+  const windowLabel =
+    job.arrival_start_hour != null && job.arrival_end_hour != null
+      ? `${formatHour(job.arrival_start_hour)}–${formatHour(job.arrival_end_hour)}`
+      : null;
+
+  if (dateLabel && windowLabel) return `${dateLabel} · ${windowLabel}`;
+  return dateLabel ?? windowLabel;
+}
+
+/**
+ * Real posting history for a job's poster — the customer-side trust signal a
+ * browsing worker sees on the job detail screen. Counts actual rows, never a
+ * cached aggregate: `posted` excludes draft rows (a draft is an unsent
+ * direct-offer negotiation, not a posting), `completed` is finished work.
+ */
+export async function fetchClientJobStats(clientId: string) {
+  const [postedRes, completedRes] = await Promise.all([
+    supabase
+      .from('jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .not('status', 'eq', 'draft'),
+    supabase
+      .from('jobs')
+      .select('id', { count: 'exact', head: true })
+      .eq('client_id', clientId)
+      .eq('status', 'completed'),
+  ]);
+
+  return {
+    data: { posted: postedRes.count ?? 0, completed: completedRes.count ?? 0 },
+    error: postedRes.error ?? completedRes.error,
+  };
 }
 
 /** Human-friendly bid count, e.g. "3 bids" / "1 bid" / "No bids yet". */

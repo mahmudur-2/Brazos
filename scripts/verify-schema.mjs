@@ -608,6 +608,52 @@ const MIGRATIONS = [
         checkColumnRevoked('v_bids_projection_drift', 'root_offer_id')],
     ],
   },
+  {
+    // phase49 adds the post-wizard fields (budget range, scheduling window,
+    // address-capable job_locations) and recreates create_job /
+    // update_job_details with the widened parameter list. The two RPC checks
+    // call with the NEW named parameters, so they only pass once the widened
+    // signatures are live — the pre-phase49 functions answer PGRST202 to
+    // these argument names. Both RPCs raise on auth before touching any row,
+    // so probing them with the publishable key writes nothing.
+    file: 'phase49_post_wizard_fields.sql',
+    sentinel: ['rpc post_wizard_fields_enabled()', () =>
+      checkRpc('post_wizard_fields_enabled', {})],
+    checks: [
+      ['jobs.budget_min_cents', () => checkColumn('jobs', 'budget_min_cents')],
+      ['jobs.budget_max_cents', () => checkColumn('jobs', 'budget_max_cents')],
+      ['jobs.scheduled_date', () => checkColumn('jobs', 'scheduled_date')],
+      ['jobs.arrival_start_hour', () => checkColumn('jobs', 'arrival_start_hour')],
+      ['jobs.arrival_end_hour', () => checkColumn('jobs', 'arrival_end_hour')],
+      ['rpc create_job() widened signature', () =>
+        checkRpc('create_job', {
+          p_title: 'probe',
+          p_description: 'probe',
+          p_category: 'other',
+          p_location: 'probe',
+          p_budget_min_cents: 100,
+          p_budget_max_cents: 200,
+          p_scheduled_date: '2026-01-01',
+          p_arrival_start_hour: 8,
+          p_arrival_end_hour: 11,
+          p_address_line: 'probe',
+        })],
+      ['rpc update_job_details() widened signature', () =>
+        checkRpc('update_job_details', {
+          p_job_id: ZERO_UUID,
+          p_title: 'probe',
+          p_description: 'probe',
+          p_category: 'other',
+          p_location: 'probe',
+          p_budget_min_cents: 100,
+          p_budget_max_cents: 200,
+          p_scheduled_date: '2026-01-01',
+          p_arrival_start_hour: 8,
+          p_arrival_end_hour: 11,
+          p_address_line: 'probe',
+        })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
