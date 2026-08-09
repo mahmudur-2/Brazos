@@ -100,8 +100,11 @@ end $$;
 -- C. SAVED WORKERS — private in both directions.
 -- ---------------------------------------------------------------------------
 select pg_temp.become('c');
+-- seed-phase-9 may have already persisted this exact save — the proof must
+-- hold on a seeded database, so the insert is upsert-shaped.
 insert into public.saved_workers (user_id, worker_id)
-values ((select v from probe where k='c'), (select v from probe where k='wa'));
+values ((select v from probe where k='c'), (select v from probe where k='wa'))
+on conflict (user_id, worker_id) do nothing;
 
 do $$
 begin
@@ -181,8 +184,11 @@ begin
   if v_count <> 0 then raise exception 'RESIDUE: services survived'; end if;
   select count(*) into v_count from public.portfolio_items where caption like 'PHASE9 PROOF%';
   if v_count <> 0 then raise exception 'RESIDUE: portfolio rows survived'; end if;
-  select count(*) into v_count from public.saved_workers;
-  if v_count <> 0 then raise exception 'RESIDUE: saved rows survived'; end if;
+  -- The (customer, worker) save may legitimately persist from seed-phase-9;
+  -- what must NOT survive is the foreign-write pair the proof attempted.
+  select count(*) into v_count from public.saved_workers
+  where worker_id = 'b6c00000-0000-4000-8000-000000000003';
+  if v_count <> 0 then raise exception 'RESIDUE: the refused foreign save survived'; end if;
   select count(*) into v_count from public.profiles where availability_note like 'PHASE9 PROOF%';
   if v_count <> 0 then raise exception 'RESIDUE: availability survived'; end if;
   raise notice 'PASS RESIDUE: rollback left zero probe rows';

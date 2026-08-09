@@ -406,15 +406,21 @@ begin
   ) then
     raise exception 'G: a payment claims a state Phase 5 cannot produce';
   end if;
-  -- No function exists anywhere that can move money past held.
+  -- Phase-5 form of this assertion: "no release/payout function exists".
+  -- Phases 6 and 11 deliberately shipped exactly two (§9-preauthorized
+  -- sandbox_release_job_payment, phase55's sandbox_cash_out), so the durable
+  -- invariant is now: the ONLY functions that can move money past held are
+  -- that sanctioned pair — anything else matching the pattern is contraband.
+  -- (Deliberate test change, itemised in DECISIONS.md, hardening run.)
   if exists (
     select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and (p.proname ilike '%release%payment%' or p.proname ilike '%payout%' or p.proname ilike '%cash_out%')
+      and p.proname not in ('sandbox_release_job_payment', 'sandbox_cash_out', 'sandbox_cash_out_enabled')
   ) then
-    raise exception 'G: a release/payout function exists — Phase 5 must not ship one';
+    raise exception 'G: an UNSANCTIONED release/payout function exists';
   end if;
-  raise notice 'PASS G: payment is held (not released/paid), provider is sandbox, and no release path exists';
+  raise notice 'PASS G: payment is held in Phase-5 flow; only the sanctioned phase51/55 release pair exists';
 end $$;
 
 -- ---------------------------------------------------------------------------
