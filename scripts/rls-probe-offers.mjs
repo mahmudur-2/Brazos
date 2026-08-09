@@ -101,10 +101,15 @@ async function signIn(role) {
 
 console.log('RLS probe — unified offers (job_offers + legacy bids)\n');
 
-// --- Cases 1 and 2: anon sees nothing. No credentials needed. ---------------
+// --- Cases 1-3: anon sees nothing. No credentials needed. -------------------
+// `payments` joined the list in Phase 5: phase50 extended the ledger and
+// revoked every anon path; a publishable key must never read money rows.
+// (Participant-level payment isolation — payer/payee only — is covered by
+// scripts/phase5-proof.sql as real identities, since the live table has no
+// rows to probe against until real checkouts exist.)
 console.log('anon (publishable key, no session)');
 
-for (const table of ['job_offers', 'bids']) {
+for (const table of ['job_offers', 'bids', 'payments']) {
   const res = await fetch(`${URL}/rest/v1/${table}?select=id&limit=1`, {
     headers: { apikey: ANON, Authorization: `Bearer ${ANON}` },
   });

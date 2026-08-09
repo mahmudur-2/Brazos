@@ -1,26 +1,32 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-08 (second Phase 4 session — autonomous DB access)
+Updated: 2026-08-09 (Phase 5 session — autonomous DB access)
 
 ## Current phase
-Phase 4 — Post-a-job vertical slice. **FULL SCOPE BUILT AND
-AUTOMATED-PROOF PASSED; awaiting the physical two-device pass** (2026-08-08,
-second session). The first session closed two gaps (AsyncStorage draft,
-MediaUploader primitive) without DB access; this session had authorized
-direct DB access and closed the rest of the phase's scope: **phase49
-applied and verified** (budget MIN/MAX range, scheduled date + arrival
-window, private service address through job_locations), the wizard's
-Location & timing and Budget & review steps now collect all of it,
-MediaUploader is wired into the wizard (the ownership-rule conflict the
-first session flagged is resolved by design, not papered over), screen 16
-is a real SuccessScreen-template configuration, screen 51 gained the
-payout-after-fee estimate + poster trust signals, screen 39 shows
-timing/range/private address, and My Jobs surfaces the local draft under
-its Open view.
+Phase 5 — Bidding & hiring slice. **FULL SCOPE BUILT AND AUTOMATED-PROOF
+PASSED; awaiting the physical two-device pass** (2026-08-09). phase50
+applied and verified (sandbox payments ledger over the pre-repo scaffold
+table, withdraw_offer, 7-day offer expiry, expiry gates in all four
+negotiation RPC bodies). OfferComposer is the one offer-terms form (52
+Submit Bid and 30 Counteroffer render it whole; the hire wizard — 26's
+device-verified entry — shares its amount field and validation). New
+screens: SubmitBid/BidSent (worker), CompareBids/BidDetail/Counteroffer/
+Checkout/JobConfirmed (customer). Accept flows into a sandbox protected
+checkout over a phoneAuth-pattern PaymentProvider adapter; the ledger
+stops at `held` — no release path exists at any layer. Withdraw + expiry
+are live on the worker bid card, the chat thread card, and server-side.
 
 Proof lines, exactly as the brief requires:
-- **AUTOMATED TWO-ACCOUNT PROOF: PASS** — see "Phase 4 second-session
-  verification" below (RLS-engaged as two real identities, rolled back).
+- **AUTOMATED TWO-ACCOUNT PROOF: PASS** — scripts/phase5-proof.sql, 27
+  PASS assertions A–G as three real identities through RLS, single
+  transaction, ROLLBACK, zero-residue verified (see "Phase 5 — automated
+  proof" below).
 - **PHYSICAL TWO-DEVICE CONFIRMATION: NOT RUN** — no device this session.
+  The tap-by-tap checklist is under "Phase 5 — physical two-device
+  checklist".
+
+Phase 4 — Post-a-job slice is **PASS / CLOSED** (2026-08-09): the user
+physically verified the two-device post→discover→open pass and approved
+closure at the start of this session.
 
 Phase 3 — Data foundation remains **PASS / CLOSED** (2026-08-08), unchanged
 this session:
@@ -33,8 +39,8 @@ this session:
 - **Device regression Parts 1 and 2: PASS** on a real device.
 - **Shim + projection harness: PASS**, six checks.
 
-Next exact task once Phase 4's device verification is done: Phase 5 —
-Bidding & hiring slice. See "Exact next task".
+Next exact task once Phase 5's device verification is done: Phase 6 —
+Active-work lifecycle slice. See "Exact next task".
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -67,19 +73,22 @@ Bidding & hiring slice. See "Exact next task".
   dropped. **PASS** — verify-schema 131 OK / 0 PENDING, RLS probe 5/5, device
   regression Parts 1+2 on a real device, shim/projection harness 6/6. Decision
   doc: `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`.
-- [ ] 4 post · **FULL SCOPE BUILT, AUTOMATED PROOF PASSED, not closed**
-  (2026-08-08, two sessions) · Session 1 (no DB access): AsyncStorage draft
-  persistence + the `MediaUploader` primitive. Session 2 (authorized direct
-  DB access): phase49 applied+verified (budget range, arrival window,
-  private address), wizard steps 2–4 completed to the atlas spec,
-  MediaUploader wired in, screen 16 as a SuccessScreen config, screen 51
-  payout estimate + trust signals, screen 39 timing/range/address, My Jobs
-  draft card. tsc/lint clean, **218/220 tests** (same 2 pre-existing
-  failures; test deltas itemised below), verify-schema **139/0/0**.
-  **AUTOMATED TWO-ACCOUNT PROOF: PASS · PHYSICAL TWO-DEVICE CONFIRMATION:
-  NOT RUN** — closing still needs the user's on-device pass. See "Phase 4
-  second session" below.
-  [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
+- [x] 4 post · commits `083b2d6`, `65d3a69`, `529fa0e` (tag
+  `phase-4-post-slice`) · Two sessions: AsyncStorage draft + MediaUploader,
+  then phase49 + wizard steps 2–4 + screens 16/51/39/38. **PASS — CLOSED
+  2026-08-09**: the user ran the physical two-device post→discover→open
+  pass and approved closure at the start of the Phase 5 session.
+- [ ] 5 hire · **FULL SCOPE BUILT, AUTOMATED PROOF PASSED, not closed**
+  (2026-08-09, one autonomous session) · phase50 applied+verified (sandbox
+  payments over the pre-repo scaffold, withdraw, expiry), OfferComposer +
+  screens 52/53/28/29/30/31/32, accept→checkout flow, adapter-gated sandbox
+  money stopping at `held`. tsc/lint clean, **230/232 tests** (same 2
+  pre-existing failures; +12 Phase-5 guards; deltas itemised below),
+  verify-schema green incl. all 6 phase50 checks. **AUTOMATED TWO-ACCOUNT
+  PROOF: PASS (27 assertions, rolled back, zero residue) · PHYSICAL
+  TWO-DEVICE CONFIRMATION: NOT RUN** — closing needs the user's on-device
+  pass. See "Phase 5" sections below.
+  [ ] 6 lifecycle · [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
@@ -241,9 +250,25 @@ under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 ## Migrations written but NOT applied
-None. Every migration through phase49 is applied and verified.
+None. Every migration through phase50 is applied and verified.
 
 ## Migrations applied (verify-schema green)
+phase50 (`phase50_sandbox_payments_and_offer_lifecycle.sql`): **applied by
+the agent under the session's explicit autonomous-database authorization**
+(psql script file over the authenticated direct connection), re-applied to
+prove idempotency, then confirmed by a green `node scripts/verify-schema.mjs`
+— all 6 phase50 checks (payments sealed from the publishable key ×2, the two
+sandbox RPCs, withdraw_offer, and the `sandbox_payments_enabled()` sentinel)
+flipped PENDING→OK on their own; exit 0 — 2026-08-09. Extends the pre-repo
+`payments` scaffold (§H.3 enum values, ledger columns, one-active-payment
+index, write revokes), adds the sandbox authorize/hold RPCs,
+`withdraw_offer()`, `job_offers.expires_at`, and expiry gates in the four
+negotiation RPC bodies (signatures unchanged). NOTE: its enum ADD VALUE
+statements run as autocommit statements ahead of the main transaction —
+first application must be psql, not a transaction-wrapping SQL editor.
+Touches no policy except strictly-narrowing payments write revokes; no
+lifecycle RPC; no trigger.
+
 phase49 (`phase49_post_wizard_fields.sql`): **applied by the agent under the
 session's explicit autonomous-database authorization** (direct authenticated
 session-mode connection; the old paste-into-SQL-Editor flow did not apply
@@ -1041,32 +1066,388 @@ exist; these remain the on-device closing checklist:
 - **Mode-isolation smoke** — unaffected by this phase (no nav/mode edit),
   but worth reconfirming before Phase 5 builds on top.
 
-## Exact next task (Phase 5 — Bidding & hiring slice)
+## Phase 5 — what was built (2026-08-09, autonomous session)
 
-Per BRAZOS_MASTER_PLAN.md §J, Phase 5 (LARGE), screens 26–32, 52, 53. Blocked
-on Phase 4's device verification per the critical path in §K
-(`0 → 1 → 2 → 3 → 4 → 5 → 6`) — start it only after the user confirms the
-two-device post→discover→open pass above.
+Per BRAZOS_MASTER_PLAN.md §J, Phase 5 (LARGE), screens 26–32, 52, 53. The
+full hire loop: bid/direct-offer/counter → compare → accept → sandbox
+protected checkout → authorized → held → job confirmed. **STOPS at held** —
+no completion, evidence, dispute, release, earnings, or payout surface was
+built, and none can be reached: no function in the database or the app can
+move a payment past `held`.
 
-**Goal:** the full hire loop — bid/direct-offer/counter → compare → accept →
-sandbox checkout → confirmed.
+### Database (phase50 — applied by the agent, idempotency-proven, verified)
+- **The pre-repo `payments` scaffold was EXTENDED, not replaced.** The audit
+  found a `payments` table and `payment_status` enum that predate every
+  numbered migration (like `bids`): 0 rows ever, no triggers, no code
+  references, a `stripe_payment_intent_id` column from an abandoned era.
+  BUILD_STATE's old "no payment implementation at any layer" claim was about
+  implementation, not the inert table — corrected here. phase50 adds §H.3's
+  missing enum values (`unfunded`, `authorized`, `paid_out`, `voided`,
+  `partially_refunded`; the legacy `pending` label is unwritable and kept
+  only because enum values cannot drop), columns kind/offer_id/provider/
+  provider_ref/authorized_at/held_at/updated_at, integrity checks, a
+  one-active-payment-per-(job,kind) partial unique index, and phase29-style
+  explicit write revokes under the kept parties-only SELECT policy.
+- **Sandbox checkout RPCs**: `sandbox_authorize_job_payment()` /
+  `sandbox_hold_job_payment()` — named sandbox because they ARE the sandbox
+  provider (fabricated `sandbox_<uuid>` refs, `provider` CHECK-locked to
+  'sandbox'). Both idempotent; amount comes from the accepted offer, never
+  the client; fee is 0 (no authoritative fee schedule exists — screen 51's
+  10% stays a labeled estimate).
+- **`withdraw_offer()`** — §H.2 withdrawn: the AUTHOR of a pending revision
+  retracts it; the recipient's exit remains decline. Frees the
+  one-live-chain slot.
+- **`job_offers.expires_at`** — default now()+7 days on new rows (counters
+  included, each a fresh window); existing pending rows deliberately NULL =
+  never expire (no retroactive expiry of live negotiations). 7 days is a
+  product default recorded here, not a §H number.
+- **Expiry gates** in create/counter/decline/accept + `my_pending_offers()`
+  (signatures unchanged — the six legacy shims keep delegating; the
+  phase47-over-phase46 body-supersession precedent). Semantics, proven by
+  the automated proof: accept/counter REFUSE a lapsed offer (a refusal's
+  expired-flip rolls back with its own error — transaction semantics);
+  decline and create_offer's re-bid sweep PERSIST the expired flip;
+  my_pending_offers() excludes lapsed rows; clients render lapsed-pending
+  as expired via `effectiveOfferStatus()`.
+- Applied via psql script file over the authenticated direct connection,
+  re-applied to prove idempotency, then confirmed by a green
+  `node scripts/verify-schema.mjs` — all 6 phase50 checks flipped
+  PENDING→OK via the `sandbox_payments_enabled()` sentinel. NOTE: the file's
+  enum ADD VALUE statements run as standalone autocommit statements ahead of
+  its main transaction (the phase45/46 lesson, one file instead of two) —
+  first application must be via psql, not a transaction-wrapping editor.
 
-**Carried forward, explicitly NOT Phase 4's job (unchanged from before):**
+### Client architecture
+- **`lib/adapters/payments.ts` + `lib/adapters/paymentsMode.ts`** — the
+  06_DEFERRED phoneAuth template applied to money: a provider-neutral
+  `PaymentProvider` interface, ONE functional implementation (sandbox,
+  calling the two phase50 RPCs), a fail-closed disabled provider, and a
+  pure, test-executed mode resolver. A RELEASE binary requesting sandbox is
+  refused with a config error (`EXPO_PUBLIC_PAYMENTS_MODE`; default sandbox
+  in dev, disabled in release). Deliberately absent from the interface:
+  release/refund/payout — an interface method nothing implements is an
+  invitation to fake it; Phase 6 widens the boundary.
+- **`lib/payments.ts`** — the ledger's types and its one read
+  (`fetchJobPayment`, RLS payer/payee). `PaymentStatus` now lives here as
+  the DB mirror; `ui/primitives/StatusPill` re-exports it (one definition,
+  same string values, MoneyText untouched).
+- **`lib/offers.ts`** — `withdrawOffer()`, `isOfferLapsed()`,
+  `effectiveOfferStatus()`, `expires_at` in the row type and projection.
+
+### OfferComposer (§E's required consolidation)
+`components/OfferComposer.tsx` is the one offer-terms form: context-typed
+(bid | counter), shared `validateOfferAmount()` + `OfferAmountField`,
+in-flight ref guard + disabled CTA (double-tap safe), failure alerts and
+returns without clearing entered terms, consequence copy above the CTA.
+Screens 52 and 30 render it whole; the PostJob hire wizard (screen 26's
+existing, device-verified direct-offer entry) now renders the shared
+`OfferAmountField` and validates through `validateOfferAmount()` — one
+validation, one presentation, three contexts, no third form. Terms are
+price + message: the canonical `job_offers` row carries exactly those
+(schedule/scope live on the JOB via phase49), and no column was invented.
+
+### Screens
+- **52 SubmitBid** (new, worker): OfferComposer bid context; replaces
+  JobDetail's inline custom form; on success REPLACES itself with BidSent
+  so Back cannot re-submit. Registered in every stack that mounts JobDetail
+  (worker Home, MyJobs, Map) — the PostJob/WorkerHomeStack registration gap
+  is the failure mode this avoids, and tests/offerComposer.test.mjs pins it.
+- **53 BidSent** (new): SuccessScreen config; honest copy (customer decides,
+  withdrawable while pending, 7-day self-expiry).
+- **51 JobDetail** (wired): listed-price quick bid KEPT verbatim; custom
+  form → "Write a bid" → SubmitBid; "Your bid" card gains expiry line +
+  Withdraw (confirmed); lapsed bids render expired with a fresh-bid path;
+  bid state re-read on focus; payout-estimate copy updated to sandbox-honest
+  wording ("no real money is charged or paid out through the app yet").
+- **27 Job & bids** (= ClientJobDetail, wired): Compare button (>1 bid),
+  per-card "Full bid · counter or decline" link into BidDetail, accept
+  confirm copy now names supersession + the sandbox checkout step, accept
+  success navigates INTO Checkout (replacing the old overlay-then-hub
+  flow), assigned-state payment card (held → MoneyText caption; unfunded →
+  "Protect payment in checkout" CTA), payment re-read on focus.
+- **28 CompareBids** (new): DetailScreen template; value/price/rating sort
+  (existing lib/offers scoring — price is one option, never the layout),
+  best-value highlight, trust fields per row; row → BidDetail. A comparison
+  surface, deliberately not an auction hammer: accept lives one deliberate
+  step away, behind its consequence copy.
+- **29 BidDetail** (new): full terms, worker record (profile link,
+  verification, rating, completion), expiry, consequence block, and the
+  three decisions — accept (confirm → accept_offer → replace with
+  Checkout), counter (→ 30), decline (confirm). Waiting state when the
+  turn is the worker's.
+- **30 Counteroffer** (new): OfferComposer counter context; original terms
+  visible beside the proposed ones; popTo ClientJobDetail on success. (The
+  chat thread's AmountPrompt counter — the direct-offer negotiation UI —
+  stays as the working legacy path; this route is the bid-side counter
+  that never existed before Phase 5.)
+- **31 Checkout** (new): DetailScreen template over the ADAPTER only (no
+  RPC strings, no table access — test-pinned). Visible SANDBOX banner
+  (VerifyPhoneScreen precedent), summary (accepted offer, agreed amount,
+  schedule, "Platform fee: None in sandbox", total), authorize/hold/release
+  explainer ("in this build, funds can never leave protection"), one
+  confirmed funding action running authorize→hold (both idempotent; a
+  half-completed attempt resumes from the ledger's truth; failure copy
+  states the accepted offer is unchanged). Customer surface: no worker
+  payout info (V2 rule). Owner-only; disabled-mode and not-assigned states
+  wired.
+- **32 JobConfirmed** (new): renders its celebration ONLY when the ledger
+  reads `held` (anything less shows the truthful state + a path back to
+  checkout). Hired worker, terms, schedule, MoneyText held caption +
+  payment StatusPill, sandbox note; actions View job / Message worker
+  (existing chat — no Phase 7 work).
+- **WorkerJob** (wired, minimal): payee-visible payment card — held shows
+  "funds in protection… released only after approval", sandbox-labeled.
+  This is the existing worker post-hire surface for checklist item 19.
+- **Chat thread** (wired, minimal): OfferCard thread variant offers
+  Withdraw to the pending revision's AUTHOR while awaiting the other side;
+  ChatScreen confirms and calls withdraw_offer. Accept/decline/counter
+  paths untouched.
+
+### Phase 5 test changes (deliberate, itemised)
+Baseline entering: 218/220. Now **230/232** — same two pre-existing
+failures (`pwa` frozen web string; `setupOnboarding` CRLF), net +12 tests.
+- `tests/offerComposer.test.mjs` (new, 6): composer canonicality across the
+  three contexts; RPC-wrapper-only writes; double-tap/input-preservation;
+  JobDetail routes to SubmitBid with no revived inline form; withdraw +
+  expiry wired client-side; SubmitBid/BidSent registered in every
+  JobDetail-mounting stack + the customer loop routes in MyJobs.
+- `tests/sandboxCheckout.test.mjs` (new, 6): release-binary-can't-run-
+  sandbox EXECUTED against the real resolver; no provider SDK dependency or
+  import; adapter-only money paths and no client ledger writes; on-screen
+  SANDBOX label + consequence confirm + funding guard; JobConfirmed gated
+  on `held`; no hand-written released/paid captions and no release/payout
+  RPC call anywhere.
+- `customerCore.test.mjs` — two retargets: "Worker job detail" now asserts
+  the SubmitBid navigation + withdraw instead of the removed inline
+  `handleSubmit`; "no paid-service claims" drops `protected payment|funds`
+  from the forbidden regex (the Phase-4 'arrival window' precedent: phase50
+  made protection a real persisted state, and sandboxCheckout.test.mjs now
+  guards that surface's honesty). `fit percentage` / `available today`
+  remain forbidden.
+
+### Phase 5 — automated proof (scripts/phase5-proof.sql)
+**PASS — 27 assertions, exit 0.** One transaction against the live DB, RLS
+engaged exactly as PostgREST engages it (`set_config('role',
+'authenticated')` + transaction-local `request.jwt.claims`), THREE real
+active identities (customer, worker A, worker B), ended in ROLLBACK with a
+post-rollback zero-residue check (0 probe jobs / offers / payments / bid
+mirrors; the payments table is back to 0 total rows). Mechanism reported
+honestly: this is the Phase-4 mechanism — real identities through RLS in a
+rolled-back transaction — NOT a physical two-device pass, and the one piece
+of fixture surgery (rewinding one probe offer's expires_at as table owner
+to make expiry testable inside a single transaction) is declared in the
+script header. Sections:
+- **A** bid path: publish (range mirrored) → worker opens job → bids →
+  pending/awaiting-customer/7-day deadline → customer sees both bids +
+  my_pending_offers.
+- **B** counter: child row, parent superseded, linkage auditable, turn
+  flips to worker; superseded parent can never win.
+- **C** acceptance: atomic stamp (assigned, worker, accepted_offer_id,
+  final 4800), exactly one accepted offer, sibling superseded in the same
+  transaction; repeated accept idempotent (no second hire); losing sibling
+  unacceptable.
+- **D** checkout: non-owner refused; authorize → authorized row (amount
+  from accepted offer, sandbox provider/ref, fee 0, payee = hired worker,
+  offer_id audit link); authorize retry returns the SAME row; hold → held
+  (+held_at); hold retry safe; exactly one ledger row; payee reads held.
+- **E** negatives: decline settles; author withdraw works; unrelated
+  account cannot withdraw/decline another's offer; recipient cannot
+  withdraw (author-only); expired offer cannot be accepted; a non-raising
+  touch (decline) persists `expired`; after decline/withdraw/expiry the
+  worker opens a fresh chain.
+- **F** privacy: address unreadable to both workers pre-hire; hired worker
+  reads it post-accept; losing worker still cannot; workers cannot read
+  each other's offers; unrelated worker cannot read the payment row.
+- **G** money honesty: payment is `held` (never released/paid_out/legacy
+  pending), provider is sandbox, and no release/payout function exists in
+  the schema.
+
+### RLS probe (scripts/rls-probe-offers.mjs, extended)
+`payments` joined the anon cases. Run this session: **3 passed, 0 failed
+(anon cannot read job_offers / bids / payments), 3 skipped** — the
+authenticated cases need the user's PROBE_* credentials, absent in this
+session by design. Exit 2 (inconclusive) is reported as exactly that, not
+as a pass; the equivalent participant isolation ran live in the automated
+proof (sections F3/F5/F6) as real identities.
+
+### Judgment calls (each recorded per the brief)
+- **No job_status enum change; `accept_offer` still assigns.** §H.1's
+  pending_payment/confirmed would strand every installed build mid-hire
+  (their My Jobs filters and transition_job_status know only the legacy
+  values) — the same break class the phase46/47 shims exist to prevent.
+  "Confirmed" is the derived, truthful state assigned + payment held,
+  rendered from the ledger; the §H.1 enum migration rides the future
+  version-gate phase that retires the shims.
+- **`payments` extended in place** rather than a new §G-named table — the
+  brief's own rule ("if the existing payments schema already supports
+  Phase 5, use it"), plus one-ledger-no-duplicates (§O).
+- **Fee = 0, stated on screen.** No authoritative fee formula exists
+  (06_DEFERRED: fees are an open product/legal decision); inventing one in
+  a money table would be fabricated marketplace data. Screen 51's 10%
+  stays an explicitly-labeled estimate.
+- **Checkout shows no worker payout figure** — CLAUDE.md V2: customer
+  surfaces carry no worker payout info; that outranks the execution
+  prompt's "worker-side amount if legitimately known".
+- **One implementation commit, not the negotiation/checkout pair** — both
+  halves share lib/navigation.ts + sharedStacks.tsx; any split commits a
+  broken tree, and "no broken intermediate state" outranks the preferred
+  milestone split. The migration and the proof/docs are separate commits.
+- **Counters carry no message** — counter_offer()'s two-arg signature is
+  live and verified; widening it means drop/recreate for a nicety the
+  amount-only UI serves. Recorded, not smuggled.
+- **Expiry default = 7 days; pre-phase50 pending rows never expire** — no
+  retroactive expiry of live negotiations by fiat.
+- **StatusBadge gained declined/expired/superseded colours** (additive
+  keys only; existing states untouched).
+- **SubmitBid inherits the documented JobDetail leak**: JobDetail is
+  reachable from the shared Map/MyJobs stacks in customer mode (Known
+  issues, Phase 8's MarketJobPreview closes it), so SubmitBid technically
+  is too. Same leak, same owner, not widened — bidding still requires the
+  server to accept the caller as a non-owner authenticated user.
+
+### ⚠ Migration-file note (recorded, not hidden)
+phase50's file was edited once AFTER first application, while still inside
+this unclosed phase: a comment truth-up only (the expires_at COMMENT ON
+overclaimed "flipped on touch"; the proof showed a refusal's flip rolls
+back with its own error). No executable behaviour differed; the file was
+re-applied idempotently and re-verified. The never-edit rule is understood
+to protect closed, verified phases (phase29–32 etc.), not a same-session
+file that has never been through a phase gate.
+
+## Phase 5 gate (2026-08-09)
+- **tsc / lint:** PASS (clean, incl. --noUnusedLocals --noUnusedParameters).
+- **eslint:** NOT RUN — still not installed, no config. Unchanged since
+  Phase 1 (DECISIONS.md D13).
+- **tests:** **230/232 PASS.** Only the two documented pre-existing
+  failures. +12 new Phase-5 guards, two deliberate retargets (itemised).
+- **verify-schema:** **PASS** — every group green; all 6 phase50 checks
+  flipped PENDING→OK via sentinel; exit 0.
+- **locked screens:** PASS — screens 01–07 and 48 untouched (no diff).
+- **mode-smoke:** PASS at the compile level (tests/mode.test.mjs all green;
+  cross-tree navigation still a tsc error). New routes live only inside
+  existing stacks; no tree/mode/switch change.
+- **rls-probe:** anon layer PASS (3/3 incl. new payments case);
+  authenticated cases SKIPPED for credentials (exit 2, inconclusive —
+  reported as such); participant isolation proven live by the automated
+  proof instead.
+- **automated two-account proof:** PASS (27 assertions, rolled back, zero
+  residue).
+- **dev catalog:** compiles; no catalogued primitive changed visually
+  (StatusPill's PaymentStatus is a type-source move; MoneyText untouched).
+  On-device catalog eyeball rides the user's device pass.
+- **device/simulator:** **NOT RUN** — no device this session; Expo is never
+  started from an agent session.
+
+**Phase 5 gate: green for everything checkable without a device. Phase 5 is
+explicitly NOT closed** until the user runs the two-device hire-loop pass
+below.
+
+## Phase 5 — physical two-device checklist (the user's closing pass)
+
+DEVICE A = customer account · DEVICE B = worker account. Use a fresh test
+job, not a real customer's. Expected state is listed after every action.
+
+1.  **A:** Home → Post a job → complete the wizard (title/category/photos →
+    location + exact address → budget range 40–60 → Publish). *Expect:
+    screen 16 "Job published", then My Jobs → Active shows the job as
+    Open.*
+2.  **B:** Worker Home → open the new job. *Expect: budget range, arrival
+    window if set, payout ESTIMATE card (10% wording, sandbox note), NO
+    exact address anywhere.*
+3.  **B:** Tap **Write a bid**. *Expect: the SubmitBid screen (52) with the
+    job context card and the customer's budget.*
+4.  **B:** Enter an amount (e.g. 45) and a pitch; note the consequence line
+    (withdrawable, 7-day expiry). *Expect: Send bid enabled; double-tap
+    sends exactly one bid.*
+5.  **B:** Send. *Expect: Bid Sent (53) — amount, job title, withdraw/expiry
+    copy; Back does NOT return to a re-submittable form.*
+6.  **B:** Back on the job detail. *Expect: "Your bid" card, Pending badge,
+    "accept until <date>" line, Withdraw bid button.*
+7.  **A:** My Jobs → the job. *Expect: "1 bid to compare"; the bid card
+    shows B's name, rating, amount, pitch, "Full bid · counter or decline".*
+    (Optional: a second worker device bidding here makes step 8 richer and
+    step 13 provable in the UI.)
+8.  **A:** With 2+ bids, tap **Compare**. *Expect: CompareBids (28) — rows
+    with rating/completion/amount/pitch; Best value highlight; sort control;
+    lowest price is a sort option, not the default layout.*
+9.  **A:** Open a row. *Expect: BidDetail (29) — full terms, worker card →
+    profile, expiry line, the Accept/Counter/Decline consequence block.*
+10. **A:** Tap **Counter**, send a lower amount (e.g. 42). *Expect:
+    Counteroffer (30) shows B's original terms beside your field; after
+    send, back on the job the bid list shows the negotiation awaiting B.*
+11. **B:** Reopen the job (or My Jobs). *Expect: the counter at 42 awaiting
+    B; B's original bid shows superseded/replaced in its history.*
+12. **B:** Accept the counter (from the offer surface). *Expect: accept
+    confirm names the consequence; then the job appears under My Jobs as
+    Assigned for B.*
+13. **A:** (If a rival bid existed) check it. *Expect: no longer pending —
+    superseded; it cannot be accepted from anywhere.*
+14. **B:** Open the assigned job. *Expect: the exact service address is NOW
+    visible to B. On any other worker account, it still is not.*
+15. **A:** The job (ClientJobDetail). *Expect: "PAYMENT NOT PROTECTED YET"
+    card + **Protect payment in checkout** → Checkout (31).*
+16. **A:** Checkout. *Expect: SANDBOX banner; agreed amount 42; "Platform
+    fee: None in sandbox"; authorize/hold/release explainer; confirm dialog
+    stating sandbox authorize+hold and no real money. Confirm.*
+17. **A:** *Expect: Job Confirmed (32) — B named as hired, $42 with
+    "Funds held in protection", schedule if set, sandbox note. Double-tap
+    on the checkout button earlier must NOT create a second payment (the
+    proof verified the ledger enforces one row; the UI disables in flight).*
+18. **A:** Back on the job. *Expect: "PROTECTED PAYMENT · SANDBOX" card
+    with the held caption; the checkout CTA is gone.*
+19. **B:** My Jobs → the assigned job (WorkerJob). *Expect: the payee
+    payment card — "PAYMENT PROTECTED · SANDBOX", $42, "released only
+    after the finished work is approved… no real money". This is an
+    EXISTING worker surface; no Phase-6 screen was built for it.*
+20. **A + B:** Sweep every Phase-5 screen just used. *Expect: the words
+    "Released" / "Paid" appear NOWHERE except inside the explainer's
+    future-tense "Release happens only after…" copy; every money label is
+    authorized/held/protected with the sandbox note.*
+
+While there (unchanged by this phase but load-bearing under it): the
+mode-isolation smoke — switch modes both ways, tab re-press, no cross-tree
+leak — and withdraw/decline: on a fresh bid, B taps Withdraw (bid card
+returns to "Write a bid"), A declines another bid (it leaves the pending
+list and cannot be accepted).
+
+## Exact next task (Phase 6 — Active-work lifecycle slice)
+
+Per BRAZOS_MASTER_PLAN.md §J, Phase 6 (LARGE), screens 33–37, 55–58.
+Blocked on Phase 5's device verification per §K's critical path
+(`0 → 1 → 2 → 3 → 4 → 5 → 6`) — start only after the user confirms the
+two-device hire-loop pass above.
+
+**Goal:** confirmed → en route → arrived → in progress → completion
+evidence → approve/dispute → completed, with held funds released honestly
+— Phase 6 is where a payment may first move past `held`, through the
+approval flow and a deliberate widening of the payment adapter.
+
+**Carried forward, explicitly NOT Phase 5's job:**
 - The six legacy shims, the projection trigger,
   `project_offer_chain_to_bids()` and `v_bids_projection_drift` retire together
   in the first phase that ships a version gate — Expo update-gating or a
   store-side forced update. See §11 of the decision doc. That phase must also
   update the phase18/29/30/36/38 groups in `verify-schema.mjs`, which currently
-  require the shims to exist.
+  require the shims to exist, AND owns the §H.1 job-lifecycle enum migration
+  (pending_payment/confirmed/en_route/… — see the Phase 5 judgment call on
+  why accept_offer still assigns).
 - **Generated database types still do not exist.** `supabase gen types` needs
   the CLI plus a local Postgres or a service-role connection, none of which is
-  present, and adding either is a flaggable dependency. `StatusPill`'s unions
-  stay local until then.
-- The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5's
-  own job now).
-- `MarketJobPreview` and customer-safe job browsing (Phase 8).
+  present, and adding either is a flaggable dependency. `StatusPill`'s
+  job/offer unions stay local until then (its PaymentStatus now mirrors the
+  DB via lib/payments.ts).
+- **Release/refund/payout and the payment states past `held`** — Phase 6's
+  approval flow widens the PaymentProvider interface and adds the first
+  RPC that may move money past held. `stripe_payment_intent_id` (the dead
+  scaffold column) is a version-gate-phase deletion candidate.
+- Phase 6 also owns: checklist/completion_records/disputes tables if
+  needed, transition validations, the 72h auto-approve on-read check, and
+  screens 33–37/55–58. Do NOT reuse `transitionJobStatusWithoutRpc`'s
+  legacy fallback for any new transition.
+- `MarketJobPreview` and customer-safe job browsing (Phase 8) — SubmitBid
+  now inherits JobDetail's documented customer-mode reachability leak; both
+  close together there.
 - The latent `PostJob` / `WorkerHomeStack` navigation gap (Known issues) — a
-  navigation-phase change, and deliberately NOT fixed by registering the route
-  in the worker tree. Re-confirmed untouched this phase.
-- Wiring `MediaUploader` into `PostJobScreen` — see this phase's Known issues
-  entry for why it was deliberately not forced in yet.
+  navigation-phase change, deliberately NOT fixed by registering the route
+  in the worker tree. Re-confirmed untouched this phase (SubmitBid/BidSent
+  were registered by the JobDetail rule, which does not touch PostJob).

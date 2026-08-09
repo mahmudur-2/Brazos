@@ -326,7 +326,7 @@ alter table public.job_offers
   add column if not exists expires_at timestamptz default (now() + interval '7 days');
 
 comment on column public.job_offers.expires_at is
-  'When a pending offer lapses (§H.2 expired). NULL = never (pre-phase50 rows). Enforced at decision time inside the RPCs — a stale row is flipped to expired on touch, and my_pending_offers() excludes it; there is no cron (repo rule: on-read-check only).';
+  'When a pending offer lapses (§H.2 expired). NULL = never (pre-phase50 rows). Enforced at decision time inside the RPCs: accept/counter REFUSE a lapsed row (their flip rolls back with the refusal, by transaction semantics), while the non-raising touches — decline, create_offer''s re-bid sweep — persist the expired flip. my_pending_offers() excludes lapsed rows; there is no cron (repo rule: on-read-check only).';
 
 create index if not exists job_offers_pending_expiry_idx
   on public.job_offers (expires_at)
