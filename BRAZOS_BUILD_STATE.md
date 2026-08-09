@@ -2,42 +2,20 @@
 Updated: 2026-08-08
 
 ## Current phase
-Phase 3B — Offer RPCs, RLS and application integration. **CODE-COMPLETE.**
-**Phase 3 overall is PARTIAL, not CLOSED.**
+Phase 3 — Data foundation. **PASS / CLOSED** (2026-08-08).
 
-phase43–47 are all applied and verified live. **phase48 is written and NOT
-applied** — it rewrites `v_bids_projection_drift`, which phase47 got wrong.
+Every gate is green and every claim below is backed by something that was
+actually run, not by a SQL Editor success message:
 
-Closure evidence — three of four complete (2026-08-08):
+- **Migrations phase43–48 all applied and verified.** `verify-schema.mjs`:
+  **131 OK, 0 MISSING, 0 PENDING**, exit 0. Each phase's checks flipped from
+  PENDING to OK on their own via its sentinel — the mechanism cannot report a
+  missing object as passing.
+- **RLS probe: 5 passed, 0 failed, 0 skipped**, "RLS probe clean."
+- **Device regression Parts 1 and 2: PASS** on a real device.
+- **Shim + projection harness: PASS**, six checks.
 
-- **Shim + projection validation: PASS.** A SQL harness drove the compat shims
-  through bid, rival bid, counter, accept, decline and reopen — six checks
-  including the corrected 6b (every `bids` row matches its own chain's leaf) and
-  6c (every pending chain has a row). Notification assertions included: exactly
-  one `bid_received` per genuine new chain, **zero** per counter or accept. Ran
-  inside a subtransaction, rolled back clean, no probe rows left behind.
-- **RLS probe: PASS.** `scripts/rls-probe-offers.mjs` — **5 passed, 0 failed,
-  0 skipped, "RLS probe clean."** Reported by the user, who supplied the three
-  account credentials (the agent has only the publishable key and cannot run
-  the authenticated cases). Confirms anon reads neither table, worker A cannot
-  see worker B's offer on a shared job through `job_offers` **or** the frozen
-  `bids` mirror, and the job's owner sees both.
-- **Device regression: PASS**, reported by the user on a real device.
-  - *Part 1* — bid → rival bid → poster sees both → accept → rival settles
-    rejected → worker sees the job under working. All steps confirmed.
-  - *Part 2* — direct offer → B counters → **live turn flip confirmed on C's
-    device with no refresh** (phase46's `job_offers` realtime publication doing
-    its job) → C accepts. **Both phantom My Jobs checks clean: absent before
-    acceptance, present exactly once after.**
-  - Found two issues along the way: one real regression (the OfferCard
-    perspective gate, fixed in `51e5c38`) and one phantom (a stale Metro
-    bundle, no code defect). See Known issues.
-  - Part 3 (old-build compat) was covered by the SQL harness above rather than
-    a pre-cutover binary — recorded as such, not as a device-verified compat pass.
-- **phase48 applied: NOT YET.** The one remaining item.
-
-Phase 3 closes when phase48 is applied and a post-apply `verify-schema` run
-shows zero PENDING. Nothing else is outstanding. See "Exact next task".
+Next exact task: Phase 4 — Post-a-job vertical slice. See "Exact next task".
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -62,13 +40,14 @@ shows zero PENDING. Nothing else is outstanding. See "Exact next task".
   SQL Editor message), real Expo device mode-switch checklist all green (see
   Phase log entry below / "Manual verification" section for the checklist
   covered).
-- [~] 3 data · **3A + 3B code-complete, phase 3 still PARTIAL** · `job_offers` unification decided
-  and written: phase43 (structure, final), phase44 (bids backfill, final),
-  phase45 (job_requests materialization, **DRAFT / held**). Decision doc:
-  `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`. Nothing applied
-  remotely; no RPC body, RLS policy (except a strict narrowing of
-  `jobs_select_open`), or UI changed. 3B = RLS + `accept_offer` /
-  `advance_job_status` + retire `bids`/`job_requests`.
+- [x] 3 data · commits `0e230bf` (3A), `93a457f` (3B), `9d70845`+`1ff341d`
+  (phase47), `15555fe`+`391c6c9` (phase48), `51e5c38` (device-pass fix),
+  `2069bcd` (RLS probe), plus this closure commit · `bids` + `job_requests`
+  unified into `job_offers`; six migrations applied and verified; offer RPCs +
+  RLS; app retargeted onto `lib/offers.ts`; `bids`/`job_requests` frozen, not
+  dropped. **PASS** — verify-schema 131 OK / 0 PENDING, RLS probe 5/5, device
+  regression Parts 1+2 on a real device, shim/projection harness 6/6. Decision
+  doc: `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`.
   [ ] 4 post · [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
@@ -231,29 +210,15 @@ under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 ## Migrations written but NOT applied
-
-`phase48_bids_drift_view_rewrite.sql` — **final.** Rewrites
-`v_bids_projection_drift` on an exact definition (`stale` / `missing_live` /
-`orphan`) and reports the counts read-only. **Writes no data and touches no
-trigger** — one `create or replace view`, one marker function, three counts. An
-earlier draft reprojected every chain; that was removed as provably redundant
-(phase47 already reprojected and would not commit until the OLD view was empty,
-and the old view was a strict superset of genuine drift, so old-empty implies
-new-empty) and because a view swap that writes nothing is trivially reversible.
-Restores phase47's re-runnability, which the old view had broken.
-
-**Why the view needed two attempts, recorded so it is not repeated.** phase47's
-version expected one mirror row per CHAIN; the projection keeps one per
-`(job_id, worker_id)`, because `bids` still carries phase1's unconditional
-unique on that pair — so a settled chain that lost its row to a later chain read
-as drift. The first correction ("only the newest chain is mirrored", ordered by
-`created_at`) was ALSO wrong: chains created in one transaction share an
-identical `now()`, `job_offers` has no sequence and `id` is random, so
-**"newest chain" is not determinable from this schema** and the check failed
-against correct data about half the time. Same hazard phase47's header already
-documented for leaf selection, one level up.
+None. Every migration through phase48 is applied and verified.
 
 ## Migrations applied (verify-schema green)
+phase48 (`phase48_bids_drift_view_rewrite.sql`): **applied by the user and
+confirmed by a green `verify-schema.mjs` run** — both checks flipped PENDING to
+OK on their own, and the migration's own post-commit grid reported
+`repairable_drift = 0`, `orphan_rows = 0`. Writes no data, touches no trigger —
+2026-08-08. **This closed Phase 3.**
+
 phase47 (`phase47_bids_projection_trigger.sql`): **applied by the user and
 confirmed by a green `verify-schema.mjs` run** — both checks flipped from
 PENDING to OK on their own, which also proves its repair pass found zero drift
@@ -398,6 +363,49 @@ that replaced what they pointed at.
 - `components/SectionHeader.tsx` is dead code (never imported) — left in place per Phase 0 policy, candidate for Phase 13 deletion.
 
 ## Gate status
+
+Phase 3 closure (2026-08-08):
+- **tsc**: PASS — `npm run lint` exits 0, clean.
+- **eslint**: NOT RUN — still not installed, no config file. Unchanged since
+  Phase 1; consistent with DECISIONS.md D13.
+- **tests**: **213/215 PASS.** The same two pre-existing failures (`pwa` frozen
+  web version string; `setupOnboarding` CRLF mis-slice), zero unexplained new
+  ones. Net +1 test vs the 212/214 baseline: one guard test added for the
+  projection, one obsolete compatibility test replaced by an absence assertion,
+  six assertions retargeted to the files that superseded the deleted ones. All
+  itemised under "Phase 3B test changes".
+- **verify-schema**: **PASS — 131 OK, 0 MISSING, 0 PENDING**, exit 0. phase43,
+  44, 45, 46, 47 and 48 all applied by the user and each confirmed by a green
+  run in which its checks flipped from PENDING to OK on their own.
+- **locked screens**: PASS. Screens 01–07 and 48 untouched throughout Phase 3 —
+  not even an import line. `hooks/useBidCounts.ts` survives as a one-line
+  deprecated re-export of `useOfferCounts` specifically so `HomeScreen.tsx` and
+  `BrowseJobsScreen.tsx` stay byte-identical.
+- **mode-smoke**: PASS. Cross-tree navigation remains a compile error. The one
+  perspective-related defect the device pass found (`51e5c38`) was the opposite
+  failure — a component varying by mode when it should not have been — and is
+  now guarded by a test.
+- **rls-probe**: **PASS — 5 passed, 0 failed, 0 skipped** via
+  `scripts/rls-probe-offers.mjs`, run by the user with three real account
+  credentials. anon reads neither `job_offers` nor `bids`; worker A cannot see
+  worker B's offer on a shared job through `job_offers` or through the frozen
+  `bids` mirror; the job's owner sees both. Owner-sees-both is asserted first,
+  deliberately, so the isolation cases cannot pass trivially against absent data.
+- **device/simulator**: **PASS**, on a real device, reported by the user.
+  Part 1: bid → rival bid → poster sees both → accept → rival settles rejected →
+  worker sees the job under working. Part 2: direct offer → counter → **live turn
+  flip with no refresh** → accept, with **both phantom My Jobs checks clean**
+  (absent before acceptance, present exactly once after). Part 3 (old-build
+  compat) was covered by the SQL harness rather than a pre-cutover binary and is
+  recorded as such, not as a device-verified compat pass.
+- **shim/projection harness**: **PASS**, six checks — create_bid shim, rival
+  chain, counter, accept, settle-then-reopen, plus correctness (`every bids row
+  matches its own chain's leaf`) and coverage (`every pending chain has a row`).
+  Notification behaviour asserted: exactly one `bid_received` per genuine new
+  chain, **zero** per counter or accept. Ran in a subtransaction and rolled back
+  clean, leaving no probe rows.
+
+**Phase 3 gate: fully green. Phase 3 is closed.**
 
 Phase 3B (2026-08-08) — code-complete, phase45/46 not applied:
 - **tsc**: PASS — `npm run lint` exits 0, clean.
@@ -659,28 +667,36 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   enum. `AppMode` is a hand-written union today, matching the DB constraint's
   two values exactly.
 
-## Exact next task (apply phase48 — then Phase 3 CLOSES)
+## Exact next task (Phase 4 — Post-a-job vertical slice)
 
-The RLS probe, the device regression pass and the shim/projection harness are
-all complete and green. **One item remains.**
+Per BRAZOS_MASTER_PLAN.md §J, Phase 4 (MEDIUM), screens 12–16, 51, minimal
+38/39. Phase 3 is closed; this is the next task, not yet started.
 
-1. **Apply `supabase/phase48_bids_drift_view_rewrite.sql`.** It writes no data
-   and touches no trigger — one `create or replace view`, one marker function,
-   three read-only counts. Read the Results grid it returns after COMMIT:
-   `repairable_drift` and `orphan_rows` should both be 0. It does not abort if
-   they are not; the repair in that case is to re-run phase47, which is safe
-   again once this view stops reporting settled-chain false positives.
-2. **Re-run `node scripts/verify-schema.mjs`.** Both phase48 checks must flip
-   from PENDING to OK on their own, leaving **zero PENDING**. Only that green
-   run counts as applied — not the SQL Editor's "Success".
-3. **Then Phase 3 is CLOSED** and the closure commit gets written.
+**Goal:** a customer posts a real job and a worker sees and opens it on another
+device. First end-to-end proof of the Phase 3 foundation.
 
-Carried forward into later phases, not part of Phase 3:
+**Reuse, do not rebuild:** `PostJobScreen` already exists and now writes through
+`create_offer`/`create_job`; Worker Home (48, LOCKED) already lists jobs and its
+data source is already wired to real published jobs. `ui/templates/FormScreen`
+(wizard mode) and `SuccessScreen` exist from Phase 1 and are the mandatory basis.
+
+**Known gaps this phase owns:** `PostJobScreen` draft state is in-memory only —
+no `AsyncStorage` — so a draft is lost on app kill, which Phase 4's DoD requires
+surviving. `MediaUploader` is the one Phase 1 primitive deferred to here.
+
+**Carried forward, explicitly NOT Phase 4's job:**
 - The six legacy shims, the projection trigger,
-  `project_offer_chain_to_bids()` and `v_bids_projection_drift` all retire
-  together in the first phase that ships a version gate (§11 of the decision
-  doc), which also means updating the phase18/29/30/36/38 verifier groups.
-- Generated database types still do not exist.
+  `project_offer_chain_to_bids()` and `v_bids_projection_drift` retire together
+  in the first phase that ships a version gate — Expo update-gating or a
+  store-side forced update. See §11 of the decision doc. That phase must also
+  update the phase18/29/30/36/38 groups in `verify-schema.mjs`, which currently
+  require the shims to exist.
+- **Generated database types still do not exist.** `supabase gen types` needs
+  the CLI plus a local Postgres or a service-role connection, none of which is
+  present, and adding either is a flaggable dependency. `StatusPill`'s unions
+  stay local until then.
 - The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5).
+- `MarketJobPreview` and customer-safe job browsing (Phase 8).
 - The latent `PostJob` / `WorkerHomeStack` navigation gap (Known issues) — a
-  navigation-phase change.
+  navigation-phase change, and deliberately NOT fixed by registering the route
+  in the worker tree.

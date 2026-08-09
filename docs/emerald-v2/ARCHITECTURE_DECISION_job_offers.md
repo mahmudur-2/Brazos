@@ -2,7 +2,7 @@
 
 **Phase:** 3A + 3B (Data foundation)
 **Date:** 2026-08-08 (§11 corrected twice the same day — see its notes)
-**Status:** phase43–47 APPLIED and verified live; phase48 written, not applied
+**Status:** phase43–48 ALL APPLIED and verified live. Phase 3 CLOSED 2026-08-08
 **Files:** `supabase/phase43_job_offers_foundation.sql`,
 `supabase/phase44_backfill_bids_to_job_offers.sql`,
 `supabase/phase45_job_requests_to_job_offers.sql`,
@@ -582,7 +582,7 @@ negotiation card — a documented degradation with zero production impact.
 | 3 | `phase45_job_requests_to_job_offers.sql` | **APPLIED** 2026-08-08 | Gates cleared (§6). Applied before phase46, as required. |
 | 4 | `phase46_offer_rpcs_and_rls.sql` | **APPLIED** 2026-08-08 | RPCs, RLS, shims, composite FK. All ten verifier checks flipped to OK. |
 | 5 | `phase47_bids_projection_trigger.sql` | **APPLIED** 2026-08-08 | Trigger-driven projection replacing phase46's mirror. Both verifier checks OK. |
-| 6 | `phase48_bids_drift_view_rewrite.sql` | **final, not applied** | Rewrites the drift view on correctness + coverage. The projection itself was correct; the view was not. |
+| 6 | `phase48_bids_drift_view_rewrite.sql` | **APPLIED** 2026-08-08 | Rewrites the drift view on correctness + coverage. `repairable_drift = 0`, `orphan_rows = 0`. The projection was correct; the view was not. |
 
 **Why 45 before 46, and not the other way round.** The default instinct is to
 put RPCs and RLS in place before data lands. Checked against the real
