@@ -1,19 +1,26 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 6 closed)
+Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 7 closed)
 
 ## Current phase
-Phase 6 — Active-work lifecycle slice. **FULL SCOPE BUILT AND AUTOMATED-PROOF
-PASSED (28 assertions); physical two-device pass PENDING** (2026-08-09,
-autonomous run — §11 rule: pending physical verification does not stop
-progression). phase51 applied and verified on STAGING (this run's database is
-staging only; production apply is a human step listed at run end). Built:
-static arrival tracking (mark_worker_arrival), work checklist, disputes with
-release freeze, sandbox_release_job_payment (the first path past `held`),
-72h on-read auto-release (job_payment_state), review-time tip, and screens
-33/36/37/56/57 over the existing 34/35/55/58 surfaces. `lib/jobLifecycle.ts`
-is the ONE lifecycle derivation point (run addendum §1) — the §H.1 enum stays
-deferred and "confirmed" stays derived as assigned + held. See "Phase 6 —
-what was built".
+Phase 7 — Messaging. **BUILT AND AUTOMATED-PROOF PASSED (10 assertions);
+physical two-device pass PENDING** (2026-08-09, autonomous run). The existing
+messaging system (phase8/9/16/25/36: realtime, media, voice, unsend, direct
+threads, read markers) was audited COMPLETE for screens 40/41/61/62 and
+deliberately KEPT — Phase 7 closed its one real gap: **offer-scoped pre-hire
+chat**. phase52 (applied + verified on staging) makes the pair's direct
+thread exist from the first offer between two users (AFTER INSERT trigger on
+job_offers + backfill); the offer surfaces (BidDetail customer-side, the
+own-bid card worker-side) open that thread; quick replies are now
+mode-specific through ModeContext. Job-thread chat stays client + assigned
+worker ONLY — bidders never share a room. See "Phase 7 — what was built".
+
+Phase 6 — Active-work lifecycle slice: closed (tag `phase-6`), automated
+proof 28 PASS; physical pass PENDING. phase51 on staging. Built: arrival
+tracking, checklist, disputes with release freeze, sandbox_release_job_payment,
+72h on-read auto-release, tip, screens 33/36/37/56/57 over 34/35/55/58.
+`lib/jobLifecycle.ts` is the ONE lifecycle derivation point (run addendum §1)
+— the §H.1 enum stays deferred and "confirmed" stays derived as assigned +
+held. See "Phase 6 — what was built".
 
 Phase 5 remains AUTOMATED-PROOF PASSED / physical pass pending, unchanged —
 its checklist below still stands for the user's device session. The Phase 6
@@ -111,7 +118,13 @@ Active-work lifecycle slice. See "Exact next task".
   Gate: tsc/lint clean, 240/242 tests (same 2 baseline failures),
   verify-schema green, RLS probe 6/6, phase6-proof 28 PASS zero-residue.
   **PHYSICAL TWO-DEVICE PASS: PENDING** (autonomous run, §11).
-  [ ] 7 messaging ·
+- [x] 7 messaging · the phase-7 closure commit, tag `phase-7` · phase52
+  offer-scoped pre-hire chat (trigger + backfill), mode-specific quick
+  replies, chat entries on both offer surfaces, Chat registered by the
+  JobDetail rule. Existing realtime/media/unsend/read-marker system KEPT.
+  Gate: tsc/lint clean, 245/247 tests (same 2 baseline failures),
+  verify-schema green, offers probe 6/6, phase7-proof 10 PASS zero-residue.
+  **PHYSICAL TWO-DEVICE PASS: PENDING** (autonomous run, §11).
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
@@ -1588,26 +1601,90 @@ approval flow and a deliberate widening of the payment adapter.
   in the worker tree. Re-confirmed untouched this phase (SubmitBid/BidSent
   were registered by the JobDetail rule, which does not touch PostJob).
 
-## Exact next task (Phase 7 — Messaging)
+## Phase 7 — what was built (2026-08-09, autonomous run)
 
-Per BRAZOS_MASTER_PLAN.md §J Phase 7 (MEDIUM), screens 40/41/61/62. The
-autonomous run (AUTONOMOUS_RUN.md + the 2026-08-09 user addendum in
-DECISIONS.md) continues without stopping at this boundary.
+**Kept (decision, recorded):** screens 40/41/61/62 stay on the existing
+MessagesInboxScreen/ChatScreen — the crosswalk already marked them COMPLETE,
+and the system beneath them (Realtime postgres_changes, media + voice +
+unsend, reactions, negotiation cards, read markers, the conversations view)
+is real and device-proven. Rebuilding them onto ui/templates would have been
+churn without behavior; template migration belongs to the Phase 13 sweep.
 
-- **Goal:** realtime job-linked chat between the pair; Inbox + Chat as V2
-  templates; both modes' thin routes; media messages; job-context header;
-  mode-specific quick replies; unread counts.
-- **DB:** conversation auto-create when an offer first links two users —
-  messaging allowed once an offer/bid exists between the pair (pre-hire chat
-  is OFFER-scoped; addresses never auto-inserted). Read markers exist
-  (message_reads, phase9). Note the existing system is already real:
-  messages + Realtime postgres_changes + conversations view + direct threads
-  (phase36). Phase 7 is mostly consolidation onto templates + offer-scoped
-  pre-hire chat + probes — reuse, don't rebuild.
-- **DoD:** two-device realtime chat with media; participants-only RLS proven
-  by probe; unread counts correct; gate clean.
-- **Carried forward from Phase 6:** physical checklist above is PENDING;
-  seeded staging accounts phase6.* exist for reuse; production apply list so
-  far = phase51 (after human review).
-- Start by reading SCREEN_CROSSWALK rows 40/41/61/62 and the existing
-  lib/messages.ts + MessagesInboxScreen/ChatScreen before writing anything.
+**Database (supabase/phase52_offer_scoped_chat.sql, applied + verified):**
+- AFTER INSERT trigger `job_offers_thread_autocreate` →
+  `ensure_thread_for_offer()` (security definer, no client EXECUTE, failure
+  can never lose the offer insert) calls phase36's `ensure_direct_thread()`
+  for the offer's pair. Every offer path — create, counter, future — now
+  guarantees the pair's thread from the first offer.
+- Backfill: threads ensured for every distinct pair with a still-pending
+  offer (2 pairs on staging at apply time).
+- Deliberately unchanged: message RLS (job thread = client + assigned worker
+  only; direct thread = its two parties), the conversations view (a thread
+  surfaces in the inbox once it has a message — so ten bids do NOT create
+  ten empty inbox rows; the silent thread is reached from the offer
+  surfaces), addresses never auto-inserted anywhere.
+
+**Client:**
+- `fetchDirectThreadWith(userId, otherId)` (lib/conversations.ts) — pure
+  lookup; nothing client-side creates threads.
+- Chat entries: BidDetail "Message {worker} first" (customer, pre-decision);
+  JobDetail's own-bid card "Message {poster}" (worker). Chat registered in
+  WorkerHomeStack + MapStack per the existing "alongside JobDetail" rule.
+- Quick replies mode-specific: WORKER_CHAT_TEMPLATES /
+  CUSTOMER_CHAT_TEMPLATES + chatTemplatesForMode(); QuickReplies reads
+  useMode() (perspective from ModeContext, never a prop).
+
+## Phase 7 gate (2026-08-09)
+
+- tsc/lint: clean · `npm test`: **245/247 — same 2 documented baseline
+  failures**, +5 new guards (tests/offerScopedChat.test.mjs).
+- verify-schema: green incl. phase52 sentinel · offers RLS probe: 6/6.
+- `scripts/phase7-proof.sql`: **10 PASS**, zero residue — offer→thread
+  auto-create, pair-only visibility, both parties write/read, outsider
+  blind + insert-refused, inbox view + read-marker truth for both parties,
+  and the job-thread boundary re-proven against a bidder.
+
+## Phase 7 — physical checklist (the user's closing pass, PENDING)
+
+Seed: phase-6 seed, then `psql -X -v ON_ERROR_STOP=1 -f
+scripts/seed-phase-7.sql "$SUPABASE_DB_URL_STAGING"`. Devices as in the
+Phase 6 checklist (W = Wren/worker mode, C = Casey/customer mode).
+
+1. **C** · Messages tab → expect ONE unread conversation from Wren
+   ("SEED phase-7: Hi! I bid on the yard work…"), unread dot visible.
+2. **C** · open it → chat opens with Wren's message; quick replies show the
+   CUSTOMER set ("How's it going?" / "Any update?" / "When can you start?" /
+   "Thank you!") → send "When can you start?" → back to inbox → unread dot
+   gone.
+3. **W** · Messages tab → the same thread shows Casey's reply unread → open →
+   quick replies show the WORKER set ("On my way" / "Running late" / …).
+4. **C** · My Jobs → "Rake and bag the front yard" → open Wren's bid detail →
+   "Message Wren first" lands in the SAME thread (no duplicate conversation).
+5. **W** · Home → open the yard-work job (own-bid card) → "Message Casey" →
+   same thread again.
+6. **W** · send a photo from the library in that thread → **C** sees it
+   arrive live without leaving the screen (realtime + media).
+7. **C** · sign in as Blake (phase6.workerb@brazos.test) on a third session
+   if available: Messages tab must show NOTHING of the Casey↔Wren thread.
+8. Re-run seed-phase-7 → Casey's thread unread again (reset works).
+
+## Exact next task (Phase 8 — Discovery breadth)
+
+Per BRAZOS_MASTER_PLAN.md §J Phase 8 (LARGE), screens 08, 17–21, 49, 50,
+MarketJobPreview. The run continues without stopping at this boundary.
+
+- **Goal:** explore services/workers, search results, filters, list/map
+  discovery with radius, saved/rebook surfaces.
+- **Reuse:** existing browse/map/radius code — `jobs_within_radius()`
+  (phase41 Haversine over job_locations), `job_hotspots()`/`jobs_in_cell()`
+  grid RPCs, WorkerSearch/WorkerResults screens. Audit-first: read
+  SCREEN_CROSSWALK rows for 08/17–21/49/50 before building.
+- **§10 authorization:** Phase 8 is explicitly authorized to close the
+  SubmitBid/JobDetail customer-mode reachability leak via MarketJobPreview
+  (the customer-safe job browse). NOT a §7 fork unless it demands identity/
+  ModeContext/navigation architecture changes.
+- **DoD:** radius/filter correctness against seeded data; list/map parity;
+  ModeGuard confirms zero worker CTAs in customer browse; virtualized lists;
+  gate clean.
+- **Carried forward:** Phase 6 + 7 physical checklists PENDING; production
+  apply queue = phase51, phase52 (in order, then verify-schema).

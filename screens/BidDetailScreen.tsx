@@ -12,6 +12,7 @@ import { StatusPill } from '../ui/primitives/StatusPill';
 import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { alertAsync } from '../lib/dialog';
+import { fetchDirectThreadWith } from '../lib/conversations';
 import { completionPercent } from '../lib/profiles';
 import {
   acceptOffer,
@@ -50,6 +51,7 @@ export function BidDetailScreen() {
 
   const [confirming, setConfirming] = useState<'accept' | 'decline' | null>(null);
   const [acting, setActing] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
   const actingRef = useRef(false);
 
   const effective = offer ? effectiveOfferStatus(offer) : null;
@@ -92,6 +94,26 @@ export function BidDetailScreen() {
     // Hired. Funding is the immediate next step; replace so Back can never
     // land on a decision screen for a bid that has already won.
     navigation.replace('Checkout', { job });
+  }
+
+  /** Phase 7 — open the pair's direct thread (created with the bid, phase52). */
+  async function openWorkerChat() {
+    if (!user || !offer || openingChat) return;
+    setOpeningChat(true);
+    const { data: threadId, error: threadError } = await fetchDirectThreadWith(
+      user.id,
+      offer.worker_id
+    );
+    setOpeningChat(false);
+    if (!threadId) {
+      await alertAsync(
+        'Chat unavailable',
+        threadError?.message ??
+          'The conversation for this bid isn’t ready yet. Try again in a moment.'
+      );
+      return;
+    }
+    navigation.navigate('Chat', { directThreadId: threadId });
   }
 
   async function doDecline() {
@@ -213,6 +235,21 @@ export function BidDetailScreen() {
                       },
                     ]
                   : []),
+                {
+                  // Phase 7 — pre-hire chat. The pair's thread has existed
+                  // since the bid did (phase52), so a question can precede
+                  // the decision instead of requiring an accept first.
+                  content: (
+                    <Button
+                      title={`Message ${workerName} first`}
+                      variant="secondary"
+                      palette={emeraldColors}
+                      onPress={openWorkerChat}
+                      loading={openingChat}
+                      disabled={openingChat}
+                    />
+                  ),
+                },
                 ...(effective === 'pending' && !isMyTurn
                   ? [
                       {

@@ -52,6 +52,7 @@ import {
   type Offer,
 } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
+import { fetchDirectThreadWith } from '../lib/conversations';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
@@ -107,6 +108,7 @@ export function JobDetailScreen() {
   const [existingBid, setExistingBid] = useState<Offer | null>(null);
   const [checking, setChecking] = useState(true);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
   const [confirmWithdrawVisible, setConfirmWithdrawVisible] = useState(false);
   // The posting customer's public profile + real posting history — the
   // customer-side trust signals screen 51 shows a browsing worker. Rendered
@@ -286,6 +288,27 @@ export function JobDetailScreen() {
     setExistingBid(mine);
   }
 
+  /**
+   * Pre-hire chat (Phase 7). The pair's direct thread has existed since the
+   * bid did (phase52's trigger/backfill), so this only ever LOOKS UP the
+   * thread — nothing is created from the client.
+   */
+  async function openPosterChat() {
+    if (!user || openingChat) return;
+    setOpeningChat(true);
+    const { data: threadId, error } = await fetchDirectThreadWith(user.id, job.client_id);
+    setOpeningChat(false);
+    if (!threadId) {
+      await alertAsync(
+        'Chat unavailable',
+        error?.message ??
+          'The conversation for this bid isn’t ready yet. Try again in a moment.'
+      );
+      return;
+    }
+    (navigation as any).navigate('Chat', { directThreadId: threadId });
+  }
+
   // The canonical read came back empty: the poster deleted the job while this
   // screen was open (or on a stale card the list has not dropped yet). Saying
   // so beats leaving a bid form pointed at a row that no longer exists.
@@ -456,11 +479,19 @@ export function JobDetailScreen() {
                   : 'You’ve already bid on this job. Check My Jobs for updates.'}
               </Text>
               <Button
+                title={`Message ${poster?.full_name ?? 'the poster'}`}
+                variant="secondary"
+                onPress={openPosterChat}
+                loading={openingChat}
+                disabled={openingChat}
+              />
+              <Button
                 title="Withdraw bid"
                 variant="secondary"
                 onPress={() => setConfirmWithdrawVisible(true)}
                 loading={withdrawing}
                 disabled={withdrawing}
+                style={styles.withdrawAction}
               />
             </Card>
           ) : (
@@ -883,6 +914,9 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.textSubtle,
     marginTop: spacing.md,
+  },
+  withdrawAction: {
+    marginTop: spacing.sm,
   },
   missing: {
     flex: 1,

@@ -116,6 +116,8 @@ export function MapStackNavigator() {
       <MapStack.Screen name="JobDetail" component={JobDetailScreen} />
       <MapStack.Screen name="SubmitBid" component={SubmitBidScreen} />
       <MapStack.Screen name="BidSent" component={BidSentScreen} />
+      {/* Phase 7 — pre-hire chat from the own-bid card, same JobDetail rule. */}
+      <MapStack.Screen name="Chat" component={ChatScreen} />
       <MapStack.Screen name="PostJob" component={PostJobScreen} />
       <MapStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <MapStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />

@@ -138,6 +138,10 @@ export type CustomerHomeStackNavigation =
 export type WorkerHomeStackParamList = {
   BrowseJobs: undefined;
   JobDetail: { job: OpenJob };
+  /** Phase 7 — pre-hire chat from the worker's own-bid card. Registered
+   *  alongside JobDetail in every stack that mounts it (the SubmitBid rule):
+   *  an offer links the pair, and the chat entry lives on the offer surface. */
+  Chat: ChatTarget;
   /** Screen 52 — the OfferComposer's marketplace-bid entry (Phase 5).
    *  Registered alongside JobDetail in every stack that mounts it. */
   SubmitBid: { job: OpenJob };
@@ -261,6 +265,9 @@ export type MapStackParamList = {
   JobDetail: { job: OpenJob };
   SubmitBid: { job: OpenJob };
   BidSent: { jobTitle: string; amountCents: number; offerId: string };
+  /** Phase 7 — pre-hire chat from the worker's own-bid card (the JobDetail
+   *  rule: registered wherever JobDetail is). */
+  Chat: ChatTarget;
   // Registered so "Edit job" works when a job's own poster reaches its
   // detail screen via a Map/zone drill-down, not just from My Jobs.
   PostJob:

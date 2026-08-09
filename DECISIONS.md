@@ -213,3 +213,48 @@ Commits: `30a20e1` (db) + the phase-6 closure commit; tag `phase-6`.
 `node scripts/verify-schema.mjs` against production must show the phase51
 group green. (The staging ACL bootstrap and seed scripts are STAGING-ONLY —
 never run them against production.)
+
+## Phase 7 — decisions (2026-08-09)
+
+Commit: the phase-7 closure commit; tag `phase-7`.
+
+**Decided autonomously (§8 / addendum §2):**
+
+1. **Pre-hire chat lives on the PAIR thread (direct_threads), never the job
+   thread.** A job thread is one room; pre-hire there are many bidders who
+   must never see each other's words. The job-thread policies are untouched
+   and re-proven against a bidder in phase7-proof §D.
+2. **Thread auto-create is a TRIGGER on job_offers, not an edit to
+   create_offer().** Every insert path (create, counter, future ones) gets
+   the guarantee; the phase50 negotiation RPC bodies stay byte-identical;
+   the trigger swallows its own failure so thread plumbing can never lose an
+   offer. Backfill covers pairs whose pending offers predate it.
+3. **Empty threads stay OUT of the inbox.** The conversations view still
+   requires a message; the silent thread is reached from the offer surfaces
+   (BidDetail / own-bid card). Rationale: a customer with ten bids must not
+   get ten empty conversations. Trade-off recorded: until someone speaks,
+   the pair's chat is only reachable from those surfaces.
+4. **Screens 40/41/61/62 kept on the existing inbox/chat implementations**
+   (crosswalk: COMPLETE). No template rewrite — that churn belongs to the
+   Phase 13 sweep if anywhere. Master plan's "InboxScreen + ChatScreen
+   templates" satisfied by the existing screens' behavior, not by rebuilding
+   them; flagged here rather than silently reinterpreted.
+5. **Chat registered in WorkerHomeStack + MapStack** under the existing
+   "registered alongside JobDetail in every stack that mounts it" rule
+   (the SubmitBid/BidSent precedent) — the worker's own-bid chat entry can
+   never hit an unregistered route.
+6. **Quick replies:** two fixed sets (worker/customer) with one source
+   (chatTemplatesForMode); QuickReplies reads useMode(). No per-job or
+   payment-state templating — words, not status claims.
+
+**NEEDS REVIEW:**
+
+- **Decision 3's trade-off** — if product wants bid-pair conversations
+  visible in the inbox BEFORE the first message ("Say hello" rows), that is
+  a one-view change (conversations LEFT JOIN messages) plus inbox
+  null-handling; deliberately not done to avoid inbox flooding.
+- **CUSTOMER_CHAT_TEMPLATES wording** — four lines I wrote; trivially
+  editable in lib/messages.ts.
+
+**Production apply queue after this phase (in order, human step):**
+phase51, then phase52, then verify-schema green against production.

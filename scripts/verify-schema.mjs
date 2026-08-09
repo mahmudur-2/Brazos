@@ -721,6 +721,19 @@ const MIGRATIONS = [
         checkRpc('sandbox_tip_worker', { p_job_id: ZERO_UUID, p_amount_cents: 100 })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 52. Offer-scoped pre-hire chat: an AFTER INSERT trigger on
+    // job_offers guarantees the pair's direct thread from the first offer.
+    // A trigger has no PostgREST-probeable shape (the phase48 situation), so
+    // the sentinel — created last in the same transaction as the trigger and
+    // its backfill — carries the group.
+    // -----------------------------------------------------------------------
+    file: 'phase52_offer_scoped_chat.sql',
+    sentinel: ['rpc offer_scoped_chat_enabled()', () =>
+      checkRpc('offer_scoped_chat_enabled', {})],
+    checks: [],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

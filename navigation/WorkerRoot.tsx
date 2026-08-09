@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { WorkerHomeStackParamList, WorkerParamList } from '../lib/navigation';
 import { BidSentScreen } from '../screens/BidSentScreen';
 import { BrowseJobsScreen } from '../screens/BrowseJobsScreen';
+import { ChatScreen } from '../screens/ChatScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { SubmitBidScreen } from '../screens/SubmitBidScreen';
@@ -47,6 +48,8 @@ function WorkerHomeStackNavigator() {
           records for PostJob. */}
       <WorkerHomeStack.Screen name="SubmitBid" component={SubmitBidScreen} />
       <WorkerHomeStack.Screen name="BidSent" component={BidSentScreen} />
+      {/* Phase 7 — pre-hire chat from the own-bid card, same JobDetail rule. */}
+      <WorkerHomeStack.Screen name="Chat" component={ChatScreen} />
       <WorkerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <WorkerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </WorkerHomeStack.Navigator>

@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { CHAT_TEMPLATES } from '../lib/messages';
+import { chatTemplatesForMode } from '../lib/messages';
+import { useMode } from '../modes';
 import { colors, radius, spacing } from '../lib/theme';
 
 // No gradient library in this project (expo-linear-gradient isn't
@@ -28,6 +29,12 @@ type QuickRepliesProps = {
  * refusing to shrink) makes the row's size independent of that entirely.
  */
 export function QuickReplies({ onSelect, disabled = false }: QuickRepliesProps) {
+  // Mode decides the set (Phase 7): the same chat thread offers "On my way"
+  // to the worker side and "Any update?" to the customer side. Perspective
+  // comes from ModeContext, never a hand-passed prop (repo rule).
+  const { mode } = useMode();
+  const templates = chatTemplatesForMode(mode);
+
   return (
     <View style={styles.wrap}>
       <ScrollView
@@ -37,7 +44,7 @@ export function QuickReplies({ onSelect, disabled = false }: QuickRepliesProps) 
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        {CHAT_TEMPLATES.map((template) => (
+        {templates.map((template) => (
           <Pressable
             key={template}
             style={styles.chip}
