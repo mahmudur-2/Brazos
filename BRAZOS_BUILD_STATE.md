@@ -261,6 +261,44 @@ that replaced what they pointed at.
   `useJobBids.ts`→`useJobOffers.ts`, `setBids`→`setOffers`.
 
 ## Known issues
+- **`PostJob` is unreachable from the worker Home tab** — navigating to it
+  from anywhere inside `WorkerHomeStack` throws `The action 'NAVIGATE' with
+  payload {"name":"PostJob"...} was not handled by any navigator`. Found during
+  the Phase 3B device pass (2026-08-08).
+  - **Cause:** `PostJob` is registered in `CustomerHomeStack` and in all three
+    shared stacks (MyJobs, Messages, Map) but **not** in `WorkerHomeStack`,
+    which does register `WorkerProfile`. `screens/WorkerProfileScreen.tsx:46`
+    carries a comment asserting the opposite — "PostJob is registered alongside
+    WorkerProfile in every stack that can reach this screen" — which was true
+    when written and stopped being true when Phase 2 added the worker tree. It
+    is a comment, so nothing type-checks it.
+  - **NOT a Phase 3B regression.** `git diff 0e230bf..HEAD -- navigation/
+    lib/navigation.ts App.tsx` is empty; `navigation/` was last touched by
+    Phase 2's `e8cbb92`. It became reachable now only because the device pass
+    is the first time these paths were walked in worker mode.
+  - **UNRESOLVED: which call site.** The reported payload carried empty params,
+    which does NOT match `WorkerProfileScreen.tsx:231` ("Send an offer", passes
+    `hireWorkerId`). The bare `navigate('PostJob')` callers are
+    `MyJobsHubScreen.tsx:129` and `WorkerSearchScreen.tsx:324`, and both live in
+    stacks that DO register the route — so if the failure came from My Jobs it
+    is a second, separate defect this diagnosis does not explain. Confirm the
+    screen before fixing.
+  - **Workaround in use:** post from the My Jobs tab (shared stack, registers
+    the route) or switch to customer mode first.
+  - **Do NOT fix by registering `PostJob` in `WorkerHomeStack`.** Posting a job
+    and sending a paid offer are customer actions; §F and Phase 2's own recorded
+    decision route cross-mode actions through an explicit confirm plus
+    `switchMode()`, as Customer Home's Live Nearby cards already do. Adding the
+    route would let a worker-mode session post jobs without ever switching mode
+    and weaken the isolation Phase 2 exists to enforce. Owner: a future
+    navigation phase, not Phase 3.
+- **OfferCard hid the Accept button in worker mode** — found in the same device
+  pass, fixed in `51e5c38`. A perspective gate added in phase-3b suppressed the
+  accept affordance whenever the app was in worker mode, and `ClientJobDetail`
+  is mounted in both trees, so an owner viewing their own job from the shared My
+  Jobs tab could not hire anyone. Removed; guard test added. This was a real
+  Phase 3B regression and is the clearest argument on record for not closing
+  Phase 3 on SQL evidence alone.
 - ~~Device verification of the Phase 1 catalog was NOT performed by the
   agent.~~ **Resolved 2026-08-08**: user manually verified the catalog on a
   real Expo iOS device (Profile tab → "Component catalog (dev)") per the
