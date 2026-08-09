@@ -424,3 +424,62 @@ mode-segmented deep links.
 **Production apply queue — FINAL (in order):** phase51, phase52, phase53,
 phase54, phase55, phase56 — then `node scripts/verify-schema.mjs` against
 production must be fully green.
+
+## ULTRACODE pre-review hardening run (2026-08-09)
+
+Branch `pre-review-hardening` from tag `pre-hardening` (= phase-12 HEAD
+`26a61bf`). Tags: `hardening-fixes` (Phase A), `hardening-polish` (Phase B).
+LOCKED_MANIFEST (95 files: screens 01–07/48 + auth flow + recursive deps)
+verified UNCHANGED at baseline, post-A, post-B, and final; the 12 directly
+locked screens are byte-identical to `phase-5-known-good`.
+
+**Phase A fixes (each proven before fixing):** phase57 (pre-hire chat never
+reached the feed — notify_on_message returned early on NULL job_id);
+phase58 (dropped the legacy permissive jobs SELECT policy that let any user
+read every job row incl. private direct-offer drafts, + client_job_stats()
+for the one legitimate read that depended on it; authorize-after-start so a
+worker starting before checkout can't strand the job with an empty ledger;
+idempotent transition retries); two baseline proof-harness repairs
+(phase9-proof seed collision, phase5-proof's stale no-release-function
+assertion → sanctioned-pair form); A6/A7/A8 screen batch (failures no
+longer masquerade as empty states; completed forks through deriveJobLifecycle;
+optimistic-write failures surfaced; all owned `as any`/`!` casts removed).
+New: scripts/lifecycle-proof.mjs (18/18), seed-review.mjs, PROD_APPLY.md,
+REVIEW_GUIDE.md.
+
+**Phase B:** two provably-dead exports deleted (TRACK_STEPS,
+isActivePayment); B2–B4 examined, no change warranted (feeds bounded, no
+N+1 in owned surfaces, no measurable render win without device profiling).
+Net production-source delta for the whole run: **+214 / −99 lines** —
+metric only, dominated by required error handling and typed casts.
+
+**NEEDS REVIEW — consolidated, with recommended resolutions (D3):**
+
+1. **Staging DB credential echoed into a local run log** (a failed
+   execFileSync printed its argv, this session, lead agent). → **Rotate the
+   staging database password**; both scripts now sanitize error paths.
+   Blast radius: staging only; production credentials never present.
+2. **[LOCKED] hooks/useReactions — fixed channel topic** collides when two
+   chats for one job mount. → Apply the useOpenJobs uniquifier pattern
+   (3 lines); trivial, isolated. 
+3. **[LOCKED] hooks/useConversations — fixed topic + resubscribe on every
+   token refresh.** → Same uniquifier + key the effect on user?.id
+   (2 lines); prevents hourly churn/missed events.
+4. **[LOCKED] hooks/useChat + useOpenJobs — no refetch on channel rejoin**
+   (missed messages after backgrounding until manual refresh). → Subscribe
+   with a status callback that refetches on rejoin (~3 lines each).
+5. **[LOCKED] components/JobProgress duplicates the lifecycle staging map.**
+   → Either extend it to take a JobLifecycleState or leave until the §H.1
+   enum lands (the map dies with the enum migration anyway). Low risk.
+6. **phase58 stat-undercount trade-off** on installed builds (counts only;
+   no errors). → Accept; ships correct with the next app update.
+7. **lib casts over untyped Supabase reads** (aggregate, log-only). →
+   Resolve properly by adding generated DB types when the CLI/service
+   connection becomes available (BUILD_STATE carries this already).
+8. All prior phase 6–12 flags stand as recorded in their sections above,
+   each already carrying a recommendation.
+
+**Deliberate test changes this run (the Phase 3B precedent):**
+phase5-proof §G (sanctioned-pair form), phase9-proof (seed-tolerant),
+phase6-proof residue (seed-tolerant) + new I1/I2 regressions, phase8-proof
+new §D (leak regression), offerScopedChat guard (reshaped mark-read call).

@@ -1,6 +1,12 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 12 closed. RUN
-COMPLETE; Phase 13 is human-led and was NOT begun.)
+Updated: 2026-08-09 (ULTRACODE pre-review hardening run complete on branch
+`pre-review-hardening`; tags `pre-hardening` → `hardening-fixes` →
+`hardening-polish`. NOT Phase 13 — Phase 13 remains human-led and untouched.
+See DECISIONS.md "ULTRACODE pre-review hardening run", PROD_APPLY.md for the
+production queue incl. phase57/58, and REVIEW_GUIDE.md for the device pass.
+New standing proofs: scripts/lifecycle-proof.mjs (18/18 backend integration)
+and scripts/seed-review.mjs (every lifecycle state seeded at once).
+Phases 6–12 record below unchanged.)
 
 ## Current phase
 Phase 12 — Notifications (screen 42). **BUILT AND PROOF PASSED (4
