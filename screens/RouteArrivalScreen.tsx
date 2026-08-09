@@ -8,6 +8,7 @@ import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   arrivalWindowLabel,
   fetchJobLocation,
@@ -89,7 +90,7 @@ export function RouteArrivalScreen() {
     const { error: markError } = await markWorkerArrival(params.jobId, step);
     setMarking(null);
     if (markError) {
-      await alertAsync('Could not update your status', markError.message);
+      await alertAsync('Could not update your status', userMessage(markError));
       return;
     }
     await refresh();

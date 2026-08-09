@@ -30,6 +30,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   categoryAccent,
   completionPhotosOf,
@@ -138,7 +139,7 @@ export function WorkerJobScreen() {
     const { error } = await updateJobStatus(params.jobId, 'in_progress');
     setWorking(false);
     if (error) {
-      await alertAsync('Could not start job', error.message);
+      await alertAsync('Could not start job', userMessage(error));
       return;
     }
     await refresh();
@@ -300,7 +301,7 @@ export function WorkerJobScreen() {
     );
     setWorking(false);
     if (error) {
-      await alertAsync('Could not complete job', error.message);
+      await alertAsync('Could not complete job', userMessage(error));
       return;
     }
     setDonePhotos([]);

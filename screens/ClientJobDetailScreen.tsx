@@ -41,6 +41,7 @@ import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/p
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   acceptOffer,
   bestValueOfferId,
@@ -165,7 +166,7 @@ export function ClientJobDetailScreen() {
     ) {
       return;
     }
-    if (result.error) setWorkerError(result.error.message);
+    if (result.error) setWorkerError(userMessage(result.error));
     else setWorker(result.data);
   }, [canAccept, job.assigned_worker_id, job.id]);
 
@@ -253,7 +254,7 @@ export function ClientJobDetailScreen() {
         screenMountedRef.current &&
         jobResult.error
       ) {
-        await alertAsync('Could not refresh job', jobResult.error.message);
+        await alertAsync('Could not refresh job', userMessage(jobResult.error));
       }
     } finally {
       if (runId === refreshRunRef.current && screenMountedRef.current) {
@@ -309,7 +310,7 @@ export function ClientJobDetailScreen() {
         proceedToCheckout();
         return;
       }
-      await alertAsync('Could not confirm bid acceptance', error.message);
+      await alertAsync('Could not confirm bid acceptance', userMessage(error));
       return;
     }
 

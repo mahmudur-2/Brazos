@@ -53,6 +53,7 @@ import {
   type Offer,
 } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { fetchClientJobStatsCounted } from '../lib/clientStats';
 import { fetchDirectThreadWith } from '../lib/conversations';
 import { maybePromptForPush } from '../lib/pushNotifications';
@@ -221,7 +222,7 @@ export function JobDetailScreen() {
       const msg =
         error.code === '23505'
           ? 'You already have a bid on this job.'
-          : error.message;
+          : userMessage(error);
       await alertAsync('Could not place bid', msg);
       // A duplicate means someone (this screen, a second tap, another device)
       // already bid — resync so the form is replaced by the real bid rather
@@ -294,7 +295,7 @@ export function JobDetailScreen() {
     setWithdrawing(false);
     setConfirmWithdrawVisible(false);
     if (error) {
-      await alertAsync('Could not withdraw bid', error.message);
+      await alertAsync('Could not withdraw bid', userMessage(error));
       // Whatever blocked it (already accepted, already expired), the truth is
       // in the canonical row — re-read rather than guess.
     }
@@ -315,8 +316,10 @@ export function JobDetailScreen() {
     if (!threadId) {
       await alertAsync(
         'Chat unavailable',
-        error?.message ??
+        userMessage(
+          error,
           'The conversation for this bid isn’t ready yet. Try again in a moment.'
+        )
       );
       return;
     }

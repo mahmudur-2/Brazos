@@ -7,6 +7,7 @@ import type { ScreenState } from '../ui/templates/ScreenStates';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { dollarsToCents, JOB_CATEGORIES, JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
   addWorkerService,
@@ -56,12 +57,12 @@ export function ServicesPricingScreen() {
       fetchMyProfile(user.id),
       fetchWorkerServices(user.id),
     ]);
-    if (profileRes.error) setLoadError(profileRes.error.message);
+    if (profileRes.error) setLoadError(userMessage(profileRes.error));
     else if (profileRes.data) {
       setProfile(profileRes.data);
       setNote(profileRes.data.availability_note ?? '');
     }
-    if (servicesRes.error) setLoadError(servicesRes.error.message);
+    if (servicesRes.error) setLoadError(userMessage(servicesRes.error));
     else setServices(servicesRes.data);
     setLoaded(true);
   }, [user]);
@@ -96,7 +97,7 @@ export function ServicesPricingScreen() {
     });
     setAdding(false);
     if (error || !data) {
-      await alertAsync('Could not add the service', error?.message ?? 'Try again.');
+      await alertAsync('Could not add the service', userMessage(error, 'Try again.'));
       return;
     }
     setServices((prev) => [...prev, data]);
@@ -112,7 +113,7 @@ export function ServicesPricingScreen() {
     });
     setBusyId(null);
     if (error || !data) {
-      await alertAsync('Could not update the service', error?.message ?? 'Try again.');
+      await alertAsync('Could not update the service', userMessage(error, 'Try again.'));
       return;
     }
     setServices((prev) => prev.map((s) => (s.id === service.id ? data : s)));
@@ -131,7 +132,7 @@ export function ServicesPricingScreen() {
     const { error } = await removeWorkerService(service.id);
     setBusyId(null);
     if (error) {
-      await alertAsync('Could not remove the service', error.message);
+      await alertAsync('Could not remove the service', userMessage(error));
       return;
     }
     setServices((prev) => prev.filter((s) => s.id !== service.id));
@@ -144,7 +145,7 @@ export function ServicesPricingScreen() {
     setSavingAvailability(false);
     if (error) {
       // The toggle/note keep their edited values; nothing typed is lost.
-      await alertAsync('Could not save availability', error.message);
+      await alertAsync('Could not save availability', userMessage(error));
       return;
     }
     if (data) setProfile(data);

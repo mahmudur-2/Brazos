@@ -12,6 +12,7 @@ import { StatusPill } from '../ui/primitives/StatusPill';
 import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { fetchDirectThreadWith } from '../lib/conversations';
 import { completionPercent } from '../lib/profiles';
 import {
@@ -86,7 +87,7 @@ export function BidDetailScreen() {
     if (acceptError || !jobId) {
       await alertAsync(
         'Could not accept this bid',
-        acceptError?.message ?? 'Check your connection and try again.'
+        userMessage(acceptError, 'Check your connection and try again.')
       );
       void refresh();
       return;
@@ -108,8 +109,7 @@ export function BidDetailScreen() {
     if (!threadId) {
       await alertAsync(
         'Chat unavailable',
-        threadError?.message ??
-          'The conversation for this bid isn’t ready yet. Try again in a moment.'
+        userMessage(threadError, 'The conversation for this bid isn’t ready yet. Try again in a moment.')
       );
       return;
     }
@@ -125,7 +125,7 @@ export function BidDetailScreen() {
     setActing(false);
     setConfirming(null);
     if (declineError) {
-      await alertAsync('Could not decline this bid', declineError.message);
+      await alertAsync('Could not decline this bid', userMessage(declineError));
       void refresh();
       return;
     }

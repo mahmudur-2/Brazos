@@ -12,6 +12,7 @@ import { fetchProfileById, type Profile } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
+import { userMessage } from '../lib/errorMessage';
 
 /**
  * Screen 32 — Job Confirmed. Renders its confirmation ONLY after the state it
@@ -38,7 +39,7 @@ export function JobConfirmedScreen() {
   const load = useCallback(async () => {
     setError(null);
     const { data, error: paymentError } = await fetchJobPayment(job.id);
-    if (paymentError) setError(paymentError.message);
+    if (paymentError) setError(userMessage(paymentError));
     else setPayment(data);
     setLoaded(true);
   }, [job.id]);

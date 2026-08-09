@@ -9,6 +9,7 @@ import type { ScreenState } from '../ui/templates/ScreenStates';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
@@ -37,7 +38,7 @@ export function EarningsScreen() {
     if (!user) return;
     setLoadError(null);
     const { data, error } = await fetchMyEarnings(user.id);
-    if (error) setLoadError(error.message);
+    if (error) setLoadError(userMessage(error));
     else setSummary(data);
   }, [user]);
 
@@ -53,7 +54,7 @@ export function EarningsScreen() {
     try {
       const { data, error } = await paymentProvider.cashOut();
       if (error) {
-        await alertAsync('Could not cash out', `${error.message}\n\nNothing moved.`);
+        await alertAsync('Could not cash out', `${userMessage(error)}\n\nNothing moved.`);
         return;
       }
       await load();

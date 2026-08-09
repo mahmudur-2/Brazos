@@ -20,6 +20,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import {
   fetchJobPaymentState,
@@ -77,10 +78,10 @@ export function ReviewAndTipScreen() {
       fetchJobPaymentState(job.id),
       fetchJobTip(job.id),
     ]);
-    if (paymentRes.error) setLoadError(paymentRes.error.message);
+    if (paymentRes.error) setLoadError(userMessage(paymentRes.error));
     else setPayment(paymentRes.data);
     if (tipRes.error) {
-      const message = tipRes.error.message;
+      const message = userMessage(tipRes.error);
       setLoadError((prev) => prev ?? message);
     } else setTip(tipRes.data);
     setLoaded(true);
@@ -123,7 +124,7 @@ export function ReviewAndTipScreen() {
       if (result.error || !result.data) {
         await alertAsync(
           'Could not send the tip',
-          `${result.error?.message ?? 'Check your connection and try again.'}\n\nNo tip was recorded.`
+          `${userMessage(result.error, 'Check your connection and try again.')}\n\nNo tip was recorded.`
         );
         await load();
         return;

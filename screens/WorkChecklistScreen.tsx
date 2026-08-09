@@ -7,6 +7,7 @@ import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   addChecklistItem,
   fetchChecklist,
@@ -42,7 +43,7 @@ export function WorkChecklistScreen() {
 
   const loadItems = useCallback(async () => {
     const { data, error: listError } = await fetchChecklist(params.jobId);
-    if (listError) setItemsError(listError.message);
+    if (listError) setItemsError(userMessage(listError));
     else {
       setItems(data);
       setItemsError(null);
@@ -93,7 +94,7 @@ export function WorkChecklistScreen() {
       // The input keeps the typed text — a failed save never costs the entry.
       await alertAsync(
         'Could not add the step',
-        addError?.message ?? 'Check your connection and try again.'
+        userMessage(addError, 'Check your connection and try again.')
       );
       return;
     }
@@ -114,7 +115,7 @@ export function WorkChecklistScreen() {
       setItems((prev) => prev.map((i) => (i.id === item.id ? item : i)));
       await alertAsync(
         'Could not update the step',
-        toggleError?.message ?? 'Check your connection and try again.'
+        userMessage(toggleError, 'Check your connection and try again.')
       );
       return;
     }
@@ -134,7 +135,7 @@ export function WorkChecklistScreen() {
     const { error: deleteError } = await removeChecklistItem(item.id);
     setBusyId(null);
     if (deleteError) {
-      await alertAsync('Could not remove the step', deleteError.message);
+      await alertAsync('Could not remove the step', userMessage(deleteError));
       return;
     }
     setItems((prev) => prev.filter((i) => i.id !== item.id));

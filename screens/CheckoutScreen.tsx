@@ -10,6 +10,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPayment, type Payment } from '../lib/payments';
 import { fetchProfileById } from '../lib/profiles';
@@ -53,7 +54,7 @@ export function CheckoutScreen() {
   const loadPayment = useCallback(async () => {
     setPaymentError(null);
     const { data, error } = await fetchJobPayment(job.id);
-    if (error) setPaymentError(error.message);
+    if (error) setPaymentError(userMessage(error));
     else setPayment(data);
     setPaymentLoaded(true);
   }, [job.id]);
@@ -132,7 +133,7 @@ export function CheckoutScreen() {
       if (authorized.error || !authorized.data) {
         await alertAsync(
           'Could not authorize the payment',
-          `${authorized.error?.message ?? 'Check your connection and try again.'}\n\nYour accepted offer is unchanged — nothing was authorized or held.`
+          `${userMessage(authorized.error, 'Check your connection and try again.')}\n\nYour accepted offer is unchanged — nothing was authorized or held.`
         );
         await loadPayment();
         return;
@@ -143,7 +144,7 @@ export function CheckoutScreen() {
       if (heldResult.error || !heldResult.data) {
         await alertAsync(
           'Authorized, but not yet protected',
-          `${heldResult.error?.message ?? 'Check your connection and try again.'}\n\nThe payment is authorized — not charged — and your accepted offer is unchanged. Tap the button again to finish protecting the funds.`
+          `${userMessage(heldResult.error, 'Check your connection and try again.')}\n\nThe payment is authorized — not charged — and your accepted offer is unchanged. Tap the button again to finish protecting the funds.`
         );
         await loadPayment();
         return;

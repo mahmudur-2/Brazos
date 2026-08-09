@@ -11,6 +11,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
 import {
@@ -67,7 +68,7 @@ export function ApproveOrDisputeScreen() {
       fetchJobPaymentState(job.id),
       fetchOpenJobDispute(job.id),
     ]);
-    if (paymentRes.error) setLoadError(paymentRes.error.message);
+    if (paymentRes.error) setLoadError(userMessage(paymentRes.error));
     else setPayment(paymentRes.data);
     if (!disputeRes.error) setDispute(disputeRes.data);
     setLoaded(true);
@@ -124,7 +125,7 @@ export function ApproveOrDisputeScreen() {
       if (result.error || !result.data) {
         await alertAsync(
           'Could not release the payment',
-          `${result.error?.message ?? 'Check your connection and try again.'}\n\nThe funds are exactly where they were — nothing was released.`
+          `${userMessage(result.error, 'Check your connection and try again.')}\n\nThe funds are exactly where they were — nothing was released.`
         );
         await load();
         return;
@@ -147,7 +148,7 @@ export function ApproveOrDisputeScreen() {
       // The typed report is preserved — a failed send never costs the text.
       await alertAsync(
         'Could not send the report',
-        error?.message ?? 'Check your connection and try again.'
+        userMessage(error, 'Check your connection and try again.')
       );
       return;
     }
@@ -164,7 +165,7 @@ export function ApproveOrDisputeScreen() {
     setWithdrawing(false);
     setConfirmWithdraw(false);
     if (error) {
-      await alertAsync('Could not withdraw the report', error.message);
+      await alertAsync('Could not withdraw the report', userMessage(error));
       return;
     }
     setDispute(data && data.status === 'open' ? data : null);

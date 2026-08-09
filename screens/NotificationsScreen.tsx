@@ -6,6 +6,7 @@ import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -43,7 +44,7 @@ export function NotificationsScreen() {
     if (!user) return;
     setLoadError(null);
     const { data, error } = await fetchNotifications(user.id);
-    if (error) setLoadError(error.message);
+    if (error) setLoadError(userMessage(error));
     else setRows(data);
   }, [user]);
 
@@ -88,7 +89,7 @@ export function NotificationsScreen() {
     const { error } = await markAllNotificationsRead(user.id);
     if (error) {
       // Revert the optimistic lie to the server truth and say so.
-      await alertAsync('Could not mark all read', error.message);
+      await alertAsync('Could not mark all read', userMessage(error));
       void load();
     }
   }

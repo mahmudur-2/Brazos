@@ -7,6 +7,7 @@ import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { fetchRehirableWorkerIds } from '../lib/jobs';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
 import { fetchSavedWorkers, unsaveWorker } from '../lib/savedWorkers';
@@ -43,18 +44,18 @@ export function SavedWorkersScreen() {
       fetchSavedWorkers(user.id),
       fetchRehirableWorkerIds(user.id),
     ]);
-    if (savedRes.error) setLoadError(savedRes.error.message);
+    if (savedRes.error) setLoadError(userMessage(savedRes.error));
     else setSaved(savedRes.data);
     // A failed past-workers read must not masquerade as "no one here yet"
     // (hardening A6): surface it into the same retryable error state.
     if (pastIdsRes.error) {
-      const message = pastIdsRes.error.message;
+      const message = userMessage(pastIdsRes.error);
       setLoadError((prev) => prev ?? message);
     } else if (pastIdsRes.data.size > 0) {
       const { data: profiles, error: profilesError } = await fetchProfilesByIds([
         ...pastIdsRes.data,
       ]);
-      if (profilesError) setLoadError((prev) => prev ?? profilesError.message);
+      if (profilesError) setLoadError((prev) => prev ?? userMessage(profilesError));
       else setPast(profiles);
     } else {
       setPast([]);
@@ -74,7 +75,7 @@ export function SavedWorkersScreen() {
     const { error } = await unsaveWorker(user.id, workerId);
     setBusyId(null);
     if (error) {
-      await alertAsync('Could not remove', error.message);
+      await alertAsync('Could not remove', userMessage(error));
       return;
     }
     setSaved((prev) => prev.filter((r) => r.worker_id !== workerId));

@@ -20,6 +20,7 @@ import { useConversations } from '../hooks/useConversations';
 import { conversationKey, conversationTarget, resolveOtherId } from '../lib/conversations';
 import { fetchMyPendingOffers } from '../lib/offers';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   blockUser,
   muteUser,
@@ -177,7 +178,7 @@ export function MessagesInboxScreen() {
 
     if (target.blocking) {
       const { error } = await unblockUser(user.id, target.userId);
-      if (error) await alertAsync('Could not unblock', error.message);
+      if (error) await alertAsync('Could not unblock', userMessage(error));
       await refresh();
       return;
     }
@@ -193,7 +194,7 @@ export function MessagesInboxScreen() {
     if (!ok) return;
 
     const { error } = await blockUser(user.id, target.userId);
-    if (error) await alertAsync('Could not block', error.message);
+    if (error) await alertAsync('Could not block', userMessage(error));
     await refresh();
   }
 
@@ -204,7 +205,7 @@ export function MessagesInboxScreen() {
       ? await unmuteUser(user.id, target.userId)
       : await muteUser(user.id, target.userId);
     if (error) {
-      await alertAsync(target.muted ? 'Could not unmute' : 'Could not mute', error.message);
+      await alertAsync(target.muted ? 'Could not unmute' : 'Could not mute', userMessage(error));
     }
     await refresh();
   }

@@ -36,6 +36,7 @@ import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { canRehireWorker, fetchJobById, formatBudget } from '../lib/jobs';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
 import {
   fetchDirectThread,
@@ -175,8 +176,7 @@ export function ChatScreen() {
       setSending(false);
       await alertAsync(
         'Could not send voice message',
-        uploadError?.message ??
-          'Upload failed. The chat-audio storage bucket may still need setting up.'
+        userMessage(uploadError, 'Upload failed. The chat-audio storage bucket may still need setting up.')
       );
       return;
     }
@@ -191,7 +191,7 @@ export function ChatScreen() {
     setSending(false);
 
     if (error) {
-      await alertAsync('Could not send voice message', error.message);
+      await alertAsync('Could not send voice message', userMessage(error));
       return;
     }
     recorder.reset();
@@ -300,7 +300,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send message', error.message);
+      await alertAsync('Could not send message', userMessage(error));
       // Restore the draft AND the reply target, so a failure doesn't silently
       // turn a reply into a standalone message on the next attempt.
       setText(content);
@@ -333,7 +333,7 @@ export function ChatScreen() {
     setRespondingId(null);
 
     if (error) {
-      await alertAsync('Could not update offer', error.message);
+      await alertAsync('Could not update offer', userMessage(error));
       // The RPC rejects stale turns, so resync rather than leaving the card
       // showing actions that no longer apply.
       await refreshRequests();
@@ -373,7 +373,7 @@ export function ChatScreen() {
       if (error || !fetchedJob) {
         await alertAsync(
           'Could not open job',
-          error?.message ?? 'This job could not be found.'
+          userMessage(error, 'This job could not be found.')
         );
         return;
       }
@@ -459,7 +459,7 @@ export function ChatScreen() {
     });
     if (!ok) return;
     const { error } = await unsendMessage(message.id);
-    if (error) await alertAsync('Could not unsend', error.message);
+    if (error) await alertAsync('Could not unsend', userMessage(error));
   }
 
   /**
@@ -486,7 +486,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send message', error.message);
+      await alertAsync('Could not send message', userMessage(error));
       return;
     }
     if (data) addLocal(data);
@@ -505,7 +505,7 @@ export function ChatScreen() {
       emoji,
     });
     if (error) {
-      await alertAsync('Could not react', error.message);
+      await alertAsync('Could not react', userMessage(error));
       return;
     }
     // Refresh immediately for the reactor; the other party gets it via realtime.
@@ -518,7 +518,7 @@ export function ChatScreen() {
     setReactionTarget(null);
     const { error } = await removeReaction(messageId, user.id);
     if (error) {
-      await alertAsync('Could not remove reaction', error.message);
+      await alertAsync('Could not remove reaction', userMessage(error));
       return;
     }
     await refreshReactions();
@@ -548,7 +548,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send photo', error.message);
+      await alertAsync('Could not send photo', userMessage(error));
       return;
     }
     if (data) addLocal(data);
