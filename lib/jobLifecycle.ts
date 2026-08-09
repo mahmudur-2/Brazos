@@ -105,14 +105,6 @@ export const JOB_LIFECYCLE_LABELS: Record<JobLifecycleState, string> = {
  * the work is submitted either way; the dispute changes the money, not the
  * distance travelled.
  */
-export const TRACK_STEPS = [
-  'confirmed',
-  'en_route',
-  'arrived',
-  'in_progress',
-  'completed',
-] as const;
-
 export function trackStepIndex(state: JobLifecycleState): number {
   switch (state) {
     case 'pending_payment':

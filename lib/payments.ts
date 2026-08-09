@@ -71,12 +71,6 @@ export type Payment = {
 const PAYMENT_COLUMNS =
   'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at';
 
-/** True while the row is live money state rather than failed/voided debris —
- *  the same predicate phase50's one-active-payment index enforces. */
-export function isActivePayment(payment: Pick<Payment, 'status'>): boolean {
-  return payment.status !== 'failed' && payment.status !== 'voided';
-}
-
 /** True once funds are protected. §H.3: "held" is the ONLY state the app may
  *  describe as protected. Since phase51, approval (or the 72h clock) can move
  *  a held payment to released — see isReleased. */
