@@ -654,6 +654,39 @@ const MIGRATIONS = [
         })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 50. Sandbox payments + withdraw/expiry. Same sentinel mechanism
+    // as phase43/46/47/49: PENDING while unapplied, mandatory once applied.
+    //
+    // The four superseded RPC bodies (create_offer, counter_offer,
+    // decline_offer, accept_offer) and my_pending_offers() keep their names
+    // and signatures, so the phase46 group above continues to cover their
+    // existence; body behaviour (expiry gates) has no probeable shape, which
+    // is what the sentinel is for. The `payments` table predates the repo's
+    // migrations — phase50 extends it, so its new columns are probed here.
+    // -----------------------------------------------------------------------
+    file: 'phase50_sandbox_payments_and_offer_lifecycle.sql',
+    sentinel: ['rpc sandbox_payments_enabled()', () =>
+      checkRpc('sandbox_payments_enabled', {})],
+    checks: [
+      // payments and job_offers are anon-revoked, so their new columns have no
+      // publishable-key probe (the phase43/46 situation exactly). Existence is
+      // proven transitively by the sentinel — created last in the same
+      // transaction as the columns — while the probes below assert the parts a
+      // client key CAN see: the RPCs exist, and the money table stays sealed.
+      ['payments not readable with publishable key', () =>
+        checkColumnRevoked('payments', 'id')],
+      ['payments.amount_cents not readable either', () =>
+        checkColumnRevoked('payments', 'amount_cents')],
+      ['rpc sandbox_authorize_job_payment()', () =>
+        checkRpc('sandbox_authorize_job_payment', { p_job_id: ZERO_UUID })],
+      ['rpc sandbox_hold_job_payment()', () =>
+        checkRpc('sandbox_hold_job_payment', { p_job_id: ZERO_UUID })],
+      ['rpc withdraw_offer()', () =>
+        checkRpc('withdraw_offer', { p_offer_id: ZERO_UUID })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
