@@ -122,8 +122,10 @@ rollback;
 
 do $$
 begin
+  -- Scoped to the proof's own job: persistent seeds (d1) legitimately keep
+  -- paid_out rows of their own.
   if (select count(*) from public.payments where status = 'paid_out'
-      and payee_id = 'b6c00000-0000-4000-8000-000000000002') <> 0 then
+      and job_id = 'b6c00000-0000-4000-8000-00000000000b') <> 0 then
     raise exception 'RESIDUE: a paid_out row survived the rollback';
   end if;
   raise notice 'PASS RESIDUE: rollback restored the seeded ledger';
