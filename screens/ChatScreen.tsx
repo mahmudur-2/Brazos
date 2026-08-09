@@ -56,6 +56,7 @@ import {
   counterOffer,
   declineOffer,
   offerIdOf,
+  withdrawOffer,
   type OfferWithJob,
 } from '../lib/offers';
 import { useThreadOffers } from '../hooks/useJobOffers';
@@ -112,7 +113,7 @@ export function ChatScreen() {
   const [counterTarget, setCounterTarget] = useState<OfferWithJob | null>(null);
   const [confirmResponse, setConfirmResponse] = useState<{
     request: OfferWithJob;
-    action: 'accept' | 'decline';
+    action: 'accept' | 'decline' | 'withdraw';
   } | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [openingJobId, setOpeningJobId] = useState<string | null>(null);
@@ -306,7 +307,7 @@ export function ChatScreen() {
 
   async function respondToRequest(
     request: OfferWithJob,
-    action: 'accept' | 'decline' | 'counter',
+    action: 'accept' | 'decline' | 'counter' | 'withdraw',
     amountCents?: number
   ) {
     if (respondingId) return;
@@ -314,12 +315,16 @@ export function ChatScreen() {
     // One RPC per action rather than an action string the server has to
     // re-parse. Each validates the turn, the lifecycle state and the counter
     // cap itself, so a stale card cannot produce an invalid transition.
+    // withdraw (phase50) is the AUTHOR's retraction while the other side owes
+    // the reply — the mirror of decline, validated the same way.
     const { error } =
       action === 'accept'
         ? await acceptOffer(request.id)
         : action === 'decline'
           ? await declineOffer(request.id)
-          : await counterOffer(request.id, amountCents ?? 0);
+          : action === 'withdraw'
+            ? await withdrawOffer(request.id)
+            : await counterOffer(request.id, amountCents ?? 0);
     setRespondingId(null);
 
     if (error) {
@@ -675,6 +680,9 @@ export function ChatScreen() {
                         request && setConfirmResponse({ request, action: 'decline' })
                       }
                       onCounter={() => request && setCounterTarget(request)}
+                      onWithdraw={() =>
+                        request && setConfirmResponse({ request, action: 'withdraw' })
+                      }
                       onOpenJob={
                         request?.status === 'accepted'
                           ? () => openAcceptedJob(request)
@@ -846,16 +854,28 @@ export function ChatScreen() {
         title={
           confirmResponse?.action === 'accept'
             ? `Accept this ${formatBudget(confirmResponse.request.amount_cents)} job?`
-            : 'Decline this offer?'
+            : confirmResponse?.action === 'withdraw'
+              ? 'Withdraw your offer?'
+              : 'Decline this offer?'
         }
         message={
           confirmResponse?.action === 'accept'
             ? 'The job is created and assigned to you straight away. It moves into My Jobs and can’t be undone here.'
-            : 'No job will be created. This can’t be undone.'
+            : confirmResponse?.action === 'withdraw'
+              ? 'This withdraws your pending offer — they’ll no longer be able to accept it. You can send a new offer later.'
+              : 'No job will be created. This can’t be undone.'
         }
-        confirmText={confirmResponse?.action === 'accept' ? 'Accept job' : 'Decline'}
+        confirmText={
+          confirmResponse?.action === 'accept'
+            ? 'Accept job'
+            : confirmResponse?.action === 'withdraw'
+              ? 'Withdraw offer'
+              : 'Decline'
+        }
         cancelText="Cancel"
-        destructive={confirmResponse?.action === 'decline'}
+        destructive={
+          confirmResponse?.action === 'decline' || confirmResponse?.action === 'withdraw'
+        }
         loading={!!confirmResponse && respondingId === confirmResponse.request.id}
         onConfirm={confirmPendingResponse}
         onCancel={() => setConfirmResponse(null)}

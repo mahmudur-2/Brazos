@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -12,7 +12,12 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { Button } from '../components/Button';
@@ -23,7 +28,6 @@ import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
-import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useOpenJobs } from '../hooks/useOpenJobs';
@@ -31,7 +35,6 @@ import {
   arrivalWindowLabel,
   budgetRangeLabel,
   categoryAccent,
-  dollarsToCents,
   fetchClientJobStats,
   formatBudget,
   hasBudget,
@@ -41,7 +44,13 @@ import {
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { Avatar } from '../components/Avatar';
-import { createMarketplaceOffer, fetchMyOfferForJob, type Offer } from '../lib/offers';
+import {
+  createMarketplaceOffer,
+  fetchMyOfferForJob,
+  isOfferLapsed,
+  withdrawOffer,
+  type Offer,
+} from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
@@ -90,15 +99,15 @@ export function JobDetailScreen() {
   const { job, missing } = useOpenJobDetail(params.job);
   const { user } = useAuth();
 
-  const [amount, setAmount] = useState('');
-  const [message, setMessage] = useState('');
-  const [submitting, setSubmitting] = useState(false);
-  // Separate from `submitting` so the two bid paths disable each other while
-  // either is in flight, and repeated taps on the listed-price button cannot
-  // stack a second create_bid call behind the first.
+  // Guards the one inline bid path left on this screen (the listed-price
+  // quick bid) so repeated taps cannot stack a second create_offer call.
+  // The custom-terms path moved to the SubmitBid route (screen 52), where
+  // OfferComposer owns its own in-flight guard.
   const [takingListedPrice, setTakingListedPrice] = useState(false);
   const [existingBid, setExistingBid] = useState<Offer | null>(null);
   const [checking, setChecking] = useState(true);
+  const [withdrawing, setWithdrawing] = useState(false);
+  const [confirmWithdrawVisible, setConfirmWithdrawVisible] = useState(false);
   // The posting customer's public profile + real posting history — the
   // customer-side trust signals screen 51 shows a browsing worker. Rendered
   // only once loaded; nothing is fabricated while they're in flight.
@@ -113,6 +122,10 @@ export function JobDetailScreen() {
   const insets = useSafeAreaInsets();
 
   const isOwnJob = !!user && job.client_id === user.id;
+  // A pending bid past its deadline renders as expired and frees the worker
+  // to bid again — the server enforces the same rule inside every RPC.
+  const bidLapsed = !!existingBid && isOfferLapsed(existingBid);
+  const activeBid = existingBid && !bidLapsed ? existingBid : null;
   const accent = categoryAccent(job.category);
   const galleryPhotos = job.photos ?? [];
   const heroHeight = Math.min(340, Math.max(260, Math.round(screenWidth * 0.82)));
@@ -132,22 +145,27 @@ export function JobDetailScreen() {
     })
     .slice(0, 3);
 
-  useEffect(() => {
-    let active = true;
-    if (!user || isOwnJob) {
-      setChecking(false);
-      return;
-    }
-    fetchMyOfferForJob(user.id, job.id).then(({ data }) => {
-      if (active) {
-        setExistingBid(data);
+  // Focus, not mount: the bid form now lives on its own route (SubmitBid),
+  // so coming back from Bid Sent — or from withdrawing over on another
+  // device — must re-read the canonical row rather than trust mount state.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!user || isOwnJob) {
         setChecking(false);
+        return;
       }
-    });
-    return () => {
-      active = false;
-    };
-  }, [user, job.id, isOwnJob]);
+      fetchMyOfferForJob(user.id, job.id).then(({ data }) => {
+        if (active) {
+          setExistingBid(data);
+          setChecking(false);
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }, [user, job.id, isOwnJob])
+  );
 
   // A retained JobDetail route may be re-targeted from a similar-job card.
   // Always lead with that job's poster-selected first photo.
@@ -222,7 +240,7 @@ export function JobDetailScreen() {
    * choose this worker over the others.
    */
   function handleTakeListedPrice() {
-    if (!user || job.budget_cents == null || takingListedPrice || submitting) return;
+    if (!user || job.budget_cents == null || takingListedPrice) return;
     setConfirmBidVisible(true);
   }
 
@@ -248,38 +266,24 @@ export function JobDetailScreen() {
     navigation.getParent()?.navigate('MyJobs' as never);
   }
 
-  async function handleSubmit() {
-    if (!user) return;
-
-    const amountCents = dollarsToCents(amount);
-    if (amountCents == null) {
-      await alertAsync('Enter a bid', 'Please enter your bid amount.');
-      return;
+  /**
+   * Withdraw the pending bid (§H.2 withdrawn, phase50). Confirmed first; the
+   * RPC is idempotent, and on success the screen re-reads the canonical row —
+   * a withdrawn bid frees this worker to bid again, so the entry cards return.
+   */
+  async function handleWithdraw() {
+    if (!user || !activeBid || withdrawing) return;
+    setWithdrawing(true);
+    const { error } = await withdrawOffer(activeBid.id);
+    setWithdrawing(false);
+    setConfirmWithdrawVisible(false);
+    if (error) {
+      await alertAsync('Could not withdraw bid', error.message);
+      // Whatever blocked it (already accepted, already expired), the truth is
+      // in the canonical row — re-read rather than guess.
     }
-    if (Number.isNaN(amountCents) || amountCents <= 0) {
-      await alertAsync('Invalid amount', 'Your bid must be a positive dollar amount.');
-      return;
-    }
-    if (!message.trim()) {
-      await alertAsync('Add a pitch', 'Add a short message telling the client why to pick you.');
-      return;
-    }
-
-    setSubmitting(true);
-    const placed = await placeBid(amountCents, message.trim());
-    setSubmitting(false);
-    if (!placed) return;
-
-    await alertAsync('Bid placed', 'The client can now see your bid.');
-
-    // Second good moment to ask: they have a bid in flight whose outcome they
-    // now care about. No-ops if the PostJob path already asked.
-    await maybePromptForPush(
-      'Get told the moment this client accepts your bid — and when new jobs like this are posted.'
-    );
-
-    // Show the worker their pending bid in the My Jobs hub tab.
-    navigation.getParent()?.navigate('MyJobs' as never);
+    const { data: mine } = await fetchMyOfferForJob(user.id, job.id);
+    setExistingBid(mine);
   }
 
   // The canonical read came back empty: the poster deleted the job while this
@@ -431,22 +435,45 @@ export function JobDetailScreen() {
             </Card>
           ) : checking ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
-          ) : existingBid ? (
+          ) : activeBid ? (
             <Card style={styles.secondaryCard}>
               <View style={styles.bidHeader}>
                 <Text style={styles.sectionTitle}>Your bid</Text>
-                <StatusBadge status={existingBid.status} />
+                <StatusBadge status={activeBid.status} />
               </View>
-              <Text style={styles.bidAmount}>{formatBudget(existingBid.amount_cents)}</Text>
-              {existingBid.message ? (
-                <Text style={styles.bidMessage}>“{existingBid.message}”</Text>
+              <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
+              {activeBid.message ? (
+                <Text style={styles.bidMessage}>“{activeBid.message}”</Text>
               ) : null}
               <Text style={styles.bidNote}>
-                You’ve already bid on this job. Check My Bids for updates.
+                {activeBid.expires_at
+                  ? `The customer can accept it until ${new Date(
+                      activeBid.expires_at
+                    ).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                    })} — after that it expires on its own. Check My Jobs for updates.`
+                  : 'You’ve already bid on this job. Check My Jobs for updates.'}
               </Text>
+              <Button
+                title="Withdraw bid"
+                variant="secondary"
+                onPress={() => setConfirmWithdrawVisible(true)}
+                loading={withdrawing}
+                disabled={withdrawing}
+              />
             </Card>
           ) : (
             <>
+              {bidLapsed ? (
+                <Card style={[styles.noticeCard, styles.secondaryCard]}>
+                  <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+                  <Text style={styles.noticeText}>
+                    Your earlier bid expired without a response. You can send a
+                    new one below.
+                  </Text>
+                </Card>
+              ) : null}
               {/* Customer-side trust signals: real profile, real counted
                   history. Rendered only once loaded — never placeholders. */}
               {poster ? (
@@ -479,9 +506,9 @@ export function JobDetailScreen() {
                   <Text style={styles.payoutAmount}>{payoutEstimateLabel(job)}</Text>
                   <Text style={styles.payoutNote}>
                     Estimate only, from the customer’s stated budget minus a{' '}
-                    {Math.round(ESTIMATED_PLATFORM_FEE_RATE * 100)}% platform fee. Payments
-                    aren’t live in BRAZOS yet, so nothing is charged or paid through the
-                    app — you settle directly with the customer.
+                    {Math.round(ESTIMATED_PLATFORM_FEE_RATE * 100)}% platform fee. BRAZOS
+                    payments currently run in a clearly-labeled development sandbox — no
+                    real money is charged or paid out through the app yet.
                   </Text>
                 </Card>
               ) : null}
@@ -510,41 +537,28 @@ export function JobDetailScreen() {
                     icon="sparkles"
                     onPress={handleTakeListedPrice}
                     loading={takingListedPrice}
-                    disabled={submitting}
                     style={styles.quickBidAction}
                   />
                 </Card>
               )}
 
+              {/* The custom-terms path is the OfferComposer's SubmitBid route
+                  (screen 52) — one canonical offer form for bids, counters
+                  and direct offers, rather than a second form living here. */}
               <Card style={styles.secondaryCard}>
                 <Text style={styles.sectionTitle}>
                   {job.budget_cents != null ? 'Or name your own price' : 'Place a bid'}
                 </Text>
-                <View style={styles.form}>
-                  <TextField
-                    label="Your bid (USD)"
-                    value={amount}
-                    onChangeText={setAmount}
-                    placeholder="e.g. 45"
-                    keyboardType="numeric"
-                  />
-                  <TextField
-                    label="Pitch"
-                    value={message}
-                    onChangeText={setMessage}
-                    placeholder="Why should the client pick you?"
-                    autoCapitalize="sentences"
-                    multiline
-                    numberOfLines={3}
-                    style={styles.multiline}
-                  />
-                  <Button
-                    title="Place bid"
-                    onPress={handleSubmit}
-                    loading={submitting}
-                    disabled={takingListedPrice}
-                  />
-                </View>
+                <Text style={styles.quickBidText}>
+                  Set your own amount and tell the customer why you’re the right
+                  pick. You can withdraw a pending bid at any time.
+                </Text>
+                <Button
+                  title="Write a bid"
+                  onPress={() => (navigation as any).navigate('SubmitBid', { job })}
+                  disabled={takingListedPrice}
+                  style={styles.quickBidAction}
+                />
               </Card>
             </>
           )}
@@ -585,6 +599,17 @@ export function JobDetailScreen() {
           onCancel={() => setConfirmBidVisible(false)}
         />
       )}
+
+      <ConfirmDialog
+        visible={confirmWithdrawVisible}
+        title="Withdraw your bid?"
+        message="This withdraws your pending bid — the customer will no longer be able to accept it. You can send a new bid afterwards if you change your mind."
+        confirmText="Withdraw bid"
+        cancelText="Keep bid"
+        loading={withdrawing}
+        onConfirm={handleWithdraw}
+        onCancel={() => setConfirmWithdrawVisible(false)}
+      />
     </SafeAreaView>
   );
 }

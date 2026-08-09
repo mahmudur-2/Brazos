@@ -14,11 +14,16 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   // without borrowing the danger red used elsewhere for rejected/actioned.
   completed: { bg: colors.successBg, text: colors.success },
   cancelled: { bg: colors.neutralBg, text: colors.neutral },
-  // Bid statuses
+  // Bid/offer statuses (offer_status vocabulary — phase50 made
+  // declined/expired/superseded reachable states, so they get deliberate
+  // colours instead of the default fallback)
   pending: { bg: colors.warningBg, text: colors.warning },
   accepted: { bg: colors.successBg, text: colors.success },
   rejected: { bg: colors.dangerBg, text: colors.danger },
+  declined: { bg: colors.dangerBg, text: colors.danger },
   withdrawn: { bg: colors.neutralBg, text: colors.neutral },
+  expired: { bg: colors.neutralBg, text: colors.neutral },
+  superseded: { bg: colors.neutralBg, text: colors.neutral },
   // Report statuses (admin moderation queue). 'open' reuses the job status
   // above, which reads correctly here too.
   actioned: { bg: colors.dangerBg, text: colors.danger },

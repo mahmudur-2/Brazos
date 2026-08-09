@@ -56,6 +56,9 @@ type ListProps = {
   onHireAgain?: () => void;
   /** Opens the worker's public profile (rating, bio, Past Work gallery). */
   onViewProfile?: () => void;
+  /** Phase 5: opens Bid Detail (29) — full terms plus counter/decline, which
+   *  deliberately do not crowd this compare card. */
+  onOpenDetail?: () => void;
   /** Long-press on the avatar specifically — opens it full-screen, a faster
    *  look than navigating to the full profile. */
   onLongPressAvatar?: () => void;
@@ -81,6 +84,9 @@ type ThreadProps = {
   onAccept: () => void;
   onDecline: () => void;
   onCounter: () => void;
+  /** Phase 5: the AUTHOR retracting their own pending revision while the
+   *  other side owes the reply — rendered only in exactly that state. */
+  onWithdraw?: () => void;
   /**
    * Present only when this card can lead into the job it created — i.e. its
    * own event is 'accepted' and a job actually exists. Rendered as a tappable
@@ -109,6 +115,7 @@ function OfferListCard({
   canRehire = false,
   onHireAgain,
   onViewProfile,
+  onOpenDetail,
   onLongPressAvatar,
   palette = colors,
 }: ListProps) {
@@ -237,6 +244,19 @@ function OfferListCard({
           style={styles.rehireBtn}
         />
       )}
+
+      {onOpenDetail && !isAccepted ? (
+        <Pressable
+          onPress={onOpenDetail}
+          disabled={disabled}
+          style={({ pressed }) => [styles.detailLink, pressed && styles.profilePressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Open full bid detail with counter and decline options"
+        >
+          <Text style={styles.detailLinkText}>Full bid · counter or decline</Text>
+          <Ionicons name="chevron-forward" size={14} color={colors.emerald} />
+        </Pressable>
+      ) : null}
     </Card>
   );
 }
@@ -275,6 +295,7 @@ function OfferThreadCard({
   onAccept,
   onDecline,
   onCounter,
+  onWithdraw,
   onOpenJob,
 }: ThreadProps) {
   const event = message.request_event ?? 'created';
@@ -284,6 +305,15 @@ function OfferThreadCard({
   const isMyTurn = !!offer && isOpenOffer(offer.status) && offer.awaiting_id === currentUserId;
   const showActions = isLatest && isMyTurn && !!offer;
   const canCounter = chain.length > 0 && countersRemaining(chain, currentUserId) > 0;
+  // The sender's exit while the ball is in the other court (§H.2 withdrawn):
+  // only the current revision, only its author, only while still pending.
+  const canWithdraw =
+    isLatest &&
+    !!offer &&
+    isOpenOffer(offer.status) &&
+    offer.author_id === currentUserId &&
+    offer.awaiting_id !== currentUserId &&
+    !!onWithdraw;
 
   // A settled offer explains itself on its newest card, so the thread never
   // ends on an offer that silently stopped mattering.
@@ -383,6 +413,16 @@ function OfferThreadCard({
         {waitingNote && <Text style={styles.waitingNote}>{waitingNote}</Text>}
         {openable && <Text style={styles.openHint}>Tap to view the job</Text>}
       </Pressable>
+
+      {canWithdraw && (
+        <Button
+          title="Withdraw offer"
+          variant="secondary"
+          onPress={onWithdraw}
+          disabled={busy}
+          style={styles.counterBtn}
+        />
+      )}
 
       {showActions && (
         <View style={styles.threadActions}>
@@ -561,6 +601,19 @@ const styles = StyleSheet.create({
   },
   rehireBtn: {
     marginTop: spacing.md,
+  },
+  detailLink: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.sm,
+  },
+  detailLinkText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.emerald,
   },
 
   // Thread variant

@@ -2,9 +2,11 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { WorkerHomeStackParamList, WorkerParamList } from '../lib/navigation';
+import { BidSentScreen } from '../screens/BidSentScreen';
 import { BrowseJobsScreen } from '../screens/BrowseJobsScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
+import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerResultsScreen } from '../screens/WorkerResultsScreen';
 import { bottomNavScreenOptions } from '../ui/primitives/BottomNav';
@@ -40,6 +42,11 @@ function WorkerHomeStackNavigator() {
       <WorkerHomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
       <WorkerHomeStack.Screen name="WorkerResults" component={WorkerResultsScreen} />
       <WorkerHomeStack.Screen name="JobDetail" component={JobDetailScreen} />
+      {/* Phase 5 — registered wherever JobDetail is, so the bid entry can
+          never hit the not-handled-by-any-navigator failure Known Issues
+          records for PostJob. */}
+      <WorkerHomeStack.Screen name="SubmitBid" component={SubmitBidScreen} />
+      <WorkerHomeStack.Screen name="BidSent" component={BidSentScreen} />
       <WorkerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <WorkerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </WorkerHomeStack.Navigator>

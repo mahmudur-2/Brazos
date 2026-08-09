@@ -6,10 +6,17 @@ import type {
   ProfileStackParamList,
 } from '../lib/navigation';
 import { AdminReportsScreen } from '../screens/AdminReportsScreen';
+import { BidDetailScreen } from '../screens/BidDetailScreen';
+import { BidSentScreen } from '../screens/BidSentScreen';
 import { CellJobsScreen } from '../screens/CellJobsScreen';
 import { ChatScreen } from '../screens/ChatScreen';
+import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { ClientJobDetailScreen } from '../screens/ClientJobDetailScreen';
+import { CompareBidsScreen } from '../screens/CompareBidsScreen';
+import { CounterofferScreen } from '../screens/CounterofferScreen';
+import { JobConfirmedScreen } from '../screens/JobConfirmedScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
+import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { LegalDocumentScreen } from '../screens/LegalDocumentScreen';
 import { MapScreen } from '../screens/MapScreen';
 import { MessagesInboxScreen } from '../screens/MessagesInboxScreen';
@@ -59,6 +66,16 @@ export function MyJobsStackNavigator() {
       <MyJobsStack.Screen name="ClientJobDetail" component={ClientJobDetailScreen} />
       <MyJobsStack.Screen name="WorkerJob" component={WorkerJobScreen} />
       <MyJobsStack.Screen name="JobDetail" component={JobDetailScreen} />
+      {/* Phase 5 — worker bid entry rides along wherever JobDetail is mounted
+          (the PostJob/WorkerHomeStack gap is the failure mode this avoids). */}
+      <MyJobsStack.Screen name="SubmitBid" component={SubmitBidScreen} />
+      <MyJobsStack.Screen name="BidSent" component={BidSentScreen} />
+      {/* Phase 5 — the customer hire loop lives with ClientJobDetail. */}
+      <MyJobsStack.Screen name="CompareBids" component={CompareBidsScreen} />
+      <MyJobsStack.Screen name="BidDetail" component={BidDetailScreen} />
+      <MyJobsStack.Screen name="Counteroffer" component={CounterofferScreen} />
+      <MyJobsStack.Screen name="Checkout" component={CheckoutScreen} />
+      <MyJobsStack.Screen name="JobConfirmed" component={JobConfirmedScreen} />
       <MyJobsStack.Screen name="Chat" component={ChatScreen} />
       <MyJobsStack.Screen name="PostJob" component={PostJobScreen} />
       <MyJobsStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
@@ -85,6 +102,8 @@ export function MapStackNavigator() {
       <MapStack.Screen name="MapMain" component={MapScreen} />
       <MapStack.Screen name="CellJobs" component={CellJobsScreen} />
       <MapStack.Screen name="JobDetail" component={JobDetailScreen} />
+      <MapStack.Screen name="SubmitBid" component={SubmitBidScreen} />
+      <MapStack.Screen name="BidSent" component={BidSentScreen} />
       <MapStack.Screen name="PostJob" component={PostJobScreen} />
       <MapStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <MapStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />

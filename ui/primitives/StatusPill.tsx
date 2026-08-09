@@ -47,17 +47,14 @@ export type OfferStatus =
   | 'expired'
   | 'superseded';
 
-/** §H.3 payment lifecycle. */
-export type PaymentStatus =
-  | 'unfunded'
-  | 'authorized'
-  | 'held'
-  | 'released'
-  | 'paid_out'
-  | 'failed'
-  | 'voided'
-  | 'refunded'
-  | 'partially_refunded';
+/**
+ * §H.3 payment lifecycle. Phase 5 made this real: the union now lives in
+ * lib/payments.ts, the module that mirrors the database enum, and is
+ * re-exported here so MoneyText and existing callers keep their import path.
+ * (Job/offer unions above stay local until generated DB types exist.)
+ */
+export type { PaymentStatus } from '../../lib/payments';
+import type { PaymentStatus } from '../../lib/payments';
 
 type Tone = 'neutral' | 'progress' | 'positive' | 'attention';
 

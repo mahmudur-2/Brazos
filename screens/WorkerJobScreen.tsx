@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,7 +11,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from '../components/Button';
@@ -35,6 +40,8 @@ import {
   updateJobStatus,
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
+import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
+import { MoneyText } from '../ui/primitives/MoneyText';
 import {
   deleteJobPhoto,
   rejectionForPickedVideo,
@@ -99,6 +106,24 @@ export function WorkerJobScreen() {
 
   const isWorker = !!user && job?.assigned_worker_id === user.id;
   const clientName = client?.full_name ?? 'the client';
+
+  // The job's sandbox ledger row (phase50): the hired worker is the payee, so
+  // RLS grants this read, and the card below shows the honest §H.3 state —
+  // held is held, never "paid". Re-read on focus so the customer funding
+  // checkout on their side shows up when the worker returns here.
+  const [payment, setPayment] = useState<Payment | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (!job || job.status === 'open') return;
+      fetchJobPayment(job.id).then(({ data, error: paymentError }) => {
+        if (active && !paymentError) setPayment(data);
+      });
+      return () => {
+        active = false;
+      };
+    }, [job?.id, job?.status])
+  );
 
   async function handleStart() {
     setWorking(true);
@@ -335,6 +360,20 @@ export function WorkerJobScreen() {
             <JobProgress status={job.status} />
           </Card>
 
+          {isWorker && payment ? (
+            <Card style={styles.paymentCard}>
+              <Text style={styles.paymentEyebrow}>
+                {isHeld(payment) ? 'PAYMENT PROTECTED · SANDBOX' : 'PAYMENT · SANDBOX'}
+              </Text>
+              <MoneyText cents={payment.amount_cents} state={payment.status} />
+              <Text style={styles.paymentNote}>
+                {isHeld(payment)
+                  ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
+                  : 'Sandbox build — payment states here are development records, not real money.'}
+              </Text>
+            </Card>
+          ) : null}
+
           {isWorker && (
             <Button
               title={`Message ${clientName}`}
@@ -518,6 +557,20 @@ export function WorkerJobScreen() {
 }
 
 const styles = StyleSheet.create({
+  paymentCard: {
+    gap: spacing.sm,
+  },
+  paymentEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: colors.textMuted,
+    letterSpacing: 0.8,
+  },
+  paymentNote: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 19,
+  },
   safe: {
     flex: 1,
     backgroundColor: colors.background,

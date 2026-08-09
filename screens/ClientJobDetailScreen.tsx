@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -13,7 +12,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
@@ -32,8 +36,9 @@ import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import { fetchProfileById, type Profile } from '../lib/profiles';
+import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
+import { MoneyText } from '../ui/primitives/MoneyText';
 import { alertAsync } from '../lib/dialog';
 import {
   acceptOffer,
@@ -62,8 +67,6 @@ import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigat
 import { colors, emeraldColors, radius, spacing, typography } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
-
 export function ClientJobDetailScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ClientJobDetail'>>();
@@ -79,9 +82,10 @@ export function ClientJobDetailScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [pendingAccept, setPendingAccept] = useState<OfferWithWorker | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [acceptedName, setAcceptedName] = useState('');
   const [worker, setWorker] = useState<Profile | null>(null);
+  // The job's sandbox ledger row (phase50). Loaded on focus so returning from
+  // Checkout immediately reflects authorized/held truthfully.
+  const [payment, setPayment] = useState<Payment | null>(null);
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
   // The exact service address (job_private_details). This is the poster's own
@@ -94,16 +98,12 @@ export function ClientJobDetailScreen() {
   // clear of the keyboard — the review card is the last thing in this list.
   const scrollRef = useRef<ScrollView>(null);
 
-  const successScale = useRef(new Animated.Value(0.4)).current;
-  const successOpacity = useRef(new Animated.Value(0)).current;
-  const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const acceptingRef = useRef(false);
   const screenMountedRef = useRef(true);
   const currentJobIdRef = useRef(job.id);
   const refreshRunRef = useRef(0);
   const workerRunRef = useRef(0);
   currentJobIdRef.current = job.id;
-  const reducedMotion = useReducedMotion();
 
   const canAccept = job.status === 'open';
   // A retained ClientJobDetail route can be retargeted to another job. Never
@@ -135,11 +135,8 @@ export function ClientJobDetailScreen() {
     return () => {
       screenMountedRef.current = false;
       refreshRunRef.current += 1;
-      if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-      successScale.stopAnimation();
-      successOpacity.stopAnimation();
     };
-  }, [successOpacity, successScale]);
+  }, []);
 
   const loadAssignedWorker = useCallback(async () => {
     const workerId = job.assigned_worker_id;
@@ -166,21 +163,31 @@ export function ClientJobDetailScreen() {
 
   useEffect(() => {
     // React Navigation can retarget this retained route to another job. Modal,
-    // viewer, sort, and success UI belong to the old job and must not follow.
+    // viewer, sort, and payment state belong to the old job and must not follow.
     refreshRunRef.current += 1;
-    if (successTimeoutRef.current) {
-      clearTimeout(successTimeoutRef.current);
-      successTimeoutRef.current = null;
-    }
     setSort('value');
     setRefreshing(false);
     setPendingAccept(null);
-    setShowSuccess(false);
-    setAcceptedName('');
     setViewerUri(null);
     setAvatarUri(null);
     setWorkerError(null);
+    setPayment(null);
   }, [job.id]);
+
+  // The ledger row, re-read on every focus: Checkout is one push away and the
+  // money label here must follow what actually happened there.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (job.status === 'open' || job.status === 'cancelled') return;
+      fetchJobPayment(job.id).then(({ data, error }) => {
+        if (active && !error) setPayment(data);
+      });
+      return () => {
+        active = false;
+      };
+    }, [job.id, job.status])
+  );
 
   useEffect(() => {
     setWorker(null);
@@ -241,33 +248,14 @@ export function ClientJobDetailScreen() {
     }
   }
 
-  function playSuccessThenLeave(name: string) {
-    setAcceptedName(name);
-    setShowSuccess(true);
-    successScale.setValue(reducedMotion ? 1 : 0.4);
-    successOpacity.setValue(reducedMotion ? 1 : 0);
-
-    if (!reducedMotion) {
-      Animated.parallel([
-        Animated.spring(successScale, {
-          toValue: 1,
-          friction: 6,
-          tension: 80,
-          useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-        Animated.timing(successOpacity, {
-          toValue: 1,
-          duration: 200,
-          useNativeDriver: USE_NATIVE_DRIVER,
-        }),
-      ]).start();
-    }
-
-    if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
-    successTimeoutRef.current = setTimeout(() => {
-      successTimeoutRef.current = null;
-      navigation.popTo('MyJobsHub');
-    }, 1400);
+  /**
+   * Phase 5: an accepted bid flows straight into the protected checkout —
+   * hiring and funding are one continuous motion, so instead of the old
+   * "success overlay, back to the hub" the screen navigates to Checkout,
+   * which re-reads the job canonically and shows the truthful payment state.
+   */
+  function proceedToCheckout() {
+    navigation.navigate('Checkout', { job });
   }
 
   /**
@@ -304,7 +292,7 @@ export function ClientJobDetailScreen() {
       // canonical job read tells us whether this exact worker was assigned,
       // avoiding a false failure message and a stale open-job screen.
       if (jobResult.data?.assigned_worker_id === bid.worker.id) {
-        playSuccessThenLeave(bid.worker.full_name ?? 'the worker');
+        proceedToCheckout();
         return;
       }
       await alertAsync('Could not confirm bid acceptance', error.message);
@@ -312,7 +300,7 @@ export function ClientJobDetailScreen() {
     }
 
     setPendingAccept(null);
-    playSuccessThenLeave(bid.worker.full_name ?? 'the worker');
+    proceedToCheckout();
   }
 
   if (missing) {
@@ -578,6 +566,15 @@ export function ClientJobDetailScreen() {
                     {pendingBids.length === 1 ? 'bid' : 'bids'} to compare
                   </Text>
                 </View>
+                {pendingBids.length > 1 && (
+                  <Button
+                    title="Compare"
+                    size="sm"
+                    variant="secondary"
+                    palette={emeraldColors}
+                    onPress={() => navigation.navigate('CompareBids', { job })}
+                  />
+                )}
               </View>
               {pendingBids.length > 1 && (
                 <SegmentedControl
@@ -600,6 +597,9 @@ export function ClientJobDetailScreen() {
                     accepting={acceptingId === bid.id}
                     disabled={acceptingId !== null && acceptingId !== bid.id}
                     onAccept={() => confirmAccept(bid)}
+                    onOpenDetail={() =>
+                      navigation.navigate('BidDetail', { job, offerId: bid.id })
+                    }
                     onViewProfile={
                       bid.worker
                         ? () =>
@@ -733,6 +733,41 @@ export function ClientJobDetailScreen() {
               />
             )}
 
+            {/* The money truth for this job (phase50 ledger). Labels come from
+                MoneyText's fixed §H.3 captions — never hand-written here. */}
+            {job.status === 'assigned' ? (
+              payment && isHeld(payment) ? (
+                <Card palette={emeraldColors} style={styles.paymentCard}>
+                  <Text style={styles.eyebrow}>PROTECTED PAYMENT · SANDBOX</Text>
+                  <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
+                  <Text style={styles.paymentNote}>
+                    Funds stay held until you approve the finished work. Sandbox
+                    build — no real money moves.
+                  </Text>
+                </Card>
+              ) : (
+                <Card palette={emeraldColors} style={styles.paymentCard}>
+                  <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
+                  <Text style={styles.paymentNote}>
+                    {workerName} is hired, but the payment isn’t in protection yet.
+                    {payment?.status === 'authorized'
+                      ? ' It’s authorized — not charged — finish checkout to protect it.'
+                      : ''}
+                  </Text>
+                  <Button
+                    title="Protect payment in checkout"
+                    palette={emeraldColors}
+                    onPress={() => navigation.navigate('Checkout', { job })}
+                  />
+                </Card>
+              )
+            ) : payment ? (
+              <Card palette={emeraldColors} style={styles.paymentCard}>
+                <Text style={styles.eyebrow}>PAYMENT · SANDBOX</Text>
+                <MoneyText cents={payment.amount_cents} state={payment.status} />
+              </Card>
+            ) : null}
+
             {/* Before/after: the client's own posting photos next to what the
                 worker submitted on completion. Rendered as soon as the worker
                 marks the job done, so the client reviews the finished work
@@ -852,20 +887,6 @@ export function ClientJobDetailScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {showSuccess && (
-        <Animated.View style={[styles.successOverlay, { opacity: successOpacity }]}>
-          <Animated.View
-            style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
-          >
-            <Ionicons name="checkmark" size={56} color={colors.onPrimary} />
-          </Animated.View>
-          <Text style={styles.successTitle}>Bid accepted</Text>
-          <Text style={styles.successSubtitle}>
-            {acceptedName} is assigned to this job.
-          </Text>
-        </Animated.View>
-      )}
-
       <PhotoViewer
         visible={!!viewerUri}
         uri={viewerUri}
@@ -888,7 +909,7 @@ export function ClientJobDetailScreen() {
               }?`
             : ''
         }
-        message="The job is assigned to them and the other bids are closed. This can’t be undone here."
+        message="This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build)."
         confirmText="Accept bid"
         cancelText="Cancel"
         loading={!!pendingAccept && acceptingId === pendingAccept.id}
@@ -1103,6 +1124,16 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderRadius: radius.xl,
     borderColor: colors.mint2,
+  },
+  paymentCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  paymentNote: {
+    ...typography.body,
+    color: colors.textMuted,
+    lineHeight: 20,
   },
   workerRow: {
     minHeight: 60,

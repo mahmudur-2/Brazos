@@ -23,6 +23,7 @@ import type { ImagePickerAsset } from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { TextField } from '../components/TextField';
@@ -632,30 +633,24 @@ export function PostJobScreen() {
 
     // Hire mode negotiates a single amount; fresh posts and edits carry the
     // MIN/MAX range (screen 15).
-    const budgetCents = dollarsToCents(budget);
     const budgetMinCents = dollarsToCents(budgetMin);
     const budgetMaxCents = dollarsToCents(budgetMax);
+    let budgetCents: number | null = dollarsToCents(budget);
     if (isHiring) {
-      // dollarsToCents() already turns 0 (and negatives) into NaN, but that
-      // guarantee is checked explicitly here too, the same way
-      // JobDetailScreen's bid flow does — this call site shouldn't depend on
-      // staying in sync with that function's internals to keep a $0 job from
-      // posting.
-      if (Number.isNaN(budgetCents) || (budgetCents != null && budgetCents <= 0)) {
-        await alertAsync('Invalid budget', 'Budget must be a positive dollar amount.');
-        return;
-      }
-      // A hire request opens with a proposed price, so an amount is required —
-      // it's the starting point for the negotiation, not a final figure. A
-      // real 0 can't reach here (caught above), so this is specifically the
-      // "left blank" case.
-      if (budgetCents == null) {
+      // Shared with every other offer form (OfferComposer): a hire request
+      // opens with a proposed price, so a blank or non-positive amount is
+      // refused with the same rule bids and counters apply.
+      const { amountCents, problem } = validateOfferAmount(budget);
+      if (problem || amountCents == null) {
         await alertAsync(
-          'Price required',
-          `Enter the amount you'd like to offer ${hireWorkerName}. They can accept or counter.`
+          'Check your offer',
+          problem === 'Enter an amount.'
+            ? `Enter the amount you'd like to offer ${hireWorkerName}. They can accept or counter.`
+            : problem ?? 'Enter an amount.'
         );
         return;
       }
+      budgetCents = amountCents;
     } else {
       if (Number.isNaN(budgetMinCents) || Number.isNaN(budgetMaxCents)) {
         await alertAsync('Invalid budget', 'Budget amounts must be positive dollar amounts.');
@@ -1115,13 +1110,14 @@ export function PostJobScreen() {
           {step === 3 && (
             <View style={styles.stepFields}>
               {isHiring ? (
-                <TextField
+                // The direct-offer terms field is OfferComposer's shared one
+                // (Phase 5): bids, counters and this hire request present and
+                // validate an offer amount identically.
+                <OfferAmountField
                   palette={emeraldColors}
                   label="Your offer ($)"
                   value={budget}
                   onChangeText={setBudget}
-                  placeholder="e.g. 50"
-                  keyboardType="numeric"
                   hint={`${hireWorkerName} can accept or suggest a different price.`}
                 />
               ) : (

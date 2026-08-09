@@ -50,6 +50,9 @@ export type Offer = {
   amount_cents: number;
   message: string | null;
   status: OfferStatus;
+  /** When a pending offer lapses (phase50). Null = never — every pre-phase50
+   *  row, deliberately, so no live negotiation was retroactively expired. */
+  expires_at: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -78,7 +81,7 @@ export type PendingOffer = Offer & {
 };
 
 const OFFER_COLUMNS =
-  'id, job_id, offer_type, parent_offer_id, root_offer_id, customer_id, worker_id, author_id, awaiting_id, amount_cents, message, status, created_at, updated_at';
+  'id, job_id, offer_type, parent_offer_id, root_offer_id, customer_id, worker_id, author_id, awaiting_id, amount_cents, message, status, expires_at, created_at, updated_at';
 
 type PublicProfileRow = Omit<Profile, 'phone' | 'is_admin' | 'banned'>;
 
@@ -93,6 +96,31 @@ export const MAX_COUNTERS_PER_SIDE = 3;
 /** Open = still negotiable. Every other status is settled. */
 export function isOpenOffer(status: OfferStatus): boolean {
   return status === 'pending';
+}
+
+/**
+ * A pending row past its deadline. The row still says 'pending' until an RPC
+ * touches it — there is no cron (repo rule: on-read-check only) — but every
+ * decision RPC refuses it and flips it to 'expired' server-side, so treating
+ * it as expired here is rendering the truth early, not inventing state.
+ */
+export function isOfferLapsed(
+  offer: Pick<Offer, 'status' | 'expires_at'>,
+  nowMs: number = Date.now()
+): boolean {
+  return (
+    offer.status === 'pending' &&
+    offer.expires_at != null &&
+    Date.parse(offer.expires_at) <= nowMs
+  );
+}
+
+/** The status a screen should render and act on: lapsed pending = expired. */
+export function effectiveOfferStatus(
+  offer: Pick<Offer, 'status' | 'expires_at'>,
+  nowMs: number = Date.now()
+): OfferStatus {
+  return isOfferLapsed(offer, nowMs) ? 'expired' : offer.status;
 }
 
 /**
@@ -181,6 +209,16 @@ export async function counterOffer(offerId: string, amountCents: number) {
 
 export async function declineOffer(offerId: string) {
   const { error } = await supabase.rpc('decline_offer', { p_offer_id: offerId });
+  return { error };
+}
+
+/**
+ * Withdraw an offer the current user AUTHORED while the other side owes the
+ * reply (§H.2 withdrawn — phase50). The recipient's counterpart is decline.
+ * Frees the one-live-chain slot, so a withdrawn worker may bid again later.
+ */
+export async function withdrawOffer(offerId: string) {
+  const { error } = await supabase.rpc('withdraw_offer', { p_offer_id: offerId });
   return { error };
 }
 

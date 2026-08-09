@@ -163,7 +163,13 @@ test('Worker job detail uses the real photo gallery and an honest verification s
   assert.match(detail, /<PhotoViewer/);
   assert.match(detail, /<JobVideo/);
   assert.match(detail, /handleTakeListedPrice/);
-  assert.match(detail, /handleSubmit/);
+  // Phase 5: the custom-terms bid form moved to the SubmitBid route (screen
+  // 52, OfferComposer). This screen must still offer that path — as a
+  // navigation, not a second inline form — plus the §H.2 withdraw exit.
+  assert.match(detail, /navigate\('SubmitBid', \{ job \}\)/);
+  assert.doesNotMatch(detail, /createMarketplaceOffer\(\{[^}]*message:\s*message/s);
+  assert.match(detail, /withdrawOffer\(/);
+  assert.match(detail, /confirmWithdrawVisible/);
   assert.doesNotMatch(detail, /\bVerified\b/);
 });
 
@@ -187,12 +193,13 @@ test('Customer Home retains approved Emerald reference copy without adding paid-
   assert.match(customerCode, /Animated\.loop/);
   // "Arrival window" left this list in Phase 4: phase49 gave it a real
   // schema (jobs.arrival_start_hour/arrival_end_hour) and a real wizard
-  // field, so it is no longer an unbacked reference-mock claim. The rest
-  // remain claims the product cannot substantiate and must not surface.
-  assert.doesNotMatch(
-    customerCode,
-    /protected (?:payment|funds)|fit percentage|available today/i
-  );
+  // field, so it is no longer an unbacked reference-mock claim.
+  // "Protected payment/funds" left it in Phase 5 for the same reason:
+  // phase50's ledger, the sandbox checkout RPCs and MoneyText's fixed §H.3
+  // captions made protection a real, persisted state — and the sandbox
+  // honesty of that surface is guarded by tests/sandboxCheckout.test.mjs.
+  // The rest remain claims the product cannot substantiate.
+  assert.doesNotMatch(customerCode, /fit percentage|available today/i);
 });
 
 test('Emerald shared controls are customer-opt-in and keep 44pt touch semantics', async () => {

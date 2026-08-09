@@ -2,6 +2,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { Job, JobCategory, OpenJob } from './jobs';
 import type { ChatTarget } from './messages';
+import type { Offer } from './offers';
 import type { PhoneAuthIntent, PhoneProfileDraft } from './phoneAuth/types';
 
 // The signed-out flow. Not a tab: it replaces the whole tab bar until there is
@@ -137,6 +138,12 @@ export type CustomerHomeStackNavigation =
 export type WorkerHomeStackParamList = {
   BrowseJobs: undefined;
   JobDetail: { job: OpenJob };
+  /** Screen 52 — the OfferComposer's marketplace-bid entry (Phase 5).
+   *  Registered alongside JobDetail in every stack that mounts it. */
+  SubmitBid: { job: OpenJob };
+  /** Screen 53 — bid confirmation (Phase 5). SubmitBid replaces itself with
+   *  this, so Back cannot land on a re-submittable form. */
+  BidSent: { jobTitle: string; amountCents: number; offerId: string };
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string };
   /**
@@ -167,6 +174,24 @@ export type MyJobsStackParamList = {
   ClientJobDetail: { job: Job };
   WorkerJob: { jobId: string };
   JobDetail: { job: OpenJob };
+  SubmitBid: { job: OpenJob };
+  BidSent: { jobTitle: string; amountCents: number; offerId: string };
+  /** Screen 28 — the comparison surface over a job's pending bids (Phase 5). */
+  CompareBids: { job: Job };
+  /** Screen 29 — one bid's full terms and proof, with accept/counter/decline. */
+  BidDetail: { job: Job; offerId: string };
+  /** Screen 30 — OfferComposer's counter entry from the customer bid surfaces.
+   *  The offer is a seed; counter_offer() re-validates state server-side. */
+  Counteroffer: {
+    job: Job;
+    offer: Offer;
+    counterpartyName: string;
+    countersRemaining: number;
+  };
+  /** Screen 31 — sandbox protected checkout for an assigned, unfunded job. */
+  Checkout: { job: Job };
+  /** Screen 32 — rendered only after funds are genuinely held. */
+  JobConfirmed: { job: Job };
   Chat: ChatTarget;
   // Registered here too so "Hire Again" on a bid card can open it in place.
   PostJob:
@@ -221,6 +246,8 @@ export type MapStackParamList = {
   MapMain: undefined;
   CellJobs: { ilat: number; ilng: number; count: number };
   JobDetail: { job: OpenJob };
+  SubmitBid: { job: OpenJob };
+  BidSent: { jobTitle: string; amountCents: number; offerId: string };
   // Registered so "Edit job" works when a job's own poster reaches its
   // detail screen via a Map/zone drill-down, not just from My Jobs.
   PostJob:
@@ -331,6 +358,15 @@ export type ProfileReviewsRouteParamList = {
 // not the whole parent stack.
 export type WorkerSearchRouteParamList = {
   WorkerSearch: { query?: string; category?: string } | undefined;
+};
+
+// SubmitBid/BidSent are registered in every stack that mounts JobDetail
+// (worker Home, MyJobs, Map) — same standalone-type treatment as
+// Chat/JobDetail/PostJob, and for the same reason: the screens need their own
+// params and goBack(), not a parent stack's full list.
+export type SubmitBidRouteParamList = { SubmitBid: { job: OpenJob } };
+export type BidSentRouteParamList = {
+  BidSent: { jobTitle: string; amountCents: number; offerId: string };
 };
 
 export type PostJobRouteParamList = {
