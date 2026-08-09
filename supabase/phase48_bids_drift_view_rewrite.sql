@@ -45,6 +45,10 @@
 --
 -- A settled chain that lost its row to a later chain matches none of the three,
 -- which is the whole point.
+--
+-- SCOPE: one `create or replace view`, one marker function, and a read-only
+-- count. No data is written, no trigger is created, altered, enabled or
+-- disabled, and project_offer_chain_to_bids() is not called.
 -- ============================================================================
 
 begin;
@@ -155,35 +159,33 @@ comment on view public.v_bids_projection_drift is
 
 revoke all on public.v_bids_projection_drift from public, anon, authenticated;
 
--- 3. Reproject and verify ----------------------------------------------------
+-- 3. Read-only verification --------------------------------------------------
 --
--- Same shape as phase47's repair, for the same reasons: reproject everything
--- unconditionally (idempotent), with bids_notify disabled so covering a chain
--- that has been live for days cannot fire a stale "new bid" push. Disabling is
--- transactional — any failure below rolls it back to enabled.
+-- THIS MIGRATION WRITES NO DATA AND TOUCHES NO TRIGGER. An earlier draft
+-- reprojected every chain here, the way phase47's repair does. That was removed
+-- deliberately, for two reasons:
 --
--- The assertion covers only the two REPAIRABLE kinds. An orphan cannot be
--- fixed by reprojection (the projection only visits chains that exist), so it
--- is reported rather than treated as a failure.
+--   1. It is provably redundant. phase47 already reprojected everything, and
+--      its repair asserted that the OLD view was empty before it would commit.
+--      The old view flagged every genuine drift PLUS settled-chain false
+--      positives — it was a strict superset — so "old view empty" implies "new
+--      view empty". Nothing has been able to drift since, because the trigger
+--      runs on every job_offers write.
+--   2. A view swap that writes nothing is trivially safe and trivially
+--      reversible. Bundling a data pass into it makes it neither.
+--
+-- So this only LOOKS. If the counts below are non-zero, that is real news
+-- rather than something to paper over — and the fix is to re-run phase47, whose
+-- repair block is safe again now that this view no longer reports false
+-- positives. Deliberately does not abort: blocking the definition fix would
+-- leave you unable to see what the corrected definition says.
 
 do $$
 declare
-  v_root uuid;
   v_chains integer;
   v_repairable integer;
   v_orphan integer;
 begin
-  alter table public.bids disable trigger bids_notify;
-
-  for v_root in
-    select id from public.job_offers
-     where offer_type = 'marketplace_bid' and parent_offer_id is null
-  loop
-    perform public.project_offer_chain_to_bids(v_root);
-  end loop;
-
-  alter table public.bids enable trigger bids_notify;
-
   select count(*) into v_chains
     from public.job_offers
    where offer_type = 'marketplace_bid' and parent_offer_id is null;
@@ -192,14 +194,9 @@ begin
   select count(*) into v_orphan
     from public.v_bids_projection_drift where drift = 'orphan';
 
-  raise notice 'phase48: % marketplace chain(s) reprojected', v_chains;
-  raise notice 'phase48: repairable drift remaining = % (must be 0)', v_repairable;
-  raise notice 'phase48: orphan bids row(s) = % (reported, not repaired)', v_orphan;
-
-  if v_repairable <> 0 then
-    raise exception
-      'phase48: % chain(s) still stale or uncovered after a full reprojection — that is a projection defect, not a view defect. Rolled back.', v_repairable;
-  end if;
+  raise notice 'phase48: % marketplace chain(s) examined (nothing written)', v_chains;
+  raise notice 'phase48: repairable drift = % (expected 0; re-run phase47 if not)', v_repairable;
+  raise notice 'phase48: orphan bids row(s) = % (expected 0; not repairable)', v_orphan;
 end $$;
 
 -- 4. Sentinel ----------------------------------------------------------------
@@ -226,9 +223,11 @@ commit;
 --
 -- Section 3's counts go to RAISE NOTICE, which the Supabase SQL Editor shows as
 -- a fading toast that is easy to miss. This lands where it can be read.
--- repairable_drift must be 0. orphan_rows should be 0; if it is not, inspect
--- them by hand — they are legacy rows with no chain behind them and the
--- projection cannot clean them up.
+--
+-- repairable_drift should be 0. If it is not, this migration has still done its
+-- job — the definition is now correct — and the repair is to re-run phase47,
+-- which is safe again from here. orphan_rows should be 0; if not, inspect by
+-- hand, since the projection cannot clean up a row with no chain behind it.
 --
 -- phase47 is safely re-runnable again from here: its repair block asserts
 -- against this view, which no longer reports settled-chain false positives.

@@ -216,9 +216,13 @@ than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 `phase48_bids_drift_view_rewrite.sql` — **final.** Rewrites
 `v_bids_projection_drift` on an exact definition (`stale` / `missing_live` /
-`orphan`), reprojects every marketplace chain with `bids_notify` disabled, and
-asserts zero repairable drift afterwards. Restores phase47's re-runnability,
-which the old view had broken.
+`orphan`) and reports the counts read-only. **Writes no data and touches no
+trigger** — one `create or replace view`, one marker function, three counts. An
+earlier draft reprojected every chain; that was removed as provably redundant
+(phase47 already reprojected and would not commit until the OLD view was empty,
+and the old view was a strict superset of genuine drift, so old-empty implies
+new-empty) and because a view swap that writes nothing is trivially reversible.
+Restores phase47's re-runnability, which the old view had broken.
 
 **Why the view needed two attempts, recorded so it is not repeated.** phase47's
 version expected one mirror row per CHAIN; the projection keeps one per
