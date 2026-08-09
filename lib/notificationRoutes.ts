@@ -1,6 +1,34 @@
 import { fetchJobById } from './jobs';
 import type { OpenJob } from './jobs';
-import { navigationRef, navigateWhenReady } from './navigationRef';
+import { canNavigateTo, navigationRef, navigateWhenReady } from './navigationRef';
+
+declare const __DEV__: boolean;
+
+/**
+ * Dispatch only into a navigator that can actually handle the target.
+ *
+ * Perspective comes from ModeContext, whose mounted tree canNavigateTo()
+ * inspects — so a target belonging to the other mode's tree is DROPPED with a
+ * deliberate __DEV__ log instead of being dispatched blind. Dispatching blind
+ * is what produced the cold-start "state or screen could not be handled"
+ * error: the intent is parked before the container mounts and flushed the
+ * instant it is ready, which can precede mode resolution.
+ */
+function navigateChecked(tab: string, screen?: string, params?: object): void {
+  navigateWhenReady(() => {
+    if (!canNavigateTo(tab, screen)) {
+      if (__DEV__) {
+        console.warn(
+          `[push] dropped notification target ${tab}/${screen ?? '(tab root)'} — ` +
+            'not handled by the navigator this mode mounted'
+        );
+      }
+      return;
+    }
+    if (screen) navigationRef.navigate(tab, { screen, params });
+    else navigationRef.navigate(tab);
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Notification payload -> destination screen.
@@ -13,6 +41,8 @@ import { navigationRef, navigateWhenReady } from './navigationRef';
 export type NotificationData = {
   screen?: string;
   jobId?: string;
+  /** phase57's pre-hire chat payload: a direct thread carries no job. */
+  directThreadId?: string;
   type?: string;
   outboxId?: string;
 };
@@ -40,6 +70,8 @@ function toNotificationData(raw: unknown): NotificationData | null {
   return {
     screen,
     jobId: typeof data.jobId === 'string' ? data.jobId : undefined,
+    directThreadId:
+      typeof data.directThreadId === 'string' ? data.directThreadId : undefined,
     type: typeof data.type === 'string' ? data.type : undefined,
     outboxId: typeof data.outboxId === 'string' ? data.outboxId : undefined,
   };
@@ -66,7 +98,15 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
 
   // Profile needs no record.
   if (data.screen === 'ProfileMain') {
-    navigateWhenReady(() => navigationRef.navigate('Profile', { screen: 'ProfileMain' }));
+    navigateChecked('Profile', 'ProfileMain');
+    return;
+  }
+
+  // phase57: a pre-hire chat notification carries a direct thread, never a
+  // job. Chat's route param is the ChatTarget union, so this is the same
+  // screen with the other half of that union.
+  if (data.screen === 'Chat' && data.directThreadId) {
+    navigateChecked(tab, 'Chat', { directThreadId: data.directThreadId });
     return;
   }
 
@@ -77,12 +117,7 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
 
   // These take only an id, so they can be routed without a round-trip.
   if (data.screen === 'Chat' || data.screen === 'WorkerJob') {
-    navigateWhenReady(() =>
-      navigationRef.navigate(tab, {
-        screen: data.screen,
-        params: { jobId: data.jobId },
-      })
-    );
+    navigateChecked(tab, data.screen, { jobId: data.jobId });
     return;
   }
 
@@ -93,25 +128,15 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
     // Deleted job, or RLS hides it from this user (e.g. they were unassigned).
     // Land them on the owning tab rather than doing nothing at all.
     console.error('[push] could not load job for notification', data.jobId, error);
-    navigateWhenReady(() => navigationRef.navigate(tab));
+    navigateChecked(tab);
     return;
   }
 
   if (data.screen === 'ClientJobDetail') {
-    navigateWhenReady(() =>
-      navigationRef.navigate('MyJobs', {
-        screen: 'ClientJobDetail',
-        params: { job },
-      })
-    );
+    navigateChecked('MyJobs', 'ClientJobDetail', { job });
     return;
   }
 
   // JobDetail takes an OpenJob, which is a strict subset of Job's fields.
-  navigateWhenReady(() =>
-    navigationRef.navigate('MyJobs', {
-      screen: 'JobDetail',
-      params: { job: job as OpenJob },
-    })
-  );
+  navigateChecked('MyJobs', 'JobDetail', { job: job as OpenJob });
 }
