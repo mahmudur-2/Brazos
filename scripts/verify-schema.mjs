@@ -808,6 +808,20 @@ const MIGRATIONS = [
       checkRpc('direct_thread_notifications_enabled', {})],
     checks: [],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 58 (hardening run). Policy drop + two function-body fixes have
+    // no probeable shape; the sentinel carries them. client_job_stats is the
+    // one new callable surface.
+    // -----------------------------------------------------------------------
+    file: 'phase58_hardening_fixes.sql',
+    sentinel: ['rpc hardening_fixes_enabled()', () =>
+      checkRpc('hardening_fixes_enabled', {})],
+    checks: [
+      ['rpc client_job_stats()', () =>
+        checkRpc('client_job_stats', { p_client_id: ZERO_UUID })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

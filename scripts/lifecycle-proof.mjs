@@ -58,9 +58,17 @@ const PASSWORD = 'brazos-test-1234';
 const MARK = 'LIFECYCLE-PROOF';
 
 function psql(sql) {
-  return execFileSync('psql', ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-c', sql, DB], {
-    encoding: 'utf8',
-  }).trim();
+  // try/catch because a failed execFileSync echoes its full argv — including
+  // the connection string — into the thrown error; never let that print.
+  try {
+    return execFileSync('psql', ['-X', '-q', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-f', '-', DB], {
+      input: Buffer.from(sql, 'utf8'),
+      encoding: 'utf8',
+      env: { ...process.env, PGCLIENTENCODING: 'UTF8' },
+    }).trim();
+  } catch (e) {
+    throw new Error(`psql failed: ${String(e.stderr ?? '').trim().slice(0, 300) || 'see output'}`);
+  }
 }
 
 // ---------------------------------------------------------------------------

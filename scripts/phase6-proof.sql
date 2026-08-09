@@ -497,6 +497,68 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- I. HARDENING-RUN REGRESSIONS (phase58).
+--    I1: the unfundable-job race — the worker starts BEFORE checkout; the
+--        customer can still authorize+hold afterwards (was: refused forever,
+--        job completed with an empty ledger).
+--    I2: transition retry idempotency — repeating a landed transition
+--        returns the row instead of "Invalid job status transition".
+-- ---------------------------------------------------------------------------
+select pg_temp.become('c');
+insert into probe (k, v)
+select 'job3', (public.create_job(
+  p_title := 'PHASE6 PROOF late-funding job',
+  p_description := 'probe row, rolled back',
+  p_category := 'other',
+  p_location := 'Probe Area',
+  p_budget_min_cents := 2500,
+  p_budget_max_cents := 2500,
+  p_address_line := '129 Probe Street'
+)).id;
+
+select pg_temp.become('wa');
+insert into probe (k, v)
+select 'offer3', public.create_offer(
+  p_amount_cents := 2500,
+  p_job_id := (select v from probe where k='job3'),
+  p_message := 'phase6 proof late-funding bid'
+);
+
+select pg_temp.become('c');
+select public.accept_offer((select v from probe where k='offer3'));
+
+-- Worker starts FIRST — no payment exists yet.
+select pg_temp.become('wa');
+select public.transition_job_status((select v from probe where k='job3'), 'in_progress');
+
+do $$
+declare v_job public.jobs;
+begin
+  -- I2: the retry of the landed transition is a no-op success.
+  v_job := public.transition_job_status((select v from probe where k='job3'), 'in_progress');
+  if v_job.status <> 'in_progress' then
+    raise exception 'I2: retry did not return the landed state (%)', v_job.status;
+  end if;
+  raise notice 'PASS I2: a repeated transition returns the row instead of raising';
+end $$;
+
+select pg_temp.become('c');
+do $$
+declare v_payment public.payments;
+begin
+  -- I1: authorize + hold still work after the start.
+  v_payment := public.sandbox_authorize_job_payment((select v from probe where k='job3'));
+  if v_payment.status <> 'authorized' then
+    raise exception 'I1: late authorize did not land (%)', v_payment.status;
+  end if;
+  v_payment := public.sandbox_hold_job_payment((select v from probe where k='job3'));
+  if v_payment.status <> 'held' then
+    raise exception 'I1: late hold did not land (%)', v_payment.status;
+  end if;
+  raise notice 'PASS I1: a job started before checkout can still be funded (held)';
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- ROLLBACK + zero residue.
 -- ---------------------------------------------------------------------------
 rollback;
@@ -508,7 +570,10 @@ begin
   if v_count <> 0 then
     raise exception 'RESIDUE: % probe jobs survived the rollback', v_count;
   end if;
-  select count(*) into v_count from public.job_disputes;
+  -- Persistent seeds (the d1 review fixture) legitimately carry an open
+  -- dispute; only THIS proof's rows must be gone.
+  select count(*) into v_count from public.job_disputes
+  where details like 'PHASE6 PROOF%';
   if v_count <> 0 then
     raise exception 'RESIDUE: % dispute rows survived', v_count;
   end if;

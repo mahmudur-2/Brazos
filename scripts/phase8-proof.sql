@@ -128,4 +128,33 @@ begin
   raise notice 'PASS C: % hotspot cell(s) cover the seeded area — grid and radius agree', v_cells;
 end $$;
 
+-- ---------------------------------------------------------------------------
+-- D. JOBS ROW PRIVACY (phase58 regression). Before the hardening run, a
+--    legacy permissive policy let ANY authenticated user read EVERY job row.
+--    An outsider (worker B — no offer on the pair's completed job) must now
+--    see nothing of it, while the counted trust signal still answers through
+--    client_job_stats().
+-- ---------------------------------------------------------------------------
+create temp table probe2 (k text primary key, v uuid);
+insert into probe2 (k, v) values
+  ('wb', 'b6c00000-0000-4000-8000-000000000003'),
+  ('job_b', 'b6c00000-0000-4000-8000-00000000000b'),
+  ('casey', 'b6c00000-0000-4000-8000-000000000001');
+grant select on probe2 to authenticated;
+
+do $$
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', (select v from probe2 where k='wb'), 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+
+  if exists (select 1 from public.jobs where id = (select v from probe2 where k='job_b')) then
+    raise exception 'D: an outsider can read a job they have no part in (the legacy leak is back)';
+  end if;
+  if (select posted from public.client_job_stats((select v from probe2 where k='casey'))) < 1 then
+    raise exception 'D: client_job_stats no longer answers the trust signal';
+  end if;
+  raise notice 'PASS D: outsiders read zero foreign job rows; the counted trust signal survives';
+end $$;
+
 rollback;

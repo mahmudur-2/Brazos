@@ -37,7 +37,6 @@ import {
   arrivalWindowLabel,
   budgetRangeLabel,
   categoryAccent,
-  fetchClientJobStats,
   formatBudget,
   hasBudget,
   JOB_CATEGORY_ICONS,
@@ -54,6 +53,7 @@ import {
   type Offer,
 } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
+import { fetchClientJobStatsCounted } from '../lib/clientStats';
 import { fetchDirectThreadWith } from '../lib/conversations';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
@@ -192,8 +192,11 @@ export function JobDetailScreen() {
     fetchProfileById(job.client_id).then(({ data, error }) => {
       if (active && !error) setPoster(data);
     });
-    fetchClientJobStats(job.client_id).then(({ data, error }) => {
+    // phase58: counted server-side — the direct counts only ever answered
+    // through the legacy permissive jobs policy the hardening run dropped.
+    fetchClientJobStatsCounted(job.client_id).then(({ data, error }) => {
       if (active && !error) setPosterStats(data);
+      else if (error) console.warn('[JobDetail] poster stats failed', error.message);
     });
     return () => {
       active = false;
