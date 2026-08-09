@@ -261,10 +261,33 @@ that replaced what they pointed at.
   `useJobBids.ts`→`useJobOffers.ts`, `setBids`→`setOffers`.
 
 ## Known issues
-- **`PostJob` is unreachable from the worker Home tab** — navigating to it
-  from anywhere inside `WorkerHomeStack` throws `The action 'NAVIGATE' with
-  payload {"name":"PostJob"...} was not handled by any navigator`. Found during
-  the Phase 3B device pass (2026-08-08).
+- **UNEXPLAINED: 'PostJob' NAVIGATE failed from CUSTOMER Home** (2026-08-08,
+  Phase 3B device pass). The customer tapped "Post a job" on Customer Home with
+  an empty search box and got `The action 'NAVIGATE' with payload
+  {"name":"PostJob","params":{}} was not handled by any navigator`.
+  - The empty payload matches `HomeScreen.tsx:141` exactly:
+    `initialDescription: query.trim() || undefined` serializes to `{}` when the
+    search box is blank. So the call site is identified with confidence.
+  - **The source at HEAD cannot produce this failure.** `PostJob` is registered
+    unconditionally at `navigation/CustomerRoot.tsx:42` as a direct sibling of
+    `HomeMain` in `CustomerHomeStack`, and `HomeScreen` takes
+    `useNavigation<CustomerHomeStackNavigation>()` on that same stack. There is
+    no conditional registration and no nested navigator in between.
+  - **Leading hypothesis: the device was running a stale JS bundle**, not the
+    code at HEAD — most likely a Metro cache or a bundle predating Phase 2's
+    navigator split, when routes were registered in `App.tsx` and
+    `HomeStackParamList` still existed. NOT CONFIRMED.
+  - **Discriminating test:** from Customer Home, tap a category chip
+    (`searchCategory` -> `WorkerSearch`, a sibling in the same stack). If that
+    also fails, the whole stack is stale and it is a bundle problem. If
+    `WorkerSearch` works while `PostJob` does not, the source is genuinely
+    wrong somewhere and this needs real investigation.
+  - My first diagnosis of this incident — the WorkerHomeStack gap below — was
+    WRONG: it does not apply to the customer tree. Recorded so a future session
+    does not inherit it.
+- **LATENT (found by inspection, not the cause of the above): `PostJob` is not
+  registered in `WorkerHomeStack`**, so navigating to it from anywhere inside
+  the worker Home tab would throw the same error.
   - **Cause:** `PostJob` is registered in `CustomerHomeStack` and in all three
     shared stacks (MyJobs, Messages, Map) but **not** in `WorkerHomeStack`,
     which does register `WorkerProfile`. `screens/WorkerProfileScreen.tsx:46`
@@ -272,17 +295,15 @@ that replaced what they pointed at.
     WorkerProfile in every stack that can reach this screen" — which was true
     when written and stopped being true when Phase 2 added the worker tree. It
     is a comment, so nothing type-checks it.
-  - **NOT a Phase 3B regression.** `git diff 0e230bf..HEAD -- navigation/
-    lib/navigation.ts App.tsx` is empty; `navigation/` was last touched by
-    Phase 2's `e8cbb92`. It became reachable now only because the device pass
-    is the first time these paths were walked in worker mode.
-  - **UNRESOLVED: which call site.** The reported payload carried empty params,
-    which does NOT match `WorkerProfileScreen.tsx:231` ("Send an offer", passes
-    `hireWorkerId`). The bare `navigate('PostJob')` callers are
-    `MyJobsHubScreen.tsx:129` and `WorkerSearchScreen.tsx:324`, and both live in
-    stacks that DO register the route — so if the failure came from My Jobs it
-    is a second, separate defect this diagnosis does not explain. Confirm the
-    screen before fixing.
+  - **Neither issue is a Phase 3B regression.** `git diff 0e230bf..HEAD --
+    navigation/ lib/navigation.ts App.tsx` is empty; `navigation/` was last
+    touched by Phase 2's `e8cbb92`, and no commit since has gone near routing.
+  - The worker-tree gap is real but latent: `WorkerProfileScreen.tsx:46` still
+    carries a comment asserting "PostJob is registered alongside WorkerProfile
+    in every stack that can reach this screen", which was true when written and
+    stopped being true when Phase 2 added the worker tree. Nothing type-checks
+    a comment. "Send an offer" from a worker profile opened via the worker Home
+    tab would fail.
   - **Workaround in use:** post from the My Jobs tab (shared stack, registers
     the route) or switch to customer mode first.
   - **Do NOT fix by registering `PostJob` in `WorkerHomeStack`.** Posting a job
