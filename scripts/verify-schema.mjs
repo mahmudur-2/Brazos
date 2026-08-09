@@ -687,6 +687,40 @@ const MIGRATIONS = [
         checkRpc('withdraw_offer', { p_offer_id: ZERO_UUID })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 51. Active-work lifecycle: arrival timestamps, checklist,
+    // disputes, and the release path (the first function past `held`).
+    // Every RPC below raises on auth before touching a row, so probing with
+    // the publishable key writes nothing. The two new tables are sealed to
+    // anon (checklist carries authenticated grants under RLS; disputes are
+    // read-only + RPC-written), so their probes assert the seal.
+    // -----------------------------------------------------------------------
+    file: 'phase51_active_work_lifecycle.sql',
+    sentinel: ['rpc active_work_lifecycle_enabled()', () =>
+      checkRpc('active_work_lifecycle_enabled', {})],
+    checks: [
+      ['jobs.en_route_at', () => checkColumn('jobs', 'en_route_at')],
+      ['jobs.arrived_at', () => checkColumn('jobs', 'arrived_at')],
+      ['jobs.completed_at', () => checkColumn('jobs', 'completed_at')],
+      ['job_checklist_items not readable by anon', () =>
+        checkColumnRevoked('job_checklist_items', 'id')],
+      ['job_disputes not readable by anon', () =>
+        checkColumnRevoked('job_disputes', 'id')],
+      ['rpc mark_worker_arrival()', () =>
+        checkRpc('mark_worker_arrival', { p_job_id: ZERO_UUID, p_step: 'en_route' })],
+      ['rpc sandbox_release_job_payment()', () =>
+        checkRpc('sandbox_release_job_payment', { p_job_id: ZERO_UUID })],
+      ['rpc job_payment_state()', () =>
+        checkRpc('job_payment_state', { p_job_id: ZERO_UUID })],
+      ['rpc open_job_dispute()', () =>
+        checkRpc('open_job_dispute', { p_job_id: ZERO_UUID, p_reason: 'other' })],
+      ['rpc withdraw_job_dispute()', () =>
+        checkRpc('withdraw_job_dispute', { p_dispute_id: ZERO_UUID })],
+      ['rpc sandbox_tip_worker()', () =>
+        checkRpc('sandbox_tip_worker', { p_job_id: ZERO_UUID, p_amount_cents: 100 })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
