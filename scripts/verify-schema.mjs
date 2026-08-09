@@ -40,6 +40,70 @@ if (!BASE || !KEY) {
 
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
+// ---------------------------------------------------------------------------
+// ENV PARITY (added after the device found four "column does not exist"
+// screens against a green verify run).
+//
+// This script probes over PostgREST with the app's own .env values, while the
+// SQL proofs and every migration go through SUPABASE_DB_URL_STAGING on a
+// direct Postgres connection. If those two point at DIFFERENT projects, every
+// gate can be green about a database the app never touches. Refs only are
+// compared and printed — never a URL, key, or connection string.
+// ---------------------------------------------------------------------------
+function refFromRestUrl(u) {
+  return String(u ?? '').match(/https?:\/\/([a-z0-9]+)\.supabase\.(co|in)/i)?.[1] ?? null;
+}
+function refFromPgUrl(u) {
+  const s = String(u ?? '');
+  return (
+    s.match(/postgres\.([a-z0-9]{16,})/i)?.[1] ??
+    s.match(/@db\.([a-z0-9]+)\.supabase\./i)?.[1] ??
+    null
+  );
+}
+function refFromJwt(k) {
+  try {
+    return JSON.parse(Buffer.from(String(k).split('.')[1], 'base64').toString('utf8')).ref ?? null;
+  } catch {
+    return null;
+  }
+}
+
+{
+  const appRef = refFromRestUrl(BASE);
+  const keyRef = refFromJwt(KEY);
+  const toolingRef = refFromPgUrl(process.env.SUPABASE_DB_URL_STAGING);
+
+  console.log('env parity');
+  console.log(`  app .env SUPABASE_URL ref : ${appRef ?? 'UNRESOLVED'}`);
+  console.log(`  app .env SUPABASE_KEY ref : ${keyRef ?? 'UNRESOLVED'}`);
+  console.log(`  SUPABASE_DB_URL_STAGING   : ${toolingRef ?? 'NOT SET'}`);
+
+  const problems = [];
+  if (!appRef) problems.push('SUPABASE_URL in .env does not look like a Supabase project URL');
+  if (keyRef && appRef && keyRef !== appRef) {
+    problems.push(`the anon key belongs to ${keyRef} but SUPABASE_URL points at ${appRef}`);
+  }
+  if (toolingRef && appRef && toolingRef !== appRef) {
+    problems.push(
+      `the app targets ${appRef} but the SQL proofs/migrations target ${toolingRef} — ` +
+        'every gate below would be green about a database the app never touches'
+    );
+  }
+  if (!toolingRef) {
+    console.log('  WARNING: SUPABASE_DB_URL_STAGING is not set in this shell, so the');
+    console.log('           app-vs-tooling comparison could not be made. The SQL proofs');
+    console.log('           cannot run without it either.');
+  }
+  if (problems.length > 0) {
+    console.error('\nENV PARITY FAILED:');
+    for (const p of problems) console.error(`  - ${p}`);
+    console.error('\nRefusing to report on a database the app does not use.');
+    process.exit(3);
+  }
+  console.log(`  parity: OK${toolingRef ? '' : ' (app side only)'}\n`);
+}
+
 async function checkColumn(table, column) {
   const res = await fetch(
     `${BASE}/rest/v1/${table}?select=${encodeURIComponent(column)}&limit=0`,

@@ -164,8 +164,51 @@ async function feedCount(client, userId, type, sinceIso) {
 }
 
 // ---------------------------------------------------------------------------
+/**
+ * Preflight: prove the objects exist ON THE APP'S PATH (supabase-js + anon key
+ * over PostgREST), not just on the direct Postgres connection the SQL proofs
+ * use. A device found four "column does not exist" screens while every
+ * direct-connection gate was green; a schema-cache miss or an RLS/grant gap
+ * shows up here and nowhere else.
+ */
+async function preflightAnonPath() {
+  const client = createClient(URL, ANON, { auth: { persistSession: false } });
+  const objects = [
+    ['jobs', 'en_route_at'],
+    ['jobs', 'completed_at'],
+    ['payments', 'released_at'],
+    ['profiles', 'accepting_work'],
+    ['worker_services', 'id'],
+    ['job_checklist_items', 'id'],
+    ['job_disputes', 'id'],
+    ['notification_outbox', 'read_at'],
+  ];
+  const missing = [];
+  for (const [table, column] of objects) {
+    const { error } = await client.from(table).select(column).limit(1);
+    if (!error) continue;
+    const msg = error.message ?? '';
+    // A permission/RLS refusal PROVES the object exists — only "does not
+    // exist" / schema-cache misses mean the app cannot see it.
+    if (/does not exist/i.test(msg) || /schema cache/i.test(msg)) {
+      missing.push(`${table}.${column} — ${msg}`);
+    }
+  }
+  if (missing.length > 0) {
+    console.error('PREFLIGHT FAILED — the app\'s own path cannot see these objects:');
+    for (const m of missing) console.error(`  - ${m}`);
+    console.error(
+      '\nThe SQL proofs would still pass: they use a direct Postgres connection.\n' +
+        'This is exactly the drift that reached a device.'
+    );
+    process.exit(1);
+  }
+  record(`preflight: ${objects.length} objects visible over PostgREST (the app's path)`, true);
+}
+
 async function main() {
   console.log('lifecycle-proof — staging backend integration (no UI claims)\n');
+  await preflightAnonPath();
   setupAccounts();
   record('setup: dedicated accounts ready + prior rows reset', true);
 
