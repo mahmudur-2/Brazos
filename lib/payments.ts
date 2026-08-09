@@ -61,12 +61,15 @@ export type Payment = {
   /** 'approved' = the customer approved the work; 'auto_approved' = the 72h
    *  on-read clock ran out (phase51). Null for tips and unreleased rows. */
   release_reason: 'approved' | 'auto_approved' | null;
+  /** When the payee's simulated cash-out swept this row to paid_out
+   *  (phase55). Sandbox — no real transfer exists. */
+  paid_out_at: string | null;
   created_at: string;
   updated_at: string;
 };
 
 const PAYMENT_COLUMNS =
-  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, created_at, updated_at';
+  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at';
 
 /** True while the row is live money state rather than failed/voided debris —
  *  the same predicate phase50's one-active-payment index enforces. */

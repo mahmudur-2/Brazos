@@ -765,6 +765,18 @@ const MIGRATIONS = [
       checkRpc('review_integrity_enabled', {})],
     checks: [],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 55. Simulated cash-out. payments stays sealed to anon (phase50
+    // checks keep asserting that); the RPC raises on auth before any row.
+    // -----------------------------------------------------------------------
+    file: 'phase55_sandbox_cash_out.sql',
+    sentinel: ['rpc sandbox_cash_out_enabled()', () =>
+      checkRpc('sandbox_cash_out_enabled', {})],
+    checks: [
+      ['rpc sandbox_cash_out()', () => checkRpc('sandbox_cash_out', {})],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

@@ -368,3 +368,28 @@ additive.
 
 **Production apply queue after this phase (in order):** phase51, phase52,
 phase53, phase54.
+
+## Phase 11 — decisions (2026-08-09)
+
+Commit: the phase-11 closure commit; tag `phase-11`.
+
+**Decided autonomously (§8 / addendum §2):**
+
+1. **Screens 59+60 consolidated** into one EarningsScreen (buckets + fee
+   line + per-row ledger); a separate per-job breakdown screen would repeat
+   the same rows.
+2. **Cash-out sweeps ALL released rows at once** (payee-only), returns the
+   swept set, and treats zero rows as an empty-set success — a double tap is
+   a no-op by construction, not by client guard. Sweeping per-row was
+   rejected as needless ceremony over sandbox money.
+3. **The wallet math is a separate pure module (lib/earningsMath.ts)** so
+   the node suite executes the real derivation — the same split jobLifecycle
+   and jobFilters use.
+4. Fee display: the summed platform_fee_cents from the same rows (0 today),
+   explicitly tied on-screen to checkout's "None in sandbox" — DoD's "fee
+   math matches checkout" holds by construction.
+
+**NEEDS REVIEW:** nothing beyond the consolidation choice (reversible).
+
+**Production apply queue after this phase (in order):** phase51, phase52,
+phase53, phase54, phase55.

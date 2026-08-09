@@ -14,6 +14,7 @@ import { ChatScreen } from '../screens/ChatScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { ClientJobDetailScreen } from '../screens/ClientJobDetailScreen';
 import { CompareBidsScreen } from '../screens/CompareBidsScreen';
+import { EarningsScreen } from '../screens/EarningsScreen';
 import { CounterofferScreen } from '../screens/CounterofferScreen';
 import { JobConfirmedScreen } from '../screens/JobConfirmedScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
@@ -143,6 +144,7 @@ export function ProfileStackNavigator() {
       <ProfileStack.Screen name="ServicesPricing" component={ServicesPricingScreen} />
       <ProfileStack.Screen name="SavedWorkers" component={SavedWorkersScreen} />
       <ProfileStack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
+      <ProfileStack.Screen name="Earnings" component={EarningsScreen} />
       <ProfileStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <ProfileStack.Screen name="PostJob" component={PostJobScreen} />
       {/* The design-system catalog (BRAZOS_MASTER_PLAN.md §I). Registered only

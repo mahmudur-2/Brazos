@@ -589,6 +589,16 @@ export function ProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Pressable>
 
+            {/* Phase 11 — the ledger-derived wallet. */}
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('Earnings')}
+            >
+              <Ionicons name="wallet-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Earnings</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
             {/* Phase 9 — worker self-service + customer trust surfaces. */}
             <Pressable
               style={[styles.settingsRow, styles.settingsRowDivider]}

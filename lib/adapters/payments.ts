@@ -53,6 +53,12 @@ export type PaymentProvider = {
   releaseJobPayment(jobId: string): Promise<PaymentResult>;
   /** One review-time tip per completed job, only after release. */
   tipWorker(jobId: string, amountCents: number): Promise<PaymentResult>;
+  /**
+   * Sweep the caller's released rows to paid_out (phase55's simulated
+   * cash-out). Returns the swept rows; an empty array is the honest answer
+   * for "nothing to cash out" — repeat calls are no-ops by construction.
+   */
+  cashOut(): Promise<{ data: Payment[]; error: { message: string } | null }>;
 };
 
 const resolution = resolvePaymentsMode({
@@ -86,6 +92,11 @@ function createSandboxPaymentProvider(): PaymentProvider {
       if (error) return { data: null, error: { message: error.message } };
       return { data: (data ?? null) as Payment | null, error: null };
     },
+    cashOut: async () => {
+      const { data, error } = await supabase.rpc('sandbox_cash_out');
+      if (error) return { data: [], error: { message: error.message } };
+      return { data: (data ?? []) as Payment[], error: null };
+    },
   };
 }
 
@@ -100,6 +111,7 @@ function createDisabledPaymentProvider(message: string): PaymentProvider {
     protectJobPayment: refuse,
     releaseJobPayment: refuse,
     tipWorker: refuse,
+    cashOut: async () => ({ data: [], error: { message } }),
   };
 }
 

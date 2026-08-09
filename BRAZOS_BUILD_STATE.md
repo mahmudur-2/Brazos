@@ -1,7 +1,25 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 10 closed)
+Updated: 2026-08-09 (autonomous run, phases 6–12 — Phase 11 closed)
 
 ## Current phase
+Phase 11 — Earnings & money surfaces (59+60 consolidated). **BUILT AND
+PROOF PASSED (5 assertions).** phase55 on staging: payments.paid_out_at +
+sandbox_cash_out() (payee-only sweep of released rows → paid_out; zero rows
+= empty set, repeat = no-op by construction). lib/earningsMath.deriveEarnings
+is the PURE wallet: pending=held, available=released, transferred=paid_out,
+fees summed from the same rows (0, matching checkout) — §G's
+no-hand-kept-balance rule, unit-executed in node. EarningsScreen (ProfileStack
++ Profile row): three buckets, the fee line, the per-job/tip ledger with
+honest per-status wording, simulated cash-out behind the adapter with a
+consequences dialog; "sandbox / simulated" stated wherever money could be
+misread. Proof: wallet sums the payee's own rows only, outsider sees zero,
+payer's sweep sweeps nothing, sweep keeps released_at + leaves held
+untouched + repeats as no-op. Gate: tsc/lint clean, 264/266 (same 2 baseline
+failures, +3 guards incl. the executed pure math), verify-schema green incl.
+phase55. Physical: Profile→Earnings after the Phase 6 walk — buckets match
+the walk's ledger; cash out flips Available→Transferred.
+
+Previous:
 Phase 10 — Reviews & reputation (SMALL). **BUILT AND PROOF PASSED (7
 assertions).** The audit's real finding: the DoD ("one review per completed
 job enforced in DB") was ALREADY true — phase29 revoked direct INSERT and
@@ -186,7 +204,9 @@ Active-work lifecycle slice. See "Exact next task".
   defense-in-depth policy (create_review already enforced the DoD — proven),
   cancelled-count reliability signal. Gate: tsc/lint clean, 261/263,
   verify-schema green, phase10-proof 7 PASS.
-  [ ] 11 earnings ·
+- [x] 11 earnings · the phase-11 closure commit, tag `phase-11` · phase55
+  cash-out, pure wallet math, EarningsScreen. Gate: tsc/lint clean, 264/266,
+  verify-schema green, phase11-proof 5 PASS.
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
 
