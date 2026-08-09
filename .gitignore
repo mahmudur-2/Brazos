@@ -44,6 +44,9 @@ design-reference/
 .env
 .env*.local
 
+# local launcher (embeds a live DB credential — must never be committed)
+start.ps1
+
 # typescript
 *.tsbuildinfo
 
