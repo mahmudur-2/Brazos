@@ -15,12 +15,12 @@
  *
  * §I's cap: "~25 — hard cap; adding a 26th requires a justification line in
  * BUILD_STATE". §I's own enumerated list is 26 items; the justification line
- * is recorded in BRAZOS_BUILD_STATE.md. Of those 26, 19 are available here —
- * Phase 1 shipped 17, and Phase 2 added the two that were blocked on
- * ModeContext (BottomNav, JobCard). The remaining 7 are deliberately still
- * unbuilt: each is blocked on a later phase's context, and building a
- * speculative shape now is how you get a primitive nobody can use. See the
- * DEFERRED block at the bottom.
+ * is recorded in BRAZOS_BUILD_STATE.md. Of those 26, 20 are available here —
+ * Phase 1 shipped 17, Phase 2 added the two blocked on ModeContext (BottomNav,
+ * JobCard), and Phase 4 added MediaUploader (blocked on the post-a-job
+ * wizard). The remaining 6 are deliberately still unbuilt: each is blocked on
+ * a later phase's context, and building a speculative shape now is how you
+ * get a primitive nobody can use. See the DEFERRED block at the bottom.
  */
 
 // --- Re-exported existing implementations (consolidated, not duplicated) ---
@@ -73,6 +73,15 @@ export { StepHeader } from './StepHeader';
 export { MediaGrid } from './MediaGrid';
 export type { MediaItem } from './MediaGrid';
 
+// --- Built in Phase 4 (the one Phase 1 deferred on the post-a-job wizard) --
+
+/** §I "MediaUploader". Failure-safe: `items` only grows from a URL a real
+ *  upload already returned; a failed pick/upload changes nothing. Bucket-
+ *  agnostic — callers supply `onUpload`/`onDelete` bound to their own
+ *  `lib/storage.ts` function. */
+export { MediaUploader } from './MediaUploader';
+export type { MediaUploaderKind, MediaUploaderProps } from './MediaUploader';
+
 // --- Built in Phase 2 (the two Phase 1 deferred on ModeContext) -----------
 
 /**
@@ -102,10 +111,6 @@ export type { JobCardProps } from './JobCard';
 // Not oversights. Each of these needs context Phase 1 does not have, and §L
 // forbids implementing future business logic to complete a primitive.
 //
-//  MediaUploader   Phase 4, which lists it explicitly. The failure-safe upload
-//                  logic already exists and is verified in lib/storage.ts;
-//                  what is missing is the UI around it, and its shape is set
-//                  by the post-a-job wizard that Phase 4 builds.
 //  WorkerCard      Phase 5/9. components/OfferCard.tsx already fills both
 //  BidCard         roles for today's screens; splitting or renaming it now
 //                  would churn a working component with no new consumer.

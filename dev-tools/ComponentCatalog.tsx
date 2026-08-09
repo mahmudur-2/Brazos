@@ -14,6 +14,7 @@ import {
   JobCard,
   ListRow,
   MediaGrid,
+  MediaUploader,
   MoneyText,
   RatingStars,
   SearchBar,
@@ -138,6 +139,7 @@ export function ComponentCatalog() {
   const [step, setStep] = useState(1);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [stateIndex, setStateIndex] = useState(0);
+  const [uploaderPhotos, setUploaderPhotos] = useState<string[]>([]);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -316,6 +318,17 @@ export function ComponentCatalog() {
             onRemoveItem={() => {}}
           />
           <MediaGrid items={[]} emptyLabel="No photos added yet" />
+        </Section>
+
+        <Section title="MediaUploader">
+          <MediaUploader
+            kind="photo"
+            label="Photos"
+            maxItems={5}
+            items={uploaderPhotos}
+            onItemsChange={setUploaderPhotos}
+            onUpload={async (asset) => ({ url: asset.uri, error: null })}
+          />
         </Section>
 
         <Section title="Sheet">

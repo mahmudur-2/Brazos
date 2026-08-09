@@ -21,6 +21,7 @@ import {
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -76,6 +77,54 @@ const MAX_TITLE_LENGTH = 80;
 // fit a specific layout.
 const MAX_DESCRIPTION_LENGTH = 500;
 
+// A fresh (not editing, not hiring) post's in-progress fields, persisted so
+// the wizard survives an app kill (Phase 4 DoD). Deliberately holds only
+// plain, already-uploaded-URL data — nothing that references a local file
+// handle, which would not survive a process restart anyway. One slot: this
+// device only ever has one job draft in flight at a time, matching the
+// screen itself (there is exactly one PostJob route, not one per attempt).
+const DRAFT_STORAGE_KEY = 'brazos:postJobDraft:v1';
+
+type PostJobDraft = {
+  title: string;
+  description: string;
+  category: JobCategory | null;
+  location: string;
+  coords: { lat: number; lng: number } | null;
+  budget: string;
+  photos: string[];
+  videos: string[];
+  step: number;
+};
+
+async function loadPostJobDraft(): Promise<PostJobDraft | null> {
+  try {
+    const raw = await AsyncStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as PostJobDraft;
+  } catch {
+    // A corrupt or unreadable draft is treated as "no draft" rather than a
+    // crash — the wizard just starts blank, same as if none existed.
+    return null;
+  }
+}
+
+async function savePostJobDraft(draft: PostJobDraft): Promise<void> {
+  try {
+    await AsyncStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch (e) {
+    console.error('[PostJobScreen] failed to persist draft', e);
+  }
+}
+
+async function clearPostJobDraft(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch (e) {
+    console.error('[PostJobScreen] failed to clear draft', e);
+  }
+}
+
 const POST_STEPS = [
   {
     label: 'Describe',
@@ -121,6 +170,15 @@ export function PostJobScreen() {
   const editJobId = params?.editJobId ?? null;
   const isEditing = !!editJobId;
   const [loadingJob, setLoadingJob] = useState(isEditing);
+
+  // The only mode a local draft applies to — editing reloads from the saved
+  // job, and a hire request is a single quick action with nothing worth
+  // resuming.
+  const isFreshPost = !isEditing && !isHiring;
+  // Gates the autosave effect until the one-time restore-or-skip check below
+  // finishes, so autosave can never race ahead of it and overwrite a
+  // not-yet-read draft with the screen's still-blank initial state.
+  const [draftReady, setDraftReady] = useState(false);
 
   // Home's "Post a job" CTA, search field, and category chips all funnel into
   // this one screen rather than each having their own draft flow — these seed
@@ -178,11 +236,93 @@ export function PostJobScreen() {
       // Never race a still-running RPC by deleting files it may successfully
       // commit. The async write paths clean these up after a failed result if
       // the screen was removed while the request was in flight.
-      if (!uploadsCommittedRef.current && !submittingRef.current) cleanupSessionUploads();
+      if (!uploadsCommittedRef.current && !submittingRef.current) {
+        cleanupSessionUploads();
+        // A graceful unmount (Back out of the wizard) is a deliberate
+        // abandonment, same as it always was — and now that a draft can
+        // persist, the abandoned draft must go with it, or a later "Post a
+        // job" would restore text pointing at photos this just deleted. An
+        // app KILL never reaches this line at all (the process is gone
+        // before any unmount effect runs), which is exactly what leaves the
+        // persisted draft in place for the Phase 4 DoD.
+        if (isFreshPost) void clearPostJobDraft();
+      }
       successScale.stopAnimation();
       successOpacity.stopAnimation();
     };
+    // isFreshPost is derived once from route params and never changes across
+    // this screen's life, so it is safe to read without being a dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [successOpacity, successScale]);
+
+  // Restore an in-progress fresh-post draft so it survives an app kill
+  // (Phase 4 DoD). Skipped for edit (its source of truth is the saved job)
+  // and hire (nothing worth resuming). Also skipped when the route already
+  // seeded specific fields — Home's search box / category chips are an
+  // explicit fresh start and should win over a stale draft, not be silently
+  // overridden by it.
+  useEffect(() => {
+    if (!isFreshPost) {
+      setDraftReady(true);
+      return;
+    }
+    const hasRouteSeed = !!(
+      params?.initialTitle ||
+      params?.initialDescription ||
+      params?.initialCategory
+    );
+    if (hasRouteSeed) {
+      setDraftReady(true);
+      return;
+    }
+
+    let active = true;
+    (async () => {
+      const draft = await loadPostJobDraft();
+      if (!active) return;
+      if (draft) {
+        setTitle(draft.title);
+        setDescription(draft.description);
+        setCategory(draft.category);
+        setLocation(draft.location);
+        setCoords(draft.coords);
+        setBudget(draft.budget);
+        setPhotos(draft.photos);
+        setVideos(draft.videos);
+        setStep(Math.min(draft.step, POST_STEPS.length - 1));
+        // A restored draft's media belongs to no saved job (the job does not
+        // exist yet), so it follows the same rule as a photo added this
+        // session: removing it — or abandoning the draft again — deletes it
+        // from storage instead of leaking it forever.
+        for (const url of draft.photos) sessionUploadsRef.current.add(url);
+        for (const url of draft.videos) sessionUploadsRef.current.add(url);
+      }
+      if (active) setDraftReady(true);
+    })();
+
+    return () => {
+      active = false;
+    };
+    // Runs once on mount only — this is a one-time restore, not a sync.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Autosave, once the restore-or-skip check above has finished. Fresh-post
+  // only; edit/hire never read or write this key.
+  useEffect(() => {
+    if (!isFreshPost || !draftReady) return;
+    void savePostJobDraft({
+      title,
+      description,
+      category,
+      location,
+      coords,
+      budget,
+      photos,
+      videos,
+      step,
+    });
+  }, [isFreshPost, draftReady, title, description, category, location, coords, budget, photos, videos, step]);
 
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
@@ -582,6 +722,9 @@ export function PostJobScreen() {
     if (!isEditing) {
       maybePromptForPush('Get told the moment a worker bids on your job.');
       if (savedJob) setPublishedJob(savedJob);
+      // Published — nothing left to resume. Uploads are already marked
+      // committed above, so this only removes the now-stale draft record.
+      void clearPostJobDraft();
     }
 
     playSuccess();

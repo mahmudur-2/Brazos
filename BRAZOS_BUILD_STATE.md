@@ -2,10 +2,12 @@
 Updated: 2026-08-08
 
 ## Current phase
-Phase 3 — Data foundation. **PASS / CLOSED** (2026-08-08).
+Phase 4 — Post-a-job vertical slice. **CODE-COMPLETE, AWAITING DEVICE
+VERIFICATION** (2026-08-08). Not closed — see "Phase 4 — what was built" and
+the Phase 4 gate-status block below for exactly what is and is not proven.
 
-Every gate is green and every claim below is backed by something that was
-actually run, not by a SQL Editor success message:
+Phase 3 — Data foundation remains **PASS / CLOSED** (2026-08-08), unchanged
+this session:
 
 - **Migrations phase43–48 all applied and verified.** `verify-schema.mjs`:
   **131 OK, 0 MISSING, 0 PENDING**, exit 0. Each phase's checks flipped from
@@ -15,7 +17,8 @@ actually run, not by a SQL Editor success message:
 - **Device regression Parts 1 and 2: PASS** on a real device.
 - **Shim + projection harness: PASS**, six checks.
 
-Next exact task: Phase 4 — Post-a-job vertical slice. See "Exact next task".
+Next exact task once Phase 4's device verification is done: Phase 5 —
+Bidding & hiring slice. See "Exact next task".
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -48,7 +51,16 @@ Next exact task: Phase 4 — Post-a-job vertical slice. See "Exact next task".
   dropped. **PASS** — verify-schema 131 OK / 0 PENDING, RLS probe 5/5, device
   regression Parts 1+2 on a real device, shim/projection harness 6/6. Decision
   doc: `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`.
-  [ ] 4 post · [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
+- [ ] 4 post · **CODE-COMPLETE, not closed** (2026-08-08) · AsyncStorage draft
+  persistence + the `MediaUploader` primitive built this session; everything
+  else the phase needs (posting, worker discovery, job detail, My Jobs) was
+  already live per Phase 0's crosswalk and needed no change. tsc/lint clean,
+  217/219 tests (same 2 pre-existing failures, 4 new tests), verify-schema
+  131/0/0 unchanged (no migration — none was needed). Cross-account two-device
+  post→discover→open and the mode-isolation/RLS probes are **NOT RUN** — no
+  device or live credentials available this session. See "Phase 4 — what was
+  built" for the full account.
+  [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
 (mark with commit hash + one-line note when done)
@@ -351,7 +363,21 @@ that replaced what they pointed at.
   half-filled Post-a-job wizard. That is §F's required behaviour ("resets
   navigation stacks"), and the wizard already warns before losing progress —
   but it is a real, deliberate behaviour change worth knowing about.
-- `PostJobScreen` draft state is in-memory only (no `AsyncStorage`) — lost on app kill. Real gap against Phase 4's DoD.
+- ~~`PostJobScreen` draft state is in-memory only (no `AsyncStorage`) — lost on
+  app kill.~~ **Fixed in Phase 4** (this session) — a fresh (not editing, not
+  hiring) post now autosaves to AsyncStorage and restores on mount; cleared on
+  publish and on a graceful Back-out, left in place on an app kill by
+  construction (no unmount effect runs). See "Phase 4 — what was built".
+- **`MediaUploader` (the Phase 1 primitive deferred to Phase 4) is built and
+  catalogued but not wired into `PostJobScreen`** — same pattern Phase 2 used
+  for `JobCard` (primitive exists, no screen forced onto it yet). Concrete
+  reason this time, not just caution: the primitive's ownership rule ("only
+  delete on removal what this instance itself uploaded") is right for editing
+  a published job, but wrong for a restored draft, where every photo belongs
+  to no saved row yet and must always be deletable — `PostJobScreen`'s
+  existing `sessionUploadsRef`/`originalPhotosRef` split already encodes that
+  correctly and was not disturbed. A future phase that revisits the wizard
+  should resolve this before wiring the primitive in, not paper over it.
 - No scheduling/arrival-window field on `jobs` — confirmed absent (previously only suspected).
 - `lib/acceptBidCompatibility.ts`'s `acceptBidWithoutRpc()` fallback (only runs on `PGRST202`, i.e. if `accept_bid` RPC ever drops from PostgREST's schema cache) does a non-atomic read-then-multi-step-update with no row lock — a real TOCTOU race, unlikely to be exercised since the RPC is confirmed live, but untested for concurrency. **Phase 3A verdict: not dead code** — `lib/bids.ts:2,196` and `tests/hardening.test.mjs:86,91` reference it, so it was left in place and marked in-file for **mandatory removal in Phase 3B**, when `accept_offer()` replaces `accept_bid()` and it has nothing left to fall back from.
 - **`fetchJobsByClient()` (`lib/jobs.ts`) has no status filter** — it returns every job a client owns. Harmless today; it becomes a real defect the moment draft/direct jobs exist, so it is one of the two gates holding phase45. Fix it (or ship the draft-job UI) before applying that migration.
@@ -363,6 +389,43 @@ that replaced what they pointed at.
 - `components/SectionHeader.tsx` is dead code (never imported) — left in place per Phase 0 policy, candidate for Phase 13 deletion.
 
 ## Gate status
+
+Phase 4 (2026-08-08) — code-complete, device/RLS verification outstanding:
+- **tsc**: PASS — `npm run lint` (`tsc --noEmit --noUnusedLocals
+  --noUnusedParameters`) exits 0, clean.
+- **eslint**: NOT RUN — still not installed, no config. Unchanged since
+  Phase 1.
+- **tests**: **217/219 PASS.** Same two pre-existing failures (`pwa` frozen
+  web version string; `setupOnboarding` CRLF mis-slice), zero unexplained new
+  ones. Net +4 tests: `tests/postJobDraft.test.mjs` (2, guarding the
+  AsyncStorage restore/autosave/clear rules) and `tests/mediaUploader.test.mjs`
+  (2, guarding the failure-safe append rule and the barrel export).
+- **verify-schema**: **PASS — 131 OK, 0 MISSING, 0 PENDING**, exit 0,
+  identical to the Phase 3 closure baseline. No migration was written this
+  phase — none was needed. Every column/RPC/media path Phase 4 needed
+  (`jobs.photos`/`.videos`, `create_job`, `job-photos` storage bucket and its
+  policies, `fetchOpenJobs()`/realtime for Worker Home's data source) was
+  already live per the Phase 0 crosswalk, and this session did not find a gap
+  serious enough to contradict that finding.
+- **locked screens**: PASS. Screens 01–07 and 48 untouched — this phase's only
+  screen edit was `PostJobScreen.tsx`, which is not on the locked list.
+- **mode-smoke**: N/A this phase — no navigation, mode, or route-registration
+  change. The latent `PostJob`/`WorkerHomeStack` gap (Known issues) was left
+  exactly as found, per the brief's explicit instruction not to touch it.
+- **rls-probe**: N/A this phase — no policy or schema change.
+- **device/simulator**: **NOT RUN.** No real device or simulator was
+  available this session, and the repo rule is that Expo is never started
+  from an agent session. The cross-account "post → discover → open on two
+  devices" proof, the mode-isolation smoke, and the RLS probe are all
+  explicit open items for the user — none of the three is claimed as passing
+  here. See "Phase 4 — what was built" for exactly what was and wasn't
+  possible to verify without one.
+
+**Phase 4 gate: green for everything checkable without a device or live
+credentials. Phase 4 is explicitly NOT closed** until the user runs the
+two-device post→discover→open pass (and, while there, the mode-isolation
+smoke — unaffected by this phase's changes, but worth reconfirming before the
+next phase builds on top of it).
 
 Phase 3 closure (2026-08-08):
 - **tsc**: PASS — `npm run lint` exits 0, clean.
@@ -667,24 +730,115 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   enum. `AppMode` is a hand-written union today, matching the DB constraint's
   two values exactly.
 
-## Exact next task (Phase 4 — Post-a-job vertical slice)
+## Phase 4 — what was built
 
 Per BRAZOS_MASTER_PLAN.md §J, Phase 4 (MEDIUM), screens 12–16, 51, minimal
-38/39. Phase 3 is closed; this is the next task, not yet started.
+38/39. Goal: a customer posts a real job; a worker sees and opens it on
+another device — first end-to-end proof of the Phase 3 foundation.
 
-**Goal:** a customer posts a real job and a worker sees and opens it on another
-device. First end-to-end proof of the Phase 3 foundation.
+**Starting point (Phase 0's crosswalk, re-confirmed this session):** almost
+all of Phase 4's screen-level scope already existed and was already marked
+COMPLETE — `PostJobScreen.tsx` (12/13/15, the 4-step wizard), `JobDetailScreen.tsx`
+(51, worker perspective — shows `job.location`'s area string only, never an
+exact address, matching the private-details split RLS enforces),
+`MyJobsHubScreen.tsx` (38), `ClientJobDetailScreen.tsx` (39). Worker Home (48,
+LOCKED) already reads real published jobs through `useOpenJobs()` →
+`fetchOpenJobs()` (`lib/jobs.ts`), a live query against `jobs` plus a realtime
+subscription — not a stub, not touched this phase. `verify-schema` staying at
+131 OK / 0 MISSING / 0 PENDING with zero new migration written confirms no
+column, RPC, or storage policy was missing for any of this.
 
-**Reuse, do not rebuild:** `PostJobScreen` already exists and now writes through
-`create_offer`/`create_job`; Worker Home (48, LOCKED) already lists jobs and its
-data source is already wired to real published jobs. `ui/templates/FormScreen`
-(wizard mode) and `SuccessScreen` exist from Phase 1 and are the mandatory basis.
+That left exactly two real, named gaps to close, both closed this session:
 
-**Known gaps this phase owns:** `PostJobScreen` draft state is in-memory only —
-no `AsyncStorage` — so a draft is lost on app kill, which Phase 4's DoD requires
-surviving. `MediaUploader` is the one Phase 1 primitive deferred to here.
+1. **Draft persistence across app kill** (`screens/PostJobScreen.tsx`). A
+   fresh post (not editing, not hiring — those have their own source of
+   truth) now autosaves `{title, description, category, location, coords,
+   budget, photos, videos, step}` to AsyncStorage under
+   `brazos:postJobDraft:v1` on every change, and restores it on mount unless
+   the route already seeded specific fields (Home's search box / category
+   chips — an explicit fresh start wins over a stale draft). Restored media
+   is tracked the same as this-session uploads, so removing it — or
+   abandoning the draft again — deletes it from storage rather than leaking
+   it. The draft is cleared on a successful publish and on a graceful
+   Back-out of the wizard (which already deleted that session's uploaded
+   media on abandonment; the draft record has to go with it or it would
+   restore text pointing at now-deleted photos next time). It is
+   deliberately left in place on an app **kill** — no `AppState` handler
+   exists to catch that case, because there is nothing to catch: the process
+   dies before any unmount effect runs, which is exactly what leaves the
+   persisted draft available to restore. `tests/postJobDraft.test.mjs` guards
+   all of this at the source level.
+2. **`MediaUploader` primitive** (`ui/primitives/MediaUploader.tsx`) — the one
+   primitive Phase 1 explicitly deferred here. Failure-safe by construction:
+   `items` only ever grows by appending a URL a real `onUpload` call already
+   returned; a failed pick or failed upload changes nothing, so there is no
+   frame in which a failed attempt can clobber previously-uploaded media.
+   Bucket-agnostic (`onUpload`/`onDelete`/`validate` are caller-supplied), so
+   the same component can back a job posting, a review photo, or a
+   completion photo without hardcoding a bucket. Exported from
+   `ui/primitives/index.ts`, catalogued in `dev-tools/ComponentCatalog.tsx`.
+   `tests/mediaUploader.test.mjs` guards the append-only-on-success ordering
+   and the barrel export. **Not wired into `PostJobScreen`** — see the Known
+   issues entry for the concrete reason (its ownership-on-removal rule is
+   right for editing a published job, wrong for a draft) and the Phase 2
+   `JobCard` precedent this follows.
 
-**Carried forward, explicitly NOT Phase 4's job:**
+**Not built, and why:** a separate, dedicated "Job published" (screen 16)
+route on the `SuccessScreen` template. `PostJobScreen`'s existing inline
+success overlay already delivers the same outcome (confirmation, a summary of
+what was just published, "View my jobs" / "Back to home") and is deeply
+intertwined with this phase's other changes (`uploadsCommittedRef`, the new
+draft-clear call, the animated-success timing). Rebuilding it as a separate
+navigable screen this session would have been a materially larger, riskier
+change for no functional gain, against CLAUDE.md's smallest-safe-change rule.
+Flagged here rather than silently dropped — a future phase that revisits the
+wizard's shape can fold this in then.
+
+**Files touched:** `screens/PostJobScreen.tsx` (draft persistence) ·
+`ui/primitives/MediaUploader.tsx` (new) · `ui/primitives/index.ts` (export +
+DEFERRED-block update + primitive-count correction) ·
+`dev-tools/ComponentCatalog.tsx` (catalog section) ·
+`tests/postJobDraft.test.mjs` (new) · `tests/mediaUploader.test.mjs` (new).
+No screen on the locked list (01–07, 48) was touched. No migration was
+written — Phase 4 needed zero schema change.
+
+## What Phase 4 could not verify this session
+
+No real device, simulator, or emulator was available, and the repo rule is
+that Expo is never started from an agent session. These are explicit open
+items for the user, not claimed as passing:
+
+- **Cross-account two-device proof** — customer posts a job on one
+  account/device, worker discovers it via Worker Home and opens
+  `JobDetailScreen` on another. Everything this session could confirm by
+  reading code (real data source, no exact address leaked to the worker) is
+  recorded above; only a live run proves the round trip.
+- **Draft survives an actual app kill** — the persistence logic is guarded by
+  source-level tests, but "survives an app kill" is inherently a real-device
+  claim (force-quit the app mid-wizard, relaunch, confirm the draft and its
+  photos are still there).
+- **Failed media upload preserves prior state** — `MediaUploader`'s
+  append-only-on-error-free-path ordering is asserted in
+  `tests/mediaUploader.test.mjs`, but it isn't wired into any live screen
+  this phase, so there is nothing to exercise on-device yet. (`PostJobScreen`
+  itself already satisfies this DoD item independently — its existing
+  handlers only call `setPhotos`/`setVideos` after a successful upload — and
+  that part *is* live and was unchanged this session.)
+- **Mode-isolation smoke and RLS probe** — unaffected by this phase's changes
+  (no navigation, mode, or policy edit), but not re-run. Worth reconfirming
+  before Phase 5 builds on top.
+
+## Exact next task (Phase 5 — Bidding & hiring slice)
+
+Per BRAZOS_MASTER_PLAN.md §J, Phase 5 (LARGE), screens 26–32, 52, 53. Blocked
+on Phase 4's device verification per the critical path in §K
+(`0 → 1 → 2 → 3 → 4 → 5 → 6`) — start it only after the user confirms the
+two-device post→discover→open pass above.
+
+**Goal:** the full hire loop — bid/direct-offer/counter → compare → accept →
+sandbox checkout → confirmed.
+
+**Carried forward, explicitly NOT Phase 4's job (unchanged from before):**
 - The six legacy shims, the projection trigger,
   `project_offer_chain_to_bids()` and `v_bids_projection_drift` retire together
   in the first phase that ships a version gate — Expo update-gating or a
@@ -695,8 +849,11 @@ surviving. `MediaUploader` is the one Phase 1 primitive deferred to here.
   the CLI plus a local Postgres or a service-role connection, none of which is
   present, and adding either is a flaggable dependency. `StatusPill`'s unions
   stay local until then.
-- The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5).
+- The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5's
+  own job now).
 - `MarketJobPreview` and customer-safe job browsing (Phase 8).
 - The latent `PostJob` / `WorkerHomeStack` navigation gap (Known issues) — a
   navigation-phase change, and deliberately NOT fixed by registering the route
-  in the worker tree.
+  in the worker tree. Re-confirmed untouched this phase.
+- Wiring `MediaUploader` into `PostJobScreen` — see this phase's Known issues
+  entry for why it was deliberately not forced in yet.
