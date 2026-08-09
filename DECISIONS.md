@@ -479,6 +479,60 @@ metric only, dominated by required error handling and typed casts.
 8. All prior phase 6–12 flags stand as recorded in their sections above,
    each already carrying a recommendation.
 
+## env-parity-fix branch — device failures, 2026-08-09
+
+**Step 0 verdict: (a) — refs match, objects present.** The app's `.env`
+`SUPABASE_URL`/`SUPABASE_KEY` and `SUPABASE_DB_URL_STAGING` all resolve to
+project ref `zzkumxcjtbqoselzptig`, and every object the device reported
+missing (`jobs.en_route_at`, `payments.released_at`,
+`profiles.accepting_work`, `public.worker_services`) is PRESENT when probed
+over PostgREST with the anon key — the app's exact path. The repository
+configuration is correct and the hardening gates described the database the
+app is configured to use.
+
+**Root cause: a stale bundle, not a stale schema and not a wrong project.**
+`lib/supabase.ts` (LOCKED) imports `SUPABASE_URL`/`SUPABASE_KEY` from `@env`,
+which `module:react-native-dotenv` inlines **at Babel transform time**. The
+values are therefore baked into the JS bundle when it is built, not read at
+runtime. `.env` still carries the pre-cutover **production** URL/key
+commented out immediately above the active staging pair (the run's own
+cutover, recorded in this file's preflight). The installed build was bundled
+while those production values were active, so it talks to production — which
+has **none** of phase51–58 applied (see PROD_APPLY.md). That explains all
+four screens exactly, and nothing else needs to explain them.
+
+**Consequence: `.env` changes require a full Metro restart AND a rebuild.**
+`npx expo start --clear` (or deleting the Metro cache) followed by
+reinstalling the dev client / rebuilding. Editing `.env` alone changes
+nothing on an already-installed build.
+
+**EXPO_PUBLIC_* — NOT restored, deliberately.** The brief assumed the app
+reads `EXPO_PUBLIC_SUPABASE_URL` + anon key. It does not: Supabase config
+comes from `@env` (above), and the only `EXPO_PUBLIC_*` values this codebase
+reads are feature flags (`EXPO_PUBLIC_PAYMENTS_MODE`,
+`EXPO_PUBLIC_PHONE_AUTH_MODE`), both of which correctly default when unset.
+Adding `EXPO_PUBLIC_SUPABASE_*` would create a SECOND source of truth for the
+Supabase target that nothing reads — `lib/supabase.ts` is LOCKED and cannot
+be pointed at it — so it would fix nothing and could later disagree with
+`.env`. No values were invented. **Flagged for your decision** (see the
+report): if you want the app on `EXPO_PUBLIC_*`, that is a deliberate change
+to a LOCKED file plus a config migration, not a hardening-run edit.
+
+**Gate hole closed (Step 3):** `verify-schema` now compares the app's project
+ref against the tooling's and exits non-zero on divergence or a missing
+app-side value; `lifecycle-proof` now proves the phase51–58 objects over
+PostgREST with the anon key before running, so schema-cache and
+RLS-visibility drift can no longer hide behind a green direct-Postgres run.
+Neither gate could have caught a stale *bundle* — only a rebuild can — which
+is why the Metro/rebuild requirement is documented here rather than automated.
+
+**Verified vs. needs a development build:** the notification payload shapes,
+the routing decisions, and the drop-on-unhandleable behaviour were verified
+statically and by reproducing real payloads against staging.
+`expo-notifications` cannot deliver remote push in Expo Go on SDK 53, so
+cold-start notification TAP delivery on a device needs a development build to
+confirm end to end.
+
 **Deliberate test changes this run (the Phase 3B precedent):**
 phase5-proof §G (sanctioned-pair form), phase9-proof (seed-tolerant),
 phase6-proof residue (seed-tolerant) + new I1/I2 regressions, phase8-proof
