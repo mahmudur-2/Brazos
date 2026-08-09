@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -20,8 +19,7 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import * as ImagePicker from 'expo-image-picker';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { ImagePickerAsset } from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -31,6 +29,8 @@ import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
+  arrivalWindowLabel,
+  budgetRangeLabel,
   categoryAccent,
   createJob,
   dollarsToCents,
@@ -44,6 +44,11 @@ import {
   type Job,
   type JobCategory,
 } from '../lib/jobs';
+import {
+  clearPostJobDraft,
+  loadPostJobDraft,
+  savePostJobDraft,
+} from '../lib/postJobDraft';
 import { createDirectOffer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
@@ -56,12 +61,15 @@ import {
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
 import { colors, emeraldColors, radius, shadows, spacing } from '../lib/theme';
+import { MediaUploader } from '../ui/primitives';
+import { SuccessScreen } from '../ui/templates/SuccessScreen';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
-const MAX_PHOTOS = 5;
-// Two is a demonstration, not a documentary. Matches the cap create_job()
-// enforces server-side (phase34).
-const MAX_VIDEOS = 2;
+// Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
+const MAX_PHOTOS = 10;
+// Screen 13 asks for ONE video ≤60s. The server still tolerates the old cap
+// of two (so an already-installed build keeps working); this UI offers one.
+const MAX_VIDEOS = 1;
 // A minute is long enough to walk through a job and short enough to upload on
 // a phone connection without the poster giving up on it.
 const MAX_VIDEO_DURATION_MS = 60_000;
@@ -77,52 +85,42 @@ const MAX_TITLE_LENGTH = 80;
 // fit a specific layout.
 const MAX_DESCRIPTION_LENGTH = 500;
 
-// A fresh (not editing, not hiring) post's in-progress fields, persisted so
-// the wizard survives an app kill (Phase 4 DoD). Deliberately holds only
-// plain, already-uploaded-URL data — nothing that references a local file
-// handle, which would not survive a process restart anyway. One slot: this
-// device only ever has one job draft in flight at a time, matching the
-// screen itself (there is exactly one PostJob route, not one per attempt).
-const DRAFT_STORAGE_KEY = 'brazos:postJobDraft:v1';
+// Draft persistence lives in lib/postJobDraft.ts (one canonical
+// implementation — My Jobs' resume-draft card reads the same record).
 
-type PostJobDraft = {
-  title: string;
-  description: string;
-  category: JobCategory | null;
-  location: string;
-  coords: { lat: number; lng: number } | null;
-  budget: string;
-  photos: string[];
-  videos: string[];
-  step: number;
-};
+/**
+ * The arrival windows screen 14 offers. Stored as local wall-clock hours on
+ * the public jobs row — a time window doesn't identify a household the way
+ * the exact address (job_private_details) does.
+ */
+const ARRIVAL_WINDOWS = [
+  { label: 'Morning · 8–11 AM', start: 8, end: 11 },
+  { label: 'Midday · 11 AM–2 PM', start: 11, end: 14 },
+  { label: 'Afternoon · 2–5 PM', start: 14, end: 17 },
+  { label: 'Evening · 5–8 PM', start: 17, end: 20 },
+] as const;
 
-async function loadPostJobDraft(): Promise<PostJobDraft | null> {
-  try {
-    const raw = await AsyncStorage.getItem(DRAFT_STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as PostJobDraft;
-  } catch {
-    // A corrupt or unreadable draft is treated as "no draft" rather than a
-    // crash — the wizard just starts blank, same as if none existed.
-    return null;
-  }
+/** How many upcoming days the date picker row offers (Today first). */
+const SCHEDULE_DAYS = 14;
+
+function toLocalIsoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`;
 }
 
-async function savePostJobDraft(draft: PostJobDraft): Promise<void> {
-  try {
-    await AsyncStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
-  } catch (e) {
-    console.error('[PostJobScreen] failed to persist draft', e);
-  }
-}
-
-async function clearPostJobDraft(): Promise<void> {
-  try {
-    await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
-  } catch (e) {
-    console.error('[PostJobScreen] failed to clear draft', e);
-  }
+function upcomingDates(): { iso: string; label: string }[] {
+  const now = new Date();
+  return Array.from({ length: SCHEDULE_DAYS }, (_, i) => {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
+    const label =
+      i === 0
+        ? 'Today'
+        : i === 1
+          ? 'Tomorrow'
+          : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+    return { iso: toLocalIsoDate(d), label };
+  });
 }
 
 const POST_STEPS = [
@@ -138,8 +136,9 @@ const POST_STEPS = [
   },
   {
     label: 'Location',
-    title: 'Where is the job?',
-    subtitle: 'Share the area or neighborhood workers should use when considering the job.',
+    title: 'Where and when?',
+    subtitle:
+      'Workers browsing see only the area. The exact address stays private until you hire someone.',
   },
   {
     label: 'Review',
@@ -192,7 +191,16 @@ export function PostJobScreen() {
   const [location, setLocation] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
+  // The hire flow's single offer amount. Fresh posts and edits use the
+  // MIN/MAX range below instead (screen 15).
   const [budget, setBudget] = useState('');
+  const [budgetMin, setBudgetMin] = useState('');
+  const [budgetMax, setBudgetMax] = useState('');
+  // Exact service address — job_private_details on publish, never public.
+  const [address, setAddress] = useState('');
+  const [scheduledDate, setScheduledDate] = useState<string | null>(null);
+  const [arrivalStartHour, setArrivalStartHour] = useState<number | null>(null);
+  const [arrivalEndHour, setArrivalEndHour] = useState<number | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [videos, setVideos] = useState<string[]>([]);
@@ -286,7 +294,19 @@ export function PostJobScreen() {
         setCategory(draft.category);
         setLocation(draft.location);
         setCoords(draft.coords);
-        setBudget(draft.budget);
+        setBudgetMin(draft.budgetMin);
+        setBudgetMax(draft.budgetMax);
+        setAddress(draft.address);
+        // A date that slipped into the past while the draft sat idle is
+        // dropped rather than restored — publishing yesterday is never right.
+        // ISO date strings compare lexicographically.
+        setScheduledDate(
+          draft.scheduledDate && draft.scheduledDate >= toLocalIsoDate(new Date())
+            ? draft.scheduledDate
+            : null
+        );
+        setArrivalStartHour(draft.arrivalStartHour);
+        setArrivalEndHour(draft.arrivalEndHour);
         setPhotos(draft.photos);
         setVideos(draft.videos);
         setStep(Math.min(draft.step, POST_STEPS.length - 1));
@@ -317,12 +337,17 @@ export function PostJobScreen() {
       category,
       location,
       coords,
-      budget,
+      budgetMin,
+      budgetMax,
+      address,
+      scheduledDate,
+      arrivalStartHour,
+      arrivalEndHour,
       photos,
       videos,
       step,
     });
-  }, [isFreshPost, draftReady, title, description, category, location, coords, budget, photos, videos, step]);
+  }, [isFreshPost, draftReady, title, description, category, location, coords, budgetMin, budgetMax, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step]);
 
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
@@ -378,12 +403,27 @@ export function PostJobScreen() {
       setDescription(job.description);
       setCategory(job.category);
       setLocation(job.location ?? '');
-      setBudget(job.budget_cents != null ? String(job.budget_cents / 100) : '');
+      setBudgetMin(job.budget_min_cents != null ? String(job.budget_min_cents / 100) : '');
+      // A pre-range job's single budget re-opens in the MAX slot — the same
+      // slot the server mirrors a range's ceiling into.
+      setBudgetMax(
+        job.budget_max_cents != null
+          ? String(job.budget_max_cents / 100)
+          : job.budget_cents != null
+            ? String(job.budget_cents / 100)
+            : ''
+      );
+      setScheduledDate(job.scheduled_date);
+      setArrivalStartHour(job.arrival_start_hour);
+      setArrivalEndHour(job.arrival_end_hour);
       setPhotos(job.photos);
       originalPhotosRef.current = new Set(job.photos);
       setVideos(job.videos);
       originalVideosRef.current = new Set(job.videos);
-      if (loc) setCoords({ lat: loc.lat, lng: loc.lng });
+      if (loc) {
+        if (loc.lat != null && loc.lng != null) setCoords({ lat: loc.lat, lng: loc.lng });
+        setAddress(loc.address_line ?? '');
+      }
       setLoadingJob(false);
     })();
 
@@ -445,6 +485,29 @@ export function PostJobScreen() {
     );
   }
 
+  /**
+   * Screen 16's "View job and bids": straight to the published job's own
+   * detail screen (ClientJobDetail, registered in the shared MyJobs stack),
+   * which shows its real — currently zero — bids. Same stack unwinding as
+   * leaveAfterSuccess so device Back can't resurface the finished wizard.
+   */
+  function leaveToPublishedJob() {
+    if (!publishedJob) {
+      leaveAfterSuccess(true);
+      return;
+    }
+    setShowSuccess(false);
+    const parent = navigation.getParent();
+    navigation.dispatch(StackActions.popToTop());
+    if (!parent) return;
+    const navigateTab = parent.navigate as (name: string, params?: object) => void;
+    navigateTab('MyJobs', {
+      screen: 'ClientJobDetail',
+      params: { job: publishedJob },
+      pop: true,
+    });
+  }
+
   async function handleUseCurrentLocation() {
     setLocating(true);
     const result = await resolveCurrentPlace();
@@ -459,105 +522,52 @@ export function PostJobScreen() {
     setCoords({ lat: result.place.lat, lng: result.place.lng });
   }
 
-  async function handleAddPhoto() {
-    if (photos.length >= MAX_PHOTOS || !user) return;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.7,
-    });
-    if (!screenMountedRef.current || result.canceled || !result.assets[0]) return;
-
+  /**
+   * The MediaUploader upload callbacks. The primitive owns the pick and the
+   * append-only-on-success rule (§N risk 9); these own what is specific to
+   * this screen — which bucket, the session-uploads bookkeeping that lets
+   * backing out clean up, and the unmounted-mid-upload race (delete the file
+   * rather than strand it, since unmount cleanup already ran without it).
+   */
+  async function handleUploadPhoto(asset: ImagePickerAsset) {
+    if (!user) return { url: null, error: new Error('Sign in to add media') };
     setUploadingPhoto(true);
-    const { url, error } = await uploadJobAttachment(user.id, result.assets[0]);
+    const { url, error } = await uploadJobAttachment(user.id, asset);
+    setUploadingPhoto(false);
     if (!screenMountedRef.current) {
       if (url) void deleteJobPhoto(url);
-      return;
+      return { url: null, error: null };
     }
-    setUploadingPhoto(false);
-
-    if (error || !url) {
-      await alertAsync(
-        'Photo upload failed',
-        'Please try again. If this keeps happening, the job-photos storage bucket may need setting up.'
-      );
-      return;
-    }
-    sessionUploadsRef.current.add(url);
-    setPhotos((prev) => [...prev, url]);
+    if (url) sessionUploadsRef.current.add(url);
+    return { url: url ?? null, error: (error as Error | null) ?? null };
   }
 
-  async function handleAddVideo() {
-    if (videos.length >= MAX_VIDEOS || !user) return;
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['videos'],
-      // Caps recording length where the picker offers to record. A video
-      // chosen from the library is not covered by it, so the real check is
-      // the duration test below — this just stops the obvious case earlier.
-      videoMaxDuration: MAX_VIDEO_DURATION_MS / 1000,
-    });
-    if (!screenMountedRef.current || result.canceled || !result.assets[0]) return;
-
-    const asset = result.assets[0];
-
-    // Format, length and size are all checked before a byte is uploaded, so a
-    // rejected file costs nothing and the reason is specific. Shared with the
-    // worker's completion clip so both are refused in the same words.
-    const rejection = rejectionForPickedVideo(asset, {
-      maxDurationMs: MAX_VIDEO_DURATION_MS,
-      maxBytes: MAX_VIDEO_BYTES,
-    });
-    if (rejection) {
-      await alertAsync(rejection.title, rejection.message);
-      return;
-    }
-
+  async function handleUploadVideo(asset: ImagePickerAsset) {
+    if (!user) return { url: null, error: new Error('Sign in to add media') };
     setUploadingVideo(true);
     const { url, error } = await uploadJobVideo(user.id, asset);
+    setUploadingVideo(false);
     if (!screenMountedRef.current) {
       if (url) void deleteJobPhoto(url);
-      return;
+      return { url: null, error: null };
     }
-    setUploadingVideo(false);
-
-    // Only a successful upload is added to the list, so the job can never be
-    // saved referencing something that is not in storage.
-    if (error || !url) {
-      await alertAsync(
-        'Video upload failed',
-        'Please try again. On a slow connection a shorter clip will upload more reliably.'
-      );
-      return;
-    }
-    sessionUploadsRef.current.add(url);
-    setVideos((prev) => [...prev, url]);
+    if (url) sessionUploadsRef.current.add(url);
+    return { url: url ?? null, error: (error as Error | null) ?? null };
   }
 
-  function removeVideo(url: string) {
-    setVideos((prev) => prev.filter((v) => v !== url));
-
-    // Same rule as removePhoto: a video already saved on the job has to stay
-    // in storage until the edit is actually saved, because the live job row
-    // still references it.
-    if (originalVideosRef.current.has(url)) return;
-    deleteJobPhoto(url).then(({ error }) => {
-      if (error) console.error('[PostJobScreen] deleteJobPhoto (video) failed', error);
-      else sessionUploadsRef.current.delete(url);
-    });
-  }
-
-  function removePhoto(url: string) {
-    setPhotos((prev) => prev.filter((p) => p !== url));
-
-    // Only clean up storage for a photo added THIS session — one already
-    // saved on the job (edit mode) must stay until the edit is actually
-    // saved, since the still-live job row keeps referencing it until then.
-    if (originalPhotosRef.current.has(url)) return;
-    deleteJobPhoto(url).then(({ error }) => {
-      if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
-      else sessionUploadsRef.current.delete(url);
-    });
+  /**
+   * Removal cleanup, photos and videos alike (one storage path). Only ever
+   * called for media MediaUploader was told is removable — the
+   * shouldDeleteOnRemove props below encode the ownership rule: everything
+   * in a fresh post or restored draft (saved on no job row yet), and only
+   * this session's additions in edit mode (the live row still references
+   * its original media until the edit saves).
+   */
+  async function handleDeleteMedia(url: string) {
+    const { error } = await deleteJobPhoto(url);
+    if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
+    else sessionUploadsRef.current.delete(url);
+    return { error };
   }
 
   /**
@@ -620,25 +630,41 @@ export function PostJobScreen() {
       return;
     }
 
+    // Hire mode negotiates a single amount; fresh posts and edits carry the
+    // MIN/MAX range (screen 15).
     const budgetCents = dollarsToCents(budget);
-    // dollarsToCents() already turns 0 (and negatives) into NaN, but that
-    // guarantee is checked explicitly here too, the same way JobDetailScreen's
-    // bid flow does — this call site shouldn't depend on staying in sync with
-    // that function's internals to keep a $0 job from posting.
-    if (Number.isNaN(budgetCents) || (budgetCents != null && budgetCents <= 0)) {
-      await alertAsync('Invalid budget', 'Budget must be a positive dollar amount.');
-      return;
-    }
-    // A hire request opens with a proposed price, so an amount is required —
-    // it's the starting point for the negotiation, not a final figure. A real
-    // 0 can't reach here (caught above), so this is specifically the "left
-    // blank" case.
-    if (isHiring && budgetCents == null) {
-      await alertAsync(
-        'Price required',
-        `Enter the amount you'd like to offer ${hireWorkerName}. They can accept or counter.`
-      );
-      return;
+    const budgetMinCents = dollarsToCents(budgetMin);
+    const budgetMaxCents = dollarsToCents(budgetMax);
+    if (isHiring) {
+      // dollarsToCents() already turns 0 (and negatives) into NaN, but that
+      // guarantee is checked explicitly here too, the same way
+      // JobDetailScreen's bid flow does — this call site shouldn't depend on
+      // staying in sync with that function's internals to keep a $0 job from
+      // posting.
+      if (Number.isNaN(budgetCents) || (budgetCents != null && budgetCents <= 0)) {
+        await alertAsync('Invalid budget', 'Budget must be a positive dollar amount.');
+        return;
+      }
+      // A hire request opens with a proposed price, so an amount is required —
+      // it's the starting point for the negotiation, not a final figure. A
+      // real 0 can't reach here (caught above), so this is specifically the
+      // "left blank" case.
+      if (budgetCents == null) {
+        await alertAsync(
+          'Price required',
+          `Enter the amount you'd like to offer ${hireWorkerName}. They can accept or counter.`
+        );
+        return;
+      }
+    } else {
+      if (Number.isNaN(budgetMinCents) || Number.isNaN(budgetMaxCents)) {
+        await alertAsync('Invalid budget', 'Budget amounts must be positive dollar amounts.');
+        return;
+      }
+      if (budgetMinCents != null && budgetMaxCents != null && budgetMinCents > budgetMaxCents) {
+        await alertAsync('Check your budget range', 'The minimum cannot be more than the maximum.');
+        return;
+      }
     }
 
     // Sending an offer puts a real, priced commitment in front of a specific
@@ -651,27 +677,27 @@ export function PostJobScreen() {
 
     submittingRef.current = true;
     setSubmitting(true);
+    // The server mirrors the range's ceiling into the legacy single
+    // budget_cents, so nothing is passed for it here — one writer, one rule.
+    const jobInput = {
+      title: title.trim(),
+      description: description.trim(),
+      category,
+      location: location.trim(),
+      budgetCents: null,
+      budgetMinCents,
+      budgetMaxCents,
+      scheduledDate,
+      arrivalStartHour,
+      arrivalEndHour,
+      addressLine: address.trim() || null,
+      photos,
+      videos,
+      coords,
+    };
     const { data: savedJob, error, locationError } = isEditing
-      ? await updateJob(editJobId!, {
-          title: title.trim(),
-          description: description.trim(),
-          category,
-          location: location.trim(),
-          budgetCents,
-          photos,
-          videos,
-          coords,
-        })
-      : await createJob(user.id, {
-          title: title.trim(),
-          description: description.trim(),
-          category,
-          location: location.trim(),
-          budgetCents,
-          photos,
-          videos,
-          coords,
-        });
+      ? await updateJob(editJobId!, jobInput)
+      : await createJob(user.id, jobInput);
     submittingRef.current = false;
 
     if (error) {
@@ -770,12 +796,30 @@ export function PostJobScreen() {
         ? 'Check the details below. You can still go back without losing your work.'
         : currentStep.subtitle;
   const reviewBudgetCents = dollarsToCents(budget);
-  const reviewBudget =
-    reviewBudgetCents != null && !Number.isNaN(reviewBudgetCents)
+  const reviewMinCents = dollarsToCents(budgetMin);
+  const reviewMaxCents = dollarsToCents(budgetMax);
+  const validMin =
+    reviewMinCents != null && !Number.isNaN(reviewMinCents) ? reviewMinCents : null;
+  const validMax =
+    reviewMaxCents != null && !Number.isNaN(reviewMaxCents) ? reviewMaxCents : null;
+  const reviewBudget = isHiring
+    ? reviewBudgetCents != null && !Number.isNaN(reviewBudgetCents)
       ? formatBudget(reviewBudgetCents)
-      : isHiring
-        ? 'Required before sending'
-        : 'Open to bids';
+      : 'Required before sending'
+    : validMin != null || validMax != null
+      ? budgetRangeLabel({
+          budget_cents: null,
+          budget_min_cents: validMin,
+          budget_max_cents: validMax,
+        })
+      : 'Open to bids';
+  const reviewTiming =
+    arrivalWindowLabel({
+      scheduled_date: scheduledDate,
+      arrival_start_hour: arrivalStartHour,
+      arrival_end_hour: arrivalEndHour,
+    }) ?? 'Flexible';
+  const scheduleDates = upcomingDates();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -883,108 +927,51 @@ export function PostJobScreen() {
                 </Text>
               </View>
 
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>
-                  Photos (optional) · {photos.length}/{MAX_PHOTOS}
-                </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.photoRow}
-              keyboardShouldPersistTaps="handled"
-            >
-              {photos.map((url, index) => (
-                <View key={url} style={styles.photoWrap}>
-                  <Pressable
-                    onPress={() => setViewerUri(url)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`View photo ${index + 1}`}
-                  >
-                    <Image source={{ uri: url }} style={styles.photo} />
-                  </Pressable>
-                  <Pressable
-                    style={styles.photoRemove}
-                    onPress={() => removePhoto(url)}
-                    hitSlop={7}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove photo ${index + 1}`}
-                  >
-                    <Ionicons name="close" size={14} color={colors.onPrimary} />
-                  </Pressable>
-                </View>
-              ))}
-
-              {photos.length < MAX_PHOTOS && (
-                <Pressable
-                  style={styles.addTile}
-                  onPress={handleAddPhoto}
-                  disabled={uploadingPhoto}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add a job photo"
-                >
-                  {uploadingPhoto ? (
-                    <ActivityIndicator size="small" color={colors.emerald} />
-                  ) : (
-                    <Ionicons name="add" size={28} color={colors.emerald} />
-                  )}
-                </Pressable>
-              )}
-                </ScrollView>
-              </View>
+              {/* The one canonical MediaUploader primitive (§O never-duplicate
+                  list; §N risk 9). It owns the pick + append-only-on-success
+                  rule; this screen supplies the bucket calls and the
+                  ownership rule for removals. */}
+              <MediaUploader
+                kind="photo"
+                label="Photos (optional)"
+                // A hire request goes through create_offer(), whose server
+                // cap is still 5 (Phase 5 owns the offer RPCs); only the
+                // posting path's create_job() was raised to 10 in phase49.
+                maxItems={isHiring ? 5 : MAX_PHOTOS}
+                items={photos}
+                onItemsChange={setPhotos}
+                disabled={submitting || !user}
+                onUpload={handleUploadPhoto}
+                onDelete={handleDeleteMedia}
+                shouldDeleteOnRemove={(url) => !originalPhotosRef.current.has(url)}
+                onPressItem={(url) => setViewerUri(url)}
+                onUploadError={(message) => void alertAsync('Photo upload failed', message)}
+              />
 
               <View style={styles.field}>
-                <Text style={styles.fieldLabel}>
-                  Video (optional) · {videos.length}/{MAX_VIDEOS}
-                </Text>
+                <MediaUploader
+                  kind="video"
+                  label="Video (optional)"
+                  maxItems={MAX_VIDEOS}
+                  items={videos}
+                  onItemsChange={setVideos}
+                  disabled={submitting || !user}
+                  onUpload={handleUploadVideo}
+                  onDelete={handleDeleteMedia}
+                  shouldDeleteOnRemove={(url) => !originalVideosRef.current.has(url)}
+                  validate={(asset) =>
+                    rejectionForPickedVideo(asset, {
+                      maxDurationMs: MAX_VIDEO_DURATION_MS,
+                      maxBytes: MAX_VIDEO_BYTES,
+                    })
+                  }
+                  videoMaxDurationSec={MAX_VIDEO_DURATION_MS / 1000}
+                  onUploadError={(message) => void alertAsync('Video upload failed', message)}
+                />
                 <Text style={styles.fieldHint}>
-                  Up to {MAX_VIDEO_DURATION_MS / 1000} seconds each. A short clip
-                  explains an awkward job faster than a paragraph.
+                  Up to {MAX_VIDEO_DURATION_MS / 1000} seconds. A short clip explains an
+                  awkward job faster than a paragraph.
                 </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.photoRow}
-              keyboardShouldPersistTaps="handled"
-            >
-              {/* No thumbnail: extracting one needs a second native module,
-                  and a labelled play tile says what it is without pretending
-                  to preview a frame that was never generated. */}
-              {videos.map((url, index) => (
-                <View key={url} style={styles.photoWrap}>
-                  <View style={styles.videoTile}>
-                    <Ionicons name="play-circle" size={30} color={colors.emerald} />
-                    <Text style={styles.videoTileText}>Clip {index + 1}</Text>
-                  </View>
-                  <Pressable
-                    style={styles.photoRemove}
-                    onPress={() => removeVideo(url)}
-                    hitSlop={7}
-                    accessibilityLabel={`Remove clip ${index + 1}`}
-                  >
-                    <Ionicons name="close" size={14} color={colors.onPrimary} />
-                  </Pressable>
-                </View>
-              ))}
-
-              {videos.length < MAX_VIDEOS && (
-                <Pressable
-                  style={styles.addTile}
-                  onPress={handleAddVideo}
-                  disabled={uploadingVideo}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add a job video"
-                >
-                  {uploadingVideo ? (
-                    <>
-                      <ActivityIndicator size="small" color={colors.emerald} />
-                      <Text style={styles.uploadingText}>Uploading…</Text>
-                    </>
-                  ) : (
-                    <Ionicons name="videocam-outline" size={26} color={colors.emerald} />
-                  )}
-                </Pressable>
-              )}
-                </ScrollView>
               </View>
             </View>
           )}
@@ -1052,24 +1039,121 @@ export function PostJobScreen() {
                   its precise coordinates stay in protected job-location data.
                 </Text>
               </View>
+
+              {/* The exact address and timing are meaningless for a direct
+                  offer (the negotiation carries its own terms — Phase 5's
+                  surface), so hire mode keeps the plain location step. */}
+              {!isHiring && (
+                <>
+                  <TextField
+                    palette={emeraldColors}
+                    label="Service address (private, optional)"
+                    value={address}
+                    onChangeText={setAddress}
+                    placeholder="e.g. 2410 Emmons Ave, Apt 3B"
+                    autoCapitalize="words"
+                    hint="Never shown while workers browse. Only you — and the worker you hire — can see it."
+                  />
+
+                  <View style={styles.field}>
+                    <Text style={styles.fieldLabel}>Which day?</Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.chipRow}
+                      keyboardShouldPersistTaps="handled"
+                    >
+                      <Chip
+                        label="Flexible"
+                        variant="filter"
+                        selected={scheduledDate == null}
+                        onPress={() => setScheduledDate(null)}
+                      />
+                      {scheduleDates.map((d) => (
+                        <Chip
+                          key={d.iso}
+                          label={d.label}
+                          variant="filter"
+                          selected={scheduledDate === d.iso}
+                          onPress={() => setScheduledDate(d.iso)}
+                        />
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  <View style={styles.field}>
+                    <Text style={styles.fieldLabel}>Arrival window</Text>
+                    <View style={styles.chips}>
+                      <Chip
+                        label="Flexible"
+                        variant="filter"
+                        selected={arrivalStartHour == null}
+                        onPress={() => {
+                          setArrivalStartHour(null);
+                          setArrivalEndHour(null);
+                        }}
+                      />
+                      {ARRIVAL_WINDOWS.map((w) => (
+                        <Chip
+                          key={w.label}
+                          label={w.label}
+                          variant="filter"
+                          selected={arrivalStartHour === w.start && arrivalEndHour === w.end}
+                          onPress={() => {
+                            setArrivalStartHour(w.start);
+                            setArrivalEndHour(w.end);
+                          }}
+                        />
+                      ))}
+                    </View>
+                  </View>
+                </>
+              )}
             </View>
           )}
 
           {step === 3 && (
             <View style={styles.stepFields}>
-              <TextField
-                palette={emeraldColors}
-                label={isHiring ? 'Your offer ($)' : 'Budget ($) (optional)'}
-                value={budget}
-                onChangeText={setBudget}
-                placeholder="e.g. 50"
-                keyboardType="numeric"
-                hint={
-                  isHiring
-                    ? `${hireWorkerName} can accept or suggest a different price.`
-                    : 'Leave blank if you want workers to propose a price.'
-                }
-              />
+              {isHiring ? (
+                <TextField
+                  palette={emeraldColors}
+                  label="Your offer ($)"
+                  value={budget}
+                  onChangeText={setBudget}
+                  placeholder="e.g. 50"
+                  keyboardType="numeric"
+                  hint={`${hireWorkerName} can accept or suggest a different price.`}
+                />
+              ) : (
+                <View style={styles.field}>
+                  <View style={styles.budgetRow}>
+                    <View style={styles.budgetField}>
+                      <TextField
+                        palette={emeraldColors}
+                        label="Min budget ($)"
+                        value={budgetMin}
+                        onChangeText={setBudgetMin}
+                        placeholder="e.g. 40"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                    <View style={styles.budgetField}>
+                      <TextField
+                        palette={emeraldColors}
+                        label="Max budget ($)"
+                        value={budgetMax}
+                        onChangeText={setBudgetMax}
+                        placeholder="e.g. 60"
+                        keyboardType="numeric"
+                      />
+                    </View>
+                  </View>
+                  <Text style={styles.fieldHint}>
+                    Both optional — leave them blank if you want workers to propose a
+                    price. A range helps workers bid inside what you expect.
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.reviewCard}>
                 <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
@@ -1116,6 +1200,34 @@ export function PostJobScreen() {
                     </Text>
                   </View>
                 </View>
+
+                {!isHiring && (
+                  <View style={styles.reviewRow}>
+                    <View style={styles.reviewIcon}>
+                      <Ionicons name="time-outline" size={18} color={colors.emerald} />
+                    </View>
+                    <View style={styles.reviewText}>
+                      <Text style={styles.reviewLabel}>Timing</Text>
+                      <Text style={styles.reviewValue} numberOfLines={2}>
+                        {reviewTiming}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+
+                {!isHiring && address.trim() ? (
+                  <View style={styles.reviewRow}>
+                    <View style={styles.reviewIcon}>
+                      <Ionicons name="lock-closed-outline" size={18} color={colors.emerald} />
+                    </View>
+                    <View style={styles.reviewText}>
+                      <Text style={styles.reviewLabel}>Address (private)</Text>
+                      <Text style={styles.reviewValue} numberOfLines={2}>
+                        {address.trim()}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
 
                 <View style={styles.reviewRow}>
                   <View style={styles.reviewIcon}>
@@ -1180,98 +1292,122 @@ export function PostJobScreen() {
           style={[styles.successOverlay, { opacity: successOpacity }]}
           accessibilityViewIsModal
         >
-        <ScrollView
-          contentContainerStyle={styles.successScrollContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <Animated.View
-            style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
-          >
-            <Ionicons name="checkmark" size={48} color={colors.onPrimary} />
-          </Animated.View>
-          <Text style={styles.successEyebrow}>
-            {isEditing ? 'CHANGES SAVED' : isHiring ? 'REQUEST SENT' : 'JOB PUBLISHED'}
-          </Text>
-          <Text style={styles.successTitle}>
-            {isEditing ? 'Your job is updated.' : isHiring ? 'Your request is on its way.' : 'Your job is live.'}
-          </Text>
-          <Text style={styles.successBody}>
-            {isEditing
-              ? 'Workers will now see the latest details.'
-              : isHiring
-                ? `${hireWorkerName} can accept, decline, or suggest a different price in chat.`
-                : 'Workers can now review the details and send you bids.'}
-          </Text>
+          {!isEditing && !isHiring ? (
+            /* Screen 16 (JobPublished) — the SuccessScreen template, configured
+               rather than reimplemented. The body explains what happens next
+               without inventing certainty: bidding produces real bids as
+               workers respond, and right now there are none. */
+            <SuccessScreen
+              title="Your job is live."
+              body="Workers browsing BRAZOS can now see it. Bids appear on your job as workers respond — there are none yet — and you choose who gets it."
+              details={
+                publishedJob ? (
+                  <View style={styles.reviewCard}>
+                    <Text style={styles.reviewEyebrow}>PUBLISHED</Text>
+                    <Text style={styles.reviewTitle} numberOfLines={2}>
+                      {publishedJob.title}
+                    </Text>
 
-          {publishedJob && !isEditing && !isHiring && (
-            <View style={[styles.reviewCard, styles.successSummaryCard]}>
-              <Text style={styles.reviewEyebrow}>PUBLISHED</Text>
-              <Text style={styles.reviewTitle} numberOfLines={2}>
-                {publishedJob.title}
+                    <View style={styles.reviewDivider} />
+
+                    <View style={styles.reviewRow}>
+                      <View style={styles.reviewIcon}>
+                        <Ionicons name="grid-outline" size={18} color={colors.emerald} />
+                      </View>
+                      <View style={styles.reviewText}>
+                        <Text style={styles.reviewLabel}>Category</Text>
+                        <Text style={styles.reviewValue} numberOfLines={1}>
+                          {JOB_CATEGORY_LABELS[publishedJob.category]}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {publishedJob.location ? (
+                      <View style={styles.reviewRow}>
+                        <View style={styles.reviewIcon}>
+                          <Ionicons name="location-outline" size={19} color={colors.emerald} />
+                        </View>
+                        <View style={styles.reviewText}>
+                          <Text style={styles.reviewLabel}>Area</Text>
+                          <Text style={styles.reviewValue} numberOfLines={2}>
+                            {publishedJob.location}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    {arrivalWindowLabel(publishedJob) ? (
+                      <View style={styles.reviewRow}>
+                        <View style={styles.reviewIcon}>
+                          <Ionicons name="time-outline" size={18} color={colors.emerald} />
+                        </View>
+                        <View style={styles.reviewText}>
+                          <Text style={styles.reviewLabel}>Timing</Text>
+                          <Text style={styles.reviewValue} numberOfLines={2}>
+                            {arrivalWindowLabel(publishedJob)}
+                          </Text>
+                        </View>
+                      </View>
+                    ) : null}
+
+                    <View style={styles.reviewRow}>
+                      <View style={styles.reviewIcon}>
+                        <Ionicons name="wallet-outline" size={18} color={colors.emerald} />
+                      </View>
+                      <View style={styles.reviewText}>
+                        <Text style={styles.reviewLabel}>Budget</Text>
+                        <Text style={styles.reviewValue}>
+                          {publishedJob.budget_cents != null ||
+                          publishedJob.budget_min_cents != null
+                            ? budgetRangeLabel(publishedJob)
+                            : 'Open to bids'}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : undefined
+              }
+              actions={[
+                { label: 'View job and bids', onPress: leaveToPublishedJob },
+                {
+                  label: 'Keep browsing',
+                  onPress: () => leaveAfterSuccess(false),
+                  variant: 'secondary',
+                },
+              ]}
+            />
+          ) : (
+            <ScrollView
+              contentContainerStyle={styles.successScrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              <Animated.View
+                style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
+              >
+                <Ionicons name="checkmark" size={48} color={colors.onPrimary} />
+              </Animated.View>
+              <Text style={styles.successEyebrow}>
+                {isEditing ? 'CHANGES SAVED' : 'REQUEST SENT'}
+              </Text>
+              <Text style={styles.successTitle}>
+                {isEditing ? 'Your job is updated.' : 'Your request is on its way.'}
+              </Text>
+              <Text style={styles.successBody}>
+                {isEditing
+                  ? 'Workers will now see the latest details.'
+                  : `${hireWorkerName} can accept, decline, or suggest a different price in chat.`}
               </Text>
 
-              <View style={styles.reviewDivider} />
-
-              <View style={styles.reviewRow}>
-                <View style={styles.reviewIcon}>
-                  <Ionicons name="grid-outline" size={18} color={colors.emerald} />
-                </View>
-                <View style={styles.reviewText}>
-                  <Text style={styles.reviewLabel}>Category</Text>
-                  <Text style={styles.reviewValue} numberOfLines={1}>
-                    {JOB_CATEGORY_LABELS[publishedJob.category]}
-                  </Text>
-                </View>
+              <View style={styles.successActions}>
+                <Button
+                  title={isEditing ? 'Back to job' : 'Done'}
+                  onPress={() => leaveAfterSuccess(true)}
+                  palette={emeraldColors}
+                  style={styles.successButton}
+                />
               </View>
-
-              {publishedJob.location ? (
-                <View style={styles.reviewRow}>
-                  <View style={styles.reviewIcon}>
-                    <Ionicons name="location-outline" size={19} color={colors.emerald} />
-                  </View>
-                  <View style={styles.reviewText}>
-                    <Text style={styles.reviewLabel}>Area</Text>
-                    <Text style={styles.reviewValue} numberOfLines={2}>
-                      {publishedJob.location}
-                    </Text>
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={styles.reviewRow}>
-                <View style={styles.reviewIcon}>
-                  <Ionicons name="wallet-outline" size={18} color={colors.emerald} />
-                </View>
-                <View style={styles.reviewText}>
-                  <Text style={styles.reviewLabel}>Budget</Text>
-                  <Text style={styles.reviewValue}>
-                    {publishedJob.budget_cents != null
-                      ? formatBudget(publishedJob.budget_cents)
-                      : 'Open to bids'}
-                  </Text>
-                </View>
-              </View>
-            </View>
+            </ScrollView>
           )}
-
-          <View style={styles.successActions}>
-            <Button
-              title={isEditing ? 'Back to job' : isHiring ? 'Done' : 'View my jobs'}
-              onPress={() => leaveAfterSuccess(true)}
-              palette={emeraldColors}
-              style={styles.successButton}
-            />
-            {!isEditing && !isHiring && (
-              <Button
-                title="Back to home"
-                variant="secondary"
-                palette={emeraldColors}
-                onPress={() => leaveAfterSuccess(false)}
-                style={styles.successButton}
-              />
-            )}
-          </View>
-        </ScrollView>
         </Animated.View>
       )}
 
@@ -1405,62 +1541,17 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     marginTop: -spacing.xs,
   },
-  videoTile: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.lg,
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
+  budgetRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
   },
-  videoTileText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: colors.forest,
+  budgetField: {
+    flex: 1,
   },
-  uploadingText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: colors.emerald,
-    marginTop: spacing.xs,
-  },
-  photoRow: {
+  chipRow: {
+    flexDirection: 'row',
     gap: spacing.sm,
     paddingRight: spacing.sm,
-  },
-  photoWrap: {
-    position: 'relative',
-  },
-  photo: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.lg,
-    backgroundColor: colors.mint,
-  },
-  photoRemove: {
-    position: 'absolute',
-    top: -7,
-    right: -7,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: colors.danger,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.background,
-  },
-  addTile: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.emerald,
-    borderStyle: 'dashed',
-    backgroundColor: colors.mint,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   chips: {
     flexDirection: 'row',
@@ -1643,11 +1734,6 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     color: colors.textMuted,
     textAlign: 'center',
-  },
-  successSummaryCard: {
-    width: '100%',
-    maxWidth: 360,
-    marginTop: spacing.lg,
   },
   successActions: {
     width: '100%',

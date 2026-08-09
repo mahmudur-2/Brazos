@@ -28,13 +28,19 @@ import { useAuth } from '../hooks/useAuth';
 import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import {
+  arrivalWindowLabel,
+  budgetRangeLabel,
   categoryAccent,
   dollarsToCents,
+  fetchClientJobStats,
   formatBudget,
+  hasBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   type OpenJob,
 } from '../lib/jobs';
+import { fetchProfileById, type Profile } from '../lib/profiles';
+import { Avatar } from '../components/Avatar';
 import { createMarketplaceOffer, fetchMyOfferForJob, type Offer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { maybePromptForPush } from '../lib/pushNotifications';
@@ -45,6 +51,30 @@ import { colors, radius, spacing } from '../lib/theme';
 // There is no identity-verification provider yet. Keep this explicit rather
 // than presenting a trust signal the product cannot currently substantiate.
 const VERIFICATION_LABEL = 'Unverified';
+
+/**
+ * No payments, commission, or ledger system exists at any layer yet
+ * (BUILD_STATE: "payment implementation does not exist"). This constant
+ * exists ONLY to drive the clearly-labeled payout ESTIMATE below — it is a
+ * local assumption about a future fee, not a read of any real fee schedule,
+ * and the UI copy says so. Phase 5's sandbox checkout owns the real number.
+ */
+const ESTIMATED_PLATFORM_FEE_RATE = 0.1;
+
+function afterFeeCents(cents: number): number {
+  return Math.round(cents * (1 - ESTIMATED_PLATFORM_FEE_RATE));
+}
+
+/** "$45–$54" / "$54" — the job's budget with the estimated fee taken off. */
+function payoutEstimateLabel(job: OpenJob): string | null {
+  const min = job.budget_min_cents;
+  const max = job.budget_max_cents ?? job.budget_cents;
+  if (max == null) return null;
+  if (min != null && min !== max) {
+    return `${formatBudget(afterFeeCents(min))}–${formatBudget(afterFeeCents(max))}`;
+  }
+  return formatBudget(afterFeeCents(max));
+}
 
 export function JobDetailScreen() {
   // Registered in three different stacks (Home, MyJobs, Map) — like Chat, its
@@ -69,6 +99,13 @@ export function JobDetailScreen() {
   const [takingListedPrice, setTakingListedPrice] = useState(false);
   const [existingBid, setExistingBid] = useState<Offer | null>(null);
   const [checking, setChecking] = useState(true);
+  // The posting customer's public profile + real posting history — the
+  // customer-side trust signals screen 51 shows a browsing worker. Rendered
+  // only once loaded; nothing is fabricated while they're in flight.
+  const [poster, setPoster] = useState<Profile | null>(null);
+  const [posterStats, setPosterStats] = useState<{ posted: number; completed: number } | null>(
+    null
+  );
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [confirmBidVisible, setConfirmBidVisible] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -117,6 +154,22 @@ export function JobDetailScreen() {
   useEffect(() => {
     setActivePhotoIndex(0);
   }, [job.id]);
+
+  useEffect(() => {
+    let active = true;
+    setPoster(null);
+    setPosterStats(null);
+    if (isOwnJob) return;
+    fetchProfileById(job.client_id).then(({ data, error }) => {
+      if (active && !error) setPoster(data);
+    });
+    fetchClientJobStats(job.client_id).then(({ data, error }) => {
+      if (active && !error) setPosterStats(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [job.client_id, isOwnJob]);
 
   /**
    * Shared tail of both bid paths. Everything that decides whether the bid is
@@ -338,11 +391,15 @@ export function JobDetailScreen() {
             <View style={styles.detailRow}>
               <Ionicons name="cash-outline" size={20} color={colors.textMuted} />
               <Text style={styles.detailText}>
-                {job.budget_cents != null
-                  ? `${formatBudget(job.budget_cents)} budget`
-                  : 'Open budget'}
+                {hasBudget(job) ? `${budgetRangeLabel(job)} budget` : 'Open budget'}
               </Text>
             </View>
+            {arrivalWindowLabel(job) ? (
+              <View style={styles.detailRow}>
+                <Ionicons name="time-outline" size={20} color={colors.textMuted} />
+                <Text style={styles.detailText}>Arrive {arrivalWindowLabel(job)}</Text>
+              </View>
+            ) : null}
 
             {job.description ? <Text style={styles.description}>{job.description}</Text> : null}
 
@@ -390,6 +447,45 @@ export function JobDetailScreen() {
             </Card>
           ) : (
             <>
+              {/* Customer-side trust signals: real profile, real counted
+                  history. Rendered only once loaded — never placeholders. */}
+              {poster ? (
+                <Card style={[styles.posterCard, styles.secondaryCard]}>
+                  <Text style={styles.sectionTitle}>Posted by</Text>
+                  <View style={styles.posterRow}>
+                    <Avatar name={poster.full_name} uri={poster.avatar_url} size={48} />
+                    <View style={styles.posterCopy}>
+                      <Text style={styles.posterName} numberOfLines={1}>
+                        {poster.full_name ?? 'BRAZOS customer'}
+                      </Text>
+                      {posterStats ? (
+                        <Text style={styles.posterMeta}>
+                          {posterStats.posted}{' '}
+                          {posterStats.posted === 1 ? 'job' : 'jobs'} posted ·{' '}
+                          {posterStats.completed} completed
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                </Card>
+              ) : null}
+
+              {/* Payout after fee — a clearly-labeled ESTIMATE (see
+                  ESTIMATED_PLATFORM_FEE_RATE). Payments don't exist yet and
+                  the copy says so; nothing here reads a ledger. */}
+              {payoutEstimateLabel(job) ? (
+                <Card style={[styles.payoutCard, styles.secondaryCard]}>
+                  <Text style={styles.priceEyebrow}>Est. payout after fee</Text>
+                  <Text style={styles.payoutAmount}>{payoutEstimateLabel(job)}</Text>
+                  <Text style={styles.payoutNote}>
+                    Estimate only, from the customer’s stated budget minus a{' '}
+                    {Math.round(ESTIMATED_PLATFORM_FEE_RATE * 100)}% platform fee. Payments
+                    aren’t live in BRAZOS yet, so nothing is charged or paid through the
+                    app — you settle directly with the customer.
+                  </Text>
+                </Card>
+              ) : null}
+
               {/* Happy with the advertised price? One tap, no retyping the
                   number and no inventing a pitch. Still an ordinary bid the
                   poster has to accept. */}
@@ -642,6 +738,40 @@ const styles = StyleSheet.create({
   },
   listedPriceCard: {
     gap: spacing.md,
+  },
+  posterCard: {
+    gap: spacing.md,
+  },
+  posterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  posterCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  posterName: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  posterMeta: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  payoutCard: {
+    gap: spacing.sm,
+  },
+  payoutAmount: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.text,
+  },
+  payoutNote: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
   },
   priceEyebrow: {
     fontSize: 13,

@@ -43,6 +43,20 @@ export type MediaUploaderProps = {
    *  accepts it. */
   validate?: (asset: ImagePicker.ImagePickerAsset) => { title: string; message: string } | null;
   onUploadError?: (message: string) => void;
+  /**
+   * Caller-owned removal policy. By default only tiles added through this
+   * instance are delete-on-remove (right for editing a published row, whose
+   * seeded media must outlive removal until the edit saves). A restored
+   * draft is the opposite case — its seeded media belongs to no saved row
+   * and must always be deletable — so a caller that knows better supplies
+   * the rule and this instance's own bookkeeping steps aside.
+   */
+  shouldDeleteOnRemove?: (url: string) => boolean;
+  /** Opens a tile (photo viewer, video player). Omit for plain tiles. */
+  onPressItem?: (url: string) => void;
+  /** Caps in-picker recording length for `kind="video"`. Library picks are
+   *  not covered by it — enforce real duration limits via `validate`. */
+  videoMaxDurationSec?: number;
   kind: MediaUploaderKind;
   maxItems: number;
   disabled?: boolean;
@@ -56,6 +70,9 @@ export function MediaUploader({
   onDelete,
   validate,
   onUploadError,
+  shouldDeleteOnRemove,
+  onPressItem,
+  videoMaxDurationSec,
   kind,
   maxItems,
   disabled,
@@ -76,6 +93,7 @@ export function MediaUploader({
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: kind === 'video' ? ['videos'] : ['images'],
       quality: kind === 'photo' ? 0.7 : undefined,
+      videoMaxDuration: kind === 'video' ? videoMaxDurationSec : undefined,
     });
     if (result.canceled || !result.assets[0]) return;
 
@@ -103,7 +121,10 @@ export function MediaUploader({
 
   function handleRemove(url: string) {
     onItemsChange(items.filter((item) => item !== url));
-    if (!addedHereRef.current.has(url) || !onDelete) return;
+    const removable = shouldDeleteOnRemove
+      ? shouldDeleteOnRemove(url)
+      : addedHereRef.current.has(url);
+    if (!removable || !onDelete) return;
     addedHereRef.current.delete(url);
     void onDelete(url);
   }
@@ -116,14 +137,22 @@ export function MediaUploader({
       <View style={styles.row}>
         {items.map((url, index) => (
           <View key={url} style={styles.tile}>
-            {kind === 'photo' ? (
-              <Image source={{ uri: url }} style={styles.thumb} resizeMode="cover" />
-            ) : (
-              <View style={[styles.thumb, styles.videoThumb]}>
-                <Ionicons name="play-circle" size={26} color={colors.forest} />
-                <Text style={styles.videoLabel}>Clip {index + 1}</Text>
-              </View>
-            )}
+            <Pressable
+              onPress={onPressItem ? () => onPressItem(url) : undefined}
+              disabled={!onPressItem}
+              accessibilityRole={onPressItem ? 'imagebutton' : undefined}
+              accessibilityLabel={onPressItem ? `Open ${kind} ${index + 1}` : undefined}
+              style={styles.thumb}
+            >
+              {kind === 'photo' ? (
+                <Image source={{ uri: url }} style={styles.thumb} resizeMode="cover" />
+              ) : (
+                <View style={[styles.thumb, styles.videoThumb]}>
+                  <Ionicons name="play-circle" size={26} color={colors.forest} />
+                  <Text style={styles.videoLabel}>Clip {index + 1}</Text>
+                </View>
+              )}
+            </Pressable>
             <Pressable
               style={styles.remove}
               onPress={() => handleRemove(url)}

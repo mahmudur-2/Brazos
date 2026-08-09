@@ -1,10 +1,26 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-08
+Updated: 2026-08-08 (second Phase 4 session — autonomous DB access)
 
 ## Current phase
-Phase 4 — Post-a-job vertical slice. **CODE-COMPLETE, AWAITING DEVICE
-VERIFICATION** (2026-08-08). Not closed — see "Phase 4 — what was built" and
-the Phase 4 gate-status block below for exactly what is and is not proven.
+Phase 4 — Post-a-job vertical slice. **FULL SCOPE BUILT AND
+AUTOMATED-PROOF PASSED; awaiting the physical two-device pass** (2026-08-08,
+second session). The first session closed two gaps (AsyncStorage draft,
+MediaUploader primitive) without DB access; this session had authorized
+direct DB access and closed the rest of the phase's scope: **phase49
+applied and verified** (budget MIN/MAX range, scheduled date + arrival
+window, private service address through job_locations), the wizard's
+Location & timing and Budget & review steps now collect all of it,
+MediaUploader is wired into the wizard (the ownership-rule conflict the
+first session flagged is resolved by design, not papered over), screen 16
+is a real SuccessScreen-template configuration, screen 51 gained the
+payout-after-fee estimate + poster trust signals, screen 39 shows
+timing/range/private address, and My Jobs surfaces the local draft under
+its Open view.
+
+Proof lines, exactly as the brief requires:
+- **AUTOMATED TWO-ACCOUNT PROOF: PASS** — see "Phase 4 second-session
+  verification" below (RLS-engaged as two real identities, rolled back).
+- **PHYSICAL TWO-DEVICE CONFIRMATION: NOT RUN** — no device this session.
 
 Phase 3 — Data foundation remains **PASS / CLOSED** (2026-08-08), unchanged
 this session:
@@ -51,15 +67,18 @@ Bidding & hiring slice. See "Exact next task".
   dropped. **PASS** — verify-schema 131 OK / 0 PENDING, RLS probe 5/5, device
   regression Parts 1+2 on a real device, shim/projection harness 6/6. Decision
   doc: `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md`.
-- [ ] 4 post · **CODE-COMPLETE, not closed** (2026-08-08) · AsyncStorage draft
-  persistence + the `MediaUploader` primitive built this session; everything
-  else the phase needs (posting, worker discovery, job detail, My Jobs) was
-  already live per Phase 0's crosswalk and needed no change. tsc/lint clean,
-  217/219 tests (same 2 pre-existing failures, 4 new tests), verify-schema
-  131/0/0 unchanged (no migration — none was needed). Cross-account two-device
-  post→discover→open and the mode-isolation/RLS probes are **NOT RUN** — no
-  device or live credentials available this session. See "Phase 4 — what was
-  built" for the full account.
+- [ ] 4 post · **FULL SCOPE BUILT, AUTOMATED PROOF PASSED, not closed**
+  (2026-08-08, two sessions) · Session 1 (no DB access): AsyncStorage draft
+  persistence + the `MediaUploader` primitive. Session 2 (authorized direct
+  DB access): phase49 applied+verified (budget range, arrival window,
+  private address), wizard steps 2–4 completed to the atlas spec,
+  MediaUploader wired in, screen 16 as a SuccessScreen config, screen 51
+  payout estimate + trust signals, screen 39 timing/range/address, My Jobs
+  draft card. tsc/lint clean, **218/220 tests** (same 2 pre-existing
+  failures; test deltas itemised below), verify-schema **139/0/0**.
+  **AUTOMATED TWO-ACCOUNT PROOF: PASS · PHYSICAL TWO-DEVICE CONFIRMATION:
+  NOT RUN** — closing still needs the user's on-device pass. See "Phase 4
+  second session" below.
   [ ] 5 hire · [ ] 6 lifecycle · [ ] 7 messaging ·
   [ ] 8 discovery · [ ] 9 profiles · [ ] 10 reviews · [ ] 11 earnings ·
   [ ] 12 notifications · [ ] 13 hardening
@@ -222,9 +241,23 @@ under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 ## Migrations written but NOT applied
-None. Every migration through phase48 is applied and verified.
+None. Every migration through phase49 is applied and verified.
 
 ## Migrations applied (verify-schema green)
+phase49 (`phase49_post_wizard_fields.sql`): **applied by the agent under the
+session's explicit autonomous-database authorization** (direct authenticated
+session-mode connection; the old paste-into-SQL-Editor flow did not apply
+this session), then re-run to prove idempotency, then confirmed by a green
+`node scripts/verify-schema.mjs`: all 8 new phase49 checks (5 columns, the
+two widened RPC signatures, the sentinel `post_wizard_fields_enabled()`)
+flipped PENDING→OK on their own, total now **139 OK, 0 MISSING, 0 PENDING**,
+exit 0 — 2026-08-08. Adds `jobs.budget_min_cents`/`budget_max_cents`,
+`jobs.scheduled_date`/`arrival_start_hour`/`arrival_end_hour`, makes
+`job_locations.lat`/`lng` nullable-as-a-pair, and recreates
+`create_job`/`update_job_details` with the widened parameter list (all new
+params defaulted; the old nine-argument call shape was proven to still
+resolve, in a rolled-back transaction). Touches no policy, no trigger, no
+lifecycle RPC.
 phase48 (`phase48_bids_drift_view_rewrite.sql`): **applied by the user and
 confirmed by a green `verify-schema.mjs` run** — both checks flipped PENDING to
 OK on their own, and the migration's own post-commit grid reported
@@ -368,19 +401,22 @@ that replaced what they pointed at.
   hiring) post now autosaves to AsyncStorage and restores on mount; cleared on
   publish and on a graceful Back-out, left in place on an app kill by
   construction (no unmount effect runs). See "Phase 4 — what was built".
-- **`MediaUploader` (the Phase 1 primitive deferred to Phase 4) is built and
-  catalogued but not wired into `PostJobScreen`** — same pattern Phase 2 used
-  for `JobCard` (primitive exists, no screen forced onto it yet). Concrete
-  reason this time, not just caution: the primitive's ownership rule ("only
-  delete on removal what this instance itself uploaded") is right for editing
-  a published job, but wrong for a restored draft, where every photo belongs
-  to no saved row yet and must always be deletable — `PostJobScreen`'s
-  existing `sessionUploadsRef`/`originalPhotosRef` split already encodes that
-  correctly and was not disturbed. A future phase that revisits the wizard
-  should resolve this before wiring the primitive in, not paper over it.
-- No scheduling/arrival-window field on `jobs` — confirmed absent (previously only suspected).
+- ~~`MediaUploader` built but not wired into `PostJobScreen` (ownership-rule
+  conflict for restored drafts).~~ **Resolved in Phase 4 session 2**: the
+  primitive gained a caller-supplied `shouldDeleteOnRemove` override; the
+  screen passes "not in the job's original media", which is correct for
+  fresh posts, restored drafts, and edit mode alike. Wired in, guarded by
+  `tests/mediaUploader.test.mjs` (no parallel picker path may regrow).
+- ~~No scheduling/arrival-window field on `jobs`.~~ **Resolved by phase49**
+  (`scheduled_date` + `arrival_start_hour`/`arrival_end_hour`). The legacy
+  `jobs.scheduled_for` timestamptz remains unused (0 rows, 0 code refs) and
+  untouched — a Phase 13 deletion candidate.
 - `lib/acceptBidCompatibility.ts`'s `acceptBidWithoutRpc()` fallback (only runs on `PGRST202`, i.e. if `accept_bid` RPC ever drops from PostgREST's schema cache) does a non-atomic read-then-multi-step-update with no row lock — a real TOCTOU race, unlikely to be exercised since the RPC is confirmed live, but untested for concurrency. **Phase 3A verdict: not dead code** — `lib/bids.ts:2,196` and `tests/hardening.test.mjs:86,91` reference it, so it was left in place and marked in-file for **mandatory removal in Phase 3B**, when `accept_offer()` replaces `accept_bid()` and it has nothing left to fall back from.
-- **`fetchJobsByClient()` (`lib/jobs.ts`) has no status filter** — it returns every job a client owns. Harmless today; it becomes a real defect the moment draft/direct jobs exist, so it is one of the two gates holding phase45. Fix it (or ship the draft-job UI) before applying that migration.
+- ~~`fetchJobsByClient()` has no status filter.~~ **Stale entry, corrected
+  2026-08-08 (Phase 4 session 2 audit):** the Gate-2
+  `.not('status','eq','draft')` filter has been in place since Phase 3B —
+  draft rows (unsent direct-offer negotiations) are excluded from My Jobs
+  by design, and phase45 shipped with that gate satisfied.
 - **A worker cannot read the job a direct offer refers to before accepting it.** `jobs_select_assigned_worker` needs `assigned_worker_id`, which a live direct offer has not set. Phase 3B must add a policy for the targeted worker, or the offer surfaces will render an unreadable job.
 - **Declined/closed `job_requests` have no migration path** into `job_offers` — they never produced a job row and `job_offers.job_id` is NOT NULL. phase45 deliberately skips them rather than fabricating a job. Phase 3B decides whether `job_offers` should carry dead negotiations at all (if yes, `job_id` must become nullable — a model change).
 - **`bids` carries duplicate `public`- and `authenticated`-role RLS policies** (`workers view own bids` ≈ `bids_select_own`, `job owner views bids on their job` ≈ `bids_select_job_owner`) — leftovers from a role migration. The `public` pair is strictly weaker (no `is_profile_active(worker_id)` term) and, being permissive, ORs with the stricter pair, so the stricter one currently adds nothing. Untouched in 3A per the brief; Phase 3B's RLS consolidation should drop the `public` pair.
@@ -802,31 +838,208 @@ DEFERRED-block update + primitive-count correction) ·
 No screen on the locked list (01–07, 48) was touched. No migration was
 written — Phase 4 needed zero schema change.
 
-## What Phase 4 could not verify this session
+## Phase 4 second session (2026-08-08) — full slice + phase49
 
-No real device, simulator, or emulator was available, and the repo rule is
-that Expo is never started from an agent session. These are explicit open
-items for the user, not claimed as passing:
+Ran under an explicit autonomous-execution brief with a direct authenticated
+DB connection (project ref confirmed against `.env` before any change).
 
-- **Cross-account two-device proof** — customer posts a job on one
-  account/device, worker discovers it via Worker Home and opens
-  `JobDetailScreen` on another. Everything this session could confirm by
-  reading code (real data source, no exact address leaked to the worker) is
-  recorded above; only a live run proves the round trip.
-- **Draft survives an actual app kill** — the persistence logic is guarded by
-  source-level tests, but "survives an app kill" is inherently a real-device
-  claim (force-quit the app mid-wizard, relaunch, confirm the draft and its
-  photos are still there).
-- **Failed media upload preserves prior state** — `MediaUploader`'s
-  append-only-on-error-free-path ordering is asserted in
-  `tests/mediaUploader.test.mjs`, but it isn't wired into any live screen
-  this phase, so there is nothing to exercise on-device yet. (`PostJobScreen`
-  itself already satisfies this DoD item independently — its existing
-  handlers only call `setPhotos`/`setVideos` after a successful upload — and
-  that part *is* live and was unchanged this session.)
-- **Mode-isolation smoke and RLS probe** — unaffected by this phase's changes
-  (no navigation, mode, or policy edit), but not re-run. Worth reconfirming
-  before Phase 5 builds on top.
+### Built
+- **phase49** (see Migrations applied). Live-schema audit first: `jobs` had
+  a single `budget_cents`, an unused legacy `scheduled_for` (0 of 119 rows,
+  zero code references — left untouched), and no window columns;
+  `job_locations` already carried `address_line`/`access_notes` (phase43)
+  but required coords. The audit also found `fetchJobsByClient()` ALREADY
+  carries the Gate-2 `.not('status','eq','draft')` filter — the Known-issues
+  entry saying it had no filter was stale and is corrected below.
+- **Wizard step 3 (screen 14):** exact service address field (→
+  `job_locations.address_line`, private), a 14-day date chip row, and four
+  preset arrival-window chips (Morning 8–11 / Midday 11–2 / Afternoon 2–5 /
+  Evening 5–8, plus Flexible). No datetime-picker dependency added — chips
+  cover the real cases and store honest values.
+- **Wizard step 4 (screen 15):** editable MIN/MAX budget fields (both
+  optional = open to bids), range-aware review card plus Timing and private
+  Address rows. Hire mode keeps its single offer-amount field.
+- **Step 2 (screen 13):** `MediaUploader` wired in for photos (10) and video
+  (1, ≤60s) — the hand-rolled pickers are gone (guard test added). The
+  ownership conflict session 1 flagged is resolved by a new caller-supplied
+  `shouldDeleteOnRemove` override on the primitive: the screen passes
+  "not in the job's original media", which is exactly right for fresh posts,
+  restored drafts AND edit mode. `onPressItem` (photo viewer) and
+  `videoMaxDurationSec` were added to the primitive at the same time.
+- **Screen 16:** the fresh-post success is now a real `SuccessScreen`
+  template configuration — "View job and bids" (straight to
+  ClientJobDetail, which shows the job's real, currently-zero bids) /
+  "Keep browsing". Copy explains bids arrive as workers respond; no match
+  counts, no fake certainty. Edit/hire success keeps the old overlay.
+- **Screen 51 (WorkerJobDetail):** budget renders as the range; arrival
+  window row; "Posted by" trust card (real profile + counted posted/
+  completed history, rendered only once loaded); "Est. payout after fee"
+  card driven by a local named `ESTIMATED_PLATFORM_FEE_RATE = 0.1` with
+  copy stating it is an estimate and payments are not live.
+- **Screen 39 (ClientJobDetail):** budget range in the hero, a
+  "Timing & address" card (window + private address with a privacy caption).
+- **Screen 38 (MyJobsHub):** a dashed "Draft — not published yet" resume
+  card under the Active view when the local wizard draft has content.
+- **Draft persistence moved to `lib/postJobDraft.ts`** (one canonical
+  implementation; the hub reads the same record). Same `v1` key; a
+  pre-range draft's single budget folds into `budgetMax`; a
+  slipped-into-the-past `scheduledDate` is dropped on restore.
+- **lib/jobs.ts:** new columns in `Job`/`OpenJob`/both projections,
+  `budgetRangeLabel`/`hasBudget`/`arrivalWindowLabel`/`fetchClientJobStats`,
+  `fetchJobLocation` now returns `address_line` (PostJobScreen is its only
+  caller — verified).
+
+### Judgment calls (each per the brief's least-new-architecture rule)
+- **Budget range = `budget_min_cents`/`budget_max_cents`; `budget_cents`
+  stays and is mirrored server-side to `coalesce(max, min, legacy)`** —
+  LOCKED Worker Home (48) and every legacy reader render `budget_cents`,
+  and 48 may not be touched, so the ceiling (a real customer-stated number,
+  not an invented midpoint) keeps those surfaces truthful. The RPCs are the
+  only writers of the mirror.
+- **Arrival window lives on `jobs` (public)** — a worker deciding to bid
+  needs it, and a time window doesn't identify a household the way the
+  address does. Stored as `scheduled_date` + local wall-clock hour pair
+  (NOT timestamptz): the window is a promise about the job's neighborhood
+  and must render identically for every viewer.
+- **Address = `job_locations.address_line`** (job_private_details per the
+  phase43 decision), `lat`/`lng` relaxed to nullable-as-a-pair because a
+  typed address has no GPS fix (no geocoder exists). Radius/hotspot RPCs
+  do arithmetic on coords, so null-coord rows simply never match.
+- **`update_job_details` was extended in the same migration** — its old
+  body deleted the `job_locations` row whenever an edit arrived without
+  coords, which would have silently destroyed a saved private address the
+  first time a poster edited a title. Now the row is removed only when the
+  edit carries neither coords nor an address, and the upsert preserves
+  `access_notes`. Its ownership/open-status/zero-bids guards are unchanged
+  (the bids check now also covers `job_offers` directly — strictly
+  stronger).
+- **Old-build compat:** every new RPC param is defaulted, and the old
+  nine-argument call shape was proven live (rolled back). Known, accepted
+  wrinkle: a pre-phase49 build EDITING a job clears range/window fields its
+  UI never showed — its single-budget edit wins, matching what that build
+  displays.
+- **Submit-a-bid CTA on 51 was NOT un-wired.** The brief assumed no working
+  submit flow exists; in fact the screen's bid flow (createMarketplaceOffer,
+  retargeted in 3B) is live and device-verified in the Phase 3 pass.
+  Un-wiring it would regress working, verified functionality for zero gain.
+  Kept exactly as-is; Phase 5's OfferComposer replaces it wholesale.
+- **Distance on 51 is NOT rendered.** Exact coords are RLS-protected from
+  browsing workers and no public coarse point exists on `jobs`; inventing
+  one is Phase 8's discovery-model change (§E lists distance with the
+  discovery/maps family). Coarse area text renders as before.
+- **MyJobsHub was NOT rebuilt onto CommitmentsList** (§P.2 — it is a
+  working tabbed hub whose filters already map the live enum; Open ≙ its
+  Active view). DB `draft` rows remain deliberately EXCLUDED from the hub:
+  in the live schema a draft jobs row is an unsent direct-offer negotiation
+  (Gate 2, phase45 decision doc), not a customer's wizard draft — the
+  brief's "add (draft, published) filter" is thereby satisfied in
+  substance: published (=open) rows from the DB, the wizard draft from
+  lib/postJobDraft.
+- **The wizard was NOT rebuilt onto FormScreen's wizard mode** — it is
+  already a working 4-step wizard with draft persistence and upload
+  cleanup; rebuilding the container is churn with no functional gain
+  (same call session 1 made implicitly; recorded explicitly now).
+- **Hire-mode photo cap stays 5** — hire requests go through
+  `create_offer()`, whose server cap is untouched (offer RPCs are Phase
+  5's; altering them is on this brief's forbidden list). Server video cap
+  stays 2 everywhere as a permissive superset; the UI offers 1 per the
+  atlas.
+- **`ESTIMATED_PLATFORM_FEE_RATE = 0.1`** is an assumption, clearly labeled
+  in code and copy. Phase 5's sandbox checkout owns the real fee math.
+- **No dependency added.** AsyncStorage was already present (session 1);
+  date/window input is chip-based.
+
+### Phase 4 second-session verification
+- **Automated two-account proof: PASS.** One transaction against the live
+  DB, RLS engaged exactly as PostgREST engages it (`set local role
+  authenticated` + transaction-local `request.jwt.claims`), two real,
+  distinct profile ids:
+  1. As the customer identity, `create_job()` published a job with range
+     (40–60), window (Aug 12, 8–11), and a private address.
+  2. As the worker identity, `fetchOpenJobs()`'s exact column projection
+     and status filter returned the job — range and window included
+     (`budget_cents` correctly mirrored 6000) — proving Worker Home's data
+     path sees it.
+  3. As the worker identity, `job_locations` for that job returned **0
+     rows** — the address is unreadable before hire.
+  4. As the owner, the same read returned the address.
+  5. `ROLLBACK` — a follow-up count proved zero probe rows remain.
+  This is the brief's option 3 (two real identities through RLS), not a
+  service-role read. **PHYSICAL TWO-DEVICE CONFIRMATION: NOT RUN.**
+- **Old-call-shape compat: PASS** (also rolled back) — `create_job` with
+  only the nine pre-phase49 named arguments resolves and mirrors
+  `budget_cents` = 5000 with null range.
+
+### Phase 4 second-session test changes (deliberate, itemised)
+Baseline entering: 217/219. Now **218/220** — same two pre-existing
+failures (`pwa` frozen web string; `setupOnboarding` CRLF), net +1 test.
+- `customerCore.test.mjs` — "Post Job is a guarded four-step presentation":
+  `'View my jobs'` / `title="Back to home"` assertions retargeted to screen
+  16's real actions (`'View job and bids'` / `'Keep browsing'` /
+  `<SuccessScreen`). The old labels were the pre-atlas success overlay this
+  phase replaces.
+- `customerCore.test.mjs` — "no paid-service claims": `arrival window`
+  removed from the forbidden-claims regex — phase49 made it a real,
+  schema-backed feature, so it is no longer an unbacked reference-mock
+  claim. `protected payment/funds`, `fit percentage`, `available today`
+  all remain forbidden.
+- `postJobDraft.test.mjs` — storage-key/AsyncStorage assertions retargeted
+  to `lib/postJobDraft.ts` (the helpers moved there); PostJobScreen must
+  now import from it. Every behavioural invariant (fresh-post-only, route
+  seed wins, autosave gating, clear-on-publish/abandon, no AppState
+  handler) is asserted unchanged.
+- `mediaUploader.test.mjs` — +1 test: PostJobScreen must render
+  `<MediaUploader`, must NOT contain `launchImageLibraryAsync` (no parallel
+  picker path may regrow), and must supply the `shouldDeleteOnRemove`
+  ownership overrides.
+
+### Gate (second session)
+- **tsc / lint:** PASS (clean, incl. `--noUnusedLocals --noUnusedParameters`).
+- **tests:** 218/220, only the two documented pre-existing failures.
+- **verify-schema:** PASS — 139 OK / 0 MISSING / 0 PENDING after phase49.
+- **locked screens:** PASS — screens 01–07 and 48 untouched (no diff).
+- **mode-smoke:** N/A — no navigation/mode/route-registration change
+  (screen 16 renders inside the existing PostJob route; "View job and
+  bids" navigates to already-registered routes).
+- **rls-probe:** no policy touched (verified: phase49 contains zero policy
+  statements). The rolled-back two-account proof above additionally
+  re-exercised the job_locations boundary as real identities.
+- **dev catalog:** compiles with the extended MediaUploader (new props all
+  optional; catalog fixture updated for the new OpenJob fields). The
+  on-device catalog + representative-screen eyeball rides the user's
+  device pass below.
+
+### ⚠ Operational note for the user
+While running a one-off compat check, a malformed PowerShell-quoted psql
+call echoed the full database connection string — password included — into
+this session's stored transcript. The credential is not in the repo or in
+any file, but the transcript itself should be treated as having exposed it:
+**rotate the database password in the Supabase dashboard** at your
+convenience, and prefer script-file-based psql invocations in future
+sessions (every other DB call this session used `-f`).
+
+## What Phase 4 still needs from a real device (the user's closing pass)
+
+No device/simulator was available in either session, and Expo is never
+started from an agent session. Automated equivalents passed where they
+exist; these remain the on-device closing checklist:
+
+- **Physical two-device post→discover→open** — the automated RLS-engaged
+  two-account proof PASSED (see above), but the literal two-phone run is
+  the DoD's own wording. While there: confirm the published job shows its
+  budget range, arrival window, and payout estimate on the worker's
+  JobDetail, and that no exact address appears anywhere on it.
+- **Draft survives an actual app kill** — force-quit mid-wizard (now
+  including address/date/window/min-max fields), relaunch, confirm restore;
+  also confirm the My Jobs "Draft" card appears and resumes it.
+- **Failed media upload preserves prior state, on-device** — MediaUploader
+  is now live in step 2 (airplane-mode a second upload and confirm the
+  first tile survives).
+- **Dev catalog + one real screen per affected template** — MediaUploader
+  changed, so eyeball its catalog section plus PostJobScreen step 2, and
+  screen 16 after a publish.
+- **Mode-isolation smoke** — unaffected by this phase (no nav/mode edit),
+  but worth reconfirming before Phase 5 builds on top.
 
 ## Exact next task (Phase 5 — Bidding & hiring slice)
 

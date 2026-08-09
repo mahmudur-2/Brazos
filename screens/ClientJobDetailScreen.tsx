@@ -45,12 +45,16 @@ import {
 } from '../lib/offers';
 import { jobStage } from '../lib/jobStage';
 import {
+  arrivalWindowLabel,
+  budgetRangeLabel,
   categoryAccent,
   completionPhotosOf,
   completionVideosOf,
+  fetchJobLocation,
   fetchRehirableWorkerIds,
   formatBudget,
   formatPendingBidCount,
+  hasBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
 } from '../lib/jobs';
@@ -80,6 +84,10 @@ export function ClientJobDetailScreen() {
   const [worker, setWorker] = useState<Profile | null>(null);
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
+  // The exact service address (job_private_details). This is the poster's own
+  // screen, so RLS always grants the read; it simply comes back null when the
+  // posting never carried one.
+  const [privateAddress, setPrivateAddress] = useState<string | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   // Handed to ReviewSection so focusing its comment field can lift the card
@@ -181,6 +189,17 @@ export function ClientJobDetailScreen() {
       workerRunRef.current += 1;
     };
   }, [loadAssignedWorker]);
+  useEffect(() => {
+    let active = true;
+    setPrivateAddress(null);
+    fetchJobLocation(job.id).then(({ data, error }) => {
+      if (active && !error) setPrivateAddress(data?.address_line ?? null);
+    });
+    return () => {
+      active = false;
+    };
+  }, [job.id]);
+
   // "Hire Again" is client-scoped by definition: only workers who have already
   // completed a job for *this* client. Workers never see this in reverse.
   useEffect(() => {
@@ -387,7 +406,11 @@ export function ClientJobDetailScreen() {
                 {hasLifecycle ? 'AGREED PRICE' : 'BUDGET'}
               </Text>
               <Text style={[styles.budget, !canAccept && styles.heroTitleLight]}>
-                {formatBudget(displayedAmountCents)}
+                {hasLifecycle
+                  ? formatBudget(displayedAmountCents)
+                  : hasBudget(job)
+                    ? budgetRangeLabel(job)
+                    : formatBudget(null)}
               </Text>
             </View>
             {canAccept ? (
@@ -425,6 +448,31 @@ export function ClientJobDetailScreen() {
             </Text>
           </View>
         </Card>
+
+        {arrivalWindowLabel(job) || privateAddress ? (
+          <Card palette={emeraldColors} style={styles.timingCard}>
+            <Text style={styles.eyebrow}>TIMING &amp; ADDRESS</Text>
+            {arrivalWindowLabel(job) ? (
+              <View style={styles.timingRow}>
+                <Ionicons name="time-outline" size={18} color={colors.emerald} />
+                <Text style={styles.timingText}>{arrivalWindowLabel(job)}</Text>
+              </View>
+            ) : null}
+            {privateAddress ? (
+              <View style={styles.timingRow}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.emerald} />
+                <View style={styles.timingCopy}>
+                  <Text style={styles.timingText} selectable>
+                    {privateAddress}
+                  </Text>
+                  <Text style={styles.timingCaption}>
+                    Private — only you and the worker you hire can see this address.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </Card>
+        ) : null}
 
         {canAccept && (job.photos.length > 0 || job.videos.length > 0) ? (
           <Card palette={emeraldColors} style={styles.mediaCard}>
@@ -955,6 +1003,32 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderRadius: radius.xl,
     borderColor: colors.mint2,
+  },
+  timingCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  timingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  timingCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  timingText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ink,
+    lineHeight: 21,
+  },
+  timingCaption: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
   },
   eyebrow: {
     ...typography.caption,

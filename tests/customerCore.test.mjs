@@ -57,8 +57,13 @@ test('Post Job is a guarded four-step presentation over the existing form state'
   assert.match(postJob, /StackActions\.popToTop\(\)/);
   assert.match(postJob, /pop: true/);
   assert.match(postJob, /data: loc, error: locationError/);
-  assert.match(postJob, /'View my jobs'/i);
-  assert.match(postJob, /title="Back to home"/i);
+  // Screen 16 (Phase 4): the publish success is the SuccessScreen template
+  // with the atlas actions — "View job and bids" straight to the published
+  // job's own detail, "Keep browsing" home. The old "View my jobs"/"Back to
+  // home" pair was this assertion's previous target.
+  assert.match(postJob, /'View job and bids'/i);
+  assert.match(postJob, /'Keep browsing'/i);
+  assert.match(postJob, /<SuccessScreen/);
   assert.doesNotMatch(postJob, /successTimeoutRef|setTimeout\(/);
 });
 
@@ -180,9 +185,13 @@ test('Customer Home retains approved Emerald reference copy without adding paid-
   assert.match(customerCode, /function previewNeighborhood/);
   assert.match(customerCode, /useReducedMotion\(\)/);
   assert.match(customerCode, /Animated\.loop/);
+  // "Arrival window" left this list in Phase 4: phase49 gave it a real
+  // schema (jobs.arrival_start_hour/arrival_end_hour) and a real wizard
+  // field, so it is no longer an unbacked reference-mock claim. The rest
+  // remain claims the product cannot substantiate and must not surface.
   assert.doesNotMatch(
     customerCode,
-    /protected (?:payment|funds)|arrival window|fit percentage|available today/i
+    /protected (?:payment|funds)|fit percentage|available today/i
   );
 });
 

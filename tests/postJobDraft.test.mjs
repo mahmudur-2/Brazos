@@ -16,9 +16,14 @@ function codeOnly(source) {
 
 test('a fresh post survives in AsyncStorage, editing and hiring never touch it', async () => {
   const source = codeOnly(await read('screens/PostJobScreen.tsx'));
+  // The persistence itself moved to lib/postJobDraft.ts in Phase 4 so the
+  // My Jobs hub can surface the same draft without duplicating the storage
+  // key — the invariants are unchanged, just asserted against both files.
+  const draftLib = codeOnly(await read('lib/postJobDraft.ts'));
 
-  assert.match(source, /from '@react-native-async-storage\/async-storage'/);
-  assert.match(source, /DRAFT_STORAGE_KEY = 'brazos:postJobDraft:v1'/);
+  assert.match(draftLib, /from '@react-native-async-storage\/async-storage'/);
+  assert.match(draftLib, /DRAFT_STORAGE_KEY = 'brazos:postJobDraft:v1'/);
+  assert.match(source, /from '\.\.\/lib\/postJobDraft'/);
 
   // Fresh post only — never editing (reloads from the saved job) or hiring
   // (a single quick action with nothing worth resuming).

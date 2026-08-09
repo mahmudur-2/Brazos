@@ -42,6 +42,26 @@ test('MediaUploader only ever appends a URL a real upload returned', async () =>
   assert.match(source, /const rejection = validate\?\.\(asset\);/);
 });
 
+test('PostJobScreen media goes through the one canonical MediaUploader', async () => {
+  const source = codeOnly(await read('screens/PostJobScreen.tsx'));
+
+  // Phase 4 wired the primitive in — the screen must not keep (or regrow) a
+  // parallel hand-rolled picker path alongside it (§O never-duplicate list).
+  assert.match(source, /<MediaUploader/);
+  assert.doesNotMatch(source, /launchImageLibraryAsync/);
+
+  // The ownership rule rides the caller-supplied override: everything not
+  // already saved on the job row is deletable on removal, which is what makes
+  // a restored draft's media (saved on no row at all) always deletable while
+  // edit mode's original media survives until the edit saves.
+  assert.match(source, /shouldDeleteOnRemove=\{\(url\) => !originalPhotosRef\.current\.has\(url\)\}/);
+  assert.match(source, /shouldDeleteOnRemove=\{\(url\) => !originalVideosRef\.current\.has\(url\)\}/);
+
+  // Failure safety at the screen boundary: session bookkeeping only ever
+  // records URLs a real upload returned.
+  assert.match(source, /if \(url\) sessionUploadsRef\.current\.add\(url\);/);
+});
+
 test('MediaUploader is exported from the primitives barrel, no longer deferred', async () => {
   const [index, catalog] = await Promise.all([
     read('ui/primitives/index.ts'),

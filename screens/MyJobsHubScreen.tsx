@@ -19,6 +19,7 @@ import {
   jobThumbnailUrl,
   toOpenJob,
 } from '../lib/jobs';
+import { draftHasContent, loadPostJobDraft, type PostJobDraft } from '../lib/postJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
@@ -95,10 +96,21 @@ export function MyJobsHubScreen() {
   const { posted, working, pendingBids, names, loading, error, refresh } = useMyJobsHub();
   const [filter, setFilter] = useState<Filter>('active');
   const [refreshing, setRefreshing] = useState(false);
+  // The local, unpublished wizard draft (lib/postJobDraft). §H groups drafts
+  // under Open — and this device's draft is real work worth resuming, even
+  // though it has no jobs row yet. Empty autosaves don't count as a draft.
+  const [draft, setDraft] = useState<PostJobDraft | null>(null);
 
   useFocusEffect(
     useCallback(() => {
       void refresh();
+      let active = true;
+      loadPostJobDraft().then((d) => {
+        if (active) setDraft(d && draftHasContent(d) ? d : null);
+      });
+      return () => {
+        active = false;
+      };
     }, [refresh])
   );
 
@@ -121,9 +133,13 @@ export function MyJobsHubScreen() {
   );
   // Pending bids are only relevant in the Active view.
   const bidItems = filter === 'active' ? pendingBids : [];
+  const showDraft = filter === 'active' && draft != null;
 
   const isEmpty =
-    workingItems.length === 0 && postedItems.length === 0 && bidItems.length === 0;
+    workingItems.length === 0 &&
+    postedItems.length === 0 &&
+    bidItems.length === 0 &&
+    !showDraft;
 
   function openPostJob() {
     navigation.navigate('PostJob');
@@ -214,6 +230,32 @@ export function MyJobsHubScreen() {
             )
           ) : (
             <>
+              {showDraft && draft ? (
+                <View style={styles.section}>
+                  <SectionHeading title="Draft" count={1} />
+                  <Pressable
+                    onPress={openPostJob}
+                    style={({ pressed }) => [styles.draftCard, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Resume your job draft"
+                  >
+                    <View style={styles.draftIcon}>
+                      <Ionicons name="create-outline" size={20} color={colors.forest} />
+                    </View>
+                    <View style={styles.draftCopy}>
+                      <Text style={styles.draftEyebrow}>NOT PUBLISHED YET</Text>
+                      <Text style={styles.draftTitle} numberOfLines={1}>
+                        {draft.title.trim() || 'Untitled job'}
+                      </Text>
+                      <Text style={styles.draftMeta} numberOfLines={1}>
+                        Resume where you left off — workers can’t see it until you publish.
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={18} color={colors.forest} />
+                  </Pressable>
+                </View>
+              ) : null}
+
               {workingItems.length > 0 && (
                 <View style={styles.section}>
                   <SectionHeading
@@ -490,6 +532,46 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     color: colors.onPrimary,
+  },
+  draftCard: {
+    minHeight: 72,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.forest,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
+  },
+  draftIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    backgroundColor: colors.mint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  draftCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  draftEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    color: colors.emerald,
+  },
+  draftTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  draftMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
   postAnother: {
     minHeight: 56,
