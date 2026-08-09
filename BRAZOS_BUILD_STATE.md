@@ -5,15 +5,21 @@ Updated: 2026-08-08
 Phase 3B — Offer RPCs, RLS and application integration. **CODE-COMPLETE.**
 **Phase 3 overall is PARTIAL, not CLOSED.**
 
-phase43, 44, 45 and 46 are all applied and verified live (all ten phase46
-checks flipped to OK on their own). **phase47 is written and NOT applied** — it
-replaces phase46's two-call-site `bids` mirror with a trigger-driven
-projection and repairs any drift that mirror left. `verify-schema.mjs` shows
-every phase0–46 check OK and phase47's two as PENDING.
+phase43–47 are all applied and verified live. **phase48 is written and NOT
+applied** — it rewrites `v_bids_projection_drift`, which phase47 got wrong.
 
-Phase 3 closes only when: (1) phase47 applied, (2) post-apply verify-schema
-full PASS with zero PENDING, (3) a real-device regression pass. None has
-happened. See "Exact next task".
+Evidence gathered so far:
+- **Shim + projection validation: PASS** (2026-08-08). A SQL harness drove the
+  compat shims through bid, rival bid, counter, accept, decline and reopen. All
+  checks passed, including "exactly one bid_received per genuine new chain, zero
+  per counter or accept". Ran in a subtransaction and rolled back clean.
+- **Device regression: IN PROGRESS.** Found one real defect (`51e5c38`) and one
+  phantom (stale bundle). Blocked at Part 1 step 6 until the fix is on the device.
+- **RLS probe: NOT RUN** — still `exit 2, 3 skipped` for want of credentials.
+
+Phase 3 closes only when: (1) phase48 applied, (2) post-apply verify-schema full
+PASS with zero PENDING, (3) the device pass completed, (4) the RLS probe clean.
+See "Exact next task".
 
 ## Phase log
 - [x] 0 audit · commit `2aec323` · Repository audit executed per §B; two
@@ -208,15 +214,29 @@ than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 ## Migrations written but NOT applied
 
-`phase47_bids_projection_trigger.sql` — **final.** Replaces phase46's `bids`
-mirror with an AFTER INSERT OR UPDATE trigger on `job_offers`, supersedes the
-`create_bid`/`accept_bid` bodies so nothing writes `bids` by hand any more,
-adds the `v_bids_projection_drift` diagnostic view, and reprojects every
-marketplace chain to repair drift. The repair is unconditional and idempotent,
-so it does not depend on knowing the drift count in advance; it aborts if any
-row is still drifted afterwards.
+`phase48_bids_drift_view_rewrite.sql` — **final.** Rewrites
+`v_bids_projection_drift` on an exact definition (`stale` / `missing_live` /
+`orphan`), reprojects every marketplace chain with `bids_notify` disabled, and
+asserts zero repairable drift afterwards. Restores phase47's re-runnability,
+which the old view had broken.
+
+**Why the view needed two attempts, recorded so it is not repeated.** phase47's
+version expected one mirror row per CHAIN; the projection keeps one per
+`(job_id, worker_id)`, because `bids` still carries phase1's unconditional
+unique on that pair — so a settled chain that lost its row to a later chain read
+as drift. The first correction ("only the newest chain is mirrored", ordered by
+`created_at`) was ALSO wrong: chains created in one transaction share an
+identical `now()`, `job_offers` has no sequence and `id` is random, so
+**"newest chain" is not determinable from this schema** and the check failed
+against correct data about half the time. Same hazard phase47's header already
+documented for leaf selection, one level up.
 
 ## Migrations applied (verify-schema green)
+phase47 (`phase47_bids_projection_trigger.sql`): **applied by the user and
+confirmed by a green `verify-schema.mjs` run** — both checks flipped from
+PENDING to OK on their own, which also proves its repair pass found zero drift
+(it raises and rolls back otherwise) — 2026-08-08.
+
 phase45 (`phase45_job_requests_to_job_offers.sql`) + phase46
 (`phase46_offer_rpcs_and_rls.sql`): **applied by the user via the Supabase SQL
 Editor**, phase45 first as the enum dependency requires. Confirmed by a green
@@ -617,32 +637,31 @@ Modified: `App.tsx` · `lib/navigation.ts` · `lib/profiles.ts` ·
   enum. `AppMode` is a hand-written union today, matching the DB constraint's
   two values exactly.
 
-## Exact next task (apply phase47, then close Phase 3)
+## Exact next task (apply phase48, then close Phase 3)
 
-phase43–46 are live. Everything below is manual and none of it has been done.
+phase43–47 are live. None of the below has been done.
 
-1. **Optional pre-check** — measure the drift phase47 will repair:
-   `select count(*) from public.v_bids_projection_drift;` will not work yet
-   (the view ships in phase47). To see it beforehand, run the standalone audit
-   query recorded in the Phase 3B report, or simply apply phase47 and read its
-   `drifted rows BEFORE = n, AFTER = 0` NOTICE — it prints the same number.
-2. **Apply `supabase/phase47_bids_projection_trigger.sql`.** Read the NOTICE
-   lines. It aborts and rolls back if any chain is still drifted afterwards.
-3. **Re-run `node scripts/verify-schema.mjs`.** Both phase47 checks must flip
+1. **Apply `supabase/phase48_bids_drift_view_rewrite.sql`.** Read the Results
+   grid it returns after COMMIT: `repairable_drift` must be 0, `orphan_rows`
+   should be 0 (if not, inspect by hand — legacy rows with no chain behind them,
+   which the projection cannot clean up).
+2. **Re-run `node scripts/verify-schema.mjs`.** Both phase48 checks must flip
    from PENDING to OK on their own. Only that green run counts as applied.
-4. **Real-device regression pass**: bid → poster sees it and the count is right
-   → accept → job assigns and rival offers settle; direct offer from a worker
-   profile → counter from the other side → turn flips live → accept; My Jobs
-   never shows a phantom draft.
-5. **RLS probe**: a second worker cannot read another worker's offer on the same
-   job; the job owner can read all of them.
+3. **Finish the device pass** from Part 1 step 6, with `51e5c38` or later on the
+   device. Confirm the bundle first — one of this pass's two findings was a
+   stale bundle, not a defect.
+4. **Run the RLS probe** between steps 5 and 7, while both bids are pending:
+   `scripts/rls-probe-offers.mjs` with the three PROBE_* credential pairs. It
+   currently exits 2 with 3 skipped; skipped is not a pass.
 
-**Only after 2–5 is Phase 3 CLOSED.** Until then it stays PARTIAL.
+**Only after 1–4 is Phase 3 CLOSED.** Until then it stays PARTIAL.
 
-Carry forward, not part of Phase 3:
-- The six legacy shims, the projection trigger, and
-  `v_bids_projection_drift` all retire together in the first phase that ships
-  a version gate (§11 of the decision doc), which also means updating the
-  phase18/29/30/36/38 groups in `verify-schema.mjs`.
+Then Phase 4 (Post-a-job vertical slice). Carry forward, not part of Phase 3:
+- The six legacy shims, the projection trigger,
+  `project_offer_chain_to_bids()` and `v_bids_projection_drift` all retire
+  together in the first phase that ships a version gate (§11 of the decision
+  doc), which also means updating the phase18/29/30/36/38 verifier groups.
 - Generated database types still do not exist.
 - The §H.1 job-lifecycle enum beyond `draft`, and withdraw/expire (Phase 5).
+- The latent `PostJob`/`WorkerHomeStack` navigation gap (see Known issues) —
+  a navigation-phase change, not Phase 3.

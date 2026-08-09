@@ -1,13 +1,14 @@
 # ARCHITECTURE DECISION — the unified `job_offers` model
 
 **Phase:** 3A + 3B (Data foundation)
-**Date:** 2026-08-08 (§11 corrected same day, after phase46 was applied)
-**Status:** phase43–46 APPLIED and verified live; phase47 written, not applied
+**Date:** 2026-08-08 (§11 corrected twice the same day — see its notes)
+**Status:** phase43–47 APPLIED and verified live; phase48 written, not applied
 **Files:** `supabase/phase43_job_offers_foundation.sql`,
 `supabase/phase44_backfill_bids_to_job_offers.sql`,
 `supabase/phase45_job_requests_to_job_offers.sql`,
 `supabase/phase46_offer_rpcs_and_rls.sql`,
-`supabase/phase47_bids_projection_trigger.sql`
+`supabase/phase47_bids_projection_trigger.sql`,
+`supabase/phase48_bids_drift_view_rewrite.sql`
 
 ---
 
@@ -492,9 +493,23 @@ version*, not a date, and not "eventually". They must not become a permanent
 second implementation, and they cannot drift into one: every shim delegates and
 none contains negotiation logic of its own.
 
-Removing them is a deliberate, self-contained task: drop the six functions, and
-update the phase18/29/30/36/38 groups in `scripts/verify-schema.mjs`, which
-currently require them to exist and are what would otherwise turn red.
+Removing them is a deliberate, self-contained task: drop the six functions, the
+projection trigger, `project_offer_chain_to_bids()`,
+`v_bids_projection_drift`, and update the phase18/29/30/36/38 groups in
+`scripts/verify-schema.mjs`, which currently require the shims to exist and are
+what would otherwise turn red.
+
+**A note on the drift view, because it cost two attempts.** phase47's version
+expected one mirror row per CHAIN; the projection keeps one per
+`(job_id, worker_id)`, because `bids` still carries phase1's unconditional
+unique on that pair. A settled chain that lost its row to a later chain is not
+drift. The first correction — "only the newest chain is expected to be
+mirrored", ordered by `created_at` — was also wrong: two chains created in one
+transaction share an identical `now()`, there is no sequence on `job_offers`,
+and `id` is random, so **"newest chain" is not determinable from this schema**.
+phase48 therefore checks what is exact: a row must match ITS OWN chain
+(`stale`), a `pending` chain must have a row (`missing_live`), and a row with
+no chain is reported but not repairable (`orphan`).
 
 **How `bids` is kept current — a projection, not a mirror.**
 
@@ -531,7 +546,10 @@ phase47 replaces it with one `AFTER INSERT OR UPDATE` trigger on
   insert on that unconditional unique index.
 
 **It cannot drift**, because there is no way to change `job_offers` without it
-running. **No recursion**, by enumeration: it writes `bids`; the only trigger on
+running. Confirmed empirically on 2026-08-08 by a SQL harness that drove the
+shims through bid, rival bid, counter, accept, decline and reopen — every
+behavioural assertion passed, including "zero new bid pushes per counter or
+accept". **No recursion**, by enumeration: it writes `bids`; the only trigger on
 `bids` is phase20's `bids_notify`, which writes `notification_outbox`; nothing
 is triggered on `notification_outbox`; nothing anywhere writes back to
 `job_offers`.
@@ -563,7 +581,8 @@ negotiation card — a documented degradation with zero production impact.
 | 2 | `phase44_backfill_bids_to_job_offers.sql` | **APPLIED** 2026-08-08 | 25/25 bids migrated, 24/24 accepted links set. |
 | 3 | `phase45_job_requests_to_job_offers.sql` | **APPLIED** 2026-08-08 | Gates cleared (§6). Applied before phase46, as required. |
 | 4 | `phase46_offer_rpcs_and_rls.sql` | **APPLIED** 2026-08-08 | RPCs, RLS, shims, composite FK. All ten verifier checks flipped to OK. |
-| 5 | `phase47_bids_projection_trigger.sql` | **final, not applied** | Replaces phase46's two-call-site `bids` mirror with a trigger-driven projection, and repairs any drift it left. |
+| 5 | `phase47_bids_projection_trigger.sql` | **APPLIED** 2026-08-08 | Trigger-driven projection replacing phase46's mirror. Both verifier checks OK. |
+| 6 | `phase48_bids_drift_view_rewrite.sql` | **final, not applied** | Rewrites the drift view on correctness + coverage. The projection itself was correct; the view was not. |
 
 **Why 45 before 46, and not the other way round.** The default instinct is to
 put RPCs and RLS in place before data lands. Checked against the real

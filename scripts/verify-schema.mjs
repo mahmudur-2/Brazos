@@ -594,6 +594,20 @@ const MIGRATIONS = [
         checkColumnRevoked('v_bids_projection_drift', 'root_offer_id')],
     ],
   },
+  {
+    // phase48 rewrites v_bids_projection_drift. A view replacement is invisible
+    // to a PostgREST probe — the view existed before and is revoked from anon
+    // either way — so the sentinel carries this one entirely. It is created
+    // last inside phase48's transaction, AFTER the reprojection and its
+    // zero-repairable-drift assertion, so its presence proves both ran and
+    // agreed.
+    file: 'phase48_bids_drift_view_rewrite.sql',
+    sentinel: ['rpc bids_projection_v2_enabled()', () => checkRpc('bids_projection_v2_enabled', {})],
+    checks: [
+      ['v_bids_projection_drift still not readable', () =>
+        checkColumnRevoked('v_bids_projection_drift', 'root_offer_id')],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
