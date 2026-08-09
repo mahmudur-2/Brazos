@@ -50,6 +50,7 @@ import {
   type OfferWithWorker,
 } from '../lib/offers';
 import { jobStage } from '../lib/jobStage';
+import { deriveJobLifecycle } from '../lib/jobLifecycle';
 import {
   arrivalWindowLabel,
   budgetRangeLabel,
@@ -133,6 +134,9 @@ export function ClientJobDetailScreen() {
   // true here — this is the one screen that legitimately shows "In Progress".
   const actionableBidCount = loading && bids.length === 0 ? null : visibleBidCount;
   const stage = jobStage(job.status, actionableBidCount, true);
+  // THE lifecycle derivation point (run addendum §1) — the completed-job fork
+  // below branches on this, never on a hand-rolled status+payment combo.
+  const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: !!openDispute });
 
   useEffect(() => {
     screenMountedRef.current = true;
@@ -596,46 +600,51 @@ export function ClientJobDetailScreen() {
               )}
 
               <View style={styles.bidList}>
-                {sortedBids.map((bid) => (
-                  <OfferCard
-                    key={bid.id}
-                    variant="list"
-                    offer={bid}
-                    palette={emeraldColors}
-                    isBestValue={bid.id === bestId && pendingBids.length > 1}
-                    canAccept={canAccept}
-                    accepting={acceptingId === bid.id}
-                    disabled={acceptingId !== null && acceptingId !== bid.id}
-                    onAccept={() => confirmAccept(bid)}
-                    onOpenDetail={() =>
-                      navigation.navigate('BidDetail', { job, offerId: bid.id })
-                    }
-                    onViewProfile={
-                      bid.worker
-                        ? () =>
-                            navigation.navigate('WorkerProfile', {
-                              workerId: bid.worker!.id,
-                              workerName: bid.worker!.full_name ?? undefined,
-                            })
-                        : undefined
-                    }
-                    onLongPressAvatar={
-                      bid.worker?.avatar_url
-                        ? () => setAvatarUri(bid.worker!.avatar_url)
-                        : undefined
-                    }
-                    canRehire={!!bid.worker && rehirable.has(bid.worker.id)}
-                    onHireAgain={
-                      bid.worker
-                        ? () =>
-                            navigation.navigate('PostJob', {
-                              hireWorkerId: bid.worker!.id,
-                              hireWorkerName: bid.worker!.full_name ?? 'this worker',
-                            })
-                        : undefined
-                    }
-                  />
-                ))}
+                {sortedBids.map((bid) => {
+                  // A const narrows ONCE and survives into the closures — the
+                  // five `bid.worker!` assertions this replaces were sound
+                  // only by inspection (hardening A8).
+                  const worker = bid.worker;
+                  const avatarUrl = worker?.avatar_url ?? null;
+                  return (
+                    <OfferCard
+                      key={bid.id}
+                      variant="list"
+                      offer={bid}
+                      palette={emeraldColors}
+                      isBestValue={bid.id === bestId && pendingBids.length > 1}
+                      canAccept={canAccept}
+                      accepting={acceptingId === bid.id}
+                      disabled={acceptingId !== null && acceptingId !== bid.id}
+                      onAccept={() => confirmAccept(bid)}
+                      onOpenDetail={() =>
+                        navigation.navigate('BidDetail', { job, offerId: bid.id })
+                      }
+                      onViewProfile={
+                        worker
+                          ? () =>
+                              navigation.navigate('WorkerProfile', {
+                                workerId: worker.id,
+                                workerName: worker.full_name ?? undefined,
+                              })
+                          : undefined
+                      }
+                      onLongPressAvatar={
+                        avatarUrl ? () => setAvatarUri(avatarUrl) : undefined
+                      }
+                      canRehire={!!worker && rehirable.has(worker.id)}
+                      onHireAgain={
+                        worker
+                          ? () =>
+                              navigation.navigate('PostJob', {
+                                hireWorkerId: worker.id,
+                                hireWorkerName: worker.full_name ?? 'this worker',
+                              })
+                          : undefined
+                      }
+                    />
+                  );
+                })}
               </View>
             </>
           )
@@ -888,7 +897,7 @@ export function ClientJobDetailScreen() {
               // legacy job that completed without any payment keeps the old
               // inline review, since there is nothing to release.
               payment ? (
-                openDispute ? (
+                lifecycle === 'disputed' && openDispute ? (
                   <Card palette={emeraldColors} style={styles.approvalCard}>
                     <Text style={styles.approvalTitle}>Issue reported</Text>
                     <Text style={styles.noticeText}>
@@ -901,7 +910,7 @@ export function ClientJobDetailScreen() {
                       onPress={() => navigation.navigate('ApproveOrDispute', { job })}
                     />
                   </Card>
-                ) : isHeld(payment) ? (
+                ) : lifecycle === 'awaiting_approval' ? (
                   <Card palette={emeraldColors} style={styles.approvalCard}>
                     <Text style={styles.approvalTitle}>The work is done — your call</Text>
                     <Text style={styles.noticeText}>

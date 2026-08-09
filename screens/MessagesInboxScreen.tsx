@@ -62,7 +62,13 @@ export function MessagesInboxScreen() {
   const [pendingByThread, setPendingByThread] = useState<Set<string>>(new Set());
 
   const loadPending = useCallback(async () => {
-    const { data } = await fetchMyPendingOffers();
+    const { data, error } = await fetchMyPendingOffers();
+    if (error) {
+      // Keep the last known badges — a failed refresh must not clear the
+      // only surface announcing a waiting offer (hardening A8).
+      console.warn('[MessagesInbox] pending-offer refresh failed', error.message);
+      return;
+    }
     setPendingByThread(
       new Set(
         data.map((r) =>

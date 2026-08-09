@@ -379,17 +379,26 @@ export function WorkerJobScreen() {
               </Text>
               <MoneyText cents={payment.amount_cents} state={payment.status} />
               <Text style={styles.paymentNote}>
-                {isReleased(payment)
-                  ? payment.release_reason === 'auto_approved'
-                    ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
-                    : `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`
-                  : isHeld(payment)
-                    ? job.status === 'completed'
-                      ? issueOpen
-                        ? `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`
-                        : `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`
-                      : `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
-                    : 'Sandbox build — payment states here are development records, not real money.'}
+                {(() => {
+                  // A7: the disputed/awaiting fork comes from THE derivation
+                  // point; the money predicates stay payment vocabulary.
+                  const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen });
+                  if (isReleased(payment)) {
+                    return payment.release_reason === 'auto_approved'
+                      ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
+                      : `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`;
+                  }
+                  if (lifecycle === 'disputed') {
+                    return `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
+                  }
+                  if (lifecycle === 'awaiting_approval') {
+                    return `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`;
+                  }
+                  if (isHeld(payment)) {
+                    return `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`;
+                  }
+                  return 'Sandbox build — payment states here are development records, not real money.';
+                })()}
               </Text>
             </Card>
           ) : null}

@@ -277,7 +277,9 @@ export function JobDetailScreen() {
     await maybePromptForPush(
       'Get told the moment this client accepts your offer — and when new jobs like this are posted.'
     );
-    navigation.getParent()?.navigate('MyJobs' as never);
+    (navigation.getParent() as unknown as {
+      navigate: (tab: 'MyJobs') => void;
+    } | null)?.navigate('MyJobs');
   }
 
   /**
@@ -318,7 +320,9 @@ export function JobDetailScreen() {
       );
       return;
     }
-    (navigation as any).navigate('Chat', { directThreadId: threadId });
+    (navigation as unknown as {
+      navigate: (screen: 'Chat', params: { directThreadId: string }) => void;
+    }).navigate('Chat', { directThreadId: threadId });
   }
 
   // §10 (Phase 8): this screen is registered in the SHARED Map and MyJobs
@@ -612,7 +616,11 @@ export function JobDetailScreen() {
                 </Text>
                 <Button
                   title="Write a bid"
-                  onPress={() => (navigation as any).navigate('SubmitBid', { job })}
+                  onPress={() =>
+                    (navigation as unknown as {
+                      navigate: (screen: 'SubmitBid', params: { job: OpenJob }) => void;
+                    }).navigate('SubmitBid', { job })
+                  }
                   disabled={takingListedPrice}
                   style={styles.quickBidAction}
                 />
@@ -628,7 +636,11 @@ export function JobDetailScreen() {
                   <BrowseJobCard
                     key={sj.id}
                     job={sj}
-                    onPress={() => (navigation as any).navigate('JobDetail', { job: sj })}
+                    onPress={() =>
+                      (navigation as unknown as {
+                        navigate: (screen: 'JobDetail', params: { job: OpenJob }) => void;
+                      }).navigate('JobDetail', { job: sj })
+                    }
                   />
                 ))}
               </View>

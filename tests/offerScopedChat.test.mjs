@@ -108,7 +108,11 @@ test('offer surfaces look the thread up — nothing client-side creates one', as
 
 test('the inbox and chat keep their unread contract', async () => {
   const chat = await read('screens/ChatScreen.tsx');
-  assert.match(chat, /markConversationRead\(target, user\.id\)/);
+  // Hardening A8 reshaped the call (narrowed uid + observable failure): the
+  // contract is focus/blur still mark the thread read and a failed write is
+  // logged, never silently dropped.
+  assert.match(chat, /markConversationRead\(target, uid\)/);
+  assert.match(chat, /mark-read failed/);
   const inbox = await read('screens/MessagesInboxScreen.tsx');
   assert.match(inbox, /my_read_at/);
 });

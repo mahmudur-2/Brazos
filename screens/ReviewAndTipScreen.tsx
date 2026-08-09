@@ -58,6 +58,10 @@ export function ReviewAndTipScreen() {
   const [payment, setPayment] = useState<Payment | null>(null);
   const [tip, setTip] = useState<Payment | null>(null);
   const [loaded, setLoaded] = useState(false);
+  // A failed payment read must BLOCK, not fall through: with payment=null the
+  // approve gate below would wave a still-held job straight into the review
+  // form (hardening run, A6/A8).
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [workerName, setWorkerName] = useState<string | null>(null);
 
   const [tipChoice, setTipChoice] = useState<number | 'custom' | null>(null);
@@ -68,12 +72,17 @@ export function ReviewAndTipScreen() {
   const scrollRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
+    setLoadError(null);
     const [paymentRes, tipRes] = await Promise.all([
       fetchJobPaymentState(job.id),
       fetchJobTip(job.id),
     ]);
-    if (!paymentRes.error) setPayment(paymentRes.data);
-    if (!tipRes.error) setTip(tipRes.data);
+    if (paymentRes.error) setLoadError(paymentRes.error.message);
+    else setPayment(paymentRes.data);
+    if (tipRes.error) {
+      const message = tipRes.error.message;
+      setLoadError((prev) => prev ?? message);
+    } else setTip(tipRes.data);
     setLoaded(true);
   }, [job.id]);
 
@@ -153,7 +162,13 @@ export function ReviewAndTipScreen() {
           }
         : !loaded
           ? { kind: 'loading' as const, variant: 'spinner' as const }
-          : payment && !released
+          : loadError
+            ? {
+                kind: 'error' as const,
+                message: loadError,
+                onRetry: () => void load(),
+              }
+            : payment && !released
             ? {
                 kind: 'empty' as const,
                 title: 'Approve the work first',

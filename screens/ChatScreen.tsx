@@ -77,10 +77,9 @@ export function ChatScreen() {
   // people with no job (phase36) — exactly one of these is ever set.
   const jobId = params.jobId ?? null;
   const directThreadId = params.directThreadId ?? null;
-  const target = useMemo<ChatTarget>(
-    () => (jobId ? { jobId } : { directThreadId: directThreadId as string }),
-    [jobId, directThreadId]
-  );
+  // The route param IS the discriminated ChatTarget already — no rebuild, no
+  // cast (hardening A8).
+  const target: ChatTarget = params;
 
   const { job } = useJob(jobId);
   const { messages, loading, error, addLocal } = useChat(jobId, directThreadId);
@@ -91,10 +90,16 @@ export function ChatScreen() {
   // message that arrives while the chat is open doesn't show as unread later.
   useFocusEffect(
     useCallback(() => {
-      if (user) markConversationRead(target, user.id);
-      return () => {
-        if (user) markConversationRead(target, user.id);
-      };
+      // Fire-and-forget by design (the unread dot self-heals on the next
+      // focus); the log keeps a failed mark-read observable (hardening A8).
+      const uid = user?.id;
+      if (!uid) return;
+      const mark = () =>
+        void markConversationRead(target, uid).then(({ error: markError }) => {
+          if (markError) console.warn('[Chat] mark-read failed', markError.message);
+        });
+      mark();
+      return mark;
     }, [user, target])
   );
 
@@ -162,7 +167,7 @@ export function ChatScreen() {
     if (!user || !clip || !jobId) return;
     setSending(true);
     const { url, error: uploadError } = await uploadChatAudio(
-      jobId as string,
+      jobId,
       user.id,
       clip.uri
     );
@@ -372,7 +377,11 @@ export function ChatScreen() {
         );
         return;
       }
-      (navigation.getParent() as any)?.navigate('MyJobs', {
+      // The narrow-shape cast this repo standardized in NotificationsScreen:
+      // typo-proof at the shape level without claiming the whole tree type.
+      (navigation.getParent() as unknown as {
+        navigate: (tab: 'MyJobs', params: { screen: string; params: object }) => void;
+      } | null)?.navigate('MyJobs', {
         screen: 'ClientJobDetail',
         params: { job: fetchedJob },
       });
@@ -380,7 +389,9 @@ export function ChatScreen() {
     }
 
     // The worker's screen only takes the id and loads itself.
-    (navigation.getParent() as any)?.navigate('MyJobs', {
+    (navigation.getParent() as unknown as {
+      navigate: (tab: 'MyJobs', params: { screen: string; params: object }) => void;
+    } | null)?.navigate('MyJobs', {
       screen: 'WorkerJob',
       params: { jobId },
     });
@@ -489,7 +500,7 @@ export function ChatScreen() {
     setReactionTarget(null);
     const { error } = await setReaction({
       messageId,
-      jobId: jobId as string,
+      jobId,
       userId: user.id,
       emoji,
     });
@@ -517,7 +528,7 @@ export function ChatScreen() {
     if (!user || !jobId) return; // See handleSendVoice for why.
     setSending(true);
     const { url, error: uploadError } = await uploadChatPhoto(
-      jobId as string,
+      jobId,
       user.id,
       asset
     );
@@ -595,7 +606,9 @@ export function ChatScreen() {
           canRehire && counterparty && jobId ? (
             <Pressable
               onPress={() =>
-                (navigation as any).navigate('PostJob', {
+                (navigation as unknown as {
+                  navigate: (screen: 'PostJob', params: object) => void;
+                }).navigate('PostJob', {
                   hireWorkerId: counterparty.id,
                   hireWorkerName: counterparty.full_name ?? 'this worker',
                   // Post the request into THIS conversation rather than

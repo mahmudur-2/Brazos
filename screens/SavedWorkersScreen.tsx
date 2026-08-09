@@ -45,9 +45,17 @@ export function SavedWorkersScreen() {
     ]);
     if (savedRes.error) setLoadError(savedRes.error.message);
     else setSaved(savedRes.data);
-    if (!pastIdsRes.error && pastIdsRes.data.size > 0) {
-      const { data: profiles } = await fetchProfilesByIds([...pastIdsRes.data]);
-      setPast(profiles);
+    // A failed past-workers read must not masquerade as "no one here yet"
+    // (hardening A6): surface it into the same retryable error state.
+    if (pastIdsRes.error) {
+      const message = pastIdsRes.error.message;
+      setLoadError((prev) => prev ?? message);
+    } else if (pastIdsRes.data.size > 0) {
+      const { data: profiles, error: profilesError } = await fetchProfilesByIds([
+        ...pastIdsRes.data,
+      ]);
+      if (profilesError) setLoadError((prev) => prev ?? profilesError.message);
+      else setPast(profiles);
     } else {
       setPast([]);
     }

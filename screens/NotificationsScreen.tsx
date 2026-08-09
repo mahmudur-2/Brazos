@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
+import { alertAsync } from '../lib/dialog';
 import {
   fetchNotifications,
   markAllNotificationsRead,
@@ -59,7 +60,11 @@ export function NotificationsScreen() {
           n.id === notification.id ? { ...n, read_at: new Date().toISOString() } : n
         ) ?? null
       );
-      void markNotificationRead(notification.id);
+      // Fire-and-forget by design: the focus reload self-heals a failed
+      // write; the log keeps the failure observable (hardening A8).
+      void markNotificationRead(notification.id).then(({ error }) => {
+        if (error) console.warn('[Notifications] mark-read failed', error.message);
+      });
     }
     const jobId = notification.data?.jobId;
     const screen = notification.data?.screen;
@@ -80,7 +85,12 @@ export function NotificationsScreen() {
   async function markAll() {
     if (!user) return;
     setRows((prev) => prev?.map((n) => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })) ?? null);
-    await markAllNotificationsRead(user.id);
+    const { error } = await markAllNotificationsRead(user.id);
+    if (error) {
+      // Revert the optimistic lie to the server truth and say so.
+      await alertAsync('Could not mark all read', error.message);
+      void load();
+    }
   }
 
   const unread = rows?.filter((n) => !n.read_at).length ?? 0;

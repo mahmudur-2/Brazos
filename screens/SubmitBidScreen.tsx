@@ -73,7 +73,12 @@ export function SubmitBidScreen() {
               void maybePromptForPush(
                 'Get told the moment this customer accepts your bid — and when new jobs like this are posted.'
               );
-              (navigation as any).replace('BidSent', {
+              (navigation as unknown as {
+                replace: (
+                  screen: 'BidSent',
+                  params: { jobTitle: string; amountCents: number; offerId: string }
+                ) => void;
+              }).replace('BidSent', {
                 jobTitle: job.title,
                 amountCents,
                 offerId,

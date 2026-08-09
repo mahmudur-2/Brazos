@@ -34,13 +34,19 @@ export function WorkChecklistScreen() {
 
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [itemsLoaded, setItemsLoaded] = useState(false);
+  // A failed list fetch must not masquerade as "No steps yet" (hardening A6).
+  const [itemsError, setItemsError] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
 
   const loadItems = useCallback(async () => {
     const { data, error: listError } = await fetchChecklist(params.jobId);
-    if (!listError) setItems(data);
+    if (listError) setItemsError(listError.message);
+    else {
+      setItems(data);
+      setItemsError(null);
+    }
     setItemsLoaded(true);
   }, [params.jobId]);
 
@@ -58,7 +64,9 @@ export function WorkChecklistScreen() {
     ? { kind: 'loading', variant: 'spinner' }
     : error
       ? { kind: 'error', message: error, onRetry: () => void refresh() }
-      : !job
+      : itemsError
+        ? { kind: 'error', message: itemsError, onRetry: () => void loadItems() }
+        : !job
         ? {
             kind: 'empty',
             title: 'This job is no longer available',
