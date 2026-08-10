@@ -21,13 +21,18 @@
  * enqueue_notification). Cases 3-5 therefore require fixtures that ALREADY
  * exist; if they do not, this reports that and exits rather than creating them.
  *
- * Credentials come from the environment, never from .env and never from source.
- * Set them for this command only:
+ * Credentials come from the shell environment, or failing that from .env —
+ * which is git-ignored and, for these three, holds SEEDED TEST identities
+ * (scripts/seed-phase-6.sql), not anybody's real account:
  *
  *   PROBE_WORKER_A_EMAIL / PROBE_WORKER_A_PASSWORD
  *   PROBE_WORKER_B_EMAIL / PROBE_WORKER_B_PASSWORD
  *   PROBE_CUSTOMER_EMAIL / PROBE_CUSTOMER_PASSWORD
  *   PROBE_JOB_ID           (optional; auto-discovered from the customer if unset)
+ *
+ * The shell wins when both are set, so a one-off run against different
+ * identities never needs the file edited. The service-role key is a different
+ * matter and still must NEVER go in .env — see reset-test-user-password.mjs.
  *
  * Nothing sensitive is printed: no passwords, no access tokens, no offer
  * amounts, no messages. Only ids, and only the ids the probe is asserting on.
@@ -84,9 +89,14 @@ function client(accessToken) {
   });
 }
 
+/** Shell first, then .env. Never a source-level default. */
+function probeSetting(name) {
+  return process.env[name] || env[name] || null;
+}
+
 async function signIn(role) {
-  const email = process.env[`PROBE_${role}_EMAIL`];
-  const password = process.env[`PROBE_${role}_PASSWORD`];
+  const email = probeSetting(`PROBE_${role}_EMAIL`);
+  const password = probeSetting(`PROBE_${role}_PASSWORD`);
   if (!email || !password) return null;
 
   const { data, error } = await client().auth.signInWithPassword({ email, password });
@@ -148,7 +158,7 @@ if (!a || !b || !customer) {
 
   // Find a job the customer owns that carries live offers from BOTH workers.
   // Read as the customer because that is the only session RLS shows both to.
-  let jobId = process.env.PROBE_JOB_ID ?? null;
+  let jobId = probeSetting('PROBE_JOB_ID');
   if (!jobId) {
     const { data } = await cx
       .from('job_offers')
