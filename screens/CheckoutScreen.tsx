@@ -12,7 +12,7 @@ import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { fetchJobPayment, type Payment } from '../lib/payments';
+import { fetchJobPayment, platformFeeCents, type Payment } from '../lib/payments';
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
@@ -200,7 +200,13 @@ export function CheckoutScreen() {
                 ) : null}
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Platform fee</Text>
-                  <Text style={styles.summaryValue}>None in sandbox</Text>
+                  {/* Derived, not asserted: the same constant the worker's
+                      payout figure on Job details reads. */}
+                  <Text style={styles.summaryValue}>
+                    {platformFeeCents(amountCents ?? 0) > 0
+                      ? formatBudget(platformFeeCents(amountCents ?? 0))
+                      : 'None in sandbox'}
+                  </Text>
                 </View>
                 <View style={[styles.summaryRow, styles.totalRow]}>
                   <Text style={styles.totalLabel}>Total (sandbox)</Text>

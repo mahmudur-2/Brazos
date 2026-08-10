@@ -11,6 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
+import { PLATFORM_FEE_RATE } from '../lib/payments';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
@@ -106,8 +107,9 @@ export function EarningsScreen() {
                       <Ionicons name="receipt-outline" size={16} color={colors.textMuted} />
                       <Text style={styles.feeText}>
                         Platform fees on these rows: {formatBudget(s.feeCents)} — the
-                        same 0-fee sandbox math checkout shows. Every figure here is
-                        a sum over the ledger rows below, nothing else.
+                        same {Math.round(PLATFORM_FEE_RATE * 100)}% rate checkout
+                        charges and Job details quotes. Every figure here is a sum
+                        over the ledger rows below, nothing else.
                       </Text>
                     </View>
                   ),

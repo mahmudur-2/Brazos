@@ -59,6 +59,7 @@ import { fetchDirectThreadWith } from '../lib/conversations';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
+import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
 import { colors, radius, spacing } from '../lib/theme';
 
 // There is no identity-verification provider yet. Keep this explicit rather
@@ -66,27 +67,22 @@ import { colors, radius, spacing } from '../lib/theme';
 const VERIFICATION_LABEL = 'Unverified';
 
 /**
- * No payments, commission, or ledger system exists at any layer yet
- * (BUILD_STATE: "payment implementation does not exist"). This constant
- * exists ONLY to drive the clearly-labeled payout ESTIMATE below — it is a
- * local assumption about a future fee, not a read of any real fee schedule,
- * and the UI copy says so. Phase 5's sandbox checkout owns the real number.
+ * "$45–$54" / "$54" — the job's budget as the worker would actually receive it.
+ *
+ * This screen used to own a local ESTIMATED_PLATFORM_FEE_RATE = 0.1 and quote
+ * 90% of the budget, while checkout and Earnings showed no fee at all off the
+ * ledger. The rate now comes from lib/payments.ts, which derives it from what
+ * the payments RPCs actually write, so this figure can never again be lower
+ * than what the worker is paid.
  */
-const ESTIMATED_PLATFORM_FEE_RATE = 0.1;
-
-function afterFeeCents(cents: number): number {
-  return Math.round(cents * (1 - ESTIMATED_PLATFORM_FEE_RATE));
-}
-
-/** "$45–$54" / "$54" — the job's budget with the estimated fee taken off. */
 function payoutEstimateLabel(job: OpenJob): string | null {
   const min = job.budget_min_cents;
   const max = job.budget_max_cents ?? job.budget_cents;
   if (max == null) return null;
   if (min != null && min !== max) {
-    return `${formatBudget(afterFeeCents(min))}–${formatBudget(afterFeeCents(max))}`;
+    return `${formatBudget(workerPayoutCents(min))}–${formatBudget(workerPayoutCents(max))}`;
   }
-  return formatBudget(afterFeeCents(max));
+  return formatBudget(workerPayoutCents(max));
 }
 
 export function JobDetailScreen() {
@@ -572,17 +568,22 @@ export function JobDetailScreen() {
                 </Card>
               ) : null}
 
-              {/* Payout after fee — a clearly-labeled ESTIMATE (see
-                  ESTIMATED_PLATFORM_FEE_RATE). Payments don't exist yet and
-                  the copy says so; nothing here reads a ledger. */}
+              {/* Payout — the label, the number and the fee sentence all come
+                  from PLATFORM_FEE_RATE, so this card cannot drift from what
+                  checkout charges and Earnings sums. */}
               {payoutEstimateLabel(job) ? (
                 <Card style={[styles.payoutCard, styles.secondaryCard]}>
-                  <Text style={styles.priceEyebrow}>Est. payout after fee</Text>
+                  <Text style={styles.priceEyebrow}>
+                    {PLATFORM_FEE_RATE > 0 ? 'Est. payout after fee' : 'Est. payout'}
+                  </Text>
                   <Text style={styles.payoutAmount}>{payoutEstimateLabel(job)}</Text>
                   <Text style={styles.payoutNote}>
-                    Estimate only, from the customer’s stated budget minus a{' '}
-                    {Math.round(ESTIMATED_PLATFORM_FEE_RATE * 100)}% platform fee. BRAZOS
-                    payments currently run in a clearly-labeled development sandbox — no
+                    {PLATFORM_FEE_RATE > 0
+                      ? `Estimate only, from the customer’s stated budget minus a ${Math.round(
+                          PLATFORM_FEE_RATE * 100
+                        )}% platform fee.`
+                      : 'Estimate only, from the customer’s stated budget. BRAZOS takes no platform fee — you receive the full agreed amount.'}{' '}
+                    Payments currently run in a clearly-labeled development sandbox — no
                     real money is charged or paid out through the app yet.
                   </Text>
                 </Card>
