@@ -6,7 +6,16 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const read = (path) => readFileSync(join(root, path), 'utf8');
+// Normalised to LF. Several assertions below carve a function apart with
+// indexOf('...\n...') string literals, and on a CRLF checkout those needles
+// simply never match — indexOf returns -1, slice(start, -1) silently returns
+// the whole rest of the function instead of the intended fragment, and the
+// assertion then reports on code it was never meant to see. That is what made
+// 'navigation only ever follows a successful write' a standing red: the
+// failure-branch slice was actually the entire handler, success path included.
+// The repo has no .gitattributes normalising the worktree, so tests must not
+// depend on which line ending a given checkout produced.
+const read = (path) => readFileSync(join(root, path), 'utf8').replace(/\r\n/g, '\n');
 
 // ===========================================================================
 // The persistence rules, executed rather than restated
@@ -229,7 +238,13 @@ test('navigation only ever follows a successful write', () => {
     body.indexOf('writeSetupRecord') < body.indexOf('onFinished(landing)'),
     'the write must precede the transition'
   );
-  const failure = body.slice(body.indexOf('if (writeError)'), body.indexOf('}\n\n'));
+  const failureEnd = body.indexOf('}\n\n');
+  // Guard the guard. A needle that stops matching turns slice(start, -1) into
+  // "everything to the end", and this assertion would then be reporting on the
+  // success path it is supposed to exclude — passing or failing for reasons
+  // that have nothing to do with the code under test.
+  assert.notEqual(failureEnd, -1, 'the failure-branch slice must actually terminate');
+  const failure = body.slice(body.indexOf('if (writeError)'), failureEnd);
   assert.doesNotMatch(failure, /onFinished|setPendingLanding/);
   // A resolve that lands after the screen is gone writes nothing.
   assert.match(body, /if \(!mounted\.current\) return;/);
