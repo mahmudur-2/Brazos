@@ -1852,6 +1852,105 @@ C = Casey (customer).
 8. Cold-start check: reopen the app in customer mode and deep-open any open
    job from Map again — preview, never the bid surface.
 
+## Branch `env-parity-fix` — device-bug pass (2026-08-09)
+
+Six commits on top of 2339344. Tree clean, nothing pushed. Base is
+`mainexpo`; CLAUDE.md's required-branch rule was waived by the user for this
+branch specifically, twice, in writing.
+
+  f304fbd  cross-tab navigation guard
+  09d99a7  Job details top safe-area inset
+  6b6f7ce  one platform-fee source of truth
+  6af4426  offers RLS probe actually runs
+  34e138d  Map "See All Jobs" gated to worker mode
+  5ca304d  setupOnboarding CRLF slicing
+
+**Three reported bugs, and what each turned out to be.**
+
+1. *Worker Home chips dispatch an unhandled `WorkerResults`.* No name
+   mismatch exists: declared once in `lib/navigation.ts`, registered once in
+   `navigation/WorkerRoot.tsx`, one spelling everywhere. Deliberately NOT
+   renamed and NOT aliased. The real defect was the failure CLASS — four
+   screens crossed tabs with a hand-cast `getParent().navigate(tab,
+   {screen})`, which tsc cannot check, and two named a `Home` route that
+   exists in one mode only (`MapScreen` → BrowseJobs, customer mode;
+   `PostJobScreen` → HomeMain, worker mode). `navigateAcrossTabs()` in
+   `lib/navigationRef.ts` now holds the check and the dispatch together and
+   is the only way to cross tabs; `tests/crossTabNavigation.test.mjs` fails
+   if a second way appears.
+2. *Header over the status bar.* `JobDetailScreen` main render was
+   `edges={['bottom']}` while its own not-found branch was `['top','bottom']`.
+   Edge is now conditional on the hero (full-bleed photo keeps its own
+   `insets.top` back button). Only screen in the repo with the defect —
+   `tests/layout.test.mjs` now fails on any bottom-only SafeAreaView.
+3. *Contradictory platform fee.* Standardised on **0%**, from the ledger:
+   every `insert into public.payments` writes `platform_fee_cents = 0`
+   (phase50/51/58). `PLATFORM_FEE_RATE` + `platformFeeCents()` +
+   `workerPayoutCents()` live in `lib/payments.ts`; JobDetail, Checkout and
+   Earnings all derive from them. `tests/platformFee.test.mjs` also asserts
+   the SQL still writes 0, so the client constant cannot silently diverge
+   from the RPCs.
+
+**Two things that were being carried as true and were not.**
+
+- The offers RLS probe had NEVER run its authenticated cases — it read
+  `PROBE_*` from `process.env` only, so all three reported SKIPPED and every
+  run was INCONCLUSIVE while reading as green. Now sourced from `.env`
+  (git-ignored) using the `scripts/seed-phase-6.sql` fixtures, shell still
+  overriding. **Real result: 6 passed, 0 failed, 0 skipped, exit 0**, target
+  job `b6c00000-0000-4000-8000-00000000000c`. `SUPABASE_SERVICE_ROLE_KEY` is
+  still forbidden in `.env` and that prohibition is restated in
+  `.env.example`.
+- `setupOnboarding` → "navigation only ever follows a successful write" was
+  never a SetupScreen defect. `screens/SetupScreen.tsx` is CRLF (471 CRLF, 0
+  bare LF) and the test sliced with `indexOf('}\n\n')`, which cannot match
+  CRLF: it returned −1, `slice(start, −1)` widened to the whole handler, and
+  the assertion inspected the success path it was written to exclude.
+  Measured: `indexOf('}\n\n') = −1`, `indexOf('}\r\n\r\n') = 523`. Test-only
+  fix (LF normalisation at read + a non-negative terminator assertion). No
+  patch owed against the LOCKED screen. `'}\n\n'` was the only fragile needle
+  in all 24 test files; needles starting with `\n` are safe.
+
+Suite: **284 passing, 1 failing** — `tests/pwa.test.mjs` only, the documented
+frozen-web `config.js?v=` mismatch. `verify-schema` green. LOCKED_MANIFEST
+untouched throughout.
+
+## Branch `env-parity-fix` — physical checklist (the user's closing pass, PENDING)
+
+Both items are device evidence I could not gather myself. Everything else on
+this branch is verified by test or by executed probe.
+
+1. **Cold-start navigator error — unreproducible at HEAD by static analysis;
+   needs one device run to close.** No `linking` prop on `NavigationContainer`,
+   no navigation-state persistence, and the only automatic launch-time
+   dispatch (`getLastNotificationResponseAsync` replay) routes through
+   `TAB_FOR_SCREEN` to MyJobs/Messages/Profile — never Home. The stale-bundle
+   theory matches the precedent at line 490 of this file but was never
+   confirmed.
+   - `npx expo start -c` (the `-c` matters — a warm Metro cache is where the
+     stale-bundle theory hides). Force-quit from the app switcher; a Fast
+     Refresh reload is not a cold start, and a LogBox overlay from an earlier
+     tap survives a reload.
+   - **Run A, customer mode:** cold launch, touch nothing ~10s. Then Map tab
+     → "See All Jobs" must be ABSENT.
+   - **Run B, worker mode:** switch, force-quit, cold launch, wait. Map tab →
+     "See All Jobs" PRESENT → tap → Worker Home.
+   - Nothing in the console on both runs ⇒ confirmed stale bundle, close it.
+     A `[nav] dropped cross-tab target <Tab>/<Screen> — not handled by the
+     navigator this mode mounted` line (`lib/navigationRef.ts:142`) ⇒ the
+     guard caught a real cross-tree dispatch and the line names the culprit.
+     Red box with NO `[nav]` line ⇒ a dispatcher nobody has found; capture the
+     full stack. Note the prefix changed: push drops now read `[nav]`, not
+     `[push]`.
+2. **Worker Home chips — verified by test, not on device.** They do not cross
+   tabs at all (in-stack push where `WorkerResults` is a sibling of
+   `BrowseJobs`), so `navigateAcrossTabs()` is not on their path and nothing
+   about them was broken at HEAD. `tests/crossTabNavigation.test.mjs`
+   enumerates every literal the screen dispatches — `WorkerResults`,
+   `JobDetail` — and asserts each is registered in `WorkerRoot`. Run B above
+   taps them on the way; a red box there means the running bundle disagrees
+   with source, which is the same stale-bundle question as item 1.
+
 ## Exact next task (Phase 9 — Profiles, portfolio & worker self-service)
 
 Per BRAZOS_MASTER_PLAN.md §J Phase 9 (MEDIUM), screens 22–25, 43–46, 63–66.
