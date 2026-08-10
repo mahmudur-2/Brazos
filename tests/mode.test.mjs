@@ -174,6 +174,20 @@ test('the locked homes switch through switchMode() and nothing else', () => {
 // The trees are separate, and separately typed
 // ---------------------------------------------------------------------------
 
+test('the shared Map tab offers Worker Home only in worker mode', () => {
+  // Map is mounted by BOTH trees, so its "See All Jobs" control renders for a
+  // customer too — and its destination, BrowseJobs, exists only in the worker
+  // tree's Home stack. It was both a §F leak (a worker surface offered to a
+  // customer) and, when tapped, the "state or screen couldn't be applied"
+  // crash. The control is now absent in customer mode rather than redirected:
+  // there is no customer equivalent of "all open jobs".
+  const map = read('screens/MapScreen.tsx');
+  assert.match(map, /const \{ mode \} = useMode\(\)/);
+  assert.match(map, /right=\{\s*mode === 'worker' \? \(/);
+  // Perspective from ModeContext, never a hand-passed prop (CLAUDE.md §V2).
+  assert.doesNotMatch(map, /mode[=:]\s*\{?['"](customer|worker)['"]/);
+});
+
 test('customer code cannot name a worker route', () => {
   const customerList = routes.slice(
     routes.indexOf('export type CustomerHomeStackParamList'),
