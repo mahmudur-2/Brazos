@@ -6,6 +6,7 @@ import { BidSentScreen } from '../screens/BidSentScreen';
 import { BrowseJobsScreen } from '../screens/BrowseJobsScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
+import { PostJobScreen } from '../screens/PostJobScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
@@ -50,6 +51,11 @@ function WorkerHomeStackNavigator() {
       <WorkerHomeStack.Screen name="BidSent" component={BidSentScreen} />
       {/* Phase 7 — pre-hire chat from the own-bid card, same JobDetail rule. */}
       <WorkerHomeStack.Screen name="Chat" component={ChatScreen} />
+      {/* 2026-08-10 — WorkerProfile ("Send an offer"), Chat (re-hire) and
+          JobDetail (own-job Edit) all dispatch PostJob; this was the one stack
+          of six not registering it, and it crashed on device. See
+          WorkerHomeStackParamList for the full decision record. */}
+      <WorkerHomeStack.Screen name="PostJob" component={PostJobScreen} />
       <WorkerHomeStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <WorkerHomeStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
     </WorkerHomeStack.Navigator>

@@ -119,13 +119,21 @@ test('no screen dispatches a nested tab target outside navigateAcrossTabs()', as
 // it is mounted in: a shared screen is mounted in up to six stacks, and a
 // literal that resolves in five of them is still a crash in the sixth.
 //
-// Scope, stated rather than implied: this reads `navigation.navigate('X')` —
-// the in-stack form. Tab-level `getParent()` hops are deliberately excluded
-// (they target TABS, which are not routes in any stack, so they would read as
-// false failures); they are the sibling tests' concern. Dispatches made from
-// hooks/ and components/ against a caller-supplied navigation object are NOT
-// covered by this test and are recorded as an open gap in BRAZOS_BUILD_STATE.md
-// rather than silently counted as verified.
+// Scope, stated rather than implied: this reads every in-stack dispatch shape
+// that exists in the repo — the plain `navigation.navigate('X')`, the
+// object-cast `(navigation as ...).navigate('X')`, and the function-cast
+// `(navigation.navigate as ...)('X')`. Tab-level `getParent()` hops are
+// deliberately excluded (they target TABS, which are not routes in any stack,
+// so they would read as false failures); they are the sibling tests' concern
+// and BRAZOS_BUILD_STATE.md's documented latent class. Dispatches that live in
+// hooks/ or components/ against a caller-supplied navigation object are
+// covered ONLY where INDIRECT_DISPATCHES names the host screen below.
+//
+// 2026-08-10, later the same day: the user reproduced the crash on device —
+// the dispatcher WAS this gap, in the worker tree. PostJob is now registered
+// there by explicit user decision (recorded in BRAZOS_BUILD_STATE.md), so the
+// rule this test enforces is absolute: no exemptions remain, and a new gap of
+// any kind turns it red.
 
 const NAVIGATOR_FILES = [
   'navigation/CustomerRoot.tsx',
@@ -133,13 +141,36 @@ const NAVIGATOR_FILES = [
   'navigation/sharedStacks.tsx',
 ];
 
-// The one deliberate, documented gap (Known issues, BRAZOS_BUILD_STATE.md):
-// PostJob is intentionally NOT in WorkerHomeStack, because posting a job is a
-// customer action that §F routes through an explicit confirm + switchMode().
-// Registering it would let a worker-mode session post without switching mode.
-// Exempted by name so the deliberate gap cannot masquerade as an accident, and
-// so an ACCIDENTAL new gap still turns this test red.
-const DOCUMENTED_GAPS = new Set(['WorkerHomeStack::PostJob']);
+// The three dispatch shapes, in match order. A dispatch whose 200-char
+// lookback contains `getParent` is a tab hop, not an in-stack navigate.
+const DISPATCH_SHAPES = [
+  // navigation.navigate('X'  — also matches the object-cast `}).navigate('X'`.
+  /\.navigate\(\s*'([^']+)'/g,
+  // (navigation.navigate as (...) => void)('X'  — the function-cast form.
+  /\.navigate\s+as[\s\S]{0,80}?\)\s*\(\s*'([^']+)'/g,
+];
+
+function inStackTargets(source) {
+  const targets = new Set();
+  for (const shape of DISPATCH_SHAPES) {
+    for (const match of source.matchAll(shape)) {
+      const lookback = source.slice(Math.max(0, match.index - 200), match.index);
+      if (lookback.includes('getParent')) continue;
+      targets.add(match[1]);
+    }
+  }
+  return targets;
+}
+
+// Dispatches that live OUTSIDE the screen file but run against ITS navigation
+// object: useJobOwnerActions (rendered via components/JobOwnerActions) calls
+// navigate('PostJob') for own-job Edit, and exactly these two screens render
+// it. A dispatch added to a hook or component without a row here is NOT
+// covered — that residual is recorded in BRAZOS_BUILD_STATE.md.
+const INDIRECT_DISPATCHES = {
+  JobDetailScreen: ['PostJob'],
+  ClientJobDetailScreen: ['PostJob'],
+};
 
 test('every in-stack navigate target is registered in each stack its screen is mounted in', async () => {
   const sources = await Promise.all(NAVIGATOR_FILES.map(read));
@@ -164,25 +195,25 @@ test('every in-stack navigate target is registered in each stack its screen is m
 
   assert.ok(registered.size >= 6, 'expected all six stacks to be parsed');
   assert.ok(
-    mountedIn.get('PostJobScreen')?.size >= 5,
-    'expected PostJobScreen to be mounted in at least five stacks'
+    mountedIn.get('PostJobScreen')?.size >= 6,
+    'expected PostJobScreen to be mounted in all six stacks (2026-08-10 decision)'
   );
 
   const screenFiles = new Set(dir('screens').filter((f) => f.endsWith('.tsx')));
   const failures = [];
+  const targetsByComponent = new Map();
 
   for (const [component, stacks] of mountedIn) {
     const file = `${component}.tsx`;
     if (!screenFiles.has(file)) continue; // dev-tools catalog etc.
 
     const source = stripComments(await read(`screens/${file}`));
-    const targets = new Set(
-      [...source.matchAll(/navigation\.navigate\(\s*'([^']+)'/g)].map((m) => m[1])
-    );
+    const targets = inStackTargets(source);
+    for (const extra of INDIRECT_DISPATCHES[component] ?? []) targets.add(extra);
+    targetsByComponent.set(component, targets);
 
     for (const stack of stacks) {
       for (const target of targets) {
-        if (DOCUMENTED_GAPS.has(`${stack}::${target}`)) continue;
         if (!registered.get(stack)?.has(target)) {
           failures.push(
             `${component} is mounted in ${stack} and dispatches '${target}', ` +
@@ -192,6 +223,16 @@ test('every in-stack navigate target is registered in each stack its screen is m
       }
     }
   }
+
+  // Anti-vacuity for the cast shapes: ChatScreen reaches BOTH of its in-stack
+  // targets through casts (object-cast to PostJob, function-cast to
+  // WorkerProfile), so if the cast matchers rot, this assertion dries up
+  // before a silent pass can.
+  const chatTargets = targetsByComponent.get('ChatScreen') ?? new Set();
+  assert.ok(
+    chatTargets.has('PostJob') && chatTargets.has('WorkerProfile'),
+    "ChatScreen's cast-form dispatches must be visible to this guard"
+  );
 
   assert.deepEqual(
     failures.sort(),

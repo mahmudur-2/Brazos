@@ -503,9 +503,17 @@ that replaced what they pointed at.
     (the OfferCard accept gate) was real in the source and one was a stale
     bundle. Reading the source first is what separated them — a symptom that
     the code provably cannot produce is a bundle problem until shown otherwise.
-- **LATENT (found by inspection, not the cause of the above): `PostJob` is not
+- ~~**LATENT (found by inspection, not the cause of the above): `PostJob` is not
   registered in `WorkerHomeStack`**, so navigating to it from anywhere inside
-  the worker Home tab would throw the same error.
+  the worker Home tab would throw the same error.~~ **RESOLVED 2026-08-10:
+  stopped being latent — device-reproduced as a live crash (twice, dev build,
+  cold launch) — and was fixed by registering `PostJob` in `WorkerHomeStack`
+  by explicit user decision. The "Do NOT fix by registering" stance below is
+  superseded: it predates Phases 5–9 registering PostJob in all four shared
+  tabs, which had already made posting reachable from worker mode everywhere
+  except this one stack. Guarded now by tests/crossTabNavigation.test.mjs
+  (exemption removed). Full record: the 2026-08-10 sections near the end of
+  this file. Historical entry kept below.**
   - **Cause:** `PostJob` is registered in `CustomerHomeStack` and in all three
     shared stacks (MyJobs, Messages, Map) but **not** in `WorkerHomeStack`,
     which does register `WorkerProfile`. `screens/WorkerProfileScreen.tsx:46`
@@ -524,13 +532,14 @@ that replaced what they pointed at.
     tab would fail.
   - **Workaround in use:** post from the My Jobs tab (shared stack, registers
     the route) or switch to customer mode first.
-  - **Do NOT fix by registering `PostJob` in `WorkerHomeStack`.** Posting a job
+  - ~~**Do NOT fix by registering `PostJob` in `WorkerHomeStack`.** Posting a job
     and sending a paid offer are customer actions; §F and Phase 2's own recorded
     decision route cross-mode actions through an explicit confirm plus
     `switchMode()`, as Customer Home's Live Nearby cards already do. Adding the
     route would let a worker-mode session post jobs without ever switching mode
     and weaken the isolation Phase 2 exists to enforce. Owner: a future
-    navigation phase, not Phase 3.
+    navigation phase, not Phase 3.~~ **SUPERSEDED 2026-08-10 — see the RESOLVED
+    marker above.**
 - **OfferCard hid the Accept button in worker mode** — found in the same device
   pass, fixed in `51e5c38`. A perspective gate added in phase-3b suppressed the
   accept affordance whenever the app was in worker mode, and `ClientJobDetail`
@@ -2010,9 +2019,12 @@ a bundle problem until shown otherwise. Note also that `PostJob` only joined
 `ProfileStack` in phase-9 (`b51804d`), so a device bundle predating that commit
 would fail from the Profile tab exactly as reported.
 
-**NOT fixed by registering `PostJob` in `WorkerHomeStack`** — see Known issues
+~~**NOT fixed by registering `PostJob` in `WorkerHomeStack`** — see Known issues
 above. Posting a job is a customer action; §F routes cross-mode actions through
-an explicit confirm plus `switchMode()`. That gap is deliberate and stays.
+an explicit confirm plus `switchMode()`. That gap is deliberate and stays.~~
+**SUPERSEDED 2026-08-10, same day (user decision after device reproduction):
+registered.** See the resolution block below and the session section at the end
+of this file.
 
 **Real coverage gap this exposed — CLOSED by a new guard.**
 `tests/crossTabNavigation.test.mjs` guarded *cross-tab* literals only. Nothing
@@ -2060,13 +2072,123 @@ navigation phase that owns the `WorkerHomeStack` decision.
 rendered by `ClientJobDetailScreen` and `JobDetailScreen`. Those screens' stacks
 all register `PostJob`, so it is safe today; it is unverified rather than wrong.
 
-**To discriminate, needed from the device (nothing else is blocking):**
-1. The stack frames *below* `withStack` — those name the actual component. The
-   frames reported stop inside react-navigation internals.
-2. Whether the search box was empty and whether the tap was truly on Profile
-   rather than Customer Home.
-3. Confirmation the run was `npx expo start -c` **and** Expo Go force-quit —
-   `-c` clears Metro's cache, not Expo Go's on-device bundle cache.
+**RESOLUTION (2026-08-10, same day).** The user reproduced the crash twice on
+a real dev build (5G, cold launch, not Expo Go) and identified the dispatcher
+as the guard's own named gap: the worker tree. The "customer mode / Customer
+Profile screen" attribution in the original report was the misleading part —
+the static analysis above (ProfileScreen dispatches PostJob nowhere; customer
+mode registers it everywhere) remains correct and is exactly why the report
+was unreproducible AS ATTRIBUTED. The real surface was the worker Home tab,
+which mounts THREE screens that dispatch `PostJob` — WorkerProfile ("Send an
+offer", plain navigate), Chat (re-hire, object-cast navigate), JobDetail
+(own-job Edit via useJobOwnerActions, function-cast navigate) — while being
+the only stack of six not registering it. The two cast forms were invisible
+to both tsc (hand-cast by construction) and the guard's original regex, which
+is how three live crash paths hid behind one prose comment.
+
+**Fixed by registering, per explicit user decision overriding the Phase-3
+"Do NOT fix by registering" stance** (that stance predates Phases 5–9, which
+registered PostJob in all four shared tabs — a worker-mode session could
+already post from My Jobs, Messages, Map, and Profile, so the §F isolation
+argument had already been decided the other way by the standing
+every-stack-that-surfaces-a-user rule; worker Home was the one inconsistent
+stack left). Changes: `lib/navigation.ts` WorkerHomeStackParamList + 
+`navigation/WorkerRoot.tsx` registration; `tests/mode.test.mjs` "worker code
+cannot name the customer post/search routes" now guards HomeMain/WorkerSearch
+only (the real §F Home-tab boundary); the crossTabNavigation guard's
+exemption is REMOVED (no exemptions remain), its matcher widened to all three
+dispatch shapes in the repo (plain, object-cast, function-cast — with a
+getParent lookback exclusion for tab hops), `INDIRECT_DISPATCHES` covers the
+useJobOwnerActions hook path via its two host screens, and a ChatScreen
+canary asserts the cast matchers stay alive (both its in-stack targets are
+cast-form). LOCKED screens untouched.
+
+## Branch `env-parity-fix` — session 2026-08-10 (PostJob fix · scheme · transitions)
+
+**Connectivity: SOLVED, both prior threads superseded.** The user is on
+Tailscale — Metro reachable at `100.105.206.93:8081` from anywhere over LTE.
+The two threads from the previous report are closed unactioned: the Expo
+shared-ngrok session cap (ERR_NGROK_108) no longer matters because tunnel mode
+is no longer needed, and no Windows firewall rule was added because the LAN
+path is no longer the transport. Metro was left running and untouched
+throughout this session.
+
+**A. PostJob crash — FIXED.** See the RESOLUTION block in the 2026-08-10
+device-finding section above. One registration closed three live crash paths
+(WorkerProfile offer, Chat re-hire, JobDetail own-job Edit — all in the worker
+Home tab); guard exemption removed; mode test retargeted to the real §F
+boundary (HomeMain/WorkerSearch).
+
+**B. "Unable to determine the default URI scheme" — NOT a missing scheme; no
+config change made, deliberately.** The warning's source is
+`@expo/cli/build/src/utils/scheme.js:166-175` (`getManagedDevClientSchemeAsync`):
+in a managed project (no ios/ or android/ dirs — this repo) the CLI resolves
+the dev-client deep-link scheme by requiring `expo-dev-client/getDefaultScheme`
+from the project, and **expo-dev-client is not installed and never has been**
+(`git log -S expo-dev-client -- package.json` is empty), so the require throws
+and the CLI prints exactly this warning. It never reads app.json's `scheme` on
+that path. app.json has carried `"scheme": "brazos"` since `8eee70d` (long
+before any current build), so the installed binary's Info.plist already
+registers `brazos` — changing the scheme to the bundle identifier
+(`com.brazos.app`) would DESYNC the installed app for zero gain, which is
+exactly what the task's own constraint forbade. Consequences of the warning:
+none for the Tailscale workflow (the binary attaches to Metro directly; only
+QR-code/deep-link launching into a dev client is degraded, and there is no dev
+client). **Decision owed by the user, not taken unilaterally (new dependency):**
+install `expo-dev-client` + rebuild if dev-client QR launching is ever wanted;
+otherwise the warning is cosmetic and correctly ignored.
+
+**C. Dead transitions — no code cause exists at HEAD; the discriminating step
+is a rebuild, not a code change.** Checked, in the order the user specified:
+1. *Reanimated babel plugin:* N/A by design — reanimated is not installed
+   (CLAUDE.md: built-in `Animated` only, no animation library), so no plugin
+   belongs in babel.config.js (which holds only babel-preset-expo + dotenv),
+   and native-stack transitions do not use reanimated in the first place —
+   they are react-native-screens' native UINavigationController transitions.
+2. *Version skew:* none possible from this checkout — package.json
+   `react-native-screens ~4.16.0` = package-lock `4.16.0` = node_modules
+   `4.16.0`, and package.json has not changed since long before the emerald
+   phases (its newest commit predates them; the SDK became 54 in `d252932`,
+   2026-07-24), so ANY binary built from this repo since then embeds the same
+   native versions the JS expects.
+3. *enableScreens():* not called anywhere and not needed — native-stack
+   enables native screens itself.
+4. *animation:'none' / animationEnabled:false / presentation overrides:*
+   zero hits repo-wide (App.tsx, navigation/, screens/, ui/, modes/, lib/).
+   All six stack navigators pass only `{ headerShown: false }`;
+   `bottomNavScreenOptions` is pure tab-bar styling; no env-parity-fix commit
+   touched navigator options.
+Remaining candidates are all binary/runtime-side, uninspectable from the repo:
+the installed debug binary's actual build commit, or a screens-4.16/Fabric
+runtime issue on this device (SDK 54 defaults the New Architecture on; app.json
+sets no `newArchEnabled`). **Next step (user, on the Mac that built the binary):
+rebuild the debug app from current HEAD (`npx expo run:ios`). Transitions
+return ⇒ stale binary, closed. Still dead ⇒ flag before acting: the probes are
+`"newArchEnabled": false` in app.json or a react-native-screens patch bump —
+both build-affecting decisions, neither taken here.**
+
+**Bug hunt (beyond the assigned three).** The widened guard is the durable
+yield: the two cast-form dispatch shapes were invisible to tsc AND to the
+original guard regex, and both existed in WorkerHomeStack as live crash paths
+(Chat re-hire, JobDetail own-job Edit) — same root cause, same fix, now
+covered by test including a canary that fails if the cast matchers rot.
+Reviewed clean: all `navigateAcrossTabs` call sites (targets registered in
+both trees, params match declared shapes), `lib/notificationRoutes.ts`
+TAB_FOR_SCREEN (shared tabs only, guarded helper, DROP semantics preserved),
+and the three remaining `getParent()` tab hops (documented latent class —
+all target shared tabs, none can crash; `HomeScreen.tsx:162` is LOCKED).
+
+**Gate (measured, not predicted):** tsc/lint clean; **285/286 tests, 0
+skipped** — the single failure is the documented frozen-web PWA
+`config.js?v=` mismatch. Same totals as the session baseline by construction:
+the guard upgrades added assertions inside existing tests (the cast canary,
+the six-stack floor), not new test cases. LOCKED screens and manifest
+untouched.
+
+**Still OPEN, unchanged:** the "See All Jobs" cold-start item (physical
+checklist item 1 above) — explicitly out of scope this session, by user
+instruction. Worker Home chips remain verified-by-test only (Run B still taps
+them whenever it happens).
 
 ## Exact next task (Phase 9 — Profiles, portfolio & worker self-service)
 

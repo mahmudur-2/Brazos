@@ -151,6 +151,28 @@ export type WorkerHomeStackParamList = {
   WorkerProfile: { workerId: string; workerName?: string };
   ProfileReviews: { userId: string; name?: string };
   /**
+   * Registered 2026-08-10 (user decision, device-reproduced crash). This tree
+   * mounts three screens that dispatch it — WorkerProfile ("Send an offer"),
+   * Chat (re-hire), JobDetail (own-job Edit via useJobOwnerActions) — and was
+   * the ONLY stack of the six not registering it, so those taps threw
+   * `NAVIGATE 'PostJob' was not handled by any navigator`. PostJob has been
+   * registered in all four shared tabs since Phase 5–9: it is a shared
+   * surface, not a customer-Home-only one, and the standing every-stack-that-
+   * surfaces-a-user rule applies here as everywhere. Supersedes the Phase-3
+   * Known-Issues stance; decision recorded in BRAZOS_BUILD_STATE.md.
+   */
+  PostJob:
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
+    | undefined;
+  /**
    * The spacious Worker job list — "View all", the two availability-card
    * filter pills, and Worker Home's own search bar all land here with a
    * different `mode` rather than each getting a near-duplicate screen.

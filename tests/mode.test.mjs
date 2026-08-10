@@ -208,7 +208,13 @@ test('worker code cannot name the customer post/search routes', () => {
     routes.indexOf('export type WorkerHomeStackParamList'),
     routes.indexOf('export type WorkerHomeStackNavigation')
   );
-  for (const customerRoute of ['HomeMain', 'PostJob', 'WorkerSearch']) {
+  // PostJob left this list 2026-08-10: a device-reproduced crash proved the
+  // worker tree mounts three screens that dispatch it (WorkerProfile, Chat,
+  // JobDetail via useJobOwnerActions) while being the only stack of six not
+  // registering it — and it had been registered in all four shared tabs since
+  // Phase 5–9, so it was never customer-only in practice. The §F Home-tab
+  // boundary is HomeMain/WorkerSearch vs BrowseJobs/WorkerResults; those stay.
+  for (const customerRoute of ['HomeMain', 'WorkerSearch']) {
     assert.ok(
       !new RegExp(`^\\s*${customerRoute}:`, 'm').test(workerList),
       `${customerRoute} must not be on the worker Home stack`

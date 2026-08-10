@@ -51,6 +51,8 @@ import { colors, radius, spacing } from '../lib/theme';
 export function WorkerProfileScreen() {
   // PostJob is registered alongside WorkerProfile in every stack that can
   // reach this screen, so the offer button below can push it from any of them.
+  // (tests/crossTabNavigation.test.mjs executes that claim per stack — it was
+  // false once, for the worker Home tab, and crashed on device 2026-08-10.)
   const navigation =
     useNavigation<
       NativeStackNavigationProp<PostJobRouteParamList & ProfileReviewsRouteParamList>

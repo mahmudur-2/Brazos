@@ -18,8 +18,8 @@ import { dirname, join } from 'node:path';
  *   4. Withdraw and expiry (§H.2, phase50) stay wired: the client helpers
  *      exist, reads carry expires_at, and lapsed offers render as expired.
  *   5. SubmitBid/BidSent are registered in EVERY stack that mounts JobDetail
- *      — the PostJob/WorkerHomeStack registration gap (Known Issues) is the
- *      navigation failure this pins down.
+ *      — the PostJob/WorkerHomeStack registration gap (crashed on device
+ *      2026-08-10, since fixed) is the navigation failure this pins down.
  */
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
