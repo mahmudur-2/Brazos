@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const dir = (path) => readdirSync(new URL(`../${path}`, import.meta.url));
 
 test('main tab screens do not reserve redundant gaps above the safe tab bar', async () => {
   // Phase 2 extracted the tab bar's sizing into the BottomNav primitive, which
@@ -51,4 +53,31 @@ test('every screen inside the tab bar leaves the bottom safe-area inset to it', 
       `${path} must not reserve the bottom inset the tab bar already owns`
     );
   }
+});
+
+test('no screen skips the top inset the status bar needs', async () => {
+  // The other half of the same rule. JobDetailScreen shipped
+  // `edges={['bottom']}` on its main render, so on the worker Job details
+  // screen the "Job details" title drew straight over the system clock and
+  // location indicator. Every ui/templates/* screen resolves to
+  // `insideTabs ? ['top'] : ['top', 'bottom']`, and every hand-rolled
+  // SafeAreaView in screens/ is expected to name 'top' the same way.
+  //
+  // The one sanctioned exception is a full-bleed hero image that is SUPPOSED
+  // to sit under the status bar, which is why this looks for the unconditional
+  // literal rather than for the absence of the word 'top': a screen that
+  // chooses its edges per render (JobDetailScreen does, on whether the job has
+  // photos) is making the decision deliberately.
+  const offenders = [];
+  for (const file of dir('screens').filter((f) => f.endsWith('.tsx'))) {
+    const source = await read(`screens/${file}`);
+    if (/edges=\{\['bottom'\]\}/.test(source)) offenders.push(`screens/${file}`);
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'a SafeAreaView that asks only for the bottom edge lets its header render ' +
+      'under the status bar'
+  );
 });

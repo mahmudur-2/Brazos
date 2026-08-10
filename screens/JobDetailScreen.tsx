@@ -359,7 +359,18 @@ export function JobDetailScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safe} edges={['bottom']}>
+    // Same shared pattern every other ScreenHeader screen uses — SafeAreaView
+    // with an explicit `top` edge — and the reason this one was the exception
+    // is the hero. With photos the hero image is deliberately full-bleed under
+    // the status bar and its own floating Back button offsets by insets.top
+    // (below); asking for the top edge as well would push the image down and
+    // double-offset that button. Without photos the ScreenHeader IS the topmost
+    // element, and omitting the inset is what rendered "Job details" on top of
+    // the system clock. The error branch above already had this right.
+    <SafeAreaView
+      style={styles.safe}
+      edges={galleryPhotos.length > 0 ? ['bottom'] : ['top', 'bottom']}
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
