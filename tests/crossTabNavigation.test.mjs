@@ -107,6 +107,100 @@ test('no screen dispatches a nested tab target outside navigateAcrossTabs()', as
   );
 });
 
+// ---------------------------------------------------------------------------
+// In-stack targets resolve in every stack the screen is mounted in
+// ---------------------------------------------------------------------------
+//
+// The 2026-08-10 device report was `NAVIGATE {name:'PostJob',params:{}} was not
+// handled by any navigator` with NO [nav] line — i.e. a plain in-stack
+// navigate, not a cross-tab hop, so none of the guards above could have seen
+// it. The generalisation of "every route Worker Home navigates to is registered
+// in the worker Home stack" (above, one screen) to every screen in every stack
+// it is mounted in: a shared screen is mounted in up to six stacks, and a
+// literal that resolves in five of them is still a crash in the sixth.
+//
+// Scope, stated rather than implied: this reads `navigation.navigate('X')` —
+// the in-stack form. Tab-level `getParent()` hops are deliberately excluded
+// (they target TABS, which are not routes in any stack, so they would read as
+// false failures); they are the sibling tests' concern. Dispatches made from
+// hooks/ and components/ against a caller-supplied navigation object are NOT
+// covered by this test and are recorded as an open gap in BRAZOS_BUILD_STATE.md
+// rather than silently counted as verified.
+
+const NAVIGATOR_FILES = [
+  'navigation/CustomerRoot.tsx',
+  'navigation/WorkerRoot.tsx',
+  'navigation/sharedStacks.tsx',
+];
+
+// The one deliberate, documented gap (Known issues, BRAZOS_BUILD_STATE.md):
+// PostJob is intentionally NOT in WorkerHomeStack, because posting a job is a
+// customer action that §F routes through an explicit confirm + switchMode().
+// Registering it would let a worker-mode session post without switching mode.
+// Exempted by name so the deliberate gap cannot masquerade as an accident, and
+// so an ACCIDENTAL new gap still turns this test red.
+const DOCUMENTED_GAPS = new Set(['WorkerHomeStack::PostJob']);
+
+test('every in-stack navigate target is registered in each stack its screen is mounted in', async () => {
+  const sources = await Promise.all(NAVIGATOR_FILES.map(read));
+
+  const registered = new Map(); // stack var -> Set(route name)
+  const mountedIn = new Map(); // component name -> Set(stack var)
+
+  for (const source of sources) {
+    for (const match of stripComments(source).matchAll(
+      /<(\w+)\.Screen\s+name="([^"]+)"\s+component=\{(\w+)\}/g
+    )) {
+      const [, navigator, route, component] = match;
+      // `Tab` is the bottom-tab navigator: its children are whole stacks, not
+      // routes a screen can navigate to in-stack.
+      if (navigator === 'Tab') continue;
+      if (!registered.has(navigator)) registered.set(navigator, new Set());
+      registered.get(navigator).add(route);
+      if (!mountedIn.has(component)) mountedIn.set(component, new Set());
+      mountedIn.get(component).add(navigator);
+    }
+  }
+
+  assert.ok(registered.size >= 6, 'expected all six stacks to be parsed');
+  assert.ok(
+    mountedIn.get('PostJobScreen')?.size >= 5,
+    'expected PostJobScreen to be mounted in at least five stacks'
+  );
+
+  const screenFiles = new Set(dir('screens').filter((f) => f.endsWith('.tsx')));
+  const failures = [];
+
+  for (const [component, stacks] of mountedIn) {
+    const file = `${component}.tsx`;
+    if (!screenFiles.has(file)) continue; // dev-tools catalog etc.
+
+    const source = stripComments(await read(`screens/${file}`));
+    const targets = new Set(
+      [...source.matchAll(/navigation\.navigate\(\s*'([^']+)'/g)].map((m) => m[1])
+    );
+
+    for (const stack of stacks) {
+      for (const target of targets) {
+        if (DOCUMENTED_GAPS.has(`${stack}::${target}`)) continue;
+        if (!registered.get(stack)?.has(target)) {
+          failures.push(
+            `${component} is mounted in ${stack} and dispatches '${target}', ` +
+              `which ${stack} does not register`
+          );
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    failures.sort(),
+    [],
+    'a screen mounted in several stacks must resolve every in-stack target in ' +
+      'ALL of them — resolving in most is still a crash in the rest'
+  );
+});
+
 test('the guarded helper is the only thing that dispatches a nested target', async () => {
   const [ref, routesModule] = await Promise.all([
     read('lib/navigationRef.ts'),

@@ -1951,6 +1951,123 @@ this branch is verified by test or by executed probe.
    taps them on the way; a red box there means the running bundle disagrees
    with source, which is the same stale-bundle question as item 1.
 
+## Device finding 2026-08-10 — `PostJob` NAVIGATE not handled (SEPARATE, OPEN)
+
+**This is not the "See All Jobs" item above.** That one (physical checklist
+item 1) stays OPEN and unaltered — different route name, different trigger
+(launch vs tap), different dispatch mechanism. Recorded separately on purpose.
+
+Reported from device: `The action 'NAVIGATE' with payload
+{"name":"PostJob","params":{}} was not handled by any navigator`, customer
+mode, attributed to the Customer Profile screen, fires on tap. **No `[nav]`
+line**, which is itself informative: `navigateAcrossTabs()` warns on every
+target it drops, so its absence proves the dispatch never went through the
+cross-tab guard. This was a plain in-stack `navigation.navigate()`.
+
+**Registration map — every stack, verified by reading each navigator:**
+
+| Stack | `PostJob` registered |
+| --- | --- |
+| `CustomerHomeStack` | yes — `navigation/CustomerRoot.tsx:42` |
+| `MyJobsStack` | yes — `navigation/sharedStacks.tsx:97` |
+| `MessagesStack` | yes — `sharedStacks.tsx:109` |
+| `MapStack` | yes — `sharedStacks.tsx:126` |
+| `ProfileStack` | yes — `sharedStacks.tsx:151` (+ ParamList `lib/navigation.ts:313`) |
+| `WorkerHomeStack` | **NO — the only gap in the repo** |
+
+In customer mode `WorkerHomeStack` is not mounted, so **every mounted stack
+registers `PostJob`.**
+
+**`screens/ProfileScreen.tsx` cannot produce this error.** It contains no
+`'PostJob'` literal, no dynamic navigate, no `getParent()`, and no
+`navigateAcrossTabs` import. Its only targets are ProfileReviews,
+NotificationSettings, Notifications, Earnings, ServicesPricing, SavedWorkers,
+PaymentMethods, LegalDocument, ComponentCatalog, AdminReports.
+
+**Payload fingerprint pins the dispatcher.** `params:{}` means an object
+literal whose every value was `undefined` (`JSON.stringify` drops those) —
+NOT a params-less call, which omits the `params` key entirely. Across all 10
+call sites exactly one can emit it:
+
+- `screens/HomeScreen.tsx:145` — `initialDescription: query.trim() || undefined`,
+  which is `{}` whenever the search box is blank. **Only match.**
+- `MyJobsHubScreen.tsx:145`, `WorkerSearchScreen.tsx:324` — no params at all,
+  would print `{"name":"PostJob"}`.
+- The four hire sites (`SavedWorkersScreen:129`, `WorkerProfileScreen:287,336`,
+  `ClientJobDetailScreen:640`, `ChatScreen:604`) always send a defined
+  `hireWorkerName` via a `?? 'this worker'` fallback — never empty.
+- `useJobOwnerActions.ts:91` sends `{editJobId: jobId}`; empty only if `jobId`
+  were undefined, which the hook's own owner gate rules out.
+
+**Contradiction, and why it still points at the bundle.** The fingerprint says
+Customer Home (screen 07, LOCKED) — whose stack registers `PostJob` at
+`CustomerRoot.tsx:42`. The reported screen says Profile — which dispatches
+`PostJob` nowhere. **Both readings are unreachable at HEAD in customer mode.**
+That is the same shape as the resolved 2026-08-08 entry earlier in this file,
+including the identical route name and identical empty payload, and the lesson
+recorded there applies unchanged: a symptom the code provably cannot produce is
+a bundle problem until shown otherwise. Note also that `PostJob` only joined
+`ProfileStack` in phase-9 (`b51804d`), so a device bundle predating that commit
+would fail from the Profile tab exactly as reported.
+
+**NOT fixed by registering `PostJob` in `WorkerHomeStack`** — see Known issues
+above. Posting a job is a customer action; §F routes cross-mode actions through
+an explicit confirm plus `switchMode()`. That gap is deliberate and stays.
+
+**Real coverage gap this exposed — CLOSED by a new guard.**
+`tests/crossTabNavigation.test.mjs` guarded *cross-tab* literals only. Nothing
+asserted that an *in-stack* `navigate('X')` literal is registered in every stack
+its screen is mounted in — precisely the failure class reported here, and the
+class the `WorkerHomeStack` gap belongs to. Added: **"every in-stack navigate
+target is registered in each stack its screen is mounted in"** — it parses the
+three navigator files into stack → registered routes and component → stacks it
+is mounted in, then asserts every `navigation.navigate('X')` literal in each
+screen resolves in ALL stacks that screen is mounted in.
+
+**Proven non-vacuous, not merely green.** With the exemption disabled the guard
+reports exactly one failure — `WorkerProfileScreen in WorkerHomeStack ->
+'PostJob' NOT registered`. So it demonstrably goes red on the real gap, and it
+passes only because that gap is exempted BY NAME (`WorkerHomeStack::PostJob`);
+any *accidental* new gap still turns it red. It also carries two anti-vacuity
+assertions (all six stacks parsed; `PostJobScreen` mounted in ≥5 stacks) so a
+broken regex cannot make it pass by matching nothing.
+
+Side effect worth recording: this is the first **executed** confirmation of the
+long-standing Known Issue that "Send an offer" from a worker profile opened via
+the worker Home tab would fail. It had only ever been asserted in prose.
+
+**NEW, SEPARATE FINDING — four unguarded `getParent()` tab hops (OPEN, not fixed).**
+The previous pass routed cross-tab jumps through `navigateAcrossTabs()`, but its
+guard only catches the NESTED form (`navigate('Tab', {screen})`) and only scans
+`screens/`. Four bare tab-level hops still bypass the helper entirely:
+
+- `hooks/useJobOwnerActions.ts:119` — `navigation.getParent()?.navigate('MyJobs' as never)`
+- `screens/BidSentScreen.tsx:40` — `(navigation as any).getParent()?.navigate('MyJobs')`
+- `screens/HomeScreen.tsx:162` — `navigation.getParent()?.navigate('Map')` — **screen 07, LOCKED**
+- `screens/JobDetailScreen.tsx:277` — `(navigation.getParent() as unknown as {...}).navigate(...)`
+
+**None is a live crash**: all four target SHARED tabs (`MyJobs`, `Map`) that
+exist in both trees, so they resolve in either mode. They are the same latent
+CLASS as the fixed cross-tab bugs, not instances of it. Deliberately NOT fixed
+this pass: one of the four is a locked screen, so a guard that went red on them
+could not be satisfied without touching locked code, and rewriting the other
+three is a behaviour change outside a bug-diagnosis pass. Owner: the same future
+navigation phase that owns the `WorkerHomeStack` decision.
+
+**Also uncovered by any guard:** navigate literals dispatched from `hooks/` and
+`components/` against a caller-supplied navigation object — e.g.
+`useJobOwnerActions.ts:91` dispatches `PostJob` for `components/JobOwnerActions.tsx`,
+rendered by `ClientJobDetailScreen` and `JobDetailScreen`. Those screens' stacks
+all register `PostJob`, so it is safe today; it is unverified rather than wrong.
+
+**To discriminate, needed from the device (nothing else is blocking):**
+1. The stack frames *below* `withStack` — those name the actual component. The
+   frames reported stop inside react-navigation internals.
+2. Whether the search box was empty and whether the tap was truly on Profile
+   rather than Customer Home.
+3. Confirmation the run was `npx expo start -c` **and** Expo Go force-quit —
+   `-c` clears Metro's cache, not Expo Go's on-device bundle cache.
+
 ## Exact next task (Phase 9 — Profiles, portfolio & worker self-service)
 
 Per BRAZOS_MASTER_PLAN.md §J Phase 9 (MEDIUM), screens 22–25, 43–46, 63–66.
