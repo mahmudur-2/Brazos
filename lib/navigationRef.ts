@@ -1,5 +1,7 @@
 import { createNavigationContainerRef } from '@react-navigation/native';
 
+declare const __DEV__: boolean;
+
 /**
  * Navigation handle usable from outside React — specifically the push
  * notification tap handler, which fires from a native event listener that has
@@ -70,4 +72,76 @@ export function canNavigateTo(tab: string, screen?: string): boolean {
   const nested = tabRoute.state as { routeNames?: string[] } | undefined;
   if (!nested?.routeNames) return true;
   return nested.routeNames.includes(screen);
+}
+
+export type CrossTabOptions = {
+  /**
+   * When the nested target is not in the mounted tree, land on the tab's own
+   * root instead of dropping the jump. For a user-initiated tap that is nearly
+   * always right — the tab exists in both trees, only the screen inside it is
+   * mode-specific, so "go to Home" still has an answer even when "go to Worker
+   * Home" does not. Notification routing deliberately does NOT opt in: landing
+   * a tapped alert on an unrelated screen is worse than doing nothing.
+   */
+  fallbackToTabRoot?: boolean;
+  /**
+   * React Navigation 7's nested-navigate option: pop to the target when it is
+   * already on the tab's stack rather than pushing a second copy of it.
+   */
+  pop?: boolean;
+};
+
+/**
+ * THE way to dispatch across sibling tabs. Every cross-tab jump in the app
+ * goes through here.
+ *
+ * WHY THIS EXISTS AS ONE FUNCTION
+ * `Home` is the mode-defining tab (BRAZOS_MASTER_PLAN.md §F): its stack is
+ * `HomeMain/PostJob/WorkerSearch/...` in customer mode and
+ * `BrowseJobs/WorkerResults/JobDetail/...` in worker mode, and only one of the
+ * two trees is ever mounted. The other four tabs are shared. So a nested
+ * `navigate('Home', { screen: 'BrowseJobs' })` written inside a SHARED screen
+ * is correct in one mode and throws React Navigation's "The 'state' or
+ * 'screen' passed in the params couldn't be applied to the navigator with the
+ * screens: ..." in the other.
+ *
+ * tsc cannot catch that: a shared screen types its own stack, and the tab-level
+ * jump is an untyped cast by construction (there is no combined tab type — see
+ * navigationRef above). So the check has to be a runtime one, and it has to be
+ * in exactly one place, or the next cross-tab caller reintroduces the bug. It
+ * asks the LIVE navigator, which is the observable form of ModeContext's
+ * decision, so it can never drift from the mode that is actually mounted.
+ */
+export function navigateAcrossTabs(
+  tab: string,
+  screen?: string,
+  params?: object,
+  options?: CrossTabOptions
+): void {
+  navigateWhenReady(() => {
+    if (canNavigateTo(tab, screen)) {
+      if (screen) {
+        navigationRef.navigate(tab, {
+          screen,
+          params,
+          ...(options?.pop ? { pop: true } : null),
+        });
+      } else {
+        navigationRef.navigate(tab);
+      }
+      return;
+    }
+
+    if (options?.fallbackToTabRoot && canNavigateTo(tab)) {
+      navigationRef.navigate(tab);
+      return;
+    }
+
+    if (__DEV__) {
+      console.warn(
+        `[nav] dropped cross-tab target ${tab}/${screen ?? '(tab root)'} — ` +
+          'not handled by the navigator this mode mounted'
+      );
+    }
+  });
 }

@@ -14,6 +14,7 @@ import {
   type AppNotification,
 } from '../lib/notifications';
 import type { ProfileStackNavigation } from '../lib/navigation';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -71,14 +72,13 @@ export function NotificationsScreen() {
     const screen = notification.data?.screen;
     if (typeof jobId === 'string') {
       // Chat opens in the Messages tab; everything job-scoped lands on the
-      // MyJobs hub stack — both tabs are shared across modes (§F).
-      const parent = (navigation.getParent() as unknown as {
-        navigate: (tab: string, params?: object) => void;
-      } | null);
+      // MyJobs hub stack — both tabs are shared across modes (§F). Routed
+      // through the one guarded cross-tab helper (lib/navigationRef.ts) so
+      // this in-app feed and the push tap handler behave identically.
       if (screen === 'Chat') {
-        parent?.navigate('Messages', { screen: 'Chat', params: { jobId } });
+        navigateAcrossTabs('Messages', 'Chat', { jobId });
       } else {
-        parent?.navigate('MyJobs', { screen: 'MyJobsHub' });
+        navigateAcrossTabs('MyJobs', 'MyJobsHub');
       }
     }
   }

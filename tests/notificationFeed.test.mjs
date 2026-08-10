@@ -55,7 +55,9 @@ test('the two Phase-6 events are wired and deduped', async () => {
 
 test('tap-through stays inside the shared tabs', async () => {
   const screen = await read('screens/NotificationsScreen.tsx');
-  assert.match(screen, /navigate\('Messages',/);
-  assert.match(screen, /navigate\('MyJobs',/);
+  // Both hops now go through the guarded cross-tab helper (lib/navigationRef.ts)
+  // rather than a hand-cast parent navigate — same two shared destinations.
+  assert.match(screen, /navigateAcrossTabs\('Messages', 'Chat'/);
+  assert.match(screen, /navigateAcrossTabs\('MyJobs', 'MyJobsHub'/);
   assert.ok(!/switchMode|switchToOtherMode/.test(screen), 'no silent mode switching from a tap');
 });

@@ -1,34 +1,19 @@
 import { fetchJobById } from './jobs';
 import type { OpenJob } from './jobs';
-import { canNavigateTo, navigationRef, navigateWhenReady } from './navigationRef';
-
-declare const __DEV__: boolean;
+import { navigateAcrossTabs } from './navigationRef';
 
 /**
  * Dispatch only into a navigator that can actually handle the target.
  *
- * Perspective comes from ModeContext, whose mounted tree canNavigateTo()
- * inspects — so a target belonging to the other mode's tree is DROPPED with a
- * deliberate __DEV__ log instead of being dispatched blind. Dispatching blind
- * is what produced the cold-start "state or screen could not be handled"
- * error: the intent is parked before the container mounts and flushed the
- * instant it is ready, which can precede mode resolution.
+ * The check itself now lives in navigationRef.ts, because push routing is not
+ * the only thing that jumps between tabs — a shared screen reaching into the
+ * mode-defining Home tab has exactly the same problem, and two copies of the
+ * rule is how one of them ends up unguarded. This file keeps the deliberate
+ * DROP behaviour (no fallbackToTabRoot): a tapped alert that cannot reach its
+ * subject is better ignored than answered with an unrelated screen.
  */
-function navigateChecked(tab: string, screen?: string, params?: object): void {
-  navigateWhenReady(() => {
-    if (!canNavigateTo(tab, screen)) {
-      if (__DEV__) {
-        console.warn(
-          `[push] dropped notification target ${tab}/${screen ?? '(tab root)'} — ` +
-            'not handled by the navigator this mode mounted'
-        );
-      }
-      return;
-    }
-    if (screen) navigationRef.navigate(tab, { screen, params });
-    else navigationRef.navigate(tab);
-  });
-}
+const navigateChecked = (tab: string, screen?: string, params?: object): void =>
+  navigateAcrossTabs(tab, screen, params);
 
 // ---------------------------------------------------------------------------
 // Notification payload -> destination screen.

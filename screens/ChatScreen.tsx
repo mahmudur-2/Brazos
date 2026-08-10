@@ -65,6 +65,7 @@ import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
 import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, spacing } from '../lib/theme';
 
 export function ChatScreen() {
@@ -377,24 +378,16 @@ export function ChatScreen() {
         );
         return;
       }
-      // The narrow-shape cast this repo standardized in NotificationsScreen:
-      // typo-proof at the shape level without claiming the whole tree type.
-      (navigation.getParent() as unknown as {
-        navigate: (tab: 'MyJobs', params: { screen: string; params: object }) => void;
-      } | null)?.navigate('MyJobs', {
-        screen: 'ClientJobDetail',
-        params: { job: fetchedJob },
-      });
+      // MyJobs is a shared tab that registers this route in both trees, so the
+      // hop was never mode-fragile — it goes through the one guarded helper
+      // anyway, so there is a single way to cross tabs and no second pattern
+      // for the next caller to copy (lib/navigationRef.ts).
+      navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: fetchedJob });
       return;
     }
 
     // The worker's screen only takes the id and loads itself.
-    (navigation.getParent() as unknown as {
-      navigate: (tab: 'MyJobs', params: { screen: string; params: object }) => void;
-    } | null)?.navigate('MyJobs', {
-      screen: 'WorkerJob',
-      params: { jobId },
-    });
+    navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId });
   }
 
   // Long-pressing a message offers both actions rather than jumping straight

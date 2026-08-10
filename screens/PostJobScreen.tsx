@@ -61,6 +61,7 @@ import {
   uploadJobVideo,
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, emeraldColors, radius, shadows, spacing } from '../lib/theme';
 import { MediaUploader } from '../ui/primitives';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
@@ -468,21 +469,22 @@ export function PostJobScreen() {
       return;
     }
 
-    const parent = navigation.getParent();
     // Unwind the source stack too. Otherwise a post launched from discovery
     // remains hidden at the top of Home and reappears when the tab is revisited.
     navigation.dispatch(StackActions.popToTop());
-    if (!parent) return;
-    const navigateTab = parent.navigate as (name: string, params?: object) => void;
-    navigateTab(
+    // `HomeMain` is the CUSTOMER tree's Home root. PostJob is registered in the
+    // shared MyJobs/Messages/Map/Profile stacks too, so a worker-mode account
+    // genuinely reaches this line — and in worker mode the Home stack is
+    // BrowseJobs/WorkerResults/JobDetail/..., which cannot apply 'HomeMain'.
+    // The fallback lands on the Home tab's own root, i.e. Worker Home there and
+    // Customer Home here. `pop: true` keeps React Navigation 7 from appending
+    // another copy of the root route, so device Back cannot reveal the
+    // completed posting wizard or the stale discovery screen behind it.
+    navigateAcrossTabs(
       viewMyJobs ? 'MyJobs' : 'Home',
-      {
-        screen: viewMyJobs ? 'MyJobsHub' : 'HomeMain',
-        // React Navigation 7 otherwise appends another copy of the root route.
-        // Pop to the existing root so device Back cannot reveal the completed
-        // posting wizard or the stale discovery screen that launched it.
-        pop: true,
-      }
+      viewMyJobs ? 'MyJobsHub' : 'HomeMain',
+      undefined,
+      { pop: true, fallbackToTabRoot: true }
     );
   }
 
@@ -498,15 +500,12 @@ export function PostJobScreen() {
       return;
     }
     setShowSuccess(false);
-    const parent = navigation.getParent();
     navigation.dispatch(StackActions.popToTop());
-    if (!parent) return;
-    const navigateTab = parent.navigate as (name: string, params?: object) => void;
-    navigateTab('MyJobs', {
-      screen: 'ClientJobDetail',
-      params: { job: publishedJob },
-      pop: true,
-    });
+    // MyJobs is a shared tab and registers ClientJobDetail in both trees, so
+    // this one was never mode-fragile — it goes through the same helper anyway
+    // so there is exactly one way to cross tabs and no second pattern for the
+    // next caller to copy.
+    navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: publishedJob }, { pop: true });
   }
 
   async function handleUseCurrentLocation() {

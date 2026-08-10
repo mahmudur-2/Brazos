@@ -16,6 +16,7 @@ import {
   type HotspotCell,
 } from '../lib/hotspots';
 import type { MapStackNavigation } from '../lib/navigation';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 
 export function MapScreen() {
@@ -45,14 +46,18 @@ export function MapScreen() {
               // MyJobs from a different stack — reuses the existing complete
               // open-jobs list rather than duplicating it inside MapStack.
               onPress={() => {
-                // Untyped cast for the same reason useJobOwnerActions' onEdit
-                // is: this crosses from MapStackNavigation into a sibling
-                // tab's stack, which the two-argument navigate overload can't
-                // resolve cleanly.
-                const parentNavigate = navigation.getParent()?.navigate as
-                  | ((name: string, params?: object) => void)
-                  | undefined;
-                parentNavigate?.('Home', { screen: 'BrowseJobs' });
+                // Map is a SHARED tab, so this runs in both modes — but
+                // `BrowseJobs` (Worker Home) only exists in the worker tree's
+                // Home stack. Dispatching it blind in customer mode threw
+                // "The 'state' or 'screen' passed in the params couldn't be
+                // applied to the navigator with the screens: HomeMain,
+                // PostJob, WorkerSearch, WorkerProfile, ProfileReviews".
+                // navigateAcrossTabs() asks the mounted tree first and falls
+                // back to the Home tab's own root, which is the right Home in
+                // whichever mode the user is actually in.
+                navigateAcrossTabs('Home', 'BrowseJobs', undefined, {
+                  fallbackToTabRoot: true,
+                });
               }}
               hitSlop={10}
             >
