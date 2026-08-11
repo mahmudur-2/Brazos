@@ -1,25 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { BidWorkerCard } from '../components/BidWorkerCard';
+import { OfferCard } from '../components/OfferCard';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
+import { JobProgress } from '../components/JobProgress';
 import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReviewSection } from '../components/ReviewSection';
@@ -28,33 +34,42 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { StatusBadge } from '../components/StatusBadge';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
-import { useJobBids } from '../hooks/useJobBids';
+import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { fetchProfileById, type Profile } from '../lib/profiles';
+import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
+import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
+import { MoneyText } from '../ui/primitives/MoneyText';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
-  acceptBid,
-  bestValueBidId,
-  BID_SORT_OPTIONS,
-  sortBids,
-  type BidSort,
-  type BidWithWorker,
-} from '../lib/bids';
+  acceptOffer,
+  bestValueOfferId,
+  OFFER_SORT_OPTIONS,
+  sortOffers,
+  type OfferSort,
+  type OfferWithWorker,
+} from '../lib/offers';
 import { jobStage } from '../lib/jobStage';
+import { deriveJobLifecycle } from '../lib/jobLifecycle';
 import {
+  arrivalWindowLabel,
+  budgetRangeLabel,
   categoryAccent,
   completionPhotosOf,
   completionVideosOf,
+  fetchJobLocation,
   fetchRehirableWorkerIds,
   formatBudget,
   formatPendingBidCount,
+  hasBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
 } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
-
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+import { colors, emeraldColors, radius, spacing, typography } from '../lib/theme';
+import { formatTimeAgo } from '../lib/time';
 
 export function ClientJobDetailScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
@@ -63,43 +78,151 @@ export function ClientJobDetailScreen() {
   // edit made in PostJob (title, budget, location, photos, videos) is reflected
   // here the moment the poster comes back, instead of the card's snapshot from
   // whenever the hub last loaded.
-  const { job } = useOwnedJobDetail(params.job);
+  const { job, missing, refresh: refreshJob } = useOwnedJobDetail(params.job);
 
   const { user } = useAuth();
-  const { bids, loading, error, refresh } = useJobBids(job.id);
-  const [sort, setSort] = useState<BidSort>('value');
+  const { offers: bids, loading, error, refresh: refreshBids } = useJobOffers(job.id);
+  const [sort, setSort] = useState<OfferSort>('value');
+  const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
-  const [pendingAccept, setPendingAccept] = useState<BidWithWorker | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [acceptedName, setAcceptedName] = useState('');
+  const [pendingAccept, setPendingAccept] = useState<OfferWithWorker | null>(null);
   const [worker, setWorker] = useState<Profile | null>(null);
+  // The job's sandbox ledger row (phase50). Loaded on focus so returning from
+  // Checkout immediately reflects authorized/held truthfully.
+  const [payment, setPayment] = useState<Payment | null>(null);
+  // The open issue report, if any (phase51) — it freezes release and reroutes
+  // the completed-job section to the approval surface.
+  const [openDispute, setOpenDispute] = useState<JobDispute | null>(null);
+  const [workerError, setWorkerError] = useState<string | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
+  // The exact service address (job_private_details). This is the poster's own
+  // screen, so RLS always grants the read; it simply comes back null when the
+  // posting never carried one.
+  const [privateAddress, setPrivateAddress] = useState<string | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   // Handed to ReviewSection so focusing its comment field can lift the card
   // clear of the keyboard — the review card is the last thing in this list.
   const scrollRef = useRef<ScrollView>(null);
 
-  const successScale = useRef(new Animated.Value(0.4)).current;
-  const successOpacity = useRef(new Animated.Value(0)).current;
+  const acceptingRef = useRef(false);
+  const screenMountedRef = useRef(true);
+  const currentJobIdRef = useRef(job.id);
+  const refreshRunRef = useRef(0);
+  const workerRunRef = useRef(0);
+  currentJobIdRef.current = job.id;
 
   const canAccept = job.status === 'open';
-  const workerName = worker?.full_name ?? 'the worker';
+  // A retained ClientJobDetail route can be retargeted to another job. Never
+  // render the previous assignment while this job's profile read is pending.
+  const assignedWorker = worker?.id === job.assigned_worker_id ? worker : null;
+  const workerName = assignedWorker?.full_name ?? 'the worker';
   const accent = categoryAccent(job.category);
+  const hasLifecycle = ['assigned', 'in_progress', 'completed'].includes(job.status);
+  const pendingBids = useMemo(
+    () => bids.filter((bid) => bid.status === 'pending'),
+    [bids]
+  );
+  // `job.bid_count` includes withdrawn/rejected history. Only pending rows can
+  // drive the poster's actionable status, even while the fresh read loads.
+  const visibleBidCount = pendingBids.length;
+  const displayedAmountCents = hasLifecycle
+    ? job.final_amount_cents ?? job.budget_cents
+    : job.budget_cents;
+  const completionPhotos = completionPhotosOf(job);
+  const completionVideos = completionVideosOf(job);
+  const hasCompletionEvidence = completionPhotos.length > 0 || completionVideos.length > 0;
   // Always the poster's own view of their job, so isPoster is unconditionally
   // true here — this is the one screen that legitimately shows "In Progress".
-  const stage = jobStage(job.status, bids.length, true);
+  const actionableBidCount = loading && bids.length === 0 ? null : visibleBidCount;
+  const stage = jobStage(job.status, actionableBidCount, true);
+  // THE lifecycle derivation point (run addendum §1) — the completed-job fork
+  // below branches on this, never on a hand-rolled status+payment combo.
+  const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: !!openDispute });
 
   useEffect(() => {
-    if (canAccept || !job.assigned_worker_id) return;
+    screenMountedRef.current = true;
+    return () => {
+      screenMountedRef.current = false;
+      refreshRunRef.current += 1;
+    };
+  }, []);
+
+  const loadAssignedWorker = useCallback(async () => {
+    const workerId = job.assigned_worker_id;
+    const jobId = job.id;
+    const runId = ++workerRunRef.current;
+    if (canAccept || !workerId) {
+      setWorker(null);
+      setWorkerError(null);
+      return;
+    }
+
+    setWorkerError(null);
+    const result = await fetchProfileById(workerId);
+    if (
+      runId !== workerRunRef.current ||
+      currentJobIdRef.current !== jobId ||
+      !screenMountedRef.current
+    ) {
+      return;
+    }
+    if (result.error) setWorkerError(userMessage(result.error));
+    else setWorker(result.data);
+  }, [canAccept, job.assigned_worker_id, job.id]);
+
+  useEffect(() => {
+    // React Navigation can retarget this retained route to another job. Modal,
+    // viewer, sort, and payment state belong to the old job and must not follow.
+    refreshRunRef.current += 1;
+    setSort('value');
+    setRefreshing(false);
+    setPendingAccept(null);
+    setViewerUri(null);
+    setAvatarUri(null);
+    setWorkerError(null);
+    setPayment(null);
+    setOpenDispute(null);
+  }, [job.id]);
+
+  // The ledger row, re-read on every focus: Checkout and the approval flow are
+  // one push away and the money label here must follow what actually happened
+  // there. job_payment_state() (phase51) also runs the 72h auto-release check
+  // on the way — the on-read pattern; there is no cron.
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      if (job.status === 'open' || job.status === 'cancelled') return;
+      fetchJobPaymentState(job.id).then(({ data, error }) => {
+        if (active && !error) setPayment(data);
+      });
+      fetchOpenJobDispute(job.id).then(({ data, error }) => {
+        if (active && !error) setOpenDispute(data);
+      });
+      return () => {
+        active = false;
+      };
+    }, [job.id, job.status])
+  );
+
+  useEffect(() => {
+    setWorker(null);
+    void loadAssignedWorker();
+    return () => {
+      workerRunRef.current += 1;
+    };
+  }, [loadAssignedWorker]);
+  useEffect(() => {
     let active = true;
-    fetchProfileById(job.assigned_worker_id).then(({ data }) => {
-      if (active) setWorker(data);
+    setPrivateAddress(null);
+    fetchJobLocation(job.id).then(({ data, error }) => {
+      if (active && !error) setPrivateAddress(data?.address_line ?? null);
     });
     return () => {
       active = false;
     };
-  }, [canAccept, job.assigned_worker_id]);
+  }, [job.id]);
+
   // "Hire Again" is client-scoped by definition: only workers who have already
   // completed a job for *this* client. Workers never see this in reverse.
   useEffect(() => {
@@ -113,67 +236,123 @@ export function ClientJobDetailScreen() {
     };
   }, [user]);
 
-  const sortedBids = useMemo(() => sortBids(bids, sort), [bids, sort]);
-  const bestId = useMemo(() => bestValueBidId(bids), [bids]);
+  const sortedBids = useMemo(() => sortOffers(pendingBids, sort), [pendingBids, sort]);
+  const bestId = useMemo(() => bestValueOfferId(pendingBids), [pendingBids]);
 
-  function playSuccessThenLeave(name: string) {
-    setAcceptedName(name);
-    setShowSuccess(true);
-    Animated.parallel([
-      Animated.spring(successScale, {
-        toValue: 1,
-        friction: 6,
-        tension: 80,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }),
-      Animated.timing(successOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }),
-    ]).start();
+  async function onRefresh() {
+    const runId = ++refreshRunRef.current;
+    const refreshJobId = job.id;
+    setRefreshing(true);
+    try {
+      const [jobResult] = await Promise.all([
+        refreshJob(),
+        canAccept ? refreshBids() : Promise.resolve(),
+        !canAccept && job.assigned_worker_id ? loadAssignedWorker() : Promise.resolve(),
+      ]);
+      if (
+        runId === refreshRunRef.current &&
+        currentJobIdRef.current === refreshJobId &&
+        screenMountedRef.current &&
+        jobResult.error
+      ) {
+        await alertAsync('Could not refresh job', userMessage(jobResult.error));
+      }
+    } finally {
+      if (runId === refreshRunRef.current && screenMountedRef.current) {
+        setRefreshing(false);
+      }
+    }
+  }
 
-    setTimeout(() => {
-      navigation.navigate('MyJobsHub');
-    }, 1400);
+  /**
+   * Phase 5: an accepted bid flows straight into the protected checkout —
+   * hiring and funding are one continuous motion, so instead of the old
+   * "success overlay, back to the hub" the screen navigates to Checkout,
+   * which re-reads the job canonically and shows the truthful payment state.
+   */
+  function proceedToCheckout() {
+    navigation.navigate('Checkout', { job });
   }
 
   /**
    * Accepting a bid assigns the job and closes every other bid on it, so it
    * goes through the in-app confirmation rather than firing on one tap. The
-   * confirm button disables itself while accept_bid() is in flight, so a
+   * confirm button disables itself while accept_offer() is in flight, so a
    * second tap cannot send a second accept.
    */
-  function confirmAccept(bid: BidWithWorker) {
-    if (!bid.worker || acceptingId) return;
+  function confirmAccept(bid: OfferWithWorker) {
+    if (!bid.worker || acceptingId || acceptingRef.current) return;
     setPendingAccept(bid);
   }
 
-  async function doAccept(bid: BidWithWorker) {
-    if (!bid.worker) return;
+  async function doAccept(bid: OfferWithWorker) {
+    if (!bid.worker || acceptingRef.current) return;
+    const acceptedJobId = job.id;
+    acceptingRef.current = true;
     setAcceptingId(bid.id);
-    const { error } = await acceptBid({
-      jobId: job.id,
-      bidId: bid.id,
-    });
+    const { error } = await acceptOffer(bid.id);
+    acceptingRef.current = false;
+    if (!screenMountedRef.current) return;
     setAcceptingId(null);
+    if (currentJobIdRef.current !== acceptedJobId) {
+      setPendingAccept(null);
+      return;
+    }
 
     if (error) {
       setPendingAccept(null);
-      await alertAsync('Could not accept bid', error.message);
-      await refresh();
+      const [jobResult] = await Promise.all([refreshJob(), refreshBids()]);
+      if (!screenMountedRef.current || currentJobIdRef.current !== acceptedJobId) return;
+
+      // A network response can be lost after the transaction committed. The
+      // canonical job read tells us whether this exact worker was assigned,
+      // avoiding a false failure message and a stale open-job screen.
+      if (jobResult.data?.assigned_worker_id === bid.worker.id) {
+        proceedToCheckout();
+        return;
+      }
+      await alertAsync('Could not confirm bid acceptance', userMessage(error));
       return;
     }
 
     setPendingAccept(null);
-    playSuccessThenLeave(bid.worker.full_name ?? 'the worker');
+    proceedToCheckout();
+  }
+
+  if (missing) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <ScreenHeader
+          title="Job unavailable"
+          onBack={goBackOrHome}
+          palette={emeraldColors}
+        />
+        <View style={styles.missingState}>
+          <View style={styles.missingIcon}>
+            <Ionicons name="document-text-outline" size={34} color={colors.emerald} />
+          </View>
+          <Text style={styles.missingTitle}>This job is no longer available</Text>
+          <Text style={styles.missingText}>
+            It may have been deleted or you may no longer have access to it.
+          </Text>
+          <Button
+            title="Back to My Jobs"
+            onPress={() => navigation.popTo('MyJobsHub')}
+            palette={emeraldColors}
+            style={styles.missingButton}
+          />
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScreenHeader title="Job & Bids" onBack={() => navigation.goBack()} />
-
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <ScreenHeader
+        title={canAccept ? 'Job & bids' : 'Job detail'}
+        onBack={goBackOrHome}
+        palette={emeraldColors}
+      />
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -187,130 +366,372 @@ export function ClientJobDetailScreen() {
           // be dismissed by hunting for empty space to tap.
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.emerald}
+              colors={[colors.emerald]}
+            />
+          }
         >
-        <Card>
-          <View style={styles.jobHeader}>
+        <View style={[styles.jobHero, !canAccept && styles.jobHeroActive]}>
+          <View style={styles.heroTopRow}>
+            <StatusBadge status={stage.statusKey} label={stage.label} />
+            <Text style={[styles.postedAt, !canAccept && styles.heroTextLight]}>
+              Posted {formatTimeAgo(job.created_at)}
+            </Text>
+          </View>
+
+          <Text style={[styles.jobTitle, !canAccept && styles.heroTitleLight]}>
+            {job.title}
+          </Text>
+
+          <View style={styles.jobMetaRow}>
             <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
               <Ionicons
                 name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
-                size={22}
+                size={18}
                 color={accent.icon}
               />
             </View>
-            <View style={styles.jobHeaderText}>
-              <Text style={styles.jobTitle} numberOfLines={2}>
-                {job.title}
-              </Text>
-              <Text style={styles.jobMeta}>
-                {JOB_CATEGORY_LABELS[job.category] ?? job.category}
-                {job.location ? ` · ${job.location}` : ''}
-              </Text>
-            </View>
-            <StatusBadge status={stage.statusKey} label={stage.label} />
-          </View>
-          <View style={styles.jobFooter}>
-            <Text style={styles.budget}>{formatBudget(job.budget_cents)}</Text>
-            <Text style={styles.bidCount}>{formatPendingBidCount(bids.length)}</Text>
+            <Text
+              style={[styles.jobMeta, !canAccept && styles.heroTextLight]}
+              numberOfLines={2}
+            >
+              {JOB_CATEGORY_LABELS[job.category] ?? job.category}
+              {job.location ? ` · ${job.location}` : ''}
+            </Text>
           </View>
 
-          <JobOwnerActions jobId={job.id} posterId={job.client_id} status={job.status} />
+          <View style={styles.jobFooter}>
+            <View>
+              <Text style={[styles.valueLabel, !canAccept && styles.heroEyebrowLight]}>
+                {hasLifecycle ? 'AGREED PRICE' : 'BUDGET'}
+              </Text>
+              <Text style={[styles.budget, !canAccept && styles.heroTitleLight]}>
+                {hasLifecycle
+                  ? formatBudget(displayedAmountCents)
+                  : hasBudget(job)
+                    ? budgetRangeLabel(job)
+                    : formatBudget(null)}
+              </Text>
+            </View>
+            {canAccept ? (
+              <Text style={styles.bidCount} accessibilityLiveRegion="polite">
+                {loading && bids.length === 0
+                  ? 'Checking bids…'
+                  : error && bids.length === 0
+                    ? 'Bids unavailable'
+                    : formatPendingBidCount(visibleBidCount)}
+              </Text>
+            ) : null}
+          </View>
+
+          <JobOwnerActions
+            jobId={job.id}
+            posterId={job.client_id}
+            status={job.status}
+            style={styles.ownerActions}
+          />
+        </View>
+
+        <Card palette={emeraldColors} style={styles.scopeCard}>
+          <Text style={styles.eyebrow}>JOB SCOPE</Text>
+          <Text style={styles.scopeDescription} selectable>
+            {job.description}
+          </Text>
+          <View style={styles.scopeTag}>
+            <Ionicons
+              name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+              size={15}
+              color={colors.emerald}
+            />
+            <Text style={styles.scopeTagText}>
+              {JOB_CATEGORY_LABELS[job.category] ?? job.category}
+            </Text>
+          </View>
         </Card>
+
+        {arrivalWindowLabel(job) || privateAddress ? (
+          <Card palette={emeraldColors} style={styles.timingCard}>
+            <Text style={styles.eyebrow}>TIMING &amp; ADDRESS</Text>
+            {arrivalWindowLabel(job) ? (
+              <View style={styles.timingRow}>
+                <Ionicons name="time-outline" size={18} color={colors.emerald} />
+                <Text style={styles.timingText}>{arrivalWindowLabel(job)}</Text>
+              </View>
+            ) : null}
+            {privateAddress ? (
+              <View style={styles.timingRow}>
+                <Ionicons name="lock-closed-outline" size={18} color={colors.emerald} />
+                <View style={styles.timingCopy}>
+                  <Text style={styles.timingText} selectable>
+                    {privateAddress}
+                  </Text>
+                  <Text style={styles.timingCaption}>
+                    Private — only you and the worker you hire can see this address.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {canAccept && (job.photos.length > 0 || job.videos.length > 0) ? (
+          <Card palette={emeraldColors} style={styles.mediaCard}>
+            <Text style={styles.sectionTitle}>Posting media</Text>
+            <Text style={styles.sectionCaption}>What workers can review before bidding.</Text>
+            {job.photos.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoRow}
+              >
+                {job.photos.map((url) => (
+                  <Pressable
+                    key={url}
+                    onPress={() => setViewerUri(url)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Open posting photo"
+                  >
+                    <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+            {job.videos.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.photoRow}
+              >
+                {job.videos.map((url) => (
+                  <JobVideo key={url} uri={url} label="Job video" />
+                ))}
+              </ScrollView>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {canAccept && error && bids.length > 0 ? (
+          <View style={styles.errorBanner}>
+            <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
+            <View style={styles.errorCopy}>
+              <Text style={styles.errorTitle}>Bids may be out of date</Text>
+              <Text style={styles.errorMessage} selectable>
+                {error}
+              </Text>
+            </View>
+            <Pressable
+              onPress={onRefresh}
+              disabled={refreshing}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Retry loading bids"
+            >
+              <Text style={styles.retryText}>{refreshing ? 'Trying…' : 'Retry'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         {canAccept ? (
           loading ? (
-            <ActivityIndicator
-              size="large"
-              color={colors.primary}
-              style={styles.loader}
-            />
-          ) : bids.length === 0 ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator size="large" color={colors.emerald} />
+              <Text style={styles.loadingText}>Loading bids…</Text>
+            </View>
+          ) : error && bids.length === 0 ? (
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
-                <Ionicons name="people-outline" size={32} color={colors.primary} />
+                <Ionicons name="cloud-offline-outline" size={32} color={colors.emerald} />
               </View>
-              <Text style={styles.emptyTitle}>No bids yet</Text>
+              <Text style={styles.emptyTitle}>Couldn’t load bids</Text>
+              <Text style={styles.emptyText} selectable>
+                {error}
+              </Text>
+              <Button
+                title="Try again"
+                onPress={onRefresh}
+                loading={refreshing}
+                palette={emeraldColors}
+                style={styles.retryButton}
+              />
+            </View>
+          ) : pendingBids.length === 0 ? (
+            <View style={styles.empty}>
+              <View style={styles.emptyIcon}>
+                <Ionicons name="people-outline" size={32} color={colors.emerald} />
+              </View>
+              <Text style={styles.emptyTitle}>
+                {bids.length > 0 ? 'No active bids' : 'No bids yet'}
+              </Text>
               <Text style={styles.emptyText}>
-                When workers bid on this job, they’ll appear here ranked by value.
+                {bids.length > 0
+                  ? 'Previous bids were withdrawn or closed. New pending bids will appear here.'
+                  : 'When workers bid on this job, they’ll appear here ranked by value.'}
               </Text>
             </View>
           ) : (
             <>
-              {bids.length > 1 && (
+              <View style={styles.bidSectionHeader}>
+                <View>
+                  <Text style={styles.eyebrow}>WORKER OFFERS</Text>
+                  <Text style={styles.bidSectionTitle}>
+                    {pendingBids.length}{' '}
+                    {pendingBids.length === 1 ? 'bid' : 'bids'} to compare
+                  </Text>
+                </View>
+                {pendingBids.length > 1 && (
+                  <Button
+                    title="Compare"
+                    size="sm"
+                    variant="secondary"
+                    palette={emeraldColors}
+                    onPress={() => navigation.navigate('CompareBids', { job })}
+                  />
+                )}
+              </View>
+              {pendingBids.length > 1 && (
                 <SegmentedControl
-                  options={BID_SORT_OPTIONS}
+                  options={OFFER_SORT_OPTIONS}
                   value={sort}
                   onChange={setSort}
+                  palette={emeraldColors}
                 />
               )}
 
               <View style={styles.bidList}>
-                {sortedBids.map((bid) => (
-                  <BidWorkerCard
-                    key={bid.id}
-                    bid={bid}
-                    isBestValue={bid.id === bestId && bids.length > 1}
-                    canAccept={canAccept}
-                    accepting={acceptingId === bid.id}
-                    disabled={acceptingId !== null && acceptingId !== bid.id}
-                    onAccept={() => confirmAccept(bid)}
-                    onViewProfile={
-                      bid.worker
-                        ? () =>
-                            navigation.navigate('WorkerProfile', {
-                              workerId: bid.worker!.id,
-                              workerName: bid.worker!.full_name ?? undefined,
-                            })
-                        : undefined
-                    }
-                    onLongPressAvatar={
-                      bid.worker?.avatar_url
-                        ? () => setAvatarUri(bid.worker!.avatar_url)
-                        : undefined
-                    }
-                    canRehire={!!bid.worker && rehirable.has(bid.worker.id)}
-                    onHireAgain={
-                      bid.worker
-                        ? () =>
-                            navigation.navigate('PostJob', {
-                              hireWorkerId: bid.worker!.id,
-                              hireWorkerName: bid.worker!.full_name ?? 'this worker',
-                            })
-                        : undefined
-                    }
-                  />
-                ))}
+                {sortedBids.map((bid) => {
+                  // A const narrows ONCE and survives into the closures — the
+                  // five `bid.worker!` assertions this replaces were sound
+                  // only by inspection (hardening A8).
+                  const worker = bid.worker;
+                  const avatarUrl = worker?.avatar_url ?? null;
+                  return (
+                    <OfferCard
+                      key={bid.id}
+                      variant="list"
+                      offer={bid}
+                      palette={emeraldColors}
+                      isBestValue={bid.id === bestId && pendingBids.length > 1}
+                      canAccept={canAccept}
+                      accepting={acceptingId === bid.id}
+                      disabled={acceptingId !== null && acceptingId !== bid.id}
+                      onAccept={() => confirmAccept(bid)}
+                      onOpenDetail={() =>
+                        navigation.navigate('BidDetail', { job, offerId: bid.id })
+                      }
+                      onViewProfile={
+                        worker
+                          ? () =>
+                              navigation.navigate('WorkerProfile', {
+                                workerId: worker.id,
+                                workerName: worker.full_name ?? undefined,
+                              })
+                          : undefined
+                      }
+                      onLongPressAvatar={
+                        avatarUrl ? () => setAvatarUri(avatarUrl) : undefined
+                      }
+                      canRehire={!!worker && rehirable.has(worker.id)}
+                      onHireAgain={
+                        worker
+                          ? () =>
+                              navigation.navigate('PostJob', {
+                                hireWorkerId: worker.id,
+                                hireWorkerName: worker.full_name ?? 'this worker',
+                              })
+                          : undefined
+                      }
+                    />
+                  );
+                })}
               </View>
             </>
           )
         ) : (
           <>
-            <Card>
-              <Text style={styles.sectionTitle}>Assigned worker</Text>
+            {job.status === 'cancelled' ? (
+              <Card palette={emeraldColors} style={styles.cancelledCard}>
+                <View style={styles.cancelledIcon}>
+                  <Ionicons name="close" size={22} color={colors.neutral} />
+                </View>
+                <View style={styles.errorCopy}>
+                  <Text style={styles.cancelledTitle}>This job was cancelled</Text>
+                  <Text style={styles.cancelledText}>
+                    No further action is needed. The job remains here for your records.
+                  </Text>
+                </View>
+              </Card>
+            ) : (
+              <>
+            {hasLifecycle ? (
+              <Card palette={emeraldColors} style={styles.progressCard}>
+                <Text style={styles.eyebrow}>JOB PROGRESS</Text>
+                <Text style={styles.sectionTitle}>Where things stand</Text>
+                <JobProgress status={job.status} palette={emeraldColors} />
+              </Card>
+            ) : null}
+
+            <Card palette={emeraldColors} style={styles.workerCard}>
+              <Text style={styles.eyebrow}>ASSIGNED WORKER</Text>
+              <Text style={styles.sectionTitle}>
+                {assignedWorker?.full_name ?? 'Your worker'}
+              </Text>
+              {workerError ? (
+                <View style={styles.errorBanner} accessibilityRole="alert">
+                  <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
+                  <View style={styles.errorCopy}>
+                    <Text style={styles.errorTitle}>Couldn’t load the worker profile</Text>
+                    <Text style={styles.errorMessage} numberOfLines={2}>
+                      {workerError}
+                    </Text>
+                  </View>
+                  <Button
+                    title="Retry"
+                    size="sm"
+                    variant="secondary"
+                    palette={emeraldColors}
+                    onPress={() => void loadAssignedWorker()}
+                  />
+                </View>
+              ) : null}
               <Pressable
-                style={styles.workerRow}
+                style={({ pressed }) => [styles.workerRow, pressed && styles.workerRowPressed]}
                 onPress={() =>
                   job.assigned_worker_id &&
                   navigation.navigate('WorkerProfile', {
                     workerId: job.assigned_worker_id,
-                    workerName: worker?.full_name ?? undefined,
+                    workerName: assignedWorker?.full_name ?? undefined,
                   })
                 }
                 disabled={!job.assigned_worker_id}
+                accessibilityRole={job.assigned_worker_id ? 'button' : undefined}
+                accessibilityLabel={
+                  job.assigned_worker_id
+                    ? `View ${assignedWorker?.full_name ?? 'worker'} profile`
+                    : undefined
+                }
               >
                 <AvatarPressable
-                  name={worker?.full_name}
-                  uri={worker?.avatar_url}
-                  size={44}
+                  name={assignedWorker?.full_name}
+                  uri={assignedWorker?.avatar_url}
+                  size={52}
                   onLongPress={
-                    worker?.avatar_url ? () => setAvatarUri(worker?.avatar_url ?? null) : undefined
+                    assignedWorker?.avatar_url
+                      ? () => setAvatarUri(assignedWorker.avatar_url)
+                      : undefined
                   }
                 />
                 <View style={styles.workerText}>
                   <View style={styles.workerNameRow}>
                     <Text style={styles.workerName} numberOfLines={1}>
-                      {worker?.full_name ?? 'Worker'}
+                      {assignedWorker?.full_name ?? 'Assigned worker'}
                     </Text>
-                    <VerificationBadge status={worker?.verification_status} />
+                    {assignedWorker ? (
+                      <VerificationBadge status={assignedWorker.verification_status} />
+                    ) : null}
                   </View>
                   <Text style={styles.workerMeta}>
                     {formatBudget(job.final_amount_cents ?? job.budget_cents)} agreed
@@ -326,30 +747,88 @@ export function ClientJobDetailScreen() {
               <Button
                 title={`Message ${workerName}`}
                 variant="secondary"
+                palette={emeraldColors}
                 onPress={() =>
                   navigation.navigate('Chat', { jobId: job.id })
                 }
               />
             )}
 
+            {/* Phase 6 — the static tracking surface (screen 33): where the
+                worker is in the confirmed → done march, from their own
+                declarations. Meaningless once the job is completed. */}
+            {job.assigned_worker_id &&
+              (job.status === 'assigned' || job.status === 'in_progress') && (
+                <Button
+                  title="Track worker"
+                  variant="secondary"
+                  palette={emeraldColors}
+                  onPress={() => navigation.navigate('TrackWorker', { job })}
+                />
+              )}
+
+            {/* The money truth for this job (phase50 ledger). Labels come from
+                MoneyText's fixed §H.3 captions — never hand-written here. */}
+            {job.status === 'assigned' ? (
+              payment && isHeld(payment) ? (
+                <Card palette={emeraldColors} style={styles.paymentCard}>
+                  <Text style={styles.eyebrow}>PROTECTED PAYMENT · SANDBOX</Text>
+                  <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
+                  <Text style={styles.paymentNote}>
+                    Funds stay held until you approve the finished work. Sandbox
+                    build — no real money moves.
+                  </Text>
+                </Card>
+              ) : (
+                <Card palette={emeraldColors} style={styles.paymentCard}>
+                  <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
+                  <Text style={styles.paymentNote}>
+                    {workerName} is hired, but the payment isn’t in protection yet.
+                    {payment?.status === 'authorized'
+                      ? ' It’s authorized — not charged — finish checkout to protect it.'
+                      : ''}
+                  </Text>
+                  <Button
+                    title="Protect payment in checkout"
+                    palette={emeraldColors}
+                    onPress={() => navigation.navigate('Checkout', { job })}
+                  />
+                </Card>
+              )
+            ) : payment ? (
+              <Card palette={emeraldColors} style={styles.paymentCard}>
+                <Text style={styles.eyebrow}>PAYMENT · SANDBOX</Text>
+                <MoneyText cents={payment.amount_cents} state={payment.status} />
+              </Card>
+            ) : null}
+
             {/* Before/after: the client's own posting photos next to what the
                 worker submitted on completion. Rendered as soon as the worker
                 marks the job done, so the client reviews the finished work
                 here rather than having to ask for it. */}
-            {(job.photos?.length > 0 ||
-              completionPhotosOf(job).length > 0 ||
-              completionVideosOf(job).length > 0) && (
-              <Card>
-                {job.photos?.length > 0 && (
+            {(job.photos.length > 0 || job.videos.length > 0 || hasCompletionEvidence) && (
+              <Card palette={emeraldColors} style={styles.evidenceCard}>
+                <Text style={styles.eyebrow}>WORK EVIDENCE</Text>
+                <Text style={styles.sectionTitle}>
+                  {hasCompletionEvidence ? 'Before & after' : 'Your original media'}
+                </Text>
+                {job.photos.length > 0 && (
                   <View style={styles.photoGroup}>
-                    <Text style={styles.photoGroupLabel}>Before · your photos</Text>
+                    <Text style={styles.photoGroupLabel}>
+                      {hasCompletionEvidence ? 'Before · your photos' : 'Your job photos'}
+                    </Text>
                     <ScrollView
                       horizontal
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.photoRow}
                     >
                       {job.photos.map((url) => (
-                        <Pressable key={url} onPress={() => setViewerUri(url)}>
+                        <Pressable
+                          key={url}
+                          onPress={() => setViewerUri(url)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Open before photo"
+                        >
                           <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
                         </Pressable>
                       ))}
@@ -357,7 +836,24 @@ export function ClientJobDetailScreen() {
                   </View>
                 )}
 
-                {completionPhotosOf(job).length > 0 && (
+                {job.videos.length > 0 && (
+                  <View style={styles.photoGroup}>
+                    <Text style={styles.photoGroupLabel}>
+                      {hasCompletionEvidence ? 'Before · your video' : 'Your job video'}
+                    </Text>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.photoRow}
+                    >
+                      {job.videos.map((url) => (
+                        <JobVideo key={url} uri={url} label="Job video" />
+                      ))}
+                    </ScrollView>
+                  </View>
+                )}
+
+                {completionPhotos.length > 0 && (
                   <View style={styles.photoGroup}>
                     <Text style={styles.photoGroupLabel}>After · finished work</Text>
                     <ScrollView
@@ -365,8 +861,13 @@ export function ClientJobDetailScreen() {
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.photoRow}
                     >
-                      {completionPhotosOf(job).map((url) => (
-                        <Pressable key={url} onPress={() => setViewerUri(url)}>
+                      {completionPhotos.map((url) => (
+                        <Pressable
+                          key={url}
+                          onPress={() => setViewerUri(url)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Open finished work photo"
+                        >
                           <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
                         </Pressable>
                       ))}
@@ -374,7 +875,7 @@ export function ClientJobDetailScreen() {
                   </View>
                 )}
 
-                {completionVideosOf(job).length > 0 && (
+                {completionVideos.length > 0 && (
                   <View style={styles.photoGroup}>
                     <Text style={styles.photoGroupLabel}>After · video</Text>
                     <ScrollView
@@ -382,7 +883,7 @@ export function ClientJobDetailScreen() {
                       showsHorizontalScrollIndicator={false}
                       contentContainerStyle={styles.photoRow}
                     >
-                      {completionVideosOf(job).map((url) => (
+                      {completionVideos.map((url) => (
                         <JobVideo key={url} uri={url} label="Finished work" />
                       ))}
                     </ScrollView>
@@ -392,18 +893,80 @@ export function ClientJobDetailScreen() {
             )}
 
             {job.status === 'completed' ? (
-              user && job.assigned_worker_id ? (
+              // Phase 6, §9 ordering: with a payment on the job, approval
+              // comes FIRST — release the held funds (or report an issue) on
+              // screen 36, review & tip on screen 37 only after release. A
+              // legacy job that completed without any payment keeps the old
+              // inline review, since there is nothing to release.
+              payment ? (
+                lifecycle === 'disputed' && openDispute ? (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>Issue reported</Text>
+                    <Text style={styles.noticeText}>
+                      {DISPUTE_REASON_LABELS[openDispute.reason]} — the payment
+                      stays held while your report is open.
+                    </Text>
+                    <Button
+                      title="Manage your report"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('ApproveOrDispute', { job })}
+                    />
+                  </Card>
+                ) : lifecycle === 'awaiting_approval' ? (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>The work is done — your call</Text>
+                    <Text style={styles.noticeText}>
+                      Review what {workerName} submitted, then approve to release
+                      the held funds or report an issue. With no response, the
+                      funds release automatically after 72 hours.
+                    </Text>
+                    <Button
+                      title="Review & approve the work"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('ApproveOrDispute', { job })}
+                    />
+                  </Card>
+                ) : isReleased(payment) ? (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>Payment released</Text>
+                    <Text style={styles.noticeText}>
+                      All settled with {workerName}. Leave a review — and a tip,
+                      if you’d like.
+                    </Text>
+                    <Button
+                      title="Review & tip"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('ReviewAndTip', { job })}
+                    />
+                  </Card>
+                ) : (
+                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                    <Text style={styles.approvalTitle}>Payment unfinished</Text>
+                    <Text style={styles.noticeText}>
+                      The job is complete but the payment never reached
+                      protection. Finish checkout to protect and then release it.
+                    </Text>
+                    <Button
+                      title="Finish checkout"
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('Checkout', { job })}
+                    />
+                  </Card>
+                )
+              ) : user && job.assigned_worker_id ? (
                 <ReviewSection
+                  key={`${job.id}:${user.id}`}
                   jobId={job.id}
                   reviewerId={user.id}
                   revieweeId={job.assigned_worker_id}
                   revieweeName={workerName}
                   prompt={`How was ${workerName}’s work?`}
                   scrollRef={scrollRef}
+                  palette={emeraldColors}
                 />
               ) : null
             ) : (
-              <Card style={styles.noticeCard}>
+              <Card palette={emeraldColors} style={styles.noticeCard}>
                 <Ionicons name="time-outline" size={20} color={colors.textMuted} />
                 <Text style={styles.noticeText}>
                   Waiting for the worker to finish. You can leave a review once the
@@ -411,24 +974,12 @@ export function ClientJobDetailScreen() {
                 </Text>
               </Card>
             )}
+              </>
+            )}
           </>
         )}
         </ScrollView>
       </KeyboardAvoidingView>
-
-      {showSuccess && (
-        <Animated.View style={[styles.successOverlay, { opacity: successOpacity }]}>
-          <Animated.View
-            style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
-          >
-            <Ionicons name="checkmark" size={56} color={colors.onPrimary} />
-          </Animated.View>
-          <Text style={styles.successTitle}>Bid accepted</Text>
-          <Text style={styles.successSubtitle}>
-            {acceptedName} is assigned to this job.
-          </Text>
-        </Animated.View>
-      )}
 
       <PhotoViewer
         visible={!!viewerUri}
@@ -452,10 +1003,11 @@ export function ClientJobDetailScreen() {
               }?`
             : ''
         }
-        message="The job is assigned to them and the other bids are closed. This can’t be undone here."
+        message="This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build)."
         confirmText="Accept bid"
         cancelText="Cancel"
         loading={!!pendingAccept && acceptingId === pendingAccept.id}
+        palette={emeraldColors}
         onConfirm={() => pendingAccept && doAccept(pendingAccept)}
         onCancel={() => setPendingAccept(null)}
       />
@@ -472,81 +1024,236 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.sm,
     // Extra clearance below the last card so that, once the review form has
     // been scrolled to the end with the keyboard open, Submit sits clear of
     // the keyboard's top edge rather than flush against it.
     paddingBottom: spacing.xxl,
     gap: spacing.lg,
   },
-  jobHeader: {
+  jobHero: {
+    padding: spacing.xl,
+    gap: spacing.lg,
+    borderRadius: radius.xl,
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+  },
+  jobHeroActive: {
+    backgroundColor: colors.forest,
+    borderColor: colors.forest,
+  },
+  heroTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  postedAt: {
+    ...typography.caption,
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  heroTextLight: {
+    color: colors.mint2,
+  },
+  heroTitleLight: {
+    color: colors.onPrimary,
+  },
+  heroEyebrowLight: {
+    color: colors.goldSoft,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
+    width: 36,
+    height: 36,
     borderRadius: radius.md,
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
   },
-  jobHeaderText: {
-    flex: 1,
-    gap: 2,
+  jobMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   jobTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
+    ...typography.title,
+    color: colors.ink,
+    lineHeight: 34,
   },
   jobMeta: {
-    fontSize: 13,
+    flex: 1,
+    ...typography.body,
     color: colors.textMuted,
+    lineHeight: 21,
   },
   jobFooter: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: spacing.md,
     paddingTop: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: colors.border,
+    borderTopColor: colors.mint2,
+  },
+  valueLabel: {
+    ...typography.caption,
+    color: colors.emerald,
+    fontWeight: '800',
+    letterSpacing: 0.8,
   },
   budget: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: colors.text,
+    ...typography.heading,
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
   },
   bidCount: {
-    fontSize: 13,
+    ...typography.label,
+    color: colors.emerald,
+  },
+  ownerActions: {
+    borderTopColor: colors.mint2,
+  },
+  scopeCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  timingCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  timingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  timingCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  timingText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.ink,
+    lineHeight: 21,
+  },
+  timingCaption: {
+    fontSize: 12,
     color: colors.textMuted,
+    lineHeight: 17,
+  },
+  eyebrow: {
+    ...typography.caption,
+    color: colors.emerald,
+    fontWeight: '800',
+    letterSpacing: 0.9,
+  },
+  scopeDescription: {
+    ...typography.body,
+    color: colors.ink,
+    fontSize: 16,
+    lineHeight: 24,
+  },
+  scopeTag: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.pill,
+    backgroundColor: colors.mint,
+  },
+  scopeTagText: {
+    ...typography.label,
+    color: colors.emerald,
+  },
+  mediaCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  sectionCaption: {
+    ...typography.caption,
+    color: colors.textMuted,
+    marginTop: -spacing.sm,
   },
   noticeCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+    backgroundColor: colors.mint,
   },
   noticeText: {
     flex: 1,
-    fontSize: 14,
+    ...typography.body,
     color: colors.textMuted,
+    lineHeight: 21,
+  },
+  approvalCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  approvalTitle: {
+    ...typography.heading,
+    color: colors.ink,
   },
   sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: colors.text,
-    marginBottom: spacing.md,
+    ...typography.heading,
+    color: colors.ink,
+  },
+  bidSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+  },
+  bidSectionTitle: {
+    ...typography.heading,
+    color: colors.ink,
+    marginTop: spacing.xs,
+  },
+  progressCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  workerCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  paymentCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
+  },
+  paymentNote: {
+    ...typography.body,
+    color: colors.textMuted,
+    lineHeight: 20,
   },
   workerRow: {
+    minHeight: 60,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.mint,
+  },
+  workerRowPressed: {
+    opacity: 0.72,
   },
   workerText: {
     flex: 1,
-    gap: 2,
+    minWidth: 0,
+    gap: spacing.xs,
   },
   workerNameRow: {
     flexDirection: 'row',
@@ -555,30 +1262,28 @@ const styles = StyleSheet.create({
   },
   workerName: {
     flexShrink: 1,
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.text,
+    fontSize: 17,
+    fontWeight: '800',
+    color: colors.ink,
   },
   workerMeta: {
-    fontSize: 13,
+    ...typography.label,
     color: colors.textMuted,
   },
-  donePhoto: {
-    width: '100%',
-    height: 200,
-    borderRadius: radius.md,
-    backgroundColor: colors.border,
+  evidenceCard: {
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.mint2,
   },
   photoGroup: {
     gap: spacing.sm,
   },
   photoGroupLabel: {
-    fontSize: 12,
-    fontWeight: '700',
+    ...typography.caption,
+    fontWeight: '800',
     color: colors.textMuted,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
-    marginTop: spacing.md,
+    letterSpacing: 0.7,
   },
   photoRow: {
     gap: spacing.sm,
@@ -586,47 +1291,143 @@ const styles = StyleSheet.create({
   beforeAfterPhoto: {
     width: 150,
     height: 150,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     backgroundColor: colors.neutralBg,
-  },
-  loader: {
-    marginTop: spacing.xl,
   },
   bidList: {
     gap: spacing.md,
   },
+  errorBanner: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.danger,
+    backgroundColor: colors.dangerBg,
+  },
+  errorCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs,
+  },
+  errorTitle: {
+    ...typography.label,
+    color: colors.danger,
+    fontWeight: '800',
+  },
+  errorMessage: {
+    ...typography.caption,
+    color: colors.danger,
+    lineHeight: 18,
+  },
+  retryText: {
+    ...typography.label,
+    color: colors.danger,
+    fontWeight: '800',
+  },
+  loadingState: {
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xxl,
+  },
+  loadingText: {
+    ...typography.body,
+    color: colors.textMuted,
+  },
   empty: {
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.xxl,
+    padding: spacing.xxl,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.surface,
   },
   emptyIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.primarySoft,
+    backgroundColor: colors.mint,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   emptyTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: colors.text,
+    ...typography.heading,
+    color: colors.ink,
   },
   emptyText: {
-    fontSize: 14,
+    ...typography.body,
     color: colors.textMuted,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
     maxWidth: 300,
   },
-  error: {
-    color: colors.danger,
-    backgroundColor: colors.dangerBg,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm + 2,
-    fontSize: 14,
+  retryButton: {
+    minWidth: 150,
+    marginTop: spacing.sm,
+  },
+  cancelledCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderRadius: radius.xl,
+    borderColor: colors.neutralBg,
+    backgroundColor: colors.neutralBg,
+  },
+  cancelledIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+  },
+  cancelledTitle: {
+    ...typography.subheading,
+    color: colors.ink,
+    fontWeight: '800',
+  },
+  cancelledText: {
+    ...typography.body,
+    color: colors.textMuted,
+    lineHeight: 21,
+  },
+  missingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    padding: spacing.xl,
+  },
+  missingIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.mint,
+    marginBottom: spacing.xs,
+  },
+  missingTitle: {
+    ...typography.heading,
+    color: colors.ink,
+    textAlign: 'center',
+  },
+  missingText: {
+    ...typography.body,
+    color: colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: 300,
+  },
+  missingButton: {
+    width: '100%',
+    maxWidth: 300,
+    marginTop: spacing.sm,
   },
   successOverlay: {
     position: 'absolute',
@@ -634,7 +1435,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(244,241,232,0.97)',
+    backgroundColor: colors.background,
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.md,
@@ -644,18 +1445,18 @@ const styles = StyleSheet.create({
     width: 104,
     height: 104,
     borderRadius: radius.pill,
-    backgroundColor: colors.success,
+    backgroundColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   successTitle: {
-    fontSize: 22,
+    ...typography.heading,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.ink,
   },
   successSubtitle: {
-    fontSize: 15,
+    ...typography.body,
     color: colors.textMuted,
     textAlign: 'center',
   },

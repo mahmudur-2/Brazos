@@ -24,7 +24,7 @@ import { AmountPrompt } from '../components/AmountPrompt';
 import { ChatBubble } from '../components/ChatBubble';
 import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { JobRequestCard } from '../components/JobRequestCard';
+import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { QuickReplies } from '../components/QuickReplies';
 import { ReactionPicker } from '../components/ReactionPicker';
@@ -36,6 +36,7 @@ import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
 import { canRehireWorker, fetchJobById, formatBudget } from '../lib/jobs';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
 import {
   fetchDirectThread,
@@ -51,12 +52,20 @@ import {
   unsendMessage,
   type Message,
 } from '../lib/messages';
-import { respondToJobRequest, type JobRequest } from '../lib/jobRequests';
-import { useJobRequests } from '../hooks/useJobRequests';
+import {
+  acceptOffer,
+  counterOffer,
+  declineOffer,
+  offerIdOf,
+  withdrawOffer,
+  type OfferWithJob,
+} from '../lib/offers';
+import { useThreadOffers } from '../hooks/useJobOffers';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
 import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, spacing } from '../lib/theme';
 
 export function ChatScreen() {
@@ -70,10 +79,9 @@ export function ChatScreen() {
   // people with no job (phase36) — exactly one of these is ever set.
   const jobId = params.jobId ?? null;
   const directThreadId = params.directThreadId ?? null;
-  const target = useMemo<ChatTarget>(
-    () => (jobId ? { jobId } : { directThreadId: directThreadId as string }),
-    [jobId, directThreadId]
-  );
+  // The route param IS the discriminated ChatTarget already — no rebuild, no
+  // cast (hardening A8).
+  const target: ChatTarget = params;
 
   const { job } = useJob(jobId);
   const { messages, loading, error, addLocal } = useChat(jobId, directThreadId);
@@ -84,10 +92,16 @@ export function ChatScreen() {
   // message that arrives while the chat is open doesn't show as unread later.
   useFocusEffect(
     useCallback(() => {
-      if (user) markConversationRead(target, user.id);
-      return () => {
-        if (user) markConversationRead(target, user.id);
-      };
+      // Fire-and-forget by design (the unread dot self-heals on the next
+      // focus); the log keeps a failed mark-read observable (hardening A8).
+      const uid = user?.id;
+      if (!uid) return;
+      const mark = () =>
+        void markConversationRead(target, uid).then(({ error: markError }) => {
+          if (markError) console.warn('[Chat] mark-read failed', markError.message);
+        });
+      mark();
+      return mark;
     }, [user, target])
   );
 
@@ -103,18 +117,19 @@ export function ChatScreen() {
   // Long-press target for the message menu (React / Reply).
   const [menuTarget, setMenuTarget] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
-  const [counterTarget, setCounterTarget] = useState<JobRequest | null>(null);
+  const [counterTarget, setCounterTarget] = useState<OfferWithJob | null>(null);
   const [confirmResponse, setConfirmResponse] = useState<{
-    request: JobRequest;
-    action: 'accept' | 'decline';
+    request: OfferWithJob;
+    action: 'accept' | 'decline' | 'withdraw';
   } | null>(null);
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [openingJobId, setOpeningJobId] = useState<string | null>(null);
 
-  const { byId: requestsById, refresh: refreshRequests } = useJobRequests(
-    jobId,
-    directThreadId
-  );
+  const {
+    byId: requestsById,
+    offers: threadOffers,
+    refresh: refreshRequests,
+  } = useThreadOffers(messages);
 
   // The direct thread's own row, for working out who the other person is when
   // there is no job to read it from.
@@ -154,7 +169,7 @@ export function ChatScreen() {
     if (!user || !clip || !jobId) return;
     setSending(true);
     const { url, error: uploadError } = await uploadChatAudio(
-      jobId as string,
+      jobId,
       user.id,
       clip.uri
     );
@@ -162,8 +177,7 @@ export function ChatScreen() {
       setSending(false);
       await alertAsync(
         'Could not send voice message',
-        uploadError?.message ??
-          'Upload failed. The chat-audio storage bucket may still need setting up.'
+        userMessage(uploadError, 'Upload failed. The chat-audio storage bucket may still need setting up.')
       );
       return;
     }
@@ -178,7 +192,7 @@ export function ChatScreen() {
     setSending(false);
 
     if (error) {
-      await alertAsync('Could not send voice message', error.message);
+      await alertAsync('Could not send voice message', userMessage(error));
       return;
     }
     recorder.reset();
@@ -212,7 +226,8 @@ export function ChatScreen() {
   const latestMessageIdByRequest = useMemo(() => {
     const map: Record<string, string> = {};
     for (const m of messages) {
-      if (m.job_request_id) map[m.job_request_id] = m.id;
+      const offerId = offerIdOf(m);
+      if (offerId) map[offerId] = m.id;
     }
     return map;
   }, [messages]);
@@ -249,10 +264,13 @@ export function ChatScreen() {
   const isBlocked = relation.blocking || relation.blockedBy;
 
   // "Hire Again" only ever shows to the client side of a past completed job —
-  // a worker never sees it for their client.
+  // a worker never sees it for their client. It also requires a job-backed
+  // chat: create_job_request can target that job thread, but has no parameter
+  // for a direct-thread id and would otherwise place the offer in an older job.
   const [canRehire, setCanRehire] = useState(false);
   useEffect(() => {
-    if (!user || !counterpartyId || counterpartyId === user.id) return;
+    setCanRehire(false);
+    if (!jobId || !user || !counterpartyId || counterpartyId === user.id) return;
     let active = true;
     canRehireWorker(user.id, counterpartyId).then(({ data }) => {
       if (active) setCanRehire(data);
@@ -260,7 +278,7 @@ export function ChatScreen() {
     return () => {
       active = false;
     };
-  }, [user, counterpartyId]);
+  }, [jobId, user, counterpartyId]);
 
   useEffect(() => {
     if (messages.length > 0) {
@@ -283,7 +301,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send message', error.message);
+      await alertAsync('Could not send message', userMessage(error));
       // Restore the draft AND the reply target, so a failure doesn't silently
       // turn a reply into a standalone message on the next attempt.
       setText(content);
@@ -294,17 +312,29 @@ export function ChatScreen() {
   }
 
   async function respondToRequest(
-    request: JobRequest,
-    action: 'accept' | 'decline' | 'counter',
+    request: OfferWithJob,
+    action: 'accept' | 'decline' | 'counter' | 'withdraw',
     amountCents?: number
   ) {
     if (respondingId) return;
     setRespondingId(request.id);
-    const { error } = await respondToJobRequest(request.id, action, amountCents);
+    // One RPC per action rather than an action string the server has to
+    // re-parse. Each validates the turn, the lifecycle state and the counter
+    // cap itself, so a stale card cannot produce an invalid transition.
+    // withdraw (phase50) is the AUTHOR's retraction while the other side owes
+    // the reply — the mirror of decline, validated the same way.
+    const { error } =
+      action === 'accept'
+        ? await acceptOffer(request.id)
+        : action === 'decline'
+          ? await declineOffer(request.id)
+          : action === 'withdraw'
+            ? await withdrawOffer(request.id)
+            : await counterOffer(request.id, amountCents ?? 0);
     setRespondingId(null);
 
     if (error) {
-      await alertAsync('Could not update request', error.message);
+      await alertAsync('Could not update offer', userMessage(error));
       // The RPC rejects stale turns, so resync rather than leaving the card
       // showing actions that no longer apply.
       await refreshRequests();
@@ -314,7 +344,7 @@ export function ChatScreen() {
     await refreshRequests();
     if (action === 'accept') {
       await alertAsync(
-        'Request accepted',
+        'Offer accepted',
         'The job is now assigned and has moved into My Jobs.'
       );
     }
@@ -327,11 +357,14 @@ export function ChatScreen() {
    * Jobs stack regardless of which tab Chat itself was reached from, so this
    * always goes through the tab-level parent rather than the local stack.
    */
-  async function openAcceptedJob(request: JobRequest) {
-    if (!request.created_job_id || !user || openingJobId) return;
-    const jobId = request.created_job_id;
+  async function openAcceptedJob(request: OfferWithJob) {
+    if (!user || openingJobId) return;
+    // Under the unified model the job always exists — a direct offer creates
+    // it as a draft up front — so there is no nullable created_job_id to
+    // guard, only the offer having actually been accepted.
+    const jobId = request.job_id;
 
-    if (user.id === request.client_id) {
+    if (user.id === request.customer_id) {
       // The client's screen needs the full job row (bids, status, etc.), not
       // just the id, so it's fetched before navigating.
       setOpeningJobId(request.id);
@@ -341,22 +374,20 @@ export function ChatScreen() {
       if (error || !fetchedJob) {
         await alertAsync(
           'Could not open job',
-          error?.message ?? 'This job could not be found.'
+          userMessage(error, 'This job could not be found.')
         );
         return;
       }
-      (navigation.getParent() as any)?.navigate('MyJobs', {
-        screen: 'ClientJobDetail',
-        params: { job: fetchedJob },
-      });
+      // MyJobs is a shared tab that registers this route in both trees, so the
+      // hop was never mode-fragile — it goes through the one guarded helper
+      // anyway, so there is a single way to cross tabs and no second pattern
+      // for the next caller to copy (lib/navigationRef.ts).
+      navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: fetchedJob });
       return;
     }
 
     // The worker's screen only takes the id and loads itself.
-    (navigation.getParent() as any)?.navigate('MyJobs', {
-      screen: 'WorkerJob',
-      params: { jobId },
-    });
+    navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId });
   }
 
   // Long-pressing a message offers both actions rather than jumping straight
@@ -421,7 +452,7 @@ export function ChatScreen() {
     });
     if (!ok) return;
     const { error } = await unsendMessage(message.id);
-    if (error) await alertAsync('Could not unsend', error.message);
+    if (error) await alertAsync('Could not unsend', userMessage(error));
   }
 
   /**
@@ -448,7 +479,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send message', error.message);
+      await alertAsync('Could not send message', userMessage(error));
       return;
     }
     if (data) addLocal(data);
@@ -462,12 +493,12 @@ export function ChatScreen() {
     setReactionTarget(null);
     const { error } = await setReaction({
       messageId,
-      jobId: jobId as string,
+      jobId,
       userId: user.id,
       emoji,
     });
     if (error) {
-      await alertAsync('Could not react', error.message);
+      await alertAsync('Could not react', userMessage(error));
       return;
     }
     // Refresh immediately for the reactor; the other party gets it via realtime.
@@ -480,7 +511,7 @@ export function ChatScreen() {
     setReactionTarget(null);
     const { error } = await removeReaction(messageId, user.id);
     if (error) {
-      await alertAsync('Could not remove reaction', error.message);
+      await alertAsync('Could not remove reaction', userMessage(error));
       return;
     }
     await refreshReactions();
@@ -490,7 +521,7 @@ export function ChatScreen() {
     if (!user || !jobId) return; // See handleSendVoice for why.
     setSending(true);
     const { url, error: uploadError } = await uploadChatPhoto(
-      jobId as string,
+      jobId,
       user.id,
       asset
     );
@@ -510,7 +541,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send photo', error.message);
+      await alertAsync('Could not send photo', userMessage(error));
       return;
     }
     if (data) addLocal(data);
@@ -549,7 +580,7 @@ export function ChatScreen() {
             : 'Chat'
         }
         subtitle={job?.title}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         // Tapping the title opens the other party's profile — including their
         // Past Work gallery, which is the point of having one.
         onPressTitle={
@@ -565,10 +596,12 @@ export function ChatScreen() {
             : undefined
         }
         right={
-          canRehire && counterparty ? (
+          canRehire && counterparty && jobId ? (
             <Pressable
               onPress={() =>
-                (navigation as any).navigate('PostJob', {
+                (navigation as unknown as {
+                  navigate: (screen: 'PostJob', params: object) => void;
+                }).navigate('PostJob', {
                   hireWorkerId: counterparty.id,
                   hireWorkerName: counterparty.full_name ?? 'this worker',
                   // Post the request into THIS conversation rather than
@@ -591,7 +624,10 @@ export function ChatScreen() {
         }
       />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {/* useChat is a LOCKED hook and still stores the raw message; the wrap
+          happens here at the render seam instead (raw-error sweep, 2026-08-10
+          — see docs/LOCKED_FILE_PATCHES.md). */}
+      {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {/* keyboardVerticalOffset is 0, not 90. With `behavior="padding"` RN
           computes padding as (frameBottom - keyboardTop + offset), and this
@@ -624,8 +660,9 @@ export function ChatScreen() {
             renderItem={({ item }) => {
               // A hire-request event renders as a negotiation card instead of
               // an ordinary bubble — same thread, no separate screen.
-              if (item.job_request_id) {
-                const request = requestsById[item.job_request_id];
+              const offerId = offerIdOf(item);
+              if (offerId) {
+                const request = requestsById[offerId];
                 const isOwn = item.sender_id === user?.id;
                 return (
                   <View
@@ -634,12 +671,17 @@ export function ChatScreen() {
                       isOwn ? styles.requestRowOwn : styles.requestRowOther,
                     ]}
                   >
-                    <JobRequestCard
+                    <OfferCard
+                      variant="thread"
                       message={item}
-                      request={request}
-                      isLatest={latestMessageIdByRequest[item.job_request_id] === item.id}
+                      offer={request}
+                      chain={threadOffers.filter(
+                        (o) => o.root_offer_id === request?.root_offer_id
+                      )}
+                      job={request?.job ?? null}
+                      isLatest={latestMessageIdByRequest[offerId] === item.id}
                       currentUserId={user?.id ?? ''}
-                      busy={respondingId === item.job_request_id}
+                      busy={respondingId === offerId}
                       onAccept={() =>
                         request && setConfirmResponse({ request, action: 'accept' })
                       }
@@ -647,8 +689,11 @@ export function ChatScreen() {
                         request && setConfirmResponse({ request, action: 'decline' })
                       }
                       onCounter={() => request && setCounterTarget(request)}
+                      onWithdraw={() =>
+                        request && setConfirmResponse({ request, action: 'withdraw' })
+                      }
                       onOpenJob={
-                        request?.created_job_id
+                        request?.status === 'accepted'
                           ? () => openAcceptedJob(request)
                           : undefined
                       }
@@ -818,16 +863,28 @@ export function ChatScreen() {
         title={
           confirmResponse?.action === 'accept'
             ? `Accept this ${formatBudget(confirmResponse.request.amount_cents)} job?`
-            : 'Decline this offer?'
+            : confirmResponse?.action === 'withdraw'
+              ? 'Withdraw your offer?'
+              : 'Decline this offer?'
         }
         message={
           confirmResponse?.action === 'accept'
             ? 'The job is created and assigned to you straight away. It moves into My Jobs and can’t be undone here.'
-            : 'No job will be created. This can’t be undone.'
+            : confirmResponse?.action === 'withdraw'
+              ? 'This withdraws your pending offer — they’ll no longer be able to accept it. You can send a new offer later.'
+              : 'No job will be created. This can’t be undone.'
         }
-        confirmText={confirmResponse?.action === 'accept' ? 'Accept job' : 'Decline'}
+        confirmText={
+          confirmResponse?.action === 'accept'
+            ? 'Accept job'
+            : confirmResponse?.action === 'withdraw'
+              ? 'Withdraw offer'
+              : 'Decline'
+        }
         cancelText="Cancel"
-        destructive={confirmResponse?.action === 'decline'}
+        destructive={
+          confirmResponse?.action === 'decline' || confirmResponse?.action === 'withdraw'
+        }
         loading={!!confirmResponse && respondingId === confirmResponse.request.id}
         onConfirm={confirmPendingResponse}
         onCancel={() => setConfirmResponse(null)}

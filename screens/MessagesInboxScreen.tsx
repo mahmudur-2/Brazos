@@ -18,8 +18,9 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
 import { conversationKey, conversationTarget, resolveOtherId } from '../lib/conversations';
-import { fetchMyPendingRequests } from '../lib/jobRequests';
+import { fetchMyPendingOffers } from '../lib/offers';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   blockUser,
   muteUser,
@@ -62,7 +63,13 @@ export function MessagesInboxScreen() {
   const [pendingByThread, setPendingByThread] = useState<Set<string>>(new Set());
 
   const loadPending = useCallback(async () => {
-    const { data } = await fetchMyPendingRequests();
+    const { data, error } = await fetchMyPendingOffers();
+    if (error) {
+      // Keep the last known badges — a failed refresh must not clear the
+      // only surface announcing a waiting offer (hardening A8).
+      console.warn('[MessagesInbox] pending-offer refresh failed', error.message);
+      return;
+    }
     setPendingByThread(
       new Set(
         data.map((r) =>
@@ -171,7 +178,7 @@ export function MessagesInboxScreen() {
 
     if (target.blocking) {
       const { error } = await unblockUser(user.id, target.userId);
-      if (error) await alertAsync('Could not unblock', error.message);
+      if (error) await alertAsync('Could not unblock', userMessage(error));
       await refresh();
       return;
     }
@@ -187,7 +194,7 @@ export function MessagesInboxScreen() {
     if (!ok) return;
 
     const { error } = await blockUser(user.id, target.userId);
-    if (error) await alertAsync('Could not block', error.message);
+    if (error) await alertAsync('Could not block', userMessage(error));
     await refresh();
   }
 
@@ -198,7 +205,7 @@ export function MessagesInboxScreen() {
       ? await unmuteUser(user.id, target.userId)
       : await muteUser(user.id, target.userId);
     if (error) {
-      await alertAsync(target.muted ? 'Could not unmute' : 'Could not mute', error.message);
+      await alertAsync(target.muted ? 'Could not unmute' : 'Could not mute', userMessage(error));
     }
     await refresh();
   }
@@ -236,7 +243,10 @@ export function MessagesInboxScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Messages" />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {/* useConversations is a LOCKED hook and still stores the raw message;
+          the wrap happens here at the render seam instead (raw-error sweep,
+          2026-08-10 — see docs/LOCKED_FILE_PATCHES.md). */}
+      {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {loading ? (
         <View style={styles.center}>

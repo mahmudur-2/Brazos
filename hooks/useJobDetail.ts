@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { fetchJobById, fetchOpenJobById, type Job, type OpenJob } from '../lib/jobs';
 
@@ -51,20 +51,49 @@ export function useOpenJobDetail(snapshot: OpenJob) {
 export function useOwnedJobDetail(snapshot: Job) {
   const [job, setJob] = useState<Job>(snapshot);
   const [missing, setMissing] = useState(false);
+  const runRef = useRef(0);
+
+  const refresh = useCallback(async () => {
+    const runId = ++runRef.current;
+    const result = await fetchJobById(snapshot.id);
+    if (runId !== runRef.current) return result;
+
+    if (!result.error) {
+      if (result.data) {
+        setJob(result.data);
+        setMissing(false);
+      } else {
+        setMissing(true);
+      }
+    }
+    return result;
+  }, [snapshot.id]);
+
+  // React Navigation may reuse this route with a new job param. Paint that
+  // new snapshot immediately and clear a previous missing result while the
+  // focus read below replaces it with the canonical row.
+  useEffect(() => {
+    runRef.current += 1;
+    setJob(snapshot);
+    setMissing(false);
+    return () => {
+      runRef.current += 1;
+    };
+  }, [snapshot]);
 
   useFocusEffect(
     useCallback(() => {
-      let active = true;
-      fetchJobById(snapshot.id).then(({ data, error }) => {
-        if (!active || error) return;
-        if (data) setJob(data);
-        else setMissing(true);
-      });
+      void refresh();
       return () => {
-        active = false;
+        runRef.current += 1;
       };
-    }, [snapshot.id])
+    }, [refresh])
   );
 
-  return { job, missing };
+  const isCurrentRoute = job.id === snapshot.id;
+  return {
+    job: isCurrentRoute ? job : snapshot,
+    missing: isCurrentRoute ? missing : false,
+    refresh,
+  };
 }

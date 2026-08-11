@@ -28,6 +28,7 @@ import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { formatPhoneDisplay } from '../lib/phone';
 import { fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
 import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
@@ -204,7 +205,7 @@ export function ProfileScreen() {
     setRemoveConfirmOpen(false);
 
     if (error) {
-      await alertAsync('Could not remove photo', error.message);
+      await alertAsync('Could not remove photo', userMessage(error));
       setAvatarUrl(previousAvatarUrl);
       setPendingAsset(previousPendingAsset);
       return;
@@ -285,7 +286,7 @@ export function ProfileScreen() {
     setSaving(false);
 
     if (error) {
-      await alertAsync('Could not save', error.message);
+      await alertAsync('Could not save', userMessage(error));
       return;
     }
     if (data) setProfile(data);
@@ -316,7 +317,7 @@ export function ProfileScreen() {
     setLoggingOut(true);
     const { error } = await logout();
     setLoggingOut(false);
-    if (error) await alertAsync('Logout failed', error.message);
+    if (error) await alertAsync('Logout failed', userMessage(error));
   }
 
   const selectedCategoryLabels = categories.map((c) => ({
@@ -589,6 +590,54 @@ export function ProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Pressable>
 
+            {/* Phase 12 — the in-app event feed. */}
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('Notifications')}
+            >
+              <Ionicons name="mail-unread-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Notification feed</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            {/* Phase 11 — the ledger-derived wallet. */}
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('Earnings')}
+            >
+              <Ionicons name="wallet-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Earnings</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            {/* Phase 9 — worker self-service + customer trust surfaces. */}
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('ServicesPricing')}
+            >
+              <Ionicons name="pricetag-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Services & availability</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('SavedWorkers')}
+            >
+              <Ionicons name="bookmark-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Saved & past workers</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('PaymentMethods')}
+            >
+              <Ionicons name="card-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Payment methods</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
             <Pressable
               style={[styles.settingsRow, styles.settingsRowDivider]}
               onPress={() => navigation.navigate('LegalDocument', { document: 'terms' })}
@@ -606,6 +655,20 @@ export function ProfileScreen() {
               <Text style={styles.settingsLabel}>Privacy Policy</Text>
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Pressable>
+
+            {/* Dev-only entry to the design-system catalog. The route itself is
+                only registered under __DEV__ in App.tsx, so this row and its
+                destination disappear together in a production build. */}
+            {__DEV__ && (
+              <Pressable
+                style={[styles.settingsRow, styles.settingsRowDivider]}
+                onPress={() => navigation.navigate('ComponentCatalog')}
+              >
+                <Ionicons name="color-palette-outline" size={20} color={colors.textMuted} />
+                <Text style={styles.settingsLabel}>Component catalog (dev)</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+              </Pressable>
+            )}
           </Card>
 
           {/* Deliberately NOT a Button like Log out below — same pill shape

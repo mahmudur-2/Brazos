@@ -22,6 +22,12 @@ type AuthButtonProps = {
   onPress: () => void;
   /** `ghost` is the reference's .btn.ghost — outlined, forest label. */
   variant?: 'primary' | 'ghost';
+  /**
+   * `semibold` is one step down from the default. The onboarding CTAs use it:
+   * they sit under a lot of quiet supporting copy, and at full weight the
+   * button was the loudest thing on a screen whose job is to be read.
+   */
+  weight?: 'bold' | 'semibold';
   loading?: boolean;
   disabled?: boolean;
   accessibilityHint?: string;
@@ -41,6 +47,7 @@ export function AuthButton({
   title,
   onPress,
   variant = 'primary',
+  weight = 'bold',
   loading = false,
   disabled = false,
   accessibilityHint,
@@ -79,7 +86,10 @@ export function AuthButton({
         {loading ? (
           <ActivityIndicator color={tint} />
         ) : (
-          <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+          <Text
+            style={[styles.label, weight === 'semibold' && styles.labelSemibold, { color: tint }]}
+            numberOfLines={1}
+          >
             {title}
           </Text>
         )}
@@ -110,5 +120,8 @@ const styles = StyleSheet.create({
   },
   label: {
     ...authType.button,
+  },
+  labelSemibold: {
+    fontWeight: '600',
   },
 });

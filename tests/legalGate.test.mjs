@@ -1,0 +1,264 @@
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
+import { dirname, join } from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const read = (path) => readFileSync(join(root, path), 'utf8');
+
+const gate = read('screens/LegalGateScreen.tsx');
+const legalIndex = read('lib/legal/index.ts');
+
+// ===========================================================================
+// The document set, executed rather than restated
+// ===========================================================================
+// lib/legal/index.ts imports the Supabase client, so only the parts that are
+// pure data can be run here: the two document modules and the version
+// constants are read as text and checked for the properties the gate relies
+// on.
+
+test('there is exactly one copy of each legal document, and the gate owns none of it', () => {
+  // The bodies live in their own modules and are re-exported once.
+  assert.match(legalIndex, /import \{ PRIVACY_POLICY \} from '\.\/privacyPolicy'/);
+  assert.match(legalIndex, /import \{ TERMS_OF_SERVICE \} from '\.\/termsOfService'/);
+
+  // The gate renders them, never restates them. Anything long and quoted in
+  // this screen would be a second, drifting copy of the legal text.
+  // Single-line literals only — a multi-line backtick pattern pairs the
+  // closing tick of one template with the opening tick of the next and
+  // "matches" ordinary code in between.
+  const longLiterals = (gate.match(/'[^'\n]{200,}'|"[^"\n]{200,}"|`[^`\n]{200,}`/g) ?? []).length;
+  assert.equal(longLiterals, 0, 'the gate must not carry its own legal prose');
+  assert.match(gate, /import \{\s*[\s\S]*?\} from '\.\.\/lib\/legal'/);
+});
+
+test('both required documents are driven from the shared list', () => {
+  // Not two hardcoded rows: adding a third required document must light up a
+  // third row without touching this screen.
+  assert.match(gate, /REQUIRED_DOCUMENTS\.map\(/);
+  assert.match(legalIndex, /export const REQUIRED_DOCUMENTS/);
+  assert.match(legalIndex, /LEGAL_DOCUMENTS\.terms,\s*\n\s*LEGAL_DOCUMENTS\.privacy,/);
+});
+
+// ===========================================================================
+// The status row cannot be completed by hand
+// ===========================================================================
+
+test('the status indicator is a status, not a switch', () => {
+  // A Switch here would say "you may turn this on", which is exactly what the
+  // user must not be able to do.
+  assert.doesNotMatch(gate, /<Switch/, 'a togglable control would misrepresent the gate');
+  // Two branches, and neither is a control: a check once done, an empty ring
+  // until then.
+  assert.match(gate, /name="checkmark-circle"/);
+  assert.match(gate, /name="ellipse-outline"/);
+  assert.doesNotMatch(gate, /onPress=\{\(\) => setSeen/, 'nothing may complete a document by tap');
+  // Announced as a button that opens the document, not as a checkbox.
+  assert.match(gate, /accessibilityHint="Opens this document"/);
+});
+
+test('opening a document does not complete it — only reaching its end does', () => {
+  // Completion is written in exactly one place, and only two things call it —
+  // both of them measurements of the document, not of a press.
+  const writes = gate.match(/setSeen\(\(prev\)/g) ?? [];
+  assert.equal(writes.length, 1, `completion should have one writer, saw ${writes.length}`);
+
+  const callers = gate.match(/markSeen\(/g) ?? [];
+  assert.equal(callers.length, 3, 'markSeen: one definition, two call sites');
+
+  for (const fn of ['onScroll', 'onContentSizeChange']) {
+    const body = gate.slice(gate.indexOf(`function ${fn}(`));
+    assert.match(
+      body.slice(0, body.indexOf('\n  }')),
+      /markSeen\(/,
+      `${fn} should be one of the two callers`
+    );
+  }
+
+  // Switching document is navigation only.
+  const switchBody = gate.slice(gate.indexOf('function switchTab('));
+  assert.doesNotMatch(
+    switchBody.slice(0, switchBody.indexOf('\n  }')),
+    /setSeen|setAgreed/,
+    'opening a document must not complete or agree to anything'
+  );
+});
+
+test('reaching the end is measured with a tolerance, not pixel equality', () => {
+  assert.match(
+    gate,
+    /layoutMeasurement\.height \+ contentOffset\.y >= contentSize\.height - 48/,
+    'a forgiving threshold, so a rounding error cannot make the gate unpassable'
+  );
+  // A document shorter than the viewport can never be scrolled, so it counts
+  // on sight rather than trapping the user.
+  assert.match(gate, /h <= viewportHeight\.current && !seen\[tab\]/);
+});
+
+test('each document is tracked separately', () => {
+  assert.match(gate, /useState<Record<LegalDocumentKey, boolean>>\(\{\s*\n\s*terms: false,\s*\n\s*privacy: false,/);
+  // Only the named document is written, never both.
+  assert.match(gate, /\.\.\.prev, \[key\]: true/);
+  assert.match(gate, /const bothSeen = seen\.terms && seen\.privacy;/);
+});
+
+// ===========================================================================
+// Scrolling both is necessary but not sufficient
+// ===========================================================================
+
+test('reading both documents still does not accept them', () => {
+  // The checkbox is a separate, explicit act. bothSeen only unlocks it.
+  assert.match(gate, /const canCheck = bothSeen;/);
+  assert.match(gate, /onPress=\{\(\) => canCheck && setAgreed\(\(v\) => !v\)\}/);
+  assert.match(gate, /disabled=\{!canCheck\}/);
+});
+
+test('the CTA needs the explicit agreement AND both documents', () => {
+  assert.match(gate, /disabled=\{!agreed \|\| !bothSeen\}/);
+  // …and the handler re-checks rather than trusting the disabled prop alone.
+  const handler = gate.slice(gate.indexOf('async function handleContinue()'));
+  assert.match(handler.slice(0, 200), /if \(!agreed \|\| !bothSeen \|\| saving\) return;/);
+});
+
+test('a double tap cannot record acceptance twice', () => {
+  const handler = gate.slice(gate.indexOf('async function handleContinue()'));
+  assert.match(handler.slice(0, 200), /\|\| saving\) return;/);
+  assert.match(gate, /loading=\{saving\}/);
+});
+
+test('backing out before agreeing leaves nothing recorded', () => {
+  // The only exit that is not acceptance signs the user out; it records
+  // nothing on the way.
+  const signOut = gate.slice(gate.indexOf('async function handleSignOut()'));
+  const body = signOut.slice(0, signOut.indexOf('\n  }'));
+  assert.doesNotMatch(body, /acceptCurrentDocuments|onAccepted/);
+  assert.match(body, /await logout\(\)/);
+});
+
+// ===========================================================================
+// Persistence: the existing versioned record, and nothing new
+// ===========================================================================
+
+test('acceptance goes through the existing versioned RPC only', () => {
+  assert.match(gate, /await acceptCurrentDocuments\(\)/);
+  // No second store, no local mirror, no direct table write from the screen.
+  assert.doesNotMatch(gate, /AsyncStorage|from\('legal_acceptances'\)|\.insert\(/);
+  assert.doesNotMatch(gate, /supabase/, 'the screen goes through lib/legal, not the client');
+
+  // The record is per document AND per version, timestamped by the database.
+  assert.match(legalIndex, /supabase\.rpc\('accept_legal_documents'/);
+  assert.match(legalIndex, /document: doc\.key,\s*\n\s*version: doc\.version,/);
+
+  // Scoped to what the call actually sends — the LegalAcceptance row type
+  // declares accepted_at, which is the column, not a client-supplied value.
+  const call = legalIndex.slice(legalIndex.indexOf('export async function acceptCurrentDocuments'));
+  assert.doesNotMatch(call, /accepted_at:/, 'the DB clock owns the timestamp');
+});
+
+test('nothing is written for a user who is not authenticated', () => {
+  const hook = read('hooks/useLegalGate.ts');
+  // The gate is only ever mounted for a signed-in user (App.tsx), and the
+  // check short-circuits without one.
+  assert.match(hook, /if \(!user\) \{\s*\n\s*setState\('accepted'\);/);
+  assert.match(read('App.tsx'), /if \(!user\) return <AuthFlow \/>;/);
+  // The RPC carries no user id: the database takes it from the caller's JWT,
+  // so one user can never record acceptance for another. Scoped to the call
+  // itself — the LegalAcceptance row type names the column, as it should.
+  const call = legalIndex.slice(legalIndex.indexOf('export async function acceptCurrentDocuments'));
+  assert.doesNotMatch(call, /p_user_id|user_id/);
+  // No service-role path anywhere near it.
+  assert.doesNotMatch(legalIndex, /service_role|auth\.admin/);
+});
+
+test('a version bump re-prompts, which is what makes this a gate and not a flag', () => {
+  assert.match(legalIndex, /const accepted = new Set\(\(data \?\? \[\]\)\.map\(\(r\) => `\$\{r\.document\}:\$\{r\.version\}`\)\)/);
+  assert.match(legalIndex, /!accepted\.has\(`\$\{doc\.key\}:\$\{doc\.version\}`\)/);
+});
+
+// ===========================================================================
+// The polish must not have cost anything
+// ===========================================================================
+
+test('completion is spelled out, never carried by colour alone', () => {
+  // Visible state, including which document to read next.
+  assert.match(gate, /done \? 'Read to the end' : isNext \? 'Read this next' : 'Not finished'/);
+  // …and the same thing again for a screen reader.
+  assert.match(gate, /done \? 'Read to the end\.' : 'Not finished\.'/);
+  assert.match(gate, /`\$\{LEGAL_DOCUMENTS\[key\]\.title\} review complete`/);
+});
+
+// ---------------------------------------------------------------------------
+// Guidance, unlock and the announcements that carry them
+// ---------------------------------------------------------------------------
+
+test('the scroll hint appears, then leaves on its own and on first scroll', () => {
+  assert.match(gate, /Scroll to the end to continue/);
+  // Two ways out, so it can never become something to get past.
+  assert.match(gate, /setTimeout\(\(\) => \{\s*\n\s*if \(mounted\.current\) setGuidanceDismissed\(true\);/);
+  const onScroll = gate.slice(gate.indexOf('function onScroll('));
+  assert.match(onScroll.slice(0, onScroll.indexOf('\n  }')), /setGuidanceDismissed\(true\)/);
+  // It must never take a touch away from the document underneath it.
+  assert.match(gate, /pointerEvents="none"/);
+  assert.match(gate, /accessibilityElementsHidden/);
+});
+
+test('the agreement unlock is announced, and only once', () => {
+  assert.match(gate, /Both documents reviewed\. Agreement is now available\./);
+  assert.match(gate, /if \(!bothSeen \|\| wasUnlocked\.current\) return;/);
+  // Reaching the end of a document announces that document by name.
+  assert.match(gate, /review complete/);
+});
+
+test('the next document is offered explicitly, never forced', () => {
+  assert.match(gate, /title=\{`Review \$\{nextDocument\.title\}`\}/);
+  assert.match(gate, /onPress=\{\(\) => switchTab\(nextDocument\.key\)\}/);
+  // The offer is a button; nothing navigates on its own.
+  assert.doesNotMatch(gate, /useEffect\([^)]*switchTab/);
+});
+
+test('reduced motion still completes every state', () => {
+  // Each animation has a reduced-motion branch that jumps to the end value
+  // rather than being skipped, so no state is only reachable by animating.
+  assert.match(gate, /if \(reducedMotion\) \{\s*\n\s*unlock\.setValue\(1\);/);
+  assert.match(gate, /if \(reducedMotion\) \{\s*\n\s*check\.setValue\(1\);/);
+});
+
+test('the gate is on the auth palette and hardcodes no colour of its own', () => {
+  assert.match(gate, /from '\.\.\/lib\/authTheme'/);
+  assert.doesNotMatch(gate, /#[0-9A-Fa-f]{6}/, 'colours come from tokens, never hex literals');
+  assert.doesNotMatch(gate, /from '\.\.\/lib\/theme'/, 'one palette per surface');
+});
+
+test('the screen still owns its safe area and stays readable on a wide window', () => {
+  assert.match(gate, /edges=\{\['top', 'bottom', 'left', 'right'\]\}/);
+  assert.match(gate, /maxWidth: authSizes\.maxContentWidth/);
+  // Touch targets survive the tighter layout: the roomy row is 48, and the
+  // compact variant sits exactly on the 44pt floor, never under it.
+  assert.match(gate, /minHeight: 48/);
+  assert.match(gate, /statusRowCompact: \{\s*\n\s*minHeight: 44/);
+  assert.ok((gate.match(/minHeight: 44/g) ?? []).length >= 2);
+});
+
+test('the reader is what grows, and the chrome is what gives way', () => {
+  // The document container takes whatever the fixed blocks leave, so the fix
+  // for a cramped reader is tightening them — not resizing the reader.
+  assert.match(gate, /docWrapper: \{\s*\n\s*flex: 1,/);
+  // Below the height where everything cannot fit, the intro line and some
+  // type scale are dropped rather than letting the reader collapse.
+  assert.match(gate, /const compact = windowHeight < 700;/);
+  assert.match(gate, /\{compact \? null : \(/);
+  assert.match(gate, /compact && styles\.titleCompact/);
+  assert.match(gate, /compact && styles\.statusRowCompact/);
+  assert.match(gate, /compact && styles\.footerCompact/);
+});
+
+test('shared components used by other screens were not repainted for this one', () => {
+  // The in-app palette still belongs to the in-app surface: SegmentedControl
+  // has four other consumers and MarkdownText one, so neither was touched.
+  for (const path of ['components/SegmentedControl.tsx', 'components/MarkdownText.tsx']) {
+    assert.match(read(path), /from '\.\.\/lib\/theme'/, `${path} keeps the in-app palette`);
+  }
+  assert.doesNotMatch(gate, /SegmentedControl/, 'the status rows replaced it here only');
+});

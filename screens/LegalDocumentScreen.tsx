@@ -1,9 +1,10 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import { MarkdownText } from '../components/MarkdownText';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { LEGAL_DOCUMENTS } from '../lib/legal';
+import { goBackOrHome } from '../lib/navigationRef';
 import type { LegalDocumentRouteParamList } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
 
@@ -13,7 +14,6 @@ import { colors, spacing } from '../lib/theme';
  * the two can't drift.
  */
 export function LegalDocumentScreen() {
-  const navigation = useNavigation();
   const route = useRoute<RouteProp<LegalDocumentRouteParamList, 'LegalDocument'>>();
   // route.params.document is typed as 'terms' | 'privacy', but the value
   // still comes from outside this screen's control (a deep link, or a stale
@@ -24,7 +24,7 @@ export function LegalDocumentScreen() {
   if (!doc) {
     return (
       <SafeAreaView style={styles.safe} edges={['top']}>
-        <ScreenHeader title="Document" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Document" onBack={goBackOrHome} />
         <View style={styles.center}>
           <Text style={styles.muted}>
             This document isn't available. It may have moved, or this link is
@@ -37,7 +37,7 @@ export function LegalDocumentScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title={doc.title} onBack={() => navigation.goBack()} />
+      <ScreenHeader title={doc.title} onBack={goBackOrHome} />
       <ScrollView contentContainerStyle={styles.content}>
         <MarkdownText markdown={doc.body} />
         <Text style={styles.version}>Version {doc.version}</Text>

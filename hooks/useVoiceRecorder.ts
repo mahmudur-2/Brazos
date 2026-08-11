@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { userMessage } from '../lib/errorMessage';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -93,7 +94,7 @@ export function useVoiceRecorder() {
       setPhase('recording');
     } catch (err) {
       console.error('[useVoiceRecorder] start failed', err);
-      setError(err instanceof Error ? err.message : 'Could not start recording.');
+      setError(userMessage(err instanceof Error ? err : null, 'Could not start recording.'));
       setPhase('idle');
     }
   }
@@ -134,7 +135,7 @@ export function useVoiceRecorder() {
       setPhase('preview');
     } catch (err) {
       console.error('[useVoiceRecorder] stop failed', err);
-      setError(err instanceof Error ? err.message : 'Could not finish recording.');
+      setError(userMessage(err instanceof Error ? err : null, 'Could not finish recording.'));
       setPhase('idle');
     }
   }

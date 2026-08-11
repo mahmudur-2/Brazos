@@ -14,6 +14,12 @@ import { BrandLogo } from '../components/BrandLogo';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
+// The canonical app-icon export — see components/BrandLogo.tsx's SOURCE
+// comment for why the launch mark uses this instead of BrandLogo's own
+// default asset (a corner-radius mismatch measured against the atlas
+// reference: ~21.5% vs this file's ~18.7%).
+const LAUNCH_MARK = require('../assets/brand/app-icon-v2.png');
+
 /**
  * The cold-launch timeline, in milliseconds from mount:
  *
@@ -197,7 +203,7 @@ export function LaunchScreen({ sessionReady, onFinish }: LaunchScreenProps) {
 
       <View style={styles.center}>
         <Animated.View style={logoStyle}>
-          <BrandLogo size={authSizes.logoLaunch} elevated />
+          <BrandLogo size={authSizes.logoLaunch} elevated source={LAUNCH_MARK} />
         </Animated.View>
 
         <Animated.Text

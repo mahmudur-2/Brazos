@@ -12,6 +12,7 @@ import {
 import { Button } from './Button';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { createReport, REPORT_REASONS, type ReportReason } from '../lib/moderation';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 
@@ -59,7 +60,7 @@ export function ReportDialog({
     setSubmitting(false);
 
     if (error) {
-      await alertAsync('Could not send report', error.message);
+      await alertAsync('Could not send report', userMessage(error));
       return;
     }
 

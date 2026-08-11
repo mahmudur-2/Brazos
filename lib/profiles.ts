@@ -25,6 +25,11 @@ export type Profile = {
   // hasn't been run yet — both default to false/absent.
   is_admin?: boolean | null;
   banned?: boolean | null;
+  // Availability (phase53, screen 66). Display truth only — nothing blocks a
+  // customer from offering; the worker declines as usual. Optional for the
+  // pre-migration window; absent reads as "accepting".
+  accepting_work?: boolean | null;
+  availability_note?: string | null;
 };
 
 export type ProfileUpdate = {
@@ -34,10 +39,12 @@ export type ProfileUpdate = {
   bio?: string | null;
   language?: string;
   categories?: string[];
+  accepting_work?: boolean;
+  availability_note?: string | null;
 };
 
 export const PUBLIC_PROFILE_COLUMNS =
-  'id, full_name, avatar_url, role, verification_status, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time';
+  'id, full_name, avatar_url, role, verification_status, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time, accepting_work, availability_note';
 
 const SELF_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, phone, is_admin, banned`;
 
@@ -70,6 +77,38 @@ export async function updateProfile(userId: string, patch: ProfileUpdate) {
     .maybeSingle();
 
   return { data: data as Profile | null, error };
+}
+
+/**
+ * The signed-in account's persisted Customer/Worker mode
+ * (supabase/phase42_active_mode.sql).
+ *
+ * Returns `null` — never a guess — when the answer cannot be had: the RPC is
+ * missing (phase42 not applied yet), the request failed, or the value coming
+ * back is not one of the two modes. The caller falls back to its local cache in
+ * that case; see modes/ModeProvider.tsx. Deliberately its own narrow RPC rather
+ * than reading the whole profile: this runs on every launch, before anything
+ * authenticated renders, and it must not depend on a full profile read
+ * succeeding.
+ */
+export async function fetchMyActiveMode() {
+  const { data, error } = await supabase.rpc('get_my_active_mode');
+  if (error) return { data: null, error };
+  return { data: typeof data === 'string' ? data : null, error: null };
+}
+
+/**
+ * Persist the signed-in account's mode. `set_active_mode()` validates the value
+ * server-side and the check constraint backs it up, so an invalid mode cannot
+ * be stored even if this is called wrongly.
+ *
+ * Failure is reported, not thrown: switching modes must still work on a device
+ * that is offline or talking to a database without phase42 applied — the local
+ * cache carries it until the next successful write.
+ */
+export async function setMyActiveMode(mode: 'customer' | 'worker') {
+  const { error } = await supabase.rpc('set_active_mode', { p_mode: mode });
+  return { error };
 }
 
 /** Fetch the signed-in user's complete profile, including their own phone. */

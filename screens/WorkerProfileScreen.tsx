@@ -25,7 +25,15 @@ import {
   isProfileActive,
   type Profile,
 } from '../lib/profiles';
-import { canRehireWorker, JOB_CATEGORY_LABELS } from '../lib/jobs';
+import { canRehireWorker, JOB_CATEGORIES, JOB_CATEGORY_LABELS, type JobCategory } from '../lib/jobs';
+import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
+import {
+  fetchWorkerServices,
+  servicePriceLabel,
+  type WorkerService,
+} from '../lib/services';
+import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import type {
   PostJobRouteParamList,
   ProfileReviewsRouteParamList,
@@ -45,6 +53,8 @@ import { colors, radius, spacing } from '../lib/theme';
 export function WorkerProfileScreen() {
   // PostJob is registered alongside WorkerProfile in every stack that can
   // reach this screen, so the offer button below can push it from any of them.
+  // (tests/crossTabNavigation.test.mjs executes that claim per stack — it was
+  // false once, for the worker Home tab, and crashed on device 2026-08-10.)
   const navigation =
     useNavigation<
       NativeStackNavigationProp<PostJobRouteParamList & ProfileReviewsRouteParamList>
@@ -65,6 +75,11 @@ export function WorkerProfileScreen() {
    * direct thread for exactly that case.
    */
   const [workedTogether, setWorkedTogether] = useState(false);
+  // Phase 9: published services (RLS hides other people's drafts) and the
+  // viewer's own saved state for this worker.
+  const [services, setServices] = useState<WorkerService[]>([]);
+  const [savedByMe, setSavedByMe] = useState(false);
+  const [savingBookmark, setSavingBookmark] = useState(false);
   /**
    * Banned/suspended accounts can't be transacted with. `banned` is not
    * publicly readable (phase29), so this asks the narrow RPC instead. Starts
@@ -87,7 +102,7 @@ export function WorkerProfileScreen() {
     // from a genuinely sparse profile — data would just come back null and
     // every field would render its empty fallback with no explanation. This
     // surfaces it as a distinct, retryable error state instead.
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     setLoading(false);
   }, [params.workerId]);
 
@@ -110,10 +125,34 @@ export function WorkerProfileScreen() {
     isProfileActive(params.workerId).then(({ data }) => {
       if (active) setRecipientActive(data);
     });
+    fetchSavedWorkerIds(user.id).then(({ data }) => {
+      if (active) setSavedByMe(data.has(params.workerId));
+    });
     return () => {
       active = false;
     };
   }, [user, isSelf, params.workerId]);
+
+  useEffect(() => {
+    let active = true;
+    setServices([]);
+    fetchWorkerServices(params.workerId).then(({ data, error: servicesError }) => {
+      if (active && !servicesError) setServices(data.filter((s) => s.published || isSelf));
+    });
+    return () => {
+      active = false;
+    };
+  }, [params.workerId, isSelf]);
+
+  async function toggleSaved() {
+    if (!user || isSelf || savingBookmark) return;
+    setSavingBookmark(true);
+    const { error: saveError } = savedByMe
+      ? await unsaveWorker(user.id, params.workerId)
+      : await saveWorker(user.id, params.workerId);
+    setSavingBookmark(false);
+    if (!saveError) setSavedByMe((v) => !v);
+  }
 
   const name = profile?.full_name ?? params.workerName ?? 'Worker';
   // Headings address the person, so they use the first name the way a message
@@ -127,7 +166,7 @@ export function WorkerProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Profile" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Profile" onBack={goBackOrHome} />
 
       {loading ? (
         <View style={styles.center}>
@@ -212,6 +251,76 @@ export function WorkerProfileScreen() {
             )}
           </Card>
 
+          {/* Phase 9 — availability truth + saved toggle + services. */}
+          {profile && (profile.accepting_work === false || profile.availability_note) ? (
+            <Card style={styles.availabilityCard}>
+              <Ionicons
+                name={profile.accepting_work === false ? 'moon-outline' : 'sunny-outline'}
+                size={18}
+                color={profile.accepting_work === false ? colors.textMuted : colors.emerald}
+              />
+              <Text style={styles.availabilityText}>
+                {profile.accepting_work === false
+                  ? `${firstName} isn’t taking new work right now.`
+                  : `${firstName} is taking new work.`}
+                {profile.availability_note ? ` ${profile.availability_note}` : ''}
+              </Text>
+            </Card>
+          ) : null}
+
+          {!isSelf && user ? (
+            <Button
+              title={savedByMe ? 'Saved — tap to remove' : `Save ${firstName} for later`}
+              variant="secondary"
+              icon={savedByMe ? 'bookmark' : 'bookmark-outline'}
+              onPress={() => void toggleSaved()}
+              loading={savingBookmark}
+            />
+          ) : null}
+
+          {services.length > 0 ? (
+            <Card style={styles.servicesCard}>
+              <Text style={styles.servicesTitle}>Services & pricing</Text>
+              {services.map((service) => (
+                <Pressable
+                  key={service.id}
+                  style={styles.serviceRow}
+                  onPress={
+                    !isSelf && canOffer
+                      ? () =>
+                          navigation.navigate('PostJob', {
+                            hireWorkerId: params.workerId,
+                            hireWorkerName:
+                              profile?.full_name ?? params.workerName ?? 'this worker',
+                            initialTitle: service.title,
+                            initialCategory: (JOB_CATEGORIES as readonly string[]).includes(
+                              service.category
+                            )
+                              ? (service.category as JobCategory)
+                              : undefined,
+                          })
+                      : undefined
+                  }
+                  accessibilityRole={!isSelf && canOffer ? 'button' : 'text'}
+                  accessibilityLabel={`${service.title}, ${servicePriceLabel(service)}`}
+                >
+                  <View style={styles.serviceCopy}>
+                    <Text style={styles.serviceName} numberOfLines={1}>
+                      {service.title}
+                      {service.published ? '' : '  ·  Draft'}
+                    </Text>
+                    {service.description ? (
+                      <Text style={styles.serviceDescription} numberOfLines={2}>
+                        {service.description}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.servicePrice}>{servicePriceLabel(service)}</Text>
+                </Pressable>
+              ))}
+            </Card>
+          ) : null}
+
           {canOffer && (
             <Card style={styles.hireCard}>
               <Text style={styles.hireTitle}>
@@ -253,6 +362,53 @@ export function WorkerProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  availabilityCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  availabilityText: {
+    flex: 1,
+    fontSize: 14,
+    color: colors.text,
+    lineHeight: 20,
+  },
+  servicesCard: {
+    gap: spacing.sm,
+  },
+  servicesTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  serviceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    minHeight: 48,
+  },
+  serviceCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  serviceName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  serviceDescription: {
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
+  },
+  servicePrice: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.emerald,
+  },
   safe: {
     flex: 1,
     backgroundColor: colors.background,

@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
-import { Skeleton } from './Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { colors, radius, spacing } from '../lib/theme';
 import {
@@ -111,30 +110,6 @@ export function BrowseJobCard({
             <Text style={styles.time} numberOfLines={1}>
               {formatTimeAgo(job.created_at)}
             </Text>
-          </View>
-        </View>
-      </View>
-    </Card>
-  );
-}
-
-/**
- * The same card's silhouette with nothing in it, for while the feed loads.
- * Matching the real card's height means the list does not jump when the data
- * lands.
- */
-export function BrowseJobCardSkeleton() {
-  return (
-    <Card style={styles.card}>
-      <View style={styles.row}>
-        <Skeleton style={styles.thumb} />
-        <View style={styles.body}>
-          <View style={styles.bodyTop}>
-            <Skeleton style={styles.skeletonLine} />
-            <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
-          </View>
-          <View style={styles.footerRow}>
-            <Skeleton style={[styles.skeletonLine, styles.skeletonLineTiny]} />
           </View>
         </View>
       </View>

@@ -40,6 +40,70 @@ if (!BASE || !KEY) {
 
 const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
+// ---------------------------------------------------------------------------
+// ENV PARITY (added after the device found four "column does not exist"
+// screens against a green verify run).
+//
+// This script probes over PostgREST with the app's own .env values, while the
+// SQL proofs and every migration go through SUPABASE_DB_URL_STAGING on a
+// direct Postgres connection. If those two point at DIFFERENT projects, every
+// gate can be green about a database the app never touches. Refs only are
+// compared and printed — never a URL, key, or connection string.
+// ---------------------------------------------------------------------------
+function refFromRestUrl(u) {
+  return String(u ?? '').match(/https?:\/\/([a-z0-9]+)\.supabase\.(co|in)/i)?.[1] ?? null;
+}
+function refFromPgUrl(u) {
+  const s = String(u ?? '');
+  return (
+    s.match(/postgres\.([a-z0-9]{16,})/i)?.[1] ??
+    s.match(/@db\.([a-z0-9]+)\.supabase\./i)?.[1] ??
+    null
+  );
+}
+function refFromJwt(k) {
+  try {
+    return JSON.parse(Buffer.from(String(k).split('.')[1], 'base64').toString('utf8')).ref ?? null;
+  } catch {
+    return null;
+  }
+}
+
+{
+  const appRef = refFromRestUrl(BASE);
+  const keyRef = refFromJwt(KEY);
+  const toolingRef = refFromPgUrl(process.env.SUPABASE_DB_URL_STAGING);
+
+  console.log('env parity');
+  console.log(`  app .env SUPABASE_URL ref : ${appRef ?? 'UNRESOLVED'}`);
+  console.log(`  app .env SUPABASE_KEY ref : ${keyRef ?? 'UNRESOLVED'}`);
+  console.log(`  SUPABASE_DB_URL_STAGING   : ${toolingRef ?? 'NOT SET'}`);
+
+  const problems = [];
+  if (!appRef) problems.push('SUPABASE_URL in .env does not look like a Supabase project URL');
+  if (keyRef && appRef && keyRef !== appRef) {
+    problems.push(`the anon key belongs to ${keyRef} but SUPABASE_URL points at ${appRef}`);
+  }
+  if (toolingRef && appRef && toolingRef !== appRef) {
+    problems.push(
+      `the app targets ${appRef} but the SQL proofs/migrations target ${toolingRef} — ` +
+        'every gate below would be green about a database the app never touches'
+    );
+  }
+  if (!toolingRef) {
+    console.log('  WARNING: SUPABASE_DB_URL_STAGING is not set in this shell, so the');
+    console.log('           app-vs-tooling comparison could not be made. The SQL proofs');
+    console.log('           cannot run without it either.');
+  }
+  if (problems.length > 0) {
+    console.error('\nENV PARITY FAILED:');
+    for (const p of problems) console.error(`  - ${p}`);
+    console.error('\nRefusing to report on a database the app does not use.');
+    process.exit(3);
+  }
+  console.log(`  parity: OK${toolingRef ? '' : ' (app side only)'}\n`);
+}
+
 async function checkColumn(table, column) {
   const res = await fetch(
     `${BASE}/rest/v1/${table}?select=${encodeURIComponent(column)}&limit=0`,
@@ -180,14 +244,20 @@ const MIGRATIONS = [
         checkColumn('notification_prefs', 'nearby_radius_miles')],
       ['notification_prefs.home_lat', () => checkColumn('notification_prefs', 'home_lat')],
       ['notification_prefs.home_lng', () => checkColumn('notification_prefs', 'home_lng')],
-      ['notification_outbox table', () => checkColumn('notification_outbox', 'id')],
-      ['notification_outbox.recipient_id', () =>
-        checkColumn('notification_outbox', 'recipient_id')],
-      ['notification_outbox.category', () =>
-        checkColumn('notification_outbox', 'category')],
-      ['notification_outbox.dedupe_key', () =>
-        checkColumn('notification_outbox', 'dedupe_key')],
-      ['notification_outbox.status', () => checkColumn('notification_outbox', 'status')],
+      // phase56 sealed the outbox to anon (it became the recipient-scoped
+      // in-app feed), so these five flipped from open-probe to sealed-probe:
+      // existence is proven transitively by this group's own RPC checks plus
+      // the phase56 sentinel; what a publishable key must see is a refusal.
+      ['notification_outbox sealed to anon', () =>
+        checkColumnRevoked('notification_outbox', 'id')],
+      ['notification_outbox.recipient_id sealed', () =>
+        checkColumnRevoked('notification_outbox', 'recipient_id')],
+      ['notification_outbox.category sealed', () =>
+        checkColumnRevoked('notification_outbox', 'category')],
+      ['notification_outbox.dedupe_key sealed', () =>
+        checkColumnRevoked('notification_outbox', 'dedupe_key')],
+      ['notification_outbox.status sealed', () =>
+        checkColumnRevoked('notification_outbox', 'status')],
       ['rpc register_push_token()', () =>
         checkRpc('register_push_token', { p_token: '', p_platform: 'unknown' })],
       ['rpc should_notify()', () =>
@@ -471,6 +541,351 @@ const MIGRATIONS = [
         checkColumnRevoked('worker_semantic_docs', 'source_text')],
     ],
   },
+  {
+    file: 'phase42_active_mode.sql',
+    checks: [
+      // get_my_active_mode() is `language sql` and selects profiles.active_mode
+      // directly, so Postgres refuses to create it unless that column exists.
+      // The function being here is therefore proof the COLUMN landed too —
+      // which matters, because active_mode is deliberately not publicly
+      // readable and so cannot be probed with checkColumn().
+      ['rpc get_my_active_mode()', () => checkRpc('get_my_active_mode', {})],
+      ['rpc set_active_mode()', () => checkRpc('set_active_mode', { p_mode: 'customer' })],
+      // The privacy half: which mode someone is in is nobody else's business,
+      // so active_mode must NOT be in phase29's public column grant. A column
+      // that reads back here means the grant was widened.
+      ['profiles.active_mode not publicly readable', () =>
+        checkColumnRevoked('profiles', 'active_mode')],
+    ],
+  },
+  {
+    // ---------------------------------------------------------------------
+    // PHASE 3A. Unlike every group above, this one is NOT expected to be
+    // applied yet: the migration files are written and reviewed but have not
+    // been run against the remote database. The `sentinel` below is what
+    // makes that distinction honest rather than a weakened check.
+    //
+    //   sentinel MISSING -> the migration has not been applied. Every check
+    //                       in this group reports PENDING and none of them
+    //                       counts toward the failure total. Nothing is
+    //                       marked as passing.
+    //   sentinel PRESENT -> the migration HAS been applied. Every check
+    //                       becomes mandatory, exactly like the groups above,
+    //                       and a missing object fails the run.
+    //
+    // The flip is automatic and cannot be gamed by editing a flag: the only
+    // way to reach the mandatory state is for phase43 to actually have run.
+    // job_offers_enabled() is created as the LAST object inside phase43's
+    // single transaction, so its presence proves the whole file committed —
+    // which is also why the parts of phase43 that no PostgREST probe can see
+    // (the two enums, every constraint, the widened messages CHECK, and the
+    // visibility predicate added to the three discovery RPCs) need no probe
+    // of their own. Probing those RPCs for mere existence would be worse than
+    // useless here: they all exist BEFORE the migration, so such a check
+    // would report green against an unmigrated database.
+    // ---------------------------------------------------------------------
+    file: 'phase43_job_offers_foundation.sql',
+    sentinel: ['rpc job_offers_enabled()', () => checkRpc('job_offers_enabled', {})],
+    checks: [
+      ['jobs.visibility', () => checkColumn('jobs', 'visibility')],
+      ['jobs.accepted_offer_id', () => checkColumn('jobs', 'accepted_offer_id')],
+      ['job_locations.address_line', () => checkColumn('job_locations', 'address_line')],
+      ['job_locations.access_notes', () => checkColumn('job_locations', 'access_notes')],
+      // phase43 enables RLS on job_offers with zero policies and revokes every
+      // grant, so the table must be unreachable with the publishable key.
+      // Phase 3B grants deliberately; until then a readable job_offers would
+      // mean both sides' private negotiation amounts were world-readable.
+      ['job_offers not readable', () => checkColumnRevoked('job_offers', 'id')],
+    ],
+  },
+  // phase44_backfill_bids_to_job_offers.sql and
+  // phase45_job_requests_to_job_offers.sql are deliberately NOT given groups of
+  // their own. Both are essentially data migrations: they add no probeable
+  // schema object, and row counts are not visible through RLS with the
+  // publishable key. Each file verifies itself instead — it recounts source and
+  // destination rows at the end and raises, rolling the whole transaction back,
+  // if they disagree.
+  //
+  // phase45's one piece of schema is the `draft` value it adds to the
+  // job_status enum, which no PostgREST probe can see either. It is covered
+  // transitively and reliably: phase46 REFUSES TO INSTALL if that value is
+  // missing (its section 1 raises), so the phase46 sentinel below existing is
+  // proof that phase45 ran first.
+  {
+    // ---------------------------------------------------------------------
+    // PHASE 3B. Same sentinel mechanism as phase43 above: PENDING while
+    // unapplied, mandatory the moment it lands, never a false PASS.
+    //
+    // The six legacy shims (create_bid, accept_bid, create_job_request,
+    // respond_job_request, job_bid_count, job_bid_counts) are deliberately NOT
+    // listed here as new checks. They keep their existing names and are still
+    // covered by the phase18/29/30/36/38 groups above, which continue to
+    // require them — which is the correct contract, because phase46 keeps them
+    // present and working rather than dropping them. When the deprecation
+    // trigger fires and they are finally removed, those groups are what has to
+    // be updated, deliberately, in that phase.
+    // ---------------------------------------------------------------------
+    file: 'phase46_offer_rpcs_and_rls.sql',
+    sentinel: ['rpc job_offer_rpcs_enabled()', () => checkRpc('job_offer_rpcs_enabled', {})],
+    checks: [
+      ['rpc create_offer()', () => checkRpc('create_offer', { p_amount_cents: 1 })],
+      ['rpc counter_offer()', () =>
+        checkRpc('counter_offer', { p_offer_id: ZERO_UUID, p_amount_cents: 1 })],
+      ['rpc decline_offer()', () => checkRpc('decline_offer', { p_offer_id: ZERO_UUID })],
+      ['rpc accept_offer()', () => checkRpc('accept_offer', { p_offer_id: ZERO_UUID })],
+      ['rpc my_pending_offers()', () => checkRpc('my_pending_offers', {})],
+      ['rpc job_offer_count()', () => checkRpc('job_offer_count', { p_job_id: ZERO_UUID })],
+      ['rpc job_offer_counts()', () =>
+        checkRpc('job_offer_counts', { p_job_ids: [ZERO_UUID] })],
+      ['messages.job_offer_id', () => checkColumn('messages', 'job_offer_id')],
+      // Still unreachable with the publishable key after phase46: the SELECT
+      // policy and grant are for `authenticated` only, so anon must stay shut
+      // out. This is the check that would catch a grant widened by mistake.
+      ['job_offers still not readable by anon', () =>
+        checkColumnRevoked('job_offers', 'id')],
+    ],
+  },
+  {
+    // phase47 replaces phase46's two-call-site `bids` mirror with a trigger on
+    // job_offers. Neither the trigger nor the superseded function BODIES are
+    // visible to a PostgREST probe — create_bid/accept_bid already existed and
+    // would answer identically before and after — so the sentinel is doing the
+    // real work here, as it does for phase43. It is created last inside
+    // phase47's single transaction, including after the repair pass, so its
+    // presence proves the reprojection ran and found zero remaining drift
+    // (section 6 raises and rolls back otherwise).
+    file: 'phase47_bids_projection_trigger.sql',
+    sentinel: ['rpc bids_projection_enabled()', () => checkRpc('bids_projection_enabled', {})],
+    checks: [
+      // The drift view joins across every user's offers, so it must not be
+      // reachable with the publishable key. Supabase's default privileges
+      // would otherwise hand a new view in `public` to anon.
+      ['v_bids_projection_drift not readable', () =>
+        checkColumnRevoked('v_bids_projection_drift', 'root_offer_id')],
+    ],
+  },
+  {
+    // phase48 rewrites v_bids_projection_drift. A view replacement is invisible
+    // to a PostgREST probe — the view existed before and is revoked from anon
+    // either way — so the sentinel carries this one entirely. It is created
+    // last inside phase48's transaction, AFTER the reprojection and its
+    // zero-repairable-drift assertion, so its presence proves both ran and
+    // agreed.
+    file: 'phase48_bids_drift_view_rewrite.sql',
+    sentinel: ['rpc bids_projection_v2_enabled()', () => checkRpc('bids_projection_v2_enabled', {})],
+    checks: [
+      ['v_bids_projection_drift still not readable', () =>
+        checkColumnRevoked('v_bids_projection_drift', 'root_offer_id')],
+    ],
+  },
+  {
+    // phase49 adds the post-wizard fields (budget range, scheduling window,
+    // address-capable job_locations) and recreates create_job /
+    // update_job_details with the widened parameter list. The two RPC checks
+    // call with the NEW named parameters, so they only pass once the widened
+    // signatures are live — the pre-phase49 functions answer PGRST202 to
+    // these argument names. Both RPCs raise on auth before touching any row,
+    // so probing them with the publishable key writes nothing.
+    file: 'phase49_post_wizard_fields.sql',
+    sentinel: ['rpc post_wizard_fields_enabled()', () =>
+      checkRpc('post_wizard_fields_enabled', {})],
+    checks: [
+      ['jobs.budget_min_cents', () => checkColumn('jobs', 'budget_min_cents')],
+      ['jobs.budget_max_cents', () => checkColumn('jobs', 'budget_max_cents')],
+      ['jobs.scheduled_date', () => checkColumn('jobs', 'scheduled_date')],
+      ['jobs.arrival_start_hour', () => checkColumn('jobs', 'arrival_start_hour')],
+      ['jobs.arrival_end_hour', () => checkColumn('jobs', 'arrival_end_hour')],
+      ['rpc create_job() widened signature', () =>
+        checkRpc('create_job', {
+          p_title: 'probe',
+          p_description: 'probe',
+          p_category: 'other',
+          p_location: 'probe',
+          p_budget_min_cents: 100,
+          p_budget_max_cents: 200,
+          p_scheduled_date: '2026-01-01',
+          p_arrival_start_hour: 8,
+          p_arrival_end_hour: 11,
+          p_address_line: 'probe',
+        })],
+      ['rpc update_job_details() widened signature', () =>
+        checkRpc('update_job_details', {
+          p_job_id: ZERO_UUID,
+          p_title: 'probe',
+          p_description: 'probe',
+          p_category: 'other',
+          p_location: 'probe',
+          p_budget_min_cents: 100,
+          p_budget_max_cents: 200,
+          p_scheduled_date: '2026-01-01',
+          p_arrival_start_hour: 8,
+          p_arrival_end_hour: 11,
+          p_address_line: 'probe',
+        })],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 50. Sandbox payments + withdraw/expiry. Same sentinel mechanism
+    // as phase43/46/47/49: PENDING while unapplied, mandatory once applied.
+    //
+    // The four superseded RPC bodies (create_offer, counter_offer,
+    // decline_offer, accept_offer) and my_pending_offers() keep their names
+    // and signatures, so the phase46 group above continues to cover their
+    // existence; body behaviour (expiry gates) has no probeable shape, which
+    // is what the sentinel is for. The `payments` table predates the repo's
+    // migrations — phase50 extends it, so its new columns are probed here.
+    // -----------------------------------------------------------------------
+    file: 'phase50_sandbox_payments_and_offer_lifecycle.sql',
+    sentinel: ['rpc sandbox_payments_enabled()', () =>
+      checkRpc('sandbox_payments_enabled', {})],
+    checks: [
+      // payments and job_offers are anon-revoked, so their new columns have no
+      // publishable-key probe (the phase43/46 situation exactly). Existence is
+      // proven transitively by the sentinel — created last in the same
+      // transaction as the columns — while the probes below assert the parts a
+      // client key CAN see: the RPCs exist, and the money table stays sealed.
+      ['payments not readable with publishable key', () =>
+        checkColumnRevoked('payments', 'id')],
+      ['payments.amount_cents not readable either', () =>
+        checkColumnRevoked('payments', 'amount_cents')],
+      ['rpc sandbox_authorize_job_payment()', () =>
+        checkRpc('sandbox_authorize_job_payment', { p_job_id: ZERO_UUID })],
+      ['rpc sandbox_hold_job_payment()', () =>
+        checkRpc('sandbox_hold_job_payment', { p_job_id: ZERO_UUID })],
+      ['rpc withdraw_offer()', () =>
+        checkRpc('withdraw_offer', { p_offer_id: ZERO_UUID })],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 51. Active-work lifecycle: arrival timestamps, checklist,
+    // disputes, and the release path (the first function past `held`).
+    // Every RPC below raises on auth before touching a row, so probing with
+    // the publishable key writes nothing. The two new tables are sealed to
+    // anon (checklist carries authenticated grants under RLS; disputes are
+    // read-only + RPC-written), so their probes assert the seal.
+    // -----------------------------------------------------------------------
+    file: 'phase51_active_work_lifecycle.sql',
+    sentinel: ['rpc active_work_lifecycle_enabled()', () =>
+      checkRpc('active_work_lifecycle_enabled', {})],
+    checks: [
+      ['jobs.en_route_at', () => checkColumn('jobs', 'en_route_at')],
+      ['jobs.arrived_at', () => checkColumn('jobs', 'arrived_at')],
+      ['jobs.completed_at', () => checkColumn('jobs', 'completed_at')],
+      ['job_checklist_items not readable by anon', () =>
+        checkColumnRevoked('job_checklist_items', 'id')],
+      ['job_disputes not readable by anon', () =>
+        checkColumnRevoked('job_disputes', 'id')],
+      ['rpc mark_worker_arrival()', () =>
+        checkRpc('mark_worker_arrival', { p_job_id: ZERO_UUID, p_step: 'en_route' })],
+      ['rpc sandbox_release_job_payment()', () =>
+        checkRpc('sandbox_release_job_payment', { p_job_id: ZERO_UUID })],
+      ['rpc job_payment_state()', () =>
+        checkRpc('job_payment_state', { p_job_id: ZERO_UUID })],
+      ['rpc open_job_dispute()', () =>
+        checkRpc('open_job_dispute', { p_job_id: ZERO_UUID, p_reason: 'other' })],
+      ['rpc withdraw_job_dispute()', () =>
+        checkRpc('withdraw_job_dispute', { p_dispute_id: ZERO_UUID })],
+      ['rpc sandbox_tip_worker()', () =>
+        checkRpc('sandbox_tip_worker', { p_job_id: ZERO_UUID, p_amount_cents: 100 })],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 52. Offer-scoped pre-hire chat: an AFTER INSERT trigger on
+    // job_offers guarantees the pair's direct thread from the first offer.
+    // A trigger has no PostgREST-probeable shape (the phase48 situation), so
+    // the sentinel — created last in the same transaction as the trigger and
+    // its backfill — carries the group.
+    // -----------------------------------------------------------------------
+    file: 'phase52_offer_scoped_chat.sql',
+    sentinel: ['rpc offer_scoped_chat_enabled()', () =>
+      checkRpc('offer_scoped_chat_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 53. Worker self-service: worker_services, saved_workers,
+    // portfolio drafts, availability columns. profiles/portfolio columns are
+    // behind auth (column grants / RLS), so — the phase50 situation — the
+    // sentinel proves them transitively while the probes assert what the
+    // publishable key CAN see: the new tables stay sealed to anon.
+    // -----------------------------------------------------------------------
+    file: 'phase53_worker_self_service.sql',
+    sentinel: ['rpc worker_self_service_enabled()', () =>
+      checkRpc('worker_self_service_enabled', {})],
+    checks: [
+      ['worker_services not readable by anon', () =>
+        checkColumnRevoked('worker_services', 'id')],
+      ['saved_workers not readable by anon', () =>
+        checkColumnRevoked('saved_workers', 'user_id')],
+      ['rpc update_my_profile() still callable shape', () =>
+        checkRpc('update_my_profile', { p_patch: {} })],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 54. Review integrity — a policy swap has no PostgREST-probeable
+    // shape (the phase19 situation), so the sentinel carries the group; it is
+    // created last in the same transaction as the policy.
+    // -----------------------------------------------------------------------
+    file: 'phase54_review_integrity.sql',
+    sentinel: ['rpc review_integrity_enabled()', () =>
+      checkRpc('review_integrity_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 55. Simulated cash-out. payments stays sealed to anon (phase50
+    // checks keep asserting that); the RPC raises on auth before any row.
+    // -----------------------------------------------------------------------
+    file: 'phase55_sandbox_cash_out.sql',
+    sentinel: ['rpc sandbox_cash_out_enabled()', () =>
+      checkRpc('sandbox_cash_out_enabled', {})],
+    checks: [
+      ['rpc sandbox_cash_out()', () => checkRpc('sandbox_cash_out', {})],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 56. The notification feed over the phase20 outbox. The table is
+    // recipient-scoped behind auth, so anon probes assert the seal; the
+    // trigger/policy work rides the sentinel.
+    // -----------------------------------------------------------------------
+    file: 'phase56_notification_feed.sql',
+    sentinel: ['rpc notification_feed_enabled()', () =>
+      checkRpc('notification_feed_enabled', {})],
+    checks: [
+      ['notification_outbox not readable by anon', () =>
+        checkColumnRevoked('notification_outbox', 'id')],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 57 (hardening run). notify_on_message gains the direct-thread
+    // branch — a trigger-function body change with no probeable shape, so
+    // the sentinel carries it (the phase48 situation).
+    // -----------------------------------------------------------------------
+    file: 'phase57_direct_thread_message_notifications.sql',
+    sentinel: ['rpc direct_thread_notifications_enabled()', () =>
+      checkRpc('direct_thread_notifications_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 58 (hardening run). Policy drop + two function-body fixes have
+    // no probeable shape; the sentinel carries them. client_job_stats is the
+    // one new callable surface.
+    // -----------------------------------------------------------------------
+    file: 'phase58_hardening_fixes.sql',
+    sentinel: ['rpc hardening_fixes_enabled()', () =>
+      checkRpc('hardening_fixes_enabled', {})],
+    checks: [
+      ['rpc client_job_stats()', () =>
+        checkRpc('client_job_stats', { p_client_id: ZERO_UUID })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
@@ -486,9 +901,34 @@ if (!control.ok) {
 console.log('control check (jobs.photos): OK — probe is working\n');
 
 let missing = 0;
+let pending = 0;
 for (const migration of MIGRATIONS) {
   console.log(migration.file);
+
+  // A group with a sentinel is one whose migration may legitimately not be
+  // applied yet. Ask the sentinel first; it decides whether this group's
+  // checks are mandatory or merely expected-missing. A group without one is
+  // mandatory, exactly as it always was.
+  let applied = true;
+  if (migration.sentinel) {
+    const [sentinelLabel, runSentinel] = migration.sentinel;
+    const s = await runSentinel();
+    applied = s.ok;
+    if (applied) {
+      console.log(`  OK       ${sentinelLabel}${s.note ? `  [${s.note}]` : ''}`);
+    } else {
+      pending++;
+      console.log(`  PENDING  ${sentinelLabel}  — NOT APPLIED (${s.detail})`);
+    }
+  }
+
   for (const [label, run] of migration.checks) {
+    if (!applied) {
+      // Reported, counted as pending, never counted as passing.
+      pending++;
+      console.log(`  PENDING  ${label}  — EXPECTED MISSING until the migration is applied`);
+      continue;
+    }
     const r = await run();
     if (r.ok) {
       console.log(`  OK       ${label}${r.note ? `  [${r.note}]` : ''}`);
@@ -501,8 +941,15 @@ for (const migration of MIGRATIONS) {
 }
 
 if (missing === 0) {
-  console.log('All checked objects exist in the live database.');
+  console.log('All REQUIRED objects exist in the live database.');
 } else {
   console.log(`${missing} object(s) missing — run the SQL file(s) listed above.`);
+}
+if (pending > 0) {
+  console.log(
+    `${pending} check(s) PENDING — their migration is not applied yet. This is ` +
+      'not a failure; the checks become mandatory automatically once the ' +
+      'migration lands.'
+  );
 }
 process.exit(missing === 0 ? 0 : 1);

@@ -48,7 +48,23 @@ export type Message = {
    * the thread reads correctly as history even after the request moves on.
    */
   job_request_id: string | null;
-  request_event: 'created' | 'countered' | 'accepted' | 'declined' | 'closed' | null;
+  /**
+   * The offer revision this message records (phase46). Successor to
+   * job_request_id, which stays populated on rows written before the
+   * unification so historical threads keep rendering. Read this first and
+   * fall back to job_request_id — see offerIdOf() in lib/offers.ts.
+   */
+  job_offer_id: string | null;
+  request_event:
+    | 'created'
+    | 'countered'
+    | 'accepted'
+    | 'declined'
+    | 'closed'
+    | 'withdrawn'
+    | 'expired'
+    | 'superseded'
+    | null;
   request_amount_cents: number | null;
   /**
    * Unsend (phase25). Set once the sender unsends this message — content,
@@ -79,16 +95,31 @@ export async function unsendMessage(messageId: string) {
   return { error };
 }
 
-// One-tap templates for hands-full workers (driving, on a ladder, etc).
-export const CHAT_TEMPLATES = [
+// One-tap templates above the composer (Phase 7: mode-specific). The worker
+// set is for hands-full moments (driving, on a ladder); the customer set is
+// the other half of those same conversations. Neither claims anything about
+// job or payment state — they are words, not status.
+export const WORKER_CHAT_TEMPLATES = [
   'On my way',
   'Running late',
   'Here, where do I go?',
   'Job done',
 ] as const;
 
+export const CUSTOMER_CHAT_TEMPLATES = [
+  'How’s it going?',
+  'Any update?',
+  'When can you start?',
+  'Thank you!',
+] as const;
+
+/** The quick-reply set for the current mode — QuickReplies' one source. */
+export function chatTemplatesForMode(mode: 'customer' | 'worker'): readonly string[] {
+  return mode === 'worker' ? WORKER_CHAT_TEMPLATES : CUSTOMER_CHAT_TEMPLATES;
+}
+
 const MESSAGE_COLUMNS =
-  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, request_event, request_amount_cents, unsent_at, created_at';
+  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
 
 /** Replace stored private-media references with short-lived display URLs. */
 export async function resolveMessageMedia(message: Message): Promise<Message> {

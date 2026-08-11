@@ -12,8 +12,10 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { useBidCounts } from '../hooks/useBidCounts';
+import { useOfferCounts } from '../hooks/useOfferCounts';
+import { userMessage } from '../lib/errorMessage';
 import { fetchJobsInCell } from '../lib/hotspots';
+import { goBackOrHome } from '../lib/navigationRef';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
 import { supabase } from '../lib/supabase';
@@ -27,7 +29,7 @@ export function CellJobsScreen() {
   const [jobs, setJobs] = useState<OpenJob[]>([]);
   // Same batched source the full list uses, so a job shows the same count
   // whichever surface it was opened from.
-  const bidCounts = useBidCounts(jobs.map((j) => j.id));
+  const bidCounts = useOfferCounts(jobs.map((j) => j.id));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -39,7 +41,7 @@ export function CellJobsScreen() {
   const load = useCallback(async () => {
     setError(null);
     const { data, error } = await fetchJobsInCell(params.ilat, params.ilng);
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else setJobs(data);
     setLoading(false);
   }, [params.ilat, params.ilng]);
@@ -94,7 +96,7 @@ export function CellJobsScreen() {
       <ScreenHeader
         title="Jobs in this zone"
         subtitle={`${displayCount} open ${displayCount === 1 ? 'job' : 'jobs'} nearby`}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

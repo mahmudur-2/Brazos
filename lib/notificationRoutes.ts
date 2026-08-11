@@ -1,6 +1,19 @@
 import { fetchJobById } from './jobs';
 import type { OpenJob } from './jobs';
-import { navigationRef, navigateWhenReady } from './navigationRef';
+import { navigateAcrossTabs } from './navigationRef';
+
+/**
+ * Dispatch only into a navigator that can actually handle the target.
+ *
+ * The check itself now lives in navigationRef.ts, because push routing is not
+ * the only thing that jumps between tabs — a shared screen reaching into the
+ * mode-defining Home tab has exactly the same problem, and two copies of the
+ * rule is how one of them ends up unguarded. This file keeps the deliberate
+ * DROP behaviour (no fallbackToTabRoot): a tapped alert that cannot reach its
+ * subject is better ignored than answered with an unrelated screen.
+ */
+const navigateChecked = (tab: string, screen?: string, params?: object): void =>
+  navigateAcrossTabs(tab, screen, params);
 
 // ---------------------------------------------------------------------------
 // Notification payload -> destination screen.
@@ -13,6 +26,8 @@ import { navigationRef, navigateWhenReady } from './navigationRef';
 export type NotificationData = {
   screen?: string;
   jobId?: string;
+  /** phase57's pre-hire chat payload: a direct thread carries no job. */
+  directThreadId?: string;
   type?: string;
   outboxId?: string;
 };
@@ -22,7 +37,13 @@ const TAB_FOR_SCREEN: Record<string, string> = {
   Chat: 'Messages',
   ClientJobDetail: 'MyJobs',
   WorkerJob: 'MyJobs',
-  JobDetail: 'Home',
+  // The worker bid screen. Routed through the SHARED MyJobs tab, not Home:
+  // since Phase 2, Home is the mode-defining tab and only the worker tree's
+  // Home stack registers JobDetail, so a customer-mode tap on this tab would
+  // silently land on Customer Home instead. MyJobs is mounted in both trees
+  // and registers JobDetail in both, so the link resolves in either mode.
+  // §F's real answer is a mode segment in the payload, which Phase 12 owns.
+  JobDetail: 'MyJobs',
   ProfileMain: 'Profile',
 };
 
@@ -34,6 +55,8 @@ function toNotificationData(raw: unknown): NotificationData | null {
   return {
     screen,
     jobId: typeof data.jobId === 'string' ? data.jobId : undefined,
+    directThreadId:
+      typeof data.directThreadId === 'string' ? data.directThreadId : undefined,
     type: typeof data.type === 'string' ? data.type : undefined,
     outboxId: typeof data.outboxId === 'string' ? data.outboxId : undefined,
   };
@@ -60,7 +83,15 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
 
   // Profile needs no record.
   if (data.screen === 'ProfileMain') {
-    navigateWhenReady(() => navigationRef.navigate('Profile', { screen: 'ProfileMain' }));
+    navigateChecked('Profile', 'ProfileMain');
+    return;
+  }
+
+  // phase57: a pre-hire chat notification carries a direct thread, never a
+  // job. Chat's route param is the ChatTarget union, so this is the same
+  // screen with the other half of that union.
+  if (data.screen === 'Chat' && data.directThreadId) {
+    navigateChecked(tab, 'Chat', { directThreadId: data.directThreadId });
     return;
   }
 
@@ -71,12 +102,7 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
 
   // These take only an id, so they can be routed without a round-trip.
   if (data.screen === 'Chat' || data.screen === 'WorkerJob') {
-    navigateWhenReady(() =>
-      navigationRef.navigate(tab, {
-        screen: data.screen,
-        params: { jobId: data.jobId },
-      })
-    );
+    navigateChecked(tab, data.screen, { jobId: data.jobId });
     return;
   }
 
@@ -87,25 +113,15 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
     // Deleted job, or RLS hides it from this user (e.g. they were unassigned).
     // Land them on the owning tab rather than doing nothing at all.
     console.error('[push] could not load job for notification', data.jobId, error);
-    navigateWhenReady(() => navigationRef.navigate(tab));
+    navigateChecked(tab);
     return;
   }
 
   if (data.screen === 'ClientJobDetail') {
-    navigateWhenReady(() =>
-      navigationRef.navigate('MyJobs', {
-        screen: 'ClientJobDetail',
-        params: { job },
-      })
-    );
+    navigateChecked('MyJobs', 'ClientJobDetail', { job });
     return;
   }
 
   // JobDetail takes an OpenJob, which is a strict subset of Job's fields.
-  navigateWhenReady(() =>
-    navigationRef.navigate('Home', {
-      screen: 'JobDetail',
-      params: { job: job as OpenJob },
-    })
-  );
+  navigateChecked('MyJobs', 'JobDetail', { job: job as OpenJob });
 }

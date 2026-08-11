@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { userMessage } from '../lib/errorMessage';
 import { fetchHotspots, type HotspotCell } from '../lib/hotspots';
 import { supabase } from '../lib/supabase';
 
@@ -28,7 +29,7 @@ export function useHotspots() {
 
   const refresh = useCallback(async () => {
     const { data, error } = await fetchHotspots();
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else {
       setError(null);
       setCells(data);

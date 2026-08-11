@@ -134,6 +134,26 @@ export function clampNational(country: Country, digits: string): string {
 }
 
 /**
+ * The number as the verify screen names it back: calling code, the last four
+ * digits, and bullets for everything between — '+1 ••• ••• 0610'.
+ *
+ * Enough for the user to recognise their own number and catch a typo, not
+ * enough to be worth reading off a shoulder. The masked part reuses
+ * `formatNational` so it carries the same grouping rhythm as the field they
+ * typed it into.
+ */
+export function maskE164(value: string): string {
+  const split = splitInternational(value);
+  if (!split) return value;
+
+  const { country, national } = split;
+  const visible = national.length > 4 ? national.slice(-4) : '';
+  const hidden = '•'.repeat(national.length - visible.length);
+
+  return `+${country.dial} ${formatNational(country, hidden + visible)}`.trimEnd();
+}
+
+/**
  * Split a stored E.164 value back into a country + national pair, for
  * pre-filling the field from an existing profile. Falls back to the default
  * country when the value isn't in E.164 form.

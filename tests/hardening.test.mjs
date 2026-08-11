@@ -1,17 +1,18 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync as fsExistsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
+const existsSync = (path) => fsExistsSync(join(root, path));
 
 const migration = read('supabase/phase29_security_hardening.sql');
 const executeGrants = read('supabase/phase32_function_execute_privileges.sql');
 const profiles = read('lib/profiles.ts');
 const jobs = read('lib/jobs.ts');
-const bids = read('lib/bids.ts');
+const offers = read('lib/offers.ts');
 const reviews = read('lib/reviews.ts');
 const storage = read('lib/storage.ts');
 const pushHook = read('hooks/usePushNotifications.ts');
@@ -73,29 +74,77 @@ test('job, bid, and review protected writes use server-validated RPCs', () => {
   assert.doesNotMatch(jobs, /\.from\('jobs'\)\s*\.update\(/);
   assert.doesNotMatch(jobs, /\.from\('jobs'\)\s*\.insert\(/);
   assert.doesNotMatch(jobs, /\.select\(['"]\*[,)]/);
-  assert.match(bids, /\.rpc\('create_bid'/);
-  assert.match(bids, /\.rpc\('accept_bid'/);
-  assert.doesNotMatch(bids, /\.from\('bids'\)\s*\.(?:insert|update)\(/);
+  assert.match(offers, /\.rpc\('create_offer'/);
+  assert.match(offers, /\.rpc\('accept_offer'/);
+  assert.match(offers, /\.rpc\('counter_offer'/);
+  assert.match(offers, /\.rpc\('decline_offer'/);
+  // Every mutation is an RPC. phase46 grants authenticated SELECT only on
+  // job_offers, so a direct write would be rejected by the database — this
+  // asserts the client never even tries, and never touches the frozen tables.
+  assert.doesNotMatch(offers, /\.from\('job_offers'\)\s*\.(?:insert|update|delete)\(/);
+  assert.doesNotMatch(offers, /\.from\('bids'\)/);
+  assert.doesNotMatch(offers, /\.from\('job_requests'\)/);
   assert.match(reviews, /\.rpc\('create_review'/);
   assert.doesNotMatch(reviews, /\.from\('reviews'\)\s*\.insert\(/);
 });
 
-test('missing accept_bid deployments have a constrained compatibility path', async () => {
-  const [bidsSource, compatibility, phase30] = await Promise.all([
-    read('lib/bids.ts'),
-    read('lib/acceptBidCompatibility.ts'),
-    read('supabase/phase30_accept_bid_rpc.sql'),
-  ]);
+// The accept_bid compatibility path is deliberately GONE (Phase 3B).
+// lib/acceptBidCompatibility.ts was deleted with accept_offer(): there is no
+// RPC left for it to fall back from, and its non-atomic read-then-update had a
+// real TOCTOU race. This asserts the absence rather than dropping the coverage
+// — a reintroduced client-side write path would fail here.
+// The frozen `bids` table is kept current by a PROJECTION, not by writes
+// scattered through the compatibility shims. phase46 did the latter and it
+// drifted on four of the six paths that mutate job_offers; phase47 replaced it.
+// These assertions are what stop a future edit from reintroducing a second
+// writer, which is the exact shape of the original bug.
+test('the bids compatibility mirror is a trigger-driven projection only', async () => {
+  const phase47 = read('supabase/phase47_bids_projection_trigger.sql');
 
-  assert.match(bidsSource, /error\?\.code === 'PGRST202'/);
-  assert.match(bidsSource, /acceptBidWithoutRpc\(params\)/);
-  assert.match(compatibility, /\.select\('id, worker_id, amount_cents, status'\)/);
-  assert.doesNotMatch(compatibility, /workerId|amountCents/);
-  assert.match(compatibility, /\.eq\('status', 'open'\)/);
-  assert.match(compatibility, /const rollback = async/);
-  assert.match(phase30, /create or replace function public\.accept_bid\(/i);
-  assert.match(phase30, /where id = p_job_id\s+for update;/i);
-  assert.match(phase30, /notify pgrst, 'reload schema'/i);
+  // One projection, driven by the source of truth.
+  assert.match(phase47, /create trigger job_offers_mirror_bids\s+after insert or update on public\.job_offers/i);
+  assert.match(phase47, /create or replace function public\.project_offer_chain_to_bids\(/i);
+
+  // Marketplace bids only — direct offers never wrote to bids and must not start.
+  assert.match(phase47, /offer_type <> 'marketplace_bid'/);
+
+  // Current revision is the chain LEAF, not the newest timestamp: a counter
+  // supersedes its parent and inserts the child in one transaction, so both
+  // carry an identical now() and a created_at sort is not deterministic.
+  assert.match(phase47, /not exists \(\s*select 1 from public\.job_offers c where c\.parent_offer_id = o\.id\s*\)/i);
+  assert.doesNotMatch(phase47, /order by .*created_at desc.*limit 1/i);
+
+  // Delete-then-upsert, so a settled chain cannot block a new one on bids'
+  // unconditional unique (job_id, worker_id).
+  // (A bare "on conflict do nothing" is what silently dropped rows in phase46;
+  // the file's header explains that, so this asserts the REPLACEMENT shape
+  // rather than the absence of a phrase that legitimately appears in prose.)
+  assert.match(phase47, /delete from public\.bids/i);
+  // UPDATE-then-INSERT, NOT an upsert: bids_notify is AFTER INSERT, so the
+  // branch has to be visible rather than resting on ON CONFLICT trigger
+  // semantics. An existing chain updates silently; a new chain inserts once.
+  assert.match(phase47, /update public\.bids/i);
+  assert.match(phase47, /if not found then\s+insert into public\.bids/i);
+  assert.doesNotMatch(phase47, /on conflict \(id\) do update/i);
+  // The delete must never reach a row a job still names as its accepted bid.
+  assert.match(phase47, /not exists \(select 1 from public\.jobs j where j\.accepted_bid_id = b\.id\)/i);
+  // And the migration must verify, not assume, that nothing cascades off bids.
+  assert.match(phase47, /confdeltype = 'c'/);
+
+  // The shims must no longer write bids themselves.
+  const shims = phase47.slice(phase47.indexOf('4. create_bid()'));
+  assert.doesNotMatch(shims, /insert into public\.bids/i);
+  assert.doesNotMatch(shims, /update public\.bids/i);
+});
+
+test('offer acceptance has no client-side fallback write path', async () => {
+  const offersSource = read('lib/offers.ts');
+
+  assert.doesNotMatch(offersSource, /PGRST202/);
+  assert.doesNotMatch(offersSource, /acceptBidWithoutRpc/);
+  assert.doesNotMatch(offersSource, /\.from\('job_offers'\)\s*\.(?:insert|update|delete)\(/);
+  assert.match(offersSource, /\.rpc\('accept_offer'/);
+  assert.strictEqual(existsSync('lib/acceptBidCompatibility.ts'), false);
 });
 
 test('missing transition_job_status deployments have a constrained compatibility path', async () => {
@@ -245,7 +294,13 @@ test('job videos reuse the owned posting path and never autoplay', () => {
 
   // Playback is native-controlled and never starts itself.
   const videoCode = jobVideo.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.match(videoCode, /currentTime = 0\.5/);
+  assert.match(videoCode, /nativeControls=\{false\}/);
+  assert.match(videoCode, /contentFit="cover"/);
   assert.match(videoCode, /nativeControls/);
+  assert.match(videoCode, /fullscreenOptions=\{\{ enable: true \}\}/);
+  assert.match(videoCode, /enterFullscreen\(\)/);
+  assert.match(videoCode, /Play video fullscreen/);
   assert.doesNotMatch(videoCode, /\.play\(\)/);
   assert.doesNotMatch(videoCode, /autoPlay|shouldPlay/i);
 

@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -17,7 +16,9 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { resolveCurrentPlace } from '../lib/geolocation';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   DEFAULT_PREFS,
   fetchNotificationPrefs,
@@ -45,7 +46,6 @@ import { colors, radius, spacing } from '../lib/theme';
  * already-delivered notification.
  */
 export function NotificationSettingsScreen() {
-  const navigation = useNavigation();
   const { user } = useAuth();
   const { profile } = useProfile();
 
@@ -53,12 +53,18 @@ export function NotificationSettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [pushState, setPushState] = useState<PushRegistration | null>(null);
+  // Inline instead of a one-shot alert: a failed load used to alert once and
+  // then render DEFAULT_PREFS as if they were the user's saved settings, with
+  // no way to retry. The banner + Try again keeps the failure visible and
+  // recoverable (state-coverage audit, 2026-08-10).
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
+    setLoadError(null);
     const { data, error } = await fetchNotificationPrefs(user.id);
     if (error) {
-      await alertAsync('Could not load settings', error.message);
+      setLoadError(userMessage(error));
     }
     setPrefs(data);
     setLoading(false);
@@ -86,7 +92,7 @@ export function NotificationSettingsScreen() {
 
     if (error) {
       setPrefs(previous);
-      await alertAsync('Could not save', error.message);
+      await alertAsync('Could not save', userMessage(error));
       return;
     }
     if (data) setPrefs(data);
@@ -166,7 +172,7 @@ export function NotificationSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Notifications" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Notifications" onBack={goBackOrHome} />
 
       {loading ? (
         <View style={styles.center}>
@@ -174,6 +180,17 @@ export function NotificationSettingsScreen() {
         </View>
       ) : (
         <ScrollView contentContainerStyle={styles.content}>
+          {loadError && (
+            <View style={[styles.notice, styles.noticeWarn]}>
+              <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />
+              <Text style={styles.noticeText}>
+                {loadError} Showing defaults until it loads.
+              </Text>
+              <Pressable onPress={load} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.noticeRetry}>Try again</Text>
+              </Pressable>
+            </View>
+          )}
           {notice && (
             <View
               style={[
@@ -308,6 +325,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: colors.text,
+  },
+  noticeRetry: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: '700',
+    color: colors.primary,
   },
   row: {
     flexDirection: 'row',

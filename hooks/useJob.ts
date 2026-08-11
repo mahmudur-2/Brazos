@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { userMessage } from '../lib/errorMessage';
 import { fetchJobById, type Job } from '../lib/jobs';
 
 /**
@@ -21,7 +22,7 @@ export function useJob(jobId: string | null) {
       return;
     }
     const { data, error } = await fetchJobById(jobId);
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else setJob(data);
     setLoading(false);
   }, [jobId]);

@@ -3,6 +3,8 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { deleteJob } from '../lib/jobs';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { useAuth } from './useAuth';
 
 /**
@@ -50,12 +52,13 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
 
     let active = true;
 
+    // The owner is asking "can I still edit or delete this?", which turns on
+    // whether anyone has engaged with the job. job_offer_count() answers that
+    // for any viewer without needing RLS to return the rows themselves, and it
+    // counts root offers so a countered negotiation still reads as one.
     async function loadCount() {
-      const { count, error } = await supabase
-        .from('bids')
-        .select('id', { count: 'exact', head: true })
-        .eq('job_id', jobId);
-      if (active && !error) setBidCount(count ?? 0);
+      const { data, error } = await supabase.rpc('job_offer_count', { p_job_id: jobId });
+      if (active && !error) setBidCount(typeof data === 'number' ? data : 0);
     }
     loadCount();
 
@@ -63,12 +66,12 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
       .channel(`job-owner-actions:${jobId}:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'bids', filter: `job_id=eq.${jobId}` },
+        { event: 'INSERT', schema: 'public', table: 'job_offers', filter: `job_id=eq.${jobId}` },
         loadCount
       )
       .on(
         'postgres_changes',
-        { event: 'DELETE', schema: 'public', table: 'bids', filter: `job_id=eq.${jobId}` },
+        { event: 'DELETE', schema: 'public', table: 'job_offers', filter: `job_id=eq.${jobId}` },
         loadCount
       )
       .subscribe();
@@ -107,15 +110,20 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
     setDeleteDialogVisible(false);
 
     if (error) {
-      await alertAsync('Could not delete job', error.message);
+      await alertAsync('Could not delete job', userMessage(error));
       return;
     }
 
     // Pop this detail screen off whichever stack it was reached from, then
     // switch to the My Jobs tab — works the same regardless of entry point
-    // (Home browse, a Map/zone drill-down, or My Jobs itself).
-    navigation.goBack();
-    navigation.getParent()?.navigate('MyJobs' as never);
+    // (Home browse, a Map/zone drill-down, or My Jobs itself). Through the
+    // guarded helper, not a hand-cast getParent() hop, so the dispatch is
+    // checked against the tree the current mode actually mounted.
+    // Guarded pop: a job detail landed on cross-tab IS its stack's root, and
+    // a bare goBack there dispatches an unhandled GO_BACK before the tab
+    // switch. The helper pops when it can; either way MyJobs is next.
+    goBackOrHome();
+    navigateAcrossTabs('MyJobs');
   }
 
   return {

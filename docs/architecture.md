@@ -26,19 +26,30 @@ route-param type instead of being tied to one parent stack.
 Auth and the legal gate sit above the tabs in `RootNavigator`: signed out →
 `AuthFlow`; signed in but documents unaccepted → `LegalGateScreen`.
 
-`AuthFlow` is its own native stack (Welcome → SignIn → EmailSignIn, plus
-CreateAccount) on the "Emerald Trust" brand palette in `lib/authTheme.ts`, not
-the in-app cream one. Authentication itself is unchanged — Supabase email +
-password through `AuthContext.login()` / `signUp()`.
+`AuthFlow` is its own native stack on the "Emerald Trust" brand palette in
+`lib/authTheme.ts`, not the in-app cream one. It is **phone first, in paired
+routes**: `SignIn` and `CreateAccount` take a number and route to
+`VerifyPhone`, while `EmailSignIn` and `EmailCreateAccount` hold the email +
+password forms behind them. Each half is its own route rather than a toggle, so
+neither loses what the user typed in the other.
 
-Sign-in is **phone first in presentation only**. `SignInScreen` asks for a
-phone number and validates it, but no SMS provider is configured and there is
-no one-time-code route, so its Continue says so and points at `EmailSignInScreen`
-— which holds the real `login()` call and is the only path that actually
-authenticates. When SMS auth lands, `SignInScreen.handleContinue` is the single
-place that changes. Phone numbers are also collected on Create account as the
-profile value `signUp()` already takes, normalised to E.164 by
-`lib/phoneNumber.ts`.
+Phone one-time codes go through the provider boundary in `lib/phoneAuth/`.
+Screens call `phoneAuth` and never `supabase.auth`, so the same UI runs against
+either implementation:
+
+| Mode | Provider | What it does |
+| --- | --- | --- |
+| `mock` | `mock.ts` | Development only. Generates a random six-digit code on the device, shows it on the verify screen, sends nothing, creates no session. |
+| `supabase` | `supabase.ts` | The real `signInWithOtp`/`verifyOtp`. Written, dormant until SMS is provisioned. |
+| `disabled` | `index.ts` | Every entry point refuses; the screens point at email. |
+
+`EXPO_PUBLIC_PHONE_AUTH_MODE` picks one, resolved by `mode.ts` — unset means
+mock in development and disabled in a release, and mock is impossible when
+`__DEV__` is false. Email + password through `AuthContext.login()` / `signUp()`
+is still the only path that actually authenticates anyone until Supabase mode
+is switched on; see [phone-auth-activation.md](phone-auth-activation.md). Phone
+numbers are normalised to E.164 by `lib/phoneNumber.ts` everywhere, and the
+verify screen names the number back masked (`maskE164`) rather than in full.
 
 `AuthScaffold` owns the safe area, keyboard avoidance, max content width and
 the optional `AuthBackdrop` — decorative contour arcs built from bordered

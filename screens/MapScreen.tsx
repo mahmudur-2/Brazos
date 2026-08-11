@@ -15,12 +15,15 @@ import {
   tierForCount,
   type HotspotCell,
 } from '../lib/hotspots';
+import { useMode } from '../modes';
 import type { MapStackNavigation } from '../lib/navigation';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 
 export function MapScreen() {
   const navigation = useNavigation<MapStackNavigation>();
-  const { cells, loading, error } = useHotspots();
+  const { cells, loading, error, refresh } = useHotspots();
+  const { mode } = useMode();
   const [selected, setSelected] = useState<HotspotCell | null>(null);
 
   return (
@@ -39,38 +42,42 @@ export function MapScreen() {
           titleIcon={
             <Ionicons name="location-outline" size={22} color={colors.primary} />
           }
+          // Worker-only. Map is a SHARED tab, so this screen renders in both
+          // modes, but its destination — `BrowseJobs`, Worker Home — exists
+          // only in the worker tree's Home stack. Rendering the control in
+          // customer mode offered a worker surface to a customer (§F) and
+          // threw "The 'state' or 'screen' passed in the params couldn't be
+          // applied to the navigator with the screens: HomeMain, PostJob,
+          // WorkerSearch, WorkerProfile, ProfileReviews" when tapped. Absent
+          // beats disabled beats a redirect somewhere else: there is no
+          // customer equivalent of "all open jobs" to send them to.
+          //
+          // Same mode-conditional shape SubmitBidScreen and JobDetailScreen
+          // use — perspective read from ModeContext, never a passed prop.
           right={
-            <Pressable
-              // Cross-tab, same pattern JobDetailScreen already uses to reach
-              // MyJobs from a different stack — reuses the existing complete
-              // open-jobs list rather than duplicating it inside MapStack.
-              onPress={() => {
-                // Untyped cast for the same reason useJobOwnerActions' onEdit
-                // is: this crosses from MapStackNavigation into a sibling
-                // tab's stack, which the two-argument navigate overload can't
-                // resolve cleanly.
-                const parentNavigate = navigation.getParent()?.navigate as
-                  | ((name: string, params?: object) => void)
-                  | undefined;
-                parentNavigate?.('Home', { screen: 'BrowseJobs' });
-              }}
-              hitSlop={10}
-            >
-              <Text style={styles.seeAll}>See All Jobs</Text>
-            </Pressable>
+            mode === 'worker' ? (
+              <Pressable
+                // Reuses the existing complete open-jobs list rather than
+                // duplicating it inside MapStack.
+                onPress={() => navigateAcrossTabs('Home', 'BrowseJobs')}
+                hitSlop={10}
+              >
+                <Text style={styles.seeAll}>See All Jobs</Text>
+              </Pressable>
+            ) : null
           }
         />
       </View>
 
       {error ? (
-        <Text
-          style={[
-            styles.error,
-            { color: colors.danger, backgroundColor: colors.dangerBg },
-          ]}
-        >
-          {error}
-        </Text>
+        // Retryable, not just announced — the map without hotspot data is a
+        // dead end otherwise (state-coverage audit, 2026-08-10).
+        <View style={[styles.errorRow, { backgroundColor: colors.dangerBg }]}>
+          <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
+          <Pressable onPress={refresh} hitSlop={8} accessibilityRole="button">
+            <Text style={styles.errorRetry}>Try again</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       <ScrollView
@@ -226,5 +233,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: spacing.lg,
+  },
+  errorRetry: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });

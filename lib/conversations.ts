@@ -74,6 +74,25 @@ export async function fetchConversations(userId: string) {
   return { data: (data ?? []) as Conversation[], error };
 }
 
+/**
+ * The direct thread between the current user and one other person, or null if
+ * no offer has ever linked the pair. Since phase52 a thread exists from the
+ * first offer between two users (trigger + backfill), so the offer surfaces
+ * use this to open pre-hire chat. RLS returns the row only to its two
+ * parties; direct_threads orders the pair (user_a < user_b) by constraint.
+ */
+export async function fetchDirectThreadWith(userId: string, otherId: string) {
+  const [a, b] = userId < otherId ? [userId, otherId] : [otherId, userId];
+  const { data, error } = await supabase
+    .from('direct_threads')
+    .select('id')
+    .eq('user_a', a)
+    .eq('user_b', b)
+    .maybeSingle();
+
+  return { data: (data?.id as string | undefined) ?? null, error };
+}
+
 export type ReadState = { job_id: string; last_read_at: string };
 
 /** When the user last opened each job's chat (drives the unread dot). */

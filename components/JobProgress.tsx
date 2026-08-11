@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing } from '../lib/theme';
+import { colors, spacing, type ColorPalette } from '../lib/theme';
 
 const STEPS = [
   { key: 'assigned', label: 'Assigned' },
@@ -14,7 +14,13 @@ const ORDER: Record<string, number> = {
   completed: 2,
 };
 
-export function JobProgress({ status }: { status: string }) {
+export function JobProgress({
+  status,
+  palette = colors,
+}: {
+  status: string;
+  palette?: ColorPalette;
+}) {
   const current = ORDER[status] ?? 0;
 
   return (
@@ -24,17 +30,39 @@ export function JobProgress({ status }: { status: string }) {
         return (
           <View key={step.key} style={styles.stepWrap}>
             <View style={styles.step}>
-              <View style={[styles.dot, done && styles.dotDone]}>
+              <View
+                style={[
+                  styles.dot,
+                  { backgroundColor: palette.neutralBg },
+                  done && { backgroundColor: palette.primary },
+                ]}
+              >
                 {done ? (
-                  <Ionicons name="checkmark" size={14} color={colors.onPrimary} />
+                  <Ionicons name="checkmark" size={14} color={palette.onPrimary} />
                 ) : (
-                  <Text style={styles.dotNumber}>{index + 1}</Text>
+                  <Text style={[styles.dotNumber, { color: palette.textMuted }]}>
+                    {index + 1}
+                  </Text>
                 )}
               </View>
-              <Text style={[styles.label, done && styles.labelDone]}>{step.label}</Text>
+              <Text
+                style={[
+                  styles.label,
+                  { color: palette.textMuted },
+                  done && { color: palette.text },
+                ]}
+              >
+                {step.label}
+              </Text>
             </View>
             {index < STEPS.length - 1 && (
-              <View style={[styles.line, index < current && styles.lineDone]} />
+              <View
+                style={[
+                  styles.line,
+                  { backgroundColor: palette.border },
+                  index < current && { backgroundColor: palette.primary },
+                ]}
+              />
             )}
           </View>
         );
@@ -62,35 +90,22 @@ const styles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: colors.neutralBg,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  dotDone: {
-    backgroundColor: colors.primary,
   },
   dotNumber: {
     fontSize: 12,
     fontWeight: '700',
-    color: colors.textMuted,
   },
   label: {
     fontSize: 12,
-    color: colors.textMuted,
     fontWeight: '600',
     textAlign: 'center',
-  },
-  labelDone: {
-    color: colors.text,
   },
   line: {
     flex: 1,
     height: 2,
-    backgroundColor: colors.border,
     marginTop: 12,
     marginHorizontal: -12,
-  },
-  lineDone: {
-    backgroundColor: colors.primary,
   },
 });

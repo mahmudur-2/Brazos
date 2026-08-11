@@ -153,3 +153,49 @@ Break any of these and the marketplace is wrong, not just ugly.
 - Animation uses the built-in `Animated` API with
   `useNativeDriver: Platform.OS !== 'web'`. No animation library is installed
   and none should be added.
+
+## BRAZOS V2 — Emerald Trust
+
+### References
+- docs/emerald-v2/references/screen_map.json + NN_slug.png (immutable).
+- Audit docs: docs/emerald-v2/SCREEN_CROSSWALK.md, DESIGN_SYSTEM_STATUS.md.
+- Roadmap: BRAZOS_MASTER_PLAN.md. Session state: BRAZOS_BUILD_STATE.md
+  (read BUILD_STATE first, always).
+
+### Locked — never modify
+- App screens 01–07 (Launch→Customer Home) and 48 (Worker Home): finished.
+- The frozen PWA/web build. The emerald-v2 reference files.
+
+### Scope
+- AI screens 09–11 and all LLM dependencies are OUT of V1. Manual posting
+  produces a JobDraft; nothing may depend on AI.
+
+### Non-negotiable architecture
+- One account, two modes. Mode changes ONLY via switchMode() with confirm
+  + stack reset. Customer and Worker navigator trees are separately typed;
+  cross-tree navigation must be a compile error.
+- Customer surfaces: EST. PRICE, no bid CTAs, no worker payout info,
+  approximate location only. Worker surfaces: EST. PAY + bid actions.
+  JobCard perspective comes from ModeContext, never a hand-passed prop.
+- Job/offer/payment statuses come from generated DB enums via the RPCs
+  advance_job_status / accept_offer. No string literals, no raw UPDATEs.
+- Exact address lives in job_private_details: owner + hired worker only,
+  enforced by RLS, never only by the frontend.
+- Money labels follow the payment state machine. Never "paid" before
+  released. Never fake production payment states.
+
+### UI rules
+- Every screen consumes ui/tokens.ts + shared primitives/templates. No
+  per-screen hex, radii, or spacing. Templates provide loading/empty/
+  error/offline/permission-denied — configure them, don't reinvent them.
+- Recoverable errors preserve user input. Failed uploads never clobber
+  existing media. Destructive actions confirm; reversible ones get undo.
+- Phones stored E.164. SafeArea everywhere; no absolute positioning to
+  match PNGs; references are direction, not canvases.
+
+### Workflow
+- Migrations: numbered SQL in supabase/, hand-applied; only a green
+  `node scripts/verify-schema.mjs` counts as applied. Regenerate types.
+- Base branch mainexpo; work on v2; one commit per milestone; clean tree.
+- Flag new dependencies before adding. No unrelated cleanup.
+- Follow the PROTOCOL in BRAZOS_MASTER_PLAN.md §L for every task.

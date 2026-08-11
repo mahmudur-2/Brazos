@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { AuthButton } from '../components/AuthButton';
@@ -10,23 +10,23 @@ import { useAuth } from '../hooks/useAuth';
 import { authSizes, authSpacing, authType, authColors } from '../lib/authTheme';
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import type { AuthStackNavigation } from '../lib/navigation';
-import { phoneValidationError } from '../lib/phoneNumber';
+import { maskE164, phoneValidationError, toE164 } from '../lib/phoneNumber';
+import { phoneAuth } from '../lib/phoneAuth';
 
 /**
  * Sign in — phone first.
  *
  * The product's intended credential is a phone number, so this is the screen
- * the flow lands on. BRAZOS does not have the backend for it yet: nothing in
- * the codebase requests a one-time code, there is no verify-phone route to send
- * anyone to, and no SMS provider is configured on the Supabase project. Rather
- * than fake a code screen that could never receive a code, `Continue` validates
- * the number for real and then says plainly that the text-message step is not
- * live, pointing at the path that is — email and password, one tap away on
- * EmailSignIn.
+ * the flow lands on. `Continue` validates the number, normalises it to E.164
+ * and asks the phone-auth provider for a code; only a real challenge routes
+ * anyone onward to VerifyPhone.
  *
- * That keeps this screen honest and non-blocking: nobody is stranded, and when
- * the SMS phase lands the only change here is what `handleContinue` does with
- * an already-validated number.
+ * Which provider answers is not this screen's business. In development that is
+ * the mock, which generates a code locally and sends no text message; with
+ * Twilio provisioned it is Supabase, and nothing here changes. When no
+ * provider is configured at all the request comes back `provider-disabled` and
+ * the screen says so plainly, pointing at the path that does work — email and
+ * password, one tap away on EmailSignIn. Nobody is stranded in any mode.
  */
 export function SignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
@@ -35,14 +35,56 @@ export function SignInScreen() {
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
   const [phoneError, setPhoneError] = useState<string | null>(null);
-  const [smsPending, setSmsPending] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
-  function handleContinue() {
+  // The request can still be in flight when the user backs out; a late resolve
+  // must not write into an unmounted screen.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  async function handleContinue() {
+    // Guards a double tap landing between the press and the disabled state.
+    if (loading) return;
+
     const nextPhoneError = phoneValidationError(country, phoneDigits);
     setPhoneError(nextPhoneError);
-    // A real number gets the real answer; an incomplete one gets the field
-    // error and nothing else, so the two messages can't stack up.
-    setSmsPending(!nextPhoneError);
+    setNotice(null);
+    // An incomplete number gets the field error and nothing else, so the two
+    // messages can't stack up.
+    if (nextPhoneError) return;
+
+    const phone = toE164(country, phoneDigits);
+    if (!phone) {
+      setPhoneError('Enter a valid phone number.');
+      return;
+    }
+
+    setLoading(true);
+    const result = await phoneAuth.requestOtp({ phone, intent: 'sign-in' });
+    if (!mounted.current) return;
+    setLoading(false);
+
+    if (result.status === 'challenge-sent') {
+      // The code is not passed — only which challenge it belongs to. See
+      // VerifyPhoneParams in lib/navigation.ts.
+      navigation.navigate('VerifyPhone', {
+        phone: result.phone,
+        maskedPhone: maskE164(result.phone),
+        intent: 'sign-in',
+        challengeId: result.challengeId,
+        expiresAt: result.expiresAt,
+        resendAvailableAt: result.resendAvailableAt,
+      });
+      return;
+    }
+
+    setNotice(result.message);
   }
 
   return (
@@ -75,31 +117,29 @@ export function SignInScreen() {
             onChangeValue={(digits) => {
               setPhoneDigits(digits);
               if (phoneError) setPhoneError(null);
-              if (smsPending) setSmsPending(false);
+              if (notice) setNotice(null);
             }}
             error={phoneError}
+            editable={!loading}
             returnKeyType="go"
             onSubmitEditing={handleContinue}
           />
 
-          {smsPending ? (
-            <AuthNotice tone="info">
-              Sign-in by text message is not switched on yet. Use your email and
-              password for now — it is the same account.
-            </AuthNotice>
-          ) : null}
+          {notice ? <AuthNotice tone="info">{notice}</AuthNotice> : null}
         </View>
 
         <View style={styles.actions}>
           <AuthButton
             title="Continue"
             onPress={handleContinue}
-            accessibilityHint="Continue with this phone number"
+            loading={loading}
+            accessibilityHint="Send a verification code to this phone number"
           />
           <AuthButton
             title="Use Email Instead"
             variant="ghost"
             onPress={() => navigation.navigate('EmailSignIn')}
+            disabled={loading}
             accessibilityHint="Sign in with your email address and password"
           />
         </View>
