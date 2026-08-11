@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { userMessage } from '../lib/errorMessage';
 import { fetchMyProfile, type Profile } from '../lib/profiles';
 import { useAuth } from './useAuth';
 
@@ -17,7 +18,7 @@ export function useProfile() {
     }
     setError(null);
     const { data, error } = await fetchMyProfile(user.id);
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else setProfile(data);
     setLoading(false);
   }, [user]);

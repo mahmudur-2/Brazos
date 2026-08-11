@@ -242,6 +242,42 @@ test('every in-stack navigate target is registered in each stack its screen is m
   );
 });
 
+// ---------------------------------------------------------------------------
+// Tab hops go through the helper too (navigation sweep, 2026-08-10)
+// ---------------------------------------------------------------------------
+//
+// The four hand-cast `getParent()?.navigate(tab)` hops documented in
+// BRAZOS_BUILD_STATE.md were all converted to navigateAcrossTabs() this pass —
+// except the one in a LOCKED screen, which is allowlisted here by name and
+// carries its authorized-ready diff in docs/LOCKED_FILE_PATCHES.md. All four
+// targeted SHARED tabs, so none could crash — but they bypassed the single
+// guarded dispatch path, and an unguarded pattern is what the next
+// mode-fragile hop gets copied from.
+
+const GETPARENT_ALLOWLIST = new Set([
+  'screens/HomeScreen.tsx', // LOCKED (screen 07) — patch doc addendum
+]);
+
+test('no unguarded getParent() tab hop exists outside the locked allowlist', async () => {
+  const offenders = [];
+  for (const folder of ['screens', 'hooks', 'components']) {
+    for (const file of dir(folder).filter((f) => /\.(ts|tsx)$/.test(f))) {
+      const rel = `${folder}/${file}`;
+      if (GETPARENT_ALLOWLIST.has(rel)) continue;
+      const source = stripComments(await read(rel));
+      if (/getParent\(/.test(source)) {
+        offenders.push(rel);
+      }
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'tab hops must go through navigateAcrossTabs() — getParent() bypasses the ' +
+      'mounted-tree check and is how the next mode-fragile hop gets written'
+  );
+});
+
 test('the guarded helper is the only thing that dispatches a nested target', async () => {
   const [ref, routesModule] = await Promise.all([
     read('lib/navigationRef.ts'),

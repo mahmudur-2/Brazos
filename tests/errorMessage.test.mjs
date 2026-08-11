@@ -51,22 +51,69 @@ test('classification covers the states a user can act on', () => {
   assert.equal(userMessage(null, 'Nothing was charged.'), 'Nothing was charged.');
 });
 
-test('every user-visible error surface in the lifecycle screens is routed', async () => {
-  const SCREENS = [
-    'ChatScreen', 'ClientJobDetailScreen', 'ServicesPricingScreen', 'EarningsScreen',
-    'WorkerJobScreen', 'ReviewAndTipScreen', 'WorkChecklistScreen', 'SavedWorkersScreen',
-    'NotificationsScreen', 'MessagesInboxScreen', 'JobDetailScreen',
-    'ApproveOrDisputeScreen', 'CheckoutScreen', 'BidDetailScreen',
-  ];
-  for (const name of SCREENS) {
-    const src = await read(`screens/${name}.tsx`);
-    const offenders = src
-      .split('\n')
-      .filter((l) => /[Ee]rror\??\.message/.test(l) && !l.includes('console.'));
-    assert.deepEqual(
-      offenders,
-      [],
-      `${name} still shows raw error text:\n${offenders.join('\n')}`
-    );
+// ---------------------------------------------------------------------------
+// Whole-surface sweep (raw-error sweep, 2026-08-10). Supersedes the original
+// 14-screen list: EVERY screen, component and hook is scanned, and the regex
+// catches err/firstError/uploadError-style identifiers the old
+// /[Ee]rror\.message/ shape missed.
+// ---------------------------------------------------------------------------
+
+// Files that may still carry a raw `.message` and exactly why. Each entry is
+// either LOCKED (do-not-patch this session — the exact authorized-ready diff
+// lives in docs/LOCKED_FILE_PATCHES.md) or a non-database message field that
+// is human-written by our own code.
+const RAW_MESSAGE_ALLOWLIST = new Set([
+  'screens/EmailSignInScreen.tsx', // LOCKED auth flow — patch doc addendum
+  'screens/EmailCreateAccountScreen.tsx', // LOCKED auth flow — patch doc addendum
+  'screens/LegalGateScreen.tsx', // LOCKED auth flow — patch doc addendum
+  'hooks/useChat.ts', // LOCKED hook — wrapped at the ChatScreen render seam
+  'hooks/useConversations.ts', // LOCKED hook — wrapped at the MessagesInbox render seam
+  'hooks/useOpenJobs.ts', // LOCKED hook — BrowseJobs render seam is itself locked (patch doc)
+]);
+
+test('no screen, component, or hook stores or shows raw error text', async () => {
+  const { readdirSync } = await import('node:fs');
+  const dirs = ['screens', 'components', 'hooks'];
+  const offenders = [];
+
+  for (const dir of dirs) {
+    for (const file of readdirSync(join(root, dir)).filter((f) => /\.(ts|tsx)$/.test(f))) {
+      const rel = `${dir}/${file}`;
+      if (RAW_MESSAGE_ALLOWLIST.has(rel)) continue;
+      const src = await read(rel);
+      for (const line of src.split('\n')) {
+        // An identifier containing err/Err (error, firstError, uploadError,
+        // err, acceptError…) reaching .message outside a console call. Named
+        // non-error fields (activeBid.message, pushState.message,
+        // rejection.message, here.message) do not contain 'err' and pass.
+        if (!/\b\w*[Ee]rr\w*\??\.message\b/.test(line)) continue;
+        if (line.includes('console.')) continue;
+        if (line.includes('userMessage(')) continue;
+        offenders.push(`${rel}: ${line.trim()}`);
+      }
+    }
   }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `raw error text reaches state or UI outside lib/errorMessage:\n${offenders.join('\n')}`
+  );
+});
+
+test('locked hooks stay raw only because their render seams wrap', async () => {
+  // The three LOCKED hooks still store the raw message; the guarantee is the
+  // consumer wrap. If a wrap disappears, this — not just a device — says so.
+  const chat = await read('screens/ChatScreen.tsx');
+  assert.match(
+    chat,
+    /\{error \? <Text style=\{styles\.error\}>\{userMessage\(error\)\}<\/Text> : null\}/,
+    'ChatScreen must wrap useChat.error with userMessage() at render'
+  );
+  const inbox = await read('screens/MessagesInboxScreen.tsx');
+  assert.match(
+    inbox,
+    /\{error \? <Text style=\{styles\.error\}>\{userMessage\(error\)\}<\/Text> : null\}/,
+    'MessagesInbox must wrap useConversations.error with userMessage() at render'
+  );
 });

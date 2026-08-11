@@ -31,6 +31,7 @@ import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
+import { userMessage } from '../lib/errorMessage';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
   findWorkers,
@@ -116,7 +117,7 @@ export function WorkerSearchScreen() {
 
       if (runId !== runRef.current) return;
       if (error) {
-        setState({ kind: 'error', message: error.message });
+        setState({ kind: 'error', message: userMessage(error) });
         return;
       }
       setState({ kind: 'results', matches: data, categories, mode });

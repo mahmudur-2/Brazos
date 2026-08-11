@@ -2190,6 +2190,107 @@ checklist item 1 above) — explicitly out of scope this session, by user
 instruction. Worker Home chips remain verified-by-test only (Run B still taps
 them whenever it happens).
 
+## Branch `pre-review-hardening` — session 2026-08-10 (six-item hardening pass)
+
+**Branch note, stated up front:** the brief named `pre-review-hardening`, whose
+tip (a6bde00) predated the env-parity work — but the work items referenced
+`lib/errorMessage.ts` and `navigateAcrossTabs()`, which existed only in the
+env-parity commits. History was LINEAR (a6bde00 is a strict ancestor of
+6b079b7), so `pre-review-hardening` was **fast-forwarded** to 6b079b7 (`git
+merge --ff-only` — no merge commit, nothing rewritten, every commit previously
+reported) and the session's one commit sits on top. Nothing pushed.
+
+**1 · Raw-error sweep — every unlocked surface now routes through
+`lib/errorMessage.userMessage()`.** Fixed at the HOOK level (every consumer
+inherits): useHotspots, useJob, useJobOffers, useMyJobsHub, useProfile,
+useVoiceRecorder (its two fallbacks preserved via the fallback arg),
+useJobOwnerActions. At the SCREEN/COMPONENT level: AdminReports (×4), CellJobs,
+NotificationSettings (×2), PostJob (×4, incl. the map-pin partial-failure
+template line), ProfileReviews, Profile (×3), WorkerSearch, WorkerProfile,
+OfferComposer (×2 — its better 23505 wording kept, userMessage as fallback),
+PortfolioPicker (×3), ReportDialog, ReviewSection (×2). LOCKED hooks
+(useChat/useConversations) got wrapped at their UNLOCKED render seams
+(ChatScreen:627-ish, MessagesInbox) with pointers to the patch doc; the one
+chain locked at BOTH ends (useOpenJobs → BrowseJobs:351) is patch-doc item A7.
+Guard: `tests/errorMessage.test.mjs` replaced its 14-screen list with an
+ALL-screens/components/hooks sweep whose regex also catches `err`/`firstError`
+variants the old one missed, plus a seam-wrap assertion for the two locked-hook
+consumers; the 6-file allowlist names each locked exception and why.
+
+**2 · Navigation sweep — zero unguarded tab hops outside one locked file.**
+Converted to `navigateAcrossTabs()`: useJobOwnerActions:119, BidSentScreen:40,
+JobDetailScreen:277 (all previously hand-cast `getParent()` hops). The fourth —
+HomeScreen.tsx:162, LOCKED — is patch-doc item A8 and is the only name on the
+new guard's allowlist: `tests/crossTabNavigation.test.mjs` now fails on ANY
+`getParent(` in screens/, hooks/, or components/ outside that allowlist.
+
+**3 · Own-job exclusion from Potential Earnings — NOT implementable without a
+locked file; delivered as patch-doc item A5 with the exact diff.** The sum is
+inline in LOCKED screen 48 (`stats` memo, BrowseJobsScreen:105-109) and its
+data source `useOpenJobs` is itself a do-not-patch file, and data-level
+filtering is wrong anyway (the card must STAY in the feed with Edit intact).
+The ready diff excludes `job.client_id === profile.id` rows from cents+count
+only, uses ModeContext-free ownership (no new prop), and names the unit tests
+that land with it. Flagged as a release blocker in the doc (wrong money math
+on the primary worker surface).
+
+**4 · State-coverage audit — matrix over 30 routed data screens; three gaps
+filled, all with existing components.** Filled: **NotificationSettings** (load
+failure used to alert once then silently render DEFAULT_PREFS as if saved —
+now an inline warn banner + Try again, alert removed for the load path only);
+**MapScreen** (error banner gained Try again wired to the hook's existing
+refresh); **WorkerResults** (no recovery path existed — RefreshControl added
+to the FlatList, wired to useOpenJobs.refresh). Audited N/A, no fill:
+Counteroffer/SubmitBid (param-driven, submit errors live in OfferComposer),
+PaymentMethods (static sandbox surface), TrackWorker (primary content is
+param-driven; its two secondary strips deliberately keep-last-known on error
+per the hardening run's A8 precedent). Everything else already carried
+loading/empty/error+retry from earlier passes. "Offline" app-wide is the
+error+retry path with connection wording via userMessage — no NetInfo
+dependency exists and none was added.
+
+**5 · Phase58 backward compatibility (written verdict — no fix, no
+migration).** An installed build running THIS code against a pre-phase51–58
+schema (production today, per PROD_APPLY.md) **does not crash anywhere**:
+every touch point returns a handled `{error}` that renders as the friendly
+VERSION_SKEW banner. The worker FEED works (OPEN_JOB_COLUMNS is ≤phase49,
+lib/jobs.ts:290). Exact degraded sites: every job DETAIL read
+(lib/jobs.ts:293 JOB_COLUMNS selects en_route_at/arrived_at/completed_at →
+42703 → WorkerJob/ClientJobDetail/TrackWorker/notification tap-throughs);
+lib/earnings.ts:32 (released_at/paid_out_at → Earnings);
+lib/notifications.ts:27 (pre-56 outbox is sealed → Notifications);
+lib/checklist.ts:25-56 (42P01 → WorkChecklist); lib/disputes.ts:55/71/84
+(ApproveOrDispute reporting); lib/adapters/payments.ts:86/88/96
+(release/tip/cash-out PGRST202); lib/payments.ts:148 (job_payment_state →
+payment strips absent); lib/jobs.ts:584 (mark_worker_arrival → RouteArrival);
+lib/services.ts + lib/savedWorkers.ts + profiles.accepting_work
+(ServicesPricing/SavedWorkers/WorkerProfile — the observed device errors);
+lib/clientStats.ts:18 (client_job_stats PGRST202 → JobDetail trust row hides,
+console.warn only, JobDetailScreen:195-198); lib/profiles.ts:65
+(update_my_profile rejects phase53 keys with its own human sentence).
+Transitions WORK on old schemas: the 4-arg call resolves against the
+phase35-era function, and a PGRST202 falls back to
+lib/jobStatusCompatibility.ts:38's guarded direct update (lib/jobs.ts:570).
+Non-erroring behavioral gaps that remain on old schemas: the phase58
+unfundable-job race (worker Start before checkout → authorize refuses with its
+human message), retry-of-landed-transition punished with "Invalid job status
+transition", and phases 52/56/57's triggers silently absent (no pre-hire
+thread backfill, no notification rows).
+
+**6 · docs/LOCKED_FILE_PATCHES.md written** — the four DECISIONS.md [LOCKED]
+findings (useReactions topic collision, useConversations topic+token-refresh
+churn, useChat+useOpenJobs rejoin refetch, JobProgress duplicate staging map)
+each with exact diff / risk / blocker verdict, plus addendum items A5–A8 from
+this session's sweeps (own-job earnings, locked auth raw errors, the
+useOpenJobs↔BrowseJobs raw chain, HomeScreen's getParent hop). Release-blocker
+verdicts: A5 YES, A7 YES (one line, rides any batch), all others NO.
+
+**Gate (measured):** tsc exit 0 · **288 tests, 287 pass, 1 fail, 0 skipped**
+— the single failure is the documented frozen-web PWA `config.js?v=` mismatch;
+NO new failures (baseline 285/286 + 2 new guard tests, both passing) ·
+`verify-schema` green ("All REQUIRED objects exist"), read-only run. LOCKED
+screens, frozen PWA, app.json, dependencies: untouched.
+
 ## Exact next task (Phase 9 — Profiles, portfolio & worker self-service)
 
 Per BRAZOS_MASTER_PLAN.md §J Phase 9 (MEDIUM), screens 22–25, 43–46, 63–66.

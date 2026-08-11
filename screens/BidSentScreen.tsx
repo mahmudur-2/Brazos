@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 import { formatBudget } from '../lib/jobs';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import type { BidSentRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
@@ -37,7 +38,9 @@ export function BidSentScreen() {
       actions={[
         {
           label: 'View in My Jobs',
-          onPress: () => (navigation as any).getParent()?.navigate('MyJobs'),
+          // Through the guarded helper, not a hand-cast getParent() hop —
+          // MyJobs is a shared tab, but the helper is the one dispatch path.
+          onPress: () => navigateAcrossTabs('MyJobs'),
         },
         {
           label: 'Keep browsing',

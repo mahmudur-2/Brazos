@@ -243,7 +243,10 @@ export function MessagesInboxScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Messages" />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {/* useConversations is a LOCKED hook and still stores the raw message;
+          the wrap happens here at the render seam instead (raw-error sweep,
+          2026-08-10 — see docs/LOCKED_FILE_PATCHES.md). */}
+      {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {loading ? (
         <View style={styles.center}>

@@ -3,6 +3,8 @@ import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { deleteJob } from '../lib/jobs';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { useAuth } from './useAuth';
 
 /**
@@ -108,15 +110,17 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
     setDeleteDialogVisible(false);
 
     if (error) {
-      await alertAsync('Could not delete job', error.message);
+      await alertAsync('Could not delete job', userMessage(error));
       return;
     }
 
     // Pop this detail screen off whichever stack it was reached from, then
     // switch to the My Jobs tab — works the same regardless of entry point
-    // (Home browse, a Map/zone drill-down, or My Jobs itself).
+    // (Home browse, a Map/zone drill-down, or My Jobs itself). Through the
+    // guarded helper, not a hand-cast getParent() hop, so the dispatch is
+    // checked against the tree the current mode actually mounted.
     navigation.goBack();
-    navigation.getParent()?.navigate('MyJobs' as never);
+    navigateAcrossTabs('MyJobs');
   }
 
   return {

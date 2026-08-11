@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
+import { userMessage } from '../lib/errorMessage';
 import { supabase } from '../lib/supabase';
 import {
   fetchOffersByIds,
@@ -22,7 +23,7 @@ export function useJobOffers(jobId: string) {
     setError(null);
     const { data, error } = await fetchOffersForJob(jobId);
     if (runId !== runRef.current) return;
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else setOffers(data);
     setLoading(false);
   }, [jobId]);

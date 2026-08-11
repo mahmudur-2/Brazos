@@ -17,6 +17,7 @@ import { Card } from './Card';
 import { StarRating } from './StarRating';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   createReview,
   fetchMyReviewForJob,
@@ -137,7 +138,7 @@ export function ReviewSection({
     setLoading(true);
     fetchMyReviewForJob(reviewerId, jobId).then(({ data, error }) => {
       if (active) {
-        if (error) setLoadError(error.message);
+        if (error) setLoadError(userMessage(error));
         else setExisting(data);
         setLoading(false);
       }
@@ -253,7 +254,7 @@ export function ReviewSection({
     setSubmitting(false);
 
     if (error) {
-      await alertAsync('Could not submit review', error.message);
+      await alertAsync('Could not submit review', userMessage(error));
       return;
     }
     setExisting(data);

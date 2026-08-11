@@ -54,6 +54,7 @@ import {
 } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchClientJobStatsCounted } from '../lib/clientStats';
 import { fetchDirectThreadWith } from '../lib/conversations';
 import { maybePromptForPush } from '../lib/pushNotifications';
@@ -274,9 +275,9 @@ export function JobDetailScreen() {
     await maybePromptForPush(
       'Get told the moment this client accepts your offer — and when new jobs like this are posted.'
     );
-    (navigation.getParent() as unknown as {
-      navigate: (tab: 'MyJobs') => void;
-    } | null)?.navigate('MyJobs');
+    // Through the guarded helper, not a hand-cast getParent() hop — MyJobs is
+    // a shared tab, but the helper is the one dispatch path.
+    navigateAcrossTabs('MyJobs');
   }
 
   /**

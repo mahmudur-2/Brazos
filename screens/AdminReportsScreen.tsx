@@ -15,6 +15,7 @@ import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   banUser,
   dismissReport,
@@ -47,7 +48,7 @@ export function AdminReportsScreen() {
     setError(null);
     const { data, error } = await fetchAdminReports();
     if (requestId !== requestIdRef.current) return;
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else setReports(data);
     setLoading(false);
   }, []);
@@ -83,7 +84,7 @@ export function AdminReportsScreen() {
     setActioningId(null);
 
     if (error) {
-      await alertAsync('Could not ban', error.message);
+      await alertAsync('Could not ban', userMessage(error));
       return;
     }
     await load();
@@ -94,7 +95,7 @@ export function AdminReportsScreen() {
     const { error } = await unbanUser(report.reported_id);
     setActioningId(null);
     if (error) {
-      await alertAsync('Could not unban', error.message);
+      await alertAsync('Could not unban', userMessage(error));
       return;
     }
     await load();
@@ -105,7 +106,7 @@ export function AdminReportsScreen() {
     const { error } = await dismissReport(report.id);
     setActioningId(null);
     if (error) {
-      await alertAsync('Could not dismiss', error.message);
+      await alertAsync('Could not dismiss', userMessage(error));
       return;
     }
     await load();

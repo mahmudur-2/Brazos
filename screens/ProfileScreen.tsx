@@ -28,6 +28,7 @@ import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { formatPhoneDisplay } from '../lib/phone';
 import { fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
 import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
@@ -204,7 +205,7 @@ export function ProfileScreen() {
     setRemoveConfirmOpen(false);
 
     if (error) {
-      await alertAsync('Could not remove photo', error.message);
+      await alertAsync('Could not remove photo', userMessage(error));
       setAvatarUrl(previousAvatarUrl);
       setPendingAsset(previousPendingAsset);
       return;
@@ -285,7 +286,7 @@ export function ProfileScreen() {
     setSaving(false);
 
     if (error) {
-      await alertAsync('Could not save', error.message);
+      await alertAsync('Could not save', userMessage(error));
       return;
     }
     if (data) setProfile(data);
@@ -316,7 +317,7 @@ export function ProfileScreen() {
     setLoggingOut(true);
     const { error } = await logout();
     setLoggingOut(false);
-    if (error) await alertAsync('Logout failed', error.message);
+    if (error) await alertAsync('Logout failed', userMessage(error));
   }
 
   const selectedCategoryLabels = categories.map((c) => ({

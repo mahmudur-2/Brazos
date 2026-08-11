@@ -624,7 +624,10 @@ export function ChatScreen() {
         }
       />
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {/* useChat is a LOCKED hook and still stores the raw message; the wrap
+          happens here at the render seam instead (raw-error sweep, 2026-08-10
+          — see docs/LOCKED_FILE_PATCHES.md). */}
+      {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {/* keyboardVerticalOffset is 0, not 90. With `behavior="padding"` RN
           computes padding as (frameBottom - keyboardTop + offset), and this

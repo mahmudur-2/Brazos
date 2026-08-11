@@ -35,6 +35,7 @@ import {
   type PortfolioItem,
 } from '../lib/portfolio';
 import { alertAsync, confirmAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { colors, radius, spacing } from '../lib/theme';
 
 const OTHER_KEY = '__other__';
@@ -226,7 +227,7 @@ export function PortfolioPicker({
       setSaving(false);
 
       if (error) {
-        await alertAsync('Could not save changes', error.message);
+        await alertAsync('Could not save changes', userMessage(error));
         return;
       }
 
@@ -256,7 +257,7 @@ export function PortfolioPicker({
     setSaving(false);
 
     if (error) {
-      await alertAsync('Could not add to portfolio', error.message);
+      await alertAsync('Could not add to portfolio', userMessage(error));
       return;
     }
 
@@ -282,7 +283,7 @@ export function PortfolioPicker({
     setSaving(false);
 
     if (error) {
-      await alertAsync('Could not remove', error.message);
+      await alertAsync('Could not remove', userMessage(error));
       return;
     }
 

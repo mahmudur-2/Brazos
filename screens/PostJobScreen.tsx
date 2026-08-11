@@ -52,6 +52,7 @@ import {
 } from '../lib/postJobDraft';
 import { createDirectOffer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import {
@@ -383,7 +384,7 @@ export function PostJobScreen() {
       if (error || !job) {
         await alertAsync(
           'Could not load job',
-          error?.message ?? 'This job may have been deleted.'
+          userMessage(error, 'This job may have been deleted.')
         );
         navigation.goBack();
         return;
@@ -606,7 +607,7 @@ export function PostJobScreen() {
       }
       setSubmitting(false);
       setConfirmOfferCents(null);
-      await alertAsync('Could not send offer', requestError.message);
+      await alertAsync('Could not send offer', userMessage(requestError));
       return;
     }
     uploadsCommittedRef.current = true;
@@ -700,7 +701,10 @@ export function PostJobScreen() {
         return;
       }
       setSubmitting(false);
-      await alertAsync(isEditing ? 'Could not save changes' : 'Could not post job', error.message);
+      await alertAsync(
+        isEditing ? 'Could not save changes' : 'Could not post job',
+        userMessage(error)
+      );
       return;
     }
     uploadsCommittedRef.current = true;
@@ -712,7 +716,7 @@ export function PostJobScreen() {
       // diagnosable instead of just "something went wrong".
       await alertAsync(
         'Saved, but without a map pin',
-        `${isEditing ? 'Your changes were saved' : 'Your job is live'}, but we couldn't save its location for the map: ${locationError.message}`
+        `${isEditing ? 'Your changes were saved' : 'Your job is live'}, but we couldn't save its location for the map: ${userMessage(locationError)}`
       );
     }
 

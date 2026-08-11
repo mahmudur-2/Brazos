@@ -32,6 +32,7 @@ import {
   servicePriceLabel,
   type WorkerService,
 } from '../lib/services';
+import { userMessage } from '../lib/errorMessage';
 import type {
   PostJobRouteParamList,
   ProfileReviewsRouteParamList,
@@ -100,7 +101,7 @@ export function WorkerProfileScreen() {
     // from a genuinely sparse profile — data would just come back null and
     // every field would render its empty fallback with no explanation. This
     // surfaces it as a distinct, retryable error state instead.
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     setLoading(false);
   }, [params.workerId]);
 

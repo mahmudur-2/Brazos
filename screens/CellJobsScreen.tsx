@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useOfferCounts } from '../hooks/useOfferCounts';
+import { userMessage } from '../lib/errorMessage';
 import { fetchJobsInCell } from '../lib/hotspots';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
@@ -39,7 +40,7 @@ export function CellJobsScreen() {
   const load = useCallback(async () => {
     setError(null);
     const { data, error } = await fetchJobsInCell(params.ilat, params.ilng);
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else setJobs(data);
     setLoading(false);
   }, [params.ilat, params.ilng]);

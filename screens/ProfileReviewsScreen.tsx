@@ -19,6 +19,7 @@ import { Card } from '../components/Card';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StarRating } from '../components/StarRating';
+import { userMessage } from '../lib/errorMessage';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import {
   fetchProfileReviews,
@@ -63,7 +64,7 @@ export function ProfileReviewsScreen() {
     ]);
 
     const firstError = summaryRes.error || listRes.error;
-    if (firstError) setError(firstError.message);
+    if (firstError) setError(userMessage(firstError));
 
     setSummary(summaryRes.data);
     setReviews(listRes.data);

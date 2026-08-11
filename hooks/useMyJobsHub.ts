@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { userMessage } from '../lib/errorMessage';
 import { fetchJobsAssignedToWorker, fetchJobsByClient, type Job } from '../lib/jobs';
 import { fetchPendingOffersByWorker, type PendingOffer } from '../lib/offers';
 import { fetchProfilesByIds } from '../lib/profiles';
@@ -69,7 +70,7 @@ export function useMyJobsHub() {
     }
 
     const firstError = postedRes.error || workingRes.error || bidsRes.error || profilesError;
-    setError(firstError?.message ?? null);
+    setError(firstError ? userMessage(firstError) : null);
     setLoading(false);
   }, [user?.id]);
 

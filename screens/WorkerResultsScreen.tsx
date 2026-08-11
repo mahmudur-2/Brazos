@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -57,7 +57,11 @@ export function WorkerResultsScreen() {
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
   const { profile } = useProfile();
-  const { jobs, loading: jobsLoading, error: jobsError } = useOpenJobs();
+  const { jobs, loading: jobsLoading, error: jobsError, refresh } = useOpenJobs();
+  // Pull-to-refresh is the recovery path for a failed load — before it, the
+  // "Couldn't load jobs" empty state was a dead end with no retry affordance
+  // (state-coverage audit, 2026-08-10).
+  const [refreshing, setRefreshing] = useState(false);
   const bidCounts = useOfferCounts(useMemo(() => jobs.map((j) => j.id), [jobs]));
 
   const myCategories = useMemo(
@@ -223,6 +227,17 @@ export function WorkerResultsScreen() {
           showsVerticalScrollIndicator={false}
           initialNumToRender={8}
           windowSize={11}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                await refresh();
+                setRefreshing(false);
+              }}
+              tintColor={colors.primary}
+            />
+          }
           ListEmptyComponent={
             filterCount > 0 ? (
               <View style={styles.empty}>

@@ -5,6 +5,7 @@ import { Button } from './Button';
 import { Card } from './Card';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
+import { userMessage } from '../lib/errorMessage';
 import {
   budgetRangeLabel,
   dollarsToCents,
@@ -146,7 +147,10 @@ export function OfferComposer({ context, onSubmitted, palette = colors }: OfferC
           const msg =
             error?.code === '23505'
               ? 'You already have a live bid on this job.'
-              : error?.message ?? 'Your bid could not be sent. Check your connection and try again.';
+              : userMessage(
+                  error,
+                  'Your bid could not be sent. Check your connection and try again.'
+                );
           // Entered terms stay in the fields — alert and return, never reset.
           await alertAsync('Could not send bid', msg);
           return;
@@ -157,8 +161,10 @@ export function OfferComposer({ context, onSubmitted, palette = colors }: OfferC
         if (error || !newOfferId) {
           await alertAsync(
             'Could not send counter-offer',
-            error?.message ??
+            userMessage(
+              error,
               'Your counter-offer could not be sent. Check your connection and try again.'
+            )
           );
           return;
         }

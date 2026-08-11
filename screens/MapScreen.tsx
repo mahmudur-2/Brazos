@@ -22,7 +22,7 @@ import { colors, radius, shadows, spacing } from '../lib/theme';
 
 export function MapScreen() {
   const navigation = useNavigation<MapStackNavigation>();
-  const { cells, loading, error } = useHotspots();
+  const { cells, loading, error, refresh } = useHotspots();
   const { mode } = useMode();
   const [selected, setSelected] = useState<HotspotCell | null>(null);
 
@@ -70,14 +70,14 @@ export function MapScreen() {
       </View>
 
       {error ? (
-        <Text
-          style={[
-            styles.error,
-            { color: colors.danger, backgroundColor: colors.dangerBg },
-          ]}
-        >
-          {error}
-        </Text>
+        // Retryable, not just announced — the map without hotspot data is a
+        // dead end otherwise (state-coverage audit, 2026-08-10).
+        <View style={[styles.errorRow, { backgroundColor: colors.dangerBg }]}>
+          <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
+          <Pressable onPress={refresh} hitSlop={8} accessibilityRole="button">
+            <Text style={styles.errorRetry}>Try again</Text>
+          </Pressable>
+        </View>
       ) : null}
 
       <ScrollView
@@ -233,5 +233,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingRight: spacing.lg,
+  },
+  errorRetry: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.primary,
   },
 });
