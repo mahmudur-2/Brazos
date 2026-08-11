@@ -15,6 +15,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useOfferCounts } from '../hooks/useOfferCounts';
 import { userMessage } from '../lib/errorMessage';
 import { fetchJobsInCell } from '../lib/hotspots';
+import { goBackOrHome } from '../lib/navigationRef';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
 import { supabase } from '../lib/supabase';
@@ -95,7 +96,7 @@ export function CellJobsScreen() {
       <ScreenHeader
         title="Jobs in this zone"
         subtitle={`${displayCount} open ${displayCount === 1 ? 'job' : 'jobs'} nearby`}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { FormScreen } from '../ui/templates/FormScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { dollarsToCents, JOB_CATEGORIES, JOB_CATEGORY_LABELS } from '../lib/jobs';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   addWorkerService,
   fetchWorkerServices,
@@ -19,7 +20,6 @@ import {
   type WorkerService,
 } from '../lib/services';
 import { fetchMyProfile, updateProfile, type Profile } from '../lib/profiles';
-import type { ProfileStackNavigation } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 /**
@@ -31,7 +31,6 @@ import { colors, radius, spacing } from '../lib/theme';
  * says so instead of pretending.
  */
 export function ServicesPricingScreen() {
-  const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -156,7 +155,7 @@ export function ServicesPricingScreen() {
   return (
     <FormScreen
       title="Services & availability"
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={state}
     >
       <View style={styles.card}>

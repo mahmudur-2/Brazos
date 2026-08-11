@@ -316,3 +316,34 @@ this file by name.
 example of the unguarded pattern.
 
 **Release blocker:** **NO.**
+
+### A9 · Locked auth flow — bare goBack() dispatches (GO_BACK fix, 2026-08-11)
+
+**Files:** `screens/SignInScreen.tsx:91`, `screens/EmailSignInScreen.tsx:65`,
+`screens/CreateAccountScreen.tsx:98`, `screens/EmailCreateAccountScreen.tsx:99`,
+`screens/VerifyPhoneScreen.tsx:284/309/393` (all LOCKED — shared auth flow).
+
+The 2026-08-11 sweep converted every unlocked back control to
+`goBackOrHome()` after the device-confirmed unhandled GO_BACK (a screen landed
+on via `navigateAcrossTabs()` is its stack's INITIAL route — nothing to pop).
+These seven sites keep bare `goBack()` and are the guard test's named
+allowlist (`tests/crossTabNavigation.test.mjs`, `GOBACK_ALLOWLIST`).
+
+**Why the risk is near-zero here:** every one of these screens is pushed from
+Welcome inside the auth tree — none is reachable by cross-tab or notification
+dispatch (those fire post-auth), so `canGoBack()` is true in practice.
+`OnboardingFlow.tsx:78` already uses the guarded
+`if (navigation.canGoBack()) goBack()` form and needs nothing.
+
+**Diff (per file, mechanical):** add
+`import { goBackOrHome } from '../lib/navigationRef';` and replace each
+`() => navigation.goBack()` with `goBackOrHome` (for VerifyPhone, inside its
+`leaveChallenge(() => …)` wrapper: `leaveChallenge(goBackOrHome)`). Note the
+helper's fallback dispatches `navigateAcrossTabs('Home')`, which in the auth
+tree (no tabs mounted) is DROPPED with a dev warning — same net behavior as
+today's unhandled GO_BACK, minus the red box.
+
+**Risk unpatched:** effectively none today; becomes real only if an auth
+screen ever becomes deep-linkable.
+
+**Release blocker:** **NO.**

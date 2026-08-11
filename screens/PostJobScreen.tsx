@@ -62,7 +62,7 @@ import {
   uploadJobVideo,
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
-import { navigateAcrossTabs } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, emeraldColors, radius, shadows, spacing } from '../lib/theme';
 import { MediaUploader } from '../ui/primitives';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
@@ -386,7 +386,7 @@ export function PostJobScreen() {
           'Could not load job',
           userMessage(error, 'This job may have been deleted.')
         );
-        navigation.goBack();
+        goBackOrHome();
         return;
       }
 
@@ -398,7 +398,7 @@ export function PostJobScreen() {
           'Could not load job location',
           'Please try editing again so the existing map location stays intact.'
         );
-        navigation.goBack();
+        goBackOrHome();
         return;
       }
 
@@ -462,11 +462,11 @@ export function PostJobScreen() {
       // Edit can be launched from Home, My Jobs, or Map. Returning to the
       // originating detail route works in every stack, and its focus hook
       // immediately reloads the canonical saved row.
-      navigation.goBack();
+      goBackOrHome();
       return;
     }
     if (isHiring) {
-      navigation.goBack();
+      goBackOrHome();
       return;
     }
 
@@ -775,7 +775,7 @@ export function PostJobScreen() {
       setStep((current) => Math.max(0, current - 1));
       return;
     }
-    navigation.goBack();
+    goBackOrHome();
   }
 
   const currentStep = POST_STEPS[step];

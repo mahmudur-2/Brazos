@@ -21,6 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import {
   fetchJobPaymentState,
@@ -145,7 +146,7 @@ export function ReviewAndTipScreen() {
         title: 'This job is no longer available',
         body: 'It may have been deleted or you may no longer have access to it.',
         actionLabel: 'Back',
-        onAction: () => navigation.goBack(),
+        onAction: goBackOrHome,
       }
     : !isOwner
       ? {
@@ -159,7 +160,7 @@ export function ReviewAndTipScreen() {
             title: 'The job isn’t finished yet',
             body: 'Review and tip open once the work is completed and approved.',
             actionLabel: 'Back to the job',
-            onAction: () => navigation.goBack(),
+            onAction: goBackOrHome,
           }
         : !loaded
           ? { kind: 'loading' as const, variant: 'spinner' as const }
@@ -184,7 +185,7 @@ export function ReviewAndTipScreen() {
       <ScreenHeader
         title="Review & tip"
         subtitle={job.title}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         palette={emeraldColors}
       />
       {gateState ? (

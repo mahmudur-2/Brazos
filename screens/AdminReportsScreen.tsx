@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -16,6 +16,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   banUser,
   dismissReport,
@@ -24,12 +25,10 @@ import {
   unbanUser,
   type AdminReport,
 } from '../lib/moderation';
-import type { ProfileStackNavigation } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 export function AdminReportsScreen() {
-  const navigation = useNavigation<ProfileStackNavigation>();
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,7 +116,7 @@ export function AdminReportsScreen() {
       <ScreenHeader
         title="Reports"
         subtitle="Moderation queue"
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

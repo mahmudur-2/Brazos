@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { FormScreen } from '../ui/templates/FormScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   addChecklistItem,
   fetchChecklist,
@@ -15,7 +16,7 @@ import {
   setChecklistItemDone,
   type ChecklistItem,
 } from '../lib/checklist';
-import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import type { MyJobsStackParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 /**
@@ -28,7 +29,6 @@ import { colors, radius, spacing } from '../lib/theme';
  * record and the database (not just this screen) refuses further edits.
  */
 export function WorkChecklistScreen() {
-  const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkChecklist'>>();
   const { user } = useAuth();
   const { job, loading, error, refresh } = useJob(params.jobId);
@@ -73,7 +73,7 @@ export function WorkChecklistScreen() {
             title: 'This job is no longer available',
             body: 'It may have been deleted or you may no longer have access to it.',
             actionLabel: 'Back',
-            onAction: () => navigation.goBack(),
+            onAction: goBackOrHome,
           }
         : !isWorker
           ? {
@@ -145,7 +145,7 @@ export function WorkChecklistScreen() {
     <FormScreen
       title="Work checklist"
       subtitle={job?.title}
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={state}
       submitLabel={editable ? 'Add step' : undefined}
       onSubmit={editable ? addItem : undefined}

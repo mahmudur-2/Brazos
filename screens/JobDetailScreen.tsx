@@ -54,7 +54,7 @@ import {
 } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { navigateAcrossTabs } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchClientJobStatsCounted } from '../lib/clientStats';
 import { fetchDirectThreadWith } from '../lib/conversations';
 import { maybePromptForPush } from '../lib/pushNotifications';
@@ -332,7 +332,7 @@ export function JobDetailScreen() {
   // can bypass it. Their own job keeps the owner view below.
   if (!missing && mode === 'customer' && !isOwnJob) {
     return (
-      <MarketJobPreview job={job} poster={poster} onBack={() => navigation.goBack()} />
+      <MarketJobPreview job={job} poster={poster} onBack={goBackOrHome} />
     );
   }
 
@@ -342,14 +342,14 @@ export function JobDetailScreen() {
   if (missing) {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScreenHeader title="Job details" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Job details" onBack={goBackOrHome} />
         <View style={styles.missing}>
           <Ionicons name="alert-circle-outline" size={40} color={colors.textMuted} />
           <Text style={styles.missingTitle}>This job is no longer available</Text>
           <Text style={styles.missingText}>
             The person who posted it has taken it down.
           </Text>
-          <Button title="Go back" variant="secondary" onPress={() => navigation.goBack()} />
+          <Button title="Go back" variant="secondary" onPress={goBackOrHome} />
         </View>
       </SafeAreaView>
     );
@@ -404,7 +404,7 @@ export function JobDetailScreen() {
               </ScrollView>
 
               <Pressable
-                onPress={() => navigation.goBack()}
+                onPress={goBackOrHome}
                 style={[styles.heroBack, { top: insets.top + spacing.sm }]}
                 hitSlop={10}
                 accessibilityRole="button"
@@ -422,7 +422,7 @@ export function JobDetailScreen() {
               ) : null}
             </View>
           ) : (
-            <ScreenHeader title="Job details" onBack={() => navigation.goBack()} />
+            <ScreenHeader title="Job details" onBack={goBackOrHome} />
           )}
 
           <View style={styles.detailContent}>

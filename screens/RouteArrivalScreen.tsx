@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useFocusEffect, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { DetailScreen } from '../ui/templates/DetailScreen';
@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   arrivalWindowLabel,
   fetchJobLocation,
@@ -19,7 +20,7 @@ import {
   deriveJobLifecycle,
   JOB_LIFECYCLE_LABELS,
 } from '../lib/jobLifecycle';
-import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import type { MyJobsStackParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 /**
@@ -33,7 +34,6 @@ import { colors, radius, spacing } from '../lib/theme';
  * screen 33 (TrackWorker).
  */
 export function RouteArrivalScreen() {
-  const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'RouteArrival'>>();
   const { user } = useAuth();
   const { job, loading, error, refresh } = useJob(params.jobId);
@@ -74,7 +74,7 @@ export function RouteArrivalScreen() {
             title: 'This job is no longer available',
             body: 'It may have been deleted or you may no longer have access to it.',
             actionLabel: 'Back',
-            onAction: () => navigation.goBack(),
+            onAction: goBackOrHome,
           }
         : !isWorker
           ? {
@@ -104,7 +104,7 @@ export function RouteArrivalScreen() {
     <DetailScreen
       title="Route & arrival"
       subtitle={job?.title}
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={state}
       sections={
         !job
@@ -213,7 +213,7 @@ export function RouteArrivalScreen() {
             <Button
               title="Back to the job — start work there"
               variant="secondary"
-              onPress={() => navigation.goBack()}
+              onPress={goBackOrHome}
             />
           )
         ) : undefined

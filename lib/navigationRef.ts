@@ -145,3 +145,34 @@ export function navigateAcrossTabs(
     }
   });
 }
+
+/**
+ * THE way to leave a screen backwards. Every back control in the app calls
+ * this (tests/crossTabNavigation.test.mjs fails on a bare goBack outside it).
+ *
+ * WHY: navigateAcrossTabs() lands on NESTED screens, and React Navigation
+ * mounts an unvisited tab's stack with that target as its INITIAL route — the
+ * stack's declared first screen is not underneath it. A bare goBack() there
+ * dispatches GO_BACK into a navigator with nothing to pop, which is exactly
+ * the device error this closes ("The action 'GO_BACK' was not handled by any
+ * navigator", on cold start via the parked notification replay and after any
+ * cross-tab jump). Root-of-stack is a NORMAL state for our screens, not an
+ * edge case, so the check belongs beside the dispatch — same rule as
+ * navigateAcrossTabs above.
+ *
+ * Fallback: the Home tab root of whichever tree is mounted. Exactly one tree
+ * is ever mounted and ModeContext decides which (§F), so the mounted tree IS
+ * the customer/worker perspective in navigation form — this lands on Customer
+ * Home in customer mode and Worker Home in worker mode without mirroring mode
+ * state into this module. 'Home' is the one tab name both CustomerParamList
+ * and WorkerParamList declare, so the target exists in either tree by type.
+ */
+export function goBackOrHome(): void {
+  navigateWhenReady(() => {
+    if (navigationRef.canGoBack()) {
+      navigationRef.goBack();
+      return;
+    }
+    navigateAcrossTabs('Home');
+  });
+}

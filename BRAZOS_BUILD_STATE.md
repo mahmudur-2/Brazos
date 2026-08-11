@@ -2291,6 +2291,67 @@ NO new failures (baseline 285/286 + 2 new guard tests, both passing) ·
 `verify-schema` green ("All REQUIRED objects exist"), read-only run. LOCKED
 screens, frozen PWA, app.json, dependencies: untouched.
 
+## Branch `pre-review-hardening` — session 2026-08-11 (unhandled GO_BACK fix)
+
+**Symptom (device, confirmed):** `The action 'GO_BACK' was not handled by any
+navigator`, on cold start and after landing on a screen via
+`navigateAcrossTabs()`.
+
+**Root cause — CONFIRMED as the suspected class, with the precise mechanism.**
+`navigateAcrossTabs()` dispatches the NESTED navigate form
+(`lib/navigationRef.ts:124`), and React Navigation mounts an unvisited tab's
+stack with that target as its INITIAL route — the stack's declared first
+screen is NOT underneath it. Every screen reached that way is its stack's
+root, and its back control dispatched a bare `goBack()` into a navigator with
+nothing to pop. Cold start is the same path: the parked notification replay
+(`navigateWhenReady` → `flushPendingNavigation`) lands Chat/ClientJobDetail/
+WorkerJob as stack roots. Root-of-stack is therefore a NORMAL state in this
+app, not an edge case.
+
+**Fix.** ONE guarded helper in the module that already owns cross-tab
+dispatch: `goBackOrHome()` (`lib/navigationRef.ts`) — pops when
+`navigationRef.canGoBack()`, otherwise dispatches `navigateAcrossTabs('Home')`,
+which lands on the mounted tree's Home tab root. The mounted tree IS
+ModeContext's decision in navigation form (§F, exactly one tree mounted), so
+the fallback is Customer Home in customer mode and Worker Home in worker mode
+with no mode state mirrored into the module and no new prop. 'Home' is the
+one tab name both CustomerParamList and WorkerParamList declare.
+
+**Sweep: 43 call sites converted across 24 files** — every bare
+`navigation.goBack()` in unlocked screens/, hooks/ (AdminReports,
+ApproveOrDispute ×3, BidDetail ×3, BidSent, CellJobs, Chat, Checkout ×3,
+ClientJobDetail ×2, CompareBids, Counteroffer, Earnings, JobConfirmed,
+JobDetail ×5, LegalDocument ×2, NotificationSettings, Notifications ×2,
+PaymentMethods, PostJob ×5, ProfileReviews, ReviewAndTip ×3, RouteArrival ×3,
+SavedWorkers ×2, ServicesPricing, SubmitBid ×2, TrackWorker ×3,
+WorkChecklist ×2, WorkerJob, WorkerProfile, WorkerResults, WorkerSearch,
+useJobOwnerActions). Ten screens whose `navigation` object became fully
+unused had the declaration + imports removed (tsc --noUnusedLocals enforced).
+`StackActions.popToTop()` in PostJob's leave flows is NOT goBack and stays.
+
+**Locked-file findings deferred (docs/LOCKED_FILE_PATCHES.md §A9):** seven
+bare goBack sites in the LOCKED auth flow (SignIn, EmailSignIn,
+CreateAccount, EmailCreateAccount, VerifyPhone ×3) — all pushed-from-Welcome,
+never cross-tab-landed, so canGoBack is true in practice; risk ≈ nil, no
+blocker. `OnboardingFlow.tsx:78` already used the canGoBack-guarded form and
+needs nothing (the guard test asserts it stays that form).
+
+**Guards (same mechanism as the cross-tab checks, extended in
+tests/crossTabNavigation.test.mjs):** "no bare goBack() dispatch exists
+outside the helper and the locked allowlist" (scans screens/hooks/components/
+ui; the auth files + OnboardingFlow are the named allowlist) and "back pops
+when it can, and lands on the mounted mode home when it cannot" — helper-shape
+assertions plus the executed-static both-modes composition: fallback targets
+the Home TAB, CustomerHomeStack roots at HomeMain/HomeScreen, WorkerHomeStack
+at BrowseJobs/BrowseJobsScreen. (Mounting real navigators is outside the
+node:test suite's reach — this is the honest static form of the both-modes
+proof, and the device pass is the runtime form.)
+
+**Gate (measured):** tsc exit 0 · **290 tests, 289 pass, 1 fail, 0 skipped** —
+the one failure is the documented frozen-web PWA mismatch; NO new failures
+(288 baseline + 2 new guard tests, both passing) · verify-schema green.
+LOCKED screens, frozen PWA, app.json, dependencies untouched.
+
 ## Exact next task (Phase 9 — Profiles, portfolio & worker self-service)
 
 Per BRAZOS_MASTER_PLAN.md §J Phase 9 (MEDIUM), screens 22–25, 43–46, 63–66.

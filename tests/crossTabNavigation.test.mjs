@@ -278,6 +278,93 @@ test('no unguarded getParent() tab hop exists outside the locked allowlist', asy
   );
 });
 
+// ---------------------------------------------------------------------------
+// Back goes through the helper too (GO_BACK fix, 2026-08-11)
+// ---------------------------------------------------------------------------
+//
+// navigateAcrossTabs() lands on NESTED screens, and React Navigation mounts an
+// unvisited tab's stack with that target as its INITIAL route — nothing
+// underneath. A bare goBack() there dispatches an unhandled GO_BACK (the
+// device error: cold start via the parked notification replay, and any
+// cross-tab jump). goBackOrHome() in lib/navigationRef.ts pops when the
+// container can pop and otherwise lands on the mounted tree's Home tab root.
+
+const GOBACK_ALLOWLIST = new Set([
+  // LOCKED shared auth flow — each is a pushed-from-Welcome screen, so its
+  // stack always has something under it in practice. Authorized-ready diffs:
+  // docs/LOCKED_FILE_PATCHES.md §A9.
+  'screens/SignInScreen.tsx',
+  'screens/EmailSignInScreen.tsx',
+  'screens/CreateAccountScreen.tsx',
+  'screens/EmailCreateAccountScreen.tsx',
+  'screens/VerifyPhoneScreen.tsx',
+  // Pre-mode onboarding tree; already carries the guarded form, asserted below.
+  'screens/OnboardingFlow.tsx',
+]);
+
+test('no bare goBack() dispatch exists outside the helper and the locked allowlist', async () => {
+  const offenders = [];
+  for (const folder of ['screens', 'hooks', 'components', 'ui']) {
+    for (const file of dir(folder).filter((f) => /\.(ts|tsx)$/.test(f))) {
+      const rel = `${folder}/${file}`;
+      if (GOBACK_ALLOWLIST.has(rel)) continue;
+      const source = stripComments(await read(rel));
+      if (/\bgoBack\(/.test(source.replace(/goBackOrHome/g, ''))) {
+        offenders.push(rel);
+      }
+    }
+  }
+  assert.deepEqual(
+    offenders,
+    [],
+    'back controls must call goBackOrHome() from lib/navigationRef.ts — a bare ' +
+      'goBack() at a stack root dispatches an unhandled GO_BACK'
+  );
+
+  // The onboarding exception must stay the GUARDED form, not become bare.
+  const onboarding = stripComments(await read('screens/OnboardingFlow.tsx'));
+  assert.match(
+    onboarding,
+    /if \(navigation\.canGoBack\(\)\) navigation\.goBack\(\);/,
+    'OnboardingFlow may keep its own guard, but only the canGoBack-checked form'
+  );
+});
+
+test('back pops when it can, and lands on the mounted mode home when it cannot', async () => {
+  const ref = stripComments(await read('lib/navigationRef.ts'));
+
+  // The helper's two branches, in the one module that owns dispatch.
+  assert.match(ref, /export function goBackOrHome\(\)/);
+  assert.match(ref, /if \(navigationRef\.canGoBack\(\)\) \{\s*navigationRef\.goBack\(\);/);
+  assert.match(ref, /navigateAcrossTabs\('Home'\)/);
+
+  // Executed-static composition for BOTH modes: the fallback targets the Home
+  // TAB with no screen name, which navigateAcrossTabs dispatches as the tab
+  // itself — landing on whatever the mounted tree's Home stack roots at.
+  // Exactly one tree is mounted per §F, so proving each tree's Home root IS
+  // that mode's home proves the fallback lands correctly in both modes.
+  const [customerRoot, workerRoot] = await Promise.all([
+    read('navigation/CustomerRoot.tsx'),
+    read('navigation/WorkerRoot.tsx'),
+  ]);
+  const firstScreen = (source, stack) => {
+    const match = stripComments(source).match(
+      new RegExp(`<${stack}\\.Screen\\s+name="([^"]+)"\\s+component=\\{(\\w+)\\}`)
+    );
+    return match ? { name: match[1], component: match[2] } : null;
+  };
+  assert.deepEqual(
+    firstScreen(customerRoot, 'CustomerHomeStack'),
+    { name: 'HomeMain', component: 'HomeScreen' },
+    'customer fallback must land on Customer Home'
+  );
+  assert.deepEqual(
+    firstScreen(workerRoot, 'WorkerHomeStack'),
+    { name: 'BrowseJobs', component: 'BrowseJobsScreen' },
+    'worker fallback must land on Worker Home'
+  );
+});
+
 test('the guarded helper is the only thing that dispatches a nested target', async () => {
   const [ref, routesModule] = await Promise.all([
     read('lib/navigationRef.ts'),

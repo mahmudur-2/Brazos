@@ -12,6 +12,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
 import {
@@ -91,7 +92,7 @@ export function ApproveOrDisputeScreen() {
         title: 'This job is no longer available',
         body: 'It may have been deleted or you may no longer have access to it.',
         actionLabel: 'Back',
-        onAction: () => navigation.goBack(),
+        onAction: goBackOrHome,
       }
     : !isOwner
       ? {
@@ -105,7 +106,7 @@ export function ApproveOrDisputeScreen() {
             title: 'Nothing to approve yet',
             body: 'Once the worker marks the job complete, review their finished work here.',
             actionLabel: 'Back to the job',
-            onAction: () => navigation.goBack(),
+            onAction: goBackOrHome,
           }
         : !loaded
           ? { kind: 'loading', variant: 'spinner' }
@@ -199,7 +200,7 @@ export function ApproveOrDisputeScreen() {
       <FormScreen
         title="Finished work"
         subtitle={job.title}
-        onBack={() => (reporting ? setReporting(false) : navigation.goBack())}
+        onBack={() => (reporting ? setReporting(false) : goBackOrHome())}
         state={state}
         submitLabel={paymentsMode === 'sandbox' || released ? submitLabel : undefined}
         onSubmit={paymentsMode === 'sandbox' || released ? onSubmit : undefined}

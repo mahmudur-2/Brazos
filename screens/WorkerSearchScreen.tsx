@@ -32,6 +32,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
   findWorkers,
@@ -173,7 +174,7 @@ export function WorkerSearchScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title="Find help"
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         palette={EMERALD_PALETTE}
         titleSize={25}
       />

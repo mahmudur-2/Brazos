@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -10,12 +10,12 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { PLATFORM_FEE_RATE } from '../lib/payments';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
-import type { ProfileStackNavigation } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
 /**
@@ -27,7 +27,6 @@ import { colors, radius, spacing } from '../lib/theme';
  * wherever money could be misread as real.
  */
 export function EarningsScreen() {
-  const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
 
   const [summary, setSummary] = useState<EarningsSummary | null>(null);
@@ -86,7 +85,7 @@ export function EarningsScreen() {
       <DetailScreen
         title="Earnings"
         subtitle="Sandbox — no real money"
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         state={state}
         sections={
           !s

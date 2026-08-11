@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabase';
 import { deleteJob } from '../lib/jobs';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { navigateAcrossTabs } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { useAuth } from './useAuth';
 
 /**
@@ -119,7 +119,10 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
     // (Home browse, a Map/zone drill-down, or My Jobs itself). Through the
     // guarded helper, not a hand-cast getParent() hop, so the dispatch is
     // checked against the tree the current mode actually mounted.
-    navigation.goBack();
+    // Guarded pop: a job detail landed on cross-tab IS its stack's root, and
+    // a bare goBack there dispatches an unhandled GO_BACK before the tab
+    // switch. The helper pops when it can; either way MyJobs is next.
+    goBackOrHome();
     navigateAcrossTabs('MyJobs');
   }
 

@@ -1,9 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import { paymentsMode } from '../lib/adapters/payments';
-import type { ProfileStackNavigation } from '../lib/navigation';
+import { goBackOrHome } from '../lib/navigationRef';
 import { colors, radius, spacing } from '../lib/theme';
 
 /**
@@ -14,13 +13,12 @@ import { colors, radius, spacing } from '../lib/theme';
  * disabled) and what the sandbox actually does with money states.
  */
 export function PaymentMethodsScreen() {
-  const navigation = useNavigation<ProfileStackNavigation>();
   const sandbox = paymentsMode === 'sandbox';
 
   return (
     <DetailScreen
       title="Payment methods"
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={{ kind: 'ready' }}
       sections={[
         {

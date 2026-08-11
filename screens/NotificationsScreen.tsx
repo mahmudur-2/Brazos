@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
@@ -13,8 +13,7 @@ import {
   markNotificationRead,
   type AppNotification,
 } from '../lib/notifications';
-import type { ProfileStackNavigation } from '../lib/navigation';
-import { navigateAcrossTabs } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -35,7 +34,6 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
  * is ever needed for these payloads.
  */
 export function NotificationsScreen() {
-  const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
 
   const [rows, setRows] = useState<AppNotification[] | null>(null);
@@ -108,7 +106,7 @@ export function NotificationsScreen() {
               title: 'Nothing yet',
               body: 'Bids, offers, messages, approvals and payment events land here as they happen.',
               actionLabel: 'Back',
-              onAction: () => navigation.goBack(),
+              onAction: goBackOrHome,
             }
           : { kind: 'ready' };
 
@@ -116,7 +114,7 @@ export function NotificationsScreen() {
     <DetailScreen
       title="Notifications"
       subtitle={unread > 0 ? `${unread} unread` : undefined}
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={state}
       headerRight={
         unread > 0 ? (

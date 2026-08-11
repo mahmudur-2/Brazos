@@ -1,8 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 import { formatBudget } from '../lib/jobs';
-import { navigateAcrossTabs } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import type { BidSentRouteParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 
@@ -14,7 +14,6 @@ import { colors, radius, spacing } from '../lib/theme';
  * 7 days. No match odds, no "you're likely to win", no invented urgency.
  */
 export function BidSentScreen() {
-  const navigation = useNavigation();
   const { params } = useRoute<RouteProp<BidSentRouteParamList, 'BidSent'>>();
 
   return (
@@ -46,8 +45,10 @@ export function BidSentScreen() {
           label: 'Keep browsing',
           variant: 'secondary',
           // The form replaced itself with this screen, so one pop lands back
-          // on the job detail — not on a re-submittable bid form.
-          onPress: () => navigation.goBack(),
+          // on the job detail — not on a re-submittable bid form. Guarded:
+          // if this screen IS the stack root (cross-tab landing), back goes
+          // to the mounted mode's Home instead of dispatching into nothing.
+          onPress: goBackOrHome,
         },
       ]}
     />

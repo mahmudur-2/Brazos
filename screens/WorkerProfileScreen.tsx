@@ -33,6 +33,7 @@ import {
   type WorkerService,
 } from '../lib/services';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import type {
   PostJobRouteParamList,
   ProfileReviewsRouteParamList,
@@ -165,7 +166,7 @@ export function WorkerProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Profile" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Profile" onBack={goBackOrHome} />
 
       {loading ? (
         <View style={styles.center}>

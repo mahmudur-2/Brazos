@@ -10,6 +10,7 @@ import { useOfferCounts } from '../hooks/useOfferCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { resolveCurrentPlace } from '../lib/geolocation';
+import { goBackOrHome } from '../lib/navigationRef';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
 import {
   DEFAULT_JOB_FILTERS,
@@ -184,7 +185,7 @@ export function WorkerResultsScreen() {
       <ScreenHeader
         title={MODE_TITLES[params.mode]}
         subtitle={subtitle}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         right={
           <Pressable
             onPress={() => setFiltersOpen(true)}

@@ -27,6 +27,7 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
+import { goBackOrHome } from '../lib/navigationRef';
 import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync, confirmAsync } from '../lib/dialog';
@@ -311,7 +312,7 @@ export function WorkerJobScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScreenHeader title="Your Job" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Your Job" onBack={goBackOrHome} />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 

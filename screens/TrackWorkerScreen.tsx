@@ -8,6 +8,7 @@ import type { ScreenState } from '../ui/templates/ScreenStates';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
+import { goBackOrHome } from '../lib/navigationRef';
 import { fetchJobPaymentState, type Payment } from '../lib/payments';
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { fetchProfileById } from '../lib/profiles';
@@ -86,7 +87,7 @@ export function TrackWorkerScreen() {
         title: 'This job is no longer available',
         body: 'It may have been deleted or you may no longer have access to it.',
         actionLabel: 'Back',
-        onAction: () => navigation.goBack(),
+        onAction: goBackOrHome,
       }
     : !isOwner
       ? {
@@ -100,7 +101,7 @@ export function TrackWorkerScreen() {
             title: 'No worker to track yet',
             body: 'Once you hire a worker, their progress appears here.',
             actionLabel: 'Back to the job',
-            onAction: () => navigation.goBack(),
+            onAction: goBackOrHome,
           }
         : { kind: 'ready' };
 
@@ -115,7 +116,7 @@ export function TrackWorkerScreen() {
     <DetailScreen
       title="Track worker"
       subtitle={job.title}
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={state}
       sections={[
         {

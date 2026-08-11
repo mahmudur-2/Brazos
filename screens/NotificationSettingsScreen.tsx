@@ -9,7 +9,6 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -19,6 +18,7 @@ import { useProfile } from '../hooks/useProfile';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { resolveCurrentPlace } from '../lib/geolocation';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   DEFAULT_PREFS,
   fetchNotificationPrefs,
@@ -46,7 +46,6 @@ import { colors, radius, spacing } from '../lib/theme';
  * already-delivered notification.
  */
 export function NotificationSettingsScreen() {
-  const navigation = useNavigation();
   const { user } = useAuth();
   const { profile } = useProfile();
 
@@ -173,7 +172,7 @@ export function NotificationSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader title="Notifications" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Notifications" onBack={goBackOrHome} />
 
       {loading ? (
         <View style={styles.center}>

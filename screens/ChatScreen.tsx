@@ -65,7 +65,7 @@ import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
 import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
-import { navigateAcrossTabs } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, spacing } from '../lib/theme';
 
 export function ChatScreen() {
@@ -580,7 +580,7 @@ export function ChatScreen() {
             : 'Chat'
         }
         subtitle={job?.title}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         // Tapping the title opens the other party's profile — including their
         // Past Work gallery, which is the point of having one.
         onPressTitle={

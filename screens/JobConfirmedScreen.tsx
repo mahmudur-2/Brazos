@@ -13,6 +13,7 @@ import { arrivalWindowLabel } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 
 /**
  * Screen 32 — Job Confirmed. Renders its confirmation ONLY after the state it
@@ -84,7 +85,7 @@ export function JobConfirmedScreen() {
     return (
       <DetailScreen
         title="Job confirmed"
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         state={state}
         sections={[]}
       />

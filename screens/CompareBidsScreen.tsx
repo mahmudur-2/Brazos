@@ -8,6 +8,7 @@ import { VerificationBadge } from '../components/VerificationBadge';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useJobOffers } from '../hooks/useJobOffers';
+import { goBackOrHome } from '../lib/navigationRef';
 import { completionPercent } from '../lib/profiles';
 import {
   bestValueOfferId,
@@ -65,7 +66,7 @@ export function CompareBidsScreen() {
     <DetailScreen
       title="Compare bids"
       subtitle={job.title}
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={state}
       sections={[
         {

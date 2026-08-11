@@ -42,6 +42,7 @@ import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   acceptOffer,
   bestValueOfferId,
@@ -323,7 +324,7 @@ export function ClientJobDetailScreen() {
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <ScreenHeader
           title="Job unavailable"
-          onBack={() => navigation.goBack()}
+          onBack={goBackOrHome}
           palette={emeraldColors}
         />
         <View style={styles.missingState}>
@@ -349,7 +350,7 @@ export function ClientJobDetailScreen() {
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <ScreenHeader
         title={canAccept ? 'Job & bids' : 'Job detail'}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         palette={emeraldColors}
       />
 

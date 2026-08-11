@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { fetchRehirableWorkerIds } from '../lib/jobs';
+import { goBackOrHome } from '../lib/navigationRef';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
 import { fetchSavedWorkers, unsaveWorker } from '../lib/savedWorkers';
 import type { ProfileStackNavigation } from '../lib/navigation';
@@ -93,7 +94,7 @@ export function SavedWorkersScreen() {
               title: 'No one here yet',
               body: 'Save a worker from their profile, or finish a job with someone — both show up here for quick rehiring.',
               actionLabel: 'Back',
-              onAction: () => navigation.goBack(),
+              onAction: goBackOrHome,
             }
           : { kind: 'ready' };
 
@@ -153,7 +154,7 @@ export function SavedWorkersScreen() {
   return (
     <DetailScreen
       title="Saved & past workers"
-      onBack={() => navigation.goBack()}
+      onBack={goBackOrHome}
       state={state}
       sections={[
         ...(saved.length > 0

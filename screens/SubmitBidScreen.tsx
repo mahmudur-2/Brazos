@@ -5,6 +5,7 @@ import { Button } from '../components/Button';
 import { OfferComposer } from '../components/OfferComposer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useMode, useModeSwitch } from '../modes';
+import { goBackOrHome } from '../lib/navigationRef';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import type { SubmitBidRouteParamList } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
@@ -33,7 +34,7 @@ export function SubmitBidScreen() {
   if (mode === 'customer') {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <ScreenHeader title="Submit a bid" onBack={() => navigation.goBack()} />
+        <ScreenHeader title="Submit a bid" onBack={goBackOrHome} />
         <View style={styles.guard}>
           <Text style={styles.guardTitle}>Bidding lives in Worker Mode</Text>
           <Text style={styles.guardText}>
@@ -54,7 +55,7 @@ export function SubmitBidScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScreenHeader title="Submit a bid" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Submit a bid" onBack={goBackOrHome} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

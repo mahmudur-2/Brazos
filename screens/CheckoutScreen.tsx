@@ -11,6 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPayment, platformFeeCents, type Payment } from '../lib/payments';
 import { fetchProfileById } from '../lib/profiles';
@@ -84,7 +85,7 @@ export function CheckoutScreen() {
         title: 'This job is no longer available',
         body: 'It may have been deleted or you may no longer have access to it.',
         actionLabel: 'Back',
-        onAction: () => navigation.goBack(),
+        onAction: goBackOrHome,
       }
     : paymentsMode !== 'sandbox'
       ? {
@@ -104,7 +105,7 @@ export function CheckoutScreen() {
               title: 'Nothing to check out yet',
               body: 'Accept an offer first — checkout protects the payment for an accepted offer.',
               actionLabel: 'Back to the job',
-              onAction: () => navigation.goBack(),
+              onAction: goBackOrHome,
             }
           : !paymentLoaded
             ? { kind: 'loading', variant: 'spinner' }
@@ -163,7 +164,7 @@ export function CheckoutScreen() {
       <DetailScreen
         title="Protected checkout"
         subtitle={job.title}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         state={state}
         sections={[
           {

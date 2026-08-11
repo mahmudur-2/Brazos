@@ -4,6 +4,7 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { OfferComposer } from '../components/OfferComposer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import { goBackOrHome } from '../lib/navigationRef';
 import { colors, spacing } from '../lib/theme';
 
 /**
@@ -24,7 +25,7 @@ export function CounterofferScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-      <ScreenHeader title="Counter-offer" onBack={() => navigation.goBack()} />
+      <ScreenHeader title="Counter-offer" onBack={goBackOrHome} />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}

@@ -14,6 +14,7 @@ import { useJobOffers } from '../hooks/useJobOffers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { fetchDirectThreadWith } from '../lib/conversations';
+import { goBackOrHome } from '../lib/navigationRef';
 import { completionPercent } from '../lib/profiles';
 import {
   acceptOffer,
@@ -72,7 +73,7 @@ export function BidDetailScreen() {
               title: 'This bid is no longer here',
               body: 'It may have been withdrawn, or replaced by a newer offer in its negotiation.',
               actionLabel: 'Back to the job',
-              onAction: () => navigation.goBack(),
+              onAction: goBackOrHome,
             }
           : { kind: 'ready' };
 
@@ -129,7 +130,7 @@ export function BidDetailScreen() {
       void refresh();
       return;
     }
-    navigation.goBack();
+    goBackOrHome();
   }
 
   return (
@@ -137,7 +138,7 @@ export function BidDetailScreen() {
       <DetailScreen
         title="Bid detail"
         subtitle={job.title}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
         state={state}
         sections={
           offer

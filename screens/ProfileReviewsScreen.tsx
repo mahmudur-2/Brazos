@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -21,6 +21,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { StarRating } from '../components/StarRating';
 import { userMessage } from '../lib/errorMessage';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
+import { goBackOrHome } from '../lib/navigationRef';
 import {
   fetchProfileReviews,
   fetchProfileReviewSummary,
@@ -43,7 +44,6 @@ const STARS = [5, 4, 3, 2, 1] as const;
  * header can never claim "2 reviews" above three of them.
  */
 export function ProfileReviewsScreen() {
-  const navigation = useNavigation();
   const { params } =
     useRoute<RouteProp<ProfileReviewsRouteParamList, 'ProfileReviews'>>();
 
@@ -110,7 +110,7 @@ export function ProfileReviewsScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title={firstName ? `${firstName}’s reviews` : 'Reviews'}
-        onBack={() => navigation.goBack()}
+        onBack={goBackOrHome}
       />
 
       {loading ? (
