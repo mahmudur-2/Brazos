@@ -138,9 +138,21 @@ export function navigateAcrossTabs(
     }
 
     if (__DEV__) {
+      // Report what the mounted tree ACTUALLY offers, not just that the target
+      // missed. A drop means the live navigator and the code that dispatched
+      // disagree about which mode is mounted, and naming both sides is the
+      // difference between "unreproducible" and a located defect.
+      const root = navigationRef.isReady() ? navigationRef.getRootState() : undefined;
+      const tabs = root?.routes?.map((r) => r.name).join(',') ?? '(none)';
+      const nested = root?.routes?.find((r) => r.name === tab)?.state as
+        | { routeNames?: string[] }
+        | undefined;
+      const offered = nested?.routeNames?.join(',') ?? '(tab not yet rendered)';
       console.warn(
         `[nav] dropped cross-tab target ${tab}/${screen ?? '(tab root)'} — ` +
-          'not handled by the navigator this mode mounted'
+          'not handled by the navigator this mode mounted' +
+          `\n[nav]   tabs mounted: ${tabs}` +
+          `\n[nav]   ${tab} stack offers: ${offered}`
       );
     }
   });
