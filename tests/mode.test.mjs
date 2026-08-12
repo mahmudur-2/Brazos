@@ -139,6 +139,20 @@ test('nothing outside ModeProvider sets a mode', () => {
   }
 });
 
+test('sign-out disarms resolution so the next account cannot race Setup', () => {
+  // AUD-P2-06: `armed` surviving sign-out would resolve the NEXT account's
+  // mode the instant its session appears — before that account's Setup runs —
+  // consuming a pending landing that is not theirs and stamping resolvedFor
+  // before the "Start in" choice exists. The sign-out reset must drop all
+  // three pieces of state; ModeShell re-arms on mount, after auth + legal +
+  // setup have resolved for the new account.
+  const signOutReset = provider.match(/if \(userId\) return;[\s\S]{0,200}?\}, \[userId\]\);/);
+  assert.ok(signOutReset, 'expected the sign-out reset effect in ModeProvider');
+  assert.match(signOutReset[0], /setArmed\(false\)/);
+  assert.match(signOutReset[0], /setResolvedFor\(null\)/);
+  assert.match(signOutReset[0], /setMode\(DEFAULT_MODE\)/);
+});
+
 test('a switch always confirms, and there is no flag to skip it', () => {
   assert.match(provider, /const confirmed = await confirmAsync\(\{/);
   assert.match(provider, /if \(!confirmed\) return;/);

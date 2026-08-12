@@ -144,8 +144,16 @@ export function ModeProvider({ children }: PropsWithChildren) {
 
   // Signing out drops back to a known state, so the next account cannot inherit
   // the previous one's mode for even one frame.
+  //
+  // Disarming matters as much as the mode reset (AUD-P2-06): `armed` left true
+  // from the previous account would fire resolution the instant the NEXT
+  // session appears — before that account's Setup has run — consuming a
+  // pending landing that isn't theirs and stamping resolvedFor before Setup's
+  // "Start in" choice exists. ModeShell re-arms on mount, which happens only
+  // after auth + legal + setup have all resolved for the new account.
   useEffect(() => {
     if (userId) return;
+    setArmed(false);
     setResolvedFor(null);
     setMode(DEFAULT_MODE);
   }, [userId]);
