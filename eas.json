@@ -8,6 +8,10 @@
       "channel": "preview",
       "environment": "preview",
       "autoIncrement": true
+    },
+    "production": {
+      "channel": "production",
+      "environment": "production"
     }
   },
   "submit": {

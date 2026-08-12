@@ -18,6 +18,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { refFromRestUrl, refFromPgUrl, refFromJwt } from './supabase-ref.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -48,26 +49,9 @@ const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 // SQL proofs and every migration go through SUPABASE_DB_URL_STAGING on a
 // direct Postgres connection. If those two point at DIFFERENT projects, every
 // gate can be green about a database the app never touches. Refs only are
-// compared and printed — never a URL, key, or connection string.
+// compared and printed — never a URL, key, or connection string. The parsers
+// live in supabase-ref.mjs, shared with the EAS production pre-install gate.
 // ---------------------------------------------------------------------------
-function refFromRestUrl(u) {
-  return String(u ?? '').match(/https?:\/\/([a-z0-9]+)\.supabase\.(co|in)/i)?.[1] ?? null;
-}
-function refFromPgUrl(u) {
-  const s = String(u ?? '');
-  return (
-    s.match(/postgres\.([a-z0-9]{16,})/i)?.[1] ??
-    s.match(/@db\.([a-z0-9]+)\.supabase\./i)?.[1] ??
-    null
-  );
-}
-function refFromJwt(k) {
-  try {
-    return JSON.parse(Buffer.from(String(k).split('.')[1], 'base64').toString('utf8')).ref ?? null;
-  } catch {
-    return null;
-  }
-}
 
 {
   const appRef = refFromRestUrl(BASE);
