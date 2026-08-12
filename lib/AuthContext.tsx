@@ -42,11 +42,26 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [bannedNotice, setBannedNotice] = useState(false);
 
   useEffect(() => {
-    // Restore any persisted session on startup.
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    // Restore any persisted session on startup. The rejection branch matters:
+    // getSession() reads AsyncStorage, and an unhandled rejection here would
+    // leave `loading` true forever — the launch overlay never resolves and the
+    // app is a spinner until killed (AUD-P2-07). On failure the session is
+    // left exactly as it is (null at startup — a session is never fabricated,
+    // and one delivered by onAuthStateChange below is never torn down); the
+    // failure detail stays in the dev console, never on a user surface.
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+      })
+      .catch((error: unknown) => {
+        if (__DEV__) {
+          console.warn('[auth] session restore failed at startup', error);
+        }
+      })
+      .finally(() => {
+        setLoading(false);
+      });
 
     // Keep state in sync with sign in / sign out / token refresh events.
     const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
