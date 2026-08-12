@@ -340,6 +340,9 @@ export function MyJobsHubScreen() {
                       bid.awaiting_id === user.id &&
                       bid.author_id !== user.id;
                     const clientName = names[job.client_id] ?? 'Client';
+                    // Incoming counter-offers are addressed by first name.
+                    const clientFirstName =
+                      clientName.trim().split(/\s+/)[0] || clientName;
                     return (
                       <HubCard
                         key={`bid-${bid.id}`}
@@ -348,7 +351,7 @@ export function MyJobsHubScreen() {
                         title={job.title}
                         subtitle={
                           awaitingMe
-                            ? `${clientName} countered — respond`
+                            ? `${clientFirstName} sent you a Counteroffer — respond`
                             : `Client · ${clientName}`
                         }
                         thumbnailUrl={jobThumbnailUrl(job)}

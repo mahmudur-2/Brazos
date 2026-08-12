@@ -156,6 +156,11 @@ export function JobDetailScreen() {
   const viewerOwesResponse =
     !!activeBid && !!user && !viewerAuthoredBid && activeBid.awaiting_id === user.id;
   const countersLeft = user ? countersRemaining(chain, user.id) : 0;
+  // Incoming counter-offers are addressed by first name — the same first-name
+  // treatment the rest of the app gives a counterparty (WorkerProfileScreen,
+  // HomeScreen). A blank or whitespace-only name falls back to the role word.
+  const posterFirstName =
+    poster?.full_name?.trim().split(/\s+/)[0] || 'The customer';
   const accent = categoryAccent(job.category);
   const galleryPhotos = job.photos ?? [];
   const heroHeight = Math.min(340, Math.max(260, Math.round(screenWidth * 0.82)));
@@ -180,10 +185,27 @@ export function JobDetailScreen() {
   // so a stale card is replaced by the server's truth, never argued with.
   const refreshMyOffer = useCallback(async () => {
     if (!user) return;
-    const { data } = await fetchMyOfferForJob(user.id, job.id);
+    const { data, error } = await fetchMyOfferForJob(user.id, job.id);
+    if (error) {
+      // A FAILED read is not "no offer". Writing its null through would erase
+      // the respond card and its "Your move" badge — the only surface telling
+      // this user a counter is waiting on them — every time the screen is
+      // focused without a connection. Keep last-known-good and let the next
+      // focus re-read (same rule as the inbox's pending badges, hardening A8).
+      console.warn('[JobDetail] offer refresh failed', error.message);
+      return;
+    }
     setExistingBid(data);
     if (data) {
-      const { data: chainRows } = await fetchOfferChain(data.root_offer_id);
+      const { data: chainRows, error: chainError } = await fetchOfferChain(
+        data.root_offer_id
+      );
+      // Same reasoning: a failed chain read returns [], which would silently
+      // reset countersRemaining() to a full allowance.
+      if (chainError) {
+        console.warn('[JobDetail] offer chain refresh failed', chainError.message);
+        return;
+      }
       setChain(chainRows);
     } else {
       setChain([]);
@@ -581,7 +603,7 @@ export function JobDetailScreen() {
               <Card style={styles.secondaryCard}>
                 <View style={styles.bidHeader}>
                   <Text style={styles.sectionTitle}>
-                    {poster?.full_name ?? 'The customer'} countered
+                    {posterFirstName} sent you a Counteroffer
                   </Text>
                   <StatusBadge status="pending" label="Your move" />
                 </View>

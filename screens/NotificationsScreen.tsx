@@ -14,6 +14,7 @@ import {
   type AppNotification,
 } from '../lib/notifications';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import { handleNotificationData } from '../lib/notificationRoutes';
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -75,6 +76,14 @@ export function NotificationsScreen() {
       // this in-app feed and the push tap handler behave identically.
       if (screen === 'Chat') {
         navigateAcrossTabs('Messages', 'Chat', { jobId });
+      } else if (screen === 'ClientJobDetail' || screen === 'JobDetail') {
+        // A counter-offer is answered ON THE JOB — that is where the respond
+        // card with Accept / Decline / Counter lives (phase59 addresses the
+        // payload at exactly these two screens, one per side). Dropping it on
+        // the hub made the notification a dead end. These two take the job ROW
+        // as a route param, so they go through the canonical push router,
+        // which already loads it.
+        void handleNotificationData(notification.data);
       } else {
         navigateAcrossTabs('MyJobs', 'MyJobsHub');
       }

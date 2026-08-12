@@ -81,8 +81,9 @@ test('withdraw renders only for the pending revision the viewer authored', async
     /Withdraw/,
     'the counterparty’s pending revision must never offer Withdraw — it is author-only'
   );
-  // And the respond card carries the three decisions plus attribution.
-  assert.match(respondCard, /countered/);
+  // And the respond card carries the three decisions plus attribution —
+  // attribution is by first name since the phase62 copy change.
+  assert.match(respondCard, /\{posterFirstName\} sent you a Counteroffer/);
   assert.match(respondCard, /Accept for/);
   assert.match(respondCard, /Decline counter-offer/);
 
@@ -190,7 +191,7 @@ test('the hub’s pending-offer card reads a counter awaiting the user as requir
   assert.match(hub, /effectiveOfferStatus\(bid\) === 'pending'/);
   assert.match(hub, /bid\.awaiting_id === user\.id/);
   assert.match(hub, /bid\.author_id !== user\.id/);
-  assert.match(hub, /countered — respond/);
+  assert.match(hub, /sent you a Counteroffer — respond/);
   assert.match(hub, /'Their counter:'/);
   // It routes to the response surface (the worker job detail), same as before.
   assert.match(hub, /navigation\.navigate\('JobDetail', \{ job \}\)/);
