@@ -2494,3 +2494,58 @@ round-trip, unfunded-race walk, badge/hub checks, cold-start landings);
 decide OfferCard fix (known issue 1) as the next closed-scope item;
 merge/keep the branch. The audit's untouched P1s (P1-03/04/05/06/08/10) and
 the release pipeline remain owner-led.
+
+### End of session — 2026-08-12 (HEAD `2f8205b`, tree clean)
+
+**Added tonight (no code changes, no fixes):**
+- **phase59 confirmed APPLIED to staging.** `node scripts/verify-schema.mjs`
+  is fully green — `counter_notification_enabled()` flipped PENDING → OK,
+  and every phase20–59 group reports OK with no MISSING and no PENDING.
+  Steps 1–2 of the phase59 apply instructions above are therefore done;
+  only the on-device confirmation (step 3) remains.
+- **Push-notification pipeline audit (read-only).** Findings: client
+  registration is fully wired (`configurePushHandling()` on start,
+  non-interactive token re-sync on mount via `usePushNotifications()`,
+  `maybePromptForPush()` after post/bid, `unregisterPushToken()` on
+  logout) but minting returns `unsupported` in Expo Go, on simulators and
+  on web, so no token has likely ever been registered; server-side enqueue
+  is complete and verified live, and those same outbox rows already drive
+  the in-app feed and badges; `supabase/functions/send-push/index.ts` is a
+  COMPLETE working Expo sender that **nothing invokes** — phase20 §8's
+  pg_net/pg_cron drain is commented out by design, phase39:71 confirms
+  neither extension is used, and no client calls it (nor should it —
+  service-role only, 403s anything else). Its deployment status is not
+  determinable from the repo. Net: the outbox fills, nothing sends.
+- **`docs/emerald-v2/06_DEFERRED_INTEGRATIONS.md:21` corrected** (commit
+  `2f8205b`) — the push row's two "not re-verified this pass" hedges
+  replaced with the confirmed status above, the three outstanding items
+  enumerated (confirm/deploy the function, decide and implement a trigger,
+  cut a dev/EAS build), and the activation point re-marked **OWNER-LED,
+  post-hardening**. Doc only; the table's 12-column structure verified
+  unchanged. This is NOT one of the emerald-v2 immutable references
+  (those are `docs/emerald-v2/references/*`).
+
+**Still open at session end:**
+1. **Two-device staging script — Tests 1, 2, 3, 5 NOT RUN.** Counter
+   round-trip both directions; unfunded-race walk at in_progress and
+   completed (plus the Chat direct-offer variant); badge/inbox checks
+   including the never-chatted pair; duplicate-tap and two-device
+   double-accept races plus the Checkout stale-frame flash. Script is in
+   the run report; these are the only way to close the 5 NEEDS-DEVICE
+   verdicts and the P1-09 cold-start landings.
+2. **Test 4 (phase59 push delivery end to end) BLOCKED** on the three
+   push items above — deployment, a trigger, and a real dev/EAS build.
+   Owner-led, post-hardening. The in-app feed/badge half of phase59's
+   value already works without any of it.
+3. **OfferCard fix (known issue 1) UNDECIDED** — `components/OfferCard.tsx:130`
+   `canAcceptThisOffer` lacks the awaiting/author check, so a customer's
+   own counter renders with a live "Accept offer" the server always
+   refuses. Same class as AUD-P1-01, customer list side. Server-guarded,
+   no state corruption; recommended as the next closed-scope item.
+4. **Merge of `stability-core-transactions` into mainexpo UNDECIDED.**
+   Branch is unmerged and unpushed; base tag `pre-core-transactions-2026-08-11`
+   remains the rollback point.
+
+**Gate unchanged since the run:** tsc exit 0 · lint exit 0 · 308 tests,
+307 pass, 1 fail (the documented frozen-web PWA mismatch) · verify-schema
+green including phase59.
