@@ -61,8 +61,17 @@ export function MessagesInboxScreen() {
   // or counter-offer. Keyed the same way the rows are, so a request in a
   // direct thread badges its row too.
   const [pendingByThread, setPendingByThread] = useState<Set<string>>(new Set());
+  // Marketplace-bid chains carry NO thread keys (no root message, by design —
+  // phase46), so keying them `direct:null` matched nothing and a counter
+  // awaiting this user never badged anywhere (AUD-P1-01). They badge the
+  // pair's direct thread instead, keyed by the counterparty's id.
+  const [pendingByCounterparty, setPendingByCounterparty] = useState<Set<string>>(
+    new Set()
+  );
 
   const loadPending = useCallback(async () => {
+    const viewerId = user?.id;
+    if (!viewerId) return;
     const { data, error } = await fetchMyPendingOffers();
     if (error) {
       // Keep the last known badges — a failed refresh must not clear the
@@ -70,14 +79,22 @@ export function MessagesInboxScreen() {
       console.warn('[MessagesInbox] pending-offer refresh failed', error.message);
       return;
     }
-    setPendingByThread(
-      new Set(
-        data.map((r) =>
-          r.thread_job_id ? `job:${r.thread_job_id}` : `direct:${r.direct_thread_id}`
-        )
-      )
-    );
-  }, []);
+    const byThread = new Set<string>();
+    const byCounterparty = new Set<string>();
+    for (const r of data) {
+      if (r.thread_job_id) {
+        byThread.add(`job:${r.thread_job_id}`);
+      } else if (r.direct_thread_id) {
+        byThread.add(`direct:${r.direct_thread_id}`);
+      } else {
+        // A marketplace bid: the viewer is one of the two chain parties, so
+        // the other one is the counterparty whose direct row should badge.
+        byCounterparty.add(r.customer_id === viewerId ? r.worker_id : r.customer_id);
+      }
+    }
+    setPendingByThread(byThread);
+    setPendingByCounterparty(byCounterparty);
+  }, [user?.id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -127,7 +144,10 @@ export function MessagesInboxScreen() {
       const lastReadAt = c.job_id ? readMap[c.job_id] : c.my_read_at;
       const isMuted = moderation.muted.has(otherId);
       const key = conversationKey(c);
-      const awaitingRequest = pendingByThread.has(key);
+      // Direct rows also answer for the pair's marketplace-bid chains, which
+      // have no thread key of their own (see loadPending above).
+      const awaitingRequest =
+        pendingByThread.has(key) || (!c.job_id && pendingByCounterparty.has(otherId));
       // Muted conversations still receive messages — they just don't raise the
       // unread indicator (the only "badge" this app currently has).
       const unread =
@@ -170,6 +190,7 @@ export function MessagesInboxScreen() {
     moderation,
     user,
     pendingByThread,
+    pendingByCounterparty,
   ]);
 
   async function toggleBlock(target: SheetTarget) {

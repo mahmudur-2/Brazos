@@ -20,6 +20,7 @@ import {
   jobThumbnailUrl,
   toOpenJob,
 } from '../lib/jobs';
+import { effectiveOfferStatus } from '../lib/offers';
 import { draftHasContent, loadPostJobDraft, type PostJobDraft } from '../lib/postJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { colors, radius, spacing } from '../lib/theme';
@@ -329,19 +330,40 @@ export function MyJobsHubScreen() {
                     // Normalized once so the card and the screen it opens are
                     // built from the same row, not two different readings of it.
                     const job = toOpenJob(bid.job);
+                    // Whose terms, whose move — from author_id/awaiting_id,
+                    // never from worker_id (AUD-P1-01): a pending customer
+                    // counter must read as requiring THIS user's response,
+                    // not as their own bid quietly pending.
+                    const awaitingMe =
+                      effectiveOfferStatus(bid) === 'pending' &&
+                      !!user &&
+                      bid.awaiting_id === user.id &&
+                      bid.author_id !== user.id;
+                    const clientName = names[job.client_id] ?? 'Client';
                     return (
                       <HubCard
                         key={`bid-${bid.id}`}
                         icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                         category={job.category}
                         title={job.title}
-                        subtitle={`Client · ${names[job.client_id] ?? 'Client'}`}
+                        subtitle={
+                          awaitingMe
+                            ? `${clientName} countered — respond`
+                            : `Client · ${clientName}`
+                        }
                         thumbnailUrl={jobThumbnailUrl(job)}
                         metaLine={metaLineFor(job)}
                         timeLabel={formatTimeAgo(job.created_at)}
                         priceCents={bid.amount_cents}
-                        priceLabel="Your bid:"
+                        priceLabel={
+                          awaitingMe
+                            ? 'Their counter:'
+                            : bid.author_id === user?.id && bid.parent_offer_id
+                              ? 'Your counter:'
+                              : 'Your bid:'
+                        }
                         status={bid.status}
+                        statusLabel={awaitingMe ? 'Respond' : undefined}
                         onPress={() => navigation.navigate('JobDetail', { job })}
                       />
                     );

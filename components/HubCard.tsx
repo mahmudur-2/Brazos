@@ -30,6 +30,10 @@ type HubCardProps = {
   priceCents: number | null;
   priceLabel?: string;
   status: string;
+  /** Overrides the badge's text while keeping `status`'s colour — see
+   *  StatusBadge. Used when the status key alone under-states the row
+   *  ("Pending" on a counter that is actually waiting on the viewer). */
+  statusLabel?: string;
   onPress: () => void;
 };
 
@@ -44,6 +48,7 @@ export function HubCard({
   priceCents,
   priceLabel,
   status,
+  statusLabel,
   onPress,
 }: HubCardProps) {
   const accent = categoryAccent(category);
@@ -55,7 +60,7 @@ export function HubCard({
   return (
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.statusRow}>
-        <StatusBadge status={status} />
+        <StatusBadge status={status} label={statusLabel} />
         {timeLabel ? <Text style={styles.time}>{timeLabel}</Text> : null}
       </View>
 

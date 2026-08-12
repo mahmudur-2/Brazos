@@ -886,6 +886,19 @@ const MIGRATIONS = [
         checkRpc('client_job_stats', { p_client_id: ZERO_UUID })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 59 (core-transactions run). Marketplace counter-offer
+    // notification — one trigger through the phase20/56 outbox pipeline. A
+    // trigger has no PostgREST-probeable shape (the phase52 situation), so
+    // the sentinel carries the group. STAGING deliverable: additive
+    // convenience — the AUD-P1-01 client fixes stand without it.
+    // -----------------------------------------------------------------------
+    file: 'phase59_staging_counter_notification.sql',
+    sentinel: ['rpc counter_notification_enabled()', () =>
+      checkRpc('counter_notification_enabled', {})],
+    checks: [],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
