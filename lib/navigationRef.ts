@@ -124,6 +124,12 @@ export function navigateAcrossTabs(
         navigationRef.navigate(tab, {
           screen,
           params,
+          // Never let a cross-tab landing become its stack's initial route.
+          // Without this, an unvisited tab mounts with the target as its ONLY
+          // route: the tab bar's pop-to-top lands on the target forever and
+          // the stack's declared root is unreachable for the whole session
+          // (AUD-P1-09 — the notification cold-start orphaned Messages inbox).
+          initial: false,
           ...(options?.pop ? { pop: true } : null),
         });
       } else {

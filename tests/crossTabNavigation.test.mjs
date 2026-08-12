@@ -365,6 +365,26 @@ test('back pops when it can, and lands on the mounted mode home when it cannot',
   );
 });
 
+test('a cross-tab landing never becomes its stack root', async () => {
+  const ref = stripComments(await read('lib/navigationRef.ts'));
+
+  // AUD-P1-09: without `initial: false`, React Navigation mounts an unvisited
+  // tab's stack with the landing screen as its INITIAL route — the declared
+  // root is never underneath it, the tab bar's pop-to-top re-lands on the
+  // target, and the tab's root screen (e.g. the Messages inbox after a chat
+  // push cold start) is unreachable for the rest of the session.
+  const nestedDispatch = ref.match(
+    /navigationRef\.navigate\(tab, \{[\s\S]*?\}\);/
+  );
+  assert.ok(nestedDispatch, 'expected the nested dispatch in navigateAcrossTabs()');
+  assert.match(
+    nestedDispatch[0],
+    /initial: false/,
+    'the nested cross-tab payload must carry initial: false so the tab root ' +
+      'always sits beneath a cross-tab landing'
+  );
+});
+
 test('the guarded helper is the only thing that dispatches a nested target', async () => {
   const [ref, routesModule] = await Promise.all([
     read('lib/navigationRef.ts'),
