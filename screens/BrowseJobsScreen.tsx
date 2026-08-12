@@ -104,9 +104,16 @@ export function BrowseJobsScreen() {
 
   const stats = useMemo(() => {
     let cents = 0;
-    for (const job of jobs) cents += job.budget_cents ?? 0;
-    return { cents, count: jobs.length };
-  }, [jobs]);
+    let count = 0;
+    for (const job of jobs) {
+      // Own posted jobs stay IN the feed (their card carries Edit) but out
+      // of the earnings sum — you cannot earn from your own job.
+      if (profile?.id && job.client_id === profile.id) continue;
+      cents += job.budget_cents ?? 0;
+      count += 1;
+    }
+    return { cents, count };
+  }, [jobs, profile?.id]);
 
   // Home shows a taste of the feed, not the whole marketplace — "View all"
   // is the real full list (WorkerResultsScreen, mode "all").
