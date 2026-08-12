@@ -273,7 +273,15 @@ export async function fetchOffersForJob(jobId: string) {
   };
 }
 
-/** The live offer this worker has on a job, if any. */
+/**
+ * The live offer this worker has on a job, if any.
+ *
+ * The returned row is the chain's CURRENT pending revision, which is not
+ * necessarily the viewer's: after a customer counter, worker_id is still the
+ * worker but author_id is the customer and awaiting_id is the worker. Callers
+ * must derive "whose terms, whose move" from author_id/awaiting_id — never
+ * from worker_id alone (AUD-P1-01's root cause).
+ */
 export async function fetchMyOfferForJob(workerId: string, jobId: string) {
   const { data, error } = await supabase
     .from('job_offers')
@@ -284,6 +292,22 @@ export async function fetchMyOfferForJob(workerId: string, jobId: string) {
     .maybeSingle();
 
   return { data: data as Offer | null, error };
+}
+
+/**
+ * Every revision of one negotiation chain, oldest first — what
+ * countersRemaining() counts. RLS scopes the read to chains the viewer is
+ * party to; a worker receives the whole chain (customer-authored counters
+ * included) because worker_id is theirs on every row of it.
+ */
+export async function fetchOfferChain(rootOfferId: string) {
+  const { data, error } = await supabase
+    .from('job_offers')
+    .select(OFFER_COLUMNS)
+    .eq('root_offer_id', rootOfferId)
+    .order('created_at', { ascending: true });
+
+  return { data: (data ?? []) as Offer[], error };
 }
 
 /** The worker's still-live offers, newest first. */

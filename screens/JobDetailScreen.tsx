@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -46,12 +46,17 @@ import {
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { Avatar } from '../components/Avatar';
 import {
+  acceptOffer,
+  countersRemaining,
   createMarketplaceOffer,
+  declineOffer,
   fetchMyOfferForJob,
+  fetchOfferChain,
   isOfferLapsed,
   withdrawOffer,
   type Offer,
 } from '../lib/offers';
+import { OfferComposer } from '../components/OfferComposer';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
@@ -109,8 +114,16 @@ export function JobDetailScreen() {
   // OfferComposer owns its own in-flight guard.
   const [takingListedPrice, setTakingListedPrice] = useState(false);
   const [existingBid, setExistingBid] = useState<Offer | null>(null);
+  // The full chain behind existingBid (every revision sharing its root) —
+  // what countersRemaining() counts. Empty when there is no live chain.
+  const [chain, setChain] = useState<Offer[]>([]);
   const [checking, setChecking] = useState(true);
   const [withdrawing, setWithdrawing] = useState(false);
+  const [responding, setResponding] = useState<'accept' | 'decline' | null>(null);
+  const [confirmResponse, setConfirmResponse] = useState<'accept' | 'decline' | null>(null);
+  const [showCounterForm, setShowCounterForm] = useState(false);
+  // Sync guard: two fast taps both read the old state before React paints.
+  const respondingRef = useRef(false);
   const [openingChat, setOpeningChat] = useState(false);
   const [confirmWithdrawVisible, setConfirmWithdrawVisible] = useState(false);
   // The posting customer's public profile + real posting history — the
@@ -135,6 +148,14 @@ export function JobDetailScreen() {
   // to bid again — the server enforces the same rule inside every RPC.
   const bidLapsed = !!existingBid && isOfferLapsed(existingBid);
   const activeBid = existingBid && !bidLapsed ? existingBid : null;
+  // Whose terms, whose move — from author_id/awaiting_id, NEVER from
+  // worker_id: the chain's pending revision keeps worker_id = this worker
+  // even when the CUSTOMER authored it as a counter (AUD-P1-01). The RPCs
+  // re-check both server-side; these only decide what to render.
+  const viewerAuthoredBid = !!activeBid && !!user && activeBid.author_id === user.id;
+  const viewerOwesResponse =
+    !!activeBid && !!user && !viewerAuthoredBid && activeBid.awaiting_id === user.id;
+  const countersLeft = user ? countersRemaining(chain, user.id) : 0;
   const accent = categoryAccent(job.category);
   const galleryPhotos = job.photos ?? [];
   const heroHeight = Math.min(340, Math.max(260, Math.round(screenWidth * 0.82)));
@@ -154,27 +175,39 @@ export function JobDetailScreen() {
     })
     .slice(0, 3);
 
+  // The one canonical re-read: the chain's live pending revision plus every
+  // revision behind it. Every action lands back here — success or REFUSAL —
+  // so a stale card is replaced by the server's truth, never argued with.
+  const refreshMyOffer = useCallback(async () => {
+    if (!user) return;
+    const { data } = await fetchMyOfferForJob(user.id, job.id);
+    setExistingBid(data);
+    if (data) {
+      const { data: chainRows } = await fetchOfferChain(data.root_offer_id);
+      setChain(chainRows);
+    } else {
+      setChain([]);
+    }
+  }, [user, job.id]);
+
   // Focus, not mount: the bid form now lives on its own route (SubmitBid),
-  // so coming back from Bid Sent — or from withdrawing over on another
+  // so coming back from Bid Sent — or from a counter answered on another
   // device — must re-read the canonical row rather than trust mount state.
   useFocusEffect(
     useCallback(() => {
-      let active = true;
       if (!user || isOwnJob) {
         setChecking(false);
         return;
       }
-      fetchMyOfferForJob(user.id, job.id).then(({ data }) => {
-        if (active) {
-          setExistingBid(data);
-          setChecking(false);
-        }
-      });
-      return () => {
-        active = false;
-      };
-    }, [user, job.id, isOwnJob])
+      void refreshMyOffer().finally(() => setChecking(false));
+    }, [user, isOwnJob, refreshMyOffer])
   );
+
+  // A different revision means a different negotiation moment — never leave
+  // a half-typed counter form pointed at a row that no longer exists.
+  useEffect(() => {
+    setShowCounterForm(false);
+  }, [activeBid?.id]);
 
   // A retained JobDetail route may be re-targeted from a similar-job card.
   // Always lead with that job's poster-selected first photo.
@@ -225,8 +258,7 @@ export function JobDetailScreen() {
       // already bid — resync so the form is replaced by the real bid rather
       // than inviting another attempt.
       if (error.code === '23505') {
-        const { data: mine } = await fetchMyOfferForJob(user.id, job.id);
-        setExistingBid(mine);
+        await refreshMyOffer();
       }
       return false;
     }
@@ -235,8 +267,7 @@ export function JobDetailScreen() {
     // RLS-locked to SELECT, so the authoritative row is read back rather than
     // assembled client-side from what was just sent.
     if (offerId) {
-      const { data: mine } = await fetchMyOfferForJob(user.id, job.id);
-      setExistingBid(mine);
+      await refreshMyOffer();
     }
     return true;
   }
@@ -296,8 +327,53 @@ export function JobDetailScreen() {
       // Whatever blocked it (already accepted, already expired), the truth is
       // in the canonical row — re-read rather than guess.
     }
-    const { data: mine } = await fetchMyOfferForJob(user.id, job.id);
-    setExistingBid(mine);
+    await refreshMyOffer();
+  }
+
+  /**
+   * Accept the customer's counter (§H.2). accept_offer() re-validates the
+   * turn, expiry, and the job's state under its locks — a stale card cannot
+   * take an already-filled job; the refusal is re-read below instead.
+   */
+  async function handleAcceptCounter() {
+    if (!user || !activeBid || respondingRef.current) return;
+    respondingRef.current = true;
+    setResponding('accept');
+    const { data: assignedJobId, error } = await acceptOffer(activeBid.id);
+    respondingRef.current = false;
+    setResponding(null);
+    setConfirmResponse(null);
+    if (error || !assignedJobId) {
+      await alertAsync(
+        'Could not accept this offer',
+        userMessage(error, 'Check your connection and try again.')
+      );
+      await refreshMyOffer();
+      return;
+    }
+    await alertAsync(
+      'Offer accepted',
+      'You’re hired — the job is assigned to you and now lives in My Jobs.'
+    );
+    // MyJobs is a shared tab; the one guarded dispatch path, same as Chat's
+    // accepted-offer jump.
+    navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: assignedJobId });
+  }
+
+  /** Decline the customer's counter. Their exit is decline, never withdraw —
+   *  withdraw belongs to the pending revision's AUTHOR alone (phase50). */
+  async function handleDeclineCounter() {
+    if (!user || !activeBid || respondingRef.current) return;
+    respondingRef.current = true;
+    setResponding('decline');
+    const { error } = await declineOffer(activeBid.id);
+    respondingRef.current = false;
+    setResponding(null);
+    setConfirmResponse(null);
+    if (error) {
+      await alertAsync('Could not decline this offer', userMessage(error));
+    }
+    await refreshMyOffer();
   }
 
   /**
@@ -497,41 +573,138 @@ export function JobDetailScreen() {
           ) : checking ? (
             <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.lg }} />
           ) : activeBid ? (
-            <Card style={styles.secondaryCard}>
-              <View style={styles.bidHeader}>
-                <Text style={styles.sectionTitle}>Your bid</Text>
-                <StatusBadge status={activeBid.status} />
-              </View>
-              <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
-              {activeBid.message ? (
-                <Text style={styles.bidMessage}>“{activeBid.message}”</Text>
-              ) : null}
-              <Text style={styles.bidNote}>
-                {activeBid.expires_at
-                  ? `The customer can accept it until ${new Date(
-                      activeBid.expires_at
-                    ).toLocaleDateString(undefined, {
-                      month: 'short',
-                      day: 'numeric',
-                    })} — after that it expires on its own. Check My Jobs for updates.`
-                  : 'You’ve already bid on this job. Check My Jobs for updates.'}
-              </Text>
-              <Button
-                title={`Message ${poster?.full_name ?? 'the poster'}`}
-                variant="secondary"
-                onPress={openPosterChat}
-                loading={openingChat}
-                disabled={openingChat}
-              />
-              <Button
-                title="Withdraw bid"
-                variant="secondary"
-                onPress={() => setConfirmWithdrawVisible(true)}
-                loading={withdrawing}
-                disabled={withdrawing}
-                style={styles.withdrawAction}
-              />
-            </Card>
+            viewerOwesResponse ? (
+              // The customer countered: THEIR terms, YOUR move. Attributed to
+              // them, answered with the three server actions — never labeled
+              // "Your bid", never offered Withdraw (author-only, and the
+              // author is the customer here). AUD-P1-01.
+              <Card style={styles.secondaryCard}>
+                <View style={styles.bidHeader}>
+                  <Text style={styles.sectionTitle}>
+                    {poster?.full_name ?? 'The customer'} countered
+                  </Text>
+                  <StatusBadge status="pending" label="Your move" />
+                </View>
+                <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
+                <Text style={styles.bidNote}>
+                  Their price for this job — accepting assigns you the work at
+                  this amount.
+                  {activeBid.expires_at
+                    ? ` Respond by ${new Date(activeBid.expires_at).toLocaleDateString(
+                        undefined,
+                        { month: 'short', day: 'numeric' }
+                      )} — after that it expires on its own.`
+                    : ''}
+                </Text>
+                <Button
+                  title={`Accept for ${formatBudget(activeBid.amount_cents)}`}
+                  onPress={() => setConfirmResponse('accept')}
+                  loading={responding === 'accept'}
+                  disabled={responding !== null}
+                />
+                <Button
+                  title={showCounterForm ? 'Cancel counter-offer' : 'Counter'}
+                  variant="secondary"
+                  onPress={() => setShowCounterForm((visible) => !visible)}
+                  disabled={responding !== null || (countersLeft === 0 && !showCounterForm)}
+                  style={styles.withdrawAction}
+                />
+                {countersLeft === 0 && !showCounterForm ? (
+                  <Text style={styles.bidNote}>
+                    You’ve used all your counter-offers on this negotiation —
+                    accept or decline to continue.
+                  </Text>
+                ) : null}
+                {showCounterForm ? (
+                  <OfferComposer
+                    context={{
+                      kind: 'counter',
+                      offer: activeBid,
+                      counterpartyName: poster?.full_name ?? 'The customer',
+                      jobTitle: job.title,
+                      countersRemaining: countersLeft,
+                    }}
+                    onSubmitted={async () => {
+                      // The chain moved: their revision is superseded and the
+                      // turn is theirs. Re-read so the card shows the truth.
+                      setShowCounterForm(false);
+                      await refreshMyOffer();
+                    }}
+                  />
+                ) : null}
+                <Button
+                  title="Decline counter-offer"
+                  variant="secondary"
+                  onPress={() => setConfirmResponse('decline')}
+                  loading={responding === 'decline'}
+                  disabled={responding !== null}
+                  style={styles.withdrawAction}
+                />
+                <Button
+                  title={`Message ${poster?.full_name ?? 'the poster'}`}
+                  variant="secondary"
+                  onPress={openPosterChat}
+                  loading={openingChat}
+                  disabled={openingChat}
+                  style={styles.withdrawAction}
+                />
+              </Card>
+            ) : viewerAuthoredBid ? (
+              <Card style={styles.secondaryCard}>
+                <View style={styles.bidHeader}>
+                  <Text style={styles.sectionTitle}>
+                    {activeBid.parent_offer_id ? 'Your counter-offer' : 'Your bid'}
+                  </Text>
+                  <StatusBadge status={activeBid.status} />
+                </View>
+                <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
+                {activeBid.message ? (
+                  <Text style={styles.bidMessage}>“{activeBid.message}”</Text>
+                ) : null}
+                <Text style={styles.bidNote}>
+                  {activeBid.expires_at
+                    ? `The customer can accept it until ${new Date(
+                        activeBid.expires_at
+                      ).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                      })} — after that it expires on its own. Check My Jobs for updates.`
+                    : 'You’ve already bid on this job. Check My Jobs for updates.'}
+                </Text>
+                <Button
+                  title={`Message ${poster?.full_name ?? 'the poster'}`}
+                  variant="secondary"
+                  onPress={openPosterChat}
+                  loading={openingChat}
+                  disabled={openingChat}
+                />
+                <Button
+                  title="Withdraw bid"
+                  variant="secondary"
+                  onPress={() => setConfirmWithdrawVisible(true)}
+                  loading={withdrawing}
+                  disabled={withdrawing}
+                  style={styles.withdrawAction}
+                />
+              </Card>
+            ) : (
+              // Pending, but neither authored by nor awaiting this viewer —
+              // a state this screen cannot positively classify (two-party
+              // chains should make it unreachable). Render it attributed and
+              // actionless rather than guessing at an action the server
+              // would refuse.
+              <Card style={styles.secondaryCard}>
+                <View style={styles.bidHeader}>
+                  <Text style={styles.sectionTitle}>Offer in negotiation</Text>
+                  <StatusBadge status={activeBid.status} />
+                </View>
+                <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
+                <Text style={styles.bidNote}>
+                  This negotiation is waiting on the other side. Check My Jobs
+                  for updates.
+                </Text>
+              </Card>
+            )
           ) : (
             <>
               {bidLapsed ? (
@@ -694,6 +867,28 @@ export function JobDetailScreen() {
         loading={withdrawing}
         onConfirm={handleWithdraw}
         onCancel={() => setConfirmWithdrawVisible(false)}
+      />
+
+      <ConfirmDialog
+        visible={confirmResponse === 'accept'}
+        title={`Accept ${formatBudget(activeBid?.amount_cents ?? null)} for this job?`}
+        message="This takes the job at the customer’s countered amount and closes the negotiation. The job is assigned to you and moves into My Jobs."
+        confirmText="Accept offer"
+        cancelText="Cancel"
+        loading={responding === 'accept'}
+        onConfirm={handleAcceptCounter}
+        onCancel={() => setConfirmResponse(null)}
+      />
+
+      <ConfirmDialog
+        visible={confirmResponse === 'decline'}
+        title="Decline this counter-offer?"
+        message="This closes the negotiation — the customer’s counter can’t be accepted afterwards. You can send a new bid unless the job is filled."
+        confirmText="Decline offer"
+        cancelText="Cancel"
+        loading={responding === 'decline'}
+        onConfirm={handleDeclineCounter}
+        onCancel={() => setConfirmResponse(null)}
       />
     </SafeAreaView>
   );
