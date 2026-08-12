@@ -343,9 +343,28 @@ export function ChatScreen() {
 
     await refreshRequests();
     if (action === 'accept') {
+      // The accepter decides the next step (AUD-P1-02). The CUSTOMER just
+      // agreed to pay: funding is the immediate next move — ending on an
+      // alert here is exactly how jobs ran to completed with an empty
+      // ledger. The WORKER cannot fund; they get told where the job lives.
+      if (user && user.id === request.customer_id) {
+        setOpeningJobId(request.id);
+        const { data: acceptedJob, error: jobError } = await fetchJobById(request.job_id);
+        setOpeningJobId(null);
+        if (!jobError && acceptedJob) {
+          // Checkout lives in the shared MyJobs tab in both trees; the one
+          // guarded dispatch path, same as openAcceptedJob below.
+          navigateAcrossTabs('MyJobs', 'Checkout', { job: acceptedJob });
+          return;
+        }
+        // The row didn't come back (connection, RLS edge) — fall through to
+        // the honest alert; ClientJobDetail now carries the funding CTA too.
+      }
       await alertAsync(
         'Offer accepted',
-        'The job is now assigned and has moved into My Jobs.'
+        user && user.id === request.customer_id
+          ? 'The job is now assigned and has moved into My Jobs. Protect the payment in checkout from the job screen.'
+          : 'The job is now assigned and has moved into My Jobs.'
       );
     }
   }

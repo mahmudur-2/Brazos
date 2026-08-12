@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobVideo } from '../components/JobVideo';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -14,7 +15,13 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
+import {
+  canOfferJobFunding,
+  fetchJobPaymentState,
+  isHeld,
+  isReleased,
+  type Payment,
+} from '../lib/payments';
 import {
   DISPUTE_REASONS,
   DISPUTE_REASON_LABELS,
@@ -116,6 +123,15 @@ export function ApproveOrDisputeScreen() {
 
   const released = !!payment && isReleased(payment);
   const held = !!payment && isHeld(payment);
+  // The one funding-CTA derivation (AUD-P1-02, lib/payments) — the same
+  // predicate ClientJobDetail renders its checkout card from. True only for
+  // the owner on a fundable job with no ledger or an authorized-only row.
+  const canFundNow = canOfferJobFunding({
+    viewerId: user?.id,
+    job,
+    payment,
+    hasOpenDispute: !!dispute,
+  });
 
   async function approveAndRelease() {
     if (releasingRef.current) return;
@@ -241,7 +257,7 @@ export function ApproveOrDisputeScreen() {
           </View>
         ) : null}
 
-        {payment ? (
+        {payment && !canFundNow ? (
           <View style={styles.paymentCard}>
             <Text style={styles.eyebrow}>
               {released ? 'PAYMENT RELEASED · SANDBOX' : 'HELD PAYMENT · SANDBOX'}
@@ -254,6 +270,24 @@ export function ApproveOrDisputeScreen() {
                   : 'You approved the work and the funds were released. Sandbox build — no real money moved.'
                 : 'Approving releases these funds to the worker. If something isn’t right, report the issue instead — release waits while a report is open. Sandbox build, no real money.'}
             </Text>
+          </View>
+        ) : canFundNow ? (
+          // AUD-P1-02: this used to be a dead end ("nothing to release") for
+          // exactly the job that most needs a money action — completed with
+          // an empty or authorized-only ledger. Funding is offered from the
+          // same one derivation ClientJobDetail uses; there is nothing to
+          // release until the funds are protected first.
+          <View style={styles.paymentCard}>
+            <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
+            <Text style={styles.paymentNote}>
+              {payment?.status === 'authorized'
+                ? 'The payment is authorized — not charged — but checkout never finished, so there is nothing to release yet. Finish checkout to protect the funds; approval releases them afterwards.'
+                : 'This job finished without a protected payment, so there is nothing to release yet — the worker can’t be paid until the payment is protected and then released.'}
+            </Text>
+            <Button
+              title="Protect payment in checkout"
+              onPress={() => navigation.navigate('Checkout', { job })}
+            />
           </View>
         ) : (
           <View style={styles.paymentCard}>

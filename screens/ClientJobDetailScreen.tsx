@@ -37,7 +37,13 @@ import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
+import {
+  canOfferJobFunding,
+  fetchJobPaymentState,
+  isHeld,
+  isReleased,
+  type Payment,
+} from '../lib/payments';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { alertAsync } from '../lib/dialog';
@@ -139,6 +145,15 @@ export function ClientJobDetailScreen() {
   // THE lifecycle derivation point (run addendum §1) — the completed-job fork
   // below branches on this, never on a hand-rolled status+payment combo.
   const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: !!openDispute });
+  // THE funding-CTA derivation (AUD-P1-02) — expressed once in lib/payments,
+  // never as a per-branch status conditional. The worker starting or even
+  // finishing must never strand an unfunded job with no checkout path.
+  const canFundNow = canOfferJobFunding({
+    viewerId: user?.id,
+    job,
+    payment,
+    hasOpenDispute: !!openDispute,
+  });
 
   useEffect(() => {
     screenMountedRef.current = true;
@@ -768,33 +783,41 @@ export function ClientJobDetailScreen() {
               )}
 
             {/* The money truth for this job (phase50 ledger). Labels come from
-                MoneyText's fixed §H.3 captions — never hand-written here. */}
-            {job.status === 'assigned' ? (
-              payment && isHeld(payment) ? (
-                <Card palette={emeraldColors} style={styles.paymentCard}>
-                  <Text style={styles.eyebrow}>PROTECTED PAYMENT · SANDBOX</Text>
-                  <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
-                  <Text style={styles.paymentNote}>
-                    Funds stay held until you approve the finished work. Sandbox
-                    build — no real money moves.
-                  </Text>
-                </Card>
-              ) : (
-                <Card palette={emeraldColors} style={styles.paymentCard}>
-                  <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
-                  <Text style={styles.paymentNote}>
-                    {workerName} is hired, but the payment isn’t in protection yet.
-                    {payment?.status === 'authorized'
-                      ? ' It’s authorized — not charged — finish checkout to protect it.'
+                MoneyText's fixed §H.3 captions — never hand-written here. The
+                funding CTA renders from canFundNow ALONE (AUD-P1-02): once at
+                assigned, and still at in_progress/completed, because phase58's
+                authorize-after-start exists exactly for the worker outrunning
+                checkout. It never renders over a held/released/refunded or
+                otherwise unclassifiable row — that is the double-charge line. */}
+            {canFundNow ? (
+              <Card palette={emeraldColors} style={styles.paymentCard}>
+                <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
+                <Text style={styles.paymentNote}>
+                  {workerName} is hired, but the payment isn’t in protection yet.
+                  {payment?.status === 'authorized'
+                    ? ' It’s authorized — not charged — finish checkout to protect it.'
+                    : ''}
+                  {job.status === 'in_progress'
+                    ? ' The work has started; protecting the payment works exactly the same.'
+                    : job.status === 'completed'
+                      ? ' The work is finished, but the worker can’t be paid until the payment is protected and then released.'
                       : ''}
-                  </Text>
-                  <Button
-                    title="Protect payment in checkout"
-                    palette={emeraldColors}
-                    onPress={() => navigation.navigate('Checkout', { job })}
-                  />
-                </Card>
-              )
+                </Text>
+                <Button
+                  title="Protect payment in checkout"
+                  palette={emeraldColors}
+                  onPress={() => navigation.navigate('Checkout', { job })}
+                />
+              </Card>
+            ) : payment && isHeld(payment) && job.status === 'assigned' ? (
+              <Card palette={emeraldColors} style={styles.paymentCard}>
+                <Text style={styles.eyebrow}>PROTECTED PAYMENT · SANDBOX</Text>
+                <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
+                <Text style={styles.paymentNote}>
+                  Funds stay held until you approve the finished work. Sandbox
+                  build — no real money moves.
+                </Text>
+              </Card>
             ) : payment ? (
               <Card palette={emeraldColors} style={styles.paymentCard}>
                 <Text style={styles.eyebrow}>PAYMENT · SANDBOX</Text>
@@ -893,11 +916,14 @@ export function ClientJobDetailScreen() {
             )}
 
             {job.status === 'completed' ? (
-              // Phase 6, §9 ordering: with a payment on the job, approval
-              // comes FIRST — release the held funds (or report an issue) on
-              // screen 36, review & tip on screen 37 only after release. A
-              // legacy job that completed without any payment keeps the old
-              // inline review, since there is nothing to release.
+              // Phase 6, §9 ordering: with a HELD payment, approval comes
+              // FIRST — release the held funds (or report an issue) on screen
+              // 36, review & tip on screen 37 only after release. An unfunded
+              // or authorized-only ledger is the funding card's job above
+              // (canFundNow) — a missing ledger is NOT a settled legacy
+              // payment, so nothing here may imply the payment finished,
+              // the worker was paid, or review/tip is available merely
+              // because the status reads completed (AUD-P1-02).
               payment ? (
                 lifecycle === 'disputed' && openDispute ? (
                   <Card palette={emeraldColors} style={styles.approvalCard}>
@@ -939,21 +965,14 @@ export function ClientJobDetailScreen() {
                       onPress={() => navigation.navigate('ReviewAndTip', { job })}
                     />
                   </Card>
-                ) : (
-                  <Card palette={emeraldColors} style={styles.approvalCard}>
-                    <Text style={styles.approvalTitle}>Payment unfinished</Text>
-                    <Text style={styles.noticeText}>
-                      The job is complete but the payment never reached
-                      protection. Finish checkout to protect and then release it.
-                    </Text>
-                    <Button
-                      title="Finish checkout"
-                      palette={emeraldColors}
-                      onPress={() => navigation.navigate('Checkout', { job })}
-                    />
-                  </Card>
-                )
-              ) : user && job.assigned_worker_id ? (
+                ) : null
+              ) : // An authorized row landed in the funding card above; any other
+              // unheld, unreleased row (refunded, …) shows its MoneyText above
+              // and offers nothing here — never a checkout off a row this
+              // screen cannot positively classify.
+              canFundNow ? null : user && job.assigned_worker_id ? ( // funding card above owns this state
+                // No ledger AND no funding path (e.g. an open report on an
+                // unfunded job): the pre-payments legacy review, unchanged.
                 <ReviewSection
                   key={`${job.id}:${user.id}`}
                   jobId={job.id}

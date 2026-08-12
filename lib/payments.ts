@@ -121,6 +121,49 @@ export function isReleased(payment: Pick<Payment, 'status'>): boolean {
 }
 
 /**
+ * Whether the funding CTA (Checkout) may be offered for this job — THE one
+ * derivation for every surface that can show it (AUD-P1-02; the lifecycle
+ * derivation drifted into a duplicate once already, so this predicate exists
+ * exactly once). It mirrors the server contract of
+ * sandbox_authorize_job_payment (phase58): the job's owner, an accepted
+ * assignment, status assigned/in_progress/completed — the worker starting or
+ * even finishing must never destroy the customer's path to fund.
+ *
+ * The payment side is a strict WHITELIST: offer only on
+ *   - no active row (checkout never ran; failed/voided rows read as null), or
+ *   - an 'authorized' row (checkout stopped before the hold).
+ * held, released, paid_out, refunded, partially_refunded, the legacy
+ * 'pending', and anything unrecognized mean money already moved — or a state
+ * this client cannot positively classify — and the answer is NO for all of
+ * them: a wrongly-shown checkout here is a double-charge surface. An open
+ * dispute also suppresses the offer; it exists to freeze money movement.
+ */
+export function canOfferJobFunding({
+  viewerId,
+  job,
+  payment,
+  hasOpenDispute = false,
+}: {
+  viewerId: string | null | undefined;
+  job: { client_id: string; status: string; assigned_worker_id: string | null };
+  payment: Pick<Payment, 'status'> | null;
+  hasOpenDispute?: boolean;
+}): boolean {
+  if (!viewerId || viewerId !== job.client_id) return false;
+  if (!job.assigned_worker_id) return false;
+  if (
+    job.status !== 'assigned' &&
+    job.status !== 'in_progress' &&
+    job.status !== 'completed'
+  ) {
+    return false;
+  }
+  if (hasOpenDispute) return false;
+  if (payment == null) return true;
+  return payment.status === 'authorized';
+}
+
+/**
  * The job's active job_payment row, or null when checkout has not run.
  * RLS returns it only to the payer (customer) and payee (hired worker), so a
  * null on someone else's job is indistinguishable from "no payment" — which
