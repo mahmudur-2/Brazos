@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { userMessage } from '../lib/errorMessage';
 import { fetchOpenJobs, toOpenJob, type OpenJob } from '../lib/jobs';
 import { supabase } from '../lib/supabase';
 
@@ -34,7 +35,7 @@ export function useOpenJobs() {
   const refresh = useCallback(async () => {
     setError(null);
     const { data, error } = await fetchOpenJobs();
-    if (error) setError(error.message);
+    if (error) setError(userMessage(error));
     else setJobs(data);
     setLoading(false);
   }, []);
