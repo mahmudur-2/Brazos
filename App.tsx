@@ -11,6 +11,7 @@ import { configurePushHandling } from './lib/pushNotifications';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
 import { colors } from './lib/theme';
 import { LaunchCompleteContext } from './lib/launchContext';
+import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { ModeTransitionProvider } from './components/ModeTransitionOverlay';
 import { ModeProvider } from './modes';
 import { ModeShell } from './navigation/ModeShell';
@@ -165,7 +166,15 @@ export default function App() {
                 // routing it requested is parked and replayed here.
                 onReady={flushPendingNavigation}
               >
-                <RootNavigator />
+                {/* The one application-level boundary. Inside the container so
+                    navigationRef and the parked cold-start replay survive a
+                    crash-and-reset; outside RootNavigator so the reset key
+                    remounts every navigator — recovery is a fresh mount, not a
+                    re-render of the crashed state. The launch overlay sits
+                    entirely outside it. */}
+                <AppErrorBoundary>
+                  <RootNavigator />
+                </AppErrorBoundary>
                 {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
                     app.json's userInterfaceStyle, Android's default status bar
                     fill) to the system light/dark setting, which on a dark-mode
