@@ -2373,3 +2373,98 @@ The run continues without stopping at this boundary.
   publicly; gate clean.
 - **Carried forward:** Phase 6/7/8 physical checklists PENDING; production
   apply queue = phase51, phase52.
+
+## Branch `stability-core-transactions` — run 2026-08-11/12 (core transaction integrity)
+
+Base tag `pre-core-transactions-2026-08-11` (= mainexpo @ aa41328). Closed-scope
+autonomous run against AUDIT_2026-08-12.md: P1-09, P1-07, P1-11/P2-19, P2-07,
+P2-06, error boundary, P1-01, P1-02. Branch NOT merged, NOT pushed.
+
+**Fixed (one commit each, audit ID in the message):**
+- **AUD-P1-09** `initial: false` on navigateAcrossTabs' nested payload
+  (lib/navigationRef.ts) — a cross-tab landing never again becomes its stack's
+  only route; guard added to tests/crossTabNavigation.test.mjs.
+- **AUD-P1-07** post-job draft keyed `brazos.postJobDraft.v2.<uid>`
+  (lib/postJobDraft.ts + both consumers); legacy device-global
+  `brazos:postJobDraft:v1` DELETED (never migrated) on first authed read.
+- **AUD-P1-11 / P2-19** app.json: NSPhotoLibraryAddUsageDescription added;
+  bespoke cameraPermission on the expo-image-picker plugin (verified against
+  the installed plugin source). app.json's untouched-streak ends deliberately.
+- **AUD-P2-07** AuthContext getSession catch/finally — the launch overlay can
+  no longer hang forever; session never fabricated nor torn down on failure.
+- **AUD-P2-06** ModeProvider sign-out reset now also `setArmed(false)` — a
+  second account can no longer race Setup's "Start in" choice; ModeShell
+  re-arms on mount.
+- **Error boundary** components/AppErrorBoundary.tsx wrapping RootNavigator
+  inside NavigationContainer: remount-key reset, __DEV__ error+stack logging,
+  token-styled fallback. Render/lifecycle errors only.
+- **AUD-P1-01** worker's offer card derives from author_id/awaiting_id (never
+  worker_id): respond card (Accept/Decline + INLINE OfferComposer counter —
+  the Counteroffer route is MyJobsStack-only and pops to ClientJobDetail, so
+  no route reuse), author-only Withdraw, canonical re-read after every action
+  including refusals; lib/offers.ts adds fetchOfferChain(). Discoverability:
+  inbox badge keys thread-less marketplace chains by counterparty onto the
+  pair's direct row (direct:null keying removed); hub card reads "countered —
+  respond" via awaiting/author; HubCard gains statusLabel pass-through.
+- **AUD-P1-02** canOfferJobFunding() in lib/payments.ts is THE funding-CTA
+  derivation (whitelist: owner + assigned worker + status in {assigned,
+  in_progress, completed} + no open dispute + payment null-or-authorized;
+  everything else NEVER — the double-charge line). ClientJobDetail renders
+  from it alone (assigned-only fork and payment-nested "Finish checkout"
+  DELETED); ApproveOrDispute's "nothing to release" dead end offers funding
+  under the same predicate; Chat's customer-accept routes into Checkout via
+  navigateAcrossTabs with an honest fallback. A null ledger no longer renders
+  the legacy inline review as settled — the review survives only where no
+  funding path exists (pre-payments-era jobs now fund-first by design).
+
+**Migration written, NOT applied:** supabase/phase59_staging_counter_notification.sql
+— marketplace-counter notification through the phase20/56 outbox (category
+'bids', dedupe offer_countered:<id>, payload screens already in
+notificationRoutes.ts; direct offers excluded — their thread message already
+notifies). STAGING-only; verify-schema has its sentinel
+(counter_notification_enabled, confirmed PENDING against the live DB). The
+AUD-P1-01 client fixes stand fully without it.
+
+**Test changes (accounting):** tests/postJobDraft.test.mjs retargeted to the
+per-user key + userId call shapes, plus three EXECUTED tests (module run with
+AsyncStorage stubbed): per-account isolation, legacy deletion (gone, not
+parked), cross-account clear. tests/crossTabNavigation.test.mjs +1 (nested
+payload carries initial:false). tests/mode.test.mjs +1 (sign-out disarms).
+NEW tests/fundingPath.test.mjs (canOfferJobFunding executed across the full
+status × payment matrix with an anti-vacuity count + source pins).
+NEW tests/counterResponse.test.mjs (executed effectiveOfferStatus/
+countersRemaining + respond/authored card pins + badge keying + phase59 SQL
+guards). No unrelated test altered.
+
+**Gate (measured):** tsc exit 0 · lint exit 0 · **308 tests, 307 pass, 1 fail**
+— the one failure is the documented frozen-web PWA mismatch. LOCKED screens,
+frozen PWA, .env, dependencies untouched (verified by empty diff + sweep).
+
+**Verification (5-agent static walk + sweep, full evidence archived in the
+run report):** 31 PASS / 2 FAIL / 5 NEEDS-DEVICE; sweep clean on all mandated
+grep categories, no correctness bugs.
+
+**Known issues found, NOT fixed (closed scope):**
+1. components/OfferCard.tsx:130 `canAcceptThisOffer` has no awaiting/author
+   check → after the customer counters, their OWN counter renders under the
+   worker's name with a live "Accept offer" the server always refuses
+   ("not your turn"). Same class as AUD-P1-01, customer list side.
+2. A marketplace pair that has NEVER chatted has no inbox row at all
+   (conversations inner-join messages, by recorded design), so the corrected
+   badge has nothing to land on in that case — and when a row exists, the
+   tapped Chat shows no negotiation card for marketplace chains.
+   Discoverability rests on the hub card + phase59 notification.
+3. Low-severity (sweep): JobDetail focus effect dropped its `active` flag
+   (React 18 no-op); fetchOfferChain errors swallowed → countersLeft
+   transiently 3 (server refuses; self-corrects); JobConfirmed's non-held
+   fallback mislabels any non-held row as "authorized".
+4. ClientJobDetailScreen's PROTECTED-PAYMENT informational card keeps one
+   `payment && isHeld && status==='assigned'` conditional — deliberately NOT
+   folded into deriveJobLifecycle (it must render during en_route/arrived too).
+
+**Exact next task:** owner decisions — apply phase59 to STAGING (psql, then
+green verify-schema); run the two-device staging script from the run report
+(counter round-trip, unfunded-race walk, badge/hub checks, cold-start
+landings); decide OfferCard fix (issue 1) as the next closed-scope item;
+merge/keep the branch. The audit's untouched P1s (P1-03/04/05/06/08/10) and
+the release pipeline remain owner-led.
