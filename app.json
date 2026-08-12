@@ -14,7 +14,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.brazos.app",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSPhotoLibraryAddUsageDescription": "Brazos saves job and work photos you choose to share to your photo library."
       }
     },
     "android": {
@@ -41,7 +42,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Brazos needs access to your photos so you can attach photos to jobs, finished work, and reviews."
+          "photosPermission": "Brazos needs access to your photos so you can attach photos to jobs, finished work, and reviews.",
+          "cameraPermission": "Brazos uses the camera so you can photograph jobs, finished work, and reviews on the spot."
         }
       ],
       [
