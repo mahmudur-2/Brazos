@@ -160,20 +160,24 @@ test('countersRemaining counts the caller’s real revisions, not a cached numbe
 // Discoverability: the existing surfaces, keyed correctly
 // ---------------------------------------------------------------------------
 
-test('the inbox badge no longer keys marketplace-bid chains as direct:null', async () => {
+test('the inbox badge keys every chain by its thread, marketplace bids included', async () => {
   const inbox = stripComments(await read('screens/MessagesInboxScreen.tsx'));
 
-  // Thread-keyed rows keep their keys; the null-thread (marketplace) rows key
-  // by counterparty and light the pair's direct row.
+  // Since phase61 a marketplace bid posts a root message into the pair's
+  // direct thread, so my_pending_offers() resolves direct_thread_id for it and
+  // it keys through the SAME branch a direct offer does.
   assert.match(inbox, /byThread\.add\(`job:\$\{r\.thread_job_id\}`\)/);
   assert.match(inbox, /byThread\.add\(`direct:\$\{r\.direct_thread_id\}`\)/);
-  assert.match(
-    inbox,
-    /byCounterparty\.add\(r\.customer_id === viewerId \? r\.worker_id : r\.customer_id\)/
-  );
-  assert.match(inbox, /pendingByCounterparty\.has\(otherId\)/);
-  // The defect shape — keying a null thread id into the row-key namespace —
-  // must not come back.
+  assert.match(inbox, /const awaitingRequest = pendingByThread\.has\(key\);/);
+
+  // The counterparty-keyed fallback existed only because those ids were NULL.
+  // phase61 removes the cause, so the workaround must not survive it —
+  // a second badge source is a second thing to drift.
+  assert.doesNotMatch(inbox, /pendingByCounterparty/);
+  assert.doesNotMatch(inbox, /byCounterparty/);
+
+  // The original defect shape — keying a null thread id into the row-key
+  // namespace as `direct:null` — must not come back either.
   assert.doesNotMatch(
     inbox,
     /r\.thread_job_id \? `job:\$\{r\.thread_job_id\}` : `direct:\$\{r\.direct_thread_id\}`/
