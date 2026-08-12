@@ -13,7 +13,24 @@ import type { JobCategory } from './jobs';
  * draft (§H's Open grouping includes drafts) without duplicating the storage
  * key or the shape — MediaUploader-style single canonical implementation.
  */
-export const DRAFT_STORAGE_KEY = 'brazos:postJobDraft:v1';
+/**
+ * The pre-AUD-P1-07 slot: one device-global key, shared by every account that
+ * ever signed in on the device. A draft holds the exact private service
+ * address, so that sharing was a cross-account leak. The key is retired, not
+ * migrated — the stored value's author is unknowable (it may belong to any
+ * previous account), so moving it under the current user's key would BE the
+ * leak. It is deleted on the first authenticated read instead.
+ */
+export const LEGACY_DRAFT_STORAGE_KEY = 'brazos:postJobDraft:v1';
+
+/**
+ * Namespaced, versioned, and scoped to one authenticated user — the same
+ * arrangement (and reason) as setupStorageKey / modeStorageKey: two accounts
+ * on one device must never see each other's draft.
+ */
+export function draftStorageKey(userId: string): string {
+  return `brazos.postJobDraft.v2.${userId}`;
+}
 
 export type PostJobDraft = {
   title: string;
@@ -38,9 +55,19 @@ export type PostJobDraft = {
 /** The pre-phase49 draft shape stored a single `budget` string. */
 type StoredDraft = Partial<PostJobDraft> & { budget?: string };
 
-export async function loadPostJobDraft(): Promise<PostJobDraft | null> {
+export async function loadPostJobDraft(userId: string): Promise<PostJobDraft | null> {
+  // Retire the legacy device-global slot on the first authenticated read.
+  // Deleted, never migrated: its author may be a previous account on this
+  // device, and adopting it would hand that account's draft — including the
+  // exact private service address — to whoever signed in next (AUD-P1-07).
   try {
-    const raw = await AsyncStorage.getItem(DRAFT_STORAGE_KEY);
+    await AsyncStorage.removeItem(LEGACY_DRAFT_STORAGE_KEY);
+  } catch {
+    // Best-effort: an unremovable legacy value must not block this user's
+    // own draft from loading.
+  }
+  try {
+    const raw = await AsyncStorage.getItem(draftStorageKey(userId));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as StoredDraft;
     return {
@@ -68,17 +95,17 @@ export async function loadPostJobDraft(): Promise<PostJobDraft | null> {
   }
 }
 
-export async function savePostJobDraft(draft: PostJobDraft): Promise<void> {
+export async function savePostJobDraft(userId: string, draft: PostJobDraft): Promise<void> {
   try {
-    await AsyncStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+    await AsyncStorage.setItem(draftStorageKey(userId), JSON.stringify(draft));
   } catch (e) {
     console.error('[postJobDraft] failed to persist draft', e);
   }
 }
 
-export async function clearPostJobDraft(): Promise<void> {
+export async function clearPostJobDraft(userId: string): Promise<void> {
   try {
-    await AsyncStorage.removeItem(DRAFT_STORAGE_KEY);
+    await AsyncStorage.removeItem(draftStorageKey(userId));
   } catch (e) {
     console.error('[postJobDraft] failed to clear draft', e);
   }

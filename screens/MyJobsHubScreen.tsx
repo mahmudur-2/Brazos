@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { HubCard } from '../components/HubCard';
+import { useAuth } from '../hooks/useAuth';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import {
   JOB_CATEGORY_ICONS,
@@ -93,6 +94,7 @@ function SectionHeading({ title, count }: { title: string; count: number }) {
 
 export function MyJobsHubScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
+  const { user } = useAuth();
   const { posted, working, pendingBids, names, loading, error, refresh } = useMyJobsHub();
   const [filter, setFilter] = useState<Filter>('active');
   const [refreshing, setRefreshing] = useState(false);
@@ -105,13 +107,20 @@ export function MyJobsHubScreen() {
     useCallback(() => {
       void refresh();
       let active = true;
-      loadPostJobDraft().then((d) => {
-        if (active) setDraft(d && draftHasContent(d) ? d : null);
-      });
+      // The draft slot is per account (AUD-P1-07): no signed-in user, no
+      // draft card — never another account's leftovers.
+      const userId = user?.id;
+      if (userId) {
+        loadPostJobDraft(userId).then((d) => {
+          if (active) setDraft(d && draftHasContent(d) ? d : null);
+        });
+      } else {
+        setDraft(null);
+      }
       return () => {
         active = false;
       };
-    }, [refresh])
+    }, [refresh, user?.id])
   );
 
   async function onRefresh() {

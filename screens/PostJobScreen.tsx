@@ -157,6 +157,9 @@ export function PostJobScreen() {
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<PostJobRouteParamList, 'PostJob'>>();
   const { user } = useAuth();
+  // The draft store is keyed per account (AUD-P1-07); stable for the life of
+  // this screen — the authed tree unmounts before the user can change.
+  const draftUserId = user?.id ?? null;
 
   // "Hire Again" mode — sends a private request into the conversation these
   // two already share. It does NOT create a job; the worker can accept,
@@ -256,7 +259,7 @@ export function PostJobScreen() {
         // app KILL never reaches this line at all (the process is gone
         // before any unmount effect runs), which is exactly what leaves the
         // persisted draft in place for the Phase 4 DoD.
-        if (isFreshPost) void clearPostJobDraft();
+        if (isFreshPost && draftUserId) void clearPostJobDraft(draftUserId);
       }
       successScale.stopAnimation();
       successOpacity.stopAnimation();
@@ -287,9 +290,17 @@ export function PostJobScreen() {
       return;
     }
 
+    if (!draftUserId) {
+      // No authenticated user means no per-account slot to read. Unreachable
+      // inside the authed tree, but the honest answer is "no draft", never a
+      // guessed one.
+      setDraftReady(true);
+      return;
+    }
+
     let active = true;
     (async () => {
-      const draft = await loadPostJobDraft();
+      const draft = await loadPostJobDraft(draftUserId);
       if (!active) return;
       if (draft) {
         setTitle(draft.title);
@@ -333,8 +344,8 @@ export function PostJobScreen() {
   // Autosave, once the restore-or-skip check above has finished. Fresh-post
   // only; edit/hire never read or write this key.
   useEffect(() => {
-    if (!isFreshPost || !draftReady) return;
-    void savePostJobDraft({
+    if (!isFreshPost || !draftReady || !draftUserId) return;
+    void savePostJobDraft(draftUserId, {
       title,
       description,
       category,
@@ -350,7 +361,7 @@ export function PostJobScreen() {
       videos,
       step,
     });
-  }, [isFreshPost, draftReady, title, description, category, location, coords, budgetMin, budgetMax, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step]);
+  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step]);
 
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
@@ -748,7 +759,7 @@ export function PostJobScreen() {
       if (savedJob) setPublishedJob(savedJob);
       // Published — nothing left to resume. Uploads are already marked
       // committed above, so this only removes the now-stale draft record.
-      void clearPostJobDraft();
+      if (draftUserId) void clearPostJobDraft(draftUserId);
     }
 
     playSuccess();
