@@ -2462,9 +2462,35 @@ grep categories, no correctness bugs.
    `payment && isHeld && status==='assigned'` conditional — deliberately NOT
    folded into deriveJobLifecycle (it must render during en_route/arrived too).
 
-**Exact next task:** owner decisions — apply phase59 to STAGING (psql, then
-green verify-schema); run the two-device staging script from the run report
-(counter round-trip, unfunded-race walk, badge/hub checks, cold-start
-landings); decide OfferCard fix (issue 1) as the next closed-scope item;
+**phase59 apply instructions (STAGING `zzkumxcjtbqoselzptig` ONLY — hand-run
+by the owner; nothing in this run executed SQL anywhere):**
+1. `psql "<staging connection string>" -f supabase/phase59_staging_counter_notification.sql`
+   (or paste the whole file into the STAGING project's SQL Editor). Idempotent;
+   safe to re-run. Do NOT run against production `avkighsiufeefyycbebf` — it is
+   not in the production apply queue until promoted.
+2. `node scripts/verify-schema.mjs` (reads `.env`, which currently holds the
+   STAGING pair, so the probe targets staging). The apply counts ONLY when the
+   `phase59_staging_counter_notification.sql` group's sentinel
+   `counter_notification_enabled()` flips PENDING → OK. It was confirmed
+   PENDING (404 PGRST202) during this run's verification — i.e. unapplied.
+3. Re-run the counter round-trip on two staging devices: exactly one
+   "New counter-offer" feed row per marketplace counter, none for
+   direct-offer counters, none for roots (those keep `bid_received`).
+
+**Tracked run artifacts (swept in by the checkpoint's `git add -A`; contents
+untouched, all three pre-date this run):** `AUDIT_2026-08-12.md` is the
+read-only forensic audit this run executed against; `PROD_APPLY_READY.sql` is
+the pre-existing phase51–58 concatenation for the PRODUCTION apply queue;
+`PROD_VERIFY.sql` is the read-only phase51–58 sentinel check. None is related
+to phase59. Credential scan before any push: no keys, no JWTs, no connection
+strings in any of the three; the audit doc names the staging/production
+project REFS (public identifiers, baked into every client bundle) and
+catalogs the app's security posture — fine for a private remote, do not
+publish it to a public one.
+
+**Exact next task:** owner decisions — apply phase59 per the instructions
+above; run the two-device staging script from the run report (counter
+round-trip, unfunded-race walk, badge/hub checks, cold-start landings);
+decide OfferCard fix (known issue 1) as the next closed-scope item;
 merge/keep the branch. The audit's untouched P1s (P1-03/04/05/06/08/10) and
 the release pipeline remain owner-led.
