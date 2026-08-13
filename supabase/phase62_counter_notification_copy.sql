@@ -121,6 +121,44 @@ create trigger job_offers_notify_counter
   for each row
   execute function public.notify_on_offer_counter();
 
+-- 3. verify-schema sentinel -----------------------------------------------------
+--
+-- AMENDED 2026-08-13, after the original staging apply — see the note at the
+-- foot of this file.
+--
+-- Created last inside this file's transaction, so its presence proves the
+-- whole migration committed. Needed because nothing else here is probeable:
+-- notify_on_offer_counter() is revoked from every client role, and a trigger
+-- has no PostgREST-visible shape (the phase59 situation).
+
+create or replace function public.counter_notification_copy_enabled()
+returns boolean
+language sql
+immutable
+as $$
+  select true;
+$$;
+
+revoke all on function public.counter_notification_copy_enabled() from public, anon;
+grant execute on function public.counter_notification_copy_enabled() to authenticated;
+
 notify pgrst, 'reload schema';
 
 commit;
+
+-- ============================================================================
+-- AMENDMENT NOTE — 2026-08-13
+--
+-- This file was applied to STAGING on 2026-08-12 WITHOUT section 3. The
+-- sentinel was added the next day, when registering phase60-65 in
+-- scripts/verify-schema.mjs showed this migration had no PostgREST-probeable
+-- object, so a green verify could not distinguish "applied" from "never ran".
+--
+-- The amended file was then re-applied to staging. It is idempotent, and
+-- sections 1-2 are byte-identical to what ran on 2026-08-12, so the re-apply
+-- changed nothing except adding the sentinel.
+--
+-- THE PRODUCTION APPLY MUST USE THIS AMENDED FILE, not the 2026-08-12
+-- version. Applying the older one leaves the sentinel absent and
+-- verify-schema will correctly report this migration as PENDING.
+-- ============================================================================

@@ -883,6 +883,113 @@ const MIGRATIONS = [
       checkRpc('counter_notification_enabled', {})],
     checks: [],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 60 (core-transactions run). The jobs DELETE policy stopped
+    // recursing (42P17) by moving its whole condition into one STABLE
+    // SECURITY DEFINER helper, so the policy holds no inline subquery on
+    // bids/job_offers left to policy-expand.
+    //
+    // A policy has no PostgREST-probeable shape (the phase54 situation) — but
+    // the helper it now calls does, and the helper is created inside the SAME
+    // transaction as the policy, so its presence proves the group committed.
+    // STAGING deliverable.
+    // -----------------------------------------------------------------------
+    file: 'phase60_jobs_delete_policy_recursion.sql',
+    sentinel: ['rpc can_delete_own_job()', () =>
+      checkRpc('can_delete_own_job', { p_job_id: ZERO_UUID })],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 61 (core-transactions run). Marketplace-bid chains get a thread
+    // identity: create_offer posts the chain's ROOT MESSAGE for both offer
+    // kinds (it was direct-only), notify_on_message gains a marketplace guard
+    // so the new rows do not double-notify, and live chains are backfilled.
+    //
+    // Two function-body changes and a backfill — none of which has a
+    // probeable shape (the phase57 situation) — so the sentinel, created last
+    // inside the same transaction, carries the group. STAGING deliverable.
+    // -----------------------------------------------------------------------
+    file: 'phase61_marketplace_thread_identity.sql',
+    sentinel: ['rpc marketplace_thread_identity_enabled()', () =>
+      checkRpc('marketplace_thread_identity_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 62 (core-transactions run). Counter-offer notification copy:
+    // first name, and the action named ("<First> sent you a Counteroffer for
+    // $X"). It replaces phase59's trigger-function body and restates the
+    // trigger — neither of which PostgREST can see, and the function itself is
+    // revoked from every client role.
+    //
+    // Its sentinel was ADDED ON 2026-08-13, after the original staging apply,
+    // for exactly that reason; the file was then re-applied. See the
+    // amendment note at the foot of the SQL. The production apply must use the
+    // amended file.
+    // -----------------------------------------------------------------------
+    file: 'phase62_counter_notification_copy.sql',
+    sentinel: ['rpc counter_notification_copy_enabled()', () =>
+      checkRpc('counter_notification_copy_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 63 (core-transactions run). Counter-offers capped at 10 per side,
+    // per negotiation chain.
+    //
+    // This migration only REPLACES counter_offer(), which phase46 already
+    // registers above — so probing that RPC passes whether or not phase63 ran,
+    // which is the false green this script exists to prevent. The sentinel is
+    // the only thing that distinguishes them. Added 2026-08-13 after the
+    // original staging apply; file re-applied. The production apply must use
+    // the amended file.
+    // -----------------------------------------------------------------------
+    file: 'phase63_counteroffer_cap_ten_per_side.sql',
+    sentinel: ['rpc counteroffer_cap_enabled()', () =>
+      checkRpc('counteroffer_cap_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 64 (core-transactions run, security hardening). Pins pg_temp LAST
+    // in the search_path of the 28 SECURITY DEFINER functions that named only
+    // `public`, closing the temp-table shadowing route.
+    //
+    // ALTER FUNCTION … SET creates no object at all, so there was nothing to
+    // probe. The sentinel is created after that file's post-condition, so a
+    // green line here also means "no SECURITY DEFINER function in public was
+    // left without pg_temp" — on a partial sweep the transaction aborts and
+    // this reports PENDING instead. Added 2026-08-13 after the original
+    // staging apply; file re-applied. The production apply must use the
+    // amended file.
+    // -----------------------------------------------------------------------
+    file: 'phase64_security_definer_search_path.sql',
+    sentinel: ['rpc security_definer_search_path_enabled()', () =>
+      checkRpc('security_definer_search_path_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 65 (core-transactions run, security hardening). security_invoker
+    // on v_bids_projection_drift, the one view in public still running with
+    // owner rights. (public.conversations already had it — phase36 — and is
+    // deliberately untouched.)
+    //
+    // ALTER VIEW … SET creates no object, and phase47/48 above already assert
+    // that view is unreadable by the publishable key — which it is on BOTH
+    // sides of this change, so no column probe can tell them apart. As with
+    // phase64 the sentinel follows the post-condition, so a green line means
+    // no view in public was left on owner rights. Added 2026-08-13 after the
+    // original staging apply; file re-applied. The production apply must use
+    // the amended file.
+    // -----------------------------------------------------------------------
+    file: 'phase65_view_security_invoker.sql',
+    sentinel: ['rpc view_security_invoker_enabled()', () =>
+      checkRpc('view_security_invoker_enabled', {})],
+    checks: [],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

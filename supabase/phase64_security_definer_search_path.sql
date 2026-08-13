@@ -105,6 +105,50 @@ begin
   end if;
 end $$;
 
+-- 4. verify-schema sentinel -----------------------------------------------------
+--
+-- AMENDED 2026-08-13, after the original staging apply — see the note at the
+-- foot of this file.
+--
+-- Created last inside this file's transaction — after the post-condition
+-- above — so its presence proves both the whole sweep and the check that the
+-- sweep was complete. Needed because ALTER FUNCTION … SET creates no object,
+-- so this migration had no PostgREST-probeable shape at all.
+
+create or replace function public.security_definer_search_path_enabled()
+returns boolean
+language sql
+immutable
+as $$
+  select true;
+$$;
+
+revoke all on function public.security_definer_search_path_enabled() from public, anon;
+grant execute on function public.security_definer_search_path_enabled() to authenticated;
+
 notify pgrst, 'reload schema';
 
 commit;
+
+-- ============================================================================
+-- AMENDMENT NOTE — 2026-08-13
+--
+-- This file was applied to STAGING on 2026-08-12 WITHOUT section 4. The
+-- sentinel was added the next day, when registering phase60-65 in
+-- scripts/verify-schema.mjs showed this migration created no object a
+-- PostgREST probe could see — it only ALTERs existing functions.
+--
+-- The amended file was then re-applied to staging. It is idempotent
+-- (ALTER … SET is), and sections 1-3 are byte-identical to what ran on
+-- 2026-08-12, so the re-apply changed nothing except adding the sentinel.
+--
+-- NOTE FOR THE PRODUCTION APPLY: the sentinel is created AFTER the
+-- post-condition on purpose. On production the sweep list may differ — if any
+-- SECURITY DEFINER function there still lacks pg_temp, section 3 aborts the
+-- transaction and the sentinel is never created, so verify-schema reports
+-- PENDING rather than a green light over a half-done sweep.
+--
+-- THE PRODUCTION APPLY MUST USE THIS AMENDED FILE, not the 2026-08-12
+-- version. Applying the older one leaves the sentinel absent and
+-- verify-schema will correctly report this migration as PENDING.
+-- ============================================================================

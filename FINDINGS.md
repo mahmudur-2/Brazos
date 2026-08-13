@@ -1025,3 +1025,129 @@ exactly this purpose) but are not registered in the script. Adding them was
 outside this run's scope; it is the natural next edit for whoever promotes these
 migrations, since CLAUDE.md's rule is that only a green verify-schema counts as
 applied.
+
+---
+
+## POST-RUN — 2026-08-13 · phase62–65 amended, phase60–65 registered in verify-schema
+
+This closes the gap recorded at the end of Phase 6: `scripts/verify-schema.mjs`
+stopped at phase59, so a green run said nothing about phase60–65.
+
+### What the registration exposed
+
+Registering the six migrations showed that **only two of them had a
+PostgREST-probeable object**, and the script probes exclusively over PostgREST:
+
+| Migration | What it created or altered | Probeable as shipped on 2026-08-12? |
+|---|---|---|
+| phase60 | `can_delete_own_job(uuid)` — new function, granted to `authenticated` | **yes** |
+| phase61 | `marketplace_thread_identity_enabled()` — sentinel, granted | **yes** |
+| phase62 | `notify_on_offer_counter()` (revoked from every client role) + a trigger | no |
+| phase63 | `create or replace counter_offer(uuid, integer)` — exists since phase46 | no |
+| phase64 | 28 × `alter function … set search_path` — creates no object | no |
+| phase65 | 1 × `alter view … set (security_invoker = true)` — creates no object | no |
+
+phase63 is the sharp case: probing `counter_offer()` **passes whether or not
+phase63 ran**, because phase46 already created that function and phase63 only
+replaces its body. Registering that probe would have put a green line next to a
+migration that might never have been applied — precisely the false green this
+script exists to prevent (its own header: *"instead of trusting the SQL editor's
+'Success. No rows returned.' message"*). No such probe was written.
+
+### The amendment, and why it was made this way
+
+**phase62, phase63, phase64 and phase65 were amended on 2026-08-13 — after their
+original staging apply on 2026-08-12 — to add a sentinel function each**, then
+re-applied to staging.
+
+| Migration | Sentinel added |
+|---|---|
+| phase62 | `public.counter_notification_copy_enabled()` |
+| phase63 | `public.counteroffer_cap_enabled()` |
+| phase64 | `public.security_definer_search_path_enabled()` |
+| phase65 | `public.view_security_invoker_enabled()` |
+
+Each follows the repo's established shape exactly (`phase59:128-137`): a
+`language sql immutable` function returning `true`, `revoke all … from public,
+anon`, `grant execute … to authenticated`, and — the load-bearing part —
+**created LAST inside the migration's own transaction**. That placement is what
+makes the sentinel mean something: its presence proves that transaction
+committed, so it proves the work above it landed.
+
+The alternative considered and rejected was a separate `phase66` sentinel
+migration. It would not have needed to touch an applied file, but a sentinel
+created in a *different* transaction proves only that phase66 ran — it says
+nothing about whether phase62–65 committed. That is a sentinel that looks like
+evidence and is not, so the amendment was the correct trade.
+
+For phase64 and phase65 the sentinel sits **after** each file's post-condition
+block, which is deliberate: if the sweep is incomplete on the target database,
+the post-condition aborts the transaction, the sentinel is never created, and
+verify-schema reports PENDING rather than green over half-done work.
+
+**Re-apply was safe and changed nothing else.** All four files are idempotent,
+and everything above the new sentinel section is byte-identical to what ran on
+2026-08-12. Confirmed after re-applying:
+
+```
+counter_notification_copy_enabled|anon=f|authenticated=t
+counteroffer_cap_enabled            |anon=f|authenticated=t
+security_definer_search_path_enabled|anon=f|authenticated=t
+view_security_invoker_enabled       |anon=f|authenticated=t
+
+phase62 copy: ok            (notify_on_offer_counter still says "sent you a Counteroffer")
+phase63 cap: ok             (counter_offer still carries v_max_per_side := 10)
+phase64 secdef without pg_temp: 0
+phase65 views on owner rights: 0
+```
+
+The four sentinels are plain `language sql` functions, not SECURITY DEFINER, so
+they do not themselves fall under phase64's sweep — `secdef without pg_temp` is
+still 0 after adding them.
+
+### THE PRODUCTION APPLY MUST USE THE AMENDED FILES
+
+phase62, phase63, phase64 and phase65 as committed today are **not** what was
+applied to staging on 2026-08-12 — they carry an extra sentinel section and an
+amendment note at the foot of each file. Applying the older copies to production
+would leave the sentinels absent, and `verify-schema` would then correctly
+report those four migrations as **PENDING** on production even though their work
+had landed. Use the committed versions. Each file states this in its own
+amendment note, so the warning travels with the SQL rather than only living
+here.
+
+phase60 and phase61 are unamended — what is committed is exactly what was
+applied.
+
+### Result
+
+`node scripts/verify-schema.mjs` → **exit 0, 224 lines, every check OK**,
+including all six new groups. Zero PENDING, zero MISSING. (Two lines match the
+string "PENDING" on a substring of `my_pending_offers()` and
+`my_pending_job_requests()`; both are OK lines.)
+
+```
+phase60_jobs_delete_policy_recursion.sql
+  OK       rpc can_delete_own_job()  [exists (responded 401)]
+
+phase61_marketplace_thread_identity.sql
+  OK       rpc marketplace_thread_identity_enabled()  [exists (responded 401)]
+
+phase62_counter_notification_copy.sql
+  OK       rpc counter_notification_copy_enabled()  [exists (responded 401)]
+
+phase63_counteroffer_cap_ten_per_side.sql
+  OK       rpc counteroffer_cap_enabled()  [exists (responded 401)]
+
+phase64_security_definer_search_path.sql
+  OK       rpc security_definer_search_path_enabled()  [exists (responded 401)]
+
+phase65_view_security_invoker.sql
+  OK       rpc view_security_invoker_enabled()  [exists (responded 401)]
+
+All REQUIRED objects exist in the live database.
+```
+
+Env parity was green throughout: app `SUPABASE_URL`, app `SUPABASE_KEY` and
+`SUPABASE_DB_URL_STAGING` all resolve to `zzkumxcjtbqoselzptig`. Production was
+not contacted.

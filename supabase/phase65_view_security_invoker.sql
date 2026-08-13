@@ -63,6 +63,54 @@ begin
   end if;
 end $$;
 
+-- verify-schema sentinel --------------------------------------------------------
+--
+-- AMENDED 2026-08-13, after the original staging apply — see the note at the
+-- foot of this file.
+--
+-- Created last inside this file's transaction — after the post-condition
+-- above — so its presence proves both the ALTER and the check that no view in
+-- public was left on owner rights. Needed because ALTER VIEW … SET creates no
+-- object, and v_bids_projection_drift is unreadable by the publishable key
+-- both before and after this change, so no column probe can tell them apart.
+
+create or replace function public.view_security_invoker_enabled()
+returns boolean
+language sql
+immutable
+as $$
+  select true;
+$$;
+
+revoke all on function public.view_security_invoker_enabled() from public, anon;
+grant execute on function public.view_security_invoker_enabled() to authenticated;
+
 notify pgrst, 'reload schema';
 
 commit;
+
+-- ============================================================================
+-- AMENDMENT NOTE — 2026-08-13
+--
+-- This file was applied to STAGING on 2026-08-12 WITHOUT the sentinel. It was
+-- added the next day, when registering phase60-65 in
+-- scripts/verify-schema.mjs showed this migration created no object a
+-- PostgREST probe could see — it only ALTERs an existing view, and that view
+-- is sealed to the publishable key on both sides of the change (phase47/48
+-- already assert "v_bids_projection_drift not readable").
+--
+-- The amended file was then re-applied to staging. It is idempotent, and
+-- everything above the sentinel is byte-identical to what ran on 2026-08-12,
+-- so the re-apply changed nothing except adding the sentinel.
+--
+-- NOTE FOR THE PRODUCTION APPLY: the post-condition covers EVERY view in
+-- public, not just this one. If production carries a view this run never saw
+-- that is still on owner rights, the transaction aborts and the sentinel is
+-- never created — verify-schema then reports PENDING instead of a green light
+-- over a view that still bypasses RLS. That is the intended behaviour; fix the
+-- view rather than the check.
+--
+-- THE PRODUCTION APPLY MUST USE THIS AMENDED FILE, not the 2026-08-12
+-- version. Applying the older one leaves the sentinel absent and
+-- verify-schema will correctly report this migration as PENDING.
+-- ============================================================================

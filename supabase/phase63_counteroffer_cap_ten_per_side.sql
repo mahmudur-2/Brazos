@@ -177,6 +177,46 @@ $$;
 revoke all on function public.counter_offer(uuid, integer) from public, anon;
 grant execute on function public.counter_offer(uuid, integer) to authenticated;
 
+-- 4. verify-schema sentinel -----------------------------------------------------
+--
+-- AMENDED 2026-08-13, after the original staging apply — see the note at the
+-- foot of this file.
+--
+-- Created last inside this file's transaction, so its presence proves the
+-- whole migration committed. Needed because this migration only REPLACES a
+-- function phase46 already registered: probing counter_offer() passes whether
+-- or not phase63 ran, which is exactly the false green this script exists to
+-- prevent.
+
+create or replace function public.counteroffer_cap_enabled()
+returns boolean
+language sql
+immutable
+as $$
+  select true;
+$$;
+
+revoke all on function public.counteroffer_cap_enabled() from public, anon;
+grant execute on function public.counteroffer_cap_enabled() to authenticated;
+
 notify pgrst, 'reload schema';
 
 commit;
+
+-- ============================================================================
+-- AMENDMENT NOTE — 2026-08-13
+--
+-- This file was applied to STAGING on 2026-08-12 WITHOUT section 4. The
+-- sentinel was added the next day, when registering phase60-65 in
+-- scripts/verify-schema.mjs showed this migration had no PostgREST-probeable
+-- object of its own — counter_offer() has existed since phase46, so its
+-- presence proves nothing about the 10-per-side cap.
+--
+-- The amended file was then re-applied to staging. It is idempotent, and
+-- sections 1-3 are byte-identical to what ran on 2026-08-12, so the re-apply
+-- changed nothing except adding the sentinel.
+--
+-- THE PRODUCTION APPLY MUST USE THIS AMENDED FILE, not the 2026-08-12
+-- version. Applying the older one leaves the sentinel absent and
+-- verify-schema will correctly report this migration as PENDING.
+-- ============================================================================
