@@ -54,8 +54,10 @@ import {
 } from '../lib/messages';
 import {
   acceptOffer,
+  COUNTER_LIMIT_MESSAGE,
   counterOffer,
   declineOffer,
+  isCounterLimitError,
   offerIdOf,
   withdrawOffer,
   type OfferWithJob,
@@ -334,7 +336,13 @@ export function ChatScreen() {
     setRespondingId(null);
 
     if (error) {
-      await alertAsync('Could not update offer', userMessage(error));
+      // The counter cap is enforced server-side, so a stale chain here can
+      // still offer Counter. Name the limit instead of a generic failure.
+      if (action === 'counter' && isCounterLimitError(error)) {
+        await alertAsync('No counter-offers left', COUNTER_LIMIT_MESSAGE);
+      } else {
+        await alertAsync('Could not update offer', userMessage(error));
+      }
       // The RPC rejects stale turns, so resync rather than leaving the card
       // showing actions that no longer apply.
       await refreshRequests();

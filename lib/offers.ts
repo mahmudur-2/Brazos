@@ -89,9 +89,31 @@ function oneRelated<T>(value: T | T[] | null): T | null {
   return Array.isArray(value) ? value[0] ?? null : value;
 }
 
-/** Counters allowed per side before only accept/decline remain. Mirrored by
- *  counter_offer() in phase46 — the database is the real enforcement. */
-export const MAX_COUNTERS_PER_SIDE = 3;
+/** Counters allowed per side, per negotiation chain, before only accept/decline
+ *  remain. A chain is one customer and one worker on one job — the two sides
+ *  count independently and nothing bleeds across chains. Mirrored by
+ *  counter_offer() in phase63; the database is the real enforcement and this
+ *  only decides what the UI offers. */
+export const MAX_COUNTERS_PER_SIDE = 10;
+
+/** What to say when the server refuses a counter for being over the cap.
+ *  Reached when the client's own count was stale — a counter sent from another
+ *  device, or a chain loaded before the last revision landed. */
+export const COUNTER_LIMIT_MESSAGE =
+  `You’ve used all ${MAX_COUNTERS_PER_SIDE} counter-offers on this negotiation. ` +
+  'Accept or decline to continue.';
+
+/**
+ * Is this the server's cap refusal rather than some other failure?
+ *
+ * counter_offer() raises a plain sentence (phase63), so this matches on its
+ * shape rather than a code — Postgres reports every RAISE in a PL/pgSQL
+ * function as P0001, which the other refusals in that same function share.
+ */
+export function isCounterLimitError(error: { message?: string | null } | null): boolean {
+  const message = error?.message?.toLowerCase() ?? '';
+  return message.includes('counter-offers on this negotiation');
+}
 
 /** Open = still negotiable. Every other status is settled. */
 export function isOpenOffer(status: OfferStatus): boolean {

@@ -144,7 +144,7 @@ test('settled chains render with no actions: only a pending row is actionable', 
 
 test('countersRemaining counts the caller’s real revisions, not a cached number', async () => {
   const { countersRemaining, MAX_COUNTERS_PER_SIDE } = await offersModule;
-  assert.equal(MAX_COUNTERS_PER_SIDE, 3);
+  assert.equal(MAX_COUNTERS_PER_SIDE, 10);
 
   const chain = [
     { author_id: 'worker', parent_offer_id: null }, // the root bid is free
@@ -152,9 +152,12 @@ test('countersRemaining counts the caller’s real revisions, not a cached numbe
     { author_id: 'worker', parent_offer_id: 'b' },
     { author_id: 'customer', parent_offer_id: 'c' },
   ];
-  assert.equal(countersRemaining(chain, 'worker'), 2);
-  assert.equal(countersRemaining(chain, 'customer'), 1);
-  assert.equal(countersRemaining([], 'worker'), 3);
+  // Per side, independently: the worker has spent one of ten, the customer two.
+  assert.equal(countersRemaining(chain, 'worker'), 9);
+  assert.equal(countersRemaining(chain, 'customer'), 8);
+  assert.equal(countersRemaining([], 'worker'), 10);
+  // A third party in the same chain has spent nothing of their own.
+  assert.equal(countersRemaining(chain, 'someone-else'), 10);
 });
 
 // ---------------------------------------------------------------------------

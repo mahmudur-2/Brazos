@@ -15,8 +15,10 @@ import {
   type OpenJob,
 } from '../lib/jobs';
 import {
+  COUNTER_LIMIT_MESSAGE,
   counterOffer,
   createMarketplaceOffer,
+  isCounterLimitError,
   type Offer,
 } from '../lib/offers';
 import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
@@ -159,6 +161,14 @@ export function OfferComposer({ context, onSubmitted, palette = colors }: OfferC
       } else {
         const { data: newOfferId, error } = await counterOffer(context.offer.id, amountCents);
         if (error || !newOfferId) {
+          // The cap is enforced server-side, so a client whose count was stale
+          // (a counter sent from another device, a chain loaded a revision ago)
+          // can still get here with the Counter button enabled. Say what
+          // happened and what they can do instead, not "try again".
+          if (isCounterLimitError(error)) {
+            await alertAsync('No counter-offers left', COUNTER_LIMIT_MESSAGE);
+            return;
+          }
           await alertAsync(
             'Could not send counter-offer',
             userMessage(
