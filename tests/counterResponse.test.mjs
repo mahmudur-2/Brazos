@@ -81,11 +81,19 @@ test('withdraw renders only for the pending revision the viewer authored', async
     /Withdraw/,
     'the counterparty’s pending revision must never offer Withdraw — it is author-only'
   );
-  // And the respond card carries the three decisions plus attribution —
-  // attribution is by first name since the phase62 copy change.
-  assert.match(respondCard, /\{posterFirstName\} sent you a Counteroffer/);
-  assert.match(respondCard, /Accept for/);
-  assert.match(respondCard, /Decline counter-offer/);
+  // And the respond card carries the three decisions plus attribution.
+  // Both now come from the ONE shared actionable card (components/
+  // OfferResponseActions.tsx over lib/offerCopy.ts), so Chat and Job Detail
+  // cannot offer different labels for the same negotiation; attribution is by
+  // first name since the phase62 copy change.
+  assert.match(respondCard, /<OfferResponseActions/);
+  assert.match(respondCard, /senderFirstName=\{posterFirstName\}/);
+  assert.match(respondCard, /onAccept=\{\(\) => setConfirmResponse\('accept'\)\}/);
+  assert.match(respondCard, /onCounter=/);
+  assert.match(respondCard, /onDecline=\{\(\) => setConfirmResponse\('decline'\)\}/);
+  // The superseded per-screen labels must not come back.
+  assert.doesNotMatch(respondCard, /Accept for /);
+  assert.doesNotMatch(respondCard, /Decline counter-offer/);
 
   // The authored card keeps Withdraw, and names counters as counters.
   const afterAuthored = detail.slice(authoredStart);

@@ -73,12 +73,32 @@ export type PendingOffer = Offer & {
     category: JobCategory;
     location: string | null;
     budget_cents: number | null;
+    budget_min_cents: number | null;
+    budget_max_cents: number | null;
+    scheduled_date: string | null;
+    arrival_start_hour: number | null;
+    arrival_end_hour: number | null;
     status: string;
     created_at: string;
     photos: string[] | null;
     videos: string[] | null;
   } | null;
 };
+
+/**
+ * The job an offer is about, embedded.
+ *
+ * This is the OpenJob projection (lib/jobs.ts OPEN_JOB_COLUMNS) rather than a
+ * shorter one, because the embedded row is what BOTH offer surfaces build
+ * their card from AND what they hand to the job screen they navigate to — so
+ * a narrower list here silently dropped the budget range and the arrival
+ * window from a card that had the data available. Deliberately not
+ * `select('*')`: jobs carries no coordinates (phase12 removed them), and an
+ * explicit list keeps a future sensitive column from being pulled in by
+ * accident.
+ */
+const OFFER_JOB_EMBED =
+  'job:jobs!job_offers_job_id_fkey(id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos)';
 
 const OFFER_COLUMNS =
   'id, job_id, offer_type, parent_offer_id, root_offer_id, customer_id, worker_id, author_id, awaiting_id, amount_cents, message, status, expires_at, created_at, updated_at';
@@ -143,6 +163,41 @@ export function effectiveOfferStatus(
   nowMs: number = Date.now()
 ): OfferStatus {
   return isOfferLapsed(offer, nowMs) ? 'expired' : offer.status;
+}
+
+/**
+ * THE "may this viewer accept / counter / decline right now" rule.
+ *
+ * One question, one answer, both surfaces. Chat's thread card and the worker
+ * job detail's respond card were each deciding it from their own reading of
+ * the row; this is that decision written once so they cannot diverge — and
+ * so a settled, superseded or lapsed revision can never be offered as live on
+ * one screen while the other correctly refuses it.
+ *
+ * Three independent terms, all of which the RPCs re-check server-side:
+ *
+ *   still open   effectiveOfferStatus, so a pending row past its deadline is
+ *                already treated as expired rather than inviting an action
+ *                every decision RPC would refuse.
+ *   their move   awaiting_id is the turn. NEVER worker_id — after a customer
+ *                counter the pending row still carries the worker's id while
+ *                the customer authored it (AUD-P1-01).
+ *   not theirs   the author of the live revision is waiting, not deciding. In
+ *                a two-party chain the turn alone implies this, but stating it
+ *                makes "the sender cannot accept their own offer" true by
+ *                construction rather than by inference.
+ */
+export function isOfferActionableBy(
+  offer: Pick<Offer, 'status' | 'expires_at' | 'awaiting_id' | 'author_id'> | null | undefined,
+  viewerId: string | null | undefined,
+  nowMs: number = Date.now()
+): boolean {
+  if (!offer || !viewerId) return false;
+  return (
+    isOpenOffer(effectiveOfferStatus(offer, nowMs)) &&
+    offer.awaiting_id === viewerId &&
+    offer.author_id !== viewerId
+  );
 }
 
 /**
@@ -336,9 +391,7 @@ export async function fetchOfferChain(rootOfferId: string) {
 export async function fetchPendingOffersByWorker(workerId: string) {
   const { data, error } = await supabase
     .from('job_offers')
-    .select(
-      `${OFFER_COLUMNS}, job:jobs!job_offers_job_id_fkey(id, client_id, title, description, category, location, budget_cents, status, created_at, photos, videos)`
-    )
+    .select(`${OFFER_COLUMNS}, ${OFFER_JOB_EMBED}`)
     .eq('worker_id', workerId)
     .eq('status', 'pending')
     .order('created_at', { ascending: false });
@@ -370,9 +423,7 @@ export async function fetchOffersByIds(ids: string[]) {
   // exists for exactly this.
   const { data, error } = await supabase
     .from('job_offers')
-    .select(
-      `${OFFER_COLUMNS}, job:jobs!job_offers_job_id_fkey(id, client_id, title, description, category, location, budget_cents, status, created_at, photos, videos)`
-    )
+    .select(`${OFFER_COLUMNS}, ${OFFER_JOB_EMBED}`)
     .in('id', ids)
     .order('created_at', { ascending: true });
 
@@ -445,6 +496,47 @@ export type PendingOfferSummary = {
 export async function fetchMyPendingOffers() {
   const { data, error } = await supabase.rpc('my_pending_offers');
   return { data: (data ?? []) as PendingOfferSummary[], error };
+}
+
+/**
+ * Fold a thread-offers response into what is already on screen.
+ *
+ * WHY A MERGE AND NOT AN ASSIGNMENT — this is the root cause of the
+ * "$X proposed" stub. A conversation runs TWO independent realtime channels:
+ * `messages` (which is what adds a new counter's id to the fetch set) and
+ * `job_offers` (which fires on the counter's own INSERT). Both trigger a
+ * refresh, so two reads are in flight at once with DIFFERENT id sets, and
+ * whichever answers last used to win outright. When the older, smaller answer
+ * landed last it erased the just-arrived offer — and nothing re-triggered
+ * afterwards, so the newest card stayed stuck with no job and no actions
+ * while every older card rendered fully.
+ *
+ * Merging by id makes the outcome order-independent: the union always
+ * contains the new revision. `updated_at` breaks ties so a genuinely stale
+ * copy of a row can never overwrite a fresher one, and `allowedIds` prunes
+ * offers the thread no longer references, so this cannot grow unbounded.
+ */
+export function mergeThreadOffers(
+  previous: OfferWithJob[],
+  incoming: OfferWithJob[],
+  allowedIds: string[]
+): OfferWithJob[] {
+  const allowed = new Set(allowedIds);
+  const byId = new Map<string, OfferWithJob>();
+
+  for (const offer of previous) {
+    if (allowed.has(offer.id)) byId.set(offer.id, offer);
+  }
+  for (const offer of incoming) {
+    if (!allowed.has(offer.id)) continue;
+    const existing = byId.get(offer.id);
+    // Ties go to the incoming row: same instant, same truth, and preferring
+    // the fresh read keeps an embedded job that a previous read missed.
+    if (existing && existing.updated_at > offer.updated_at) continue;
+    byId.set(offer.id, offer);
+  }
+
+  return [...byId.values()].sort((a, b) => a.created_at.localeCompare(b.created_at));
 }
 
 // ---------------------------------------------------------------------------

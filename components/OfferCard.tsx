@@ -3,14 +3,22 @@ import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { Button } from './Button';
 import { Card } from './Card';
+import { OfferResponseActions } from './OfferResponseActions';
 import { StatusBadge } from './StatusBadge';
 import { VerificationBadge } from './VerificationBadge';
 import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+import {
+  firstNameOf,
+  offerExpiryLabel,
+  offerResponseNote,
+} from '../lib/offerCopy';
 import { formatBudget, JOB_CATEGORY_LABELS } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import { completionPercent } from '../lib/profiles';
 import {
   countersRemaining,
+  effectiveOfferStatus,
+  isOfferActionableBy,
   isOpenOffer,
   type Offer,
   type OfferWithJob,
@@ -80,6 +88,8 @@ type ThreadProps = {
    *  that card is interactive. */
   isLatest: boolean;
   currentUserId: string;
+  /** The other party's name, for the actionable card's heading. */
+  counterpartyName?: string | null;
   busy?: boolean;
   onAccept: () => void;
   onDecline: () => void;
@@ -88,9 +98,12 @@ type ThreadProps = {
    *  other side owes the reply — rendered only in exactly that state. */
   onWithdraw?: () => void;
   /**
-   * Present only when this card can lead into the job it created — i.e. its
-   * own event is 'accepted' and a job actually exists. Rendered as a tappable
-   * card rather than a button so it reads as "this now points somewhere".
+   * Present whenever this card leads into the job it is about — which is
+   * every LIVE offer and every accepted one, since job_offers.job_id is NOT
+   * NULL and pinned constant down a chain. The caller decides with
+   * offerJobTarget() (lib/offerNavigation.ts); this component only renders
+   * the affordance. Rendered as a tappable card rather than a button so it
+   * reads as "this points somewhere".
    */
   onOpenJob?: () => void;
 };
@@ -291,6 +304,7 @@ function OfferThreadCard({
   job,
   isLatest,
   currentUserId,
+  counterpartyName,
   busy = false,
   onAccept,
   onDecline,
@@ -300,17 +314,30 @@ function OfferThreadCard({
 }: ThreadProps) {
   const event = message.request_event ?? 'created';
   const amount = message.request_amount_cents;
-  const openable = event === 'accepted' && !!onOpenJob;
+  // Any card the caller gave a destination is tappable — a live offer is not a
+  // dead end just because nobody has accepted it yet (Fix A). The caller owns
+  // the decision; offerJobTarget() is where it is made, once, for every
+  // surface.
+  const openable = !!onOpenJob;
 
-  const isMyTurn = !!offer && isOpenOffer(offer.status) && offer.awaiting_id === currentUserId;
+  // Whose move it is comes from the ONE rule both actionable surfaces use, so
+  // a superseded, declined, withdrawn, expired or already-answered revision
+  // cannot render actions here that the job detail would refuse.
+  const isMyTurn = isOfferActionableBy(offer, currentUserId);
   const showActions = isLatest && isMyTurn && !!offer;
   const canCounter = chain.length > 0 && countersRemaining(chain, currentUserId) > 0;
+  // Lapsed-pending is expired everywhere on this card, so a deadline that has
+  // passed reads as expired rather than as a live offer nobody answered — the
+  // same reading the RPCs enforce and the job detail already rendered.
+  const liveStatus = offer ? effectiveOfferStatus(offer) : null;
+  const isStillOpen = !!liveStatus && isOpenOffer(liveStatus);
+
   // The sender's exit while the ball is in the other court (§H.2 withdrawn):
   // only the current revision, only its author, only while still pending.
   const canWithdraw =
     isLatest &&
     !!offer &&
-    isOpenOffer(offer.status) &&
+    isStillOpen &&
     offer.author_id === currentUserId &&
     offer.awaiting_id !== currentUserId &&
     !!onWithdraw;
@@ -318,18 +345,24 @@ function OfferThreadCard({
   // A settled offer explains itself on its newest card, so the thread never
   // ends on an offer that silently stopped mattering.
   const settledNote =
-    isLatest && offer && !isOpenOffer(offer.status) ? SETTLED_NOTE[offer.status] : null;
+    isLatest && liveStatus && !isStillOpen ? SETTLED_NOTE[liveStatus] : null;
 
   const waitingNote =
-    isLatest && offer && isOpenOffer(offer.status) && !isMyTurn
-      ? 'Waiting for their response…'
-      : null;
+    isLatest && offer && isStillOpen && !isMyTurn ? 'Waiting for their response…' : null;
 
   const photos = job?.photos ?? [];
   const videos = job?.videos ?? [];
 
   return (
-    <View style={[styles.threadCard, !isLatest && styles.threadCardHistoric]}>
+    <View
+      style={[
+        styles.threadCard,
+        // An actionable card carries three full-width controls, so it takes
+        // the row's available width instead of the narrow event-card cap.
+        showActions && styles.threadCardActionable,
+        !isLatest && styles.threadCardHistoric,
+      ]}
+    >
       <Pressable
         onPress={openable ? onOpenJob : undefined}
         disabled={!openable}
@@ -373,7 +406,11 @@ function OfferThreadCard({
           </>
         )}
 
-        {amount != null && (
+        {/* The amount moves INTO the response block when this card is
+            actionable — it is the headline there, beside "Your move", and
+            printing it twice is what made the old card read as a bare
+            "$X proposed" stub with the real decision hidden below. */}
+        {amount != null && !showActions && (
           <Text style={styles.amount}>
             {formatBudget(amount)}
             {event === 'countered' && <Text style={styles.amountNote}> proposed</Text>}
@@ -424,33 +461,26 @@ function OfferThreadCard({
         />
       )}
 
-      {showActions && (
+      {/* The one actionable presentation, shared with the job-detail respond
+          card. Order, wording, icons and destructive treatment come from that
+          component so Chat and Job Detail cannot drift apart again. */}
+      {showActions && offer && (
         <View style={styles.threadActions}>
-          <View style={styles.threadActionRow}>
-            <Button title="Accept" onPress={onAccept} disabled={busy} style={styles.actionBtn} />
-            <Button
-              title="Decline"
-              variant="secondary"
-              onPress={onDecline}
-              disabled={busy}
-              palette={{ ...colors, primary: colors.danger, border: colors.danger }}
-              style={styles.actionBtn}
-            />
-          </View>
-
-          {canCounter ? (
-            <Button
-              title="Counter offer"
-              variant="secondary"
-              onPress={onCounter}
-              disabled={busy}
-              style={styles.counterBtn}
-            />
-          ) : (
-            <Text style={styles.capNote}>
-              No counter-offers left — accept or decline to continue.
-            </Text>
-          )}
+          <OfferResponseActions
+            compact
+            senderFirstName={firstNameOf(counterpartyName, 'They')}
+            isCounter={offer.parent_offer_id !== null}
+            amountLabel={formatBudget(offer.amount_cents)}
+            note={offerResponseNote({
+              viewerIsWorker: currentUserId === offer.worker_id,
+              expiresLabel: offerExpiryLabel(offer.expires_at),
+            })}
+            canCounter={canCounter}
+            busy={busy}
+            onAccept={onAccept}
+            onCounter={onCounter}
+            onDecline={onDecline}
+          />
         </View>
       )}
     </View>
@@ -627,6 +657,14 @@ const styles = StyleSheet.create({
     minWidth: 240,
     maxWidth: 300,
   },
+  threadCardActionable: {
+    // Grows into the row's remaining width rather than staying at the narrow
+    // event-card cap, so three stacked controls are comfortable and their
+    // labels never truncate. Still bounded, so it cannot span a tablet.
+    flexGrow: 1,
+    flexShrink: 1,
+    maxWidth: 380,
+  },
   threadCardHistoric: {
     borderColor: colors.border,
     opacity: 0.85,
@@ -734,22 +772,8 @@ const styles = StyleSheet.create({
   },
   threadActions: {
     marginTop: spacing.sm,
-    gap: spacing.xs,
-  },
-  threadActionRow: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  actionBtn: {
-    flex: 1,
-    minWidth: 0,
   },
   counterBtn: {
     width: '100%',
-  },
-  capNote: {
-    fontSize: 11,
-    color: colors.textMuted,
-    textAlign: 'center',
   },
 });

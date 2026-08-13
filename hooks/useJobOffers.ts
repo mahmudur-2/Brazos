@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 import {
   fetchOffersByIds,
   fetchOffersForJob,
+  mergeThreadOffers,
   offerIdOf,
   type OfferWithJob,
   type OfferWithWorker,
@@ -89,14 +90,37 @@ export function useThreadOffers(messages: Message[]) {
   const instanceId = useId();
   const runRef = useRef(0);
 
+  // The CURRENT id set, readable from inside an in-flight fetch. Two refreshes
+  // overlap routinely — the realtime job_offers channel fires on the counter's
+  // INSERT while the realtime messages channel is still delivering the event
+  // message that adds its id here — so the request that started first can
+  // answer last with a smaller id set. Merging against the live set instead of
+  // the captured one is what stops the older answer from erasing the newer
+  // offer (the "$X proposed" stub with no job and no actions).
+  const idKeyRef = useRef(idKey);
+  idKeyRef.current = idKey;
+
   const refresh = useCallback(async () => {
     const ids = idKey ? idKey.split(',') : [];
     if (ids.length === 0) {
       setOffers([]);
       return;
     }
-    const { data } = await fetchOffersByIds(ids);
-    setOffers(data);
+    const { data, error } = await fetchOffersByIds(ids);
+    // A FAILED read is not "no offers". Writing [] through would blank every
+    // negotiation card in the thread — the same rule JobDetailScreen's offer
+    // refresh already follows.
+    if (error) {
+      console.warn('[ThreadOffers] refresh failed', error.message);
+      return;
+    }
+    setOffers((prev) =>
+      mergeThreadOffers(
+        prev,
+        data,
+        idKeyRef.current ? idKeyRef.current.split(',') : []
+      )
+    );
   }, [idKey]);
 
   useEffect(() => {

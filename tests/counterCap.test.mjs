@@ -114,10 +114,21 @@ test('the client mirrors the cap and disables the action when it is spent', asyn
   // The two surfaces that gate the Counter control on that number.
   const card = stripComments(await read('components/OfferCard.tsx'));
   assert.match(card, /countersRemaining\(chain, currentUserId\) > 0/);
-  assert.match(card, /No counter-offers left — accept or decline to continue\./);
+  assert.match(card, /canCounter=\{canCounter\}/);
 
   const detail = stripComments(await read('screens/JobDetailScreen.tsx'));
   assert.match(detail, /countersLeft === 0 && !showCounterForm/);
+
+  // Both hand that answer to the ONE actionable card, which swaps the counter
+  // control for the spent-cap sentence — a single definition of both the gate
+  // and the wording, so the two surfaces cannot disagree about either.
+  const actions = stripComments(await read('components/OfferResponseActions.tsx'));
+  assert.match(actions, /canCounter \? \(/);
+  assert.match(actions, /<Text style=\{styles\.capNote\}>\{COUNTERS_SPENT_NOTE\}<\/Text>/);
+  assert.match(
+    stripComments(await read('lib/offerCopy.ts')),
+    /export const COUNTERS_SPENT_NOTE =\s*\n?\s*'No counter-offers left — accept or decline to continue\.';/
+  );
 });
 
 test('a stale client count gets the cap message, not a generic failure', async () => {

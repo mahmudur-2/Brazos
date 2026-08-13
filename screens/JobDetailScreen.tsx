@@ -26,9 +26,16 @@ import { Card } from '../components/Card';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { JobOwnerActions } from '../components/JobOwnerActions';
 import { JobVideo } from '../components/JobVideo';
+import { OfferResponseActions } from '../components/OfferResponseActions';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { StatusBadge } from '../components/StatusBadge';
+import {
+  acceptOfferConfirmTitle,
+  declineOfferConfirmTitle,
+  offerExpiryLabel,
+  offerResponseNote,
+} from '../lib/offerCopy';
 import { useAuth } from '../hooks/useAuth';
 import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useMode } from '../modes';
@@ -601,75 +608,48 @@ export function JobDetailScreen() {
               // "Your bid", never offered Withdraw (author-only, and the
               // author is the customer here). AUD-P1-01.
               <Card style={styles.secondaryCard}>
-                <View style={styles.bidHeader}>
-                  <Text style={styles.sectionTitle}>
-                    {posterFirstName} sent you a Counteroffer
-                  </Text>
-                  <StatusBadge status="pending" label="Your move" />
-                </View>
-                <Text style={styles.bidAmount}>{formatBudget(activeBid.amount_cents)}</Text>
-                <Text style={styles.bidNote}>
-                  Their price for this job — accepting assigns you the work at
-                  this amount.
-                  {activeBid.expires_at
-                    ? ` Respond by ${new Date(activeBid.expires_at).toLocaleDateString(
-                        undefined,
-                        { month: 'short', day: 'numeric' }
-                      )} — after that it expires on its own.`
-                    : ''}
-                </Text>
-                <Button
-                  title={`Accept for ${formatBudget(activeBid.amount_cents)}`}
-                  onPress={() => setConfirmResponse('accept')}
-                  loading={responding === 'accept'}
-                  disabled={responding !== null}
+                {/* THE shared actionable presentation — the same component
+                    the chat thread renders, so the two surfaces cannot show
+                    different labels, a different action order or a different
+                    destructive treatment for one negotiation. It owns its own
+                    spacing, which is what stopped the explanatory paragraph
+                    colliding with the fixed-height Accept button. */}
+                <OfferResponseActions
+                  senderFirstName={posterFirstName}
+                  isCounter={activeBid.parent_offer_id !== null}
+                  amountLabel={formatBudget(activeBid.amount_cents)}
+                  note={offerResponseNote({
+                    viewerIsWorker: true,
+                    expiresLabel: offerExpiryLabel(activeBid.expires_at),
+                  })}
+                  // The control stays available while the form is open so the
+                  // same button dismisses it.
+                  canCounter={!(countersLeft === 0 && !showCounterForm)}
+                  busy={responding !== null}
+                  onAccept={() => setConfirmResponse('accept')}
+                  onCounter={() => setShowCounterForm((visible) => !visible)}
+                  onDecline={() => setConfirmResponse('decline')}
                 />
-                <Button
-                  title={showCounterForm ? 'Cancel counter-offer' : 'Counter'}
-                  variant="secondary"
-                  onPress={() => setShowCounterForm((visible) => !visible)}
-                  disabled={responding !== null || (countersLeft === 0 && !showCounterForm)}
-                  style={styles.withdrawAction}
-                />
-                {countersLeft === 0 && !showCounterForm ? (
-                  <Text style={styles.bidNote}>
-                    You’ve used all your counter-offers on this negotiation —
-                    accept or decline to continue.
-                  </Text>
-                ) : null}
                 {showCounterForm ? (
-                  <OfferComposer
-                    context={{
-                      kind: 'counter',
-                      offer: activeBid,
-                      counterpartyName: poster?.full_name ?? 'The customer',
-                      jobTitle: job.title,
-                      countersRemaining: countersLeft,
-                    }}
-                    onSubmitted={async () => {
-                      // The chain moved: their revision is superseded and the
-                      // turn is theirs. Re-read so the card shows the truth.
-                      setShowCounterForm(false);
-                      await refreshMyOffer();
-                    }}
-                  />
+                  <View style={styles.counterFormWrap}>
+                    <OfferComposer
+                      context={{
+                        kind: 'counter',
+                        offer: activeBid,
+                        counterpartyName: poster?.full_name ?? 'The customer',
+                        jobTitle: job.title,
+                        countersRemaining: countersLeft,
+                      }}
+                      onSubmitted={async () => {
+                        // The chain moved: their revision is superseded and
+                        // the turn is theirs. Re-read so the card shows the
+                        // truth.
+                        setShowCounterForm(false);
+                        await refreshMyOffer();
+                      }}
+                    />
+                  </View>
                 ) : null}
-                <Button
-                  title="Decline counter-offer"
-                  variant="secondary"
-                  onPress={() => setConfirmResponse('decline')}
-                  loading={responding === 'decline'}
-                  disabled={responding !== null}
-                  style={styles.withdrawAction}
-                />
-                <Button
-                  title={`Message ${poster?.full_name ?? 'the poster'}`}
-                  variant="secondary"
-                  onPress={openPosterChat}
-                  loading={openingChat}
-                  disabled={openingChat}
-                  style={styles.withdrawAction}
-                />
               </Card>
             ) : viewerAuthoredBid ? (
               <Card style={styles.secondaryCard}>
@@ -893,7 +873,7 @@ export function JobDetailScreen() {
 
       <ConfirmDialog
         visible={confirmResponse === 'accept'}
-        title={`Accept ${formatBudget(activeBid?.amount_cents ?? null)} for this job?`}
+        title={acceptOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null))}
         message="This takes the job at the customer’s countered amount and closes the negotiation. The job is assigned to you and moves into My Jobs."
         confirmText="Accept offer"
         cancelText="Cancel"
@@ -904,7 +884,7 @@ export function JobDetailScreen() {
 
       <ConfirmDialog
         visible={confirmResponse === 'decline'}
-        title="Decline this counter-offer?"
+        title={declineOfferConfirmTitle(formatBudget(activeBid?.amount_cents ?? null))}
         message="This closes the negotiation — the customer’s counter can’t be accepted afterwards. You can send a new bid unless the job is filled."
         confirmText="Decline offer"
         cancelText="Cancel"
@@ -1188,6 +1168,9 @@ const styles = StyleSheet.create({
   },
   withdrawAction: {
     marginTop: spacing.sm,
+  },
+  counterFormWrap: {
+    marginTop: spacing.md,
   },
   missing: {
     flex: 1,

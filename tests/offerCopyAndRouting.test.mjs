@@ -48,12 +48,16 @@ test('notificationRoutes still owns the screen→tab contract', async () => {
 
 test('the worker job detail names an incoming counter by first name', async () => {
   const detail = stripComments(await read('screens/JobDetailScreen.tsx'));
+  const copy = stripComments(await read('lib/offerCopy.ts'));
 
   assert.match(
     detail,
     /const posterFirstName =\s*\n?\s*poster\?\.full_name\?\.trim\(\)\.split\(\/\\s\+\/\)\[0\] \|\| 'The customer';/
   );
-  assert.match(detail, /\{posterFirstName\} sent you a Counteroffer/);
+  // The heading moved into the shared actionable card, which the screen hands
+  // that same first name — the wording itself now has exactly one definition.
+  assert.match(detail, /senderFirstName=\{posterFirstName\}/);
+  assert.match(copy, /`\$\{senderFirstName\} sent you a Counteroffer`/);
   // The full-name form must not come back.
   assert.doesNotMatch(detail, /\{poster\?\.full_name \?\? 'The customer'\} countered/);
 });
@@ -138,6 +142,14 @@ test('the badge itself is derived, never stored', async () => {
     detail,
     /const viewerOwesResponse =\s*\n?\s*!!activeBid && !!user && !viewerAuthoredBid && activeBid\.awaiting_id === user\.id;/
   );
-  assert.match(detail, /<StatusBadge status="pending" label="Your move" \/>/);
+  // The badge is rendered by the shared actionable card, which exists only
+  // while the viewer owes the reply — so it still cannot be stored state.
+  assert.match(detail, /<OfferResponseActions/);
+  const actions = stripComments(await read('components/OfferResponseActions.tsx'));
+  assert.match(actions, /<StatusBadge status="pending" label=\{YOUR_MOVE_BADGE_LABEL\} \/>/);
+  assert.match(
+    stripComments(await read('lib/offerCopy.ts')),
+    /export const YOUR_MOVE_BADGE_LABEL = 'Your move';/
+  );
   assert.doesNotMatch(detail, /useState[^\n]*viewerOwesResponse/);
 });

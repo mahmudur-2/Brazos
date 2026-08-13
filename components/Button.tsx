@@ -41,9 +41,16 @@ type ButtonProps = {
   size?: ButtonSize;
   /** Overrides fill/text colors, e.g. for the Map tab's dark mode. */
   palette?: ColorPalette;
-  /** Small glyph rendered after the title. Inherits the title's color so it
+  /** Small glyph rendered beside the title. Inherits the title's color so it
    *  can't drift from the variant's text treatment. */
   icon?: IoniconName;
+  /**
+   * Which side of the label the glyph sits on. Defaults to 'trailing', which
+   * is what every existing caller renders — this prop was added for the
+   * negotiation card, where the reference design leads each action with its
+   * meaning (check / swap / X) so the three read as a set at a glance.
+   */
+  iconPosition?: 'leading' | 'trailing';
 } & Omit<PressableProps, 'onPress' | 'disabled'>;
 
 export function Button({
@@ -55,6 +62,7 @@ export function Button({
   size = 'md',
   palette = colors,
   icon,
+  iconPosition = 'trailing',
   style,
   ...rest
 }: ButtonProps) {
@@ -102,12 +110,22 @@ export function Button({
         <ActivityIndicator color={textColor} />
       ) : icon ? (
         <View style={styles.row}>
-          <Text style={[styles.text, { fontSize: sizeStyle.fontSize, color: textColor }]}>
+          {/* Sized from the title rather than a fixed number so it stays
+              matched to the text at every ButtonSize. The row centres on one
+              axis, so the glyph and the label share a baseline whichever side
+              it sits on. */}
+          {iconPosition === 'leading' ? (
+            <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={textColor} />
+          ) : null}
+          <Text
+            style={[styles.text, { fontSize: sizeStyle.fontSize, color: textColor }]}
+            numberOfLines={1}
+          >
             {title}
           </Text>
-          {/* Sized from the title rather than a fixed number so it stays
-              matched to the text at every ButtonSize. */}
-          <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={textColor} />
+          {iconPosition === 'trailing' ? (
+            <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={textColor} />
+          ) : null}
         </View>
       ) : (
         <Text style={[styles.text, { fontSize: sizeStyle.fontSize, color: textColor }]}>

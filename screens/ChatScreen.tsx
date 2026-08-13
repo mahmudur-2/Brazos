@@ -34,7 +34,12 @@ import { useChat } from '../hooks/useChat';
 import { useJob } from '../hooks/useJob';
 import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
-import { canRehireWorker, fetchJobById, formatBudget } from '../lib/jobs';
+import { canRehireWorker, fetchJobById, formatBudget, toOpenJob } from '../lib/jobs';
+import {
+  acceptOfferConfirmTitle,
+  declineOfferConfirmTitle,
+} from '../lib/offerCopy';
+import { offerJobTarget } from '../lib/offerNavigation';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { markConversationRead, resolveOtherId } from '../lib/conversations';
@@ -378,43 +383,61 @@ export function ChatScreen() {
   }
 
   /**
-   * Opens the job an accepted request created. Either party can tap into it —
-   * routed to whichever screen their own role actually has: the client's full
-   * job-with-bids view, or the worker's status screen. Both live in the My
-   * Jobs stack regardless of which tab Chat itself was reached from, so this
-   * always goes through the tab-level parent rather than the local stack.
+   * Opens the job an offer is about — live or accepted, both directions.
+   *
+   * Under the unified model the job ALWAYS exists (job_offers.job_id is NOT
+   * NULL and a direct offer creates its draft job up front), so there is no
+   * nullable created_job_id to guard and no standalone offer to invent one
+   * for. Which screen a viewer lands on is decided once, in
+   * lib/offerNavigation.ts, from the offer's own stable participants — the
+   * same decision My Jobs makes for the same offer.
+   *
+   * All three destinations live in the shared My Jobs stack regardless of
+   * which tab Chat itself was reached from, so this goes through the one
+   * guarded cross-tab helper rather than the local stack.
    */
-  async function openAcceptedJob(request: OfferWithJob) {
+  async function openOfferJob(request: OfferWithJob) {
     if (!user || openingJobId) return;
-    // Under the unified model the job always exists — a direct offer creates
-    // it as a draft up front — so there is no nullable created_job_id to
-    // guard, only the offer having actually been accepted.
-    const jobId = request.job_id;
+    const target = offerJobTarget(request, user.id);
+    if (!target) return;
 
-    if (user.id === request.customer_id) {
-      // The client's screen needs the full job row (bids, status, etc.), not
-      // just the id, so it's fetched before navigating.
-      setOpeningJobId(request.id);
-      const { data: fetchedJob, error } = await fetchJobById(jobId);
-      setOpeningJobId(null);
-
-      if (error || !fetchedJob) {
-        await alertAsync(
-          'Could not open job',
-          userMessage(error, 'This job could not be found.')
-        );
-        return;
-      }
-      // MyJobs is a shared tab that registers this route in both trees, so the
-      // hop was never mode-fragile — it goes through the one guarded helper
-      // anyway, so there is a single way to cross tabs and no second pattern
-      // for the next caller to copy (lib/navigationRef.ts).
-      navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: fetchedJob });
+    // The worker's own screen for a job they hold only takes the id and loads
+    // itself.
+    if (target.screen === 'WorkerJob') {
+      navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId: target.jobId });
       return;
     }
 
-    // The worker's screen only takes the id and loads itself.
-    navigateAcrossTabs('MyJobs', 'WorkerJob', { jobId });
+    // The worker's marketplace view takes the browse-feed projection, which
+    // the offer already embeds — the same row My Jobs hands the same screen.
+    if (target.screen === 'JobDetail' && request.job) {
+      navigateAcrossTabs('MyJobs', 'JobDetail', { job: toOpenJob(request.job) });
+      return;
+    }
+
+    // Either the client's screen (which needs the full job row — offers,
+    // status, payment) or a JobDetail whose embed did not come back. Both are
+    // answered by the authoritative read rather than a half-built row.
+    setOpeningJobId(request.id);
+    const { data: fetchedJob, error } = await fetchJobById(target.jobId);
+    setOpeningJobId(null);
+
+    if (error || !fetchedJob) {
+      await alertAsync(
+        'Could not open job',
+        userMessage(error, 'This job could not be found.')
+      );
+      return;
+    }
+    // MyJobs is a shared tab that registers these routes in both trees, so the
+    // hop was never mode-fragile — it goes through the one guarded helper
+    // anyway, so there is a single way to cross tabs and no second pattern
+    // for the next caller to copy (lib/navigationRef.ts).
+    if (target.screen === 'JobDetail') {
+      navigateAcrossTabs('MyJobs', 'JobDetail', { job: toOpenJob(fetchedJob) });
+      return;
+    }
+    navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job: fetchedJob });
   }
 
   // Long-pressing a message offers both actions rather than jumping straight
@@ -708,6 +731,7 @@ export function ChatScreen() {
                       job={request?.job ?? null}
                       isLatest={latestMessageIdByRequest[offerId] === item.id}
                       currentUserId={user?.id ?? ''}
+                      counterpartyName={counterparty?.full_name}
                       busy={respondingId === offerId}
                       onAccept={() =>
                         request && setConfirmResponse({ request, action: 'accept' })
@@ -719,9 +743,12 @@ export function ChatScreen() {
                       onWithdraw={() =>
                         request && setConfirmResponse({ request, action: 'withdraw' })
                       }
+                      // Live and accepted offers alike lead to the job they
+                      // are about; offerJobTarget() is the single rule for
+                      // whether there is a destination and which one.
                       onOpenJob={
-                        request?.status === 'accepted'
-                          ? () => openAcceptedJob(request)
+                        request && offerJobTarget(request, user?.id)
+                          ? () => openOfferJob(request)
                           : undefined
                       }
                     />
@@ -889,10 +916,16 @@ export function ChatScreen() {
         visible={!!confirmResponse}
         title={
           confirmResponse?.action === 'accept'
-            ? `Accept this ${formatBudget(confirmResponse.request.amount_cents)} job?`
+            ? acceptOfferConfirmTitle(
+                formatBudget(confirmResponse.request.amount_cents)
+              )
             : confirmResponse?.action === 'withdraw'
               ? 'Withdraw your offer?'
-              : 'Decline this offer?'
+              : confirmResponse
+                ? declineOfferConfirmTitle(
+                    formatBudget(confirmResponse.request.amount_cents)
+                  )
+                : ''
         }
         message={
           confirmResponse?.action === 'accept'
