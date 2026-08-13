@@ -52,6 +52,9 @@ import type { ChatTarget } from '../lib/messages';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
 import {
   canUnsend,
+  fetchMessagingUnlocked,
+  isMessagingLockedError,
+  MESSAGING_LOCKED_MESSAGE,
   messagePreviewText,
   sendMessage,
   unsendMessage,
@@ -132,6 +135,38 @@ export function ChatScreen() {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [openingJobId, setOpeningJobId] = useState<string | null>(null);
 
+  /**
+   * Whether free-form messaging is open here yet. `null` = not yet known.
+   *
+   * The answer comes from the database function that also backs the messages
+   * INSERT policy (phase66), so this screen cannot offer a composer the server
+   * would refuse, and cannot hide one it would allow. Before the pair are
+   * hired the negotiation cards ARE the conversation; everything free-form —
+   * the text input, the send button, quick replies, camera, photo library and
+   * voice — is removed rather than shown and then failing.
+   */
+  const [messagingUnlocked, setMessagingUnlocked] = useState<boolean | null>(null);
+  const refreshMessagingLock = useCallback(async () => {
+    const { data, error } = await fetchMessagingUnlocked(
+      jobId ? { jobId } : { directThreadId: directThreadId as string }
+    );
+    // A failed read keeps the conversation closed: the policy is the authority
+    // either way, so guessing "open" would only produce a refused send.
+    if (error) {
+      console.warn('[Chat] messaging lock read failed', error.message);
+      return;
+    }
+    setMessagingUnlocked(data);
+  }, [jobId, directThreadId]);
+
+  // Re-read on every focus, so accepting an offer on another screen (or the
+  // other device) opens this thread without a restart.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshMessagingLock();
+    }, [refreshMessagingLock])
+  );
+
   const {
     byId: requestsById,
     offers: threadOffers,
@@ -199,7 +234,7 @@ export function ChatScreen() {
     setSending(false);
 
     if (error) {
-      await alertAsync('Could not send voice message', userMessage(error));
+      await reportSendFailure('Could not send voice message', error);
       return;
     }
     recorder.reset();
@@ -293,6 +328,28 @@ export function ChatScreen() {
     }
   }, [messages.length]);
 
+  /**
+   * The one place a refused send is turned into words.
+   *
+   * A pre-confirmation insert is rejected by the policy, not by this screen,
+   * so it can arrive even with the composer hidden — a stale screen, an
+   * alternate entry point, or an older installed build. Name the rule instead
+   * of leaking the database's own text, and re-read the lock so the surface
+   * catches up with the server.
+   */
+  async function reportSendFailure(
+    title: string,
+    error: { message?: string | null; code?: string | null } | null
+  ) {
+    if (isMessagingLockedError(error)) {
+      setMessagingUnlocked(false);
+      void refreshMessagingLock();
+      await alertAsync('Messaging isn’t open yet', MESSAGING_LOCKED_MESSAGE);
+      return;
+    }
+    await alertAsync(title, userMessage(error));
+  }
+
   async function handleSendText() {
     const content = text.trim();
     if (!content || !user || sending) return;
@@ -308,7 +365,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send message', userMessage(error));
+      await reportSendFailure('Could not send message', error);
       // Restore the draft AND the reply target, so a failure doesn't silently
       // turn a reply into a standalone message on the next attempt.
       setText(content);
@@ -355,6 +412,10 @@ export function ChatScreen() {
     }
 
     await refreshRequests();
+    // Accepting is what assigns the worker — which is exactly the condition
+    // that opens messaging. Re-read it here so the composer appears without
+    // needing to leave and come back.
+    if (action === 'accept') await refreshMessagingLock();
     if (action === 'accept') {
       // The accepter decides the next step (AUD-P1-02). The CUSTOMER just
       // agreed to pay: funding is the immediate next move — ending on an
@@ -529,7 +590,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send message', userMessage(error));
+      await reportSendFailure('Could not send message', error);
       return;
     }
     if (data) addLocal(data);
@@ -591,7 +652,7 @@ export function ChatScreen() {
     });
     setSending(false);
     if (error) {
-      await alertAsync('Could not send photo', userMessage(error));
+      await reportSendFailure('Could not send photo', error);
       return;
     }
     if (data) addLocal(data);
@@ -810,6 +871,23 @@ export function ChatScreen() {
                 : "You can't reply to this conversation."}
             </Text>
           </View>
+        ) : messagingUnlocked !== true ? (
+          // Every free-form entry point at once — composer, send button, quick
+          // replies, camera, photo library and voice — rather than disabling
+          // them one by one and leaving the next one to be forgotten. The
+          // negotiation cards above stay fully interactive. While the answer
+          // is still unknown (null) nothing is offered, so a slow read can
+          // never flash a composer the server would refuse.
+          messagingUnlocked === false ? (
+            <View style={styles.lockedNotice}>
+              <Ionicons
+                name="lock-closed-outline"
+                size={18}
+                color={colors.textMuted}
+              />
+              <Text style={styles.lockedText}>{MESSAGING_LOCKED_MESSAGE}</Text>
+            </View>
+          ) : null
         ) : (
           <>
             {!isSelfConversation && !replyTo && (
@@ -1062,6 +1140,24 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 13,
     color: colors.danger,
+    lineHeight: 18,
+  },
+  // Same shape as the blocked notice, in the neutral palette: this is not a
+  // failure, it is the stage the negotiation is at.
+  lockedNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.lg,
+  },
+  lockedText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textMuted,
     lineHeight: 18,
   },
   // Was a bare text link, which read as a caption next to the counterparty's

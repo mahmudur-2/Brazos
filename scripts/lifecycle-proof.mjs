@@ -246,11 +246,20 @@ async function main() {
     threadId = data.id;
   });
 
-  await must('chat pre-hire: worker message lands + notifies customer (phase57)', async () => {
+  // phase66 reversed phase52's product decision: before the job is confirmed
+  // the two sides interact through the offer, not through free-form chat. The
+  // thread still exists (phase52's trigger) and still carries the negotiation
+  // cards — only free-form content is refused, and it is refused by the
+  // policy, not by a screen.
+  await must('chat pre-hire: a free-form message is REFUSED (phase66)', async () => {
     const { error } = await w.client.from('messages')
       .insert({ direct_thread_id: threadId, sender_id: W_ID, content: `${MARK} could I come at nine?` });
-    assert(!error, error?.message);
-    assert((await feedCount(c.client, C_ID, 'message', start)) >= 1, 'no feed row for the customer');
+    assert(error, 'a pre-confirmation message must be rejected by the database');
+    // The refusal is RLS, not a missing thread or a broken participant check.
+    assert(
+      error.code === '42501' || /row-level security/i.test(error.message ?? ''),
+      `expected an RLS refusal, got ${error.code}: ${error.message}`
+    );
   });
 
   await must('accept: customer accepts; job assigned; worker notified', async () => {
@@ -314,6 +323,16 @@ async function main() {
       .insert({ job_id: jobId, sender_id: C_ID, content: `${MARK} looks great` });
     assert(!error, error?.message);
     assert((await feedCount(w.client, W_ID, 'message', start)) === before + 1, 'no worker feed row');
+  });
+
+  // The other half of phase66: assignment is what opens the PAIR thread too,
+  // so the conversation the offer lived in becomes an ordinary one.
+  await must('chat post-hire: the pair thread now accepts a free-form message', async () => {
+    const before = await feedCount(c.client, C_ID, 'message', start);
+    const { error } = await w.client.from('messages')
+      .insert({ direct_thread_id: threadId, sender_id: W_ID, content: `${MARK} on my way` });
+    assert(!error, error?.message);
+    assert((await feedCount(c.client, C_ID, 'message', start)) > before, 'no feed row for the customer');
   });
 
   await must('approve/release: held → released; worker notified (phase56)', async () => {

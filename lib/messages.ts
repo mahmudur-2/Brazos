@@ -159,6 +159,50 @@ export type NewMessageInput = {
   replyToId?: string | null;
 };
 
+/**
+ * Is free-form messaging open in this conversation yet?
+ *
+ * THE question is answered by the database (phase66 `messaging_unlocked()`),
+ * not re-derived here: the same function backs the `messages` INSERT policy,
+ * so the composer can never be offered for a thread the server would refuse —
+ * and, just as importantly, can never be hidden on one the server would allow.
+ *
+ * Before the pair share a job that reached assignment, the structured
+ * negotiation cards are the whole conversation. After it, normal messaging
+ * opens and stays open.
+ *
+ * A failed read returns `false` WITH the error, so the caller can keep the
+ * conversation closed and say why rather than silently opening it.
+ */
+export async function fetchMessagingUnlocked(target: ChatTarget) {
+  const { data, error } = await supabase.rpc('messaging_unlocked', {
+    p_job_id: target.jobId ?? null,
+    p_direct_thread_id: target.directThreadId ?? null,
+  });
+  return { data: data === true, error };
+}
+
+/**
+ * Did this failure come from the pre-confirmation lock rather than something
+ * the user can fix by retrying?
+ *
+ * A refused insert surfaces as Postgres 42501 / PostgREST's row-level-security
+ * text. Callers map it to the application's own sentence — the raw database
+ * message never reaches a user (lib/errorMessage.ts is the general path; this
+ * only decides WHICH friendly sentence applies).
+ */
+export function isMessagingLockedError(
+  error: { message?: string | null; code?: string | null } | null
+): boolean {
+  if (!error) return false;
+  if (error.code === '42501') return true;
+  return (error.message ?? '').toLowerCase().includes('row-level security');
+}
+
+/** What to tell someone whose conversation has not opened yet. */
+export const MESSAGING_LOCKED_MESSAGE =
+  'You can send messages once this job is confirmed. Until then, use the offer actions above to agree on a price.';
+
 /** Send a text, photo, and/or voice message, optionally quoting another. */
 export async function sendMessage(input: NewMessageInput) {
   const { data, error } = await supabase

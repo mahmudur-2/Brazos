@@ -990,6 +990,33 @@ const MIGRATIONS = [
       checkRpc('view_security_invoker_enabled', {})],
     checks: [],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 66 (core-transactions run). Free-form messaging is locked until
+    // the pair share a job that reached assignment: messaging_unlocked() is
+    // the one definition of that, consulted by BOTH the messages INSERT
+    // policy and the chat screen.
+    //
+    // A policy is invisible to a PostgREST existence probe, so the sentinel is
+    // what makes "applied" mean "the lock is live" — it is created after the
+    // file's own post-condition, which fails the transaction if
+    // messages_insert_party did not pick up the gate.
+    //
+    // messaging_unlocked() IS probeable and is checked directly: with both
+    // arguments null it must return false for any caller, which also proves
+    // the grant phase32 revoked was restored.
+    // -----------------------------------------------------------------------
+    file: 'phase66_messaging_locked_until_confirmed.sql',
+    sentinel: ['rpc messaging_lock_enabled()', () =>
+      checkRpc('messaging_lock_enabled', {})],
+    checks: [
+      ['rpc messaging_unlocked() — reachable and closed by default', () =>
+        checkRpc('messaging_unlocked', {
+          p_job_id: null,
+          p_direct_thread_id: null,
+        })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';

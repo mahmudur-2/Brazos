@@ -18,8 +18,14 @@ import { dirname, join } from 'node:path';
  *      of the template sets.
  *   4. Chat is registered wherever JobDetail is (the SubmitBid rule), so
  *      the own-bid entry can never hit an unregistered route.
- *   5. The offer surfaces only LOOK UP the thread (fetchDirectThreadWith);
- *      nothing client-side creates direct_threads.
+ *   5. Nothing client-side creates direct_threads — the trigger owns that.
+ *
+ * SUPERSEDED BY phase66: this phase also shipped pre-hire chat ENTRY POINTS
+ * ("Message <worker> first" on Bid Detail, "Message the poster" on the worker
+ * job detail). Free-form messaging is now locked until the job is confirmed,
+ * so those entries are gone and the guard below asserts their absence. The
+ * thread itself, the trigger, the backfill and the negotiation cards inside
+ * the thread are all unchanged — only free-form content is gated.
  */
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -71,7 +77,7 @@ test('Chat rides along wherever JobDetail is registered', async () => {
   assert.match(shared, /<MapStack\.Screen name="Chat" component={ChatScreen} \/>/);
 });
 
-test('offer surfaces look the thread up — nothing client-side creates one', async () => {
+test('nothing client-side creates a direct thread', async () => {
   const conversations = await read('lib/conversations.ts');
   assert.match(conversations, /fetchDirectThreadWith/);
   // The lookup is a plain select; no insert/rpc-create of threads exists in
@@ -79,8 +85,9 @@ test('offer surfaces look the thread up — nothing client-side creates one', as
   for (const file of [
     'lib/conversations.ts',
     'lib/messages.ts',
-    'screens/BidDetailScreen.tssx'.replace('tssx', 'tsx'),
+    'screens/BidDetailScreen.tsx',
     'screens/JobDetailScreen.tsx',
+    'screens/ChatScreen.tsx',
   ]) {
     const src = await read(file);
     assert.ok(
@@ -89,21 +96,32 @@ test('offer surfaces look the thread up — nothing client-side creates one', as
       `${file} must not create direct threads from the client`
     );
   }
+});
+
+test('phase66 supersedes the pre-hire chat ENTRIES, not the thread itself', async () => {
+  // phase52's mechanism is untouched: the pair's thread still exists from the
+  // first offer, so the negotiation cards still have somewhere to live and the
+  // conversation is already there the moment the job is confirmed. What went
+  // away is the free-form ENTRY POINTS before that moment.
+  const phase52 = await read('supabase/phase52_offer_scoped_chat.sql');
+  assert.match(phase52, /create trigger job_offers_thread_autocreate/);
 
   const bidDetail = await read('screens/BidDetailScreen.tsx');
-  assert.match(bidDetail, /fetchDirectThreadWith\(\s*user\.id,\s*offer\.worker_id\s*\)/);
   const jobDetail = await read('screens/JobDetailScreen.tsx');
-  assert.match(jobDetail, /fetchDirectThreadWith\(user\.id, job\.client_id\)/);
-  // The worker entry lives on the own-bid card only — a worker with no bid
-  // has no offer scope to chat in. The card renders "Your bid" and ends at
-  // its Withdraw button; the chat button must sit between them.
-  const bidCardStart = jobDetail.indexOf('activeBid ? (');
-  const bidCardEnd = jobDetail.indexOf('"Withdraw bid"');
-  assert.ok(bidCardStart >= 0 && bidCardEnd > bidCardStart, 'own-bid card anchors must exist');
-  assert.ok(
-    jobDetail.slice(bidCardStart, bidCardEnd).includes('openPosterChat'),
-    'the worker chat entry must sit inside the own-bid card'
-  );
+
+  assert.doesNotMatch(bidDetail, /Message \$\{workerName\} first/);
+  assert.doesNotMatch(jobDetail, /Message \$\{poster/);
+  // The lookups that existed only to open those composers are gone with them.
+  for (const [name, src] of [
+    ['BidDetailScreen', bidDetail],
+    ['JobDetailScreen', jobDetail],
+  ]) {
+    assert.doesNotMatch(
+      src,
+      /fetchDirectThreadWith/,
+      `${name} must not open a pre-confirmation composer`
+    );
+  }
 });
 
 test('the inbox and chat keep their unread contract', async () => {

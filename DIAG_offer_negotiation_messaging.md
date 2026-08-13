@@ -307,3 +307,176 @@ to `'trailing'` — every existing caller renders byte-identically.
    budget range and arrival window from both the card and the screen it hands
    the row to. Additive projection change only — no new table, no policy
    change.
+5. **Cancellation does not unlock messaging.** `messaging_unlocked()` accepts
+   only `assigned` / `in_progress` / `completed`. A pair whose only job was
+   cancelled returns to the pre-confirmation state. This is the narrower,
+   safer reading of "the worker has been assigned / the job is confirmed";
+   widening it later is a one-word change to the status list.
+6. **`scripts/lifecycle-proof.mjs` was amended, not left failing.** Its
+   step 'chat pre-hire: worker message lands + notifies customer (phase57)'
+   asserted the *opposite* of the new rule (phase52's product decision). It now
+   asserts the refusal, and a new post-hire step asserts the pair thread opens
+   after assignment. Leaving it as-is would have left a standing proof
+   asserting behaviour the run deliberately removed.
+
+## 8. THE MESSAGING LOCK — WHAT WAS BUILT
+
+**Canonical unlock condition.** The job carries an `assigned_worker_id` and
+its status is `assigned` / `in_progress` / `completed`. That is precisely the
+state `accept_offer()` produces, so "the offer was accepted" and "the worker
+was assigned" are one event and one condition — not two definitions.
+
+`lib/jobLifecycle.ts`'s `'confirmed'` label was **rejected** for this purpose
+and the reason is recorded here so it is not re-litigated: it is derived as
+`assigned + payment held` and is **transient** — arrival timestamps outrank
+payment, so a hired, funded job becomes `en_route` the moment the worker taps
+"on my way". Gating messaging on it would have re-locked a conversation
+mid-job. The assignment is the monotonic fact.
+
+**Where it is enforced — `public.messages` INSERT policy** (`phase66`,
+replacing phase36's `messages_insert_party`). phase36's participant and
+block-enforcement terms are carried forward unchanged; one conjunct is added:
+
+```sql
+and (
+  public.messaging_unlocked(messages.job_id, messages.direct_thread_id)
+  or (
+    (messages.job_offer_id is not null or messages.job_request_id is not null)
+    and coalesce(btrim(messages.content), '') = ''
+    and messages.image_url is null
+    and messages.audio_url is null
+  )
+)
+```
+
+The negotiation branch is **payload-free by construction**, which is what
+stops it becoming a bypass: `offer_post_event()` and `create_offer()` both
+write `content = ''` with no media, so nothing legitimate is excluded and a
+forged event row can carry no free-form content. Proved: a forged row with
+text is refused with 42501.
+
+`public.messaging_unlocked(p_job_id, p_direct_thread_id)` is the one
+definition, `security definer`, granted to `authenticated`, and answers only
+about the caller's own conversations (both branches require `auth.uid()` to be
+a participant). **The chat screen calls the same function**, so the UI gate
+and the policy cannot drift.
+
+**Where it is enforced — UI.** `screens/ChatScreen.tsx` replaces the entire
+composer block with an explanatory notice when the thread is not unlocked.
+That removes every free-form entry point in one branch — text input, send
+button, quick-reply chips, camera, photo library, voice — rather than
+disabling them one at a time. Unknown (still loading) is treated as locked, so
+a slow read never flashes a composer. The negotiation cards above stay fully
+interactive.
+
+**Message CTAs removed** (all pre-confirmation):
+`screens/JobDetailScreen.tsx` counteroffer card and own-bid card;
+`screens/BidDetailScreen.tsx` "Message <worker> first". The thread lookups
+that existed only to open those composers went with them. Post-hire CTAs are
+untouched and still correct: `ClientJobDetailScreen` (gated on
+`assigned_worker_id`), `WorkerJobScreen` (gated on `isWorker`),
+`TrackWorkerScreen`, `JobConfirmedScreen`.
+
+**Refused sends are named, never leaked.** All four send paths route through
+one `reportSendFailure()`, which maps 42501 / row-level-security to
+`MESSAGING_LOCKED_MESSAGE` and re-reads the lock. No database text reaches a
+user.
+
+**Migration: `supabase/phase66_messaging_locked_until_confirmed.sql`.**
+STAGING (`zzkumxcjtbqoselzptig`) — **APPLIED and verified**.
+`node scripts/verify-schema.mjs`: phase66 group green
+(`messaging_lock_enabled()` and `messaging_unlocked()` both OK),
+"All REQUIRED objects exist in the live database", 0 MISSING / 0 PENDING.
+Re-applied a second time to prove idempotency — no change. Production
+(`avkighsiufeefyycbebf`) was never contacted or referenced.
+
+**Behavioural proof: `scripts/phase66-proof.sql` — 8 PASS, 0 FAIL,
+`ROLLBACK`, zero residue.** Run against staging through the `authenticated`
+role with a JWT claim, so RLS actually applies:
+
+1. a locked pair's free-form message is refused (42501)
+2. a forged negotiation-event row carrying text is refused (42501)
+3. reads still work in a locked thread
+4. `messaging_unlocked()` = false for the locked pair
+5. `messaging_unlocked()` = true for the hired pair
+6. the hired pair may send a free-form message
+7. an assigned job's own thread accepts a message from its client
+8. **a negotiation event still posts before confirmation** — the assertion
+   that matters most, run against a live pre-confirmation chain
+
+## 9. FILES CHANGED
+
+**Commit 1 — `fix(offers): unify negotiation cards, job routing, and card format`**
+
+| File | Change |
+|---|---|
+| `lib/offerNavigation.ts` | NEW — `offerJobTarget()`, `isOfferJobOpenable()` |
+| `lib/offerCopy.ts` | NEW — every actionable-card string, pure |
+| `components/OfferResponseActions.tsx` | NEW — the one actionable card |
+| `lib/offers.ts` | `isOfferActionableBy()`, `mergeThreadOffers()`, `OFFER_JOB_EMBED` |
+| `hooks/useJobOffers.ts` | merge + live-id-set + error guard in `useThreadOffers` |
+| `components/OfferCard.tsx` | thread card: shared actions, `openable`, expiry-aware notes |
+| `components/Button.tsx` | optional `iconPosition`, default unchanged |
+| `screens/ChatScreen.tsx` | `openOfferJob()`, `onOpenJob` for live offers, confirm copy |
+| `screens/JobDetailScreen.tsx` | respond card → shared component; confirm copy |
+| `tests/offerActionParity.test.mjs` | NEW — 21 tests |
+| `tests/counterCap.test.mjs`, `tests/counterResponse.test.mjs`, `tests/offerCopyAndRouting.test.mjs` | assertions follow the refactor |
+| `DIAG_offer_negotiation_messaging.md` | NEW |
+
+**Commit 2 — `feat(messaging): lock free-form messaging until job confirmed`**
+
+| File | Change |
+|---|---|
+| `supabase/phase66_messaging_locked_until_confirmed.sql` | NEW — `messaging_unlocked()` + INSERT policy + sentinel |
+| `scripts/verify-schema.mjs` | phase66 group registered |
+| `scripts/phase66-proof.sql` | NEW — 8-assertion behavioural proof |
+| `scripts/lifecycle-proof.mjs` | pre-hire step inverted; post-hire pair-thread step added |
+| `lib/messages.ts` | `fetchMessagingUnlocked()`, `isMessagingLockedError()`, `MESSAGING_LOCKED_MESSAGE` |
+| `screens/ChatScreen.tsx` | composer block gated; `reportSendFailure()` |
+| `screens/JobDetailScreen.tsx`, `screens/BidDetailScreen.tsx` | pre-hire Message CTAs removed |
+| `tests/messagingLock.test.mjs` | NEW — 10 tests |
+| `tests/offerScopedChat.test.mjs` | phase52's chat ENTRIES superseded; thread guarantees kept |
+
+## 10. TESTS ADDED
+
+`tests/offerActionParity.test.mjs` (21) and `tests/messagingLock.test.mjs`
+(10) cover the run's required list 1–15:
+
+| # | Requirement | Where |
+|---|---|---|
+| 1 | incoming live job offer actionable | offerActionParity |
+| 2 | incoming live counteroffer actionable | offerActionParity |
+| 3 | outgoing live offer not actionable by its sender | offerActionParity |
+| 4 | superseded not actionable | offerActionParity |
+| 5 | declined not actionable | offerActionParity |
+| 6 | accepted retains job navigation | offerActionParity |
+| 7 | live offer → correct nav params | offerActionParity |
+| 8 | live counteroffer → correct nav params | offerActionParity |
+| 9 | pre-confirmation text message rejected | messagingLock + `scripts/phase66-proof.sql` #1 |
+| 10 | attachment / alternate mutation rejected | messagingLock (one insert covers all four paths) + proof #2 |
+| 11 | confirmed job permits messaging | messagingLock + proof #5–7 |
+| 12 | offer/counter/accept/decline still succeed | messagingLock (first test) + proof #8 |
+| 13 | role reversal moves the turn | offerActionParity |
+| 14 | Chat and My Jobs share mutation semantics | offerActionParity |
+| 15 | counter cap unchanged | offerActionParity |
+
+## 11. INTENTIONALLY LEFT UNCHANGED
+
+* The open `42P17` jobs-delete RLS recursion and every other audit item —
+  explicitly out of scope.
+* `messages_select_party` (phase36) and every historical message row. Reads
+  are untouched; nothing was deleted or migrated.
+* Every negotiation RPC — `create_offer`, `counter_offer`, `accept_offer`,
+  `decline_offer`, `withdraw_offer`, `offer_post_event` — and their grants.
+* phase52's thread trigger, backfill and sentinel. Only its pre-hire chat
+  *entry points* are superseded; the pair thread still exists from the first
+  offer.
+* The counter cap (10 per side, per chain), badge persistence and every
+  notification path.
+* `ban_user()`'s system notice — `security definer`, still delivers.
+* The frozen PWA/web surface, including `tests/pwa.test.mjs`'s known failure.
+* Locked screens 01–07 and 48 — not touched, and nothing this run changed
+  renders on them.
+* Post-hire `Message <name>` CTAs on `ClientJobDetailScreen`,
+  `WorkerJobScreen`, `TrackWorkerScreen` and `JobConfirmedScreen` — all
+  already gated on assignment, all still correct.

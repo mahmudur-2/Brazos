@@ -68,7 +68,6 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchClientJobStatsCounted } from '../lib/clientStats';
-import { fetchDirectThreadWith } from '../lib/conversations';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
@@ -131,7 +130,6 @@ export function JobDetailScreen() {
   const [showCounterForm, setShowCounterForm] = useState(false);
   // Sync guard: two fast taps both read the old state before React paints.
   const respondingRef = useRef(false);
-  const [openingChat, setOpeningChat] = useState(false);
   const [confirmWithdrawVisible, setConfirmWithdrawVisible] = useState(false);
   // The posting customer's public profile + real posting history — the
   // customer-side trust signals screen 51 shows a browsing worker. Rendered
@@ -405,30 +403,11 @@ export function JobDetailScreen() {
     await refreshMyOffer();
   }
 
-  /**
-   * Pre-hire chat (Phase 7). The pair's direct thread has existed since the
-   * bid did (phase52's trigger/backfill), so this only ever LOOKS UP the
-   * thread — nothing is created from the client.
-   */
-  async function openPosterChat() {
-    if (!user || openingChat) return;
-    setOpeningChat(true);
-    const { data: threadId, error } = await fetchDirectThreadWith(user.id, job.client_id);
-    setOpeningChat(false);
-    if (!threadId) {
-      await alertAsync(
-        'Chat unavailable',
-        userMessage(
-          error,
-          'The conversation for this bid isn’t ready yet. Try again in a moment.'
-        )
-      );
-      return;
-    }
-    (navigation as unknown as {
-      navigate: (screen: 'Chat', params: { directThreadId: string }) => void;
-    }).navigate('Chat', { directThreadId: threadId });
-  }
+  // The pre-hire "Message the poster" entries and the thread lookup behind
+  // them were removed with phase66: free-form messaging does not exist between
+  // a worker and a poster until the job is confirmed, and the thread they
+  // opened has no composer until then. The pair's direct_threads row is still
+  // created with the offer (phase52) and still carries the negotiation cards.
 
   // §10 (Phase 8): this screen is registered in the SHARED Map and MyJobs
   // stacks, so a customer-mode user can genuinely arrive here. Rendering the
@@ -673,13 +652,11 @@ export function JobDetailScreen() {
                       })} — after that it expires on its own. Check My Jobs for updates.`
                     : 'You’ve already bid on this job. Check My Jobs for updates.'}
                 </Text>
-                <Button
-                  title={`Message ${poster?.full_name ?? 'the poster'}`}
-                  variant="secondary"
-                  onPress={openPosterChat}
-                  loading={openingChat}
-                  disabled={openingChat}
-                />
+                {/* No Message CTA here. Free-form messaging does not exist
+                    between these two until the job is confirmed — the offer
+                    is the whole conversation, and the server refuses a
+                    pre-confirmation message regardless of what any screen
+                    offers (phase66). */}
                 <Button
                   title="Withdraw bid"
                   variant="secondary"

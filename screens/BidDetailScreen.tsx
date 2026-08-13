@@ -13,7 +13,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { fetchDirectThreadWith } from '../lib/conversations';
 import { goBackOrHome } from '../lib/navigationRef';
 import { completionPercent } from '../lib/profiles';
 import {
@@ -53,7 +52,6 @@ export function BidDetailScreen() {
 
   const [confirming, setConfirming] = useState<'accept' | 'decline' | null>(null);
   const [acting, setActing] = useState(false);
-  const [openingChat, setOpeningChat] = useState(false);
   const actingRef = useRef(false);
 
   const effective = offer ? effectiveOfferStatus(offer) : null;
@@ -98,24 +96,12 @@ export function BidDetailScreen() {
     navigation.replace('Checkout', { job });
   }
 
-  /** Phase 7 — open the pair's direct thread (created with the bid, phase52). */
-  async function openWorkerChat() {
-    if (!user || !offer || openingChat) return;
-    setOpeningChat(true);
-    const { data: threadId, error: threadError } = await fetchDirectThreadWith(
-      user.id,
-      offer.worker_id
-    );
-    setOpeningChat(false);
-    if (!threadId) {
-      await alertAsync(
-        'Chat unavailable',
-        userMessage(threadError, 'The conversation for this bid isn’t ready yet. Try again in a moment.')
-      );
-      return;
-    }
-    navigation.navigate('Chat', { directThreadId: threadId });
-  }
+  // The pre-hire "Message <worker> first" entry and the thread lookup behind
+  // it were removed with phase66: free-form messaging does not exist between
+  // these two until the job is confirmed, and the thread this opened has no
+  // composer until then. The pair's direct_threads row is still created with
+  // the bid (phase52) and still carries the negotiation cards — nothing in
+  // the data model changed, only the entry point.
 
   async function doDecline() {
     if (!offer || actingRef.current) return;
@@ -236,21 +222,12 @@ export function BidDetailScreen() {
                       },
                     ]
                   : []),
-                {
-                  // Phase 7 — pre-hire chat. The pair's thread has existed
-                  // since the bid did (phase52), so a question can precede
-                  // the decision instead of requiring an accept first.
-                  content: (
-                    <Button
-                      title={`Message ${workerName} first`}
-                      variant="secondary"
-                      palette={emeraldColors}
-                      onPress={openWorkerChat}
-                      loading={openingChat}
-                      disabled={openingChat}
-                    />
-                  ),
-                },
+                // No "Message <worker> first" here. phase52 opened pre-hire
+                // chat; phase66 closes it again as a product rule — before the
+                // job is confirmed the two sides interact through the offer,
+                // and the server refuses a pre-confirmation message whatever a
+                // screen offers. The thread still exists and still carries the
+                // negotiation cards; it just has no composer yet.
                 ...(effective === 'pending' && !isMyTurn
                   ? [
                       {
