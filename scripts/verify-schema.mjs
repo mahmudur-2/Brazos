@@ -1053,6 +1053,64 @@ const MIGRATIONS = [
         checkColumnRevoked('profiles', 'deleted_at')],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 68. Ban checks routed through is_profile_active(uuid).
+    //
+    // phase67 built the tombstone (profiles.deleted_at) and made
+    // is_profile_active() the one lifecycle predicate, but left five SECURITY
+    // DEFINER bodies still reading profiles.banned inline - so a deleted
+    // account was tombstoned yet still treated as valid by all five. phase68
+    // repoints them.
+    //
+    // What this harness CAN see: that each patched function still resolves
+    // over PostgREST. What it CANNOT see is the part that matters - a function
+    // BODY. The proof that the predicate actually changed is the self-check DO
+    // block at the end of the migration, which reads pg_get_functiondef,
+    // pg_get_function_identity_arguments, prosecdef, provolatile, proconfig
+    // and proacl for all five and raises on any mismatch. It runs inside the
+    // same transaction as the replacements, so the sentinel cannot exist
+    // unless every one of those assertions passed. That is what the sentinel
+    // carries here.
+    //
+    // The checks below are reachability only, and are deliberately the same
+    // probes phase20 / phase31 / phase35 / phase39 already run against four of
+    // these five functions - if a phase68 body failed to create, the signature
+    // it replaced would stop resolving and those probes would go red too.
+    // job_request_parties_ok is the one addition; it is an internal helper,
+    // revoked from anon, and a permission-denied answer still proves it exists.
+    // Only PGRST202 (no such function) counts as missing.
+    //
+    // notify_nearby_for_job is NOT probed here, because phase68 deliberately
+    // did not patch it. See docs/audits/PHASE68_DIAGNOSTIC.md.
+    // -----------------------------------------------------------------------
+    file: 'phase68_deleted_at_authorization.sql',
+    sentinel: ['rpc phase68_deleted_at_authorization_enabled()', () =>
+      checkRpc('phase68_deleted_at_authorization_enabled', {})],
+    checks: [
+      ['rpc job_request_parties_ok()', () =>
+        checkRpc('job_request_parties_ok', { p_a: ZERO_UUID, p_b: ZERO_UUID })],
+      ['rpc should_notify() still resolves after phase68', () =>
+        checkRpc('should_notify', {
+          p_recipient: ZERO_UUID,
+          p_actor: ZERO_UUID,
+          p_category: 'messages',
+        })],
+      ['rpc transition_job_status() still resolves after phase68', () =>
+        checkRpc('transition_job_status', {
+          p_job_id: ZERO_UUID,
+          p_status: 'in_progress',
+          p_completion_photos: null,
+          p_completion_videos: null,
+        })],
+      ['rpc match_workers_semantic() still resolves after phase68', () =>
+        checkRpc('match_workers_semantic', { p_query_embedding: [] })],
+      ['rpc worker_semantic_refresh_queue() still resolves after phase68', () =>
+        checkRpc('worker_semantic_refresh_queue', { p_limit: 1 })],
+      ['rpc is_profile_active() - the predicate all five now route through', () =>
+        checkRpc('is_profile_active', { p_user: ZERO_UUID })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
