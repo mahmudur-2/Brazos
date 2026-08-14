@@ -34,11 +34,16 @@ test('web build is installable and receives hosted runtime configuration', async
   assert.match(html, /apple-mobile-web-app-capable/);
   assert.match(html, /apple-touch-icon\.png\?v=4/);
   assert.match(html, /navigator\.serviceWorker\.register\('\/sw\.js'\)/);
-  assert.match(html, /src="\/config\.js\?v=20260731-1"/);
+  // Two cache-busting literals, both bumped deliberately in 560ebb4 ("Fix
+  // installed PWA viewport inset"): the runtime-config query here and
+  // CACHE_NAME in public/sw.js below. public/ is a frozen surface and is the
+  // truth — these expectations trailed it, so the test was the defect. The
+  // second one was unreachable until the first was corrected.
+  assert.match(html, /src="\/config\.js\?v=20260731-2"/);
   assert.match(html, /id="brazos-startup"/);
   assert.match(html, /BRAZOS could not start/);
   assert.doesNotMatch(html, /maplibre/i);
-  assert.match(serviceWorker, /brazos-shell-v5/);
+  assert.match(serviceWorker, /brazos-shell-v6/);
   assert.doesNotMatch(serviceWorker, /APP_SHELL = \['\/'/);
   assert.match(webSupabase, /__BRAZOS_CONFIG__/);
   assert.match(worker, /url\.pathname === '\/config\.js'/);

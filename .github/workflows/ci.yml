@@ -1,0 +1,41 @@
+name: CI
+
+# The canonical offline check, and nothing else. No database, no Supabase or
+# Stripe secrets, no verify-schema, no EAS, no deploy — those are human-run
+# steps against live services and have no business in an automated job.
+
+on:
+  push:
+    branches: [mainexpo]
+  pull_request:
+    branches: [mainexpo]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: lint + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Third-party actions are pinned to a full commit SHA, not a tag: a tag
+      # is mutable and can be repointed at new code after review.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # .nvmrc is the single source for the Node major, shared with local
+          # development. Never hard-code a version here.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify
+        run: npm run verify
