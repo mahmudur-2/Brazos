@@ -117,6 +117,27 @@ async function checkColumnRevoked(table, column) {
   };
 }
 
+/**
+ * The positive counterpart to checkRpc. checkRpc proves a function EXISTS and
+ * deliberately accepts a permission refusal; this one proves the publishable
+ * key can actually EXECUTE it. Used where a migration must PRESERVE anon access
+ * rather than remove it, so that a fumbled grant reads as a failure instead of
+ * passing quietly.
+ */
+async function checkRpcAllowed(fn, args) {
+  const res = await fetch(`${BASE}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  if (res.ok) return { ok: true, note: `executable (responded ${res.status})` };
+  const body = await res.json().catch(() => ({}));
+  return {
+    ok: false,
+    detail: `${res.status} ${body.code ?? ''} ${body.message ?? ''}`.trim(),
+  };
+}
+
 async function checkRpc(fn, args) {
   const res = await fetch(`${BASE}/rest/v1/rpc/${fn}`, {
     method: 'POST',
@@ -1109,6 +1130,50 @@ const MIGRATIONS = [
         checkRpc('worker_semantic_refresh_queue', { p_limit: 1 })],
       ['rpc is_profile_active() - the predicate all five now route through', () =>
         checkRpc('is_profile_active', { p_user: ZERO_UUID })],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 69. Execute privileges in schema public.
+    //
+    // Sixteen functions still carried the CREATE-time default ACL, which for a
+    // function grants EXECUTE to PUBLIC. Four of them formed an unauthenticated
+    // notification chain, and one of them - job_request_parties_ok - is what
+    // aborted phase68 at its own self-check (d). phase69 must be applied BEFORE
+    // phase68; phase68 itself needs no change.
+    //
+    // WHAT THIS HARNESS CANNOT SEE: an ACL. PostgREST returns SQL results, not
+    // pg_proc.proacl, so nothing here can prove EXECUTE was revoked from PUBLIC
+    // or from anon. The real proof is the in-database self-check at the end of
+    // phase69_execute_privilege_lockdown.sql: it reads proacl and
+    // has_function_privilege for all sixteen, compares the five already-correct
+    // functions against a before/after snapshot taken in the same transaction,
+    // and refuses to commit on any mismatch. It runs in the same transaction as
+    // every revoke, so the sentinel below cannot exist unless all of it passed.
+    // That is what the sentinel carries.
+    //
+    // The two reachability probes below are the same tolerant shape used for
+    // the service_role-only functions in the phase20 group: a function anon may
+    // not execute answers 403 permission-denied, which still proves it exists,
+    // and only PGRST202 counts as missing.
+    //
+    // job_categories_expanded is different, and is checked in the POSITIVE
+    // direction with checkRpcAllowed. It is SECURITY INVOKER, it respects RLS,
+    // and phase69 re-grants it to anon explicitly to replace the PUBLIC default
+    // it used to lean on. A refusal there would mean that grant was fumbled and
+    // a pre-auth catalog read had been locked out - the one way this migration
+    // could take something away that it meant to keep.
+    // -----------------------------------------------------------------------
+    file: 'phase69_execute_privilege_lockdown.sql',
+    sentinel: ['rpc phase69_execute_lockdown_enabled()', () =>
+      checkRpc('phase69_execute_lockdown_enabled', {})],
+    checks: [
+      ['rpc job_categories_expanded() still executable by the publishable key', () =>
+        checkRpcAllowed('job_categories_expanded', {})],
+      ['rpc job_request_parties_ok() still resolves after phase69', () =>
+        checkRpc('job_request_parties_ok', { p_a: ZERO_UUID, p_b: ZERO_UUID })],
+      ['rpc is_blocked_between() still resolves after phase69', () =>
+        checkRpc('is_blocked_between', { a: ZERO_UUID, b: ZERO_UUID })],
     ],
   },
 ];
