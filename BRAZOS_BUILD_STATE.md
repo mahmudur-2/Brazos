@@ -1,8 +1,98 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-14 — see "2026-08-14 · Account deletion (phase67)" directly
-below. Everything from the 2026-08-09 header onward is unchanged.
+Updated: 2026-08-14 — see "2026-08-14 · phase67 amendment" and then
+"2026-08-14 · Account deletion (phase67)" directly below. Everything from the
+2026-08-09 header onward is unchanged.
+
+## 2026-08-14 · phase67 amendment (pre-apply corrections)
+
+Branch `mainexpo`, base `3ffe870`, two code commits: `3cadb0b` (migration),
+`2369100` (screen copy), plus this docs/state commit. Tree clean, **not
+pushed**. `git rev-parse HEAD` is authoritative for the tip.
+`supabase/phase67_account_deletion.sql` was amended IN PLACE — every function
+in it is `create or replace` and it has never been executed anywhere, so no
+phase68 was created. **It is still unapplied.**
+
+**Next exact task is unchanged: apply `supabase/phase67_account_deletion.sql`
+in the Supabase SQL Editor against STAGING `zzkumxcjtbqoselzptig`, then run
+`node scripts/verify-schema.mjs` and confirm the 4 phase67 checks flip PENDING
+→ OK on their own.** Walk a throwaway account through delete with an OPEN
+posting on it and confirm the posting flips to `cancelled`.
+
+### What changed, and why
+
+- **`open` and `draft` joined the `job_status` terminal set** in
+  `account_deletion_blockers()`. This REVERSES the 2026-08-14 decision recorded
+  below ("an OPEN or DRAFT job posting blocks deletion"). A draft is an unsent
+  private note; an open posting has no worker committed and no money moved, so
+  cancelling it on the owner's behalf produces the same outcome as the owner
+  cancelling it by hand. Blocking on either is what App Review reads as a
+  5.1.1(v) wall. The clause is still `NOT IN` — an unclassified status still
+  blocks by default — and the unreachable `open`/`draft` branches came out of
+  the `detail` CASE. Live terminal sets now: `job_status` = completed,
+  cancelled, open, draft · `payment_status` and `dispute_status` UNCHANGED.
+- **Step (c) is reachable for the first time, and stays a raw UPDATE.** The
+  canonical RPC cannot do this: phase58's
+  `transition_job_status(uuid, text, jsonb, jsonb)` allows exactly
+  `assigned -> in_progress` and `in_progress -> completed`, and authorises on
+  `v_job.assigned_worker_id <> v_user` — only the assigned worker. The caller
+  here is the client, and an open job has no assigned worker. No other
+  cancellation RPC exists in the schema (the only other writer of `cancelled`
+  is phase13's admin `ban_user()`, itself a raw UPDATE). The reason is written
+  into the file at the statement. Drafts are left at `draft`.
+- **Both triggers on `public.jobs` were checked before making that UPDATE
+  reachable.** `jobs_notify_status` (phase20) is a no-op on `open -> cancelled`
+  (no assigned worker, not `completed`); `jobs_worker_semantic_stale` (phase39)
+  wraps its whole body in `exception when others then raise notice`. Neither
+  can abort the deletion.
+- **Step (d) wraps each `withdraw_offer()` in its own subtransaction.** Those
+  offers sit on OTHER people's jobs, which the gate at (b) never examined, so a
+  refusal is legitimate — and unhandled it aborted the entire deletion with an
+  opaque error. Failures are counted and named in the closing NOTICE.
+- **Step (c) deliberately has NO exception handler** — the opposite call from
+  (d). Swallowing a failure to cancel the user's own live posting would commit
+  the tombstone and leave a posting in the open market nobody can cancel.
+- **The `auth.users` delete now asserts `row_count = 1`.** RLS is enabled on
+  that table and the delete only works while the function owner carries
+  BYPASSRLS. Without the assertion a zero-row delete would COMMIT the tombstone
+  and the scrub while leaving the auth row alive — the user could sign back
+  into a hollowed-out account every lifecycle gate rejects, and the logs would
+  read as success.
+- **Screen copy:** `screens/DeleteAccountScreen.tsx` "What is removed" gained
+  one line saying open postings are cancelled. No copy anywhere claimed
+  open/draft *blocked* deletion (that wording lived only in the SQL `detail`
+  CASE), but the new behaviour is a material consequence and the screen's own
+  docblock says it exists to tell the truth about what deletion does.
+
+### Known issue added this run
+
+- **Pending offers other people authored on a cancelled job are orphaned.**
+  Step (c) does not route through an offer-aware path, so those offers stay
+  `pending` on a job that is now cancelled, and no notification tells those
+  workers. They are unreachable (job cancelled, owner is a tombstone) but they
+  are not settled. Fix is a `decline_offer()` sweep — it authorises as the job
+  owner, which `delete_my_account()` is running as — in its own migration with
+  its own proof. Same class of orphan applies to a counter authored by the
+  worker on a `draft` direct-offer job, which the old rule blocked outright.
+
+### Gate
+
+- **tsc/lint**: PASS — `npm run lint` exits 0, clean.
+- **tests**: **389/390 PASS**, unchanged from baseline. The one failure is the
+  documented frozen-web `pwa.test.mjs` version string. No test was added or
+  changed. `tests/accountDeletion.test.mjs` still passes: its "still open for
+  offers" string is a fixture fed to the pure formatter, not an assertion about
+  which statuses block, so removing that SQL branch does not touch it.
+- **verify-schema**: 179 object checks OK (plus env parity and the control
+  probe — the "181" of earlier runs), 0 MISSING, **4 PENDING**, exit 0.
+  PostgREST-reachability mode against `zzkumxcjtbqoselzptig`;
+  `SUPABASE_DB_URL_STAGING` is NOT SET in this shell, so no SQL proof ran.
+- **locked screens**: PASS — none touched.
+- **SQL executed**: NONE, against any database.
 
 ## 2026-08-14 · Account deletion (phase67) — App Store Guideline 5.1.1(v)
+
+**NOTE: the "OPEN or DRAFT blocks deletion" decision below was REVERSED by the
+amendment section above. Everything else in this section still stands.**
 
 Branch `mainexpo`, base `64055e2`, three commits: `8275e0c` (docs), `48e0b23`
 (migration), `1ba21e0` (client), plus the docs/state commits recording the run.
@@ -527,11 +617,12 @@ under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 ## Migrations written but NOT applied
-`phase67_account_deletion.sql` (2026-08-14) — written, never executed against
-any database. Apply in the Supabase SQL Editor against STAGING
+`phase67_account_deletion.sql` (2026-08-14, **amended in place the same day** —
+see "phase67 amendment" at the top of this file) — written, never executed
+against any database. Apply in the Supabase SQL Editor against STAGING
 `zzkumxcjtbqoselzptig`; only a green `node scripts/verify-schema.mjs` with its
-4 checks flipped PENDING → OK counts as applied. See the 2026-08-14 section at
-the top of this file for the two post-apply checks the repo cannot make.
+4 checks flipped PENDING → OK counts as applied. See the 2026-08-14 sections at
+the top of this file for the post-apply checks the repo cannot make.
 
 Everything through phase66 is applied and verified.
 
