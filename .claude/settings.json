@@ -33,13 +33,91 @@
       "Edit(/screens/SetupScreen.tsx)",
       "Edit(/screens/LegalGateScreen.tsx)",
       "Edit(/screens/HomeScreen.tsx)",
-      "Edit(/screens/BrowseJobsScreen.tsx)"
+      "Edit(/screens/BrowseJobsScreen.tsx)",
+
+      "Bash(*avkighsiufeefyycbebf*)",
+      "PowerShell(*avkighsiufeefyycbebf*)",
+
+      "Read(./start.ps1)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Edit(./start.ps1)",
+      "Edit(./.env)",
+      "Edit(./.env.*)",
+
+      "Edit(/.claude/**)",
+
+      "Bash(psql:*)",
+      "PowerShell(psql:*)",
+      "Bash(pg_dump:*)",
+      "Bash(pg_restore:*)",
+      "Bash(pg_dumpall:*)",
+      "Bash(supabase:*)",
+      "PowerShell(supabase:*)",
+
+      "Bash(claude)",
+      "Bash(claude *)",
+      "Bash(claude.exe)",
+      "Bash(claude.exe *)",
+      "PowerShell(claude)",
+      "PowerShell(claude *)",
+      "PowerShell(claude.exe *)",
+
+      "PowerShell(Invoke-Expression *)",
+      "Bash(*-EncodedCommand*)",
+      "PowerShell(*-EncodedCommand*)",
+      "Bash(*cmd /c*)",
+      "Bash(*cmd /k*)",
+      "Bash(node -e *)",
+      "Bash(node --eval *)",
+      "Bash(node -p *)",
+      "Bash(python -c *)",
+      "PowerShell(node -e *)",
+
+      "Bash(*--amend*)",
+      "PowerShell(*--amend*)",
+
+      "Bash(git add .)",
+      "Bash(git add -A)",
+      "Bash(git add -A *)",
+      "Bash(git add -u)",
+      "Bash(git add -u *)",
+      "Bash(git add --all*)",
+
+      "Bash(git pull:*)",
+      "PowerShell(git pull:*)",
+      "Bash(git fetch:*)",
+      "PowerShell(git fetch:*)",
+      "Bash(git checkout:*)",
+      "PowerShell(git checkout:*)",
+      "Bash(git switch:*)",
+      "PowerShell(git switch:*)",
+      "Bash(git restore:*)",
+      "PowerShell(git restore:*)",
+      "Bash(git rebase:*)",
+      "PowerShell(git rebase:*)",
+      "Bash(git merge:*)",
+      "PowerShell(git merge:*)",
+      "Bash(git cherry-pick:*)",
+      "PowerShell(git cherry-pick:*)",
+      "Bash(git revert:*)",
+      "PowerShell(git revert:*)",
+      "Bash(git tag:*)",
+      "PowerShell(git tag:*)",
+      "Bash(git worktree:*)",
+      "PowerShell(git worktree:*)",
+      "Bash(git submodule:*)",
+      "PowerShell(git submodule:*)",
+      "Bash(git reset:*)",
+      "PowerShell(git reset:*)",
+      "Bash(git filter-branch:*)",
+      "PowerShell(git filter-branch:*)"
     ]
   },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|PowerShell",
+        "matcher": "Bash|PowerShell|Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
