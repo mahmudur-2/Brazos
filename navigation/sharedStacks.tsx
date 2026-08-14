@@ -14,6 +14,7 @@ import { ChatScreen } from '../screens/ChatScreen';
 import { CheckoutScreen } from '../screens/CheckoutScreen';
 import { ClientJobDetailScreen } from '../screens/ClientJobDetailScreen';
 import { CompareBidsScreen } from '../screens/CompareBidsScreen';
+import { DeleteAccountScreen } from '../screens/DeleteAccountScreen';
 import { EarningsScreen } from '../screens/EarningsScreen';
 import { CounterofferScreen } from '../screens/CounterofferScreen';
 import { JobConfirmedScreen } from '../screens/JobConfirmedScreen';
@@ -149,6 +150,10 @@ export function ProfileStackNavigator() {
       <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
       <ProfileStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <ProfileStack.Screen name="PostJob" component={PostJobScreen} />
+      {/* Phase 67 — App Store Guideline 5.1.1(v). Registered here because
+          Profile is the shared account surface: deletion has to be reachable
+          in BOTH modes, and this stack is mounted by both trees. */}
+      <ProfileStack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       {/* The design-system catalog (BRAZOS_MASTER_PLAN.md §I). Registered only
           under __DEV__, so a production bundle has no route to it at all —
           hidden by absence rather than by a hidden entry point. Its row in

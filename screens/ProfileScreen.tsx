@@ -700,6 +700,24 @@ export function ProfileScreen() {
             onPress={handleLogout}
             loading={loggingOut}
           />
+
+          {/* App Store Guideline 5.1.1(v) — account deletion has to be
+              initiable from inside the app. Deliberately a plain row rather
+              than a second destructive Button: two red pills stacked make
+              "sign out" and "delete forever" read as the same weight of
+              decision, and the consequences are not remotely the same. The
+              screen it opens is where the warning and the confirmation
+              live. */}
+          <Pressable
+            style={({ pressed }) => [styles.deleteRow, pressed && styles.deleteRowPressed]}
+            onPress={() => navigation.navigate('DeleteAccount')}
+            accessibilityRole="button"
+            accessibilityLabel="Delete account"
+          >
+            <Ionicons name="trash-outline" size={18} color={colors.danger} />
+            <Text style={styles.deleteLabel}>Delete account</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.danger} />
+          </Pressable>
         </ScrollView>
       )}
 
@@ -956,6 +974,22 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: colors.text,
+  },
+  deleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.md,
+  },
+  deleteRowPressed: {
+    opacity: 0.7,
+  },
+  deleteLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.danger,
   },
   adminCard: {
     backgroundColor: colors.warningBg,

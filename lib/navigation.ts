@@ -360,6 +360,9 @@ export type ProfileStackParamList = {
     | undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
   ProfileReviews: { userId: string; name?: string };
+  /** Phase 67 — in-app account deletion (App Store Guideline 5.1.1(v)).
+   *  Reached only from the Profile tab's destructive row, below Log out. */
+  DeleteAccount: undefined;
   /**
    * The dev-only design-system catalog (BRAZOS_MASTER_PLAN.md §I). The route is
    * only REGISTERED under `__DEV__` in App.tsx and its entry point in
