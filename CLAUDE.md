@@ -115,6 +115,19 @@ agent session.
 - Every new function needs `grant execute … to authenticated;` (phase32 revoked
   the default) or it is unreachable from the app. Never weaken RLS, a policy,
   or a grant to make a feature work — add a narrow security definer function.
+- **Every new SECURITY DEFINER function in schema `public` carries explicit
+  `revoke`/`grant` statements in the same migration that creates it** —
+  `revoke all on function … from public, anon;` then `grant execute … to` only
+  the roles a call-site inventory proves are needed. The CREATE-time default ACL
+  grants EXECUTE to PUBLIC, so a function shipped without them is reachable by
+  `anon` from the moment it exists, and `create or replace` on an existing
+  function preserves whatever ACL it already had — a later phase cannot quietly
+  fix it. phase69 is the precedent: sixteen pre-phase32 functions had drifted
+  that way, four of them forming a live unauthenticated notification chain, and
+  one of them aborted phase68 at its own self-check. If the function is called
+  from an RLS policy, grant it to that policy's roles — a policy expression is
+  evaluated as the querying role, so revoking there breaks the policy, not just
+  the function.
 - **There are NO generated Supabase database types.** `lib/supabase.ts` calls
   `createClient(URL, KEY, {...})` with no type parameter, so nothing is
   compile-checked against the schema. Status values are plain `string`, compared

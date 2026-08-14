@@ -443,16 +443,31 @@ behaviour. phase69 implements the dispatch decision. If the phase23 intent is
 preferred, it is a one-line edit to drop `anon` from that grant; flagged for
 Mahmudur, not decided here.
 
-**2. Residual risk on the phase68 `job_request_parties_ok` probe.**
-After phase69, `anon` loses EXECUTE on `job_request_parties_ok`, and
-`scripts/verify-schema.mjs:1091` probes it with the publishable key. The probe is
-written to tolerate a permission-denied response
-(`scripts/verify-schema.mjs:126-133`), so a `401`/`403` keeps it green. If
-PostgREST instead omits the function from its schema cache for a role without
-EXECUTE, the probe would return `PGRST202` and go red. That would be a privilege
-artefact, not a missing function, and the in-database self-check is the real
-proof either way. Recorded so a red line there is read correctly rather than
-treated as a failed migration.
+**2. The phase68 `job_request_parties_ok` probe stays green - settled, not
+assumed.** After phase69, `anon` loses EXECUTE on `job_request_parties_ok`, and
+`scripts/verify-schema.mjs:1112` probes it with the publishable key. The probe
+tolerates a permission-denied response (`scripts/verify-schema.mjs:147-154`), so
+a `403` keeps it green; only `PGRST202` counts as missing. The open question was
+whether PostgREST would instead drop a function the calling role cannot execute
+from its schema cache and answer `PGRST202` anyway.
+
+The repo already leans on the answer. `scripts/verify-schema.mjs:274-285` probes
+`claim_notification_batch`, `resolve_notification` and `deactivate_push_token`
+with the same publishable key, and all three are service_role-only. Those probes
+sit in the `phase20_push_notifications.sql` group, which carries **no**
+`sentinel:` key (`scripts/verify-schema.mjs:232`), so unlike a pending group its
+checks are mandatory: a `PGRST202` from any of them increments `missing` and
+exits the harness non-zero. The same tolerant shape has been in place since
+phase20 and phase56 and is documented in the comment right above them - "a
+permission-denied answer still proves it exists". phase69's block reuses that
+established behaviour rather than introducing a new assumption.
+
+This is a static reading of the harness, not a live result: verify-schema needs
+staging and was not run here (last recorded run 2026-08-13). If those three ever
+did go red, the phase69 and phase68 probes would be red for the same reason, and
+the in-database self-check would remain the real proof either way. Line numbers
+in this section are as of the phase69 verify commit, after the phase69 block was
+inserted.
 
 ## What phase69 will do
 
