@@ -150,6 +150,7 @@ export function DeleteAccountScreen() {
         <Line text="Your name, phone number, photo, bio and categories." />
         <Line text="Your services, availability and portfolio." />
         <Line text="Your saved workers, notification settings and this device’s push registration." />
+        <Line text="Your open job postings. Any job still taking offers is cancelled when the account is deleted — it does not stay on the marketplace without you." />
         <Line text="Your sign-in. You will not be able to sign back in with this account." />
       </View>
 
