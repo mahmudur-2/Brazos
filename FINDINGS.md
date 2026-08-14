@@ -1151,3 +1151,287 @@ All REQUIRED objects exist in the live database.
 Env parity was green throughout: app `SUPABASE_URL`, app `SUPABASE_KEY` and
 `SUPABASE_DB_URL_STAGING` all resolve to `zzkumxcjtbqoselzptig`. Production was
 not contacted.
+
+---
+---
+
+# UNIFIED CONVERSATION RUN (one person, one thread) — 2026-08-13
+
+Branch `mainexpo`, base `abfced9` (supersedes `3846495`; `.gitattributes` now
+declares `*.sql text eol=lf`). Tree clean at start. Production ref
+`avkighsiufeefyycbebf` never contacted; no SQL executed anywhere; `.env`
+untouched.
+
+**Product rule being implemented:** a customer and a worker have exactly ONE
+conversation, ever. Jobs are context inside that conversation, not separate
+rooms. The inbox may never show two rows for the same person.
+
+**Architecture:** a PRESENTATION-LAYER collapse. No message data is migrated,
+no row is reparented, `messages.job_id` / `direct_thread_id` semantics are
+unchanged. phase66's RLS lock, the offer events and the chat-media storage
+paths all key on `job_id` and none of them move. Only the inbox, the thread
+screen and send routing change.
+
+## PHASE 0 — DIAGNOSTICS
+
+### 0.1 How the inbox builds its list today
+
+- Screen `screens/MessagesInboxScreen.tsx`; hook `hooks/useConversations.ts`;
+  data access `lib/conversations.ts:67` `fetchConversations()`.
+- Query: `supabase.from('conversations').select('*')` filtered
+  `.or(client_id.eq.<me>,assigned_worker_id.eq.<me>)`, ordered
+  `last_message_at desc`. `conversations` is a **view**, defined at
+  `supabase/phase36_direct_offer_threads.sql:611` (`security_invoker = true`).
+- Row shape (`lib/conversations.ts:7` `Conversation`): `job_id`,
+  `direct_thread_id`, `job_title`, `client_id`, `assigned_worker_id`,
+  `last_message_id`, `last_message_sender_id`, `last_message_content`,
+  `last_message_image_url`, `last_message_audio_url`,
+  `last_message_unsent_at`, `last_message_at`, `my_read_at`.
+- The view is a UNION of two `distinct on` selects: one row per **job thread**
+  (`distinct on (job_id)`, newest message) joined to `jobs`, and one row per
+  **direct thread** (`distinct on (direct_thread_id)`) joined to
+  `direct_threads`. For a direct thread it reuses `client_id` /
+  `assigned_worker_id` as `user_a` / `user_b` with no role implied — which is
+  exactly why `resolveOtherId()` (`lib/conversations.ts:58`) already yields the
+  counterparty for **both** kinds of row.
+- **Grouping by counterparty is possible purely client-side. No server change
+  is required.** Counterparty via `resolveOtherId`, preview/timestamp via the
+  `last_message_*` columns, unread via the existing per-row rule — all already
+  on the returned set. **No `supabase/phase67_*.sql` was written.** The one
+  thing NOT on the view is `jobs.status`, which the resolver needs; see
+  AUTONOMOUS DECISIONS #3.
+
+### 0.2 Where "N conversations together" came from
+
+`screens/MessagesInboxScreen.tsx:160` — the template literal
+`${jobCount} conversations together`, from the `counterpartyJobCounts` tally at
+`:109-113`, chosen in the `subtitle` ternary at `:157-163` ahead of
+`c.job_title ?? 'Direct messages'`. Deleted in commit 1 along with the tally
+and the per-job rows that made it necessary.
+
+### 0.3 Every navigation entry point into ChatScreen (the regression surface)
+
+| # | Site | Params passed |
+|---|---|---|
+| 1 | `screens/MessagesInboxScreen.tsx:280` | `item.target` = `conversationTarget(c)` → `{jobId}` **or** `{directThreadId}` |
+| 2 | `screens/ClientJobDetailScreen.tsx:767` | `{ jobId: job.id }` ("Message <worker>") |
+| 3 | `screens/JobConfirmedScreen.tsx:138` | `{ jobId: job.id }` (post-hire confirmation action) |
+| 4 | `screens/TrackWorkerScreen.tsx:213` | `{ jobId: job.id }` (action bar) |
+| 5 | `screens/WorkerJobScreen.tsx:412` | `{ jobId: job.id }` ("Message <client>", worker side) |
+| 6 | `screens/NotificationsScreen.tsx:78` | `navigateAcrossTabs('Messages', 'Chat', { jobId })` (in-app feed tap) |
+| 7 | `lib/notificationRoutes.ts:94` | `{ directThreadId }` (push tap, phase57 pre-hire payload) |
+| 8 | `lib/notificationRoutes.ts:105` | `{ jobId }` (push tap, job-thread payload) |
+
+Notes:
+
+- There is **no** `linking`/deep-link config route into Chat — 7 and 8 are the
+  only "deep link" paths, both through `handleNotificationData()`.
+- There is **no** rehire entry *into* Chat: "Hire Again" lives *inside*
+  ChatScreen (`ChatScreen.tsx:710-735`) and navigates to `PostJob`.
+- The pre-hire "Message …" entries on `BidDetailScreen` / `JobDetailScreen`
+  were removed by phase66; their absence is asserted by
+  `tests/offerScopedChat.test.mjs:101` and `tests/messagingLock.test.mjs:223`
+  and must not be reintroduced.
+- Route type: `ChatRouteParamList = { Chat: ChatTarget }`
+  (`lib/navigation.ts:399`), with `Chat: ChatTarget` registered in MyJobsStack
+  (`:234`), MessagesStack (`:259`), WorkerHomeStack (`:144`), MapStack (`:292`).
+
+### 0.4 useChat realtime, and whether multi-thread reproduces the 16511c9 race
+
+`hooks/useChat.ts:56-99` opens **one** channel per target, named
+`messages:${chatTargetKey}:${instanceId}:${run}`, filtered server-side by
+`job_id=eq.<id>` **or** `direct_thread_id=eq.<id>` (`lib/messages.ts:23`). A
+merged conversation over N threads therefore means N filtered channels — there
+is no single filter expressing "either of these two columns".
+
+Can that reproduce the `useThreadOffers` overwrite race fixed in 16511c9?
+**Not from the realtime handlers, but yes from the initial fetches.**
+
+- The 16511c9 race (`lib/offers.ts:501-540`) was two overlapping *fetches*
+  written with a whole-collection assignment `setOffers(data)`, so the older,
+  smaller answer landing last erased the newer row.
+- `useChat`'s realtime handlers are already immune: both use functional updates
+  that merge by id (`hooks/useChat.ts:71-73`, `:90`).
+- The exposure is `refresh()` at `hooks/useChat.ts:38-46`, which does
+  `setMessages(data)` — a whole-collection assignment guarded only by one
+  `loadRef` counter. Run once per thread against one shared array and each
+  thread's load clobbers the others: same failure mode, different subject.
+
+**F is therefore a real constraint, not a precaution.** Commit 2 keys the
+merged store by thread and merges into it; no code path ever assigns the whole
+collection.
+
+### 0.5 Can a pair hold more than one job in assigned/in_progress at once?
+
+**YES** — from the schema and the RPCs, not from assumption:
+
+- No unique index, check constraint or exclusion constraint anywhere in
+  `supabase/*.sql` restricts `jobs` by `(client_id, assigned_worker_id)` or by
+  a worker's concurrent assignments. The only constraints added to `jobs` after
+  creation are `jobs_budget_range_valid` and `jobs_arrival_window_valid`
+  (`supabase/phase49_post_wizard_fields.sql:50,64`).
+- `accept_offer()`
+  (`supabase/phase50_sandbox_payments_and_offer_lifecycle.sql:437`) guards only
+  **this** job: `if v_job.accepted_offer_id is not null or
+  v_job.assigned_worker_id is not null then raise 'This job has already been
+  assigned'` (`:491-493`). It asks nothing about the pair's other jobs.
+- `deriveJobLifecycle()` (`lib/jobLifecycle.ts:51`) is a pure per-job
+  derivation with no cross-job exclusivity notion.
+- Reachable the obvious way: a customer posts two jobs and hires the same
+  worker on both — `canRehireWorker()` / "Hire Again" exists to encourage
+  exactly that.
+
+This is why the resolver needs a real selection rule rather than "the one job".
+The rule was signed off; it is recorded verbatim below.
+
+### 0.6 What the inbox unread/badge reads from
+
+Two independent indicators, both per-row before this run:
+
+1. **Unread dot** — `MessagesInboxScreen.tsx:143-146`: `!isMuted &&
+   c.last_message_sender_id !== user.id && (!lastReadAt || last_message_at >
+   lastReadAt)`, where `lastReadAt` is `readMap[c.job_id]` for a job thread
+   (from `message_reads` via `fetchMyReadStates()`, `lib/conversations.ts:99`)
+   and `c.my_read_at` for a direct thread (on the view itself, phase36). It is
+   a **boolean**: `ConversationRow.unread` is typed `boolean`
+   (`components/ConversationRow.tsx:15`) and renders a 9pt dot plus emphasis.
+   There is no numeric badge and no tab-bar badge anywhere in the app.
+2. **Awaiting-offer pill** — `pendingByThread`, built in `loadPending()`
+   (`:70-88`) from `fetchMyPendingOffers()` → `my_pending_offers()`, keyed
+   `job:<thread_job_id>` or `direct:<direct_thread_id>` and matched against
+   `conversationKey(c)` at `:140`.
+
+Consequence for A: "unread = sum across all threads" has no numeric surface to
+sum into — see AUTONOMOUS DECISIONS #1.
+
+### 0.7 The canonical activity timestamp for a job
+
+**`conversations.last_message_at` for that job's own conversation row** — i.e.
+`Conversation.last_message_at` (`lib/conversations.ts:32`), produced by the
+view's `distinct on (job_id) … order by job_id, created_at desc`
+(`supabase/phase36_direct_offer_threads.sql:627-632`). It is the only existing
+field expressing "most recently active" for a job, and already what the inbox
+orders by. Alternatives checked and rejected on fact:
+
+- **`jobs.updated_at` does not exist.** No migration ever adds it, and it is
+  absent from both the `Job` type (`lib/jobs.ts:89-141`) and `JOB_COLUMNS`
+  (`lib/jobs.ts:292`). `updated_at` exists on `job_offers`, `job_requests`,
+  `job_private_details`, `worker_semantic_docs` and the push tables — never on
+  `jobs`.
+- `jobs.created_at` is posting time, not activity (it is used only as the
+  contract's rule-2 comparison, never as an activity value).
+- `en_route_at` / `arrived_at` / `completed_at` are lifecycle facts, and null
+  for most active jobs.
+
+Caveat the resolver handles explicitly: an assigned job whose **job thread** has
+no messages yet has no `conversations` row and therefore no value here. That is
+the normal state straight after a hire, because offer/counter/accept cards live
+in the **pair's direct thread** since phase61, not in the job thread. Rule 2 of
+the contract exists precisely for that state.
+
+## PHASE 0.8 — BASELINE (re-run on `abfced9`)
+
+Both commands run from local binaries; nothing installed, no resolver invoked.
+
+| Check | Command | Result |
+|---|---|---|
+| TypeScript + lint | `node node_modules/typescript/bin/tsc --noEmit --pretty false --noUnusedLocals --noUnusedParameters` | **PASS** — exit 0, no output |
+| Full suite | `node --test tests/*.test.mjs` | **361 tests / 360 pass / 1 fail** |
+
+The single failure is the documented one: `tests/pwa.test.mjs:8` expects
+`config.js?v=20260731-1` while `public/index.html` ships `-2`; both sides are
+the frozen web/PWA surface. **Baseline matches expectation — proceeded.**
+
+The earlier run's extra failure (`tests/counterCap.test.mjs:67`) is gone: it was
+`indexOf('for update;\n  if not found')` returning −1 against a CRLF working-tree
+copy of an LF blob, and `.gitattributes` now pins `*.sql` to LF.
+`supabase/phase63_counteroffer_cap_ten_per_side.sql` verified at 0 CR bytes.
+`tests/counterCap.test.mjs` was not modified.
+
+## THE AUTHORITATIVE RESOLVER CONTRACT (signed off 2026-08-13, verbatim)
+
+```
+  Among jobs with that counterparty in assigned/in_progress:
+    1. Prefer the job with the greatest conversations.last_message_at.
+    2. If the winner from (1) has NO messages at all (last_message_at absent)
+       and another active job DOES have messages, that is acceptable only if
+       the message-less job is the more recently CREATED job. A brand-new job
+       with no chat yet must beat an older job that is still being chatted in —
+       otherwise the first message about new work routes into the old job.
+    3. Ties on the deciding value break by ascending job id.
+  If no active job exists, the pair thread.
+
+  Restated as one rule: newer work wins over stale chatter; among jobs that
+  both have activity, most recent activity wins; deterministic tiebreak by
+  ascending job id.
+```
+
+Implemented once, in `lib/conversationResolver.ts` (`resolveActiveJob()` /
+`resolveConversation()`), and read by every downstream surface. The contract is
+reproduced verbatim in that file's header so an editor meets it before the code.
+
+**Reading of rule 2, stated so it cannot be re-derived differently later:** the
+comparison is `created_at` against `created_at`. That is what makes a brand-new
+silent job beat an older job whose last message is *newer than the new job's
+creation* — the case the rule exists for. Comparing the silent job's creation
+against the chatty job's last message instead would hand the conversation
+straight back to the old job, which is the defect being prevented. Because that
+mixed comparison is not a total order, the implementation is a two-stage
+selection (best silent by creation, best chatty by activity, then the rule-2
+head-to-head) rather than a single sort, so the answer is total and
+order-independent for any input. `tests/unifiedConversation.test.mjs` asserts
+rule 2 in both directions and both input orders.
+
+## COMMIT 1 — `feat(inbox): one row per person`
+
+Files changed:
+
+- `lib/conversationResolver.ts` **(new)** — the contract above, plus
+  `groupThreadsByPerson()`. Pure module, no runtime imports (the
+  `lib/jobLifecycle.ts` / `lib/errorMessage.ts` precedent), so the suite
+  executes it directly. A test asserts it stays pure.
+- `lib/conversations.ts` — added `ActiveJob`, `ACTIVE_JOB_STATUSES` and
+  `fetchActiveJobs(userId)`: five columns, one round trip, both sides of a job.
+- `screens/MessagesInboxScreen.tsx` — one row per person; preview/timestamp
+  from the newest message across all of that person's threads; unread and the
+  waiting-offer badge folded across them; subtitle is the resolver's active job
+  or nothing; `"N conversations together"` deleted.
+- `tests/unifiedConversation.test.mjs` **(new)** — 11 tests.
+
+Row destination in commit 1 is the resolver's own target (the active job's
+thread, else the pair thread), so the subtitle and the destination cannot
+disagree. Commit 2 changes it to `{ counterpartyId }` once ChatScreen can
+accept that shape; keeping commit 1 on the existing route shapes is what makes
+it a safe stopping point on its own.
+
+Validation at commit 1: typecheck exit 0; **372 tests / 371 pass / 1 fail**
+(361 baseline + 11 new). The only failure is the pre-existing frozen-PWA one.
+No regressions.
+
+## AUTONOMOUS DECISIONS
+
+1. **Aggregated unread is a logical OR, not an integer.** Decision A says
+   "Unread = sum across all threads", but 0.6 establishes there is no numeric
+   unread surface anywhere — `ConversationRow.unread` is a `boolean` driving a
+   dot and bold text. ORing the existing per-thread predicate across the group
+   is the smallest change that satisfies the product rule; a count would mean a
+   new prop, new styling and a new visual element on a shared component. The
+   awaiting-offer pill folds the same way, and for the same reason: with one
+   row per person, anything unanswered in ANY of their threads has to surface
+   on that row or nowhere.
+2. **Absent activity is handled by contract rule 2, not by a sort convention.**
+   The earlier plan (absent sorts last, then id) was superseded by the
+   signed-off rule; `created_at` is used only as rule 2's comparison value and
+   never as an activity timestamp, so no new timestamp is invented.
+3. **`jobs.status` for the resolver comes from a narrow new read in
+   `lib/conversations.ts`, not from `lib/jobs.ts` and not from a migration.**
+   `fetchJobsByClient()` / `fetchJobsAssignedToWorker()` would have worked but
+   fetch every job of every status with an offer-count embed, in two round
+   trips — far more than a subtitle needs. `fetchActiveJobs()` selects five
+   columns for both sides in one query. `lib/jobs.ts` is untouched.
+4. **No `supabase/phase67_*.sql` was written.** Per 0.1 and #3 every input to
+   A, B and C is reachable client-side from existing queries, so no server
+   change is necessary and none was made. No SQL was executed anywhere.
+5. **Row key is `person:<counterpartyId>`.** Making the person the list key is
+   what makes "two rows for one person" inexpressible rather than merely
+   avoided, and the test asserts the key shape as well as the behaviour.

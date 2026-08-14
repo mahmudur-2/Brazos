@@ -93,6 +93,38 @@ export async function fetchDirectThreadWith(userId: string, otherId: string) {
   return { data: (data?.id as string | undefined) ?? null, error };
 }
 
+/**
+ * A job the signed-in user is a party to that is still being worked.
+ *
+ * This is the resolver's candidate set (lib/conversationResolver.ts): the jobs
+ * that can own a conversation right now. It is read here rather than through
+ * lib/jobs.ts because the inbox needs only these five columns for every
+ * counterparty at once — `fetchJobsByClient` / `fetchJobsAssignedToWorker`
+ * fetch every job of every status with an offer-count embed, which is two
+ * round trips and far more data than a subtitle needs.
+ */
+export type ActiveJob = {
+  id: string;
+  title: string;
+  created_at: string;
+  client_id: string;
+  assigned_worker_id: string | null;
+};
+
+/** The statuses that mean "still being worked" — the resolver's window. */
+export const ACTIVE_JOB_STATUSES: string[] = ['assigned', 'in_progress'];
+
+/** Every job the user currently holds with anyone, either side of it. */
+export async function fetchActiveJobs(userId: string) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('id, title, created_at, client_id, assigned_worker_id')
+    .in('status', ACTIVE_JOB_STATUSES)
+    .or(`client_id.eq.${userId},assigned_worker_id.eq.${userId}`);
+
+  return { data: (data ?? []) as ActiveJob[], error };
+}
+
 export type ReadState = { job_id: string; last_read_at: string };
 
 /** When the user last opened each job's chat (drives the unread dot). */

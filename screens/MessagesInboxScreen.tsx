@@ -17,7 +17,19 @@ import { ReportDialog } from '../components/ReportDialog';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
-import { conversationKey, conversationTarget, resolveOtherId } from '../lib/conversations';
+import {
+  conversationKey,
+  conversationTarget,
+  fetchActiveJobs,
+  resolveOtherId,
+  type ActiveJob,
+  type Conversation,
+} from '../lib/conversations';
+import {
+  groupThreadsByPerson,
+  resolveConversation,
+  type ActiveJobCandidate,
+} from '../lib/conversationResolver';
 import { fetchMyPendingOffers } from '../lib/offers';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
@@ -66,6 +78,23 @@ export function MessagesInboxScreen() {
   // NULL that used to key as `direct:null` and match nothing (AUD-P1-01). The
   // counterparty-keyed fallback that worked around that is gone with it.
   const [pendingByThread, setPendingByThread] = useState<Set<string>>(new Set());
+  // The jobs this user currently holds with anyone. A person's row is
+  // subtitled with the job the resolver picks out of these, which is the SAME
+  // job their next message would go to — the inbox must never name one job
+  // while sends route to another.
+  const [activeJobs, setActiveJobs] = useState<ActiveJob[]>([]);
+
+  const loadActiveJobs = useCallback(async () => {
+    if (!user?.id) return;
+    const { data, error } = await fetchActiveJobs(user.id);
+    if (error) {
+      // Keep the last known set, exactly as the pending-offer refresh does: a
+      // failed read must not silently drop every row's subtitle.
+      console.warn('[MessagesInbox] active-job refresh failed', error.message);
+      return;
+    }
+    setActiveJobs(data);
+  }, [user?.id]);
 
   const loadPending = useCallback(async () => {
     if (!user?.id) return;
@@ -91,85 +120,120 @@ export function MessagesInboxScreen() {
     useCallback(() => {
       refresh();
       loadPending();
-    }, [refresh, loadPending])
+      loadActiveJobs();
+    }, [refresh, loadPending, loadActiveJobs])
   );
 
   async function onRefresh() {
     setRefreshing(true);
-    await refresh();
+    await Promise.all([refresh(), loadActiveJobs()]);
     setRefreshing(false);
   }
 
   const rows = useMemo(() => {
     if (!user) return [];
 
-    // Count conversations per counterparty first, so a job title that would
-    // be ambiguous (same person, several jobs) can fall back to a neutral
-    // summary instead of naming just one of them.
-    const counterpartyJobCounts: Record<string, number> = {};
+    // ONE row per person. A pair have exactly one conversation, ever — jobs
+    // are context inside it, not separate rooms — so every thread with the
+    // same counterparty folds into a single row here.
+    const people = groupThreadsByPerson(conversations, (c) => ({
+      counterpartyId: resolveOtherId(c, user.id),
+      jobId: c.job_id,
+      directThreadId: c.direct_thread_id,
+      lastMessageAt: c.last_message_at,
+    }));
+
+    // conversations.last_message_at IS the canonical activity timestamp for a
+    // job, so the resolver reads it straight off the rows this list is built
+    // from. A job whose own thread has no messages yet simply has no entry.
+    const activityByJob: Record<string, string> = {};
     for (const c of conversations) {
-      const otherId = resolveOtherId(c, user.id);
-      counterpartyJobCounts[otherId] = (counterpartyJobCounts[otherId] ?? 0) + 1;
+      if (c.job_id) activityByJob[c.job_id] = c.last_message_at;
     }
 
-    return conversations.map((c) => {
-      const otherId = resolveOtherId(c, user.id);
+    return people.map((person) => {
+      const otherId = person.counterpartyId;
       const other = profiles[otherId];
       const isSelf = otherId === user.id;
-      const reactions = lastMessageReactions[c.last_message_id] ?? [];
+      const isMuted = moderation.muted.has(otherId);
+
+      // The preview is the newest message across ALL of this person's
+      // threads, whichever one it happens to be in.
+      const latest = person.latest;
+      const reactions = lastMessageReactions[latest.last_message_id] ?? [];
       const reactionPrefix =
         reactions.length > 0 ? `${reactions.map((r) => r.emoji).join('')} ` : '';
-      const isImage = !!c.last_message_image_url;
-      const isVoice = !!c.last_message_audio_url;
-      const preview = c.last_message_unsent_at
+      const isImage = !!latest.last_message_image_url;
+      const isVoice = !!latest.last_message_audio_url;
+      const preview = latest.last_message_unsent_at
         ? 'This message was unsent'
         : reactionPrefix +
           (isVoice
             ? 'Voice message'
             : isImage
             ? 'Photo sent'
-            : c.last_message_content || '…');
-      // A direct thread keeps its read timestamp on the thread row itself
-      // (see phase36), so it comes back on the conversation instead of from
-      // the job-keyed message_reads map.
-      const lastReadAt = c.job_id ? readMap[c.job_id] : c.my_read_at;
-      const isMuted = moderation.muted.has(otherId);
-      const key = conversationKey(c);
-      // One lookup for every kind of chain now — a marketplace bid keys as
-      // `direct:<pair thread>` exactly like a direct offer (see loadPending).
-      const awaitingRequest = pendingByThread.has(key);
-      // Muted conversations still receive messages — they just don't raise the
-      // unread indicator (the only "badge" this app currently has).
-      const unread =
-        !isMuted &&
-        c.last_message_sender_id !== user.id &&
-        (!lastReadAt || new Date(c.last_message_at) > new Date(lastReadAt));
+            : latest.last_message_content || '…');
+
+      // Unread and the waiting-offer badge are both folded across the whole
+      // conversation: with one row per person, anything unanswered in ANY of
+      // their threads has to surface on that row or nowhere.
+      const unreadInThread = (thread: Conversation) => {
+        // A direct thread keeps its read timestamp on the thread row itself
+        // (see phase36), so it comes back on the conversation instead of from
+        // the job-keyed message_reads map.
+        const lastReadAt = thread.job_id ? readMap[thread.job_id] : thread.my_read_at;
+        // Muted conversations still receive messages — they just don't raise
+        // the unread indicator (the only "badge" this app currently has).
+        return (
+          !isMuted &&
+          thread.last_message_sender_id !== user.id &&
+          (!lastReadAt || new Date(thread.last_message_at) > new Date(lastReadAt))
+        );
+      };
+      const awaitingInThread = (thread: Conversation) => {
+        // One lookup for every kind of chain now — a marketplace bid keys as
+        // `direct:<pair thread>` exactly like a direct offer (see loadPending).
+        const key = conversationKey(thread);
+        const awaitingRequest = pendingByThread.has(key);
+        return awaitingRequest;
+      };
+
+      // The job this conversation is about, chosen by the ONE resolver that
+      // also decides where a message sent from the chat screen lands.
+      const candidates: ActiveJobCandidate[] = activeJobs
+        .filter((job) => resolveOtherId(job, user.id) === otherId)
+        .map((job) => ({
+          id: job.id,
+          title: job.title,
+          createdAt: job.created_at,
+          lastMessageAt: activityByJob[job.id] ?? null,
+        }));
+      const { target, activeJob } = resolveConversation(candidates, person.directThreadId);
 
       const baseName = other?.full_name ?? 'Someone';
-      const jobCount = counterpartyJobCounts[otherId] ?? 1;
 
       return {
-        key,
-        target: conversationTarget(c),
-        jobId: c.job_id,
+        key: `person:${otherId}`,
+        // Until the pair have an active job there may be no resolved target at
+        // all (every thread of theirs is a finished job): open the newest one
+        // rather than nothing.
+        target: target ?? conversationTarget(latest),
+        jobId: activeJob?.id ?? latest.job_id,
         otherId,
         isSelf,
-        subtitle: isSelf
-          ? null
-          : jobCount > 1
-          ? `${jobCount} conversations together`
-          : // A direct thread is not about a job, so there is no job title to
-            // show — say what it is instead of leaving the line blank.
-            c.job_title ?? 'Direct messages',
+        // No active job means no job to name. A neutral placeholder here is
+        // what produced "N conversations together" — the line stays empty
+        // instead of saying something that isn't about anything.
+        subtitle: isSelf ? null : activeJob?.title ?? null,
         name: isSelf ? `${baseName} (You)` : baseName,
         rawName: baseName,
         avatarUrl: other?.avatar_url ?? null,
         preview,
-        lastMessageAt: c.last_message_at,
-        unread,
+        lastMessageAt: latest.last_message_at,
+        unread: person.threads.some(unreadInThread),
         muted: isMuted,
         blocking: moderation.blocking.has(otherId),
-        awaitingRequest,
+        awaitingRequest: person.threads.some(awaitingInThread),
       };
     });
   }, [
@@ -180,6 +244,7 @@ export function MessagesInboxScreen() {
     moderation,
     user,
     pendingByThread,
+    activeJobs,
   ]);
 
   async function toggleBlock(target: SheetTarget) {
