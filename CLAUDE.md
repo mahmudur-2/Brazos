@@ -7,6 +7,11 @@ holds invariants and rules. **BRAZOS_MASTER_PLAN.md** holds the roadmap and the
 win. On invariants, this file wins. docs/architecture.md is partially stale
 (its navigation section predates the dual-tree refactor) — where it conflicts
 with this file or the code, trust this file and the code.
+BRAZOS_MASTER_PLAN.md §D (the `src/features/...` feature-domain layout) and
+the table names in its §G data model are **aspirational, not current**: the
+repo is flat-root (lib/, screens/, components/, ui/, navigation/, modes/) and
+several §G tables were satisfied by extending existing ones instead. Read §D/§G
+as design intent; read the code and this file for what exists.
 
 ## Target
 Expo / iOS native app. Android deferred. Check versioned Expo docs
@@ -74,9 +79,11 @@ Break these and the marketplace is wrong, not just ugly.
   INSERT/UPDATE/DELETE.
 - **Messaging is locked pre-assignment.** Free-form person-to-person
   messaging opens only after an offer is accepted and a worker is assigned.
-- **Exact address lives in job_private_details** — owner + hired worker only,
+- **Exact address lives in job_locations** — owner + hired worker only,
   enforced by RLS, never only by the frontend. Customer-facing open-market
-  surfaces show approximate location only.
+  surfaces show approximate location only. (§G called this table
+  `job_private_details`; phase12 already implemented that shape and phase43
+  extended it with address_line/access_notes rather than renaming it.)
 - **Never invent marketplace data.** No placeholder ratings, fake reviews,
   stub history, or stock imagery standing in for real uploads.
 - **Lifecycle derivation is never duplicated** (P3-31). One implementation
@@ -126,6 +133,20 @@ in lib/navigation.ts.
   revoked the default) or it is unreachable from the app.
 - Never weaken RLS, a policy, or a grant to make a feature work — add a
   narrow security definer function instead.
+- **There are NO generated Supabase database types.** lib/supabase.ts calls
+  `createClient(URL, KEY, {...})` with no type parameter, so nothing in the
+  app is compile-checked against the schema. Status values are plain `string`
+  in TypeScript and are compared against hand-written string literals and
+  local unions (lib/jobLifecycle.ts, lib/jobStage.ts, lib/disputes.ts,
+  ui/primitives/StatusPill.tsx). Consequence: a status literal that does not
+  exist in the database enum fails at runtime, never at build time — so SQL
+  that filters on status must fail safe (allow-list the values it accepts,
+  never block-list the ones it rejects).
+- Live table names, where the plan's vocabulary differs: exact address →
+  `job_locations`; disputes → `job_disputes`; portfolio → `portfolio_items`;
+  push tokens → `push_tokens`; notifications → `notification_outbox` +
+  `notification_prefs`. `completion_records` and `job_media` were never built
+  (completion media lives on `jobs` as jsonb columns).
 - Detailed migration mechanics: .claude/rules/supabase.md.
 
 ## Validation
