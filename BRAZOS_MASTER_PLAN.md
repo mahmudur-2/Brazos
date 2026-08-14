@@ -28,10 +28,11 @@ with the evidence that produced it.
 
 ## Near-term priorities
 
-1. **Apply `supabase/phase67_account_deletion.sql` to staging, then walk the
-   flow on a device.** The migration is written and unapplied. The procedure —
-   including the foreign-key NOTICE expectations and the deletion-count
-   assertions — is
+1. **Apply `supabase/phase68_deleted_at_authorization.sql` to staging.** The
+   migration is written and unapplied. It depends on phase67, which is applied
+   and device-verified as of 2026-08-14. The apply steps, the expected NOTICE
+   output and the meaning of each self-check failure are in the phase68 section
+   of
    [`docs/runbooks/phase67-account-deletion.md`](docs/runbooks/phase67-account-deletion.md).
    Only a green `node scripts/verify-schema.mjs` counts as applied.
 2. **Security hardening before push ships.** Two items are named in `HANDOFF.md`:
@@ -80,8 +81,34 @@ with the evidence that produced it.
 - **`notification_outbox.title` / `body`** embed an actor's name with no actor
   column, so a renamed or deleted actor leaves stale copy behind.
 - **`job_requests` has no withdrawn status.**
-- **Six SECURITY DEFINER bodies still read `profiles.banned` directly** rather
-  than through a shared predicate.
+- **Ban checks that bypass the shared lifecycle predicate.** The old entry here
+  claimed "six SECURITY DEFINER bodies still read `profiles.banned` directly"
+  and was never enumerated. phase68 enumerated it; the full evidence, with file
+  and line for every site, is in
+  [`docs/audits/PHASE68_DIAGNOSTIC.md`](docs/audits/PHASE68_DIAGNOSTIC.md).
+  Eleven functions reference `banned`. Six of them gate or filter on it, which
+  is where "six" came from; the other five either write it (`ban_user`,
+  `unban_user`), return it as data (`admin_open_reports`), or do not touch
+  `profiles.banned` at all (`current_user_is_banned`, `handle_new_user`).
+  Resolution:
+  - **Repointed by phase68 (5):** `job_request_parties_ok`, `should_notify`,
+    `transition_job_status` now call `public.is_profile_active(uuid)`;
+    `match_workers_semantic` and `worker_semantic_refresh_queue` inline
+    `deleted_at is null` beside the existing predicate, because both are set
+    scans and a per-row definer call does not belong in one.
+  - **Excluded (1):** `notify_nearby_for_job`. Its body carries a non-ASCII
+    separator inside a user-visible notification string, and `create or replace`
+    re-emits the whole body, so it cannot be patched without either breaking the
+    ASCII rule or changing user-facing copy. A deleted account is already
+    excluded from that fan-out structurally, because `delete_my_account` deletes
+    the `notification_prefs` row the query inner-joins. Patching it needs a
+    migration allowed to carry UTF-8, or a decision to encode the separator as
+    `chr(183)`.
+  - **Left alone deliberately (5):** the two writers, the one reader, and the
+    two that never read `profiles.banned`.
+- **Retire `current_user_is_banned()`.** It fails OPEN on a missing profile row
+  and no function body calls it; its only caller is `lib/profiles.ts:132`.
+  Removal needs its own migration plus that client sweep.
 - **`42P17` RLS recursion on job delete**, and a stale map pin after an address
   edit.
 - **Worker hero-card parity with the design reference** — never built, not a
