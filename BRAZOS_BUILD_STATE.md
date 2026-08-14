@@ -2642,3 +2642,68 @@ subtitle names the resolver's job, the timeline interleaves with dividers in
 the right places, a "Message client" tap from an active job lands scrolled to
 that job's first message, and the composer's attachment controls disappear on
 a pair-thread conversation. Then decide known issue 1 (reactions).
+
+## Session 2026-08-13 — CLAUDE.md rewrite + Claude Code guard hardening (docs/config only)
+
+**What was done.** Docs and Claude Code configuration only — no app code, no
+SQL, nothing under supabase/, no locked screen touched, no database contacted.
+
+- **docs/CLAUDE_MD_AUDIT.md** (written earlier the same day, committed here):
+  read-only ground-truth audit of the repo and live staging. Found ten
+  contradictions in the old CLAUDE.md, including a phantom RPC
+  (`advance_job_status` — exists nowhere), a dead working-branch instruction
+  (`v2` is 66 commits behind mainexpo, 0 ahead), and a protect path that
+  matches nothing (`docs/emerald-v2/references/` does not exist; the real
+  assets are in `design-reference/`).
+- **CLAUDE.md rewritten in full** from that audit. Single-generation now:
+  dual-tree navigation (CustomerRoot/WorkerRoot under ModeShell),
+  accept_offer()/transition_job_status() as the only lifecycle RPCs,
+  ui/tokens.ts as token source of truth with lib/theme.ts as the standard
+  screen-facing wrapper, the 11 locked screen files named explicitly, and the
+  production ref named explicitly as never-contacted.
+- **.claude/rules/** added (path-scoped, `paths:` frontmatter):
+  `supabase.md` (migration mechanics, scoped to supabase/**/*.sql) and
+  `native-ui.md` (mobile UX mechanics, scoped to screens/components/ui/modes).
+- **.claude/settings.json hardened:** permissions.deny for git push (incl.
+  --force/-f), git reset --hard, git clean, git stash — each in Bash(...) and
+  PowerShell(...) form — plus Edit(...) deny rules for design-reference/,
+  public/, hosting/, dist/, WEB_DEPLOYMENT.md, *.web.ts(x), and each of the
+  11 locked screen files. PreToolUse hook (matcher Bash|PowerShell) runs
+  `.claude/hooks/guard.ps1`, which whole-string-scans every shell command and
+  blocks (exit 2) anything containing the production ref, git push,
+  push --force/-f, reset --hard, git clean, or git stash. SessionStart hook
+  runs `.claude/hooks/session-context.ps1` (injects branch/HEAD/dirty-clean).
+- **.claude/settings.local.json:** removed the `Bash(git:*)` blanket approval
+  and the pre-approval that extracted the postgresql:// credential from
+  start.ps1 for psql; added narrow read-only approvals (git status/log/diff,
+  grep/Select-String, verify-schema) mirrored for Bash and PowerShell.
+- **.claude/launch.json deleted** (it targeted the frozen web surface).
+- **Canaries all blocked pre-execution, both tools:** `echo <prod-ref>` and
+  `git push --dry-run` were each rejected by guard.ps1 (its reason line
+  visible in the rejection) through Bash AND through PowerShell; benign
+  commands pass. The dry-run push never reached Git.
+
+**Migrations verified:** none written, none touched, no database contacted
+this session.
+
+**Open items (recorded, deliberately not acted on):**
+1. Future migration: drop the `accept_bid`/`respond_job_request` compat shims
+   and revoke their `authenticated` grants — live, callable, zero app callers
+   (audit §2).
+2. Consolidate/verify the live `transition_job_status` signature across its
+   five stacked definitions (phase29/31/35/51/58, arity change at phase35).
+3. `docs/architecture.md` navigation section is stale (pre-dual-tree);
+   rewrite pending.
+4. The audit's verify-schema run executed in PostgREST-reachability mode
+   (`SUPABASE_DB_URL_STAGING` not set): RPC presence confirmed, signatures
+   and bodies not. Re-run with the staging DB URL for signature-level proof.
+
+**Gate:** JSON validity of both settings files (node JSON.parse), guard.ps1
+unit-tested against 8 payloads (blocks case-insensitive and compound
+commands, fail-open on non-command payloads), all 4 live canaries blocked.
+No app code changed, so tsc/test suite not re-run — nothing it covers moved.
+
+**Next exact task.** Unchanged from the previous session (device pass on the
+merged conversation timeline, then decide reactions known issue 1). For the
+config surface: apply open item 4's signature-level verify-schema run when
+the staging DB URL is next available in a shell.
