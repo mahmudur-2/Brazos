@@ -31,18 +31,29 @@
 --   state.
 --
 --   Terminal sets, reconstructed from the migrations that define each enum:
---     job_status      terminal: completed, cancelled
---                     blocking: open, draft, assigned, in_progress
+--     job_status      terminal: completed, cancelled, open, draft
+--                     blocking: assigned, in_progress
 --     payment_status  terminal: released, paid_out, refunded, failed, voided
 --                     blocking: unfunded, pending, authorized, held,
 --                               partially_refunded
 --     dispute_status  terminal: resolved, withdrawn
 --                     blocking: open
 --
---   Consequence worth knowing before this ships: an OPEN or DRAFT job posting
---   blocks deletion. That is deliberate — an open posting is a live listing
---   other workers are bidding into — and the deletion screen names each one so
---   the user can cancel it themselves and come back.
+--   'open' and 'draft' are terminal FOR THIS GATE ONLY — they are not terminal
+--   in the job lifecycle, and nothing else in the schema should read them that
+--   way. They sit here because neither one holds another person to anything: a
+--   draft is an unsent private note, and an open posting has no worker
+--   committed and no money moved, so cancelling it on the owner's behalf
+--   produces exactly the outcome the owner would have produced by cancelling
+--   it themselves. Blocking deletion behind that housekeeping is what App
+--   Review reads as a 5.1.1(v) failure.
+--
+--   Consequence worth knowing before this ships: deleting an account CANCELS
+--   every job it posted that is still open — step (c) of delete_my_account()
+--   does it, and the deletion screen says so before the user confirms. Drafts
+--   are left as drafts: invisible to everyone, owned by a tombstone. What
+--   still blocks is work somebody else is depending on — an assigned or
+--   in-progress job, money that has not finished moving, an open dispute.
 --
 -- WHAT THIS DELIBERATELY DOES NOT DO
 --   * No storage cleanup. The avatars bucket keys objects as
@@ -235,9 +246,9 @@ as $$
       'job'::text as kind,
       j.id as ref_id,
       coalesce(nullif(btrim(j.title), ''), 'Untitled job') as label,
+      -- No 'open' or 'draft' branch: both are terminal for this gate (see the
+      -- header), so neither can reach this CASE.
       case j.status::text
-        when 'open'        then 'This job is still open for offers.'
-        when 'draft'       then 'This job is an unsent draft.'
         when 'assigned'    then 'A worker is assigned to this job.'
         when 'in_progress' then 'Work is underway on this job.'
         else 'This job has not reached a final state yet.'
@@ -250,7 +261,7 @@ as $$
       and (j.client_id = me.uid or j.assigned_worker_id = me.uid)
       and (
         j.status is null
-        or j.status not in ('completed', 'cancelled')
+        or j.status not in ('completed', 'cancelled', 'open', 'draft')
       )
 
     union all
@@ -327,7 +338,10 @@ as $$
 declare
   v_user uuid := auth.uid();
   v_offer record;
+  v_cancelled integer := 0;
   v_withdrawn integer := 0;
+  v_offer_failures integer := 0;
+  v_auth_deleted integer;
 begin
   -- (a) ------------------------------------------------------------------
   if v_user is null then
@@ -344,16 +358,60 @@ begin
 
   -- (c) Cancel, don't orphan.
   --
-  --     Under the terminal set in force today this updates zero rows: 'open'
-  --     and 'draft' are NOT terminal, so any such job was already a blocker at
-  --     (b). It is kept deliberately rather than deleted as dead code — the
-  --     moment someone adds 'open' or 'draft' to the terminal set (a one-line
-  --     product change), this is what stops a live posting from being left
-  --     behind with no owner. Cheap, idempotent, and it fails closed.
+  --     'open' is terminal for the gate at (b), so an open posting no longer
+  --     blocks deletion — which makes THIS the step that stops a live listing
+  --     from outliving its owner. It is reachable now; it was not before.
+  --
+  --     WHY THIS IS A RAW UPDATE AND NOT transition_job_status().
+  --     The canonical lifecycle RPC cannot perform this transition. Its live
+  --     definition is phase58's
+  --     transition_job_status(uuid, text, jsonb, jsonb), and:
+  --       * its allow-list is exactly `assigned -> in_progress` and
+  --         `in_progress -> completed`. Anything else — including
+  --         'open' -> 'cancelled' — raises 'Invalid job status transition'.
+  --       * its authorisation is `v_job.assigned_worker_id <> v_user`: only
+  --         the ASSIGNED WORKER may call it. The caller here is the job's
+  --         CLIENT, and an open job has no assigned worker at all.
+  --     There is no other cancellation RPC in this schema — the only other
+  --     writer of 'cancelled' is phase13's admin ban_user(), itself a raw
+  --     UPDATE. The canonical path does not exist to be taken here, rather
+  --     than being bypassed. Widening transition_job_status means editing a
+  --     body stacked across phases 29/31/35/51/58 and is a follow-up
+  --     migration, not this one.
+  --
+  --     FOLLOW-UP, RECORDED WITH THE RISK NAMED: because this does not route
+  --     through an offer-aware path, offers OTHER people authored on these
+  --     jobs stay `pending` on a job that is now cancelled. They are
+  --     unreachable — the job is cancelled and its owner is a tombstone — but
+  --     they are not settled, and no notification tells those workers. The fix
+  --     is a decline_offer() sweep here (it authorises as the job owner, which
+  --     this function is running as); it needs its own migration and its own
+  --     proof.
+  --
+  --     DRAFTS ARE DELIBERATELY LEFT AT 'draft'. A draft job is an unsent
+  --     direct-offer negotiation, visible to nobody, and 'draft' ->
+  --     'cancelled' is a transition nothing in this schema performs. Leaving
+  --     it untouched under a tombstone owner is the smaller lie than inventing
+  --     a status move for it.
+  --
+  --     The filter is an IN, not a NOT IN, and that is the fail-safe direction
+  --     HERE: the gate at (b) blocks on any status it does not recognise,
+  --     while this statement refuses to auto-cancel any status it does not
+  --     recognise. Both fail closed; they just fail closed in opposite
+  --     directions.
+  --
+  --     NO EXCEPTION HANDLER HERE — deliberately the opposite call from (d).
+  --     A refusal to withdraw an offer sitting on somebody else's job must not
+  --     veto the user's deletion. A refusal to cancel the user's OWN live
+  --     posting must: swallowing it would commit the tombstone and leave a
+  --     posting in the open market that nobody can cancel, which is the exact
+  --     orphan this step exists to prevent.
   update public.jobs
      set status = 'cancelled'
    where client_id = v_user
-     and status in ('open', 'draft');
+     and status = 'open';
+
+  get diagnostics v_cancelled = row_count;
 
   -- (d) Withdraw outbound commitments.
   --
@@ -379,8 +437,24 @@ begin
         and (o.expires_at is null or o.expires_at > now())
       order by o.created_at
     loop
-      perform public.withdraw_offer(v_offer.id);
-      v_withdrawn := v_withdrawn + 1;
+      -- Each withdrawal is its own subtransaction. A pending offer sits on
+      -- SOMEBODY ELSE'S job, and the gate at (b) never examined that job — so
+      -- withdraw_offer() can legitimately refuse (the job moved on, the chain
+      -- went stale, a rule tightened). Unhandled, one refusal would abort the
+      -- whole transaction and fail the deletion with an opaque error the user
+      -- cannot act on. Deletion is a right the user is exercising; a single
+      -- unwithdrawable offer must not veto it. The failures are counted and
+      -- named in the closing notice rather than silently swallowed.
+      begin
+        perform public.withdraw_offer(v_offer.id);
+        v_withdrawn := v_withdrawn + 1;
+      exception when others then
+        v_offer_failures := v_offer_failures + 1;
+        raise notice
+          'phase67: offer % could not be withdrawn (%) — left as-is, continuing.',
+          v_offer.id, sqlerrm;
+        continue;
+      end;
     end loop;
   end if;
 
@@ -508,11 +582,30 @@ begin
   -- (i) The auth row. Only safe because section 1 of THIS FILE dropped every
   --     public foreign key pointing at auth.users — without that, this either
   --     cascades the tombstone away or is rejected outright.
+  --
+  --     THE ASSERTION IS NOT DEFENSIVE PADDING. RLS is ENABLED on auth.users.
+  --     This DELETE reaches the row only while the owner of this SECURITY
+  --     DEFINER function carries BYPASSRLS — true today (owner: postgres), and
+  --     not something this file controls. An owner change, a new policy, or a
+  --     platform change would turn it into a zero-row DELETE that raises
+  --     nothing. Without the check that zero-row DELETE would COMMIT the
+  --     tombstone and the scrub while leaving the auth row alive: the user
+  --     could sign back in to a hollowed-out account that every lifecycle gate
+  --     rejects, and every log line would say the deletion succeeded. Raising
+  --     here rolls the whole transaction back instead.
   delete from auth.users where id = v_user;
 
+  get diagnostics v_auth_deleted = row_count;
+  if v_auth_deleted <> 1 then
+    raise exception
+      'phase67: auth.users delete affected % row(s), expected 1. '
+      'Rolling back — the profile scrub must not commit without it.',
+      v_auth_deleted;
+  end if;
+
   raise notice
-    'phase67: account % deleted (% outbound offer(s) withdrawn).',
-    v_user, v_withdrawn;
+    'phase67: account % deleted (% open posting(s) cancelled, % outbound offer(s) withdrawn, % withdrawal(s) failed).',
+    v_user, v_cancelled, v_withdrawn, v_offer_failures;
 
   -- RETAINED DELIBERATELY, all now pointing at the tombstone: reviews
   -- (written and received), reports (both sides), blocks (both sides),
