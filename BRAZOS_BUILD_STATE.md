@@ -1,5 +1,132 @@
 # BRAZOS_BUILD_STATE
-Updated: 2026-08-09 (ULTRACODE pre-review hardening run complete on branch
+Updated: 2026-08-14 — see "2026-08-14 · Account deletion (phase67)" directly
+below. Everything from the 2026-08-09 header onward is unchanged.
+
+## 2026-08-14 · Account deletion (phase67) — App Store Guideline 5.1.1(v)
+
+Branch `mainexpo`, base `64055e2`, three commits: `8275e0c` (docs), `48e0b23`
+(migration), `1ba21e0` (client). HEAD `1ba21e0`, tree clean, **not pushed**.
+
+**Next exact task: apply `supabase/phase67_account_deletion.sql` in the
+Supabase SQL Editor against STAGING `zzkumxcjtbqoselzptig`, then run
+`node scripts/verify-schema.mjs` and confirm the 4 phase67 checks flip
+PENDING → OK on their own.** Two things the repo cannot prove and the user
+must check by hand at apply time: (1) the section-1 DO block's NOTICE output
+names the `auth.users` foreign keys it dropped — zero on a first run means the
+FK was never there; (2) `delete_my_account()` can actually delete from
+`auth.users` under the function owner's privileges (`auth.users` is owned by
+`supabase_auth_admin`, not `postgres`). Then walk a throwaway staging account
+through the delete end to end.
+
+### Decisions made this run
+
+- **The blocking rule is an allow-list, not a block-list.** There are no
+  generated Supabase types in this repo, so nothing in the app is
+  compile-checked against these enums and a status filter has to fail safe on
+  its own. Every condition in `account_deletion_blockers()` is
+  `status not in (<terminal set>)`; a value added to any of these enums later
+  is at risk by default and blocks deletion until someone classifies it.
+  Terminal sets, reconstructed from the migrations that define each enum:
+  `job_status` = completed, cancelled · `payment_status` = released, paid_out,
+  refunded, failed, voided · `dispute_status` = resolved, withdrawn.
+- **Consequence, deliberate: an OPEN or DRAFT job posting blocks deletion.**
+  An open posting is a live listing other workers are bidding into. The
+  deletion screen names each one so the user can cancel it themselves. This
+  also makes `delete_my_account()` step (c) currently unreachable — it is kept
+  on purpose so that widening the terminal set (a one-line change) cannot
+  orphan a live posting.
+- **One lifecycle predicate.** `is_profile_active(uuid)` gains the `deleted_at`
+  term and `is_active_user()` becomes nothing but a call to it, so a ban rule
+  and a deletion rule can never disagree (P3-31). `deleted_at is null` is
+  written exactly once in the repo.
+- **No RLS policy or view needed repointing.** Audited: phase29 already routed
+  `jobs_select_open` and `bids_select_job_owner` through `is_profile_active()`,
+  and phase43 narrowed the former while keeping that call. phase13's direct
+  `profiles.banned` policy reads are historical, superseded. No policy on
+  `profiles` was touched (42P17).
+- **RPC bodies that read `profiles.banned` directly were NOT rewritten.**
+  `create or replace function` re-emits an entire body, and several of these
+  are the product of stacked definitions across up to five migrations (see
+  `.claude/rules/supabase.md` on `transition_job_status`) — reproducing one
+  from a single file would silently revert later fixes. Listed under Known
+  issues below.
+- **Tombstone, not erasure.** A deleted account leaves a scrubbed `profiles`
+  row (`full_name = 'Deleted user'`, `deleted_at` set) so retained reviews,
+  payments and disputes still resolve to a name. `banned` is untouched —
+  deletion must not launder a ban — and `banned_phones` stores the number
+  independently of the profile.
+- **Local-only sign-out after a successful delete.** The auth row is gone
+  while the device's JWT is still valid, so a server-side sign-out returns
+  401/403. `signOut({ scope: 'local' })` in a try/catch, failure swallowed;
+  the root navigator gates on the session, so clearing it is the stack reset.
+- **`lib/accountDeletionBlockers.ts` is pure** (type-only imports) so
+  `tests/accountDeletion.test.mjs` executes the formatter instead of reading
+  its source — the `lib/earningsMath.ts` ↔ `lib/earnings.ts` split.
+
+### Deferred, with reasons
+
+- **Storage cleanup skipped.** Avatars key as `avatars/<uid>/avatar.<ext>`
+  where the extension follows the uploaded file (there is no single
+  deterministic path), and `portfolio_items` media reuses the shared
+  `job-photos` bucket under paths that are not per-user. Partial confidence is
+  not confidence.
+- **`notification_outbox.title` / `.body` embed the actor's display name**
+  (`notify_display_name()`, phase20) and the table has no actor column and no
+  actor id in `data`. Rows delivered to OTHER people about a deleted account
+  cannot be found except by substring-matching the old name, which would
+  corrupt the copy of every other user sharing it. Not scrubbed.
+- **`job_requests` is skipped in the withdraw step.** Its status CHECK allows
+  only pending / countered / accepted / declined / closed — there is no
+  withdrawn value, and inventing one is worse than leaving it. The table is
+  retired (phase45) anyway; `bids` is a read-only projection of `job_offers`
+  and is never written directly.
+- **Client-side `banned` references left alone** (`lib/AuthContext.tsx`,
+  `lib/profiles.ts`, `lib/moderation.ts`, `lib/offers.ts`) — none of them
+  gates deletion, and touching them was out of scope.
+
+### Gate
+
+- **tsc/lint**: PASS — `npm run lint` exits 0, clean.
+- **tests**: **389/390 PASS.** Baseline was 381/382. The one failure is the
+  documented frozen-web `pwa.test.mjs` version string, unchanged. +8 guards in
+  `tests/accountDeletion.test.mjs` (formatter executed on the empty, populated,
+  single and unknown-kind cases; the blocked-error predicate; no user id on
+  either RPC wrapper; local sign-out wrapped and swallowed; the entry point and
+  the single route registration).
+- **verify-schema**: **181 OK, 0 MISSING, 4 PENDING, exit 0** — the four
+  phase67 checks, expected until the migration is applied. Ran in
+  PostgREST-reachability mode against `zzkumxcjtbqoselzptig`
+  (`SUPABASE_DB_URL_STAGING` is NOT SET in this shell, so no SQL proof could
+  run). A FK/constraint sentinel is not expressible in that mode; the
+  `account_deletion_enabled()` sentinel carries the constraint drops, the
+  function bodies and the ungranted column instead.
+- **locked screens**: PASS — none touched. The entry point went on
+  `screens/ProfileScreen.tsx`, which is not on the locked list.
+- **SQL executed**: NONE. `verify-schema.mjs` (a PostgREST read) only.
+
+### Known issues added this run
+
+- **`profiles.banned` is still read directly inside these SECURITY DEFINER
+  function bodies**, so they do not yet see a tombstone as inactive:
+  phase18 `can_transact_between`; phase20 `should_notify` + the nearby-jobs
+  fan-out (phase56 recreated `should_notify` with the same read, so phase56 is
+  the live one); phase39 `refresh_stale_worker_semantic_docs`; phase40
+  `match_workers_semantic`; phase30 `accept_bid` (a deprecated shim with no app
+  callers); phase58 `transition_job_status`. Exposure is bounded: the
+  `p.id = auth.uid()` self-checks are unreachable once the auth row is gone,
+  and discovery is covered structurally because deletion removes
+  `worker_semantic_docs`, `worker_services` and `portfolio_items`. Worth a
+  follow-up migration that repoints them one at a time against the LIVE body.
+- **`profiles.stripe_account_id` appears in no migration in this repo** and
+  `profiles.verification_status` is a named enum whose labels no migration
+  defines. Both scrubs in `delete_my_account()` are guarded by a live
+  catalog check rather than assumed.
+- **Deleting a banned account frees its auth email for re-registration.** The
+  phone ban still holds (`banned_phones` is keyed by the number). Pre-existing
+  ban-evasion surface, not introduced here, but now reachable through a
+  user-facing button.
+
+
 `pre-review-hardening`; tags `pre-hardening` → `hardening-fixes` →
 `hardening-polish`. NOT Phase 13 — Phase 13 remains human-led and untouched.
 See DECISIONS.md "ULTRACODE pre-review hardening run", PROD_APPLY.md for the
@@ -399,7 +526,13 @@ under `__DEV__` only (the route is not registered at all in production, rather
 than merely hidden), reached from a `__DEV__`-gated row on the Profile tab.
 
 ## Migrations written but NOT applied
-None. Every migration through phase50 is applied and verified.
+`phase67_account_deletion.sql` (2026-08-14) — written, never executed against
+any database. Apply in the Supabase SQL Editor against STAGING
+`zzkumxcjtbqoselzptig`; only a green `node scripts/verify-schema.mjs` with its
+4 checks flipped PENDING → OK counts as applied. See the 2026-08-14 section at
+the top of this file for the two post-apply checks the repo cannot make.
+
+Everything through phase66 is applied and verified.
 
 ## Migrations applied (verify-schema green)
 phase50 (`phase50_sandbox_payments_and_offer_lifecycle.sql`): **applied by
