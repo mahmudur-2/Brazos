@@ -28,7 +28,10 @@ yarn-error.*
 *.log
 
 # local review/tooling artifacts
-.claude/
+# Claude Code: shared config is versioned; local-only state is not.
+.claude/settings.local.json
+.claude/*.local.json
+.claude/_claude_bak/
 brazos-review.zip
 
 # Supplied design comps (78MB of PNG/PDF/ZIP). Source material for the auth
