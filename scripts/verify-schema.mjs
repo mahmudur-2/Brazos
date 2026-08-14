@@ -1017,6 +1017,42 @@ const MIGRATIONS = [
         })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 67. In-app account deletion.
+    //
+    // Most of what this migration does is invisible from here. This script
+    // probes over PostgREST with the publishable key, so it cannot see a
+    // DROPPED CONSTRAINT (the auth.users foreign keys), cannot see a function
+    // BODY (is_profile_active gaining the deleted_at term), and cannot see a
+    // column it has no SELECT grant on — phase29 narrowed profiles to a public
+    // column list, so probing profiles.deleted_at positively would report
+    // "missing" for a permission error. A constraint/FK sentinel is not
+    // expressible in this mode at all. The sentinel carries all of it: it is
+    // created in the same transaction as everything above it in the file.
+    //
+    // The two real RPCs ARE probeable and are checked directly, which is also
+    // what proves the grants phase32 revoked were restored. Calling
+    // delete_my_account with the publishable key is safe by construction: it
+    // is revoked from anon, and its first statement raises when auth.uid() is
+    // null, which it always is for this key.
+    //
+    // profiles.deleted_at is asserted NOT readable rather than readable. That
+    // is the honest direction for this harness — it is a privacy assertion
+    // that can genuinely fail if a later migration grants the column, not an
+    // existence check dressed up as one.
+    // -----------------------------------------------------------------------
+    file: 'phase67_account_deletion.sql',
+    sentinel: ['rpc account_deletion_enabled()', () =>
+      checkRpc('account_deletion_enabled', {})],
+    checks: [
+      ['rpc account_deletion_blockers()', () =>
+        checkRpc('account_deletion_blockers', {})],
+      ['rpc delete_my_account()', () => checkRpc('delete_my_account', {})],
+      ['profiles.deleted_at not readable by anon', () =>
+        checkColumnRevoked('profiles', 'deleted_at')],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
