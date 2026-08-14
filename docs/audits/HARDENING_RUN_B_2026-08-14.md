@@ -489,4 +489,161 @@ it.
 
 ## 11. POST-ARM RESULTS
 
-To be completed in B8.
+Arming was guard-first, settings-second. The `git mv` promoted the new guard
+over the registered path while the matcher was still `Bash|PowerShell`, so the
+guard was live but blind to file tools; that window is what allowed the
+file-tool write to `.claude/settings.json`. The moment the new settings parsed,
+`Edit(/.claude/**)` and the widened matcher took effect and no further
+file-tool write to `.claude/` can succeed.
+
+### Scope diff, verbatim
+
+```
+$ git diff df93584226b007250b99c353977e06a5edb8b162..HEAD --name-only
+.claude/hooks/guard.ps1
+.claude/settings.json
+.gitignore
+HANDOFF.md
+docs/audits/HARDENING_RUN_B_2026-08-14.md
+tests/safety.test.mjs
+```
+
+Exactly the six permitted paths and nothing else. `.claude/hooks/guard.v2.ps1`
+does NOT appear, which is correct: it existed only transiently between commits
+2 and 4, and the B7b `git mv` renamed it onto the registered path. Working
+tree clean at the end of the run.
+
+### Post-arm canary totals
+
+The suite re-ran against the ARMED guard, resolved dynamically at
+`.claude/hooks/guard.ps1` because `guard.v2.ps1` no longer exists. The phase
+signal flipped to ARMED, so the two assertions the gate skipped at B4 now ran.
+
+| Checkpoint | Phase | Tests | Pass | Fail | Skipped |
+| --- | --- | --- | --- | --- | --- |
+| B4, `npm run verify` | PRE-ARM | 519 | 517 | 0 | 2 |
+| B7e, `npm run verify` | ARMED | 519 | **519** | **0** | **0** |
+
+Both previously-gated assertions passed: "the deny matrix is armed" and "the
+PreToolUse matcher covers the file tools". Canary counts were identical in
+both directions at both checkpoints -- 79 must-block, 25 must-allow, 5
+live-guard -- and the live-guard block passed against the ARMED guard exactly
+as it had against the old one, re-proving that this run's own staging and
+commit commands remain possible under the layer it installed.
+
+`tests/governance.test.mjs` was also run explicitly by name: 8 tests, 8 pass,
+0 fail.
+
+### settings.json validation
+
+Read back and parsed after the write, per B7d:
+
+```
+PARSE: OK
+deny entries:            99
+matcher value:           Bash|PowerShell|Edit|Write|NotebookEdit
+matcher exact:           True
+SessionStart present:    True
+enabledPlugins:          expo@claude-plugins-official
+PreToolUse hook command: powershell.exe
+PreToolUse hook args:    -NoProfile -ExecutionPolicy Bypass -File ${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.ps1
+rules w/ prod ref:       2
+Read denies:             3
+claude-tree denies:      1
+unconsulted path rules:  0
+duplicate deny entries:  0
+```
+
+The hook registrations kept their proven shape -- `powershell.exe` plus an
+args array plus `${CLAUDE_PROJECT_DIR}` -- and SessionStart was left alone.
+`Read` is deliberately excluded from the matcher: it is the highest-frequency
+tool and a PowerShell spawn per call would tax every run, so the three `Read`
+deny rules cover it instead.
+
+### Live evidence that the guard is registered and firing
+
+Two of this run's own validation commands were blocked by the newly armed
+guard, which is stronger evidence of live registration than any unit test:
+
+| Command | Reason code | Verdict |
+| --- | --- | --- |
+| A PowerShell check that quoted the production ref while listing required deny rules | `BLOCK GUARD-PRODREF production-supabase-ref` | Correct. Rule 1 is a substring match on full command text; the command was at fault |
+| The retry, which still quoted `Read(./.env.*)` as a literal rule name | `BLOCK GUARD-SECRET credential-bearing-file` | Correct. That token's basename matches the `.env.<anything>` pattern, and GUARD-SECRET is pure text matching by design |
+
+Neither was a guard defect and neither was a MUST-ALLOW canary, so under the
+self-repair rule the commands were rewritten and the guard was left untouched.
+The check was restructured to test the same properties structurally, and the
+suite proves the ref and secret rules from `fs` without putting either string
+on a command line. This is also a live demonstration that a hook firing on the
+PowerShell matcher blocks before the command runs.
+
+Note that this only proves registration for the `Bash|PowerShell` half of the
+matcher, which was already registered before this run. The Edit/Write/
+NotebookEdit half remains unproven until a fresh session; see section 10 and
+the manual canary below.
+
+### Manual canary for a fresh session
+
+Only a fresh session can prove the hook is registered and loaded, and only
+step 3 can prove the widened matcher. Run these in a new session in this
+repository.
+
+1. Confirm hooks load at all. The session should open with the SessionStart
+   line:
+
+   ```
+   [repo-state] branch=mainexpo HEAD=<short> tree=clean
+   ```
+
+   No line means hooks are not loading and nothing below is meaningful.
+
+2. Ask for a blocked command:
+
+   ```
+   git push
+   ```
+
+   Expected: blocked before it runs, `BLOCK GUARD-GIT
+   forbidden-git-subcommand` on stderr.
+
+3. Ask for a blocked FILE-TOOL call. **This is the step no unit test can
+   substitute for**, because spawning the guard directly proves nothing about
+   the matcher:
+
+   ```
+   Write the text "x" to .claude/scratch.txt
+   ```
+
+   Expected: blocked, `BLOCK GUARD-PATH-CLAUDEDIR claude-config-tree`, with
+   `Edit(/.claude/**)` in `permissions.deny` as the second layer behind it. If
+   this write SUCCEEDS, the matcher is not covering file tools and the layer
+   is only doing what the old one did.
+
+4. Confirm an allowed command still runs:
+
+   ```
+   git status
+   ```
+
+   Expected: proceeds normally.
+
+5. Version check is now an operator pre-flight step, run outside an agent
+   session, because `claude --version` is denied to agent runs:
+
+   ```
+   claude --version
+   ```
+
+### Commits
+
+| # | Hash | Subject |
+| --- | --- | --- |
+| 1 | `94a9362` | chore(git): version shared Claude config, ignore local state |
+| 2 | `96f2c95` | feat(safety): fail-closed guard with canary coverage |
+| 3 | `eb7497f` | docs: record Run B pre-arm audit |
+| 4 | `a5932b7` | feat(safety): arm fail-closed guard and deny matrix |
+| 5 | this commit | docs: finalize Run B audit with post-arm evidence |
+
+Commits 4 and 5 carry no `Co-Authored-By` trailer. GUARD-NESTED-CLAUDE matches
+`claude` as a whole token anywhere in a command, including inside a `-m`
+argument, so the standard trailer is blocked post-arming. See section 8.
