@@ -4,9 +4,11 @@ Rewritten in full at the end of every run. Never appended.
 Paste this file at the start of a planning session.
 
 **Branch:** `mainexpo` — single-branch rule, all work lands here
-**HEAD:** `1ba21e0` (stamped from `git rev-parse` after the final commit — the
-previous stamp was stale by three commits; do not hand-edit this line)
-**Remote:** `origin/mainexpo` at `64055e2` — **3 commits ahead, not pushed**
+**HEAD:** last **code** commit `1ba21e0`, with this run's docs/state commits on
+top. `git rev-parse HEAD` is authoritative — this line deliberately does not
+try to name the branch tip, because a commit cannot contain its own SHA and a
+hand-typed tip is exactly how the previous stamp went three commits stale.
+**Remote:** `origin/mainexpo` at `64055e2` — **ahead, not pushed**
 **Tree:** clean
 
 ## Last landed

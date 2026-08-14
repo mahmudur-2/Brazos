@@ -5,7 +5,8 @@ below. Everything from the 2026-08-09 header onward is unchanged.
 ## 2026-08-14 · Account deletion (phase67) — App Store Guideline 5.1.1(v)
 
 Branch `mainexpo`, base `64055e2`, three commits: `8275e0c` (docs), `48e0b23`
-(migration), `1ba21e0` (client). HEAD `1ba21e0`, tree clean, **not pushed**.
+(migration), `1ba21e0` (client), plus the docs/state commits recording the run.
+Tree clean, **not pushed**. `git rev-parse HEAD` is authoritative for the tip.
 
 **Next exact task: apply `supabase/phase67_account_deletion.sql` in the
 Supabase SQL Editor against STAGING `zzkumxcjtbqoselzptig`, then run
