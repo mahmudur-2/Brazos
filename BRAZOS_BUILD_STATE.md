@@ -2549,3 +2549,96 @@ the release pipeline remain owner-led.
 **Gate unchanged since the run:** tsc exit 0 · lint exit 0 · 308 tests,
 307 pass, 1 fail (the documented frozen-web PWA mismatch) · verify-schema
 green including phase59.
+
+---
+
+## Session 2026-08-13 — one person, one conversation
+
+**Base:** `abfced9` on `mainexpo`, clean. Two commits, in order:
+`2ce3aca` *feat(inbox): one row per person*, then *feat(chat): merged
+conversation timeline and send routing* (this one).
+
+**Progress.** The inbox showed one row per JOB THREAD and papered over the
+duplicates with an "N conversations together" subtitle. It now shows one row
+per PERSON, and the chat screen renders every thread with that person as one
+chronological timeline with a divider wherever the job context changes. A pair
+have exactly one conversation; jobs are context inside it.
+
+This is a **presentation-layer collapse only**. No message data moved, no row
+was reparented, `messages.job_id` / `direct_thread_id` semantics are unchanged,
+and phase66's RLS lock, the offer events and the chat-media storage paths all
+still key on `job_id`. **No migration was written and no SQL was executed** —
+every input the collapse needs was already reachable client-side.
+
+**Decisions made.**
+
+- **The resolver contract** (owner-signed-off, recorded verbatim in
+  `lib/conversationResolver.ts` and in FINDINGS.md): among the pair's
+  `assigned`/`in_progress` jobs, greatest `conversations.last_message_at` wins;
+  a job with no messages at all beats a job still being chatted in only if it
+  is the more recently CREATED of the two (otherwise the first message about
+  new work routes into the old job); ties break on ascending job id; no active
+  job means the pair thread. Rule 2's comparison is `created_at` against
+  `created_at` — that is what makes a brand-new silent job beat an old job
+  whose last message is newer than the new job's creation.
+- **`conversations.last_message_at` is THE canonical activity timestamp.**
+  `jobs` has no `updated_at` column in any migration and none was invented.
+- **One resolver, read by everything downstream** — send routing, the inbox
+  subtitle, the header subtitle, attachment availability and the quick
+  replies. `messaging_unlocked()` is asked about the resolved target and
+  nowhere else; unknown stays locked.
+- **`counterpartyId` is the canonical route identity; the two legacy shapes
+  stay valid forever.** `ChatTargetParams` carries `ChatTarget` through
+  unchanged, so no call site has to manufacture a counterparty id. A supplied
+  `jobId` is kept ONLY as the initial scroll target.
+- **Attachments follow the resolved target, not the route** — chat media is
+  stored under `{jobId}/{userId}/…`, so the pair thread still has none. Pair-
+  thread attachment storage was explicitly NOT added.
+- **Hire Again now follows the relationship, not the route.** It used to also
+  require a route `jobId`; with the inbox opening chats by counterparty that
+  gate would have hidden the CTA on exactly the completed-job conversations it
+  exists for. `tests/customerCore.test.mjs:152` updated to match, and it now
+  also pins where the offer is posted (`threadJobId: activeJob?.id`).
+- **Reactions stay scoped to one job thread** — `message_reactions` is keyed by
+  job, so the merged view loads reactions for the thread being added to now.
+  See known issues.
+
+**Migrations verified:** none written and none touched. `.env` was checked to
+resolve to STAGING `zzkumxcjtbqoselzptig` (not production
+`avkighsiufeefyycbebf`) before anything ran, and `.env` itself was not
+modified. `node scripts/verify-schema.mjs` then ran **green, exit 0** — all
+required objects through phase66 exist. Nothing new needed verifying; this is
+the unchanged-schema baseline.
+
+**Known issues opened by this change.**
+
+1. **Reactions on other threads do not render.** `useReactions(jobId)` loads one
+   job's reactions; in a merged conversation that is the resolved job (or the
+   route job). Messages from the pair thread or from a finished job render
+   without their reaction chips and cannot be reacted to. Decorative only, no
+   data loss — every reaction row is intact. Fixing it means either N
+   subscriptions or a by-message-ids read, both of which are wider than this
+   change.
+2. **Realtime is one channel per thread.** `messages` has no filter expressing
+   "either of these two columns", so a conversation with N threads opens N
+   channels. The merged store is keyed by thread and never assigned wholesale,
+   which is what makes that safe — see the 16511c9 note in
+   `hooks/useConversationChat.ts`.
+3. **`hooks/useChat.ts` is now unreferenced.** Left in place deliberately: it
+   is a locked-manifest file and deleting it is a modification, not a cleanup.
+   Its replacement is `hooks/useConversationChat.ts`.
+4. **Not device-verified.** Every claim here is from tsc, the source-level
+   guard suite and the executed resolver tests. The merged timeline, the
+   dividers and the initial-scroll jump have not been seen on a device.
+
+**Gate:** tsc exit 0 · lint exit 0 · **382 tests, 381 pass, 1 fail** — the
+documented frozen-web PWA `config.js` version mismatch, unchanged. Baseline
+before this session was 361/360/1, so all 21 new tests pass and nothing
+regressed.
+
+**Next exact task.** Run the merged conversation on a device for a pair with
+two active jobs and a pair thread: confirm the inbox shows one row, the
+subtitle names the resolver's job, the timeline interleaves with dividers in
+the right places, a "Message client" tap from an active job lands scrolled to
+that job's first message, and the composer's attachment controls disappear on
+a pair-thread conversation. Then decide known issue 1 (reactions).

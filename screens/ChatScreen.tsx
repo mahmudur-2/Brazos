@@ -30,7 +30,7 @@ import { QuickReplies } from '../components/QuickReplies';
 import { ReactionPicker } from '../components/ReactionPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
-import { useChat } from '../hooks/useChat';
+import { useConversationChat } from '../hooks/useConversationChat';
 import { useJob } from '../hooks/useJob';
 import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
@@ -42,13 +42,24 @@ import {
 import { offerJobTarget } from '../lib/offerNavigation';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { markConversationRead, resolveOtherId } from '../lib/conversations';
+import {
+  ACTIVE_JOB_STATUSES,
+  fetchDirectThreadWith,
+  fetchSharedJobs,
+  markConversationRead,
+  resolveOtherId,
+  type SharedJob,
+} from '../lib/conversations';
+import {
+  resolveConversation,
+  type ActiveJobCandidate,
+} from '../lib/conversationResolver';
 import {
   fetchDirectThread,
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
-import type { ChatTarget } from '../lib/messages';
+import { chatTargetKey, type ChatTarget } from '../lib/messages';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
 import {
   canUnsend,
@@ -78,42 +89,30 @@ import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { colors, radius, spacing } from '../lib/theme';
 
+/** One entry in the merged timeline: a message, or the job it belongs to. */
+type TimelineItem =
+  | { kind: 'divider'; key: string; title: string }
+  | { kind: 'message'; key: string; message: Message };
+
 export function ChatScreen() {
   // Chat is nested in more than one tab's stack, so its nav/route types are
   // declared standalone (ChatRouteParamList) rather than tied to one parent
-  // stack — it only needs goBack() and its own `jobId` param.
+  // stack — it only needs goBack() and its own params.
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<ChatRouteParamList, 'Chat'>>();
   const { user } = useAuth();
-  // A thread is either a job's conversation or a direct thread between two
-  // people with no job (phase36) — exactly one of these is ever set.
-  const jobId = params.jobId ?? null;
-  const directThreadId = params.directThreadId ?? null;
-  // The route param IS the discriminated ChatTarget already — no rebuild, no
-  // cast (hardening A8).
-  const target: ChatTarget = params;
+  // A pair have exactly ONE conversation, and `counterpartyId` names it. The
+  // two older shapes name one THREAD inside it and stay valid forever — every
+  // job screen and every push payload arrives with one of them, and none of
+  // them should have to manufacture a counterparty id. The person is derived
+  // from whichever was supplied; a supplied jobId is then kept ONLY as the
+  // initial scroll target (see scrollTargetIndex).
+  const routeJobId = params.jobId ?? null;
+  const routeDirectThreadId = params.directThreadId ?? null;
+  const routeCounterpartyId = params.counterpartyId ?? null;
 
-  const { job } = useJob(jobId);
-  const { messages, loading, error, addLocal } = useChat(jobId, directThreadId);
-  const { byMessage: reactionsByMessage, refresh: refreshReactions } =
-    useReactions(jobId);
-
-  // Mark this conversation read on entering and again on leaving, so a
-  // message that arrives while the chat is open doesn't show as unread later.
-  useFocusEffect(
-    useCallback(() => {
-      // Fire-and-forget by design (the unread dot self-heals on the next
-      // focus); the log keeps a failed mark-read observable (hardening A8).
-      const uid = user?.id;
-      if (!uid) return;
-      const mark = () =>
-        void markConversationRead(target, uid).then(({ error: markError }) => {
-          if (markError) console.warn('[Chat] mark-read failed', markError.message);
-        });
-      mark();
-      return mark;
-    }, [user, target])
-  );
+  // Loaded to put a name to a legacy jobId entry, and to title its divider.
+  const { job } = useJob(routeJobId);
 
   const [counterparty, setCounterparty] = useState<Profile | null>(null);
   const [relation, setRelation] = useState<RelationState>(EMPTY_RELATION);
@@ -135,6 +134,163 @@ export function ChatScreen() {
   const [respondingId, setRespondingId] = useState<string | null>(null);
   const [openingJobId, setOpeningJobId] = useState<string | null>(null);
 
+  // The direct thread's own row, for working out who the other person is when
+  // there is no job to read it from.
+  const [thread, setThread] = useState<DirectThread | null>(null);
+  useEffect(() => {
+    if (!routeDirectThreadId) return;
+    let active = true;
+    fetchDirectThread(routeDirectThreadId).then(({ data }) => {
+      if (active) setThread(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [routeDirectThreadId]);
+
+  /** Who this conversation is with — the one thing that identifies it. */
+  const counterpartyId = useMemo(() => {
+    if (!user) return null;
+    if (routeCounterpartyId) return routeCounterpartyId;
+    if (thread) return otherParticipant(thread, user.id);
+    if (!job) return null;
+    return resolveOtherId(job, user.id);
+  }, [job, routeCounterpartyId, thread, user]);
+
+  // Every thread this one conversation is made of: their job threads — any
+  // stage, because a conversation does not end when a job does — and their
+  // pair thread. Nothing is migrated or reparented to build this; the rows
+  // stay exactly where they have always been.
+  const [sharedJobs, setSharedJobs] = useState<SharedJob[]>([]);
+  const [pairThreadId, setPairThreadId] = useState<string | null>(null);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  useEffect(() => {
+    if (!user || !counterpartyId) return;
+    let active = true;
+    setThreadsLoading(true);
+    Promise.all([
+      fetchSharedJobs(user.id, counterpartyId),
+      fetchDirectThreadWith(user.id, counterpartyId),
+    ]).then(([jobs, pair]) => {
+      if (!active) return;
+      setSharedJobs(jobs.data);
+      setPairThreadId(pair.data);
+      setThreadsLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user, counterpartyId]);
+
+  const targets = useMemo<ChatTarget[]>(() => {
+    const list: ChatTarget[] = [];
+    const seen = new Set<string>();
+    const add = (target: ChatTarget) => {
+      const key = chatTargetKey(target);
+      if (seen.has(key)) return;
+      seen.add(key);
+      list.push(target);
+    };
+    // The thread the caller named goes in first and unconditionally, so an
+    // older entry point can never open a conversation missing its own thread —
+    // not even when the shared-job read is still in flight or comes back
+    // short.
+    if (routeJobId) add({ jobId: routeJobId });
+    if (routeDirectThreadId) add({ directThreadId: routeDirectThreadId });
+    if (pairThreadId) add({ directThreadId: pairThreadId });
+    for (const shared of sharedJobs) add({ jobId: shared.id });
+    return list;
+  }, [routeJobId, routeDirectThreadId, pairThreadId, sharedJobs]);
+
+  const { messages, loading, error, addLocal } = useConversationChat(targets);
+
+  // conversations.last_message_at IS the newest message in a job's thread, so
+  // the canonical activity timestamp is read straight off the timeline that is
+  // already loaded rather than fetched a second time.
+  const activityByJob = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const message of messages) {
+      if (message.job_id) map[message.job_id] = message.created_at;
+    }
+    return map;
+  }, [messages]);
+
+  const activeJobs = useMemo<ActiveJobCandidate[]>(
+    () =>
+      sharedJobs
+        .filter((shared) => ACTIVE_JOB_STATUSES.includes(shared.status))
+        .map((shared) => ({
+          id: shared.id,
+          title: shared.title,
+          createdAt: shared.created_at,
+          lastMessageAt: activityByJob[shared.id] ?? null,
+        })),
+    [sharedJobs, activityByJob]
+  );
+
+  /**
+   * THE send target — the one answer everything free-form reads: the composer,
+   * the messaging lock, attachments and the quick replies. Resolved in one
+   * place (lib/conversationResolver.ts) so the conversation can never show one
+   * job while a message sent from it lands in another.
+   */
+  const resolved = useMemo(
+    () => resolveConversation(activeJobs, pairThreadId),
+    [activeJobs, pairThreadId]
+  );
+  const activeJob = resolved.activeJob;
+  // A pair with no active job AND no pair thread is not a conversation the
+  // resolver can name — every thread of theirs is a finished job. Fall back to
+  // the thread the caller came from, so an older entry still sends exactly
+  // where it always did.
+  const fallbackTarget: ChatTarget | null = routeJobId
+    ? { jobId: routeJobId }
+    : routeDirectThreadId
+      ? { directThreadId: routeDirectThreadId }
+      : null;
+  const sendTargetSource = resolved.target ?? fallbackTarget;
+  const sendJobId = sendTargetSource?.jobId ?? null;
+  const sendDirectThreadId = sendTargetSource?.directThreadId ?? null;
+  const sendTarget = useMemo<ChatTarget | null>(
+    () =>
+      sendJobId
+        ? { jobId: sendJobId }
+        : sendDirectThreadId
+          ? { directThreadId: sendDirectThreadId }
+          : null,
+    [sendJobId, sendDirectThreadId]
+  );
+
+  // Reactions are stored per job (message_reactions.job_id), so inside a merged
+  // conversation they stay scoped to one job thread: the one messages are being
+  // added to now. Messages from the pair thread or from a finished job render
+  // without reaction chips, and the React action is hidden on them.
+  const reactionsJobId = sendJobId ?? routeJobId;
+  const { byMessage: reactionsByMessage, refresh: refreshReactions } =
+    useReactions(reactionsJobId);
+
+  // Mark the conversation read on entering and again on leaving, so a message
+  // that arrives while the chat is open doesn't show as unread later. Every
+  // thread of it, because the inbox folds their unread state into one row —
+  // leaving one unmarked keeps that row lit with nothing to open.
+  useFocusEffect(
+    useCallback(() => {
+      // Fire-and-forget by design (the unread dot self-heals on the next
+      // focus); the log keeps a failed mark-read observable (hardening A8).
+      const uid = user?.id;
+      if (!uid) return;
+      const mark = () => {
+        for (const target of targets) {
+          void markConversationRead(target, uid).then(({ error: markError }) => {
+            if (markError) console.warn('[Chat] mark-read failed', markError.message);
+          });
+        }
+      };
+      mark();
+      return mark;
+    }, [user, targets])
+  );
+
   /**
    * Whether free-form messaging is open here yet. `null` = not yet known.
    *
@@ -147,8 +303,11 @@ export function ChatScreen() {
    */
   const [messagingUnlocked, setMessagingUnlocked] = useState<boolean | null>(null);
   const refreshMessagingLock = useCallback(async () => {
+    // Asked about the RESOLVED target and nowhere else. No target yet means no
+    // answer yet, which stays locked — the rule is never re-derived here.
+    if (!sendJobId && !sendDirectThreadId) return;
     const { data, error } = await fetchMessagingUnlocked(
-      jobId ? { jobId } : { directThreadId: directThreadId as string }
+      sendJobId ? { jobId: sendJobId } : { directThreadId: sendDirectThreadId as string }
     );
     // A failed read keeps the conversation closed: the policy is the authority
     // either way, so guessing "open" would only produce a refused send.
@@ -157,7 +316,7 @@ export function ChatScreen() {
       return;
     }
     setMessagingUnlocked(data);
-  }, [jobId, directThreadId]);
+  }, [sendJobId, sendDirectThreadId]);
 
   // Re-read on every focus, so accepting an offer on another screen (or the
   // other device) opens this thread without a restart.
@@ -172,20 +331,6 @@ export function ChatScreen() {
     offers: threadOffers,
     refresh: refreshRequests,
   } = useThreadOffers(messages);
-
-  // The direct thread's own row, for working out who the other person is when
-  // there is no job to read it from.
-  const [thread, setThread] = useState<DirectThread | null>(null);
-  useEffect(() => {
-    if (!directThreadId) return;
-    let active = true;
-    fetchDirectThread(directThreadId).then(({ data }) => {
-      if (active) setThread(data);
-    });
-    return () => {
-      active = false;
-    };
-  }, [directThreadId]);
 
   const recorder = useVoiceRecorder();
 
@@ -205,13 +350,15 @@ export function ChatScreen() {
   async function handleSendVoice() {
     const clip = recorder.previewClip;
     // Chat media is stored under `{jobId}/{userId}/…` and its storage policies
-    // authorise on that job — a direct thread has no job id to key a path on,
-    // so attachments stay job conversations only. The composer hides both
-    // controls there; this is the guard behind them.
-    if (!user || !clip || !jobId) return;
+    // authorise on that job — the pair thread has no job id to key a path on,
+    // so attachments follow the RESOLVED send target rather than the route: if
+    // this message would land in the pair thread, there is nowhere to put a
+    // file. The composer hides both controls there; this is the guard behind
+    // them.
+    if (!user || !clip || !sendTarget || !sendJobId) return;
     setSending(true);
     const { url, error: uploadError } = await uploadChatAudio(
-      jobId,
+      sendJobId,
       user.id,
       clip.uri
     );
@@ -225,7 +372,7 @@ export function ChatScreen() {
     }
 
     const { data, error } = await sendMessage({
-      target,
+      target: sendTarget,
       senderId: user.id,
       content: '',
       audioUrl: url,
@@ -241,14 +388,7 @@ export function ChatScreen() {
     if (data) addLocal(data);
   }
 
-  const listRef = useRef<FlatList>(null);
-
-  const counterpartyId = useMemo(() => {
-    if (!user) return null;
-    if (thread) return otherParticipant(thread, user.id);
-    if (!job) return null;
-    return resolveOtherId(job, user.id);
-  }, [job, thread, user]);
+  const listRef = useRef<FlatList<TimelineItem>>(null);
 
   // A job where the client is also the assigned worker (e.g. bid on your own
   // job), or a job with no resolvable second party at all (no one assigned) —
@@ -256,12 +396,58 @@ export function ChatScreen() {
   const isSelfConversation = !!user && counterpartyId === user.id;
 
   // Messages by id, for resolving a reply's quoted original without a join —
-  // the quoted message is always in this same thread.
+  // the quoted message is always somewhere in this conversation.
   const messagesById = useMemo(() => {
     const map: Record<string, Message> = {};
     for (const m of messages) map[m.id] = m;
     return map;
   }, [messages]);
+
+  const jobTitles = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const shared of sharedJobs) map[shared.id] = shared.title;
+    if (job) map[job.id] = job.title;
+    return map;
+  }, [sharedJobs, job]);
+
+  /**
+   * The one timeline: every message from every thread with this person, in
+   * strict chronological order. Chronology always wins — nothing is regrouped
+   * or reordered by job.
+   *
+   * A divider goes in wherever the job context CHANGES from the message before
+   * it, so the same job can head more than one divider when two conversations
+   * interleave. That is the honest reading of what happened, not a bug. Pair-
+   * thread messages carry no job and get no divider.
+   */
+  const items = useMemo<TimelineItem[]>(() => {
+    const list: TimelineItem[] = [];
+    let context: string | null = null;
+    for (const message of messages) {
+      const messageJobId = message.job_id ?? null;
+      if (messageJobId !== context) {
+        context = messageJobId;
+        if (messageJobId) {
+          list.push({
+            kind: 'divider',
+            key: `divider:${message.id}`,
+            title: jobTitles[messageJobId] ?? 'Job',
+          });
+        }
+      }
+      list.push({ kind: 'message', key: message.id, message });
+    }
+    return list;
+  }, [messages, jobTitles]);
+
+  // A supplied jobId is ONLY an initial scroll target: the conversation opens
+  // at that job's first chronological message rather than at the bottom.
+  const scrollTargetIndex = useMemo(() => {
+    if (!routeJobId) return -1;
+    return items.findIndex(
+      (item) => item.kind === 'message' && item.message.job_id === routeJobId
+    );
+  }, [items, routeJobId]);
 
   // Only the newest event message for each request stays interactive; earlier
   // ones render as history. Messages arrive oldest-first, so the last one wins.
@@ -306,13 +492,18 @@ export function ChatScreen() {
   const isBlocked = relation.blocking || relation.blockedBy;
 
   // "Hire Again" only ever shows to the client side of a past completed job —
-  // a worker never sees it for their client. It also requires a job-backed
-  // chat: create_job_request can target that job thread, but has no parameter
-  // for a direct-thread id and would otherwise place the offer in an older job.
+  // a worker never sees it for their client. It used to also require a
+  // job-backed chat, because an offer with no thread named would "otherwise
+  // place the offer in an older job". With one conversation per pair that
+  // older job's thread IS this conversation, so the requirement is gone: the
+  // CTA follows the RELATIONSHIP (canRehireWorker) rather than which route
+  // opened the screen, and the offer is posted into the resolved job when
+  // there is one (create_direct_offer falls back to their most recent shared
+  // completed job, then their pair thread, when there is not).
   const [canRehire, setCanRehire] = useState(false);
   useEffect(() => {
     setCanRehire(false);
-    if (!jobId || !user || !counterpartyId || counterpartyId === user.id) return;
+    if (!user || !counterpartyId || counterpartyId === user.id) return;
     let active = true;
     canRehireWorker(user.id, counterpartyId).then(({ data }) => {
       if (active) setCanRehire(data);
@@ -320,13 +511,28 @@ export function ChatScreen() {
     return () => {
       active = false;
     };
-  }, [jobId, user, counterpartyId]);
+  }, [user, counterpartyId]);
 
+  // Once the jump has happened, only genuinely NEW messages pull the view back
+  // down — otherwise the conversation would snap to the bottom the moment a
+  // photo finished measuring and the jump would be pointless.
+  const settledCount = useRef<number | null>(null);
   useEffect(() => {
-    if (messages.length > 0) {
-      requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+    if (items.length === 0) return;
+    if (scrollTargetIndex >= 0 && settledCount.current === null) {
+      settledCount.current = items.length;
+      requestAnimationFrame(() =>
+        listRef.current?.scrollToIndex({
+          index: scrollTargetIndex,
+          animated: false,
+          viewPosition: 0,
+        })
+      );
+      return;
     }
-  }, [messages.length]);
+    if (scrollTargetIndex >= 0 && items.length <= (settledCount.current ?? 0)) return;
+    requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
+  }, [items.length, scrollTargetIndex]);
 
   /**
    * The one place a refused send is turned into words.
@@ -352,13 +558,13 @@ export function ChatScreen() {
 
   async function handleSendText() {
     const content = text.trim();
-    if (!content || !user || sending) return;
+    if (!content || !user || sending || !sendTarget) return;
     const quoted = replyTo;
     setText('');
     setReplyTo(null);
     setSending(true);
     const { data, error } = await sendMessage({
-      target,
+      target: sendTarget,
       senderId: user.id,
       content,
       replyToId: quoted?.id ?? null,
@@ -507,8 +713,10 @@ export function ChatScreen() {
   const messageMenuItems: ActionSheetItem[] = menuTarget
     ? [
         // Reactions are stored per job (message_reactions.job_id), so they are
-        // only offered in a job conversation.
-        ...(jobId
+        // only offered on messages belonging to the job whose reactions this
+        // conversation has loaded — never on a pair-thread message, which has
+        // no job to key one on.
+        ...(reactionsJobId && menuTarget.job_id === reactionsJobId
           ? [
               {
                 key: 'react',
@@ -581,10 +789,10 @@ export function ChatScreen() {
   }
 
   async function handleTemplate(template: string) {
-    if (!user || sending) return;
+    if (!user || sending || !sendTarget) return;
     setSending(true);
     const { data, error } = await sendMessage({
-      target,
+      target: sendTarget,
       senderId: user.id,
       content: template,
     });
@@ -597,14 +805,14 @@ export function ChatScreen() {
   }
 
   async function handleSelectReaction(emoji: string) {
-    // message_reactions is keyed by job, so reactions are a job-conversation
-    // feature; the React menu item is hidden in a direct thread.
-    if (!user || !reactionTarget || !jobId) return;
+    // message_reactions is keyed by job, so reactions are a job-thread
+    // feature; the React menu item is hidden everywhere else.
+    if (!user || !reactionTarget || !reactionsJobId) return;
     const messageId = reactionTarget;
     setReactionTarget(null);
     const { error } = await setReaction({
       messageId,
-      jobId,
+      jobId: reactionsJobId,
       userId: user.id,
       emoji,
     });
@@ -629,10 +837,10 @@ export function ChatScreen() {
   }
 
   async function sendPhoto(asset: ImagePicker.ImagePickerAsset) {
-    if (!user || !jobId) return; // See handleSendVoice for why.
+    if (!user || !sendTarget || !sendJobId) return; // See handleSendVoice for why.
     setSending(true);
     const { url, error: uploadError } = await uploadChatPhoto(
-      jobId,
+      sendJobId,
       user.id,
       asset
     );
@@ -645,7 +853,7 @@ export function ChatScreen() {
       return;
     }
     const { data, error } = await sendMessage({
-      target,
+      target: sendTarget,
       senderId: user.id,
       content: '',
       imageUrl: url,
@@ -690,7 +898,9 @@ export function ChatScreen() {
               : counterparty.full_name
             : 'Chat'
         }
-        subtitle={job?.title}
+        // The job this conversation is about right now — the same one the
+        // inbox row names and the same one a message sent now would go to.
+        subtitle={activeJob?.title}
         onBack={goBackOrHome}
         // Tapping the title opens the other party's profile — including their
         // Past Work gallery, which is the point of having one.
@@ -707,7 +917,7 @@ export function ChatScreen() {
             : undefined
         }
         right={
-          canRehire && counterparty && jobId ? (
+          canRehire && counterparty ? (
             <Pressable
               onPress={() =>
                 (navigation as unknown as {
@@ -715,9 +925,12 @@ export function ChatScreen() {
                 }).navigate('PostJob', {
                   hireWorkerId: counterparty.id,
                   hireWorkerName: counterparty.full_name ?? 'this worker',
-                  // Post the request into THIS conversation rather than
-                  // letting the server pick a thread for us.
-                  threadJobId: jobId,
+                  // Post the request into the same thread a message would go
+                  // to. With no active job there is nothing to name and the
+                  // server's own fallback — their most recent shared completed
+                  // job, then their pair thread — lands in this conversation
+                  // anyway, because every one of those threads IS it.
+                  threadJobId: activeJob?.id,
                 })
               }
               hitSlop={8}
@@ -735,9 +948,9 @@ export function ChatScreen() {
         }
       />
 
-      {/* useChat is a LOCKED hook and still stores the raw message; the wrap
-          happens here at the render seam instead (raw-error sweep, 2026-08-10
-          — see docs/LOCKED_FILE_PATCHES.md). */}
+      {/* useConversationChat keeps the failure itself rather than its text, so
+          the one mapper still runs here at the render seam (raw-error sweep,
+          2026-08-10 — see docs/LOCKED_FILE_PATCHES.md). */}
       {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {/* keyboardVerticalOffset is 0, not 90. With `behavior="padding"` RN
@@ -752,7 +965,7 @@ export function ChatScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >
-        {loading ? (
+        {loading || (threadsLoading && targets.length === 0) ? (
           <View style={styles.center}>
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
@@ -766,9 +979,25 @@ export function ChatScreen() {
             // contentContainerStyle's flexGrow only affects the inner content
             // view, so it does not bound the scroller itself.
             style={styles.list}
-            data={messages}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => {
+            data={items}
+            keyExtractor={(entry) => entry.key}
+            renderItem={({ item: entry }) => {
+              // The job context changed here. Not a section header — the same
+              // job can head several of these when two conversations
+              // interleave, which is what actually happened.
+              if (entry.kind === 'divider') {
+                return (
+                  <View style={styles.jobDivider}>
+                    <View style={styles.jobDividerRule} />
+                    <Text style={styles.jobDividerLabel} numberOfLines={1}>
+                      {entry.title}
+                    </Text>
+                    <View style={styles.jobDividerRule} />
+                  </View>
+                );
+              }
+
+              const item = entry.message;
               // A hire-request event renders as a negotiation card instead of
               // an ordinary bubble — same thread, no separate screen.
               const offerId = offerIdOf(item);
@@ -845,7 +1074,20 @@ export function ChatScreen() {
               );
             }}
             contentContainerStyle={styles.messages}
-            onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: false })}
+            // A legacy jobId entry owns the initial scroll (see
+            // scrollTargetIndex) — sticking to the bottom here would undo it
+            // the moment an image finished measuring.
+            onContentSizeChange={() => {
+              if (scrollTargetIndex >= 0) return;
+              listRef.current?.scrollToEnd({ animated: false });
+            }}
+            onScrollToIndexFailed={({ index, averageItemLength }) => {
+              // Variable-height rows: the target may not be measured yet.
+              listRef.current?.scrollToOffset({
+                offset: index * averageItemLength,
+                animated: false,
+              });
+            }}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.empty}>
@@ -890,7 +1132,12 @@ export function ChatScreen() {
           ) : null
         ) : (
           <>
-            {!isSelfConversation && !replyTo && (
+            {/* The templates are about work in progress — "On my way",
+                "Running late", "When can you start?". They are only true of a
+                job thread with a live job, so on the pair thread there are no
+                quick replies at all rather than a second set invented to fill
+                the row. */}
+            {!isSelfConversation && !replyTo && !!activeJob && (
               <QuickReplies onSelect={handleTemplate} disabled={sending} />
             )}
 
@@ -937,7 +1184,11 @@ export function ChatScreen() {
               onStopRecording={handleStopRecording}
               onSendVoice={handleSendVoice}
               onDiscardVoice={recorder.discard}
-              allowAttachments={!!jobId}
+              // Whether the RESOLVED send target is job-scoped, not which
+              // route opened the screen: chat media is stored under
+              // `{jobId}/{userId}/…` and the pair thread has no job id to key
+              // a path on.
+              allowAttachments={!!sendJobId}
             />
           </>
         )}
@@ -1078,6 +1329,25 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 280,
     lineHeight: 20,
+  },
+  // Where the conversation changes job. Quiet by design — it is a caption on
+  // the messages either side of it, not a section header.
+  jobDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginVertical: spacing.md,
+  },
+  jobDividerRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: colors.border,
+  },
+  jobDividerLabel: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.textMuted,
   },
   requestRow: {
     flexDirection: 'row',

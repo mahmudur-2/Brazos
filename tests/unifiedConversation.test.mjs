@@ -195,14 +195,14 @@ test('the inbox renders one row per person and never counts conversations', asyn
 test('the inbox subtitle is the resolver’s job, never a second opinion', async () => {
   const inbox = stripComments(await read('screens/MessagesInboxScreen.tsx'));
 
-  // ONE call, feeding both the subtitle and the row's destination — the inbox
-  // must never display one job while sends route to another.
+  // The subtitle is the SAME rule the chat screen sends by — one resolver,
+  // asked once, so the inbox can never name one job while sends go elsewhere.
   assert.equal(
-    (inbox.match(/resolveConversation\(/g) ?? []).length,
+    (inbox.match(/resolveActiveJob\(/g) ?? []).length,
     1,
-    'the inbox must resolve the conversation exactly once'
+    'the inbox must resolve the active job exactly once'
   );
-  assert.match(inbox, /const \{ target, activeJob \} = resolveConversation\(/);
+  assert.match(inbox, /const activeJob = resolveActiveJob\(candidates\)/);
   assert.match(inbox, /subtitle: isSelf \? null : activeJob\?\.title \?\? null/);
 
   // The candidate set is the active jobs shared with THAT person, and the
@@ -236,4 +236,183 @@ test('the resolver stays a pure module the tests can execute', async () => {
   // The signed-off contract is recorded where an editor will see it.
   assert.match(source, /THE AUTHORITATIVE RESOLVER CONTRACT/);
   assert.match(source, /Ties on the deciding value break by ascending job id/);
+});
+
+// ---------------------------------------------------------------------------
+// B — one merged timeline, chronological, with job dividers
+// ---------------------------------------------------------------------------
+
+test('the chat screen renders one merged timeline, never one thread', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // Every thread with this person is loaded together: their job threads, any
+  // stage, plus their pair thread.
+  assert.match(chat, /fetchSharedJobs\(user\.id, counterpartyId\)/);
+  assert.match(chat, /fetchDirectThreadWith\(user\.id, counterpartyId\)/);
+  assert.match(chat, /useConversationChat\(targets\)/);
+  // The thread the caller named is always in the conversation, even if the
+  // shared-job read is slow or comes back short.
+  assert.match(chat, /if \(routeJobId\) add\(\{ jobId: routeJobId \}\)/);
+  assert.match(chat, /if \(routeDirectThreadId\) add\(\{ directThreadId: routeDirectThreadId \}\)/);
+
+  // Chronology wins: the merge sorts by created_at and nothing regroups by job.
+  const hook = stripComments(await read('hooks/useConversationChat.ts'));
+  assert.match(hook, /Date\.parse\(a\.created_at\) - Date\.parse\(b\.created_at\)/);
+  assert.doesNotMatch(hook, /job_id\s*===/);
+});
+
+test('a job divider marks a CHANGE of context, and never on the pair thread', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // The divider is emitted on a change from the preceding message, so the same
+  // job can head more than one when two conversations interleave.
+  assert.match(chat, /if \(messageJobId !== context\)/);
+  // A pair-thread message carries no job, so it produces no divider — the
+  // guard is on the job id being present, not on it being different.
+  assert.match(chat, /if \(messageJobId\) \{/);
+  assert.match(chat, /kind: 'divider'/);
+  assert.match(chat, /title: jobTitles\[messageJobId\] \?\? 'Job'/);
+});
+
+test('the merged store is keyed by thread and never assigned wholesale', async () => {
+  const hook = stripComments(await read('hooks/useConversationChat.ts'));
+
+  // THE 16511c9 failure mode, one subject over: N reads and N realtime
+  // channels writing one array, last answer winning outright. Every write
+  // lands in its own thread slice instead.
+  for (const write of [
+    /return \{ \.\.\.previous, \[key\]: \[\.\.\.existing, message\] \};/,
+    /\[key\]: existing\.map\(\(m\) => \(m\.id === message\.id \? message : m\)\)/,
+  ]) {
+    assert.match(hook, write);
+  }
+  // A failed read keeps what that thread already had rather than blanking it.
+  assert.match(hook, /next\[key\] = result\.error \? previous\[key\] \?\? \[\] : result\.data;/);
+  // And the only full-map write is the one load that owns every thread at
+  // once, guarded by a sequence counter.
+  assert.match(hook, /if \(load !== loadRef\.current\) return;/);
+});
+
+// ---------------------------------------------------------------------------
+// B2 — every existing route shape keeps working
+// ---------------------------------------------------------------------------
+
+test('counterpartyId is canonical and the legacy shapes stay valid', async () => {
+  const nav = await read('lib/navigation.ts');
+  assert.match(nav, /export type ChatTargetParams =/);
+  // The legacy union is carried through rather than replaced, so no call site
+  // has to manufacture a counterparty id.
+  assert.match(nav, /\(ChatTarget & \{ counterpartyId\?: undefined \}\)/);
+  assert.match(nav, /\{ counterpartyId: string; jobId\?: undefined; directThreadId\?: undefined \}/);
+  // Chat is still registered in all four stacks that mount it.
+  assert.equal((nav.match(/Chat: ChatTargetParams;/g) ?? []).length, 4);
+
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+  // The person is derived at the screen boundary from whichever id arrived.
+  assert.match(chat, /if \(routeCounterpartyId\) return routeCounterpartyId;/);
+  assert.match(chat, /if \(thread\) return otherParticipant\(thread, user\.id\);/);
+  assert.match(chat, /return resolveOtherId\(job, user\.id\);/);
+});
+
+test('every entry point from the audit still opens Chat with a shape Chat accepts', async () => {
+  // The regression surface, enumerated. Each navigates with a jobId, a
+  // directThreadId or a counterpartyId — the three shapes ChatTargetParams
+  // admits — and tsc proves the params typecheck against the route.
+  const expected = [
+    ['screens/MessagesInboxScreen.tsx', /navigation\.navigate\('Chat', \{ counterpartyId: item\.otherId \}\)/],
+    ['screens/ClientJobDetailScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
+    ['screens/JobConfirmedScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
+    ['screens/TrackWorkerScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
+    ['screens/WorkerJobScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
+    ['screens/NotificationsScreen.tsx', /navigateAcrossTabs\('Messages', 'Chat', \{ jobId \}\)/],
+    ['lib/notificationRoutes.ts', /navigateChecked\(tab, 'Chat', \{ directThreadId: data\.directThreadId \}\)/],
+    ['lib/notificationRoutes.ts', /navigateChecked\(tab, data\.screen, \{ jobId: data\.jobId \}\)/],
+  ];
+  for (const [file, pattern] of expected) {
+    assert.match(stripComments(await read(file)), pattern, `${file} must still open Chat`);
+  }
+});
+
+test('a legacy jobId entry opens the merged conversation scrolled to that job', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // The jobId is NOT a filter — it selects a scroll position in the merged
+  // list, at that job's FIRST chronological message.
+  assert.match(chat, /const scrollTargetIndex = useMemo\(\(\) => \{/);
+  assert.match(chat, /if \(!routeJobId\) return -1;/);
+  assert.match(
+    chat,
+    /items\.findIndex\(\s*\(item\) => item\.kind === 'message' && item\.message\.job_id === routeJobId\s*\)/
+  );
+  assert.match(chat, /scrollToIndex\(\{\s*index: scrollTargetIndex,/);
+  // findIndex returns -1 when that job has nothing in it yet; the screen must
+  // fall back to the bottom rather than scrolling to index -1.
+  assert.match(chat, /if \(scrollTargetIndex >= 0 && settledCount\.current === null\)/);
+  assert.match(chat, /onScrollToIndexFailed/);
+  // And the stick-to-bottom behaviour must not immediately undo the jump.
+  assert.match(chat, /if \(scrollTargetIndex >= 0\) return;\s*listRef\.current\?\.scrollToEnd/);
+});
+
+// ---------------------------------------------------------------------------
+// C/D/E — everything downstream reads the resolver, not the route
+// ---------------------------------------------------------------------------
+
+test('the messaging lock is asked about the resolved target and nowhere else', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  assert.equal(
+    (chat.match(/fetchMessagingUnlocked\(/g) ?? []).length,
+    1,
+    'there must be exactly one messaging-lock read'
+  );
+  assert.match(
+    chat,
+    /sendJobId \? \{ jobId: sendJobId \} : \{ directThreadId: sendDirectThreadId as string \}/
+  );
+  // Unknown stays locked: no target yet means no answer, and the state starts
+  // null with the composer hidden until it is true.
+  assert.match(chat, /if \(!sendJobId && !sendDirectThreadId\) return;/);
+  assert.match(chat, /useState<boolean \| null>\(null\)/);
+  // No second unlock concept anywhere on this surface.
+  assert.doesNotMatch(chat, /deriveJobLifecycle/);
+});
+
+test('attachments follow the resolved target, so the pair thread has none', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // Chat media is stored under {jobId}/{userId}/… — the pair thread has no job
+  // id to key a path on, so both controls go rather than fail on upload.
+  assert.match(chat, /allowAttachments=\{!!sendJobId\}/);
+  assert.doesNotMatch(chat, /allowAttachments=\{!!jobId\}/);
+  // And the guards behind them agree with the control, on the same value.
+  assert.match(chat, /if \(!user \|\| !clip \|\| !sendTarget \|\| !sendJobId\) return;/);
+  assert.match(chat, /if \(!user \|\| !sendTarget \|\| !sendJobId\) return;/);
+  assert.match(chat, /uploadChatAudio\(\s*sendJobId,/);
+  assert.match(chat, /uploadChatPhoto\(\s*sendJobId,/);
+});
+
+test('the en-route quick replies only appear on a live job', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+  // "On my way" / "Running late" are claims about work in progress. With no
+  // active job the row renders nothing rather than a second set invented for
+  // the pair thread.
+  assert.match(chat, /!isSelfConversation && !replyTo && !!activeJob && \(/);
+
+  // The sets themselves are unchanged and still mode-specific.
+  const messages = await read('lib/messages.ts');
+  assert.match(messages, /'On my way',\s*'Running late',\s*'Here, where do I go\?'/);
+});
+
+test('every send goes to the resolved target, and only there', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+  // Four send paths (text, quick reply, photo, voice), one target between them.
+  assert.equal(
+    (chat.match(/target: sendTarget,/g) ?? []).length,
+    4,
+    'all four send paths must use the resolved target'
+  );
+  // Read state is cleared across the WHOLE conversation, or the inbox row it
+  // folds into would stay lit with nothing left to open.
+  assert.match(chat, /for \(const target of targets\) \{/);
+  assert.match(chat, /markConversationRead\(target, uid\)/);
 });

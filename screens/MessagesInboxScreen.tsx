@@ -19,7 +19,6 @@ import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
 import {
   conversationKey,
-  conversationTarget,
   fetchActiveJobs,
   resolveOtherId,
   type ActiveJob,
@@ -27,7 +26,7 @@ import {
 } from '../lib/conversations';
 import {
   groupThreadsByPerson,
-  resolveConversation,
+  resolveActiveJob,
   type ActiveJobCandidate,
 } from '../lib/conversationResolver';
 import { fetchMyPendingOffers } from '../lib/offers';
@@ -208,16 +207,12 @@ export function MessagesInboxScreen() {
           createdAt: job.created_at,
           lastMessageAt: activityByJob[job.id] ?? null,
         }));
-      const { target, activeJob } = resolveConversation(candidates, person.directThreadId);
+      const activeJob = resolveActiveJob(candidates);
 
       const baseName = other?.full_name ?? 'Someone';
 
       return {
         key: `person:${otherId}`,
-        // Until the pair have an active job there may be no resolved target at
-        // all (every thread of theirs is a finished job): open the newest one
-        // rather than nothing.
-        target: target ?? conversationTarget(latest),
         jobId: activeJob?.id ?? latest.job_id,
         otherId,
         isSelf,
@@ -342,7 +337,9 @@ export function MessagesInboxScreen() {
               muted={item.muted}
               blocked={item.blocking}
               awaitingRequest={item.awaitingRequest}
-              onPress={() => navigation.navigate('Chat', item.target)}
+              // Keyed by the PERSON, not by one of their threads: the row is
+              // the whole conversation and Chat merges it either way.
+              onPress={() => navigation.navigate('Chat', { counterpartyId: item.otherId })}
               onLongPress={
                 item.isSelf
                   ? undefined

@@ -5,6 +5,21 @@ import type { ChatTarget } from './messages';
 import type { Offer } from './offers';
 import type { PhoneAuthIntent, PhoneProfileDraft } from './phoneAuth/types';
 
+/**
+ * Chat's route params.
+ *
+ * `counterpartyId` is the canonical conversation identity: a pair have exactly
+ * ONE conversation, and that is what names it. The two legacy shapes stay
+ * valid forever — every job screen, every push payload and every offer surface
+ * already navigates with a `jobId` or a `directThreadId`, and none of them
+ * should have to manufacture a counterparty id. Chat derives the person from
+ * whichever identifier it was handed and renders the same merged conversation
+ * either way; a supplied `jobId` is kept ONLY as the initial scroll target.
+ */
+export type ChatTargetParams =
+  | (ChatTarget & { counterpartyId?: undefined })
+  | { counterpartyId: string; jobId?: undefined; directThreadId?: undefined };
+
 // The signed-out flow. Not a tab: it replaces the whole tab bar until there is
 // a session, so it is its own stack rooted at Welcome. The branded launch
 // layer is not a route here — it renders above everything (see LaunchGate in
@@ -141,7 +156,7 @@ export type WorkerHomeStackParamList = {
   /** Phase 7 — pre-hire chat from the worker's own-bid card. Registered
    *  alongside JobDetail in every stack that mounts it (the SubmitBid rule):
    *  an offer links the pair, and the chat entry lives on the offer surface. */
-  Chat: ChatTarget;
+  Chat: ChatTargetParams;
   /** Screen 52 — the OfferComposer's marketplace-bid entry (Phase 5).
    *  Registered alongside JobDetail in every stack that mounts it. */
   SubmitBid: { job: OpenJob };
@@ -231,7 +246,7 @@ export type MyJobsStackParamList = {
   /** Screen 37 — review & tip, reachable only after release per the §9
    *  ordering (release first, then review). */
   ReviewAndTip: { job: Job };
-  Chat: ChatTarget;
+  Chat: ChatTargetParams;
   // Registered here too so "Hire Again" on a bid card can open it in place.
   PostJob:
     | {
@@ -256,7 +271,7 @@ export type MyJobsStackNavigation = NativeStackNavigationProp<MyJobsStackParamLi
 // Screens stacked inside the Messages (inbox) tab.
 export type MessagesStackParamList = {
   MessagesInbox: undefined;
-  Chat: ChatTarget;
+  Chat: ChatTargetParams;
   // "Hire Again" from a past conversation.
   PostJob:
     | {
@@ -289,7 +304,7 @@ export type MapStackParamList = {
   BidSent: { jobTitle: string; amountCents: number; offerId: string };
   /** Phase 7 — pre-hire chat from the worker's own-bid card (the JobDetail
    *  rule: registered wherever JobDetail is). */
-  Chat: ChatTarget;
+  Chat: ChatTargetParams;
   // Registered so "Edit job" works when a job's own poster reaches its
   // detail screen via a Map/zone drill-down, not just from My Jobs.
   PostJob:
@@ -396,7 +411,7 @@ export type LegalDocumentRouteParamList = {
 // detail screen or from the inbox). It only needs its own route param shape and
 // goBack(), so its route/nav types are declared standalone rather than tied to
 // either parent stack's full param list.
-export type ChatRouteParamList = { Chat: ChatTarget };
+export type ChatRouteParamList = { Chat: ChatTargetParams };
 
 // JobDetail (the worker bid screen) is registered in HomeStack, MyJobsStack,
 // and MapStack — reached from browsing, a hotspot drill-down, etc. Same

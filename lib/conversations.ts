@@ -125,6 +125,29 @@ export async function fetchActiveJobs(userId: string) {
   return { data: (data ?? []) as ActiveJob[], error };
 }
 
+/** A job two people share, whatever stage it has reached. */
+export type SharedJob = ActiveJob & { status: string };
+
+/**
+ * Every job the signed-in user and one other person share, any status.
+ *
+ * These are the job threads that make up their one conversation — finished
+ * work included, because a conversation does not end when a job does. RLS
+ * already limits `jobs` to rows the caller is a party to; the filter here is
+ * about the OTHER party.
+ */
+export async function fetchSharedJobs(userId: string, otherId: string) {
+  const { data, error } = await supabase
+    .from('jobs')
+    .select('id, title, created_at, status, client_id, assigned_worker_id')
+    .or(
+      `and(client_id.eq.${userId},assigned_worker_id.eq.${otherId}),` +
+        `and(client_id.eq.${otherId},assigned_worker_id.eq.${userId})`
+    );
+
+  return { data: (data ?? []) as SharedJob[], error };
+}
+
 export type ReadState = { job_id: string; last_read_at: string };
 
 /** When the user last opened each job's chat (drives the unread dot). */

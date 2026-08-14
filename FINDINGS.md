@@ -1435,3 +1435,180 @@ No regressions.
 5. **Row key is `person:<counterpartyId>`.** Making the person the list key is
    what makes "two rows for one person" inexpressible rather than merely
    avoided, and the test asserts the key shape as well as the behaviour.
+
+## COMMIT 2 — `feat(chat): merged conversation timeline and send routing`
+
+Files changed:
+
+- `hooks/useConversationChat.ts` **(new)** — loads every thread of one
+  conversation and hands back a single chronological timeline, live.
+- `screens/ChatScreen.tsx` — merged timeline with job dividers; counterparty
+  derived from whichever route id arrived; resolver-driven send routing,
+  messaging lock, attachments and quick replies; a supplied `jobId` demoted to
+  the initial scroll target.
+- `lib/navigation.ts` — `ChatTargetParams` adds the `counterpartyId` shape and
+  carries `ChatTarget` through unchanged. All four stack registrations updated.
+- `lib/conversations.ts` — `SharedJob` + `fetchSharedJobs(userId, otherId)`.
+- `screens/MessagesInboxScreen.tsx` — rows now open Chat by counterparty, so
+  the subtitle reads `resolveActiveJob()` directly.
+- `tests/unifiedConversation.test.mjs` — 10 further tests (21 total).
+- `tests/customerCore.test.mjs` — one assertion updated; see ATTESTATIONS.
+- `BRAZOS_BUILD_STATE.md` — §L.8 update.
+
+### B — the merged timeline
+
+`useConversationChat(targets)` fetches all threads together under one sequence
+counter and keeps a store **keyed by thread**. Every realtime write lands in
+its own slice (`{ ...previous, [key]: … }`); a thread whose read failed keeps
+what it already had rather than blanking. That is the 16511c9 discipline
+(0.4) applied to its second possible subject: N reads and N channels can never
+overwrite each other's messages, and the outcome does not depend on arrival
+order. Merging sorts on `created_at` with the message id breaking exact ties —
+chronology always wins, nothing is regrouped by job.
+
+A divider is emitted wherever `message.job_id` CHANGES from the preceding
+message, so the same job heads more than one divider when two conversations
+interleave. Pair-thread messages carry no job and get none. Offer cards keep
+rendering inline in chronological position; `OfferCard` and its data path
+(`useThreadOffers`) are untouched and now simply see the merged message list.
+
+### B2 — every entry point re-verified
+
+`ChatTargetParams = (ChatTarget & { counterpartyId?: undefined }) |
+{ counterpartyId: string; … }`. The legacy union is carried through rather than
+replaced, so no existing call site had to change, and tsc proves each one still
+typechecks against the route.
+
+| # | Entry point | Shape | Result |
+|---|---|---|---|
+| 1 | `screens/MessagesInboxScreen.tsx` | `{ counterpartyId }` (changed this commit) | **PASS** |
+| 2 | `screens/ClientJobDetailScreen.tsx:767` | `{ jobId }` | **PASS** — unchanged |
+| 3 | `screens/JobConfirmedScreen.tsx:138` | `{ jobId }` | **PASS** — unchanged |
+| 4 | `screens/TrackWorkerScreen.tsx:213` | `{ jobId }` | **PASS** — unchanged |
+| 5 | `screens/WorkerJobScreen.tsx:412` | `{ jobId }` | **PASS** — unchanged |
+| 6 | `screens/NotificationsScreen.tsx:78` | `{ jobId }` via `navigateAcrossTabs` | **PASS** — unchanged |
+| 7 | `lib/notificationRoutes.ts:94` | `{ directThreadId }` | **PASS** — unchanged |
+| 8 | `lib/notificationRoutes.ts:105` | `{ jobId }` | **PASS** — unchanged |
+
+Verified three ways: tsc exit 0 over the whole tree; a test that asserts each
+call site's literal shape is still present
+(`tests/unifiedConversation.test.mjs`, "every entry point from the audit still
+opens Chat"); and by reading the derivation at the screen boundary —
+`counterpartyId` from the route, else `otherParticipant(thread)`, else
+`resolveOtherId(job)`. Seven of the eight call sites were not edited at all.
+
+A supplied `jobId` selects a scroll position, never a filter: the conversation
+opens at that job's FIRST chronological message. When that job has nothing in
+it yet the index is −1 and the screen falls back to the bottom, and the
+stick-to-bottom handler stands down while a jump is pending so it cannot undo
+it. The route's own thread is also added to `targets` unconditionally, so an
+older entry point can never open a conversation missing the very thread it
+named — not even while the shared-job read is still in flight.
+
+### C/D/E — one resolver, read by everything
+
+`fetchMessagingUnlocked()` is called exactly once, on the resolved target;
+no target yet means no answer, and `messagingUnlocked` starts `null` with the
+whole free-form block hidden until it is `true`. Attachments key on
+`sendJobId` — the resolved target — not on the route param, and the guards
+behind the controls test the same value. Quick replies render only when the
+resolved target is a job thread with an active job; otherwise the row is
+absent rather than filled with an invented set. All four send paths pass
+`target: sendTarget`.
+
+### AUTONOMOUS DECISIONS (commit 2)
+
+6. **Reactions stay scoped to one job thread.** `message_reactions` is keyed by
+   job, so a merged conversation cannot show all of them without either N more
+   subscriptions or a by-message-ids read plus its own realtime. Both are wider
+   than this change and neither was requested. `useReactions()` is given the
+   resolved job (falling back to the route job), and the React action is
+   offered only on messages belonging to it. Consequence, recorded as a known
+   issue: reaction chips on pair-thread messages and on finished jobs' messages
+   do not render in the merged view. No data is lost — every row is intact.
+7. **Hire Again follows the relationship, not the route.** The old gate
+   (`canRehire && counterparty && jobId`) existed because "create_job_request …
+   has no parameter for a direct-thread id and would otherwise place the offer
+   in an older job". Under one-conversation-per-pair that older job's thread IS
+   this conversation, so the objection dissolves — and with the inbox opening
+   chats by counterparty the gate would have hidden the CTA on exactly the
+   completed-job conversations it exists for, which is a regression, not a
+   preservation. The CTA is now gated on `canRehire && counterparty` and posts
+   into `threadJobId: activeJob?.id`; with no active job the server's own
+   documented fallback (their most recent shared completed job, then their pair
+   thread) lands in this same conversation.
+8. **`hooks/useChat.ts` is left in place, unreferenced.** It is a
+   locked-manifest file; deleting it is a modification, and "no unrelated
+   cleanup" applies. `hooks/useConversationChat.ts` is a new file rather than a
+   rewrite of it for the same reason — zero change to a locked-manifest file is
+   more provable than "unchanged for the locked screens".
+9. **The header subtitle is the resolved active job, not the route job.** It
+   was `job?.title` (whichever thread you came from), which in a merged
+   conversation would name a job that sends may not go to. Naming the resolved
+   job makes the screen agree with the inbox row and with the composer.
+
+### SHARED-INFRASTRUCTURE / EXISTING-FILE ATTESTATIONS
+
+Screens 01–07 and 48 were not opened and are not in the dependency path of
+anything changed here. `ModeProvider`, `ModeShell` and the mode-switch path
+were not touched. The frozen web/PWA surface was not touched. For completeness,
+every file this run modified that is not new:
+
+- **`screens/MessagesInboxScreen.tsx`**, **`screens/ChatScreen.tsx`** — the two
+  screens the feature is about. Neither is a locked screen (both are in the
+  lead-writable set recorded in `LEASES.md`).
+- **`lib/conversations.ts`** — additive only: two types and two functions. No
+  existing export changed. Lead-writable per `LEASES.md`.
+- **`lib/navigation.ts`** — in the older run's LOCKED_MANIFEST as a recursive
+  dependency. Change is additive: one new exported type, and `Chat`'s param
+  type widened from `ChatTarget` to a union that CONTAINS `ChatTarget`
+  unchanged. No other route's params were touched, no route was added or
+  removed, and no screen outside Chat reads `ChatTargetParams`. Locked screens
+  01–07 and 48 do not register or navigate to `Chat` at all — their params are
+  byte-identical — and the whole suite, including
+  `tests/offerScopedChat.test.mjs`'s "Chat rides along wherever JobDetail is
+  registered" and `tests/crossTabNavigation.test.mjs`, still passes. It was
+  unavoidable because the route param type is the only place a new entry shape
+  can be declared.
+- **`hooks/useChat.ts`, `lib/messages.ts`, `hooks/useReactions.ts`,
+  `lib/jobs.ts`, `lib/offers.ts`, `components/OfferCard.tsx`,
+  `components/QuickReplies.tsx`, `hooks/useConversations.ts` — NOT MODIFIED.**
+  Each was considered and each was avoided: the merged hook is a new file, the
+  active-job read is a new function in `lib/conversations.ts` rather than a
+  change to `lib/jobs.ts`, and the offer/quick-reply/inbox data paths are
+  consumed as they are.
+- **`tests/customerCore.test.mjs`** — one assertion changed, from
+  `/canRehire && counterparty && jobId/` to `/canRehire && counterparty \?/`
+  plus a new `/threadJobId: activeJob\?\.id/`. The test's intent — Hire Again
+  exists on the chat surface and is gated — is preserved and strengthened (it
+  now also pins where the offer is posted, which was previously unasserted).
+  Only the removed `jobId` term is gone, and decision 7 above is why. No other
+  assertion in that file, or in any other existing test, was modified; the
+  remaining 360 baseline tests pass untouched.
+
+### VALIDATION AGAINST THE 0.8 BASELINE
+
+| | Baseline (`abfced9`) | After commit 2 | Delta |
+|---|---|---|---|
+| tsc (`--noEmit --noUnusedLocals --noUnusedParameters`) | exit 0 | **exit 0** | — |
+| Tests | 361 / 360 pass / 1 fail | **382 / 381 pass / 1 fail** | +21 tests, +21 pass |
+| Failing | `tests/pwa.test.mjs:8` (frozen PWA) | `tests/pwa.test.mjs:8` (frozen PWA) | unchanged |
+| `scripts/verify-schema.mjs` | — | **green, exit 0** (staging) | — |
+
+**Pre-existing failures: 1** — `tests/pwa.test.mjs:8`, the frozen web/PWA
+`config.js?v=` version mismatch, identical before and after and untouched.
+**New regressions: 0.**
+
+`scripts/verify-schema.mjs` was permitted to run: `.env` resolves
+`SUPABASE_URL` to STAGING `zzkumxcjtbqoselzptig`, confirmed before running and
+without printing any secret, and NOT to production `avkighsiufeefyycbebf`.
+`.env` was not modified. The run is green through phase66. No SQL was executed
+against any database and no migration was written — none was needed (0.1).
+
+### DEFERRED
+
+- Pair-thread attachment storage — explicitly out of scope for this run.
+- Reactions across the whole merged conversation (known issue 1 above).
+- Device verification of the merged timeline, the dividers and the
+  initial-scroll jump. Everything asserted here is from tsc, the source-level
+  guard suite and the executed resolver tests.

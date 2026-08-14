@@ -149,7 +149,13 @@ test('Customer job detail keeps evidence and honest lifecycle recovery states', 
   assert.match(reviewSection, /if \(submittingRef\.current\) return/);
   assert.match(reviewSection, /editable={!submitting}/);
   assert.match(reviewSection, /disabled={uploadingPhoto \|\| submitting}/);
-  assert.match(chat, /canRehire && counterparty && jobId/);
+  // Hire Again follows the RELATIONSHIP, not which route opened the chat. It
+  // used to also require a route jobId; with one conversation per pair the
+  // inbox opens chats by counterparty, so that gate hid the CTA on exactly the
+  // completed-job conversations it exists for. Where the offer is posted is
+  // pinned here instead, which is the part that was actually load-bearing.
+  assert.match(chat, /canRehire && counterparty \?/);
+  assert.match(chat, /threadJobId: activeJob\?\.id/);
 });
 
 test('Worker job detail uses the real photo gallery and an honest verification state', async () => {
