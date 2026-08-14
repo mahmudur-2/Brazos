@@ -2707,3 +2707,48 @@ No app code changed, so tsc/test suite not re-run — nothing it covers moved.
 merged conversation timeline, then decide reactions known issue 1). For the
 config surface: apply open item 4's signature-level verify-schema run when
 the staging DB URL is next available in a shell.
+
+**Session 2026-08-14 — branch topology resolved, device pass complete.**
+Investigated a suspected UI regression on the worker job screen. Not a
+regression: pics compared the customer JobDetail against the worker
+WorkerJobScreen, and the worker screenshot predated the others by 28
+minutes. `git log` on `screens/WorkerJobScreen.tsx` confirms its last
+touch was `283660a` (pre-review-hardening) — phase-5/phase-6 lifecycle
+work only, never a visual pass. Worker-side hero-card parity with Atlas
+mockup 55 is never-built, not lost; deferred to the UI redesign phase.
+
+Root cause of the real complaint was branch divergence. `merge-base
+mainexpo stability-core-transactions` = `3846495`, i.e. the stability
+HEAD is an ancestor of `mainexpo`, fully contained, no merge required.
+The device build had been running `stability-core-transactions`, which
+lacks `2ce3aca` (inbox one row per person), `48169f8` (merged chat
+timeline), and `f0124e7` (CLAUDE.md rewrite + guard hooks). Fast-forward
+checkout to `mainexpo`, `npx expo start -c`, Expo Go reconnect.
+
+**Device pass: complete.** Inbox renders one row per person; merged
+chronological timeline correct across four job threads; mode-switch
+animation restored. The mode-switch regression is closed — root cause was
+branch divergence, NOT stale Metro cache as previously hypothesised.
+`lib/navigation.ts` is in the `3846495..f0124e7` diff, which accounts for
+it. This satisfies the previous session's "next exact task."
+
+**Pushed.** `abfced9..f0124e7` to `origin/mainexpo`; three commits that
+existed only on local disk are now remote. Added `HANDOFF.md` at repo
+root (`f5dfe9b`) — capped session-state file, rewritten in full each run,
+never appended.
+
+**Standing rule adopted:** single-branch. All work lands on `mainexpo`.
+Parallel live branches caused this session's entire investigation.
+
+**Gate:** no app code changed — git operations and docs only; tsc/test
+suite not re-run, nothing they cover moved. Test baseline stands at
+382 total / 381 pass / 1 known frozen-PWA failure.
+
+**Open items carried forward.** Items 1–4 above unchanged. Plus: Stripe
+key mode in `start.ps1` unverified (test vs live — sets severity on the
+security audit); reactions known issue 1 still undecided.
+
+**Next exact task.** Verify Stripe key mode in `start.ps1` (read-only,
+prefix match only). Then, at Fable budget reset, dispatch the security
+run: unauthenticated user-ID lookup chained to notification write, and
+publicly listable photo storage. Both gate the push-notification
