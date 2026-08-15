@@ -42,20 +42,21 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Brazos needs access to your photos so you can attach photos to jobs, finished work, and reviews.",
-          "cameraPermission": "Brazos uses the camera so you can photograph jobs, finished work, and reviews on the spot."
+          "photosPermission": "BRAZOS uses your photo library so you can attach photos and videos to jobs, messages, reviews, and your profile.",
+          "cameraPermission": "BRAZOS uses the camera to take photos and videos of jobs, completed work, and your profile.",
+          "microphonePermission": "BRAZOS uses the microphone to record voice messages and job videos."
         }
       ],
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "Allow Brazos to use your location to add job locations and show work on the map."
+          "locationWhenInUsePermission": "BRAZOS uses your location to show nearby jobs and to place job locations on the map."
         }
       ],
       [
         "expo-audio",
         {
-          "microphonePermission": "Allow Brazos to use the microphone so you can send voice messages in chat."
+          "microphonePermission": "BRAZOS uses the microphone to record voice messages and job videos."
         }
       ],
       [
