@@ -80,7 +80,10 @@ phase68 depends on phase67: it routes five SECURITY DEFINER bodies through
 `public.is_profile_active(uuid)`, which only gained its `deleted_at is null`
 term in phase67. Apply phase67 first, always.
 
-**Status: written, NOT applied anywhere.**
+**Status: APPLIED to staging (`zzkumxcjtbqoselzptig`), self-check passed
+(`PHASE68 SELF-CHECK PASS: 5 functions verified`), confirmed against a live
+schema snapshot 2026-08-15. Production still needs it** — the procedure below is
+preserved unchanged for that run.
 
 ### Steps
 

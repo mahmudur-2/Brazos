@@ -28,21 +28,40 @@ with the evidence that produced it.
 
 ## Near-term priorities
 
-1. **Apply `supabase/phase68_deleted_at_authorization.sql` to staging.** The
-   migration is written and unapplied. It depends on phase67, which is applied
-   and device-verified as of 2026-08-14. The apply steps, the expected NOTICE
-   output and the meaning of each self-check failure are in the phase68 section
-   of
-   [`docs/runbooks/phase67-account-deletion.md`](docs/runbooks/phase67-account-deletion.md).
-   Only a green `node scripts/verify-schema.mjs` counts as applied.
-2. **Security hardening before push ships.** Two items are named in `HANDOFF.md`:
-   an unauthenticated user-ID lookup chained to a notification write, and
-   publicly listable photo storage. Both are prerequisites for shipping push
-   notifications, not follow-ups to it.
-3. **EAS development build**, required before TestFlight and before push can be
-   tested on a device. The weakened production build gate is fixed in the same
-   pass. Apple Developer Program enrolment is calendar-gated — start it before
-   it is needed.
+The prior three near-term priorities — apply phase68, the pre-push security
+hardening pair (unauthenticated user-ID lookup → notification write, and
+publicly listable photo storage), and the EAS development build — are all done.
+phases 67–72 are applied to staging (live snapshot 2026-08-15); the notification
+chain was closed by phase69 and photo enumeration by phase72; the dev build runs
+on a physical iPhone. They leave this file. Their replacements below are each
+evidenced by `docs/audits/COMPLETION_REVIEW_2026-08-15.md` (CR) or
+`docs/audits/SECURITY_SWEEP_2026-08-15.md` (SS).
+
+1. **Ship a scheduler for `send-push`.** Enqueue is automatic but nothing drains
+   the outbox — the phase20 pg_cron block is commented out, so notifications
+   arrive only on a manual invocation (CR §push, SS Q-PUSH). Beta needs pg_net +
+   pg_cron (or an equivalent scheduler) enabled and `send-push` fired on an
+   interval, with `claim_notification_batch` bounds unchanged.
+2. **Settle the effective anon-EXECUTE state on staging.** ~11 pre-phase32
+   functions revoke EXECUTE from `public` but never name `anon`; whether `anon`
+   still holds EXECUTE is NOT DETERMINABLE STATICALLY and only a live
+   `pg_proc.proacl` read (or the `verify-schema` sentinels) settles it (SS #2).
+   If drifted, `worker_job_stats`/`deactivate_push_token`/`resolve_notification`
+   are the concerning ones. A remediation migration follows only if the live
+   check shows anon EXECUTE.
+3. **Fix `transition_job_status` NULL-unsafe owner guard.** `assigned_worker_id
+   <> v_user` is NULL — not TRUE — when the job is unassigned, so an
+   authenticated caller can read any unassigned job's full row as SECURITY
+   DEFINER and use the error text as a status oracle (SS #1). Read-only, but it
+   bypasses the `jobs` SELECT policies. Its own migration; present since phase58.
+4. **Fix the `saved_workers` save write.** `saveWorker` issues an upsert
+   (ON CONFLICT DO UPDATE) against a table with no UPDATE grant or policy — a
+   hard 42501 or a duplicate-save refusal depending on the live ACL (CR §saved
+   workers). Fix is `ignoreDuplicates` (ON CONFLICT DO NOTHING), a client change,
+   not a wider grant.
+5. **Move the Supabase session store to SecureStore.** Access/refresh tokens
+   persist in unencrypted AsyncStorage (SS #3) — a device-compromise exposure;
+   swap the `createClient` storage adapter to `expo-secure-store`.
 
 ## Known follow-ups with a named cause
 
@@ -62,8 +81,55 @@ with the evidence that produced it.
 - **Customer-safe market preview route.** `JobDetail` is registered in the Map
   and MyJobs stacks, so a customer drilling into a map cell can still reach a
   worker surface. Closing it needs a new customer-facing preview screen.
-- **Production migration queue.** Production has none of the staging
-  migrations. The human-executed order is in `PROD_APPLY.md`.
+- **Production rebuild from a staging dump (standing decision).** Production
+  (`avkighsiufeefyycbebf`) has none of the staging migrations and holds dev
+  exhaust only, no real users. Rather than replay the numbered queue, the
+  standing decision is to rebuild production from a staging schema dump once
+  staging is beta-ready. `PROD_APPLY.md` remains the ordered fallback if a
+  replay is chosen instead.
+
+## Surfaced by the 2026-08-15 audits
+
+Each item cites `COMPLETION_REVIEW_2026-08-15.md` (CR) or
+`SECURITY_SWEEP_2026-08-15.md` (SS).
+
+- **`delete_my_account` TOCTOU (SS #4).** The blocker gate takes no locks and is
+  never re-checked, so a concurrent `accept_offer` can strand an assigned job on
+  a tombstoned party. Fix: re-run the blockers under `FOR UPDATE` on the caller's
+  party jobs before committing the tombstone. Its own migration.
+- **`jobs_within_radius` trilateration (SS #5).** Returns full-precision
+  `distance_miles` from a caller-chosen point with an unbounded radius; three
+  probes recover exact coordinates, eroding the approximate-location invariant.
+  Round or cell-snap the distance.
+- **Unbounded money amounts (SS #6).** create/counter offer and job budgets
+  reject only `<=0`, no ceiling; sandbox today but the gap must close before a
+  real payment provider. Only tips are capped.
+- **`unsend_message` active-user gate (SS #9).** Add the `is_active_user()` check
+  its sibling write RPCs carry, so a banned account cannot blank its messages.
+- **Capture pre-repo policies into migrations (SS Q-RLS F5) and add explicit
+  `revoke … from anon` on the RLS-only tables (F7).** The `payments` SELECT
+  policy is pre-repo and unauditable from files; several tables rely on
+  `authenticated`-scoped policies with no anon table-revoke — defense-in-depth,
+  matching phase29/50/51/53/56.
+- **In-app notification dead-taps (CR §notifications).** Direct-message and
+  `review_received` feed rows mark-read and navigate nowhere; `WorkerJob` rows
+  land on the hub. Push taps are unaffected. Fix `NotificationsScreen` routing to
+  match `notificationRoutes`.
+- **Customer follow-along checklist is unrendered (CR §active-work).** RLS and UI
+  copy promise a customer view of the worker's checklist, but no customer surface
+  renders it. Either build the read surface or remove the promise.
+- **Pair-thread media hole (CR §messaging).** A hired pair whose shared jobs are
+  all cancelled resolves to the job-keyed pair thread and can never send
+  photo/voice. Needs a thread-scoped storage path.
+- **Remove dead code (CR dead-code sweep).** `components/SectionHeader.tsx` is
+  dead; `hooks/useChat.ts` and `ui/templates/ListScreen.tsx` are statically
+  orphaned; several exported symbols are stranded. Removal is mechanical but
+  `useChat.ts` is comment-branded "LOCKED", so it is a human decision.
+- **Dependency-advisory sweep (SS Q-DEPS).** `npm audit --omit=dev`: 0 critical /
+  14 high / 13 moderate, all in the Expo/Metro/RN toolchain (build/CLI-time DoS
+  classes, no runtime-data-path package). Resolve with a coordinated
+  Expo-SDK/toolchain bump in a code-touching pass; not urgent, not a shipped-app
+  RCE.
 
 ## Deferred, with the reason
 
