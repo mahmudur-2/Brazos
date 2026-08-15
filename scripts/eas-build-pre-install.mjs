@@ -1,57 +1,215 @@
 #!/usr/bin/env node
 /**
- * EAS Build gate (package.json "eas-build-pre-install") — refuses to build a
- * `production` binary against anything but the production Supabase project.
+ * EAS Build gate (package.json "eas-build-pre-install") — pins EVERY build
+ * profile to the one Supabase project it is allowed to bundle, and fails
+ * closed on anything it cannot prove.
  *
  * Why this can work at all: .env is gitignored and therefore never uploaded
- * to EAS, and react-native-dotenv merges process.env OVER the .env file — so
- * on a build worker the bundle's SUPABASE_URL / SUPABASE_KEY come exclusively
- * from the EAS environment selected by the profile's `environment` field.
+ * to EAS, and react-native-dotenv (babel.config.js: safe:false) reads
+ * process.env first — dotenv never overrides a variable that already exists —
+ * so on a build worker the bundle's SUPABASE_URL / SUPABASE_KEY come from the
+ * eas.json profile `env` block and the EAS environment the profile selects.
  * This hook runs on that same worker with those same variables, BEFORE
  * dependencies install (so it must stay dependency-free), and a non-zero
  * exit fails the whole build.
  *
- * What it enforces, refs only (never printing a URL or key):
- *   - SUPABASE_URL and SUPABASE_KEY are both present, and
- *   - every resolvable project ref is exactly PRODUCTION_REF.
- * Non-production profiles are exempt — their environments legitimately point
- * elsewhere.
+ * Fail-closed contract — exit 1 with a one-line named reason on stderr:
+ *   - EAS_BUILD_PROFILE unset                  → "not an EAS build"
+ *   - profile not in EXPECTED_REF              → "unknown profile"
+ *   - SUPABASE_URL / SUPABASE_KEY absent       → named absence
+ *   - a source that parses to no project ref   → named parse failure
+ *   - sources disagreeing, or any source not equal to the profile's expected
+ *     ref                                      → named, listing every ref found
+ * Sources checked: the URL env var, the key (legacy JWT keys embed the ref;
+ * an sb_publishable_… key resolves to nothing and fails closed), and every
+ * dotenv-style file react-native-dotenv could see in the build directory —
+ * none should exist on an EAS worker, but a local runner (`eas build
+ * --local`) has the developer's .env in view and it must agree too.
+ * Refs only are ever compared and printed — never a URL or key value.
  */
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { refFromRestUrl, refFromJwt } from './supabase-ref.mjs';
+
+const STAGING_REF = 'zzkumxcjtbqoselzptig';
 
 const PRODUCTION_REF = 'avkighsiufeefyycbebf';
 
-const profile = process.env.EAS_BUILD_PROFILE ?? '';
-if (profile !== 'production') {
-  console.log(`eas-build-pre-install: profile "${profile || '(none)'}" — production gate not applicable, skipping.`);
-  process.exit(0);
+/**
+ * The one Supabase project each EAS profile may build against. testflight
+ * deliberately shares the production project — TestFlight binaries reach real
+ * testers with real data — while development and preview stay on staging.
+ * A profile absent from this map is refused outright.
+ */
+export const EXPECTED_REF = Object.freeze({
+  development: STAGING_REF,
+  preview: STAGING_REF,
+  testflight: PRODUCTION_REF,
+  production: PRODUCTION_REF,
+});
+
+/**
+ * Every dotenv-style file react-native-dotenv (babel.config.js: path '.env',
+ * safe:false) could consult for any mode this process could run under. The
+ * fixed trio covers babel's defaults; APP_ENV / BABEL_ENV / NODE_ENV add
+ * whatever mode the build actually selects.
+ */
+export function envFileCandidates(env = {}) {
+  const modes = new Set(['development', 'production', 'test']);
+  for (const key of ['APP_ENV', 'BABEL_ENV', 'NODE_ENV']) {
+    const mode = env[key];
+    if (typeof mode === 'string' && mode !== '') modes.add(mode);
+  }
+  const names = ['.env', '.env.local'];
+  for (const mode of modes) names.push(`.env.${mode}`, `.env.${mode}.local`);
+  return [...new Set(names)];
 }
 
-const url = process.env.SUPABASE_URL;
-const key = process.env.SUPABASE_KEY;
-const urlRef = refFromRestUrl(url);
-const keyRef = refFromJwt(key);
-
-console.log('production build gate');
-console.log(`  SUPABASE_URL ref : ${url ? (urlRef ?? 'UNRESOLVED') : 'ABSENT'}`);
-console.log(`  SUPABASE_KEY ref : ${key ? (keyRef ?? 'not a JWT key (no embedded ref)') : 'ABSENT'}`);
-console.log(`  required ref     : ${PRODUCTION_REF}`);
-
-const problems = [];
-if (!url) problems.push('SUPABASE_URL is not set in the EAS production environment');
-if (!key) problems.push('SUPABASE_KEY is not set in the EAS production environment');
-if (url && !urlRef) problems.push('SUPABASE_URL does not look like a Supabase project URL');
-if (urlRef && urlRef !== PRODUCTION_REF) {
-  problems.push(`SUPABASE_URL points at ${urlRef}, not the production project ${PRODUCTION_REF}`);
+/**
+ * Minimal dotenv parser: KEY=value, optional `export`, quotes, comments.
+ * Returns a null-prototype map so a hostile key like __proto__ stays inert.
+ * Parsed values never leave this module — callers only ever see refs.
+ */
+export function parseEnvText(text) {
+  const vars = Object.create(null);
+  for (const rawLine of String(text).split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (line === '' || line.startsWith('#')) continue;
+    const match = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    let value = match[2].trim();
+    const quote = value[0];
+    if ((quote === '"' || quote === "'") && value.length >= 2 && value.endsWith(quote)) {
+      value = value.slice(1, -1);
+    } else {
+      const comment = value.indexOf(' #');
+      if (comment !== -1) value = value.slice(0, comment).trim();
+    }
+    vars[match[1]] = value;
+  }
+  return vars;
 }
-if (keyRef && keyRef !== PRODUCTION_REF) {
-  problems.push(`SUPABASE_KEY belongs to ${keyRef}, not the production project ${PRODUCTION_REF}`);
+
+/**
+ * Read every candidate env file under `dir`. A file that exists but cannot
+ * be read reports vars: null, which evaluateGate treats as a failure —
+ * never as "probably fine".
+ */
+export function loadEnvFiles(dir, env = {}) {
+  const files = [];
+  for (const name of envFileCandidates(env)) {
+    const filePath = path.join(dir, name);
+    if (!existsSync(filePath)) continue;
+    try {
+      files.push({ name, vars: parseEnvText(readFileSync(filePath, 'utf8')) });
+    } catch {
+      files.push({ name, vars: null });
+    }
+  }
+  return files;
 }
 
-if (problems.length > 0) {
-  console.error('\nPRODUCTION BUILD GATE FAILED:');
-  for (const p of problems) console.error(`  - ${p}`);
-  console.error('\nRefusing to build a production binary against the wrong database.');
-  process.exit(1);
+/**
+ * Pure fail-closed verdict over an environment plus the env files visible to
+ * the build. Every source that can carry a project ref must resolve, agree
+ * with every other source, and equal the profile's expected ref; an unset or
+ * unknown profile, an absent variable, an unreadable file or an unparseable
+ * value is a named failure. Returns { ok, profile, expected, sources,
+ * problems } — refs only, never a URL or key value.
+ */
+export function evaluateGate(env, envFiles = []) {
+  const profile = env.EAS_BUILD_PROFILE;
+  if (typeof profile !== 'string' || profile === '') {
+    return {
+      ok: false,
+      profile: null,
+      expected: null,
+      sources: [],
+      problems: ['not an EAS build: EAS_BUILD_PROFILE is unset'],
+    };
+  }
+  // hasOwnProperty, not a bare lookup: a profile named after an inherited
+  // member ("toString") must read as unknown, not as a match.
+  if (!Object.prototype.hasOwnProperty.call(EXPECTED_REF, profile)) {
+    return {
+      ok: false,
+      profile,
+      expected: null,
+      sources: [],
+      problems: [`unknown profile "${profile}"`],
+    };
+  }
+  const expected = EXPECTED_REF[profile];
+  const problems = [];
+  const sources = [];
+
+  if (!env.SUPABASE_URL) {
+    problems.push('SUPABASE_URL is absent from the build environment');
+  } else {
+    sources.push({ name: 'env:SUPABASE_URL', ref: refFromRestUrl(env.SUPABASE_URL) });
+  }
+  if (!env.SUPABASE_KEY) {
+    problems.push('SUPABASE_KEY is absent from the build environment');
+  } else {
+    sources.push({ name: 'env:SUPABASE_KEY', ref: refFromJwt(env.SUPABASE_KEY) });
+  }
+
+  for (const file of envFiles) {
+    if (!file || typeof file.name !== 'string') {
+      problems.push('malformed env file entry');
+      continue;
+    }
+    if (file.vars === null || typeof file.vars !== 'object') {
+      problems.push(`${file.name} exists but could not be read`);
+      continue;
+    }
+    if (file.vars.SUPABASE_URL !== undefined) {
+      sources.push({ name: `${file.name}:SUPABASE_URL`, ref: refFromRestUrl(file.vars.SUPABASE_URL) });
+    }
+    if (file.vars.SUPABASE_KEY !== undefined) {
+      sources.push({ name: `${file.name}:SUPABASE_KEY`, ref: refFromJwt(file.vars.SUPABASE_KEY) });
+    }
+  }
+
+  for (const source of sources) {
+    if (!source.ref) {
+      problems.push(`${source.name} does not resolve to a Supabase project ref`);
+    } else if (source.ref !== expected) {
+      problems.push(`${source.name} resolves to ${source.ref}, expected ${expected}`);
+    }
+  }
+  const distinct = [...new Set(sources.map((s) => s.ref).filter(Boolean))];
+  if (distinct.length > 1) {
+    problems.push(`project refs disagree: ${distinct.join(' vs ')}`);
+  }
+
+  return { ok: problems.length === 0, profile, expected, sources, problems };
 }
-console.log('  gate: OK — building against production.');
+
+// ---- CLI — what `npm run eas-build-pre-install` actually executes ----------
+// The isMain guard exists so tests can import the pure pieces above without
+// running the gate; tests/buildGate.test.mjs also spawns this file for real
+// and asserts the exit codes, which is what keeps this guard honest.
+const scriptPath = process.argv[1] ? path.resolve(process.argv[1]) : '';
+const selfPath = fileURLToPath(import.meta.url);
+const isMain =
+  scriptPath !== '' &&
+  (process.platform === 'win32'
+    ? scriptPath.toLowerCase() === selfPath.toLowerCase()
+    : scriptPath === selfPath);
+
+if (isMain) {
+  const verdict = evaluateGate(process.env, loadEnvFiles(process.cwd(), process.env));
+  console.log(
+    `eas-build-pre-install: profile "${verdict.profile ?? '(unset)'}", expected ref ${verdict.expected ?? '(none)'}`
+  );
+  for (const source of verdict.sources) {
+    console.log(`  ${source.name} → ${source.ref ?? 'UNRESOLVED'}`);
+  }
+  if (!verdict.ok) {
+    console.error(`BUILD GATE FAILED: ${verdict.problems.join('; ')}`);
+    process.exit(1);
+  }
+  console.log(`  gate: OK — "${verdict.profile}" builds against ${verdict.expected}.`);
+}
