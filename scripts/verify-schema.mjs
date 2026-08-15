@@ -154,6 +154,51 @@ async function checkRpc(fn, args) {
   return { ok: true, note: `exists (responded ${res.status})` };
 }
 
+/**
+ * The inverse of checkRpcAllowed: proves the publishable key is REFUSED.
+ * checkRpc tolerates a refusal to prove existence; checkRpcAllowed demands a
+ * 2xx to prove access; this one demands the refusal itself, which is the only
+ * shape that can verify a revoke. ok solely for a permission denial - HTTP
+ * 403, or body code 42501 ("permission denied for function"). A 2xx means the
+ * revoke did not land, so it fails. PGRST202 fails too: a MISSING function is
+ * broken, not denied. Anything else fails with the status and code in the
+ * detail rather than being guessed at.
+ *
+ * Safe to call against unsend_message with ZERO_UUID: on a database where
+ * phase70 is applied, the revoke answers 403 before anything runs - and even
+ * if only the body had landed, its null-uid guard raises 'Authentication
+ * required' before the SELECT. On an unapplied database the ZERO_UUID lookup
+ * finds no row and raises 'Message not found' before the UPDATE. Neither
+ * path writes.
+ */
+async function checkRpcDenied(fn, args) {
+  const res = await fetch(`${BASE}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  });
+  const body = await res.json().catch(() => ({}));
+  if (res.status === 403 || body.code === '42501') {
+    return { ok: true, note: `denied (responded ${res.status})` };
+  }
+  if (res.ok) {
+    return {
+      ok: false,
+      detail: `still executable with the publishable key (responded ${res.status})`,
+    };
+  }
+  if (body.code === 'PGRST202') {
+    return {
+      ok: false,
+      detail: `${res.status} ${body.code} ${body.message ?? ''} - missing, not denied`.trim(),
+    };
+  }
+  return {
+    ok: false,
+    detail: `neither denied nor missing: ${res.status} ${body.code ?? ''} ${body.message ?? ''}`.trim(),
+  };
+}
+
 // Grouped by the migration that introduces them.
 const MIGRATIONS = [
   {
@@ -1175,6 +1220,67 @@ const MIGRATIONS = [
       ['rpc is_blocked_between() still resolves after phase69', () =>
         checkRpc('is_blocked_between', { a: ZERO_UUID, b: ZERO_UUID })],
     ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 70. unsend_message: null-uid guard first in the body, EXECUTE
+    // revoked from PUBLIC and anon.
+    //
+    // The BODY half (the guard) is invisible here - PostgREST returns
+    // results, not pg_get_functiondef - and is proven by the migration's own
+    // in-transaction self-check, which the sentinel carries (the phase69
+    // situation). The ACL half IS visible to this probe and is asserted in
+    // the refusing direction with checkRpcDenied: the publishable key must be
+    // turned away at the permission layer. The phase25 group above keeps
+    // probing the same RPC with tolerant checkRpc, which reads a 403 as
+    // existence - both stay green on an applied database.
+    // -----------------------------------------------------------------------
+    file: 'phase70_unsend_message_authz.sql',
+    sentinel: ['rpc phase70_unsend_message_authz_enabled()', () =>
+      checkRpc('phase70_unsend_message_authz_enabled', {})],
+    checks: [
+      ['rpc unsend_message() denied to the publishable key', () =>
+        checkRpcDenied('unsend_message', { p_message_id: ZERO_UUID })],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 71. The world-readable "reviews are viewable by everyone" SELECT
+    // policy is dropped; reviews_select_party becomes the only row filter.
+    //
+    // A policy drop has no PostgREST-probeable shape (the phase54 situation),
+    // so the sentinel carries the group - and there is deliberately no
+    // row-level probe beside it. reviews.photos must STAY readable for the
+    // phase37 group's checkColumn above: phase71 keeps anon's table-level
+    // SELECT GRANT for exactly that probe and drops only the POLICY, so the
+    // publishable key still resolves the column while reading zero rows. A
+    // zero-row assertion is not expressible here without mistaking RLS
+    // row-visibility for absence, which this script's design rules out (see
+    // the header).
+    // -----------------------------------------------------------------------
+    file: 'phase71_reviews_read_lockdown.sql',
+    sentinel: ['rpc phase71_reviews_read_lockdown_enabled()', () =>
+      checkRpc('phase71_reviews_read_lockdown_enabled', {})],
+    checks: [],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 72. avatars_read and job_photos_read on storage.objects move from
+    // role public to authenticated, closing anonymous bucket ENUMERATION.
+    //
+    // Storage policies are invisible to this probe - it speaks to /rest/v1,
+    // and pg_policies has no PostgREST surface - so the sentinel carries the
+    // group entirely. It installs only after the migration's positive
+    // self-check proved both policies still exist, serve SELECT to exactly
+    // {authenticated}, and kept their bucket-scoped USING clauses. Note what
+    // the sentinel does NOT claim: fetching an already-known public-bucket
+    // URL still works signed out, because Supabase serves public buckets
+    // outside RLS. Full closure is deferred to private buckets + signed URLs.
+    // -----------------------------------------------------------------------
+    file: 'phase72_storage_read_lockdown.sql',
+    sentinel: ['rpc phase72_storage_read_lockdown_enabled()', () =>
+      checkRpc('phase72_storage_read_lockdown_enabled', {})],
+    checks: [],
   },
 ];
 
