@@ -1282,6 +1282,37 @@ const MIGRATIONS = [
       checkRpc('phase72_storage_read_lockdown_enabled', {})],
     checks: [],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 73. Two SECURITY DEFINER body fixes: transition_job_status()'s
+    // owner guard becomes NULL-safe (IS DISTINCT FROM), so an unassigned job
+    // no longer falls through to the idempotent return branch and hands its
+    // full row to any authenticated caller; unsend_message() gains the
+    // is_active_user() lifecycle gate its sibling write RPCs carry.
+    //
+    // A function BODY is invisible to a PostgREST probe (the phase70
+    // situation), so the sentinel carries both halves - it installs only
+    // after the migration's own in-transaction self-check proved the live
+    // definitions contain the new guards, kept SECURITY DEFINER and their
+    // pinned search_path, and are executable by authenticated but not anon.
+    // The two checks beside it assert only that both RPCs still RESOLVE with
+    // their existing signatures, which is what a body replace could break.
+    // -----------------------------------------------------------------------
+    file: 'phase73_null_safe_owner_guard_and_unsend_gate.sql',
+    sentinel: ['rpc phase73_null_safe_guards_enabled()', () =>
+      checkRpc('phase73_null_safe_guards_enabled', {})],
+    checks: [
+      ['rpc transition_job_status() still resolves after phase73', () =>
+        checkRpc('transition_job_status', {
+          p_job_id: ZERO_UUID,
+          p_status: 'in_progress',
+          p_completion_photos: null,
+          p_completion_videos: null,
+        })],
+      ['rpc unsend_message() still resolves after phase73', () =>
+        checkRpc('unsend_message', { p_message_id: ZERO_UUID })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
