@@ -2,45 +2,46 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-16 - stage4A-tail: labelling, dead route, documentation truth-up
+## 2026-08-16 - stage4C: phase74 + phase75 wired into the repository
 
-`npm run verify` is GREEN: **547 tests pass / 0 fail / 0 skipped** (lint =
-`tsc --noEmit` plus `noUnusedLocals` / `noUnusedParameters`, then the full
-`node --test tests/*.test.mjs` suite). Three commits: one label fix, one
-notification reconciliation, one documentation pass. **No SQL was executed and
-no migration file was written this run.** Per-commit detail, including three
-places where the dispatch prompt's premise did not match the repository, is in
-`docs/audits/STAGE4A_FINDINGS.md`.
+**This run changed the repository only. No SQL was executed, no schema was
+applied, and no database was contacted by the run.** Three commits: the two
+migration files landed byte-for-byte as the operator applied them to staging
+(integrity measured before staging - line counts 130/729, occurrence counts,
+ASCII-only byte scan; every number in `docs/audits/STAGE4C_REPORT.md`), two
+new verify-schema groups covering them, and this documentation pass.
+
+`npm run verify` after the changes is GREEN: **547 tests, 547 pass, 0 fail,
+0 skipped** (lint = `tsc --noEmit` plus `noUnusedLocals` /
+`noUnusedParameters`, then the full `node --test tests/*.test.mjs` suite).
 
 ## Applied reality - staging `zzkumxcjtbqoselzptig`
 
-**`node scripts/verify-schema.mjs` ran GREEN on 2026-08-16: every group OK,
-zero MISSING, zero PENDING**, including the three phase73 checks. Phases 67-73
-are all applied. There is currently **no unapplied migration in the
-repository** - the pending-migration layer is empty.
+**phase74 (push scheduler) and phase75 (security hardening) are APPLIED to
+staging.** The operator applied both before this run: phase74's header
+records the apply verified by `net._http_response` returning status 200 and
+four categories of push arriving on a physical device, and phase75 commits
+only if its in-transaction self-check passes, so its sentinel existing is the
+self-check passing. Phases 67-73 were already applied and verified green on
+2026-08-16.
 
-Account deletion and push are proven end-to-end on a physical iPhone; an EAS
-**development** build (`app.brazos.mobile`, staging) runs on device;
-`send-push` is deployed.
+**Per standing policy, only a green `node scripts/verify-schema.mjs` counts
+as applied - and the two groups that check phase74/75 were added by this
+run, so no verify-schema run has covered them yet.** The next operator
+action is to run it (needs `.env` and live staging, so it never runs inside
+an autonomous run). Expected: every group OK including the two new
+sentinels, zero MISSING, zero PENDING. With phase74/75 committed there is no
+unapplied migration in the repository - the pending layer is empty again.
 
-Production has none of the migrations; the standing decision is a rebuild from
-a staging dump. It was never contacted during this run, and its project ref is
-not repeated here. `supabase/.temp/` is expected untracked CLI state.
+**Production (`avkighsiufeefyycbebf`) still has none of the migrations.**
+The standing decision is a rebuild from a staging dump once staging is
+beta-ready; `PROD_APPLY.md` remains the ordered fallback if a replay is
+chosen instead. Production was never contacted during this run.
 
-### Blocker 4 is CLOSED on both halves
+### anon-EXECUTE evidence - preserve on any rewrite
 
-**Half one - `transition_job_status` NULL-unsafe owner guard: closed by
-phase73.** `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql` is
-APPLIED. The guard compared `assigned_worker_id` with an inequality, which is
-NULL rather than TRUE on an unassigned job, so the guard did not fire and the
-idempotent return branch handed any authenticated caller the full `jobs` row as
-SECURITY DEFINER - read-only, but it bypassed the `jobs` SELECT policies. The
-same migration added the missing active-user gate to `unsend_message`, so a
-banned or tombstoned account can no longer blank its own messages.
-
-**Half two - residual anon EXECUTE: settled by a live `pg_proc` read on
-staging, 2026-08-16.** This was previously recorded as NOT DETERMINABLE
-STATICALLY. It is now determined, and **no remediation migration is needed**.
+Settled by a live `pg_proc` read on staging, 2026-08-16 (before phase74/75
+were applied):
 
 > Exactly ONE function in schema `public` is EXECUTE-able by `anon`:
 > `job_categories_expanded()`, SECURITY INVOKER, returns boolean, ACL
@@ -49,109 +50,94 @@ STATICALLY. It is now determined, and **no remediation migration is needed**.
 > `deactivate_push_token` and `resolve_notification` did NOT drift.
 
 That ACL string cannot be re-derived from any file in this repository and
-exists nowhere else. Preserve it on any rewrite of this document.
+exists nowhere else. Preserve it on any rewrite of this document. Neither
+new phase disturbs the finding: phase74's `drain_notification_outbox()` is
+revoked from public/anon/authenticated in the same file that creates it, and
+phase75's sweep removes table WRITE grants, not function EXECUTE.
 
 ## What this run changed in the tree
 
-1. **The checkout sandbox banner states the money fact, not the build fact.**
-   It read `SANDBOX — development build`, which became false the moment Stage
-   4A let sandbox payments run on a release binary - a TestFlight tester was
-   being shown a wrong statement. It now reads **`SANDBOX — no real money
-   moves. No real money is charged, held or transferred.`**, and it renders if
-   and only if the RESOLVED payments mode is `sandbox` (a `configError` always
-   resolves to `disabled`, so that case needs no separate condition). The
-   confirm dialog carried the identical false claim one tap later ("in this
-   development build") and was corrected with it. No RPC, amount, payment-state
-   or state-machine change - this was a label.
-2. **The notification feed's maps are reconciled against what the database
-   actually emits.** `enqueue_notification()` is the only insert into
-   `notification_outbox`, all fourteen call sites pass literal categories, and
-   the complete inventory is six categories / fourteen (category, type) pairs /
-   five screens - tabulated in `docs/audits/STAGE4A_FINDINGS.md`. The routing
-   table needed no change: every emitted screen was already registered and
-   handled. **The dead entry was the feed's icon map**, which keys on `type` and
-   carried `review` - no trigger emits that; phase20 emits `review_received`, so
-   the star had never rendered on a review notification. Three new tests
-   reconcile both directions off one declared list, so the client maps and the
-   migrations cannot drift.
-3. **Documentation truth-up** - this file, `BRAZOS_MASTER_PLAN.md`,
-   `docs/architecture.md`, and the phase67/68 runbook.
-
-Still live from the previous run: payments availability is declared by
-`EXPO_PUBLIC_PAYMENTS_MODE` (allow-list; unset reproduces the old `__DEV__`
-behaviour exactly), the saved-worker write is `ON CONFLICT DO NOTHING`, and
-notification feed taps delegate wholly to `lib/notificationRoutes.ts`.
+1. **`supabase/phase74_push_scheduler.sql` (130 lines) and
+   `supabase/phase75_security_hardening.sql` (729 lines) are committed,
+   unmodified.** phase74: pg_cron fires `public.drain_notification_outbox()`
+   every minute; it reads the endpoint and service_role key from Vault and
+   POSTs to the `send-push` Edge Function through pg_net; fire-and-forget,
+   so `cron.job_run_details` succeeds independently of delivery and
+   `net._http_response` holds the outcome. phase75: six security-sweep
+   findings - money CHECK ceilings ($100,000) on `jobs`/`job_offers`/
+   `payments`, an explicit `'jobs'` arm in `should_notify`, half-mile-snapped
+   distance in `jobs_within_radius` (ordered AND filtered on the snapped
+   value), `delete_my_account` TOCTOU closed under `FOR UPDATE` job locks,
+   a trigger settling pending offers on any job cancellation, and anon's
+   write privileges removed schema-wide with SELECT deliberately retained.
+2. **`scripts/verify-schema.mjs` gained two groups at the end of
+   MIGRATIONS**, sentinel-carried like phase43 onward. `node --check` exits
+   0. Note for the next reader: the dispatch prompt placed them "after the
+   phase69 group", but phase70-73 groups already followed phase69; the end
+   of the array (after phase73) is where they went and belong.
+3. **Documentation truth-up** - this file, `BRAZOS_MASTER_PLAN.md`
+   (scheduler and five phase75-carried items leave; two follow-ups with
+   named causes arrive; F5 restated alone), `docs/architecture.md`
+   (Notifications: the scheduled drain; Money: the ceilings; Security model:
+   the anon write revoke and the snapped-distance sort), and the new
+   `docs/audits/STAGE4C_REPORT.md`.
 
 ## Still blocking a beta, worst first
 
-1. **Push has no scheduler.** Enqueue is automatic, but the outbox drains only
-   on a manual `send-push` invocation - the phase20 pg_cron block is **still
-   commented out**. Beta needs pg_net + pg_cron (or an equivalent scheduler)
-   firing `send-push` on an interval, with `claim_notification_batch` bounds
-   unchanged.
-2. **Phone sign-in dead-ends on a release build.** `EXPO_PUBLIC_PHONE_AUTH_MODE`
-   unset means `mock` in development and `disabled` in a release, and `mock` is
-   refused outright when `__DEV__` is false - correctly, since no SMS provider
-   is configured or paid for. Email + password is therefore the only path that
-   authenticates anyone. See `docs/phone-auth-activation.md`.
-3. **Supabase session tokens sit in unencrypted AsyncStorage.** A
+The push scheduler is OFF this list (phase74 drains the outbox every minute
+on staging), and so are unbounded money amounts (phase75's ceilings bound
+every writer; the client-side mirror is a master-plan follow-up, not a
+blocker).
+
+1. **Phone sign-in dead-ends on a release build.** `EXPO_PUBLIC_PHONE_AUTH_MODE`
+   unset means `mock` in development and `disabled` in a release, and `mock`
+   is refused outright when `__DEV__` is false - correctly, since no SMS
+   provider is configured or paid for. Email + password is therefore the only
+   path that authenticates anyone. See `docs/phone-auth-activation.md`.
+2. **Supabase session tokens sit in unencrypted AsyncStorage.** A
    device-compromise exposure; swap the `createClient` storage adapter to
    `expo-secure-store`.
-4. **Money amounts are unbounded.** Create/counter offer and job budgets reject
-   only `<= 0`, with no ceiling. Sandbox today, but the gap must close before a
-   real payment provider. Only tips are capped.
+3. **Payments are sandbox-only and availability is configuration-governed.**
+   `EXPO_PUBLIC_PAYMENTS_MODE` must be set to `sandbox` for a release/
+   TestFlight build to run payments at all (unset resolves to disabled
+   outside development), and there is no real provider behind the resolver -
+   deliberate for the beta, but the beta cannot exercise checkout until the
+   env is set and a provider decision is eventually made.
 
 ## Needs the operator - outside any run
 
-**A. The next TestFlight build will fail its own gate.** See
-`BRAZOS_MASTER_PLAN.md` "Known follow-ups with a named cause" and
-`docs/audits/STAGE4A_FINDINGS.md` "EAS finding 1" for the full evidence. In
-short: the EAS `preview` environment's `SUPABASE_KEY` is a new-format
-publishable key (`sb_pu…`), `refFromJwt` cannot resolve a project ref from it
-because there is no JWT to decode, and `evaluateGate` therefore fails closed
-with `env:SUPABASE_KEY does not resolve to a Supabase project ref` and exits 1
-**before dependencies install**. The gate is working as designed; the
-configuration is what is wrong. Replace that value with the legacy `eyJ…` anon
-key - **production's**, because the `testflight` profile selects the `preview`
-environment and `EXPECTED_REF.testflight` is the production ref.
+**A. Run `node scripts/verify-schema.mjs` against staging.** It is the only
+thing that makes "phase74/75 applied" official under this repository's
+policy, and the two new groups have never been exercised. Expect every group
+OK, zero MISSING, zero PENDING.
 
-A related trap, same file family: `scripts/verify-schema.mjs` shares
-`refFromJwt` and only compares when the ref is truthy, so if staging ever moves
-to a new-format key its parity check degrades **silently** to `UNRESOLVED` and
-still prints `parity: OK` instead of failing. Worth making it fail closed the
-way the EAS gate does.
+**B. The next TestFlight build will fail its own gate** - unchanged from
+Stage 4A. The EAS `preview` environment's `SUPABASE_KEY` is a new-format
+publishable key (`sb_pu…`); `refFromJwt` cannot resolve a ref from it, so
+`evaluateGate` fails closed and exits 1 before dependencies install. Replace
+the value with the legacy `eyJ…` anon key - **production's**, because the
+`testflight` profile selects the `preview` environment and
+`EXPECTED_REF.testflight` is the production ref. Related trap:
+`verify-schema.mjs` shares `refFromJwt` and only compares a truthy ref, so a
+staging move to a new-format key would degrade its parity check silently to
+`UNRESOLVED`; worth making it fail closed like the EAS gate.
 
-**B. "preview" names two different things.** `EXPECTED_REF` maps
-`preview → STAGING_REF`, but `eas.json` declares no `preview` BUILD profile at
-all, while the EAS **environment** named `preview` holds production credentials
-and is what the `testflight` profile selects. Nothing is broken - the deliberate
-`EXPECTED_REF.testflight → production` decision is what actually applies - but
-the two files read together imply preview means staging, which is false. The
-distinction is now documented in the `EXPECTED_REF` docblock.
+**C. "preview" names two different things.** `EXPECTED_REF` maps
+`preview → STAGING_REF`, but `eas.json` declares no `preview` BUILD profile;
+the EAS **environment** named `preview` holds production credentials and is
+what the `testflight` profile selects. Nothing is broken - the deliberate
+`EXPECTED_REF.testflight → production` decision applies - but the two files
+read together imply preview means staging, which is false. Documented in the
+`EXPECTED_REF` docblock.
 
-**C. `EXPO_PUBLIC_PAYMENTS_MODE` still governs whether payments run.** Leaving
-it unset reproduces the old `__DEV__` behaviour exactly. To get payments on a
-release build, set `EXPO_PUBLIC_PAYMENTS_MODE=sandbox` in `.env` and **restart
-Metro** (Expo inlines `EXPO_PUBLIC_*` at bundle time; a hot reload will not pick
-it up). It is declared in `.env.example` as of commit `4d78ce9`.
+**D. `EXPO_PUBLIC_PAYMENTS_MODE` still governs whether payments run.**
+Unset reproduces the old `__DEV__` behaviour exactly. For payments on a
+release build, set `EXPO_PUBLIC_PAYMENTS_MODE=sandbox` in `.env` and restart
+Metro (Expo inlines `EXPO_PUBLIC_*` at bundle time). Declared in
+`.env.example` since commit `4d78ce9`.
 
-**D. `RAISE NOTICE` is invisible in the Supabase SQL Editor.** The dashboard
-renders query results only, and Postgres does not log below WARNING by default,
-so the notices are not in the logs either. Any runbook step that said "read the
-NOTICE output" was unfollowable. Acceptance for these single-transaction
-migrations is **"Success. No rows returned." with no error** - the self-check
-raises on failure and rolls the whole thing back - and the real gate is a green
-`node scripts/verify-schema.mjs`. Corrected throughout
-`docs/runbooks/phase67-account-deletion.md`, which keeps the expected NOTICE
-text as a `psql`-only reference.
-
-## One documentation error this run corrected, worth remembering
-
-The previous HANDOFF and `docs/audits/STAGE4A_FINDINGS.md` both claimed
-`docs/architecture.md:48` says payments are "disabled in a release". That line
-is in the **Auth and session boundary** section and is about
-`EXPO_PUBLIC_PHONE_AUTH_MODE`, where it remains exactly true. The dispatch
-prompt for this run inherited the error from those documents. Two documents
-agreeing is not evidence when one of them is where the other one read it. The
-real gap - that `docs/architecture.md` documented the sandbox payment flow but
-never said how availability is decided - is now filled in its Money section.
+**E. `RAISE NOTICE` is invisible in the Supabase SQL Editor.** Acceptance
+for single-transaction migrations is "Success. No rows returned." with no
+error, plus the real gate: a green verify-schema. phase74 and phase75 were
+both written post-lesson - each ends with a visible-acceptance SELECT that
+returns its outcome as rows.

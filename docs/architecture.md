@@ -143,6 +143,12 @@ Integer cents throughout, formatted only through `formatBudget()`.
 adapter in `lib/adapters/payments.ts` into SECURITY DEFINER RPCs, never from a
 screen. `payments` grants SELECT to its two parties and nothing more.
 
+Amounts are bounded above as well as below (phase75): job budgets, offer
+amounts and payment amounts carry a 10,000,000-cent ($100,000) ceiling,
+enforced by CHECK constraints on `jobs`, `job_offers` and `payments` rather
+than in any function, so every writer is bound — including future ones. Tips
+keep their separate $1,000 cap in `sandbox_tip_worker()`.
+
 `payment_status` is `unfunded, authorized, held, released, paid_out, failed,
 voided, refunded, partially_refunded`. A legacy `pending` label exists in the
 live enum from a pre-repository scaffold; nothing writes it and the client
@@ -240,6 +246,13 @@ recipient, UPDATE column-granted to `read_at` only), so nothing is
 double-written. Preferences live in `notification_prefs`; device tokens in
 `push_tokens`, unregistered on sign-out.
 
+The outbox now drains on a schedule (phase74): pg_cron fires
+`public.drain_notification_outbox()` every minute; that function reads the
+endpoint and the `service_role` key from Supabase Vault and posts to the
+`send-push` Edge Function through pg_net. The call is fire-and-forget, so
+`cron.job_run_details` reports success independently of delivery —
+`net._http_response` is where the outcome actually lands.
+
 ## Security model
 
 RLS is on everywhere. Anything a caller cannot legitimately see under RLS is
@@ -250,6 +263,15 @@ unreachable until a migration grants it explicitly. phase64 pinned `search_path`
 on security definer bodies; phase65 made views `security_invoker`. Client code
 never trusts its own state for a transition that matters: it calls the RPC and
 handles the error.
+
+phase75 removed anon's INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER
+grants from seventeen tables. anon's SELECT is deliberately retained, because
+`scripts/verify-schema.mjs` probes column existence over PostgREST with the
+publishable key; the retention is inert — no policy on any of those tables
+admits anon, so the grant yields zero rows. In the same phase,
+`jobs_within_radius()` began returning a half-mile-snapped `distance_miles`
+and ordering by that snapped value, so the sort cannot leak the precision the
+rounding removes.
 
 ## Compatibility shims that really exist
 

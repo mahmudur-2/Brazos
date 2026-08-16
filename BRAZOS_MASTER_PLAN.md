@@ -56,23 +56,44 @@ Four more leave with Stage 4A and its tail, all evidenced in
   `review` icon key — no trigger emits that type; phase20 emits
   `review_received`.
 
-1. **Ship a scheduler for `send-push`.** Enqueue is automatic but nothing drains
-   the outbox — the phase20 pg_cron block is commented out, so notifications
-   arrive only on a manual invocation (CR §push, SS Q-PUSH). Beta needs pg_net +
-   pg_cron (or an equivalent scheduler) enabled and `send-push` fired on an
-   interval, with `claim_notification_batch` bounds unchanged.
-2. **Move the Supabase session store to SecureStore.** Access/refresh tokens
+Six more leave with Stage 4C — phase74 and phase75, applied to staging on
+2026-08-16, evidenced in `HANDOFF.md` and `docs/audits/STAGE4C_REPORT.md`:
+
+- **Ship a scheduler for `send-push`** — phase74 carried it: pg_cron fires
+  `drain_notification_outbox()` every minute, which reads Vault and posts to
+  `send-push` through pg_net; `claim_notification_batch` bounds unchanged.
+- **`delete_my_account` TOCTOU (SS #4)** — phase75 carried it: the caller's
+  party jobs are locked `FOR UPDATE` before the blocker gate reads.
+- **`jobs_within_radius` trilateration (SS #5)** — phase75 carried it:
+  distance snapped to a half mile, ordered and filtered on the snapped
+  value, radius clamped.
+- **Unbounded money amounts (SS #6)** — phase75 carried it: $100,000 CHECK
+  ceilings on `jobs`, `job_offers` and `payments`.
+- **`decline_offer()` sweep for cancelled jobs** — phase75 carried it: a
+  trigger on `jobs` settles pending offers on any cancellation, so every
+  canceller inherits it.
+- **The anon-revoke half of SS Q-RLS F7** — phase75 carried it: anon's write
+  privileges removed schema-wide; SELECT deliberately retained for the
+  verify-schema harness. The F5 half is NOT done and stays below.
+
+1. **Move the Supabase session store to SecureStore.** Access/refresh tokens
    persist in unencrypted AsyncStorage (SS #3) — a device-compromise exposure;
    swap the `createClient` storage adapter to `expo-secure-store`.
 
 ## Known follow-ups with a named cause
 
-- **`decline_offer()` sweep for cancelled jobs.** Account deletion cancels an
-  open posting with a raw UPDATE, because `transition_job_status()` permits
-  only `assigned → in_progress` and `in_progress → completed` and authorises
-  only the assigned worker. Offers other people authored on a cancelled job
-  therefore stay `pending` and nobody is notified. The fix is its own
-  migration.
+- **Full anon SELECT revoke, blocked on the harness.** *Named cause:* phase75
+  removed anon's write grants but kept SELECT, because
+  `scripts/verify-schema.mjs` probes ~55 columns over PostgREST with the
+  publishable key and its control check reads `jobs.photos` the same way.
+  Revoking SELECT would make the harness report those objects missing.
+  Closing it means rebuilding verify-schema's existence probe on a SECURITY
+  DEFINER introspection function first.
+- **Client-side money ceiling mirror.** *Named cause:* the $100,000 bound is
+  enforced only in the database, so a user who exceeds it sees a raw
+  constraint violation rather than a written message. Mirror it in `lib/`
+  alongside `MAX_COUNTERS_PER_SIDE` (`lib/offers.ts`) when the redesign
+  touches those forms.
 - **Retire the RPC-missing shims.** `lib/jobStatusCompatibility.ts` and
   `isMissingRpc()` in `lib/profiles.ts` exist only for deployments predating
   phase30/phase31. Retire them once every environment the app runs against is
@@ -123,22 +144,10 @@ Four more leave with Stage 4A and its tail, all evidenced in
 Each item cites `COMPLETION_REVIEW_2026-08-15.md` (CR) or
 `SECURITY_SWEEP_2026-08-15.md` (SS).
 
-- **`delete_my_account` TOCTOU (SS #4).** The blocker gate takes no locks and is
-  never re-checked, so a concurrent `accept_offer` can strand an assigned job on
-  a tombstoned party. Fix: re-run the blockers under `FOR UPDATE` on the caller's
-  party jobs before committing the tombstone. Its own migration.
-- **`jobs_within_radius` trilateration (SS #5).** Returns full-precision
-  `distance_miles` from a caller-chosen point with an unbounded radius; three
-  probes recover exact coordinates, eroding the approximate-location invariant.
-  Round or cell-snap the distance.
-- **Unbounded money amounts (SS #6).** create/counter offer and job budgets
-  reject only `<=0`, no ceiling; sandbox today but the gap must close before a
-  real payment provider. Only tips are capped.
-- **Capture pre-repo policies into migrations (SS Q-RLS F5) and add explicit
-  `revoke … from anon` on the RLS-only tables (F7).** The `payments` SELECT
-  policy is pre-repo and unauditable from files; several tables rely on
-  `authenticated`-scoped policies with no anon table-revoke — defense-in-depth,
-  matching phase29/50/51/53/56.
+- **Capture the pre-repo `payments` SELECT policy into a migration (SS Q-RLS
+  F5).** The policy predates the repository and is unauditable from files;
+  every other policy is declared in a numbered phase. (F7, the explicit anon
+  revoke, landed with phase75 and left this file.)
 - **Customer follow-along checklist is unrendered (CR §active-work).** RLS and UI
   copy promise a customer view of the worker's checklist, but no customer surface
   renders it. Either build the read surface or remove the promise.
