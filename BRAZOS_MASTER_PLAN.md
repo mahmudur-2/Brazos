@@ -37,29 +37,32 @@ on a physical iPhone. They leave this file. Their replacements below are each
 evidenced by `docs/audits/COMPLETION_REVIEW_2026-08-15.md` (CR) or
 `docs/audits/SECURITY_SWEEP_2026-08-15.md` (SS).
 
+Two more leave with Stage 4A. **The anon-EXECUTE state is settled and needs no
+remediation migration:** a direct read of the post-phase72 staging permission
+snapshot, covering all 121 functions in schema `public`, found exactly one
+anon-executable function - `job_categories_expanded()`, the intended one - zero
+functions still on the CREATE-time default ACL, and `worker_job_stats`,
+`deactivate_push_token` and `resolve_notification` all sealed. **The
+`saved_workers` save write is fixed** in the client as `ignoreDuplicates`
+(ON CONFLICT DO NOTHING); the cause was stated correctly here - the table has
+neither an UPDATE grant nor an UPDATE policy (phase53 grants `select, insert,
+delete` only, and defines those three policies only), and either absence alone
+refuses the conflict path.
+
 1. **Ship a scheduler for `send-push`.** Enqueue is automatic but nothing drains
    the outbox — the phase20 pg_cron block is commented out, so notifications
    arrive only on a manual invocation (CR §push, SS Q-PUSH). Beta needs pg_net +
    pg_cron (or an equivalent scheduler) enabled and `send-push` fired on an
    interval, with `claim_notification_batch` bounds unchanged.
-2. **Settle the effective anon-EXECUTE state on staging.** ~11 pre-phase32
-   functions revoke EXECUTE from `public` but never name `anon`; whether `anon`
-   still holds EXECUTE is NOT DETERMINABLE STATICALLY and only a live
-   `pg_proc.proacl` read (or the `verify-schema` sentinels) settles it (SS #2).
-   If drifted, `worker_job_stats`/`deactivate_push_token`/`resolve_notification`
-   are the concerning ones. A remediation migration follows only if the live
-   check shows anon EXECUTE.
-3. **Fix `transition_job_status` NULL-unsafe owner guard.** `assigned_worker_id
+2. **Fix `transition_job_status` NULL-unsafe owner guard.** `assigned_worker_id
    <> v_user` is NULL — not TRUE — when the job is unassigned, so an
    authenticated caller can read any unassigned job's full row as SECURITY
    DEFINER and use the error text as a status oracle (SS #1). Read-only, but it
    bypasses the `jobs` SELECT policies. Its own migration; present since phase58.
-4. **Fix the `saved_workers` save write.** `saveWorker` issues an upsert
-   (ON CONFLICT DO UPDATE) against a table with no UPDATE grant or policy — a
-   hard 42501 or a duplicate-save refusal depending on the live ACL (CR §saved
-   workers). Fix is `ignoreDuplicates` (ON CONFLICT DO NOTHING), a client change,
-   not a wider grant.
-5. **Move the Supabase session store to SecureStore.** Access/refresh tokens
+   **Migration written as
+   `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`, awaiting
+   hand-apply** - not applied to any database, so the defect is still live.
+3. **Move the Supabase session store to SecureStore.** Access/refresh tokens
    persist in unencrypted AsyncStorage (SS #3) — a device-compromise exposure;
    swap the `createClient` storage adapter to `expo-secure-store`.
 
@@ -93,6 +96,13 @@ evidenced by `docs/audits/COMPLETION_REVIEW_2026-08-15.md` (CR) or
 Each item cites `COMPLETION_REVIEW_2026-08-15.md` (CR) or
 `SECURITY_SWEEP_2026-08-15.md` (SS).
 
+The in-app notification dead-taps item (CR notifications) leaves this file.
+Stage 4A deleted `NotificationsScreen`'s own routing switch and delegated to
+`lib/notificationRoutes.ts`, the resolver the push tap already used: the
+direct-message, `review_received` and `WorkerJob` rows now open their subject
+instead of marking themselves read and stopping, and a row whose payload
+resolves to nothing is no longer tappable at all.
+
 - **`delete_my_account` TOCTOU (SS #4).** The blocker gate takes no locks and is
   never re-checked, so a concurrent `accept_offer` can strand an assigned job on
   a tombstoned party. Fix: re-run the blockers under `FOR UPDATE` on the caller's
@@ -106,15 +116,13 @@ Each item cites `COMPLETION_REVIEW_2026-08-15.md` (CR) or
   real payment provider. Only tips are capped.
 - **`unsend_message` active-user gate (SS #9).** Add the `is_active_user()` check
   its sibling write RPCs carry, so a banned account cannot blank its messages.
+  **Written as `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`,
+  awaiting hand-apply** - not applied to any database, so the gap is still live.
 - **Capture pre-repo policies into migrations (SS Q-RLS F5) and add explicit
   `revoke … from anon` on the RLS-only tables (F7).** The `payments` SELECT
   policy is pre-repo and unauditable from files; several tables rely on
   `authenticated`-scoped policies with no anon table-revoke — defense-in-depth,
   matching phase29/50/51/53/56.
-- **In-app notification dead-taps (CR §notifications).** Direct-message and
-  `review_received` feed rows mark-read and navigate nowhere; `WorkerJob` rows
-  land on the hub. Push taps are unaffected. Fix `NotificationsScreen` routing to
-  match `notificationRoutes`.
 - **Customer follow-along checklist is unrendered (CR §active-work).** RLS and UI
   copy promise a customer view of the worker's checklist, but no customer surface
   renders it. Either build the read surface or remove the promise.

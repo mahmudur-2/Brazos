@@ -19,8 +19,9 @@ schema claim below is one of:
    running it needs `.env` and a live database.
 4. **Pending / unapplied migrations** — SQL in the repository that has not been
    executed anywhere. `HANDOFF.md` names these; at the time of writing it names
-   `supabase/phase67_account_deletion.sql`, whose four verify-schema checks
-   report PENDING.
+   `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`, whose three
+   verify-schema checks report PENDING. (Phases 67-72 are applied to staging as
+   of 2026-08-15 and are no longer examples of this layer.)
 
 A migration file existing (layer 2) is not evidence the database has it (layer
 3). Only a green verify-schema is.
