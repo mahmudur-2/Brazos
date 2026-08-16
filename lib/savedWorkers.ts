@@ -32,10 +32,29 @@ export async function fetchSavedWorkers(userId: string) {
   return { data: rows, error };
 }
 
+/**
+ * Save a worker. ON CONFLICT DO NOTHING, not DO UPDATE.
+ *
+ * `ignoreDuplicates: true` is what makes PostgREST emit DO NOTHING, so the
+ * write needs INSERT and nothing more. The previous plain upsert compiled to
+ * ON CONFLICT DO UPDATE, and saved_workers carries neither an UPDATE grant nor
+ * an UPDATE policy (phase53) - so re-saving an already-saved worker was
+ * refused rather than being the no-op it should be.
+ *
+ * Widening the table's rights was the wrong repair: the row is (user_id,
+ * worker_id, created_at) and the first two ARE the primary key, so a duplicate
+ * save has nothing to update. The only thing DO UPDATE could touch is
+ * created_at, and silently restamping when the save happened would be a lie.
+ * Saving twice therefore succeeds, changes nothing, and keeps the original
+ * save time.
+ */
 export async function saveWorker(userId: string, workerId: string) {
   const { error } = await supabase
     .from('saved_workers')
-    .upsert({ user_id: userId, worker_id: workerId }, { onConflict: 'user_id,worker_id' });
+    .upsert(
+      { user_id: userId, worker_id: workerId },
+      { onConflict: 'user_id,worker_id', ignoreDuplicates: true }
+    );
   return { error };
 }
 

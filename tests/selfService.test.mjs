@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -20,6 +21,7 @@ import { dirname, join } from 'node:path';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
+const dir = (rel) => readdirSync(join(root, rel));
 
 test('phase53 posture: grants, allowlist, draft policies', async () => {
   const sql = await read('supabase/phase53_worker_self_service.sql');
@@ -39,6 +41,48 @@ test('phase53 posture: grants, allowlist, draft policies', async () => {
   // Function grants re-stated (phase32 lesson).
   assert.match(sql, /grant execute on function public\.update_my_profile\(jsonb\) to authenticated/);
   assert.match(sql, /grant execute on function public\.worker_self_service_enabled\(\) to authenticated/);
+});
+
+test('saving an already-saved worker is a silent no-op, not an UPDATE', async () => {
+  // saveWorker issued a plain upsert, which PostgREST compiles to ON CONFLICT
+  // DO UPDATE. saved_workers has no UPDATE grant and no UPDATE policy, so the
+  // conflict path was refused and a second save surfaced as an error.
+  const lib = await read('lib/savedWorkers.ts');
+  const start = lib.indexOf('export async function saveWorker');
+  assert.ok(start > 0, 'saveWorker must exist');
+  const body = lib.slice(start, lib.indexOf('export async function unsaveWorker'));
+
+  // DO NOTHING, so the write needs INSERT and nothing more.
+  assert.match(body, /ignoreDuplicates: true/, 'the save must take the DO NOTHING path');
+  assert.match(body, /onConflict: 'user_id,worker_id'/);
+
+  // The repair must stay client-side: nothing may hand the table UPDATE.
+  for (const file of dir('supabase').filter((f) => f.endsWith('.sql'))) {
+    const sql = (await read(`supabase/${file}`)).toLowerCase();
+    assert.ok(
+      !/on public\.saved_workers\s+for update/.test(sql),
+      `supabase/${file} adds an UPDATE policy to saved_workers; the client relies on DO NOTHING instead`
+    );
+    assert.ok(
+      !/grant[^;]*\bupdate\b[^;]*on public\.saved_workers/.test(sql),
+      `supabase/${file} grants UPDATE on saved_workers; the client relies on DO NOTHING instead`
+    );
+  }
+});
+
+test('the bookmark call site treats a duplicate save as success', async () => {
+  // With DO NOTHING there is no error to surface, so the toggle must land on
+  // saved. A guard that treated "no rows changed" as failure would re-create
+  // the defect in the UI instead of the query.
+  const src = await read('screens/WorkerProfileScreen.tsx');
+  const start = src.indexOf('async function toggleSaved()');
+  assert.ok(start > 0, 'toggleSaved must exist');
+  const body = src.slice(start, src.indexOf('}', src.indexOf('if (!saveError)', start)));
+
+  assert.match(body, /await saveWorker\(user\.id, params\.workerId\)/);
+  assert.match(body, /if \(!saveError\) setSavedByMe/);
+  // No count/rows check that would reinterpret an idempotent save as a failure.
+  assert.ok(!/\bcount\b|\.length === 0|data\?\.length/.test(body), 'no row-count failure test');
 });
 
 test('a NULL price is "Ask for a quote", never zero dollars', async () => {
