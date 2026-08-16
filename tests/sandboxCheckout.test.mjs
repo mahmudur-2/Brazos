@@ -29,19 +29,26 @@ const read = (rel) => readFile(join(root, rel), 'utf8');
 const modeUrl = pathToFileURL(join(root, 'lib/adapters/paymentsMode.ts')).href;
 const { resolvePaymentsMode } = await import(modeUrl);
 
-test('a release binary can never run sandbox money', () => {
+test('payments availability is declared, never inferred from the build type', () => {
+  // Stage 4A (2026-08-15) rewrote this assertion. It previously required that
+  // a release binary could NEVER run sandbox money. That rule left checkout,
+  // release, tip and cash-out dead on TestFlight - the build the beta is
+  // exercised on - so availability now comes from EXPO_PUBLIC_PAYMENTS_MODE
+  // and the build type is only the default. What did NOT change: sandbox is
+  // still the only functional provider, and it is still labelled on screen.
   const release = resolvePaymentsMode({ configured: 'sandbox', dev: false });
-  assert.equal(release.mode, 'disabled');
-  assert.ok(release.configError, 'refusing sandbox-in-release must surface a config error');
+  assert.equal(release.mode, 'sandbox');
+  assert.equal(release.configError, null);
 
-  // Defaults: sandbox only where __DEV__ is true; disabled everywhere else.
+  // Defaults are untouched: a build that declares nothing behaves as before.
   assert.equal(resolvePaymentsMode({ configured: undefined, dev: true }).mode, 'sandbox');
   assert.equal(resolvePaymentsMode({ configured: undefined, dev: false }).mode, 'disabled');
   assert.equal(resolvePaymentsMode({ configured: '', dev: false }).mode, 'disabled');
   assert.equal(resolvePaymentsMode({ configured: 'disabled', dev: true }).mode, 'disabled');
-  // Garbage falls back safely and says so.
+  // Garbage now fails CLOSED rather than falling back to the build default:
+  // an allow-list, not a block-list. Full table in tests/paymentsMode.test.mjs.
   const garbage = resolvePaymentsMode({ configured: 'stripe', dev: true });
-  assert.equal(garbage.mode, 'sandbox');
+  assert.equal(garbage.mode, 'disabled');
   assert.ok(garbage.configError);
 });
 
