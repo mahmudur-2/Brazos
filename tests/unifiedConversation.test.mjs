@@ -324,9 +324,14 @@ test('every entry point from the audit still opens Chat with a shape Chat accept
     ['screens/JobConfirmedScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
     ['screens/TrackWorkerScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
     ['screens/WorkerJobScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
-    ['screens/NotificationsScreen.tsx', /navigateAcrossTabs\('Messages', 'Chat', \{ jobId \}\)/],
-    ['lib/notificationRoutes.ts', /navigateChecked\(tab, 'Chat', \{ directThreadId: data\.directThreadId \}\)/],
-    ['lib/notificationRoutes.ts', /navigateChecked\(tab, data\.screen, \{ jobId: data\.jobId \}\)/],
+    // Stage 4A: the feed stopped opening Chat itself and delegates to the same
+    // router the push tap uses, so its entry point IS the delegation.
+    ['screens/NotificationsScreen.tsx', /handleNotificationData\(notification\.data\)/],
+    // Both Chat shapes are still built — now as resolved targets rather than
+    // at the call site — and dispatched by the single navigateChecked below.
+    ['lib/notificationRoutes.ts', /screen: 'Chat',\s*params: \{ directThreadId: data\.directThreadId \}/],
+    ['lib/notificationRoutes.ts', /screen: data\.screen, params: \{ jobId: data\.jobId \}/],
+    ['lib/notificationRoutes.ts', /navigateChecked\(target\.tab, target\.screen, target\.params\)/],
   ];
   for (const [file, pattern] of expected) {
     assert.match(stripComments(await read(file)), pattern, `${file} must still open Chat`);

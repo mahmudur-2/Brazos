@@ -55,9 +55,24 @@ test('the two Phase-6 events are wired and deduped', async () => {
 
 test('tap-through stays inside the shared tabs', async () => {
   const screen = await read('screens/NotificationsScreen.tsx');
-  // Both hops now go through the guarded cross-tab helper (lib/navigationRef.ts)
-  // rather than a hand-cast parent navigate — same two shared destinations.
-  assert.match(screen, /navigateAcrossTabs\('Messages', 'Chat'/);
-  assert.match(screen, /navigateAcrossTabs\('MyJobs', 'MyJobsHub'/);
-  assert.ok(!/switchMode|switchToOtherMode/.test(screen), 'no silent mode switching from a tap');
+  const routes = await read('lib/notificationRoutes.ts');
+
+  // Stage 4A: the feed no longer routes at all. It delegates to the resolver
+  // the push tap uses, so its destinations ARE TAB_FOR_SCREEN's — the exact
+  // set is asserted in tests/offerCopyAndRouting.test.mjs. What must hold
+  // here is that the feed kept none of its own cross-tab dispatch.
+  assert.match(screen, /handleNotificationData\(notification\.data\)/);
+  assert.doesNotMatch(screen, /navigateAcrossTabs\(/);
+
+  // And that nothing on the tap path can reach the mode-defining Home tab,
+  // which is the one destination that would require a mode change.
+  const start = routes.indexOf('const TAB_FOR_SCREEN');
+  assert.ok(start > 0, 'TAB_FOR_SCREEN must exist');
+  const map = routes.slice(start, routes.indexOf('};', start));
+  assert.ok(!/'Home'/.test(map), 'a notification must never route to the mode-defining Home tab');
+
+  assert.ok(
+    !/switchMode|switchToOtherMode/.test(screen + routes),
+    'no silent mode switching from a tap'
+  );
 });
