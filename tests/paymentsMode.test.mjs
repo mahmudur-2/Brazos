@@ -178,4 +178,18 @@ test('the simulated-money label is not itself gated on the build type', async ()
     /__DEV__[\s\S]{0,200}SANDBOX/,
     'the sandbox label must not be behind a build-type condition'
   );
+  // Nor may it ASSERT a build type. The label survives onto a release binary,
+  // so anything it claims has to be true there too — the money fact is, the
+  // build fact is not.
+  assert.doesNotMatch(
+    checkout,
+    /development build/,
+    'the sandbox copy must state the money fact, not the build type'
+  );
+  // The one condition it may carry is the resolved mode.
+  assert.match(
+    checkout,
+    /paymentsMode === 'sandbox'/,
+    'the banner is gated on the resolved payments mode'
+  );
 });

@@ -536,3 +536,130 @@ Recorded because both would otherwise have propagated as false claims:
 3. **Commit 4's blast radius** exceeded its stated search scope by two test
    files, which the per-commit validation policy could not have caught. Hence
    commit 4b.
+
+---
+---
+
+# Stage 4A-tail - 2026-08-16
+
+Run date: 2026-08-16. Base: `mainexpo` at `4d78ce9`, tree clean at start.
+Written incrementally, one section per commit. **No SQL was executed and no
+migration file was written in this run.** Three commits: the checkout sandbox
+label, the notification category reconciliation, and the documentation
+truth-up.
+
+Since the Stage 4A run above closed, two things changed on the operator's side
+and are now facts rather than pending items:
+
+- **phase73 is APPLIED to staging** (`zzkumxcjtbqoselzptig`) and
+  `node scripts/verify-schema.mjs` ran green on 2026-08-16 - every group OK,
+  zero MISSING, zero PENDING, including the three phase73 checks. The
+  NULL-unsafe owner guard in `transition_job_status` and the missing
+  active-user gate on `unsend_message` are both closed in the database.
+- **The residual anon-EXECUTE question is settled** by a live `pg_proc` read on
+  staging, 2026-08-16. Exactly ONE function in schema `public` is EXECUTE-able
+  by `anon`: `job_categories_expanded()`, SECURITY INVOKER, returns boolean,
+  ACL `postgres=X/postgres | anon=X/postgres | authenticated=X/postgres`. That
+  is the deliberate one (phase69 re-granted it). `worker_job_stats`,
+  `deactivate_push_token` and `resolve_notification` did NOT drift. **No
+  remediation migration is needed.** This evidence cannot be re-derived from
+  any file in the repository.
+
+---
+
+## Tail commit 1 - the checkout sandbox banner states the money fact, not the build fact
+
+### What changed
+
+| File | Change |
+| --- | --- |
+| `screens/CheckoutScreen.tsx` | banner copy rewritten; banner gated on the resolved mode; confirm-dialog copy corrected |
+| `tests/sandboxCheckout.test.mjs` | the pinned-string assertion updated, two negative guards added |
+| `tests/paymentsMode.test.mjs` | two assertions added to the label test |
+
+### The defect
+
+The banner read, verbatim, `SANDBOX — development build. No real money is
+charged, held or moved.` The first clause is a claim about the BUILD TYPE.
+Stage 4A commit `1a7b55e` moved payments availability to
+`EXPO_PUBLIC_PAYMENTS_MODE`, so sandbox payments now run on a release binary -
+and on TestFlight that sentence is simply false to the tester reading it. This
+was flagged, not fixed, in Stage 4A commit 1 above ("Flagged, not fixed").
+
+New copy, as specified:
+
+```
+SANDBOX — no real money moves. No real money is charged, held or
+transferred. The payment states below are real app records used to test
+the flow.
+```
+
+True on a development build and on TestFlight, and it states the money fact.
+"moved" became "transferred" for one reason only: `No real money is charged`
+is pinned by `tests/paymentsMode.test.mjs`, and keeping that phrase verbatim
+avoided weakening a live assertion for a cosmetic word.
+
+### The gate
+
+The banner was previously an unconditional entry in the `sections` array. It is
+now spread in only when `paymentsMode === 'sandbox'`.
+
+This is belt-and-braces rather than a behaviour change, and the reason is worth
+recording: `DetailScreen` renders `sections` **only** when `isReady(state)`,
+and `CheckoutScreen`'s state resolves to `permissionDenied` whenever
+`paymentsMode !== 'sandbox'` - so the banner could not already appear on a
+disabled build. That made the correct behaviour an incidental consequence of
+the order of a five-arm ternary in an unrelated state machine. It is now
+structural.
+
+`configError` needs no separate condition: `resolvePaymentsMode` returns
+`mode: 'disabled'` on **every** path that sets a non-null `configError`, so
+`paymentsMode === 'sandbox'` already implies `configError === null`. A second
+runtime check would be unreachable code. That reasoning is in a comment at the
+gate so a future reader does not "fix" the omission.
+
+### One deliberate extension beyond the literal brief
+
+The brief named the banner. The same screen's `ConfirmDialog` message carried
+the identical falsehood one tap later:
+
+> "No real money is being charged **in this development build**."
+
+Changed to "No real money is being charged — this is sandbox." It is the same
+defect, the same false build-type claim, in the same file, shown to the same
+tester, and CLAUDE.md's invariant is that money labels follow the payment state
+machine *everywhere, including UI copy*. Fixing the banner and leaving this
+would have shipped a half-fix. Flagged here because it was not in the brief;
+it is a one-line revert if unwanted. `tests/sandboxCheckout.test.mjs` pinned
+the old string too, and was updated in the same commit.
+
+### Assertions updated, and the direction of the fix
+
+Two files pinned the old strings. Both are **tests fixed, not code bent**: they
+asserted the copy this commit is deliberately correcting.
+
+| File | Was | Now |
+| --- | --- | --- |
+| `tests/sandboxCheckout.test.mjs` | `/SANDBOX — development build\. No real money/` | `/SANDBOX — no real money moves\. No real money is charged/` |
+| `tests/sandboxCheckout.test.mjs` | `/No real money is being charged in this development build/` | `/No real money is being charged — this is sandbox/` |
+
+Three guards were added so the string cannot regress:
+
+- `doesNotMatch(/SANDBOX — development build/)` and
+  `doesNotMatch(/in this development build/)` in `sandboxCheckout.test.mjs`.
+- `doesNotMatch(/development build/)` over the comment-stripped screen in
+  `paymentsMode.test.mjs` - the label survives onto a release binary, so
+  anything it claims has to be true there too.
+- `match(/paymentsMode === 'sandbox'[\s\S]{0,400}styles\.sandboxBanner/)` -
+  the banner renders iff the resolved mode is sandbox.
+
+The pre-existing `doesNotMatch(/__DEV__[\s\S]{0,200}SANDBOX/)` still holds:
+nothing in the screen references `__DEV__`.
+
+No RPC, amount, cents arithmetic, payment state or state-machine rule was
+touched. This commit is a label.
+
+### Checks
+
+`npm run verify` in full (lint, then `node --test tests/*.test.mjs`) -
+**544 tests, 544 pass, 0 fail, 0 cancelled, 0 skipped, 0 todo.**

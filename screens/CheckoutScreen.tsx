@@ -167,18 +167,30 @@ export function CheckoutScreen() {
         onBack={goBackOrHome}
         state={state}
         sections={[
-          {
-            content: (
-              <View style={styles.sandboxBanner} accessibilityRole="alert">
-                <Ionicons name="flask-outline" size={18} color={colors.warning} />
-                <Text style={styles.sandboxText}>
-                  SANDBOX — development build. No real money is charged, held or
-                  moved. The payment states below are real app records used to
-                  test the flow.
-                </Text>
-              </View>
-            ),
-          },
+          /**
+           * The banner states the MONEY fact, not the build fact. Stage 4A
+           * moved availability to EXPO_PUBLIC_PAYMENTS_MODE, so sandbox
+           * payments run on a release binary too — "development build" was a
+           * false statement to a TestFlight tester. It renders iff the
+           * RESOLVED mode is sandbox; a configError always resolves to
+           * disabled, so that case is covered by the same condition.
+           */
+          ...(paymentsMode === 'sandbox'
+            ? [
+                {
+                  content: (
+                    <View style={styles.sandboxBanner} accessibilityRole="alert">
+                      <Ionicons name="flask-outline" size={18} color={colors.warning} />
+                      <Text style={styles.sandboxText}>
+                        SANDBOX — no real money moves. No real money is charged,
+                        held or transferred. The payment states below are real
+                        app records used to test the flow.
+                      </Text>
+                    </View>
+                  ),
+                },
+              ]
+            : []),
           {
             title: 'What you’re protecting',
             content: (
@@ -277,7 +289,7 @@ export function CheckoutScreen() {
       <ConfirmDialog
         visible={confirmVisible}
         title={`Protect ${formatBudget(amountCents)} for this job?`}
-        message="This authorizes the sandbox amount and places it in protected/held state. No real money is being charged in this development build. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done."
+        message="This authorizes the sandbox amount and places it in protected/held state. No real money is being charged — this is sandbox. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done."
         confirmText="Authorize & protect"
         cancelText="Not now"
         loading={funding}
