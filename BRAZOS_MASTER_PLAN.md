@@ -37,32 +37,31 @@ on a physical iPhone. They leave this file. Their replacements below are each
 evidenced by `docs/audits/COMPLETION_REVIEW_2026-08-15.md` (CR) or
 `docs/audits/SECURITY_SWEEP_2026-08-15.md` (SS).
 
-Two more leave with Stage 4A. **The anon-EXECUTE state is settled and needs no
-remediation migration:** a direct read of the post-phase72 staging permission
-snapshot, covering all 121 functions in schema `public`, found exactly one
-anon-executable function - `job_categories_expanded()`, the intended one - zero
-functions still on the CREATE-time default ACL, and `worker_job_stats`,
-`deactivate_push_token` and `resolve_notification` all sealed. **The
-`saved_workers` save write is fixed** in the client as `ignoreDuplicates`
-(ON CONFLICT DO NOTHING); the cause was stated correctly here - the table has
-neither an UPDATE grant nor an UPDATE policy (phase53 grants `select, insert,
-delete` only, and defines those three policies only), and either absence alone
-refuses the conflict path.
+Four more leave with Stage 4A and its tail, all evidenced in
+`HANDOFF.md` and `docs/audits/STAGE4A_FINDINGS.md`:
+
+- **anon-EXECUTE is settled and needs no remediation migration** — a live
+  `pg_proc` read on staging, 2026-08-16, found exactly one anon-executable
+  function in schema `public`, the deliberate one. Evidence, including the ACL
+  string, is in `HANDOFF.md`; it exists nowhere else.
+- **`transition_job_status`'s NULL-unsafe owner guard and `unsend_message`'s
+  missing active-user gate are both CLOSED** by
+  `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`, applied to
+  staging and verified green on 2026-08-16.
+- **The `saved_workers` save write is fixed** in the client as
+  `ignoreDuplicates` (ON CONFLICT DO NOTHING). The table has neither an UPDATE
+  grant nor an UPDATE policy, and either absence alone refuses the conflict
+  path.
+- **The in-app notification dead-taps are fixed**, plus the feed's dead
+  `review` icon key — no trigger emits that type; phase20 emits
+  `review_received`.
 
 1. **Ship a scheduler for `send-push`.** Enqueue is automatic but nothing drains
    the outbox — the phase20 pg_cron block is commented out, so notifications
    arrive only on a manual invocation (CR §push, SS Q-PUSH). Beta needs pg_net +
    pg_cron (or an equivalent scheduler) enabled and `send-push` fired on an
    interval, with `claim_notification_batch` bounds unchanged.
-2. **Fix `transition_job_status` NULL-unsafe owner guard.** `assigned_worker_id
-   <> v_user` is NULL — not TRUE — when the job is unassigned, so an
-   authenticated caller can read any unassigned job's full row as SECURITY
-   DEFINER and use the error text as a status oracle (SS #1). Read-only, but it
-   bypasses the `jobs` SELECT policies. Its own migration; present since phase58.
-   **Migration written as
-   `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`, awaiting
-   hand-apply** - not applied to any database, so the defect is still live.
-3. **Move the Supabase session store to SecureStore.** Access/refresh tokens
+2. **Move the Supabase session store to SecureStore.** Access/refresh tokens
    persist in unencrypted AsyncStorage (SS #3) — a device-compromise exposure;
    swap the `createClient` storage adapter to `expo-secure-store`.
 
@@ -84,6 +83,34 @@ refuses the conflict path.
 - **Customer-safe market preview route.** `JobDetail` is registered in the Map
   and MyJobs stacks, so a customer drilling into a map cell can still reach a
   worker surface. Closing it needs a new customer-facing preview screen.
+- **The next TestFlight build fails its own gate — replace the EAS `preview`
+  environment's `SUPABASE_KEY` with a legacy `eyJ…` anon key.** *Named cause:*
+  the value is a new-format publishable key (`sb_pu…`), and `refFromJwt`
+  (`scripts/supabase-ref.mjs`) returns null for it because there is no JWT
+  payload to decode. `evaluateGate` then reports `env:SUPABASE_KEY does not
+  resolve to a Supabase project ref` and exits 1 **before dependencies
+  install**. The gate is working exactly as designed — fail closed on anything
+  it cannot prove — so this is a configuration fix, not a code fix, and it is
+  an operator action outside any run. It must be the legacy anon key for the
+  **production** project, because `EXPECTED_REF.testflight` is `PRODUCTION_REF`.
+  *Second-order:* `scripts/verify-schema.mjs` shares the same `refFromJwt`, and
+  its parity check only compares when the key ref is truthy
+  (`if (keyRef && appRef && keyRef !== appRef)`). If staging ever moves to a
+  new-format key, that check degrades **silently** to `UNRESOLVED` and still
+  prints `parity: OK` rather than failing. Worth making it fail closed the way
+  the EAS gate does.
+- **"preview" means two different things across `eas.json` and the build
+  gate.** *Named cause:* `EXPECTED_REF` (`scripts/eas-build-pre-install.mjs`)
+  maps `preview → STAGING_REF`, but `eas.json` declares no `preview` BUILD
+  profile at all — only `development`, `testflight` and `production`. The EAS
+  **environment** named `preview` is a different namespace, it holds
+  **production** credentials, and it is what the `testflight` build profile
+  selects (`"environment": "preview"`). Nothing is broken today:
+  `EAS_BUILD_PROFILE` is `testflight` on that build and
+  `EXPECTED_REF.testflight → PRODUCTION_REF` is the deliberate documented
+  decision ("TestFlight binaries reach real testers with real data"). But the
+  two files read together imply preview means staging, which is false. Fix is
+  documentation at the point of collision, or renaming the environment.
 - **Production rebuild from a staging dump (standing decision).** Production
   (`avkighsiufeefyycbebf`) has none of the staging migrations and holds dev
   exhaust only, no real users. Rather than replay the numbered queue, the
@@ -96,13 +123,6 @@ refuses the conflict path.
 Each item cites `COMPLETION_REVIEW_2026-08-15.md` (CR) or
 `SECURITY_SWEEP_2026-08-15.md` (SS).
 
-The in-app notification dead-taps item (CR notifications) leaves this file.
-Stage 4A deleted `NotificationsScreen`'s own routing switch and delegated to
-`lib/notificationRoutes.ts`, the resolver the push tap already used: the
-direct-message, `review_received` and `WorkerJob` rows now open their subject
-instead of marking themselves read and stopping, and a row whose payload
-resolves to nothing is no longer tappable at all.
-
 - **`delete_my_account` TOCTOU (SS #4).** The blocker gate takes no locks and is
   never re-checked, so a concurrent `accept_offer` can strand an assigned job on
   a tombstoned party. Fix: re-run the blockers under `FOR UPDATE` on the caller's
@@ -114,10 +134,6 @@ resolves to nothing is no longer tappable at all.
 - **Unbounded money amounts (SS #6).** create/counter offer and job budgets
   reject only `<=0`, no ceiling; sandbox today but the gap must close before a
   real payment provider. Only tips are capped.
-- **`unsend_message` active-user gate (SS #9).** Add the `is_active_user()` check
-  its sibling write RPCs carry, so a banned account cannot blank its messages.
-  **Written as `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`,
-  awaiting hand-apply** - not applied to any database, so the gap is still live.
 - **Capture pre-repo policies into migrations (SS Q-RLS F5) and add explicit
   `revoke … from anon` on the RLS-only tables (F7).** The `payments` SELECT
   policy is pre-repo and unauditable from files; several tables rely on

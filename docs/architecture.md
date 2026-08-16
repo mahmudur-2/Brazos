@@ -18,10 +18,10 @@ schema claim below is one of:
    last reported, recorded in `HANDOFF.md`. Never re-verified from here;
    running it needs `.env` and a live database.
 4. **Pending / unapplied migrations** — SQL in the repository that has not been
-   executed anywhere. `HANDOFF.md` names these; at the time of writing it names
-   `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`, whose three
-   verify-schema checks report PENDING. (Phases 67-72 are applied to staging as
-   of 2026-08-15 and are no longer examples of this layer.)
+   executed anywhere. `HANDOFF.md` names these. As of 2026-08-16 this layer is
+   **empty**: phases 67-73 are all applied to staging and `verify-schema`
+   reports zero MISSING and zero PENDING across every group. The layer is kept
+   because it fills again the moment a new `phaseNN_*.sql` is written.
 
 A migration file existing (layer 2) is not evidence the database has it (layer
 3). Only a green verify-schema is.
@@ -148,6 +148,20 @@ voided, refunded, partially_refunded`. A legacy `pending` label exists in the
 live enum from a pre-repository scaffold; nothing writes it and the client
 union deliberately excludes it, so no screen can render a state the payment
 model does not define. `payment_kind` is `job_payment | tip`.
+
+**Availability is declared, never inferred from the build type.**
+`EXPO_PUBLIC_PAYMENTS_MODE` selects it and `lib/adapters/paymentsMode.ts`
+resolves it as an allow-list: `sandbox` → sandbox on *any* build, `disabled` →
+disabled on *any* build, unset/blank → sandbox in development and disabled
+otherwise, anything else → disabled with the reason in `configError`. So
+sandbox money runs on a release binary — that is deliberate, because TestFlight
+is the build the beta is exercised on, and it is why the checkout banner states
+the money fact ("SANDBOX — no real money moves") rather than the build type.
+There is no `live`, `real` or `production` value and no code path behind the
+resolver that could reach a real provider; the sandbox RPCs are the only
+functional one that exists. Contrast phone auth above, whose `mock` provider
+*is* refused outside development — a mock credential path and clearly-labelled
+simulated money are not the same risk.
 
 The flow is sandbox: checkout creates a payment that stops at `held`; release
 happens on customer approval or the 72-hour auto-release clock, stamped with

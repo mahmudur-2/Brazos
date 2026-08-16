@@ -811,3 +811,164 @@ Unchanged and still pinned. The three owning tabs remain `Messages`, `MyJobs`,
 `Profile`, all mounted in both trees; no route requires `switchMode()`; the
 existing `Home` guard in `tests/notificationFeed.test.mjs` and the tab-set
 `deepEqual` in `tests/offerCopyAndRouting.test.mjs` both still hold.
+
+### Checks
+
+`npm run verify` in full - **547 tests, 547 pass, 0 fail, 0 cancelled,
+0 skipped, 0 todo** (544 + the three new ones).
+
+Committed as `5d72be6`.
+
+---
+
+## Tail commit 3 - documentation truth-up
+
+Files: `HANDOFF.md` (rewritten), `BRAZOS_MASTER_PLAN.md`,
+`docs/architecture.md`, `docs/runbooks/phase67-account-deletion.md`,
+`scripts/eas-build-pre-install.mjs` (comment only), and this file.
+
+### 3.3 correction - architecture.md:48 is about PHONE AUTH, not payments
+
+**The brief's premise is wrong, and it inherited the error from this
+repository.** The brief says *"Line ~48 states payments are 'disabled in a
+release'. Stale since Stage 4A commit `1a7b55e`."*
+
+`docs/architecture.md:44-53` is the **Auth and session boundary** section, and
+the sentence is:
+
+> `EXPO_PUBLIC_PHONE_AUTH_MODE` selects one; unset means mock in development
+> and disabled in a release, and mock is impossible when `__DEV__` is false.
+
+That is `EXPO_PUBLIC_PHONE_AUTH_MODE`, not `EXPO_PUBLIC_PAYMENTS_MODE`, and it
+is **still exactly true**: `lib/phoneAuth/mode.ts` returns
+`dev ? 'mock' : 'disabled'` when unset, and explicitly refuses `mock` when
+`!dev` with a configError. Stage 4A never touched phone auth. Rewriting that
+line to describe payments would have replaced a true statement with a false
+one.
+
+The error's origin is traceable: Stage 4A commit 5 wrote
+*"`docs/architecture.md:48` still says payments are 'disabled in a release'"*
+into `HANDOFF.md` and into this file's commit-1 section, and the brief for this
+run picked it up from there. Both instances are now corrected. The near-miss is
+worth naming: two documents agreeing is not evidence when one of them is where
+the other one read it.
+
+**The underlying task was still real, in a different place.**
+`docs/architecture.md`'s Money section documented the sandbox flow but said
+**nothing at all** about how payments availability is decided - no
+`EXPO_PUBLIC_PAYMENTS_MODE`, no resolver, no mention that the build type is not
+the gate. That contract is now written into §Money, including the deliberate
+contrast with phone auth (a mock credential path is refused outside
+development; clearly-labelled simulated money is not, because TestFlight is the
+build the beta runs on).
+
+Also corrected in the same file: the source-of-truth layer 4 paragraph still
+said phase73's three checks report PENDING. Phase73 is applied and verified, so
+layer 4 is currently empty. Nothing else in the file was rewritten.
+
+### 3.4 runbook - `RAISE NOTICE` is invisible in the Supabase SQL Editor
+
+`docs/runbooks/phase67-account-deletion.md` is the only runbook in
+`docs/runbooks/`, and it carried the instruction twice: once for phase67's
+section-1 foreign-key notice and closing counts, once for phase68's
+"Read the NOTICE output. Expect exactly these six lines".
+
+The SQL Editor renders query **results** only. `RAISE NOTICE` is a server
+notice, not a result set, and Postgres' default `log_min_messages = warning`
+means it is not in the dashboard logs either. The instruction was unfollowable
+as written and has already cost an operator a hunt for a panel that does not
+exist.
+
+What replaced it, in all three places plus a new box at the top of the file and
+a line in "Reminders that apply to every migration here":
+
+- **"Success. No rows returned." with no error IS the pass.** Each of these
+  migrations is a single transaction whose self-check raises on failure, and a
+  raised exception rolls the whole thing back and *is* shown in the editor. So
+  a clean run cannot coexist with a failed self-check.
+- **The real gate is a green `node scripts/verify-schema.mjs`** - the sentinel
+  and its checks only flip PENDING -> OK when the objects genuinely exist.
+- **The expected NOTICE text is kept**, clearly marked as `psql`-only, since
+  applying with `psql -f` does surface it and the lines are useful there.
+
+The file's own preamble claimed the procedure was preserved verbatim with
+nothing reworded; that claim is now scoped to name this correction, so the file
+does not contradict itself.
+
+Searched for the same instruction elsewhere. `PROD_APPLY.md` has none.
+`docs/audits/HARDENING_RUN_A_2026-08-14.md` mentions the NOTICE expectation
+only by cross-reference to the runbook, and it is a dated audit record -
+history, not an instruction to an operator - so it was left alone; its
+description stays accurate because the NOTICE text is still in the runbook.
+`docs/archive/` is never an authority for anything current and was not touched.
+
+### EAS finding 1 - the next TestFlight build fails its own gate
+
+**Mechanism verified from the repository; the environment value itself is the
+operator's live observation and cannot be checked from here** (EAS environment
+variables live on EAS, not in the tree).
+
+`scripts/eas-build-pre-install.mjs` runs as the `eas-build-pre-install` hook,
+before dependencies install, and exits 1 on anything it cannot prove.
+`evaluateGate` requires **every** ref source to resolve:
+
+```js
+if (!source.ref) {
+  problems.push(`${source.name} does not resolve to a Supabase project ref`);
+}
+```
+
+`refFromJwt` (`scripts/supabase-ref.mjs:30-36`) base64-decodes
+`String(k).split('.')[1]`. A new-format publishable key (`sb_pu…`) has no `.`
+segments, so that index is `undefined`, the decode throws, and the catch
+returns `null`. The EAS `preview` environment's `SUPABASE_KEY` is such a key,
+so `env:SUPABASE_KEY does not resolve to a Supabase project ref` and the build
+dies before `npm install`.
+
+**The gate is working as designed. The configuration is what is wrong.** Fix is
+an operator action outside any run: replace that value with the legacy `eyJ…`
+anon key. It must be **production's** legacy key, because the `testflight`
+profile selects the `preview` environment and `EXPECTED_REF.testflight` is
+`PRODUCTION_REF`.
+
+**Second-order, and worth its own item.** `scripts/verify-schema.mjs` imports
+the same `refFromJwt`, but its parity check is conditional on the ref being
+truthy:
+
+```js
+if (keyRef && appRef && keyRef !== appRef) { problems.push(...) }
+```
+
+A null `keyRef` therefore skips the comparison entirely: the run prints
+`app .env SUPABASE_KEY ref : UNRESOLVED` and then `parity: OK`. If staging ever
+moves to a new-format key, the check that exists to stop the tooling reporting
+green about a database the app never touches **degrades silently** instead of
+failing closed the way the EAS gate does. Only `!appRef` is a hard failure.
+
+### EAS finding 2 - "preview" names two different things
+
+Confirmed from the files. `eas.json`'s `build` block declares exactly three
+profiles: `development`, `testflight`, `production`. **There is no `preview`
+build profile.** `EXPECTED_REF` nonetheless maps `preview -> STAGING_REF`.
+
+Separately, EAS *environments* are their own namespace, and `testflight`
+selects one: `"channel": "preview"`, `"environment": "preview"`. That
+environment holds **production** credentials.
+
+Nothing is broken. `EAS_BUILD_PROFILE` on that build is `testflight`, so the
+gate uses `EXPECTED_REF.testflight -> PRODUCTION_REF`, which is the deliberate
+documented decision. The `preview` row is simply unreachable today. The hazard
+is that the two files read together imply preview means staging, which is
+false in the only sense that currently exists.
+
+Documented where a reader hits it: the `EXPECTED_REF` docblock in
+`scripts/eas-build-pre-install.mjs` (comment only - no behaviour change, and
+the entry was kept rather than deleted so that adding a real `preview` profile
+later cannot land unpinned).
+
+### Checks
+
+`npm run verify` re-run AFTER the documentation edits, because
+`tests/governance.test.mjs` reads `HANDOFF.md`, `BRAZOS_MASTER_PLAN.md` and
+`docs/architecture.md` as ACTIVE_DOCS, and `tests/buildGate.test.mjs` asserts
+over `scripts/eas-build-pre-install.mjs`.

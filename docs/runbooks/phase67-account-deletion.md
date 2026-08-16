@@ -14,8 +14,37 @@ Applying phase68 afterwards is a separate step with its own section at the
 bottom of this file.
 
 This procedure is preserved **verbatim** from the HANDOFF.md that carried it
-(repository state at commit `260a17f`). Only formatting has changed; no
-requirement, expectation or assertion has been added, removed or reworded.
+(repository state at commit `260a17f`), with one exception, corrected
+2026-08-16: every acceptance step that told the operator to *read the NOTICE
+output* has been replaced, because the Supabase SQL Editor does not display
+`RAISE NOTICE` at all. See the box below. No other requirement, expectation or
+assertion has been added, removed or reworded.
+
+---
+
+## READ THIS FIRST — `RAISE NOTICE` is invisible in the SQL Editor
+
+Every migration in this repository reports progress with `raise notice`. **None
+of it reaches the Supabase dashboard.** The SQL Editor renders query *results*
+only, and Postgres does not log below `WARNING` by default
+(`log_min_messages = warning`), so the notices are not in the dashboard logs
+either. An operator has already gone hunting for a panel that does not exist.
+
+What that changes about acceptance:
+
+- **The gate is the absence of an error.** Every migration here is a single
+  transaction whose self-check `raise`s an exception on failure, and an
+  exception rolls the whole thing back. So **"Success. No rows returned." with
+  no error means the self-check passed.** There is nothing else to look for in
+  the editor.
+- **The real proof is `node scripts/verify-schema.mjs`.** A migration's
+  sentinel and checks flip from PENDING to OK only when the objects genuinely
+  exist. That run is what counts as applied — SQL Editor success on its own
+  never was.
+- **The expected NOTICE text below is kept for `psql`.** Applying with
+  `psql -f` (or any client that surfaces server notices) does print those
+  lines, and they are useful there. In the SQL Editor, expect to see none of
+  them; their absence is not a failure.
 
 ---
 
@@ -25,15 +54,22 @@ Paste `supabase/phase67_account_deletion.sql` into the Supabase SQL Editor for
 **STAGING `zzkumxcjtbqoselzptig`** and run it. It was amended this run and never
 executed anywhere. Then confirm two things the repo cannot prove:
 
-1. The section-1 DO block's NOTICE names the dropped `auth.users` foreign keys
-   (expect `public.profiles`). Zero dropped on a first run means the FK was
-   never there — investigate before trusting the tombstone.
+1. **In the SQL Editor:** "Success. No rows returned." with no error. That is
+   the whole acceptance signal there — see the box above. The section-1 DO
+   block's NOTICE (which names the dropped `auth.users` foreign keys, expect
+   `public.profiles`) is **not visible** in the editor. If you applied via
+   `psql`, that notice does print, and zero dropped on a first run means the FK
+   was never there — investigate before trusting the tombstone. From the SQL
+   Editor, check the FK instead by querying `pg_constraint` for a remaining
+   `auth.users` reference from `public.profiles`.
 2. Walk a throwaway staging account through delete end to end, with an OPEN
-   posting on it. Expect: deletion succeeds, the posting flips to `cancelled`,
-   and the closing NOTICE reports the counts.
+   posting on it. Expect: deletion succeeds and the posting flips to
+   `cancelled` — verify both by *reading the rows*, not by looking for the
+   closing count NOTICE, which the editor does not show.
 
 Only a green `node scripts/verify-schema.mjs` counts as applied — 4 phase67
-checks report PENDING and become mandatory automatically.
+checks report PENDING and become mandatory automatically. **That run is the
+real gate**, not anything the SQL Editor prints.
 
 ---
 
@@ -67,6 +103,9 @@ in step 2 is checking:
 
 - Never execute SQL against any database from inside an autonomous run. This
   file is for a human at the SQL Editor.
+- **Do not look for `RAISE NOTICE` output in the dashboard.** It is never
+  shown. Acceptance is "Success. No rows returned." with no error, then a green
+  `node scripts/verify-schema.mjs`. Full explanation in the box at the top.
 - Staging only. Production (`avkighsiufeefyycbebf`) is never contacted, and
   `.env` stays pointed at staging.
 - Production has none of the staging migrations; its ordered queue is
@@ -93,7 +132,16 @@ preserved unchanged for that run.
 2. Paste the whole of `supabase/phase68_deleted_at_authorization.sql` and run
    it. It is one transaction and is safe to run more than once, including after
    a failed run.
-3. Read the NOTICE output. Expect exactly these six lines, then the pass line:
+3. **Accept on "Success. No rows returned." with no error.** phase68 is one
+   transaction and its self-check `raise`s on failure, so a clean run *is* the
+   self-check passing — there is nothing to read. Any `PHASE68 SELF-CHECK FAIL`
+   arrives as an **error**, which the editor does show; it aborts the
+   transaction, nothing is applied, and the message names the function and
+   which assertion failed.
+
+   The `raise notice` lines below are **not visible in the SQL Editor** (see
+   the box at the top of this file). They are kept as a reference for applying
+   with `psql`, which does print them:
 
    ```
    PHASE68 PATCHED: job_request_parties_ok(uuid, uuid) [FORM A, GATE-OTHER]
@@ -105,11 +153,11 @@ preserved unchanged for that run.
    PHASE68 SELF-CHECK PASS: 5 functions verified
    ```
 
-   `PHASE68 SELF-CHECK PASS: 5 functions verified` is the line that matters. Any
-   `PHASE68 SELF-CHECK FAIL` aborts the transaction and nothing is applied; the
-   message names the function and which assertion failed.
+   Not seeing `PHASE68 SELF-CHECK PASS: 5 functions verified` in the dashboard
+   is expected and is **not** a failure signal.
 4. Run `node scripts/verify-schema.mjs`. The six phase68 checks flip from
-   PENDING to OK. Only a green run counts as applied.
+   PENDING to OK. **This is the real gate** — only a green run counts as
+   applied.
 5. If something is wrong, paste `supabase/phase68_rollback.sql`. It restores all
    five bodies to their pre-phase68 form and drops the sentinel, and is itself
    safe to run more than once.
