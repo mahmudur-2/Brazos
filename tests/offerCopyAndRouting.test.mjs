@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+const dir = (path) => readdirSync(new URL(`../${path}`, import.meta.url));
 
 const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -16,22 +18,83 @@ const stripComments = (source) =>
 // feed ignored that and dropped every non-Chat job event on MyJobsHub, so the
 // notification announcing "your move" led nowhere near the respond card.
 
-test('the notifications feed opens job-detail payloads on the job itself', async () => {
+test('the notifications feed owns no routing of its own', async () => {
   const screen = stripComments(await read('screens/NotificationsScreen.tsx'));
 
-  assert.match(screen, /screen === 'ClientJobDetail' \|\| screen === 'JobDetail'/);
-  // Routed through the canonical push router, which loads the job row those
-  // two screens take as a param — rather than a second copy of that logic.
-  assert.match(screen, /handleNotificationData\(notification\.data\)/);
+  // Stage 4A (2026-08-15) rewrote this test. It used to pin the screen's OWN
+  // switch — a ClientJobDetail/JobDetail branch, a Chat branch and a
+  // MyJobsHub fallback, all behind `typeof jobId === 'string'`. That second
+  // copy had drifted from the push router: it dropped every payload carrying
+  // no jobId (a pre-hire direct message, a review) and sent WorkerJob to the
+  // hub instead of the job, marking the row read on the way. The switch is
+  // deleted; what must hold now is that the screen delegates and keeps none
+  // of it.
   assert.match(
     screen,
-    /import \{ handleNotificationData \} from '\.\.\/lib\/notificationRoutes';/
+    /import \{ canRouteNotification, handleNotificationData \} from '\.\.\/lib\/notificationRoutes';/
   );
+  assert.match(screen, /handleNotificationData\(notification\.data\)/);
 
-  // Chat still goes to Messages, and the hub stays the fallback for payloads
-  // that name no job screen.
-  assert.match(screen, /navigateAcrossTabs\('Messages', 'Chat', \{ jobId \}\)/);
-  assert.match(screen, /navigateAcrossTabs\('MyJobs', 'MyJobsHub'\)/);
+  // No second routing switch, and no direct cross-tab dispatch of its own.
+  assert.doesNotMatch(screen, /navigateAcrossTabs\(/);
+  assert.doesNotMatch(screen, /screen === '/);
+  assert.doesNotMatch(screen, /MyJobsHub/);
+
+  // A row that resolves to nothing is not tappable — a tap that only marks
+  // read is the defect this replaced.
+  assert.match(screen, /const routable = canRouteNotification\(n\.data\)/);
+  assert.match(screen, /onPress=\{routable \? \(\) => open\(n\) : undefined\}/);
+  assert.match(screen, /disabled=\{!routable\}/);
+});
+
+test('every notification payload the triggers emit resolves to a destination', async () => {
+  // The `screen` strings are a contract between the phase20/56/57/61 triggers
+  // and lib/notificationRoutes.ts. A payload naming a screen the resolver does
+  // not handle is a dead tap by construction, so the inventory is read from
+  // the migrations rather than restated here.
+  const emitted = new Set();
+  for (const file of dir('supabase').filter((f) => f.endsWith('.sql'))) {
+    const sql = await read(`supabase/${file}`);
+    for (const m of sql.matchAll(/'screen',\s*'([A-Za-z]+)'/g)) emitted.add(m[1]);
+  }
+  // A scan that found nothing would pass every loop below for the wrong reason.
+  assert.ok(emitted.size >= 5, `expected the trigger payload inventory, found ${emitted.size}`);
+
+  const routes = stripComments(await read('lib/notificationRoutes.ts'));
+  const mapStart = routes.indexOf('const TAB_FOR_SCREEN');
+  const resolverStart = routes.indexOf('function resolveTarget');
+  const predicateStart = routes.indexOf('export function canRouteNotification');
+  assert.ok(mapStart > 0, 'TAB_FOR_SCREEN must exist');
+  assert.ok(resolverStart > mapStart, 'resolveTarget must exist');
+  assert.ok(predicateStart > resolverStart, 'canRouteNotification must exist');
+
+  const mapBody = routes.slice(mapStart, routes.indexOf('};', mapStart));
+  const resolver = routes.slice(resolverStart, predicateStart);
+
+  for (const screen of emitted) {
+    assert.match(mapBody, new RegExp(`\\b${screen}: '`), `${screen} has no owning tab`);
+    assert.ok(
+      resolver.includes(`'${screen}'`),
+      `${screen} is mapped to a tab but resolveTarget never handles it`
+    );
+  }
+
+  // The feed's tappability predicate and the dispatcher are the SAME rule, so
+  // they cannot disagree about what is reachable.
+  assert.match(
+    routes,
+    /export function canRouteNotification\(raw: unknown\): boolean \{\s*return resolveTarget\(toNotificationData\(raw\)\) !== null;/
+  );
+  assert.match(routes, /const target = resolveTarget\(data\);/);
+  // A screen listed in the map but unhandled by the resolver fails closed:
+  // the last statement before the closing brace is a bare `return null`.
+  assert.match(resolver, /return null;\s*\}\s*$/);
+
+  // Mode boundary: every destination lives in a tab mounted in BOTH trees, so
+  // no feed tap needs switchMode() and none can navigate cross-tree. Home is
+  // the mode-defining tab — routing there would require a silent mode change.
+  const tabs = new Set([...mapBody.matchAll(/:\s*'(\w+)'/g)].map((m) => m[1]));
+  assert.deepEqual([...tabs].sort(), ['Messages', 'MyJobs', 'Profile']);
 });
 
 test('notificationRoutes still owns the screen→tab contract', async () => {

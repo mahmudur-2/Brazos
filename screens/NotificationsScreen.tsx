@@ -13,8 +13,8 @@ import {
   markNotificationRead,
   type AppNotification,
 } from '../lib/notifications';
-import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
-import { handleNotificationData } from '../lib/notificationRoutes';
+import { goBackOrHome } from '../lib/navigationRef';
+import { canRouteNotification, handleNotificationData } from '../lib/notificationRoutes';
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -29,10 +29,12 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
  * Screen 42 — the event feed over the phase20/56 outbox. Every row is a real
  * enqueued event (bids, counters, accepts, status moves, messages, reviews,
  * releases, disputes — written by the database triggers, deduped, prefs-
- * gated). Tap-through: job-scoped events open inside the shared My Jobs /
- * Messages tabs, which exist identically in BOTH modes (§F) — so a tap
- * lands correctly whichever mode the user is in, and no silent mode switch
- * is ever needed for these payloads.
+ * gated). Tap-through is delegated entirely to lib/notificationRoutes.ts, the
+ * resolver the push-tap path uses, so a notification opens the same place
+ * whether it was tapped here or in the OS tray. Every destination it can
+ * produce sits in the shared My Jobs / Messages / Profile tabs, which exist
+ * identically in BOTH modes (§F) — so a tap lands correctly whichever mode
+ * the user is in, and no silent mode switch is ever needed for these payloads.
  */
 export function NotificationsScreen() {
   const { user } = useAuth();
@@ -54,6 +56,20 @@ export function NotificationsScreen() {
     }, [load])
   );
 
+  /**
+   * A tapped row marks itself read and opens its subject. Only rows that
+   * resolve to a real destination are tappable at all — see the render, which
+   * asks canRouteNotification() the same question this delegates to.
+   *
+   * Routing is delegated WHOLE to lib/notificationRoutes.ts, the resolver the
+   * push-tap path already uses. This screen used to carry its own copy of the
+   * switch, and it had drifted: every payload without a jobId was dropped
+   * silently (a pre-hire direct message, which carries directThreadId; a
+   * review, which carries neither), and WorkerJob fell through to the hub
+   * instead of the job. The row still marked itself read on the way, so the
+   * event was consumed and led nowhere. One implementation per rule — a second
+   * copy is exactly how the first one goes stale.
+   */
   function open(notification: AppNotification) {
     if (!notification.read_at) {
       setRows((prev) =>
@@ -67,27 +83,7 @@ export function NotificationsScreen() {
         if (error) console.warn('[Notifications] mark-read failed', error.message);
       });
     }
-    const jobId = notification.data?.jobId;
-    const screen = notification.data?.screen;
-    if (typeof jobId === 'string') {
-      // Chat opens in the Messages tab; everything job-scoped lands on the
-      // MyJobs hub stack — both tabs are shared across modes (§F). Routed
-      // through the one guarded cross-tab helper (lib/navigationRef.ts) so
-      // this in-app feed and the push tap handler behave identically.
-      if (screen === 'Chat') {
-        navigateAcrossTabs('Messages', 'Chat', { jobId });
-      } else if (screen === 'ClientJobDetail' || screen === 'JobDetail') {
-        // A counter-offer is answered ON THE JOB — that is where the respond
-        // card with Accept / Decline / Counter lives (phase59 addresses the
-        // payload at exactly these two screens, one per side). Dropping it on
-        // the hub made the notification a dead end. These two take the job ROW
-        // as a route param, so they go through the canonical push router,
-        // which already loads it.
-        void handleNotificationData(notification.data);
-      } else {
-        navigateAcrossTabs('MyJobs', 'MyJobsHub');
-      }
-    }
+    void handleNotificationData(notification.data);
   }
 
   async function markAll() {
@@ -136,33 +132,42 @@ export function NotificationsScreen() {
         {
           content: (
             <View style={styles.list}>
-              {(rows ?? []).map((n) => (
-                <Pressable
-                  key={n.id}
-                  style={[styles.row, !n.read_at && styles.rowUnread]}
-                  onPress={() => open(n)}
-                  accessibilityRole="button"
-                  accessibilityLabel={n.title}
-                >
-                  <Ionicons
-                    name={KIND_ICONS[n.type] ?? 'notifications-outline'}
-                    size={20}
-                    color={!n.read_at ? colors.emerald : colors.textSubtle}
-                  />
-                  <View style={styles.rowCopy}>
-                    <Text style={[styles.rowTitle, !n.read_at && styles.rowTitleUnread]} numberOfLines={1}>
-                      {n.title}
-                    </Text>
-                    {n.body ? (
-                      <Text style={styles.rowBody} numberOfLines={2}>
-                        {n.body}
+              {(rows ?? []).map((n) => {
+                // Every category the triggers emit resolves today (Chat with
+                // a jobId or a directThreadId, ClientJobDetail, JobDetail,
+                // WorkerJob, ProfileMain). This is the safety net for a
+                // payload that does not — it stays a readable row, but it
+                // never offers a tap that would only mark it read.
+                const routable = canRouteNotification(n.data);
+                return (
+                  <Pressable
+                    key={n.id}
+                    style={[styles.row, !n.read_at && styles.rowUnread]}
+                    onPress={routable ? () => open(n) : undefined}
+                    disabled={!routable}
+                    accessibilityRole={routable ? 'button' : 'text'}
+                    accessibilityLabel={n.title}
+                  >
+                    <Ionicons
+                      name={KIND_ICONS[n.type] ?? 'notifications-outline'}
+                      size={20}
+                      color={!n.read_at ? colors.emerald : colors.textSubtle}
+                    />
+                    <View style={styles.rowCopy}>
+                      <Text style={[styles.rowTitle, !n.read_at && styles.rowTitleUnread]} numberOfLines={1}>
+                        {n.title}
                       </Text>
-                    ) : null}
-                    <Text style={styles.rowMeta}>{formatTimeAgo(n.created_at)}</Text>
-                  </View>
-                  {!n.read_at ? <View style={styles.dot} /> : null}
-                </Pressable>
-              ))}
+                      {n.body ? (
+                        <Text style={styles.rowBody} numberOfLines={2}>
+                          {n.body}
+                        </Text>
+                      ) : null}
+                      <Text style={styles.rowMeta}>{formatTimeAgo(n.created_at)}</Text>
+                    </View>
+                    {!n.read_at ? <View style={styles.dot} /> : null}
+                  </Pressable>
+                );
+              })}
             </View>
           ),
         },
