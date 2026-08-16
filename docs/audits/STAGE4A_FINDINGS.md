@@ -663,3 +663,151 @@ touched. This commit is a label.
 
 `npm run verify` in full (lint, then `node --test tests/*.test.mjs`) -
 **544 tests, 544 pass, 0 fail, 0 cancelled, 0 skipped, 0 todo.**
+
+Committed as `86b39b6`.
+
+---
+
+## Tail commit 2 - the notification outbox inventory, reconciled
+
+### Step A - what the database can actually emit
+
+`enqueue_notification()` (phase20, line 347) holds the **only**
+`insert into public.notification_outbox` in the entire `supabase/` tree, so its
+call sites are the complete emitting surface. There are fourteen, in six
+migrations, and **every one passes a literal category**. Thirteen also pass a
+literal type; the fourteenth (phase20's `notify_on_job_request`) passes
+`v_type`, assigned one of four literals a few lines above in the same function
+body. Nothing is built by string concatenation, so the inventory below is
+complete and statically determined - the ambiguity stop condition did not fire.
+
+**Six categories. Fourteen (category, type) pairs.**
+
+| Category | Type | Migration → trigger function → table | `notification_prefs` column |
+| --- | --- | --- | --- |
+| `messages` | `message` | phase20 §6.1 `notify_on_message()` → `messages_notify` on `messages`; re-issued phase57, then phase61 | `messages` |
+| `bids` | `bid_received` | phase20 §6.2 `notify_on_bid()` → `bids_notify` on `bids` | `bids` |
+| `bids` | `bid_competition` | phase20 §6.3, same function (rival bidders) | `bids` |
+| `bids` | `offer_countered` | phase59 `notify_on_offer_counter()` → `job_offers_notify_counter`; copy re-issued phase62 | `bids` |
+| `job_updates` | `job_assigned` | phase20 §6.4 `notify_on_job_status()` → `jobs_notify_status` on `jobs` | `job_updates` |
+| `job_updates` | `job_completed` | phase20 §6.5, same function | `job_updates` |
+| `job_updates` | `review_received` | phase20 §6.8 `notify_on_review()` → `reviews_notify` on `reviews` | `job_updates` |
+| `hire_requests` | `hire_request` | phase20 §6.6 `notify_on_job_request()` → `job_requests_notify` (INSERT arm) | `hire_requests` |
+| `hire_requests` | `hire_countered` | phase20 §6.6, `status = 'countered'` arm | `hire_requests` |
+| `hire_requests` | `hire_accepted` | phase20 §6.6, `status = 'accepted'` arm | `hire_requests` |
+| `hire_requests` | `hire_declined` | phase20 §6.6, `status = 'declined'` arm | `hire_requests` |
+| `nearby_jobs` | `job_nearby` | phase20 §6.7 `notify_nearby_for_job()` via `notify_on_job_location()` → `job_locations_notify_nearby` | `nearby_jobs` |
+| `jobs` | `payment_released` | phase56 `notify_on_payment_release()` → `payments_notify_release` on `payments` | **none** |
+| `jobs` | `dispute_opened` | phase56 `notify_on_dispute()` → `job_disputes_notify` on `job_disputes` | **none** |
+
+`notification_prefs` columns (phase20, lines 140-158): `user_id`, `messages`,
+`bids`, `job_updates`, `hire_requests`, `nearby_jobs`, `nearby_radius_miles`,
+`home_lat`, `home_lng`, `updated_at`, plus the
+`notification_prefs_radius_valid` CHECK. **Five** boolean category switches.
+
+**Finding - `jobs` is the one ungated category.** `should_notify`'s
+per-category `case` has arms for the five columns and an `else true`. Category
+`jobs` matches no arm, so `payment_released` and `dispute_opened` fall through
+to `true` and **cannot be switched off by any user**. That reads as deliberate
+(money movement and a dispute on your own job are transactional, not
+promotional) and `NOTIFICATION_TOGGLES` correctly offers only the five gated
+switches. Recorded so that it stays a decision rather than becoming an
+accident. Not changed - this commit is client-side only and does not touch SQL.
+
+**Live-vs-possible.** The 2026-08-16 staging inventory (`bids` 48,
+`job_updates` 27, `messages` 18, `jobs` 8, 101 rows) is missing `hire_requests`
+and `nearby_jobs`. Both have an explanation that is not "no trigger":
+`hire_requests` rows come from `job_requests`, whose only mover
+`respond_job_request()` is a deprecated shim with no app callers; `nearby_jobs`
+requires a recipient with `nearby_jobs = true` **and** `home_lat`/`home_lng`
+set, and the column defaults to false. Absence of rows was never evidence of
+absence of a trigger, which is exactly why step A was settled from the SQL.
+
+### Step B - what was dead, and what was not
+
+**`review_received` was KEPT. The brief's premise was wrong on two counts.**
+
+1. It is not a category. It is a **type**; its category is `job_updates`.
+2. It is emitted. `supabase/phase20_push_notifications.sql:727-752`,
+   `notify_on_review()`, `after insert on public.reviews`, enqueues
+   `('job_updates', 'review_received', ...)` with payload
+   `jsonb_build_object('screen', 'ProfileMain')`. There was no trigger to go
+   looking for - it has been there since phase20.
+
+The related premise that "`notification_prefs` has no review column, which
+suggests a product gap" is also not right: reviews **are** gated, by
+`notification_prefs.job_updates`, and `NOTIFICATION_TOGGLES`' own hint text
+already says so - *"Assignments, completed work, and reviews you receive."*
+There is no separate review switch and no evidence one was intended. No
+product gap here; the real ungated surface is category `jobs`, above.
+
+**What Stage 4A actually added** was the `ProfileMain` **screen** to the
+routing map - which is what a `review_received` payload points at. The routing
+table is keyed on `screen`, never on category or type, so no category or type
+string appears in `lib/notificationRoutes.ts` at all.
+
+**The routing table needed no change.** Both directions were already clean:
+
+- Emitted screens, scanned from every `supabase/*.sql`:
+  `Chat`, `ClientJobDetail`, `JobDetail`, `WorkerJob`, `ProfileMain` - five,
+  including the two produced by phase59/62's `case` expression, which are
+  literals inside the CASE and so still statically determined.
+- `TAB_FOR_SCREEN` registers exactly those five. `resolveTarget` handles all
+  five (`ProfileMain` with no job, `Chat` with either `jobId` or
+  `directThreadId`, `WorkerJob` with `jobId`, and the two job-row screens).
+- No dead entries, no dead taps. Nothing added, nothing removed.
+
+**The actual dead entry was in the feed's ICON map.**
+`screens/NotificationsScreen.tsx`'s `KIND_ICONS` keys on
+`notification_outbox.type` and carried `review: 'star-outline'`. **No trigger
+emits the type `review`** - phase20 emits `review_received`. The star has
+therefore never rendered on any review notification since phase20; every one
+of them silently fell back to the generic bell. Key corrected to
+`review_received`.
+
+That is the whole client-side delta for this commit. The other ten emitted
+types have no glyph and fall back on purpose - a missing key is a documented
+default, not a dead tap, so none were added. Adding ten icons would be
+unrequested visual design.
+
+### Step C - the test that keeps both directions honest
+
+`tests/notificationFeed.test.mjs` gains one declared list, `OUTBOX`, and three
+tests. The list is the single source the whole reconciliation runs off, so the
+two directions cannot drift apart.
+
+| Test | Direction 1 (database → client) | Direction 2 (client → database) |
+| --- | --- | --- |
+| inventory agreement | a `(category, type)` pair any `enqueue_notification()` call emits but `OUTBOX` omits FAILS | a pair `OUTBOX` declares but no migration emits FAILS |
+| prefs gating | a gated category whose claimed column is not in the DDL, or that `should_notify` never reads, FAILS | a category declared ungated that `should_notify` *does* branch on FAILS; `NOTIFICATION_TOGGLES` must equal the gated set exactly |
+| client maps | an emitted screen absent from `TAB_FOR_SCREEN`, or present but unhandled by `resolveTarget`, FAILS | a screen in `TAB_FOR_SCREEN` that no migration emits FAILS; a `KIND_ICONS` key that no migration emits FAILS |
+
+Mechanism matches the neighbours: `node --test`, `readFile`/`readdirSync` over
+source text, no framework and no dependency. The `v_type` call site is
+resolved by slicing back to its own enclosing `create or replace function` -
+a file-wide scan would be wrong, because phase46, phase50 and phase61 all
+reuse the identifier `v_type` for an unrelated `offer_type`.
+
+Every derived set is guarded against a silent empty read: `emitted.size >= 10`,
+`gated.size > 0`, `iconKeys.length > 0`, the `notification_prefs` DDL slice is
+length-checked, and `columns` / `toggles` are `deepEqual`-ed rather than
+subset-checked. An empty `registered` set cannot pass either, because
+direction 1 would then fail on the first emitted screen.
+
+**Both new assertions were verified to FAIL when the defect is present**, not
+just to pass when it is absent:
+
+- Restoring `review: 'star-outline'` →
+  `AssertionError: KIND_ICONS.review is a type no migration emits`.
+- Swapping one `OUTBOX` row for a fabricated one →
+  `AssertionError: OUTBOX must list exactly what enqueue_notification() is
+  called with — no more, no less`, with the diff naming both the missing and
+  the surplus pair. The scan's own output in that failure confirms the
+  fourteen pairs in the step A table, derived independently of the table.
+
+### Navigation constraints
+
+Unchanged and still pinned. The three owning tabs remain `Messages`, `MyJobs`,
+`Profile`, all mounted in both trees; no route requires `switchMode()`; the
+existing `Home` guard in `tests/notificationFeed.test.mjs` and the tab-set
+`deepEqual` in `tests/offerCopyAndRouting.test.mjs` both still hold.

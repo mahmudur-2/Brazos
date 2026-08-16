@@ -18,11 +18,21 @@ import { canRouteNotification, handleNotificationData } from '../lib/notificatio
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
+/**
+ * Keyed on `notification_outbox.type`, NOT on category — a category covers
+ * several types (`job_updates` is assignment, completion AND a review).
+ *
+ * Only the types worth a distinct glyph are listed; every other emitted type
+ * deliberately falls back to the bell below. What is NOT allowed is a key no
+ * trigger emits: `review` was one, and its star silently never rendered
+ * because phase20's notify_on_review() enqueues `review_received`. A test
+ * pins every key here against the migrations' own inventory.
+ */
 const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   message: 'chatbubble-outline',
   payment_released: 'checkmark-done-outline',
   dispute_opened: 'alert-circle-outline',
-  review: 'star-outline',
+  review_received: 'star-outline',
 };
 
 /**
