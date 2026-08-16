@@ -1313,6 +1313,83 @@ const MIGRATIONS = [
         checkRpc('unsend_message', { p_message_id: ZERO_UUID })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 74. The push scheduler: pg_cron -> drain_notification_outbox() ->
+    // pg_net -> the send-push Edge Function.
+    //
+    // Almost none of this is visible from here. A cron entry lives in
+    // cron.job, an extension in pg_extension, a Vault secret in a schema
+    // PostgREST does not expose - none of which this harness can read with a
+    // publishable key. The sentinel carries them: it is created last inside
+    // the same transaction as the schedule, and the file's own preconditions
+    // abort before it if either extension or either secret is missing.
+    //
+    // drain_notification_outbox is probed in the tolerant direction used for
+    // the service_role-only functions in the phase20 group: it is revoked from
+    // every client role, so a permission refusal still proves it exists and
+    // only PGRST202 counts as missing. Probing it with the publishable key
+    // cannot fire an outbound request - the revoke rejects the call before any
+    // statement in the body runs.
+    // -----------------------------------------------------------------------
+    file: 'phase74_push_scheduler.sql',
+    sentinel: ['rpc push_scheduler_enabled()', () =>
+      checkRpc('push_scheduler_enabled', {})],
+    checks: [
+      ['rpc drain_notification_outbox()', () =>
+        checkRpc('drain_notification_outbox', {})],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 75. Six security-sweep findings in one file.
+    //
+    // Most of it has no shape a publishable-key probe can see: three CHECK
+    // constraints, a trigger, two replaced function BODIES, and a table
+    // privilege revoke. pg_constraint and pg_proc.proacl are not PostgREST
+    // results. The migration's own self-check carries them - it asserts the
+    // explicit 'jobs' arm in should_notify, that jobs_within_radius both
+    // orders AND filters on the snapped distance, that delete_my_account kept
+    // all thirteen load-bearing statements through its rewrite, that the
+    // cancellation trigger is attached to public.jobs, and that anon holds no
+    // write privilege on any of the seventeen tables. It runs in the same
+    // transaction as every change, so the sentinel cannot exist unless all of
+    // it passed.
+    //
+    // The last three checks matter to THIS script specifically. phase75
+    // deliberately leaves anon's SELECT in place, because ~55 checks above and
+    // the control probe at the top of this file are PostgREST reads made with
+    // the publishable key. Asserting the retention here means a later
+    // migration that revokes SELECT goes red on a named line with a reason,
+    // instead of killing the whole run at the control check with "probe is not
+    // working".
+    // -----------------------------------------------------------------------
+    file: 'phase75_security_hardening.sql',
+    sentinel: ['rpc phase75_security_hardening_enabled()', () =>
+      checkRpc('phase75_security_hardening_enabled', {})],
+    checks: [
+      ['rpc should_notify() still resolves after phase75', () =>
+        checkRpc('should_notify', {
+          p_recipient: ZERO_UUID,
+          p_actor: ZERO_UUID,
+          p_category: 'jobs',
+        })],
+      ['rpc jobs_within_radius() still resolves after phase75', () =>
+        checkRpc('jobs_within_radius', {
+          p_lat: 0,
+          p_lng: 0,
+          p_radius_miles: 1,
+        })],
+      ['rpc delete_my_account() still resolves after phase75', () =>
+        checkRpc('delete_my_account', {})],
+      ['messages still readable by the publishable key', () =>
+        checkColumn('messages', 'reply_to_id')],
+      ['jobs still readable by the publishable key', () =>
+        checkColumn('jobs', 'photos')],
+      ['push_tokens still readable by the publishable key', () =>
+        checkColumn('push_tokens', 'id')],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
