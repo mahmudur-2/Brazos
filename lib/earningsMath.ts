@@ -30,3 +30,29 @@ export function deriveEarnings(rows: EarningsRow[]): EarningsSummary {
   }
   return { pendingCents, availableCents, transferredCents, feeCents, rows };
 }
+
+export type OpenJobsPotential = { cents: number; count: number };
+
+/**
+ * Worker Home's POTENTIAL EARNINGS pair over the open-jobs feed: the summed
+ * budgets of every open job the viewer could actually earn from, and how many
+ * rows that sum spans. Same semantics as the LOCKED BrowseJobsScreen's inline
+ * stats memo (tests/potentialEarnings.test.mjs executes both and compares):
+ * the viewer's own posted jobs are excluded — you cannot earn from your own
+ * job — and a budget-less job still counts as a row while adding $0. The
+ * locked screen keeps its authorized inline copy until its unlock session;
+ * every NEW surface derives the figure from here.
+ */
+export function openJobsPotential(
+  jobs: ReadonlyArray<{ client_id: string; budget_cents: number | null }>,
+  viewerId: string | null | undefined
+): OpenJobsPotential {
+  let cents = 0;
+  let count = 0;
+  for (const job of jobs) {
+    if (viewerId && job.client_id === viewerId) continue;
+    cents += job.budget_cents ?? 0;
+    count += 1;
+  }
+  return { cents, count };
+}

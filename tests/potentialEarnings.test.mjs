@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { stripTypeScriptTypes } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -55,6 +56,52 @@ test('a still-loading profile falls back to the whole feed, never a crash', () =
   }
   // Empty feed derives zeros, never NaN or undefined.
   assert.deepEqual(runStats([], { id: 'me' }), { cents: 0, count: 0 });
+});
+
+// ---------------------------------------------------------------------------
+// Stage 4D: the same rule as a shared lib function for NEW surfaces
+// ---------------------------------------------------------------------------
+//
+// The locked screen keeps its authorized inline memo (asserted above to exist
+// exactly once IN THAT FILE); WorkerHomeScreen and anything after it derive
+// the figure from lib/earningsMath.ts's openJobsPotential(). Executing both
+// against the same feeds is what keeps the two from drifting until the
+// operator's unlock session migrates the locked copy.
+
+const toDataUrl = (js) =>
+  'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+const { openJobsPotential } = await import(
+  toDataUrl(stripTypeScriptTypes(await read('lib/earningsMath.ts'), { mode: 'strip' }))
+);
+
+test('openJobsPotential() matches the locked banner memo on every case', () => {
+  const feeds = [
+    [],
+    [job('a', 'me', 5000)],
+    [job('a', 'me', 5000), job('b', 'other-1', 12500), job('c', 'other-2', null), job('d', 'me', 999999)],
+    [job('a', 'x', 100), job('b', 'y', null), job('c', 'z', 250)],
+  ];
+  for (const feed of feeds) {
+    for (const viewer of [{ id: 'me' }, { id: 'someone-else' }, null, undefined, {}]) {
+      const memo = runStats(feed, viewer);
+      const lib = openJobsPotential(feed, viewer?.id);
+      assert.deepEqual(
+        lib,
+        memo,
+        `openJobsPotential must agree with the locked memo for viewer ${JSON.stringify(viewer)}`
+      );
+    }
+  }
+});
+
+test('the new worker home derives its figure from the lib, not a third copy', async () => {
+  const workerHome = await read('screens/WorkerHomeScreen.tsx');
+  assert.match(workerHome, /openJobsPotential\(/);
+  assert.doesNotMatch(
+    workerHome,
+    /client_id === profile\.id/,
+    'WorkerHomeScreen must not carry its own inline copy of the exclusion'
+  );
 });
 
 test('the exclusion is banner-only: feed cards are identical in both modes', () => {

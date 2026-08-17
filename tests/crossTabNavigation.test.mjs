@@ -358,9 +358,11 @@ test('back pops when it can, and lands on the mounted mode home when it cannot',
     { name: 'HomeMain', component: 'HomeScreen' },
     'customer fallback must land on Customer Home'
   );
+  // Stage 4D: the worker stack roots at the new WorkerHome dashboard; the
+  // locked BrowseJobs (atlas 48) sits after it as "View all".
   assert.deepEqual(
     firstScreen(workerRoot, 'WorkerHomeStack'),
-    { name: 'BrowseJobs', component: 'BrowseJobsScreen' },
+    { name: 'WorkerHome', component: 'WorkerHomeScreen' },
     'worker fallback must land on Worker Home'
   );
 });

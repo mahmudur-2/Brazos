@@ -238,6 +238,9 @@ test('worker code cannot name the customer post/search routes', () => {
 
 test('the Home tab roots at the home of the mode you are in', () => {
   assert.match(customerRoot, /name="HomeMain" component=\{HomeScreen\}/);
+  // Stage 4D: the worker home is the new dashboard, with the locked browse
+  // feed (atlas 48) mounted unmodified right after it as "View all".
+  assert.match(workerRoot, /name="WorkerHome" component=\{WorkerHomeScreen\}/);
   assert.match(workerRoot, /name="BrowseJobs" component=\{BrowseJobsScreen\}/);
   // The listener that used to infer mode from stack contents is gone, because
   // popping to the root is now correct in both trees. (Comments are stripped

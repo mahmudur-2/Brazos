@@ -9,6 +9,7 @@ import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { SubmitBidScreen } from '../screens/SubmitBidScreen';
+import { WorkerHomeScreen } from '../screens/WorkerHomeScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerResultsScreen } from '../screens/WorkerResultsScreen';
 import { bottomNavScreenOptions } from '../ui/primitives/BottomNav';
@@ -30,17 +31,20 @@ const WorkerHomeStack = createNativeStackNavigator<WorkerHomeStackParamList>();
 const Tab = createBottomTabNavigator<WorkerParamList>();
 
 /**
- * The Home tab in worker mode. Rooted at Worker Home (atlas 48, LOCKED) — not
- * pushed on top of Customer Home, which is what it used to be.
+ * The Home tab in worker mode. Rooted since Stage 4D at the NEW WorkerHome
+ * (screens/WorkerHomeScreen.tsx) — greeting, the phase53 taking-new-work
+ * toggle, potential earnings and the match counts — with the locked
+ * BrowseJobsScreen (atlas 48) mounted unmodified right after it as the
+ * "View all" destination.
  *
- * That single change is the fix for "the Home tab sends worker users back to
- * Customer Home": popping this stack to its root now lands on Worker Home,
- * because Worker Home *is* the root. The listener in App.tsx that used to
- * detect "is BrowseJobs on the stack?" and intercept the pop is deleted.
+ * Popping this stack to its root still lands on the worker's own home, so the
+ * Home tab's default re-press behaviour stays correct — the property the
+ * Phase 2 restructure bought is preserved, only the root screen is newer.
  */
 function WorkerHomeStackNavigator() {
   return (
     <WorkerHomeStack.Navigator screenOptions={{ headerShown: false }}>
+      <WorkerHomeStack.Screen name="WorkerHome" component={WorkerHomeScreen} />
       <WorkerHomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
       <WorkerHomeStack.Screen name="WorkerResults" component={WorkerResultsScreen} />
       <WorkerHomeStack.Screen name="JobDetail" component={JobDetailScreen} />

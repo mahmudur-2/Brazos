@@ -172,13 +172,13 @@ export type DiscoverStackNavigation = NativeStackNavigationProp<DiscoverStackPar
 /**
  * The Home tab in WORKER mode: the job marketplace.
  *
- * `BrowseJobs` is Worker Home (atlas 48) and is this stack's ROOT, not a screen
- * pushed onto the customer stack. That is the whole fix for "the Home tab sends
- * worker users back to Customer Home" — popping this stack to its root lands on
- * Worker Home, so the default tab-re-press behaviour is now correct instead of
- * needing the listener that used to intercept it.
+ * Rooted since Stage 4D at `WorkerHome` (the new dashboard screen); the locked
+ * `BrowseJobs` (atlas 48) sits right after it as the "View all" destination.
+ * The stack still belongs to the worker tree only — popping to its root lands
+ * on the worker's own home, never Customer Home.
  */
 export type WorkerHomeStackParamList = {
+  WorkerHome: undefined;
   BrowseJobs: undefined;
   JobDetail: { job: OpenJob };
   /** Phase 7 — pre-hire chat from the worker's own-bid card. Registered
