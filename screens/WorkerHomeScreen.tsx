@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
   Switch,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -38,8 +41,9 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
  * Worker Home (Stage 4D) — the worker tree's initial route.
  *
  * Every job-list intent here lands on WorkerResultsScreen — "View all" is
- * mode 'all', the two pills are 'skills' and 'nearby' — one list surface,
- * not a chain of them.
+ * mode 'all', the search field is mode 'search', the two pills are 'skills'
+ * and 'nearby' — one list surface, not a chain of them. The search field
+ * mirrors the locked screen 48's field and dispatch exactly.
  *
  * Everything here is derived from data sources that already exist:
  *   - greeting + the mandatory-confirm mode switch: useProfile / switchMode()
@@ -63,6 +67,7 @@ export function WorkerHomeScreen() {
   const { switchMode, switching } = useMode();
   const [refreshing, setRefreshing] = useState(false);
   const [savingAvailability, setSavingAvailability] = useState(false);
+  const [query, setQuery] = useState('');
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
   const accepting = profile?.accepting_work ?? true;
@@ -150,6 +155,12 @@ export function WorkerHomeScreen() {
     void switchMode('customer');
   }
 
+  function submitSearch() {
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    navigation.navigate('WorkerResults', { mode: 'search', query: trimmed });
+  }
+
   async function saveAcceptingWork(next: boolean) {
     if (!user || savingAvailability) return;
     setSavingAvailability(true);
@@ -174,154 +185,189 @@ export function WorkerHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.forest}
-            colors={[colors.forest]}
-          />
-        }
+      {/* Standard input mechanics (.claude/rules/native-ui.md) for the search
+          field below — nothing visual, and the field sits at the top so the
+          keyboard can never cover it or its submit affordance. */}
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        {/* --- Greeting + the deliberate mode switch ---------------------- */}
-        <View style={styles.greetingRow}>
-          <View style={styles.greetingBlock}>
-            <Text style={styles.greeting} numberOfLines={1}>
-              {greetingFor(new Date())}
-              {firstName ? `, ${firstName}` : ''}
-            </Text>
-            <Text style={styles.headline} maxFontSizeMultiplier={1.3}>
-              Your work today
-            </Text>
-          </View>
-          <Pressable
-            onPress={switchToCustomer}
-            disabled={switching}
-            style={({ pressed }) => [styles.modeSwitch, pressed && styles.modeSwitchPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="Switch to Customer"
-            accessibilityHint="Returns to posting and managing your own jobs"
-            accessibilityState={{ disabled: switching }}
-          >
-            <Ionicons name="person" size={19} color={colors.forest} />
-            <Text style={styles.modeSwitchText}>Switch to Customer</Text>
-          </Pressable>
-        </View>
-
-        {/* --- Taking new work (phase53 availability, never presence) ----- */}
-        <View style={styles.availabilityCard}>
-          <View style={styles.availabilityCopy}>
-            <Text style={styles.cardTitle}>Taking new work</Text>
-            <Text style={styles.cardNote}>
-              Shown on your public profile — it tells customers what to expect.
-            </Text>
-          </View>
-          <Switch
-            value={accepting}
-            onValueChange={(value) => void saveAcceptingWork(value)}
-            disabled={savingAvailability || !profile}
-            trackColor={{ true: colors.emerald, false: colors.border }}
-            accessibilityLabel="Taking new work"
-          />
-        </View>
-
-        {/* --- Potential earnings + the two counts ------------------------ */}
-        {loading ? null : (
-          <View style={styles.earningsCard}>
-            <Text style={styles.earningsEyebrow}>POTENTIAL EARNINGS</Text>
-            <Text style={styles.earningsAmount} numberOfLines={1} maxFontSizeMultiplier={1.2}>
-              {potential.count === 0 ? '$0' : formatBudget(potential.cents)}
-            </Text>
-            <Text style={styles.earningsCaption}>
-              {`across ${potential.count} open ${potential.count === 1 ? 'job' : 'jobs'}`}
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.pillRow}>
-          <Pressable
-            onPress={() => navigation.navigate('WorkerResults', { mode: 'skills' })}
-            style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={matchLabel}
-          >
-            <Ionicons name="ribbon-outline" size={17} color={colors.forest} />
-            <Text style={styles.pillText} numberOfLines={1}>
-              {matchLabel}
-            </Text>
-          </Pressable>
-          <Pressable
-            onPress={() =>
-              navigation.navigate('WorkerResults', {
-                mode: 'nearby',
-                lat: nearbyCoords?.lat,
-                lng: nearbyCoords?.lng,
-                label: nearbyCoords?.label,
-              })
-            }
-            style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={nearbyLabel}
-          >
-            <Ionicons name="location-outline" size={17} color={colors.forest} />
-            <Text style={styles.pillText} numberOfLines={1}>
-              {nearbyLabel}
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* --- A taste of the open-jobs feed ------------------------------ */}
-        <View style={styles.feedHeader}>
-          <Text style={styles.sectionTitle}>Open jobs</Text>
-          <Pressable
-            onPress={() => navigation.navigate('WorkerResults', { mode: 'all' })}
-            style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
-            accessibilityRole="button"
-            accessibilityLabel="View all open jobs"
-          >
-            <Text style={styles.viewAllText}>View all</Text>
-            <Ionicons name="arrow-forward" size={18} color={colors.forest} />
-          </Pressable>
-        </View>
-
-        {loading ? (
-          <View style={styles.cardList}>
-            <WorkerJobCardSkeleton />
-            <WorkerJobCardSkeleton />
-          </View>
-        ) : error ? (
-          <View style={styles.notice}>
-            <Text style={styles.noticeError}>Couldn’t load open jobs.</Text>
-            <Pressable onPress={() => void onRefresh()} hitSlop={8} accessibilityRole="button">
-              <Text style={styles.retry}>Try again</Text>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.forest}
+              colors={[colors.forest]}
+            />
+          }
+        >
+          {/* --- Greeting + the deliberate mode switch ---------------------- */}
+          <View style={styles.greetingRow}>
+            <View style={styles.greetingBlock}>
+              <Text style={styles.greeting} numberOfLines={1}>
+                {greetingFor(new Date())}
+                {firstName ? `, ${firstName}` : ''}
+              </Text>
+              <Text style={styles.headline} maxFontSizeMultiplier={1.3}>
+                Your work today
+              </Text>
+            </View>
+            <Pressable
+              onPress={switchToCustomer}
+              disabled={switching}
+              style={({ pressed }) => [styles.modeSwitch, pressed && styles.modeSwitchPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Switch to Customer"
+              accessibilityHint="Returns to posting and managing your own jobs"
+              accessibilityState={{ disabled: switching }}
+            >
+              <Ionicons name="person" size={19} color={colors.forest} />
+              <Text style={styles.modeSwitchText}>Switch to Customer</Text>
             </Pressable>
           </View>
-        ) : previewJobs.length === 0 ? (
-          <Text style={styles.empty}>
-            No open jobs right now — new jobs appear here automatically as clients post them.
-          </Text>
-        ) : (
-          <View style={styles.cardList}>
-            {previewJobs.map((job) => (
-              <WorkerJobCard
-                key={job.id}
-                job={job}
-                bidCount={bidCounts[job.id]}
-                onPress={() => navigation.navigate('JobDetail', { job })}
-              />
-            ))}
+
+          {/* --- Search (mirrors the locked 48's field — the one route to
+              WorkerResults mode 'search') ---------------------------------- */}
+          <View style={styles.searchField}>
+            <Ionicons name="search" size={22} color={colors.textMuted} />
+            <TextInput
+              style={styles.searchInput}
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={submitSearch}
+              placeholder="Search for jobs or areas"
+              placeholderTextColor={colors.textMuted}
+              autoCapitalize="sentences"
+              returnKeyType="search"
+            />
+            <View style={styles.searchDivider} />
+            <Pressable
+              onPress={submitSearch}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Search"
+            >
+              <Ionicons name="arrow-forward-circle" size={22} color={colors.emerald} />
+            </Pressable>
           </View>
-        )}
-      </ScrollView>
+
+          {/* --- Taking new work (phase53 availability, never presence) ----- */}
+          <View style={styles.availabilityCard}>
+            <View style={styles.availabilityCopy}>
+              <Text style={styles.cardTitle}>Taking new work</Text>
+              <Text style={styles.cardNote}>
+                Shown on your public profile — it tells customers what to expect.
+              </Text>
+            </View>
+            <Switch
+              value={accepting}
+              onValueChange={(value) => void saveAcceptingWork(value)}
+              disabled={savingAvailability || !profile}
+              trackColor={{ true: colors.emerald, false: colors.border }}
+              accessibilityLabel="Taking new work"
+            />
+          </View>
+
+          {/* --- Potential earnings + the two counts ------------------------ */}
+          {loading ? null : (
+            <View style={styles.earningsCard}>
+              <Text style={styles.earningsEyebrow}>POTENTIAL EARNINGS</Text>
+              <Text style={styles.earningsAmount} numberOfLines={1} maxFontSizeMultiplier={1.2}>
+                {potential.count === 0 ? '$0' : formatBudget(potential.cents)}
+              </Text>
+              <Text style={styles.earningsCaption}>
+                {`across ${potential.count} open ${potential.count === 1 ? 'job' : 'jobs'}`}
+              </Text>
+            </View>
+          )}
+
+          <View style={styles.pillRow}>
+            <Pressable
+              onPress={() => navigation.navigate('WorkerResults', { mode: 'skills' })}
+              style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={matchLabel}
+            >
+              <Ionicons name="ribbon-outline" size={17} color={colors.forest} />
+              <Text style={styles.pillText} numberOfLines={1}>
+                {matchLabel}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() =>
+                navigation.navigate('WorkerResults', {
+                  mode: 'nearby',
+                  lat: nearbyCoords?.lat,
+                  lng: nearbyCoords?.lng,
+                  label: nearbyCoords?.label,
+                })
+              }
+              style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
+              accessibilityRole="button"
+              accessibilityLabel={nearbyLabel}
+            >
+              <Ionicons name="location-outline" size={17} color={colors.forest} />
+              <Text style={styles.pillText} numberOfLines={1}>
+                {nearbyLabel}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* --- A taste of the open-jobs feed ------------------------------ */}
+          <View style={styles.feedHeader}>
+            <Text style={styles.sectionTitle}>Open jobs</Text>
+            <Pressable
+              onPress={() => navigation.navigate('WorkerResults', { mode: 'all' })}
+              style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="View all open jobs"
+            >
+              <Text style={styles.viewAllText}>View all</Text>
+              <Ionicons name="arrow-forward" size={18} color={colors.forest} />
+            </Pressable>
+          </View>
+
+          {loading ? (
+            <View style={styles.cardList}>
+              <WorkerJobCardSkeleton />
+              <WorkerJobCardSkeleton />
+            </View>
+          ) : error ? (
+            <View style={styles.notice}>
+              <Text style={styles.noticeError}>Couldn’t load open jobs.</Text>
+              <Pressable onPress={() => void onRefresh()} hitSlop={8} accessibilityRole="button">
+                <Text style={styles.retry}>Try again</Text>
+              </Pressable>
+            </View>
+          ) : previewJobs.length === 0 ? (
+            <Text style={styles.empty}>
+              No open jobs right now — new jobs appear here automatically as clients post them.
+            </Text>
+          ) : (
+            <View style={styles.cardList}>
+              {previewJobs.map((job) => (
+                <WorkerJobCard
+                  key={job.id}
+                  job={job}
+                  bidCount={bidCounts[job.id]}
+                  onPress={() => navigation.navigate('JobDetail', { job })}
+                />
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
+  flex: { flex: 1 },
   content: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
@@ -359,6 +405,30 @@ const styles = StyleSheet.create({
   },
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
+  // The locked 48's searchField/searchInput/searchDivider, value for value.
+  searchField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 63,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.surface,
+    ...shadows.card,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: colors.ink,
+    paddingVertical: 0,
+  },
+  searchDivider: {
+    width: 1,
+    height: 26,
+    backgroundColor: colors.border,
+  },
   availabilityCard: {
     flexDirection: 'row',
     alignItems: 'center',

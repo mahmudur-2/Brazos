@@ -39,6 +39,25 @@ test('WorkerHome roots the worker stack and View all lands on WorkerResults', ()
   assert.match(code, /navigation\.navigate\('WorkerResults', \{ mode: 'all' \}\)/);
 });
 
+test("the search field mirrors the locked 48's dispatch and sits above the toggle", () => {
+  // 4D-1b D2: the one route to WorkerResults mode 'search', byte-for-byte
+  // the locked screen's own param shape — trim first, never dispatch empty.
+  assert.match(code, /const trimmed = query\.trim\(\);/);
+  assert.match(code, /if \(!trimmed\) return;/);
+  assert.match(
+    code,
+    /navigation\.navigate\('WorkerResults', \{ mode: 'search', query: trimmed \}\)/
+  );
+  assert.match(screen, /placeholder="Search for jobs or areas"/);
+  // Placement: directly below the greeting/switch row, above the
+  // taking-new-work card.
+  const greeting = screen.indexOf('styles.greetingRow');
+  const search = screen.indexOf('styles.searchField');
+  const toggle = screen.indexOf('styles.availabilityCard');
+  assert.ok(greeting > 0 && search > greeting && toggle > search,
+    'the search field must sit between the greeting row and the availability card');
+});
+
 test('the toggle is phase53 accepting_work through the existing profile path', () => {
   assert.match(code, /profile\?\.accepting_work \?\? true/);
   assert.match(code, /updateProfile\(user\.id, \{ accepting_work: next \}\)/);
