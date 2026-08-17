@@ -260,15 +260,67 @@ test('the shell holds rather than guessing while the mode resolves', () => {
   assert.match(shell, /<ActivityIndicator/);
 });
 
-test('the two tab trees carry the same five tabs in the same order', () => {
+test('each tree carries its Stage 4D tab contract', () => {
   const tabs = (source) =>
     [...source.matchAll(/<Tab\.Screen\s+name="(\w+)"/g)].map((m) => m[1]);
-  assert.deepEqual(tabs(customerRoot), ['Home', 'Map', 'MyJobs', 'Messages', 'Profile']);
-  assert.deepEqual(tabs(customerRoot), tabs(workerRoot));
-  // Same bar configuration in both, so the chrome under LOCKED screens 07/48
-  // cannot drift between modes.
+  // Worker: the five classic tabs, unchanged — LOCKED screen 48 sits above
+  // this exact bar.
+  assert.deepEqual(tabs(workerRoot), ['Home', 'Map', 'MyJobs', 'Messages', 'Profile']);
+  // Customer (4D-1a): four visible tabs with the center [ + ] action between
+  // Discover and Messages, then the two HIDDEN routes — Map because the
+  // LOCKED Home's "View map" pill dispatches getParent()?.navigate('Map')
+  // against this navigator, MyJobs because the hire loop and notification
+  // routing live behind that tab name in both modes. Hidden routes are
+  // registered last so the visible bar order is the first five.
+  assert.deepEqual(tabs(customerRoot), [
+    'Home',
+    'Discover',
+    'Create',
+    'Messages',
+    'Profile',
+    'MyJobs',
+    'Map',
+  ]);
+  // The hidden pair is actually hidden, and the action is actually an action
+  // (a sheet opener via tabBarButton), never a navigation destination.
+  assert.match(
+    customerRoot,
+    /name="MyJobs"[\s\S]{0,120}?options=\{HIDDEN_TAB_ITEM_OPTIONS\}/
+  );
+  assert.match(
+    customerRoot,
+    /name="Map" component=\{MapStackNavigator\} options=\{HIDDEN_TAB_ITEM_OPTIONS\}/
+  );
+  assert.match(customerRoot, /tabBarButton: \(\) => <CenterCreateButton/);
+  // Same bar configuration in both trees, so the chrome under LOCKED screens
+  // 07/48 cannot drift between modes.
   assert.match(customerRoot, /bottomNavScreenOptions\(insets\.bottom\)/);
   assert.match(workerRoot, /bottomNavScreenOptions\(insets\.bottom\)/);
+});
+
+test('the locked customer Home "View map" dispatch still resolves on the tab navigator', () => {
+  // The LOCKED screen's pill dispatches an untargeted NAVIGATE at the tab
+  // navigator (getParent). React Navigation 7 resolves that against the tab
+  // navigator and its ancestors only — never child navigators — so the route
+  // must stay registered HERE (hidden), not inside the Home stack.
+  assert.match(home, /getParent\(\)\?\.navigate\('Map'\)/);
+  assert.match(customerRoot, /<Tab\.Screen name="Map" component=\{MapStackNavigator\}/);
+});
+
+test('the center action opens the creation sheet with exactly the three 4D-1a actions', () => {
+  assert.match(customerRoot, /<ActionSheet/);
+  assert.match(customerRoot, /label: 'Post a job'/);
+  assert.match(customerRoot, /label: 'Hire someone again'/);
+  assert.match(customerRoot, /label: 'My jobs'/);
+  // Destinations go through the one guarded cross-tab dispatch path, into
+  // existing surfaces — no new picker, no new sheet component.
+  assert.match(customerRoot, /navigateAcrossTabs\('Home', 'PostJob'\)/);
+  assert.match(customerRoot, /navigateAcrossTabs\('Profile', 'SavedWorkers'\)/);
+  assert.match(customerRoot, /navigateAcrossTabs\('MyJobs'\)/);
+  // The Create slot itself is never navigated to.
+  const codeOnly = (source) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.doesNotMatch(codeOnly(customerRoot), /navigate\('Create'/);
 });
 
 test('there is exactly one bottom nav implementation', () => {

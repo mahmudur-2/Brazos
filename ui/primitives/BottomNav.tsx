@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import { colors } from '../../lib/theme';
+import { colors, radius } from '../../lib/theme';
 
 /**
  * §I's `BottomNav` primitive — deferred from Phase 1, built here because Phase 2
@@ -24,18 +24,25 @@ import { colors } from '../../lib/theme';
  * there, which is the point of the catalog.
  *
  * MODE AWARENESS lives in the two trees (navigation/CustomerRoot.tsx,
- * navigation/WorkerRoot.tsx), which mount the same five tabs against different
- * Home stacks. The bar itself is identical in both modes on purpose: the Home
- * tab means "the home of the mode you are in", and changing its icon or label
- * per mode would make the switch feel like a different app rather than the same
- * app in a different mode.
+ * navigation/WorkerRoot.tsx). Since Stage 4D the two bars differ by design
+ * (operator decision, docs/audits/STAGE4D_PLAN.md "Navigation — FINAL"):
+ * the worker bar keeps the five classic tabs (WORKER_BAR_TABS), while the
+ * customer bar shows four (CUSTOMER_BAR_TABS) with the raised [ + ] creation
+ * button in the center slot. The customer tree still REGISTERS Map and MyJobs
+ * as routes — their bar items are hidden via HIDDEN_TAB_ITEM_OPTIONS — because
+ * the LOCKED Customer Home dispatches `getParent()?.navigate('Map')` and
+ * notification routing dispatches into the MyJobs tab in both modes; both must
+ * keep resolving on the tab navigator itself (React Navigation 7 does not
+ * search child navigators for an untargeted NAVIGATE, so a route moved into a
+ * child stack would silently stop resolving for those callers).
  */
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-export type BottomNavTabKey = 'Home' | 'Map' | 'MyJobs' | 'Messages' | 'Profile';
+export type BottomNavTabKey = 'Home' | 'Map' | 'MyJobs' | 'Discover' | 'Messages' | 'Profile';
 
-/** The five tabs, in bar order. Both trees register exactly these, in this order. */
+/** Every bar item either tree can render, keyed for the item renderer. Bar
+ *  ORDER lives in WORKER_BAR_TABS / CUSTOMER_BAR_TABS below, per mode. */
 export const BOTTOM_NAV_TABS: {
   key: BottomNavTabKey;
   label: string;
@@ -47,9 +54,21 @@ export const BOTTOM_NAV_TABS: {
   // "find work near you", and a pin reads as that more directly than a map.
   { key: 'Map', label: 'Map', icons: ['location', 'location-outline'] },
   { key: 'MyJobs', label: 'My Jobs', icons: ['briefcase', 'briefcase-outline'] },
+  // The customer's browse surface (workers and services — never job
+  // postings). A compass, per the 4D-1a dispatch: same slot the Map tab
+  // occupied, different promise.
+  { key: 'Discover', label: 'Discover', icons: ['compass', 'compass-outline'] },
   { key: 'Messages', label: 'Messages', icons: ['chatbubbles', 'chatbubbles-outline'] },
   { key: 'Profile', label: 'Profile', icons: ['person', 'person-outline'] },
 ];
+
+/** The worker bar — the five classic tabs, unchanged (LOCKED screen 48 sits
+ *  above this exact bar). */
+export const WORKER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Messages', 'Profile'];
+
+/** The customer bar's four VISIBLE tabs. The center [ + ] slot sits between
+ *  Discover and Messages and is an action, not a tab — see CenterCreateButton. */
+export const CUSTOMER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Discover', 'Messages', 'Profile'];
 
 const TAB_BY_KEY = new Map(BOTTOM_NAV_TABS.map((tab) => [tab.key as string, tab]));
 
@@ -211,6 +230,54 @@ export function bottomNavScreenOptions(insetBottom: number) {
 }
 
 /**
+ * Registration options for a tab that must stay DISPATCHABLE but must not
+ * appear in the bar. `display: 'none'` on the item's outer wrapper removes it
+ * from the bar's layout entirely (no phantom flex slot — verified against the
+ * installed @react-navigation/bottom-tabs 7.18.3 BottomTabBar.js, which merges
+ * `tabBarItemStyle` onto each item's container).
+ *
+ * The customer tree uses this for Map and MyJobs: the LOCKED Customer Home's
+ * "View map" pill dispatches `getParent()?.navigate('Map')` — an untargeted
+ * NAVIGATE handled by the tab navigator itself, which React Navigation 7 never
+ * forwards down into child navigators — and every notification / cross-tab
+ * jump targets the MyJobs TAB in both modes (lib/navigationRef.ts). Keeping
+ * both as hidden tab routes keeps every one of those dispatches resolving
+ * while the bar shows only the four customer tabs plus the center action.
+ */
+export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
+  tabBarItemStyle: { display: 'none' },
+};
+
+/**
+ * The customer bar's center [ + ] — a rounded square in `colors.forest` with a
+ * dark plus glyph, visually raised above the bar (4D-1a pre-made decision).
+ * It is an ACTION, not a navigation destination: it opens the creation sheet
+ * and never dispatches navigation, so it can never render an active state.
+ *
+ * Rendered through the dummy Create route's `tabBarButton`, which replaces the
+ * library's pressable inside an `overflow: visible` item wrapper — so the
+ * raised square can poke above the hairline without touching the bar's own
+ * style object. The BUTTON is opaque forest with its own shadow; the bar keeps
+ * its opaque background and `elevation: 0` (see the comment block above
+ * TAB_BAR_BACKGROUND — nothing here reintroduces transparency on the bar).
+ */
+export function CenterCreateButton({ onPress }: { onPress: () => void }) {
+  return (
+    <View style={styles.createSlot}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.createButton, pressed && styles.createButtonPressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Create"
+        accessibilityHint="Post a job, hire someone again, or open your jobs"
+      >
+        <Ionicons name="add" size={34} color={colors.ink} />
+      </Pressable>
+    </View>
+  );
+}
+
+/**
  * A static, non-navigating rendering of the bar, for the dev catalog. Uses the
  * same item renderer and the same constants as the real bar; it just cannot be
  * tapped, because there is nothing to navigate to from a catalog page.
@@ -218,12 +285,26 @@ export function bottomNavScreenOptions(insetBottom: number) {
 export function BottomNavPreview({
   activeKey,
   insetBottom = 0,
+  tabs = WORKER_BAR_TABS,
+  showCreateAction = false,
 }: {
   activeKey: BottomNavTabKey;
   /** Simulate a notched device's home-indicator inset. */
   insetBottom?: number;
+  /** Which bar layout to draw — worker five by default. */
+  tabs?: BottomNavTabKey[];
+  /** Insert the static customer [ + ] between Discover and Messages. */
+  showCreateAction?: boolean;
 }) {
   const bottomInset = Math.min(insetBottom, TAB_BAR_SAFE_BOTTOM);
+
+  // The customer layout raises the action between its 2nd and 3rd tabs; a
+  // flat item list keeps every slot an equal flex column, like the real bar.
+  const items: Array<{ kind: 'tab'; key: BottomNavTabKey } | { kind: 'create' }> = [];
+  tabs.forEach((key, index) => {
+    if (showCreateAction && index === 2) items.push({ kind: 'create' });
+    items.push({ kind: 'tab', key });
+  });
 
   return (
     <View
@@ -233,18 +314,21 @@ export function BottomNavPreview({
       ]}
       accessibilityRole="tablist"
     >
-      {BOTTOM_NAV_TABS.map((tab) => {
-        const focused = tab.key === activeKey;
-        return (
-          <View key={tab.key} style={styles.previewItem}>
+      {items.map((item) =>
+        item.kind === 'create' ? (
+          <View key="create" style={styles.previewItem}>
+            <CenterCreateButton onPress={() => {}} />
+          </View>
+        ) : (
+          <View key={item.key} style={styles.previewItem}>
             <BottomNavItem
-              routeName={tab.key}
-              focused={focused}
-              color={focused ? TAB_ACTIVE_COLOR : TAB_INACTIVE_COLOR}
+              routeName={item.key}
+              focused={item.key === activeKey}
+              color={item.key === activeKey ? TAB_ACTIVE_COLOR : TAB_INACTIVE_COLOR}
             />
           </View>
-        );
-      })}
+        )
+      )}
     </View>
   );
 }
@@ -265,6 +349,37 @@ const styles = StyleSheet.create({
     lineHeight: TAB_LABEL_FONT_SIZE + 2,
     marginTop: 2,
   },
+  // Fills the Create route's item slot; the square inside is lifted so it
+  // pokes above the hairline. Bottom-aligned like tabItemContent so the
+  // raised amount is the translate, not layout guesswork.
+  createSlot: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: TAB_BOTTOM_GAP,
+  },
+  createButton: {
+    width: 54,
+    height: 54,
+    borderRadius: radius.lg,
+    backgroundColor: colors.forest,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Raised above the bar. iOS is the target (CLAUDE.md: Android deferred);
+    // the slice above the bar's bounds still draws because the library's item
+    // wrapper keeps overflow visible for the uikit variant.
+    transform: [{ translateY: -14 }],
+    // The button's own depth. It is OPAQUE forest, so this elevation cannot
+    // trigger the transparent-background Android rendering bug the bar's own
+    // elevation:0 exists to avoid — and the bar's style is untouched.
+    shadowColor: colors.ink,
+    shadowOpacity: 0.22,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
+  createButtonPressed: { opacity: 0.88, transform: [{ translateY: -14 }, { scale: 0.96 }] },
   previewBar: {
     flexDirection: 'row',
     backgroundColor: TAB_BAR_BACKGROUND,

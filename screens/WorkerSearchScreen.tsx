@@ -215,7 +215,9 @@ export function WorkerSearchScreen() {
               autoCapitalize="sentences"
               autoCorrect
               returnKeyType="search"
-              autoFocus={!params?.query && !params?.category}
+              // autoFocus:false is the Discover tab-root mount — opening a TAB
+              // with the keyboard up is noise; pushed-from-Home opens focused.
+              autoFocus={params?.autoFocus !== false && !params?.query && !params?.category}
               accessibilityLabel="Describe the help you need"
             />
             {query.length > 0 ? (

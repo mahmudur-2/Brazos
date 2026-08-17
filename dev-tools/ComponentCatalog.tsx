@@ -7,6 +7,8 @@ import {
   BOTTOM_NAV_TABS,
   BottomNavPreview,
   Button,
+  CUSTOMER_BAR_TABS,
+  WORKER_BAR_TABS,
   Card,
   Chip,
   EmptyState,
@@ -357,15 +359,23 @@ export function ComponentCatalog() {
         <Section title="BottomNav — tab states">
           <Text style={styles.note}>
             The real bar is drawn by React Navigation from bottomNavScreenOptions(); this preview
-            uses the same item renderer and constants, so a change to one shows here. Identical in
-            both modes by design — only the Home tab’s stack differs.
+            uses the same item renderer and constants, so a change to one shows here. Since Stage
+            4D the two bars differ: worker keeps the five classic tabs, customer shows four plus
+            the center [ + ] action (Map and MyJobs stay registered as hidden routes).
           </Text>
-          {BOTTOM_NAV_TABS.map((tab) => (
-            <View key={tab.key} style={styles.navBox}>
-              <Text style={styles.navCaption}>active: {tab.label}</Text>
-              <BottomNavPreview activeKey={tab.key} />
-            </View>
-          ))}
+          {WORKER_BAR_TABS.map((key) => {
+            const tab = BOTTOM_NAV_TABS.find((t) => t.key === key);
+            return (
+              <View key={key} style={styles.navBox}>
+                <Text style={styles.navCaption}>worker bar, active: {tab?.label ?? key}</Text>
+                <BottomNavPreview activeKey={key} />
+              </View>
+            );
+          })}
+          <View style={styles.navBox}>
+            <Text style={styles.navCaption}>customer bar — Home · Discover · [ + ] · Messages · Profile</Text>
+            <BottomNavPreview activeKey="Home" tabs={CUSTOMER_BAR_TABS} showCreateAction />
+          </View>
           <View style={styles.navBox}>
             <Text style={styles.navCaption}>with a notched device’s bottom inset (34pt reported)</Text>
             <BottomNavPreview activeKey="Home" insetBottom={34} />

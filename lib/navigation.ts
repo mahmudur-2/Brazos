@@ -133,13 +133,41 @@ export type CustomerHomeStackParamList = {
   ProfileReviews: { userId: string; name?: string };
   /**
    * Worker search. Opened blank from Home's search field, or pre-run with a
-   * typed query / a tapped service chip.
+   * typed query / a tapped service chip. `autoFocus: false` suppresses the
+   * open-with-keyboard behaviour for the Discover tab's root mount, where a
+   * keyboard popping on every first tab visit would be noise.
    */
-  WorkerSearch: { query?: string; category?: string } | undefined;
+  WorkerSearch: { query?: string; category?: string; autoFocus?: boolean } | undefined;
 };
 
 export type CustomerHomeStackNavigation =
   NativeStackNavigationProp<CustomerHomeStackParamList>;
+
+/**
+ * The customer Discover tab (Stage 4D) — the customer's browse surface, rooted
+ * at the same WorkerSearchScreen the Home stack pushes. Mode purity: this tab
+ * lists WORKERS and services, never job postings. WorkerProfile / PostJob /
+ * ProfileReviews ride along per the standing every-stack-that-surfaces-a-user
+ * rule (WorkerSearch opens profiles; a profile offers "Send an offer").
+ */
+export type DiscoverStackParamList = {
+  WorkerSearch: { query?: string; category?: string; autoFocus?: boolean } | undefined;
+  WorkerProfile: { workerId: string; workerName?: string };
+  ProfileReviews: { userId: string; name?: string };
+  PostJob:
+    | {
+        hireWorkerId?: string;
+        hireWorkerName?: string;
+        editJobId?: string;
+        threadJobId?: string;
+        initialTitle?: string;
+        initialDescription?: string;
+        initialCategory?: JobCategory;
+      }
+    | undefined;
+};
+
+export type DiscoverStackNavigation = NativeStackNavigationProp<DiscoverStackParamList>;
 
 /**
  * The Home tab in WORKER mode: the job marketplace.
@@ -381,17 +409,37 @@ export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParam
 //
 // Exactly one of these is mounted at a time (navigation/ModeShell.tsx), which
 // is §F's enforcement mechanism 2: a screen from the other tree cannot render
-// because it is not there. They carry the same five tabs in the same order so
-// the bottom bar is visually identical in both modes — only the Home tab's
-// stack differs, which is what "mode" means in navigation terms.
+// because it is not there. Since Stage 4D the two BARS differ (operator
+// decision): the worker tree keeps the five classic tabs; the customer tree
+// shows Home · Discover · [ + ] · Messages · Profile, with Map and MyJobs
+// registered as HIDDEN routes (see CustomerRoot.tsx for the mechanism and
+// why). The trees stay separately typed, so cross-tree navigation is still a
+// compile error.
 
 /** The customer tree. §F's `CustomerParamList`. */
 export type CustomerParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
-  Map: NavigatorScreenParams<MapStackParamList> | undefined;
-  MyJobs: NavigatorScreenParams<MyJobsStackParamList> | undefined;
+  /** The customer browse surface — workers and services, never job postings. */
+  Discover: NavigatorScreenParams<DiscoverStackParamList> | undefined;
+  /**
+   * The center [ + ] slot. NOT a navigation destination: its tabBarButton
+   * opens the creation sheet and never dispatches, so this route can only be
+   * reached by a deliberate programmatic navigate — which nothing does. It is
+   * typed so the registration typechecks, same rationale as ComponentCatalog.
+   */
+  Create: undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
+  /**
+   * HIDDEN routes — registered, dispatchable, absent from the bar
+   * (HIDDEN_TAB_ITEM_OPTIONS in ui/primitives/BottomNav.tsx):
+   * MyJobs hosts the whole customer hire + active-work loop and every
+   * notification / cross-tab jump that targets the MyJobs tab; Map keeps the
+   * LOCKED Customer Home's `getParent()?.navigate('Map')` pill resolving
+   * until the operator's unlock session removes that chip.
+   */
+  MyJobs: NavigatorScreenParams<MyJobsStackParamList> | undefined;
+  Map: NavigatorScreenParams<MapStackParamList> | undefined;
 };
 
 /** The worker tree. §F's `WorkerParamList`. */
@@ -439,11 +487,12 @@ export type ProfileReviewsRouteParamList = {
   ProfileReviews: { userId: string; name?: string };
 };
 
-// Only registered in HomeStack today, but given its own route-param type for
-// the same reason as the others: the screen needs its params and goBack(),
-// not the whole parent stack.
+// Registered in the customer Home stack (pushed from Home's search/chips) and
+// as the Discover tab's root; its own route-param type for the same reason as
+// the others: the screen needs its params and goBack(), not the whole parent
+// stack.
 export type WorkerSearchRouteParamList = {
-  WorkerSearch: { query?: string; category?: string } | undefined;
+  WorkerSearch: { query?: string; category?: string; autoFocus?: boolean } | undefined;
 };
 
 // SubmitBid/BidSent are registered in every stack that mounts JobDetail
