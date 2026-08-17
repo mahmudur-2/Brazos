@@ -2,64 +2,73 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-17 - stage4D batch 1a: navigation restructure + mode purity
+## 2026-08-17 - stage4D batch 1b: one worker home
 
 **App-code-only run. No SQL was executed, no schema object was created or
-modified, no database was contacted, no dependency was added, and nothing was
-pushed.** Four commits, one per dispatch work item
-(`docs/dispatch/4D-1a.md`):
+modified, no database was contacted, no dependency was added or changed, and
+nothing was pushed.** Three code commits plus this rewrite, per
+the 4D-1b dispatch ("one worker home"):
 
-1. `8c49fbd` - customer bar becomes `Home · Discover · [ + ] · Messages ·
-   Profile`. Discover mounts the existing WorkerSearchScreen (workers and
-   services, never job postings) as a tab root; the raised forest [ + ]
-   opens the existing ActionSheet with exactly Post a job / Hire someone
-   again / My jobs, each through `navigateAcrossTabs()`. **Map and MyJobs
-   stay registered on the customer tab navigator as HIDDEN routes**
-   (`HIDDEN_TAB_ITEM_OPTIONS` in `ui/primitives/BottomNav.tsx`) instead of
-   the dispatch's pushed-route-in-Home-stack sketch — React Navigation 7
-   resolves an untargeted NAVIGATE against the dispatching navigator and its
-   ancestors only (child propagation is gated on `action.target`; verified
-   in the installed `@react-navigation/core` 7.21.11 `useOnAction.js`), so
-   the LOCKED Home's `getParent()?.navigate('Map')` pill and every
-   MyJobs-tab dispatch keep resolving only because those names stay on the
-   tab navigator. Worker bar unchanged: five classic tabs.
-2. `8ae3324` - new `screens/WorkerHomeScreen.tsx` roots the worker Home
-   stack; locked BrowseJobsScreen (atlas 48) sits after it, unmodified, as
-   "View all". Greeting + confirmed mode switch, phase53 `accepting_work`
-   toggle via `updateProfile()` (the dispatch's named
-   `hooks/useWorkerAvailability.ts` is actually a device-local
-   online/offline preference, NOT the phase53 field — reported), potential
-   earnings via new `openJobsPotential()` in `lib/earningsMath.ts`
-   (executed against the locked screen's inline memo in tests), skill/nearby
-   counts from the exact sources 48 uses.
-3. `fc47df4` - MyJobsHub is mode-aware from ModeContext and retabbed to
-   Active / Review / Closed through `lib/jobLifecycle.ts` only
-   (`deriveMyJobsTab`, `myJobsNextAction`; `deriveJobLifecycle` now also
-   mirrors phase51's on-read 72h auto-release client-side, dispute-frozen
-   like the server). Worker mode renders no posting affordance. Every card
-   carries a derived next-action primary label; HubCard demotes "View
-   details". New one-query-per-fact batched reads: payment statuses
-   (`lib/payments.ts`), open disputes (`lib/disputes.ts`), own reviews
-   (`lib/reviews.ts`), settled declined/expired bids (`lib/offers.ts`).
-4. `a1bd460` - cross-mode notification routing: destinations carry a mode
-   affinity (`MODE_FOR_SCREEN`); a tap owned by the other mode prompts
-   `switchMode()` (confirmation mandatory, in the provider) and routes only
-   after it resolves. `switchMode()` now returns `Promise<boolean>`,
-   resolving true only after the target tree is committed. Both consumers
-   forward ModeContext via `hooks/useNotificationModeBridge.ts`.
-   `tests/crossModeNotification.test.mjs` executes the real router with its
-   two runtime imports stubbed.
+1. `f9d40cd` - every job-list intent resolves to `WorkerResults{mode:'all'}`
+   while BrowseJobs was still mounted: WorkerHome's "View all"
+   (was `navigate('BrowseJobs')`) and MapScreen's worker-gated "See All
+   Jobs" (was `navigateAcrossTabs('Home','BrowseJobs')`), both mirroring
+   the locked screen 48's own "View all" dispatch byte-for-byte. The worker
+   Home stack now declares `initialRouteName="WorkerHome"` explicitly.
+2. `e222a8b` - the search field moves up to WorkerHome (D2): placed between
+   the greeting/switch row and the taking-new-work card, mirroring 48's
+   inline field (48 does NOT use `ui/primitives/SearchBar` - checked) and
+   its exact dispatch `WorkerResults{mode:'search', query: trimmed}` with
+   the same trim-and-guard. KeyboardAvoidingView + keyboardShouldPersistTaps
+   added per `.claude/rules/native-ui.md`; nothing visual.
+3. `0fe3470` - BrowseJobs UNMOUNTED: registration + import removed from
+   `navigation/WorkerRoot.tsx`; `BrowseJobs` removed from
+   `WorkerHomeStackParamList` so a future `navigate('BrowseJobs')` is a
+   compile error. The locked `screens/BrowseJobsScreen.tsx` itself is
+   untouched - on disk, registered nowhere, dispatched to by nothing.
+   New executed contract T1-T7 in `tests/workerHome.test.mjs`; mode /
+   setupOnboarding / crossTabNavigation suites flipped to the new truth,
+   none weakened. Stale prose corrected (`docs/architecture.md` still
+   claimed the worker stack rooted at `BrowseJobs` - pre-4D-1a state).
 
-`npm run verify` GREEN before the run (**547/547**) and after every commit;
-final: **571 tests, 571 pass, 0 fail, 0 skipped**. No locked file, no
-`design-reference/`, no frozen web/PWA surface, no `supabase/` file, no
-`package.json` change anywhere in the diff (`git diff 95b8864..HEAD`).
+**The defect this run closed:** two unrelated availability stores were both
+user-visible - WorkerHome's "Taking new work" writes server-side
+`profiles.accepting_work` (phase53, what customers see) while the old browse
+screen's "Online/Offline" wrote a device-local AsyncStorage value nobody
+else can read (confirmed contradicting on device). The device-local writer
+is now unreachable by construction: its only consumer is the unmounted
+locked screen (T6 asserts exactly that consumer set).
 
-Known follow-ups deliberately NOT done here (out of scope per dispatch):
-the customer map stack still reaches `JobDetail` (documented Phase-8 gap);
-the locked Home's "View map" chip removal is the operator's unlock session,
-after which the hidden customer Map route can drop; 4D-1b owns trust rows,
-hero job detail, progress unification, inbox chips.
+**D3 took its leave-in-place branch, deliberately.** Screen 48 is
+`hooks/useWorkerAvailability.ts`'s SOLE consumer, but the dispatch's
+delete-the-hook branch is unexecutable: the locked screen is type-checked
+(tsconfig has no `include` narrowing, so unmounted files still compile) and
+deleting the hook would strand a locked import. The hook stays on disk,
+byte-identical, exactly like the locked screen that consumes it. No test of
+the hook's own device-local behavior existed to delete. Removing both
+together is a future unlock-session item.
+
+**Landing-route finding (dispatch section 0.3):** switchMode() never
+resolved a route name - it swaps whole navigator trees (ModeShell), and the
+worker Home stack previously relied on declaration order alone. No
+`initialRouteName` existed anywhere in the repo, no persisted navigation
+state exists (`NavigationContainer` has no `initialState`/`onStateChange`),
+and `lib/setupLanding.ts` resolves a MODE, not a route. The reported
+sometimes-lands-on-BrowseJobs symptom therefore had no reproducible
+route-resolution mechanism in the current source; the fix is structural
+regardless - explicit initialRouteName (T4) plus the unmount, after which no
+BrowseJobs route exists to land on (T1-T3).
+
+`npm run verify` GREEN at the base (571/571) and after every commit:
+571 after commit 1, 572 after commit 2 (+1 search-field test), **579 after
+commit 3** (+7 T-contract tests). 0 fail, 0 skipped throughout. No locked
+file, no `design-reference/`, no frozen web/PWA surface, no `supabase/`
+object, no `.claude/` file, no `package.json` change in the diff
+(`git diff 142517a..HEAD`).
+
+Note: the previous HANDOFF forecast 4D-1b as "trust rows, hero job detail,
+progress unification, inbox chips" - the actual 4D-1b dispatch was this
+consolidation instead; that other work remains undispatched.
 
 ## Applied reality - staging `zzkumxcjtbqoselzptig`
 
@@ -132,8 +141,15 @@ payments on a release build set it to `sandbox` in `.env` and restart Metro
 for single-transaction migrations is "Success. No rows returned." plus a
 green verify-schema; phase74/75 each end with a visible-acceptance SELECT.
 
-**F. Device-test the 4D-1a navigation** (this run is suite-verified only;
-no simulator was run): the four customer tabs + [ + ] sheet actions, the
-locked Home's "View map" pill landing on the map, a bid notification tapped
-in customer mode prompting the Worker-mode switch and landing on the job,
-and My Jobs' Active/Review/Closed buckets against a job mid-approval.
+**F. Device-test 4D-1b** (this run is suite-verified only; no simulator was
+run): cold-start into worker mode and switch customer→worker repeatedly -
+the arrival screen must be WorkerHome ("Your work today") every time, with
+nothing pushed above it and no "Get hired. / Get paid." screen reachable;
+the new search field must land on Search Results; Map's "See All Jobs"
+(worker mode) must land on Available Jobs (WorkerResults, not the old
+browse screen); "Taking new work" toggled on one device must match what a
+second account sees on the worker's public profile, and no Online/Offline
+switch exists anywhere. Also still pending from 4D-1a: the four customer
+tabs + [ + ] sheet actions, the locked Home's "View map" pill, a bid
+notification tapped in customer mode prompting the Worker-mode switch, and
+My Jobs' Active/Review/Closed buckets against a job mid-approval.
