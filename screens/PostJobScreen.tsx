@@ -487,7 +487,7 @@ export function PostJobScreen() {
     // `HomeMain` is the CUSTOMER tree's Home root. PostJob is registered in the
     // shared MyJobs/Messages/Map/Profile stacks too, so a worker-mode account
     // genuinely reaches this line — and in worker mode the Home stack is
-    // BrowseJobs/WorkerResults/JobDetail/..., which cannot apply 'HomeMain'.
+    // WorkerHome/WorkerResults/JobDetail/..., which cannot apply 'HomeMain'.
     // The fallback lands on the Home tab's own root, i.e. Worker Home there and
     // Customer Home here. `pop: true` keeps React Navigation 7 from appending
     // another copy of the root route, so device Back cannot reveal the

@@ -362,7 +362,7 @@ export function jobThumbnailUrl(job: { photos?: string[] | null }): string | nul
 /**
  * Whether a job is in a category the worker advertises. One predicate for
  * Worker Home's "X match your skills" count and the results screen it opens
- * to, so the two can never disagree — see BrowseJobsScreen/WorkerResultsScreen.
+ * to, so the two can never disagree — see WorkerHomeScreen/WorkerResultsScreen.
  */
 export function jobMatchesSkills(job: { category: JobCategory }, categories: Set<string>): boolean {
   return categories.has(job.category);

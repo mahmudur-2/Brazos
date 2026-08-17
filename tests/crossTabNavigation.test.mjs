@@ -47,8 +47,12 @@ test('the worker feed route has exactly one name, declared and registered once',
   );
 });
 
-test('every route Worker Home navigates to is registered in the worker Home stack', async () => {
-  const [workerHome, workerRoot] = await Promise.all([
+test('the locked browse screen could still resolve every target if remounted', async () => {
+  // Atlas 48 is UNMOUNTED since 4D-1b (nothing registers or dispatches to
+  // it), so the generalized mounted-screen sweep below no longer sees it.
+  // Its dispatch targets are still held against the worker stack here so a
+  // future authorized remount cannot dangle.
+  const [lockedBrowse, workerRoot] = await Promise.all([
     read('screens/BrowseJobsScreen.tsx'),
     read('navigation/WorkerRoot.tsx'),
   ]);
@@ -57,14 +61,14 @@ test('every route Worker Home navigates to is registered in the worker Home stac
     [...workerRoot.matchAll(/<WorkerHomeStack\.Screen name="([^"]+)"/g)].map((m) => m[1])
   );
   const targets = [
-    ...stripComments(workerHome).matchAll(/navigation\.navigate\(\s*'([^']+)'/g),
+    ...stripComments(lockedBrowse).matchAll(/navigation\.navigate\(\s*'([^']+)'/g),
   ].map((m) => m[1]);
 
-  assert.ok(targets.length > 0, 'expected Worker Home to navigate somewhere');
+  assert.ok(targets.length > 0, 'expected the locked browse screen to navigate somewhere');
   for (const target of targets) {
     assert.ok(
       registered.has(target),
-      `Worker Home dispatches '${target}', which the worker Home stack does not register`
+      `BrowseJobsScreen dispatches '${target}', which the worker Home stack does not register`
     );
   }
 });
@@ -358,8 +362,8 @@ test('back pops when it can, and lands on the mounted mode home when it cannot',
     { name: 'HomeMain', component: 'HomeScreen' },
     'customer fallback must land on Customer Home'
   );
-  // Stage 4D: the worker stack roots at the new WorkerHome dashboard; the
-  // locked BrowseJobs (atlas 48) sits after it as "View all".
+  // Stage 4D: the worker stack roots at the WorkerHome dashboard — and since
+  // 4D-1b that root is also the stack's explicit initialRouteName.
   assert.deepEqual(
     firstScreen(workerRoot, 'WorkerHomeStack'),
     { name: 'WorkerHome', component: 'WorkerHomeScreen' },

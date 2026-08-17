@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
@@ -85,4 +86,107 @@ test('mode changes only through switchMode(), and layout follows the tab rules',
   assert.doesNotMatch(code, /useModeTransition/);
   assert.match(code, /edges=\{\['top'\]\}/);
   assert.match(screen, /paddingBottom: 0/);
+});
+
+// ===========================================================================
+// 4D-1b — one worker home. The LOCKED BrowseJobsScreen (atlas 48) stays on
+// disk but is UNMOUNTED: no navigator registers it, nothing dispatches to it,
+// and no landing value can resolve to it. T1–T7 are that contract.
+// ===========================================================================
+
+const SOURCE_DIRS = ['screens', 'components', 'lib', 'hooks', 'modes', 'ui', 'navigation'];
+const sourceFiles = SOURCE_DIRS.flatMap((d) =>
+  readdirSync(new URL(`../${d}`, import.meta.url), { recursive: true })
+    .map(String)
+    .filter((f) => /\.(ts|tsx)$/.test(f))
+    .map((f) => `${d}/${f.replace(/\\/g, '/')}`)
+);
+
+test('T1: the worker tree registers no route named BrowseJobs', () => {
+  assert.doesNotMatch(workerRoot, /name="BrowseJobs"/);
+  assert.doesNotMatch(workerRoot, /BrowseJobsScreen/);
+});
+
+test('T2+T3: nothing dispatches to BrowseJobs, and no landing value resolves to it', async () => {
+  assert.ok(sourceFiles.length > 100, 'the source sweep must actually see the tree');
+  const offenders = [];
+  for (const file of sourceFiles) {
+    const src = stripComments(await read(file));
+    // T2 — every dispatch shape that has ever existed in this repo.
+    if (/navigate\(\s*['"]BrowseJobs['"]/.test(src)) offenders.push(`${file}: navigate()`);
+    if (/navigateAcrossTabs\([^)]*['"]BrowseJobs['"]/.test(src)) {
+      offenders.push(`${file}: navigateAcrossTabs()`);
+    }
+    if (/screen:\s*['"]BrowseJobs['"]/.test(src)) offenders.push(`${file}: nested target`);
+    // T3 — no landing-route, initial-route or mode-landing value. This is the
+    // assertion that pins the reported wrong-landing symptom shut.
+    if (/initialRouteName\s*=\s*["'{]?\s*["']BrowseJobs["']/.test(src)) {
+      offenders.push(`${file}: initialRouteName`);
+    }
+  }
+  assert.deepEqual(offenders, []);
+});
+
+test('T3: landing decisions resolve modes, never route names', async () => {
+  // A cold-start landing is a MODE (consumed by ModeProvider into
+  // resolveInitialMode), not a navigation instruction — there is no route
+  // name anywhere on that path for a stale screen to hide behind.
+  const setupLanding = stripComments(await read('lib/setupLanding.ts'));
+  assert.doesNotMatch(setupLanding, /navigate|BrowseJobs/);
+  const types = await read('modes/types.ts');
+  assert.match(types, /return landing === 'work' \? 'worker' : 'customer';/);
+});
+
+test('T4: the explicit initial route and declaration order agree — on WorkerHome', () => {
+  const stripped = stripComments(workerRoot);
+  const declared = stripped.match(/initialRouteName="([^"]+)"/);
+  const firstRegistered = stripped.match(/<WorkerHomeStack\.Screen\s+name="([^"]+)"/);
+  assert.ok(declared, 'the worker Home stack must declare initialRouteName');
+  assert.ok(firstRegistered, 'the worker Home stack must register screens');
+  // switchMode() mounts a TREE rather than resolving a route name
+  // (ModeShell), so what a fresh worker mount lands on IS this stack's
+  // initial route. The two values that could disagree — the explicit
+  // contract and the declaration order — are compared, not hardcoded twice.
+  assert.equal(declared[1], firstRegistered[1]);
+  assert.equal(declared[1], 'WorkerHome');
+  // …and Home is the worker tree's first tab, so the mount arrives here.
+  assert.match(stripped, /<Tab\.Navigator[\s\S]*?<Tab\.Screen name="Home"/);
+});
+
+test('T5: WorkerResults mode:all is reachable from View all and from the Map header', async () => {
+  assert.match(code, /navigation\.navigate\('WorkerResults', \{ mode: 'all' \}\)/);
+  const map = stripComments(await read('screens/MapScreen.tsx'));
+  assert.match(map, /mode === 'worker' \?/);
+  assert.match(map, /navigateAcrossTabs\('Home', 'WorkerResults', \{ mode: 'all' \}\)/);
+});
+
+test('T6: one availability writer on the mounted worker surface — the server-side one', async () => {
+  // The dashboard writes phase53 profiles.accepting_work through the
+  // existing updateProfile() path; the device-local AsyncStorage hook has
+  // exactly one consumer left — the locked, UNMOUNTED atlas-48 screen — so
+  // no mounted surface can show a second, disagreeing availability truth.
+  assert.match(code, /updateProfile\(user\.id, \{ accepting_work: next \}\)/);
+  const users = [];
+  for (const file of sourceFiles) {
+    if (file === 'hooks/useWorkerAvailability.ts') continue;
+    if (/useWorkerAvailability/.test(stripComments(await read(file)))) users.push(file);
+  }
+  assert.deepEqual(users.sort(), ['screens/BrowseJobsScreen.tsx']);
+});
+
+test('T7: the worker Home stack keeps its routes, in order, minus BrowseJobs', () => {
+  const names = [
+    ...stripComments(workerRoot).matchAll(/<WorkerHomeStack\.Screen\s+name="([^"]+)"/g),
+  ].map((m) => m[1]);
+  assert.deepEqual(names, [
+    'WorkerHome',
+    'WorkerResults',
+    'JobDetail',
+    'SubmitBid',
+    'BidSent',
+    'Chat',
+    'PostJob',
+    'WorkerProfile',
+    'ProfileReviews',
+  ]);
 });

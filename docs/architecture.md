@@ -74,8 +74,11 @@ customer mode because it is not mounted — and it gives `switchMode()` its stac
 reset for free. Both trees have the same five tabs in the same order (Home, Map,
 MyJobs, Messages, Profile). **Only the Home tab differs**, and that difference
 is what mode means here: customer Home roots at `HomeMain`, worker Home roots
-at `BrowseJobs` and carries the bid flow (`WorkerResults`, `JobDetail`,
-`SubmitBid`, `BidSent`).
+at `WorkerHome` (explicit `initialRouteName`, 4D-1b) and carries the bid flow
+(`WorkerResults`, `JobDetail`, `SubmitBid`, `BidSent`). The locked atlas-48
+browse screen (`screens/BrowseJobsScreen.tsx`) is unmounted since 4D-1b —
+kept on disk, registered nowhere, with every job-list intent landing on
+`WorkerResults{mode:'all'}` instead.
 
 The other four stacks are declared **once** in `navigation/sharedStacks.tsx`
 and mounted by both trees, because one account's job hub, inbox, map and

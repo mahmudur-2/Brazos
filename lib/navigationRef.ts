@@ -98,10 +98,10 @@ export type CrossTabOptions = {
  * WHY THIS EXISTS AS ONE FUNCTION
  * `Home` is the mode-defining tab (BRAZOS_MASTER_PLAN.md §F): its stack is
  * `HomeMain/PostJob/WorkerSearch/...` in customer mode and
- * `BrowseJobs/WorkerResults/JobDetail/...` in worker mode, and only one of the
+ * `WorkerHome/WorkerResults/JobDetail/...` in worker mode, and only one of the
  * two trees is ever mounted. The other four tabs are shared. So a nested
- * `navigate('Home', { screen: 'BrowseJobs' })` written inside a SHARED screen
- * is correct in one mode and throws React Navigation's "The 'state' or
+ * `navigate('Home', { screen: 'WorkerResults' })` written inside a SHARED
+ * screen is correct in one mode and throws React Navigation's "The 'state' or
  * 'screen' passed in the params couldn't be applied to the navigator with the
  * screens: ..." in the other.
  *

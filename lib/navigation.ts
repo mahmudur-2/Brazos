@@ -88,8 +88,9 @@ export type OnboardingStackNavigation = NativeStackNavigationProp<OnboardingStac
 // object. They are now two stacks with two types.
 //
 // The rule this buys: a screen types its navigation against the tree it lives
-// in, so `navigate('BrowseJobs')` from customer code is a compile error rather
-// than a mode leak, and `navigate('WorkerSearch')` from worker code likewise.
+// in, so `navigate('WorkerResults')` from customer code is a compile error
+// rather than a mode leak, and `navigate('WorkerSearch')` from worker code
+// likewise.
 // tsc is the enforcement — no lint rule, no code review, no runtime check.
 //
 // The Home tab is the mode-defining tab. The other four (Map, MyJobs,
@@ -103,10 +104,11 @@ export type OnboardingStackNavigation = NativeStackNavigationProp<OnboardingStac
 /**
  * The Home tab in CUSTOMER mode: posting a job and finding workers.
  *
- * Note what is absent, and cannot be reached from here: `BrowseJobs` (Worker
- * Home), `WorkerResults` (the worker job feed) and `JobDetail` (the worker bid
- * screen). Those are worker surfaces — EST. PAY, bid CTAs, payout figures —
- * and a customer route into them is the leak §F exists to make impossible.
+ * Note what is absent, and cannot be reached from here: `WorkerHome` (the
+ * worker dashboard), `WorkerResults` (the worker job feed) and `JobDetail`
+ * (the worker bid screen). Those are worker surfaces — EST. PAY, bid CTAs,
+ * payout figures — and a customer route into them is the leak §F exists to
+ * make impossible.
  */
 export type CustomerHomeStackParamList = {
   HomeMain: undefined;
@@ -172,14 +174,14 @@ export type DiscoverStackNavigation = NativeStackNavigationProp<DiscoverStackPar
 /**
  * The Home tab in WORKER mode: the job marketplace.
  *
- * Rooted since Stage 4D at `WorkerHome` (the new dashboard screen); the locked
- * `BrowseJobs` (atlas 48) sits right after it as the "View all" destination.
+ * Rooted since Stage 4D at `WorkerHome` (the dashboard); every job-list
+ * intent lands on `WorkerResults` (4D-1b — the locked atlas-48 browse screen
+ * is unmounted and unnamed here, so a dispatch to it is a compile error).
  * The stack still belongs to the worker tree only — popping to its root lands
  * on the worker's own home, never Customer Home.
  */
 export type WorkerHomeStackParamList = {
   WorkerHome: undefined;
-  BrowseJobs: undefined;
   JobDetail: { job: OpenJob };
   /** Phase 7 — pre-hire chat from the worker's own-bid card. Registered
    *  alongside JobDetail in every stack that mounts it (the SubmitBid rule):

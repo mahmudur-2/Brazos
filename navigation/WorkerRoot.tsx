@@ -3,7 +3,6 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { WorkerHomeStackParamList, WorkerParamList } from '../lib/navigation';
 import { BidSentScreen } from '../screens/BidSentScreen';
-import { BrowseJobsScreen } from '../screens/BrowseJobsScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
@@ -51,7 +50,6 @@ function WorkerHomeStackNavigator() {
       screenOptions={{ headerShown: false }}
     >
       <WorkerHomeStack.Screen name="WorkerHome" component={WorkerHomeScreen} />
-      <WorkerHomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
       <WorkerHomeStack.Screen name="WorkerResults" component={WorkerResultsScreen} />
       <WorkerHomeStack.Screen name="JobDetail" component={JobDetailScreen} />
       {/* Phase 5 — registered wherever JobDetail is, so the bid entry can

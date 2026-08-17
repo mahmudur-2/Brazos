@@ -182,17 +182,16 @@ test('Terms & Privacy opens the route once, and cannot double-push', () => {
 
 test('the landing choice resolves a mode, and creates no screen', () => {
   // Phase 2: "Start in: Find work" is a MODE choice, not a one-shot navigate.
-  // It used to push BrowseJobs onto the shared customer Home stack, which is
-  // the same mechanism that made mode a navigation illusion. Worker Home is
-  // now the root of the worker tree, and the landing preference simply decides
-  // which tree the app opens in.
+  // It used to push the old browse screen onto the shared customer Home stack,
+  // which is the same mechanism that made mode a navigation illusion. The
+  // landing preference simply decides which tree the app opens in, and the
+  // worker tree's Home stack lands on WorkerHome — explicitly, so the landing
+  // cannot drift back into being a declaration-order accident (4D-1b).
   assert.match(read('modes/types.ts'), /export function modeFromLanding\(landing: 'hire' \| 'work'\)/);
   assert.match(read('modes/ModeProvider.tsx'), /modeFromLanding\(landingPreference\)/);
-  assert.match(read('lib/navigation.ts'), /BrowseJobs: undefined;/);
-  assert.match(
-    read('navigation/WorkerRoot.tsx'),
-    /<WorkerHomeStack\.Screen name="BrowseJobs" component=\{BrowseJobsScreen\} \/>/
-  );
+  assert.match(read('lib/navigation.ts'), /WorkerHome: undefined;/);
+  assert.doesNotMatch(read('lib/navigation.ts'), /BrowseJobs: undefined;/);
+  assert.match(read('navigation/WorkerRoot.tsx'), /initialRouteName="WorkerHome"/);
   // Hire help is simply DEFAULT_MODE — nothing to navigate to, as before.
   assert.match(read('modes/types.ts'), /export const DEFAULT_MODE: AppMode = 'customer';/);
 });
