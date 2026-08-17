@@ -31,11 +31,14 @@ const WorkerHomeStack = createNativeStackNavigator<WorkerHomeStackParamList>();
 const Tab = createBottomTabNavigator<WorkerParamList>();
 
 /**
- * The Home tab in worker mode. Rooted since Stage 4D at the NEW WorkerHome
+ * The Home tab in worker mode. Rooted since Stage 4D at WorkerHome
  * (screens/WorkerHomeScreen.tsx) — greeting, the phase53 taking-new-work
- * toggle, potential earnings and the match counts — with the locked
- * BrowseJobsScreen (atlas 48) mounted unmodified right after it as the
- * "View all" destination.
+ * toggle, potential earnings and the match counts — with every job-list
+ * intent landing on WorkerResults.
+ *
+ * initialRouteName is EXPLICIT (4D-1b): the landing route is a stated
+ * contract, not a side effect of declaration order, so switching to worker
+ * mode lands here every time and a test can assert it.
  *
  * Popping this stack to its root still lands on the worker's own home, so the
  * Home tab's default re-press behaviour stays correct — the property the
@@ -43,7 +46,10 @@ const Tab = createBottomTabNavigator<WorkerParamList>();
  */
 function WorkerHomeStackNavigator() {
   return (
-    <WorkerHomeStack.Navigator screenOptions={{ headerShown: false }}>
+    <WorkerHomeStack.Navigator
+      initialRouteName="WorkerHome"
+      screenOptions={{ headerShown: false }}
+    >
       <WorkerHomeStack.Screen name="WorkerHome" component={WorkerHomeScreen} />
       <WorkerHomeStack.Screen name="BrowseJobs" component={BrowseJobsScreen} />
       <WorkerHomeStack.Screen name="WorkerResults" component={WorkerResultsScreen} />

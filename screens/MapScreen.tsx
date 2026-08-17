@@ -43,14 +43,15 @@ export function MapScreen() {
             <Ionicons name="location-outline" size={22} color={colors.primary} />
           }
           // Worker-only. Map is a SHARED tab, so this screen renders in both
-          // modes, but its destination — `BrowseJobs`, Worker Home — exists
-          // only in the worker tree's Home stack. Rendering the control in
-          // customer mode offered a worker surface to a customer (§F) and
-          // threw "The 'state' or 'screen' passed in the params couldn't be
-          // applied to the navigator with the screens: HomeMain, PostJob,
-          // WorkerSearch, WorkerProfile, ProfileReviews" when tapped. Absent
-          // beats disabled beats a redirect somewhere else: there is no
-          // customer equivalent of "all open jobs" to send them to.
+          // modes, but its destination — `WorkerResults`, the worker job
+          // list — exists only in the worker tree's Home stack. Rendering the
+          // control in customer mode offered a worker surface to a customer
+          // (§F) and threw "The 'state' or 'screen' passed in the params
+          // couldn't be applied to the navigator with the screens: HomeMain,
+          // PostJob, WorkerSearch, WorkerProfile, ProfileReviews" when
+          // tapped. Absent beats disabled beats a redirect somewhere else:
+          // there is no customer equivalent of "all open jobs" to send them
+          // to.
           //
           // Same mode-conditional shape SubmitBidScreen and JobDetailScreen
           // use — perspective read from ModeContext, never a passed prop.
@@ -59,7 +60,7 @@ export function MapScreen() {
               <Pressable
                 // Reuses the existing complete open-jobs list rather than
                 // duplicating it inside MapStack.
-                onPress={() => navigateAcrossTabs('Home', 'BrowseJobs')}
+                onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
                 hitSlop={10}
               >
                 <Text style={styles.seeAll}>See All Jobs</Text>

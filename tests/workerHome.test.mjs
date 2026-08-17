@@ -6,8 +6,8 @@ import test from 'node:test';
  * Stage 4D batch 1a — the new Worker Home dashboard.
  *
  * What must stay true:
- *   1. The worker Home stack roots at WorkerHome; the LOCKED BrowseJobsScreen
- *      (atlas 48) stays mounted after it, unmodified, as "View all".
+ *   1. The worker Home stack roots at WorkerHome — explicitly, via
+ *      initialRouteName — and every job-list intent lands on WorkerResults.
  *   2. The taking-new-work toggle is the phase53 profiles.accepting_work
  *      field through the existing updateProfile() path — AVAILABILITY, not
  *      presence. The words "online"/"offline"/"live" never appear: that is
@@ -29,14 +29,14 @@ const screen = await read('screens/WorkerHomeScreen.tsx');
 const workerRoot = await read('navigation/WorkerRoot.tsx');
 const code = stripComments(screen);
 
-test('WorkerHome roots the worker stack and BrowseJobs is its View all', () => {
-  // Registration order in the stack: WorkerHome first, the locked feed second.
+test('WorkerHome roots the worker stack and View all lands on WorkerResults', () => {
   const home = workerRoot.indexOf('name="WorkerHome" component={WorkerHomeScreen}');
-  const browse = workerRoot.indexOf('name="BrowseJobs" component={BrowseJobsScreen}');
   assert.ok(home > 0, 'WorkerHome must be registered');
-  assert.ok(browse > home, 'BrowseJobs must stay mounted right after WorkerHome');
-  // The View all action lands on the locked screen.
-  assert.match(code, /navigation\.navigate\('BrowseJobs'\)/);
+  // 4D-1b D6: the landing route is an explicit contract, not a side effect
+  // of declaration order.
+  assert.match(workerRoot, /initialRouteName="WorkerHome"/);
+  // Every job-list intent resolves to the one list surface.
+  assert.match(code, /navigation\.navigate\('WorkerResults', \{ mode: 'all' \}\)/);
 });
 
 test('the toggle is phase53 accepting_work through the existing profile path', () => {

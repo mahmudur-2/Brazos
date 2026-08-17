@@ -35,9 +35,11 @@ const PREVIEW_COUNT = 3;
 type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
 
 /**
- * Worker Home (Stage 4D batch 1a) — the worker tree's new initial route,
- * mounted ABOVE the locked BrowseJobsScreen (atlas 48), which stays untouched
- * as this screen's "View all" destination.
+ * Worker Home (Stage 4D) — the worker tree's initial route.
+ *
+ * Every job-list intent here lands on WorkerResultsScreen — "View all" is
+ * mode 'all', the two pills are 'skills' and 'nearby' — one list surface,
+ * not a chain of them.
  *
  * Everything here is derived from data sources that already exist:
  *   - greeting + the mandatory-confirm mode switch: useProfile / switchMode()
@@ -275,7 +277,7 @@ export function WorkerHomeScreen() {
         <View style={styles.feedHeader}>
           <Text style={styles.sectionTitle}>Open jobs</Text>
           <Pressable
-            onPress={() => navigation.navigate('BrowseJobs')}
+            onPress={() => navigation.navigate('WorkerResults', { mode: 'all' })}
             style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
             accessibilityRole="button"
             accessibilityLabel="View all open jobs"
