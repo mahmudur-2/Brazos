@@ -2,41 +2,79 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-16 - stage4C: phase74 + phase75 wired into the repository
+## 2026-08-17 - stage4D batch 1a: navigation restructure + mode purity
 
-**This run changed the repository only. No SQL was executed, no schema was
-applied, and no database was contacted by the run.** Three commits: the two
-migration files landed byte-for-byte as the operator applied them to staging
-(integrity measured before staging - line counts 130/729, occurrence counts,
-ASCII-only byte scan; every number in `docs/audits/STAGE4C_REPORT.md`), two
-new verify-schema groups covering them, and this documentation pass.
+**App-code-only run. No SQL was executed, no schema object was created or
+modified, no database was contacted, no dependency was added, and nothing was
+pushed.** Four commits, one per dispatch work item
+(`docs/dispatch/4D-1a.md`):
 
-`npm run verify` after the changes is GREEN: **547 tests, 547 pass, 0 fail,
-0 skipped** (lint = `tsc --noEmit` plus `noUnusedLocals` /
-`noUnusedParameters`, then the full `node --test tests/*.test.mjs` suite).
+1. `8c49fbd` - customer bar becomes `Home · Discover · [ + ] · Messages ·
+   Profile`. Discover mounts the existing WorkerSearchScreen (workers and
+   services, never job postings) as a tab root; the raised forest [ + ]
+   opens the existing ActionSheet with exactly Post a job / Hire someone
+   again / My jobs, each through `navigateAcrossTabs()`. **Map and MyJobs
+   stay registered on the customer tab navigator as HIDDEN routes**
+   (`HIDDEN_TAB_ITEM_OPTIONS` in `ui/primitives/BottomNav.tsx`) instead of
+   the dispatch's pushed-route-in-Home-stack sketch — React Navigation 7
+   resolves an untargeted NAVIGATE against the dispatching navigator and its
+   ancestors only (child propagation is gated on `action.target`; verified
+   in the installed `@react-navigation/core` 7.21.11 `useOnAction.js`), so
+   the LOCKED Home's `getParent()?.navigate('Map')` pill and every
+   MyJobs-tab dispatch keep resolving only because those names stay on the
+   tab navigator. Worker bar unchanged: five classic tabs.
+2. `8ae3324` - new `screens/WorkerHomeScreen.tsx` roots the worker Home
+   stack; locked BrowseJobsScreen (atlas 48) sits after it, unmodified, as
+   "View all". Greeting + confirmed mode switch, phase53 `accepting_work`
+   toggle via `updateProfile()` (the dispatch's named
+   `hooks/useWorkerAvailability.ts` is actually a device-local
+   online/offline preference, NOT the phase53 field — reported), potential
+   earnings via new `openJobsPotential()` in `lib/earningsMath.ts`
+   (executed against the locked screen's inline memo in tests), skill/nearby
+   counts from the exact sources 48 uses.
+3. `fc47df4` - MyJobsHub is mode-aware from ModeContext and retabbed to
+   Active / Review / Closed through `lib/jobLifecycle.ts` only
+   (`deriveMyJobsTab`, `myJobsNextAction`; `deriveJobLifecycle` now also
+   mirrors phase51's on-read 72h auto-release client-side, dispute-frozen
+   like the server). Worker mode renders no posting affordance. Every card
+   carries a derived next-action primary label; HubCard demotes "View
+   details". New one-query-per-fact batched reads: payment statuses
+   (`lib/payments.ts`), open disputes (`lib/disputes.ts`), own reviews
+   (`lib/reviews.ts`), settled declined/expired bids (`lib/offers.ts`).
+4. `a1bd460` - cross-mode notification routing: destinations carry a mode
+   affinity (`MODE_FOR_SCREEN`); a tap owned by the other mode prompts
+   `switchMode()` (confirmation mandatory, in the provider) and routes only
+   after it resolves. `switchMode()` now returns `Promise<boolean>`,
+   resolving true only after the target tree is committed. Both consumers
+   forward ModeContext via `hooks/useNotificationModeBridge.ts`.
+   `tests/crossModeNotification.test.mjs` executes the real router with its
+   two runtime imports stubbed.
+
+`npm run verify` GREEN before the run (**547/547**) and after every commit;
+final: **571 tests, 571 pass, 0 fail, 0 skipped**. No locked file, no
+`design-reference/`, no frozen web/PWA surface, no `supabase/` file, no
+`package.json` change anywhere in the diff (`git diff 95b8864..HEAD`).
+
+Known follow-ups deliberately NOT done here (out of scope per dispatch):
+the customer map stack still reaches `JobDetail` (documented Phase-8 gap);
+the locked Home's "View map" chip removal is the operator's unlock session,
+after which the hidden customer Map route can drop; 4D-1b owns trust rows,
+hero job detail, progress unification, inbox chips.
 
 ## Applied reality - staging `zzkumxcjtbqoselzptig`
 
-**phase74 (push scheduler) and phase75 (security hardening) are APPLIED to
-staging.** The operator applied both before this run: phase74's header
-records the apply verified by `net._http_response` returning status 200 and
-four categories of push arriving on a physical device, and phase75 commits
-only if its in-transaction self-check passes, so its sentinel existing is the
-self-check passing. Phases 67-73 were already applied and verified green on
-2026-08-16.
-
-**Per standing policy, only a green `node scripts/verify-schema.mjs` counts
-as applied - and the two groups that check phase74/75 were added by this
-run, so no verify-schema run has covered them yet.** The next operator
-action is to run it (needs `.env` and live staging, so it never runs inside
-an autonomous run). Expected: every group OK including the two new
-sentinels, zero MISSING, zero PENDING. With phase74/75 committed there is no
-unapplied migration in the repository - the pending layer is empty again.
+Unchanged by this run. phase74 (push scheduler) + phase75 (security
+hardening) are committed and operator-applied to staging; phases 67-73
+applied and verified green 2026-08-16. **Per standing policy only a green
+`node scripts/verify-schema.mjs` counts as applied, and the two groups
+covering phase74/75 have still never been exercised** - that run remains the
+next operator action (needs `.env` + live staging, never inside an
+autonomous run). Expected: every group OK, zero MISSING, zero PENDING; no
+unapplied migration exists in the repository.
 
 **Production (`avkighsiufeefyycbebf`) still has none of the migrations.**
-The standing decision is a rebuild from a staging dump once staging is
-beta-ready; `PROD_APPLY.md` remains the ordered fallback if a replay is
-chosen instead. Production was never contacted during this run.
+Standing decision: rebuild from a staging dump once staging is beta-ready;
+`PROD_APPLY.md` is the ordered fallback. Production was never contacted.
 
 ### anon-EXECUTE evidence - preserve on any rewrite
 
@@ -51,93 +89,51 @@ were applied):
 
 That ACL string cannot be re-derived from any file in this repository and
 exists nowhere else. Preserve it on any rewrite of this document. Neither
-new phase disturbs the finding: phase74's `drain_notification_outbox()` is
-revoked from public/anon/authenticated in the same file that creates it, and
-phase75's sweep removes table WRITE grants, not function EXECUTE.
-
-## What this run changed in the tree
-
-1. **`supabase/phase74_push_scheduler.sql` (130 lines) and
-   `supabase/phase75_security_hardening.sql` (729 lines) are committed,
-   unmodified.** phase74: pg_cron fires `public.drain_notification_outbox()`
-   every minute; it reads the endpoint and service_role key from Vault and
-   POSTs to the `send-push` Edge Function through pg_net; fire-and-forget,
-   so `cron.job_run_details` succeeds independently of delivery and
-   `net._http_response` holds the outcome. phase75: six security-sweep
-   findings - money CHECK ceilings ($100,000) on `jobs`/`job_offers`/
-   `payments`, an explicit `'jobs'` arm in `should_notify`, half-mile-snapped
-   distance in `jobs_within_radius` (ordered AND filtered on the snapped
-   value), `delete_my_account` TOCTOU closed under `FOR UPDATE` job locks,
-   a trigger settling pending offers on any job cancellation, and anon's
-   write privileges removed schema-wide with SELECT deliberately retained.
-2. **`scripts/verify-schema.mjs` gained two groups at the end of
-   MIGRATIONS**, sentinel-carried like phase43 onward. `node --check` exits
-   0. Note for the next reader: the dispatch prompt placed them "after the
-   phase69 group", but phase70-73 groups already followed phase69; the end
-   of the array (after phase73) is where they went and belong.
-3. **Documentation truth-up** - this file, `BRAZOS_MASTER_PLAN.md`
-   (scheduler and five phase75-carried items leave; two follow-ups with
-   named causes arrive; F5 restated alone), `docs/architecture.md`
-   (Notifications: the scheduled drain; Money: the ceilings; Security model:
-   the anon write revoke and the snapped-distance sort), and the new
-   `docs/audits/STAGE4C_REPORT.md`.
+phase74 nor phase75 disturbs the finding.
 
 ## Still blocking a beta, worst first
 
-The push scheduler is OFF this list (phase74 drains the outbox every minute
-on staging), and so are unbounded money amounts (phase75's ceilings bound
-every writer; the client-side mirror is a master-plan follow-up, not a
-blocker).
-
 1. **Phone sign-in dead-ends on a release build.** `EXPO_PUBLIC_PHONE_AUTH_MODE`
    unset means `mock` in development and `disabled` in a release, and `mock`
-   is refused outright when `__DEV__` is false - correctly, since no SMS
-   provider is configured or paid for. Email + password is therefore the only
-   path that authenticates anyone. See `docs/phone-auth-activation.md`.
-2. **Supabase session tokens sit in unencrypted AsyncStorage.** A
-   device-compromise exposure; swap the `createClient` storage adapter to
-   `expo-secure-store`.
-3. **Payments are sandbox-only and availability is configuration-governed.**
-   `EXPO_PUBLIC_PAYMENTS_MODE` must be set to `sandbox` for a release/
-   TestFlight build to run payments at all (unset resolves to disabled
-   outside development), and there is no real provider behind the resolver -
-   deliberate for the beta, but the beta cannot exercise checkout until the
-   env is set and a provider decision is eventually made.
+   is refused when `__DEV__` is false - correctly, since no SMS provider is
+   configured. Email + password is the only authenticating path. See
+   `docs/phone-auth-activation.md`.
+2. **Supabase session tokens sit in unencrypted AsyncStorage.** Swap the
+   `createClient` storage adapter to `expo-secure-store`.
+3. **Payments are sandbox-only and configuration-governed.**
+   `EXPO_PUBLIC_PAYMENTS_MODE=sandbox` must be set for a release/TestFlight
+   build to run payments at all; no real provider exists behind the
+   resolver (deliberate for beta).
 
 ## Needs the operator - outside any run
 
-**A. Run `node scripts/verify-schema.mjs` against staging.** It is the only
-thing that makes "phase74/75 applied" official under this repository's
-policy, and the two new groups have never been exercised. Expect every group
-OK, zero MISSING, zero PENDING.
+**A. Run `node scripts/verify-schema.mjs` against staging** - the only thing
+that makes "phase74/75 applied" official; their two groups have never run.
 
-**B. The next TestFlight build will fail its own gate** - unchanged from
-Stage 4A. The EAS `preview` environment's `SUPABASE_KEY` is a new-format
-publishable key (`sb_pu…`); `refFromJwt` cannot resolve a ref from it, so
-`evaluateGate` fails closed and exits 1 before dependencies install. Replace
-the value with the legacy `eyJ…` anon key - **production's**, because the
-`testflight` profile selects the `preview` environment and
-`EXPECTED_REF.testflight` is the production ref. Related trap:
-`verify-schema.mjs` shares `refFromJwt` and only compares a truthy ref, so a
-staging move to a new-format key would degrade its parity check silently to
-`UNRESOLVED`; worth making it fail closed like the EAS gate.
+**B. The next TestFlight build will fail its own gate** (unchanged from
+Stage 4A): the EAS `preview` environment's `SUPABASE_KEY` is a new-format
+publishable key (`sb_pu…`); `refFromJwt` cannot resolve it, so
+`evaluateGate` fails closed. Replace with the legacy `eyJ…` anon key -
+**production's**, because the `testflight` profile selects the `preview`
+environment and `EXPECTED_REF.testflight` is the production ref. Related:
+`verify-schema.mjs` shares `refFromJwt` and would silently degrade to
+`UNRESOLVED` on a staging key-format move; worth making it fail closed.
 
 **C. "preview" names two different things.** `EXPECTED_REF` maps
-`preview → STAGING_REF`, but `eas.json` declares no `preview` BUILD profile;
-the EAS **environment** named `preview` holds production credentials and is
-what the `testflight` profile selects. Nothing is broken - the deliberate
-`EXPECTED_REF.testflight → production` decision applies - but the two files
-read together imply preview means staging, which is false. Documented in the
-`EXPECTED_REF` docblock.
+`preview → STAGING_REF`, but the EAS **environment** named `preview` holds
+production credentials and is what the `testflight` profile selects.
+Nothing is broken; the docblock on `EXPECTED_REF` explains.
 
-**D. `EXPO_PUBLIC_PAYMENTS_MODE` still governs whether payments run.**
-Unset reproduces the old `__DEV__` behaviour exactly. For payments on a
-release build, set `EXPO_PUBLIC_PAYMENTS_MODE=sandbox` in `.env` and restart
-Metro (Expo inlines `EXPO_PUBLIC_*` at bundle time). Declared in
-`.env.example` since commit `4d78ce9`.
+**D. `EXPO_PUBLIC_PAYMENTS_MODE` governs whether payments run.** For
+payments on a release build set it to `sandbox` in `.env` and restart Metro
+(Expo inlines `EXPO_PUBLIC_*` at bundle time).
 
 **E. `RAISE NOTICE` is invisible in the Supabase SQL Editor.** Acceptance
-for single-transaction migrations is "Success. No rows returned." with no
-error, plus the real gate: a green verify-schema. phase74 and phase75 were
-both written post-lesson - each ends with a visible-acceptance SELECT that
-returns its outcome as rows.
+for single-transaction migrations is "Success. No rows returned." plus a
+green verify-schema; phase74/75 each end with a visible-acceptance SELECT.
+
+**F. Device-test the 4D-1a navigation** (this run is suite-verified only;
+no simulator was run): the four customer tabs + [ + ] sheet actions, the
+locked Home's "View map" pill landing on the map, a bid notification tapped
+in customer mode prompting the Worker-mode switch and landing on the job,
+and My Jobs' Active/Review/Closed buckets against a job mid-approval.
