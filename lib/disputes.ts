@@ -62,6 +62,27 @@ export async function fetchOpenJobDispute(jobId: string) {
 }
 
 /**
+ * Which of these jobs carry an OPEN issue report, in one query — the My Jobs
+ * hub's frozen-release marker (an open report parks a finished job in Review
+ * and blocks the 72h auto-release). Same RLS as fetchOpenJobDispute: rows
+ * come back only for jobs the viewer is party to.
+ */
+export async function fetchOpenDisputeJobIds(jobIds: string[]) {
+  if (jobIds.length === 0) return { data: new Set<string>(), error: null };
+
+  const { data, error } = await supabase
+    .from('job_disputes')
+    .select('job_id')
+    .in('job_id', jobIds)
+    .eq('status', 'open');
+
+  return {
+    data: new Set(((data ?? []) as { job_id: string }[]).map((row) => row.job_id)),
+    error,
+  };
+}
+
+/**
  * Open an issue report on a completed job. Server-enforced: customer only,
  * one open report per job (a second call returns the existing one), refused
  * once the payment has released.

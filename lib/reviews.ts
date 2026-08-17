@@ -136,6 +136,27 @@ export async function fetchProfileReviewSummary(userId: string) {
   };
 }
 
+/**
+ * Which of these jobs the viewer has already reviewed, in one query — the My
+ * Jobs hub's "Leave a review" next-action check for Closed cards. phase6's
+ * RLS already scopes the read to reviews the viewer wrote or received, and
+ * the reviewer_id filter narrows it to their own.
+ */
+export async function fetchMyReviewedJobIds(reviewerId: string, jobIds: string[]) {
+  if (jobIds.length === 0) return { data: new Set<string>(), error: null };
+
+  const { data, error } = await supabase
+    .from('reviews')
+    .select('job_id')
+    .eq('reviewer_id', reviewerId)
+    .in('job_id', jobIds);
+
+  return {
+    data: new Set(((data ?? []) as { job_id: string }[]).map((row) => row.job_id)),
+    error,
+  };
+}
+
 /** The review this reviewer already left on this job, if any. */
 export async function fetchMyReviewForJob(reviewerId: string, jobId: string) {
   const { data, error } = await supabase

@@ -406,6 +406,31 @@ export async function fetchPendingOffersByWorker(workerId: string) {
 }
 
 /**
+ * The worker's settled bids — declined or expired, newest first — for the My
+ * Jobs hub's Closed tab. Deliberately ONLY those two statuses: superseded
+ * rows are internal chain revisions (every counter creates one — showing them
+ * would render each negotiation several times), withdrawn is the worker's own
+ * deliberate exit, and an accepted bid already surfaces as the assigned job
+ * itself. Same shape as fetchPendingOffersByWorker so both feed one card.
+ */
+export async function fetchSettledOffersByWorker(workerId: string) {
+  const { data, error } = await supabase
+    .from('job_offers')
+    .select(`${OFFER_COLUMNS}, ${OFFER_JOB_EMBED}`)
+    .eq('worker_id', workerId)
+    .in('status', ['declined', 'expired'])
+    .order('created_at', { ascending: false });
+
+  const rows = (data ?? []) as unknown as Array<
+    Offer & { job: PendingOffer['job'] | NonNullable<PendingOffer['job']>[] }
+  >;
+  return {
+    data: rows.map((row) => ({ ...row, job: oneRelated(row.job) })),
+    error,
+  };
+}
+
+/**
  * The offers referenced by a conversation's messages.
  *
  * Threads link to offers through `messages`, not the other way round, so the

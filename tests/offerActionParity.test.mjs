@@ -500,10 +500,11 @@ test('the offer card carries the job facts it has, not a bare amount', async () 
       `the offer's job embed must carry ${column}`
     );
   }
-  // Both offer reads use the one embed, so Chat and My Jobs see the same job.
+  // Every job-embedding offer read uses the one embed, so Chat and both My
+  // Jobs surfaces (live bids and Stage 4D's settled bids) see the same job.
   assert.equal(
     (offers.match(/\$\{OFFER_JOB_EMBED\}/g) ?? []).length,
-    2,
-    'both job-embedding offer reads must share the one projection'
+    3,
+    'all job-embedding offer reads must share the one projection'
   );
 });

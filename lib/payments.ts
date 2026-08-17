@@ -200,6 +200,36 @@ export async function fetchJobPaymentState(jobId: string) {
 }
 
 /**
+ * The active job_payment STATUS for each of a list of jobs, in one query —
+ * the My Jobs hub's bucketing read (Review means completed + held). Same
+ * filters as fetchJobPayment; RLS scopes rows to payer/payee, and every job
+ * the hub lists has the viewer as one of the two, so nothing extra leaks.
+ *
+ * This is a plain table read: it does NOT run phase51's on-read release
+ * clock (that is job_payment_state(), one job per call — N round trips for a
+ * list). deriveJobLifecycle() mirrors the elapsed-clock case client-side
+ * instead, so a held row past its deadline still buckets as closed.
+ */
+export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
+  if (jobIds.length === 0) {
+    return { data: {} as Record<string, Pick<Payment, 'status'>>, error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('payments')
+    .select('job_id, status')
+    .in('job_id', jobIds)
+    .eq('kind', 'job_payment')
+    .not('status', 'in', '(failed,voided)');
+
+  const byJob: Record<string, Pick<Payment, 'status'>> = {};
+  for (const row of (data ?? []) as { job_id: string; status: PaymentStatus }[]) {
+    byJob[row.job_id] = { status: row.status };
+  }
+  return { data: byJob, error };
+}
+
+/**
  * The job's tip row (kind='tip'), or null when none was given. Same RLS as
  * the job payment: only the two parties can see it.
  */

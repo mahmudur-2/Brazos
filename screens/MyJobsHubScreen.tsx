@@ -19,10 +19,19 @@ import {
   JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
   toOpenJob,
+  type Job,
 } from '../lib/jobs';
-import { effectiveOfferStatus } from '../lib/offers';
+import {
+  deriveJobLifecycle,
+  deriveMyJobsTab,
+  myJobsNextAction,
+  releaseDeadlineMs,
+  type MyJobsTab,
+} from '../lib/jobLifecycle';
+import { effectiveOfferStatus, type PendingOffer } from '../lib/offers';
 import { draftHasContent, loadPostJobDraft, type PostJobDraft } from '../lib/postJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
+import { useMode } from '../modes';
 import { colors, radius, spacing } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -33,21 +42,20 @@ function metaLineFor(job: { category: string; location: string | null }): string
   return job.location ? `${label} · ${job.location}` : label;
 }
 
-type Filter = 'active' | 'in_progress' | 'completed';
+/**
+ * Stage 4D tabs (operator decision): Active / Review / Closed, derived
+ * through lib/jobLifecycle.ts — Review means work finished with the money
+ * still HELD, and it empties when funds release. It never means star-ratings:
+ * a completed-but-unrated job sits in Closed with "Leave a review" as its
+ * next action.
+ */
+type Filter = MyJobsTab;
 
-const FILTERS = [
-  { label: 'Active', value: 'active' as const },
-  { label: 'In Progress', value: 'in_progress' as const },
-  // This bucket also retains cancelled jobs as history, so "Closed" is the
-  // truthful label without changing the existing filter semantics.
-  { label: 'Closed', value: 'completed' as const },
+const FILTERS: { label: string; value: Filter }[] = [
+  { label: 'Active', value: 'active' },
+  { label: 'Review', value: 'review' },
+  { label: 'Closed', value: 'closed' },
 ];
-
-function matchesFilter(status: string, filter: Filter): boolean {
-  if (filter === 'active') return status === 'open' || status === 'assigned';
-  if (filter === 'in_progress') return status === 'in_progress';
-  return status === 'completed' || status === 'cancelled';
-}
 
 function FilterTabs({
   value,
@@ -93,14 +101,39 @@ function SectionHeading({ title, count }: { title: string; count: number }) {
   );
 }
 
+/** The settled-bid card's own next-action line — offer facts, not lifecycle. */
+function bidNextAction(status: string, awaitingMe: boolean): string {
+  if (awaitingMe) return 'Respond to the counteroffer';
+  if (status === 'declined') return 'Not selected';
+  if (status === 'expired') return 'Bid expired';
+  return 'Awaiting response';
+}
+
 export function MyJobsHubScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { user } = useAuth();
-  const { posted, working, pendingBids, names, loading, error, refresh } = useMyJobsHub();
+  // Perspective comes from ModeContext — never a hand-passed prop (CLAUDE.md).
+  // Worker mode: accepted work and the user's own bids, with no posting
+  // affordance anywhere. Customer mode: posted jobs only.
+  const { mode } = useMode();
+  const isCustomer = mode === 'customer';
+  const {
+    posted,
+    working,
+    pendingBids,
+    settledBids,
+    payments,
+    openDisputeJobIds,
+    reviewedJobIds,
+    names,
+    loading,
+    error,
+    refresh,
+  } = useMyJobsHub();
   const [filter, setFilter] = useState<Filter>('active');
   const [refreshing, setRefreshing] = useState(false);
   // The local, unpublished wizard draft (lib/postJobDraft). §H groups drafts
-  // under Open — and this device's draft is real work worth resuming, even
+  // under Active — and this device's draft is real work worth resuming, even
   // though it has no jobs row yet. Empty autosaves don't count as a draft.
   const [draft, setDraft] = useState<PostJobDraft | null>(null);
 
@@ -133,27 +166,73 @@ export function MyJobsHubScreen() {
     }
   }
 
+  // One clock reading per data load: bucketing and the release countdowns all
+  // derive from the same instant, so a card can't straddle two tabs.
+  const nowMs = useMemo(
+    () => Date.now(),
+    [posted, working, pendingBids, settledBids, payments]
+  );
+
+  const lifecycleOf = useCallback(
+    (job: Job) =>
+      deriveJobLifecycle(
+        {
+          job,
+          payment: payments[job.id] ?? null,
+          hasOpenDispute: openDisputeJobIds.has(job.id),
+        },
+        nowMs
+      ),
+    [payments, openDisputeJobIds, nowMs]
+  );
+
   const workingItems = useMemo(
-    () => working.filter((j) => matchesFilter(j.status, filter)),
-    [working, filter]
+    () => (isCustomer ? [] : working.filter((j) => deriveMyJobsTab(lifecycleOf(j)) === filter)),
+    [isCustomer, working, filter, lifecycleOf]
   );
   const postedItems = useMemo(
-    () => posted.filter((j) => matchesFilter(j.status, filter)),
-    [posted, filter]
+    () => (isCustomer ? posted.filter((j) => deriveMyJobsTab(lifecycleOf(j)) === filter) : []),
+    [isCustomer, posted, filter, lifecycleOf]
   );
-  // Pending bids are only relevant in the Active view.
-  const bidItems = filter === 'active' ? pendingBids : [];
-  const showDraft = filter === 'active' && draft != null;
+  // Worker-side bids. Active carries the genuinely live ones; a pending row
+  // past its deadline renders as expired (effectiveOfferStatus) and joins the
+  // settled declined/expired rows under Closed. Review never holds bids —
+  // that tab is about held money, and an unaccepted bid holds none.
+  const bidItems =
+    !isCustomer && filter === 'active'
+      ? pendingBids.filter((bid) => effectiveOfferStatus(bid, nowMs) === 'pending')
+      : [];
+  const closedBidItems: PendingOffer[] =
+    !isCustomer && filter === 'closed'
+      ? [
+          ...pendingBids.filter((bid) => effectiveOfferStatus(bid, nowMs) === 'expired'),
+          ...settledBids,
+        ]
+      : [];
+  const showDraft = isCustomer && filter === 'active' && draft != null;
 
   const isEmpty =
     workingItems.length === 0 &&
     postedItems.length === 0 &&
     bidItems.length === 0 &&
+    closedBidItems.length === 0 &&
     !showDraft;
 
   function openPostJob() {
     navigation.navigate('PostJob');
   }
+
+  const emptyText = isCustomer
+    ? filter === 'active'
+      ? 'Post a job to get started.'
+      : filter === 'review'
+        ? 'Nothing is waiting on your approval right now.'
+        : 'Finished and cancelled jobs land here.'
+    : filter === 'active'
+      ? 'Accepted work and the bids you’ve placed show up here.'
+      : filter === 'review'
+        ? 'Work you’ve submitted for approval lands here until funds release.'
+        : 'Finished work and settled bids land here.';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -165,7 +244,9 @@ export function MyJobsHubScreen() {
           <Text style={styles.eyebrow}>YOUR WORK</Text>
           <Text style={styles.headerTitle}>My jobs</Text>
           <Text style={styles.headerSubtitle} numberOfLines={2}>
-            Jobs you posted, work you accepted, and bids awaiting a response.
+            {isCustomer
+              ? 'Jobs you posted, from first bid to final review.'
+              : 'Work you accepted and bids awaiting a response.'}
           </Text>
         </View>
       </View>
@@ -216,26 +297,22 @@ export function MyJobsHubScreen() {
           {isEmpty ? (
             error ? null : (
               <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="briefcase-outline" size={34} color={colors.forest} />
-              </View>
-              <Text style={styles.emptyTitle}>Nothing here yet</Text>
-              <Text style={styles.emptyText}>
-                {filter === 'active'
-                  ? 'Post a job or place a bid to get started.'
-                  : filter === 'in_progress'
-                  ? 'Jobs show up here once work has actually started.'
-                  : 'Jobs show up here once they’re completed or cancelled.'}
-              </Text>
-              <Pressable
-                onPress={openPostJob}
-                style={({ pressed }) => [styles.primaryCta, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Post another job"
-              >
-                <Ionicons name="add" size={20} color={colors.onPrimary} />
-                <Text style={styles.primaryCtaText}>Post another job</Text>
-              </Pressable>
+                <View style={styles.emptyIcon}>
+                  <Ionicons name="briefcase-outline" size={34} color={colors.forest} />
+                </View>
+                <Text style={styles.emptyTitle}>Nothing here yet</Text>
+                <Text style={styles.emptyText}>{emptyText}</Text>
+                {isCustomer ? (
+                  <Pressable
+                    onPress={openPostJob}
+                    style={({ pressed }) => [styles.primaryCta, pressed && styles.pressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Post another job"
+                  >
+                    <Ionicons name="add" size={20} color={colors.onPrimary} />
+                    <Text style={styles.primaryCtaText}>Post another job</Text>
+                  </Pressable>
+                ) : null}
               </View>
             )
           ) : (
@@ -269,7 +346,7 @@ export function MyJobsHubScreen() {
               {workingItems.length > 0 && (
                 <View style={styles.section}>
                   <SectionHeading
-                    title={filter === 'completed' ? 'Work history' : 'You’re working'}
+                    title={filter === 'closed' ? 'Work history' : 'You’re working'}
                     count={workingItems.length}
                   />
                   {workingItems.map((job) => (
@@ -284,6 +361,13 @@ export function MyJobsHubScreen() {
                       timeLabel={formatTimeAgo(job.created_at)}
                       priceCents={job.final_amount_cents ?? job.budget_cents}
                       status={job.status}
+                      nextAction={myJobsNextAction({
+                        perspective: 'worker',
+                        state: lifecycleOf(job),
+                        reviewedByMe: reviewedJobIds.has(job.id),
+                        releaseDeadline: releaseDeadlineMs(job),
+                        nowMs,
+                      })}
                       onPress={() =>
                         navigation.navigate('WorkerJob', { jobId: job.id })
                       }
@@ -313,6 +397,14 @@ export function MyJobsHubScreen() {
                         timeLabel={formatTimeAgo(job.created_at)}
                         priceCents={job.final_amount_cents ?? job.budget_cents}
                         status={job.status}
+                        nextAction={myJobsNextAction({
+                          perspective: 'customer',
+                          state: lifecycleOf(job),
+                          bidCount: job.bid_count,
+                          reviewedByMe: reviewedJobIds.has(job.id),
+                          releaseDeadline: releaseDeadlineMs(job),
+                          nowMs,
+                        })}
                         onPress={() =>
                           navigation.navigate('ClientJobDetail', { job })
                         }
@@ -367,6 +459,7 @@ export function MyJobsHubScreen() {
                         }
                         status={bid.status}
                         statusLabel={awaitingMe ? 'Respond' : undefined}
+                        nextAction={bidNextAction('pending', awaitingMe)}
                         onPress={() => navigation.navigate('JobDetail', { job })}
                       />
                     );
@@ -374,18 +467,48 @@ export function MyJobsHubScreen() {
                 </View>
               )}
 
-              <Pressable
-                onPress={openPostJob}
-                style={({ pressed }) => [styles.postAnother, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Post another job"
-              >
-                <View style={styles.postAnotherIcon}>
-                  <Ionicons name="add" size={20} color={colors.forest} />
+              {closedBidItems.length > 0 && (
+                <View style={styles.section}>
+                  <SectionHeading title="Settled bids" count={closedBidItems.length} />
+                  {closedBidItems.map((bid) => {
+                    if (!bid.job) return null;
+                    const job = toOpenJob(bid.job);
+                    const status = effectiveOfferStatus(bid, nowMs);
+                    return (
+                      <HubCard
+                        key={`settled-${bid.id}`}
+                        icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+                        category={job.category}
+                        title={job.title}
+                        subtitle={`Client · ${names[job.client_id] ?? 'Client'}`}
+                        thumbnailUrl={jobThumbnailUrl(job)}
+                        metaLine={metaLineFor(job)}
+                        timeLabel={formatTimeAgo(bid.created_at)}
+                        priceCents={bid.amount_cents}
+                        priceLabel="Your bid:"
+                        status={status}
+                        nextAction={bidNextAction(status, false)}
+                        onPress={() => navigation.navigate('JobDetail', { job })}
+                      />
+                    );
+                  })}
                 </View>
-                <Text style={styles.postAnotherText}>Post another job</Text>
-                <Ionicons name="arrow-forward" size={18} color={colors.forest} />
-              </Pressable>
+              )}
+
+              {isCustomer ? (
+                <Pressable
+                  onPress={openPostJob}
+                  style={({ pressed }) => [styles.postAnother, pressed && styles.pressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Post another job"
+                >
+                  <View style={styles.postAnotherIcon}>
+                    <Ionicons name="add" size={20} color={colors.forest} />
+                  </View>
+                  <Text style={styles.postAnotherText}>Post another job</Text>
+                  <Ionicons name="arrow-forward" size={18} color={colors.forest} />
+                </Pressable>
+              ) : null}
             </>
           )}
         </ScrollView>

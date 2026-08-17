@@ -26,7 +26,15 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
 const lifecycleUrl = pathToFileURL(join(root, 'lib/jobLifecycle.ts')).href;
-const { deriveJobLifecycle, trackStepIndex, JOB_LIFECYCLE_LABELS } = await import(lifecycleUrl);
+const {
+  deriveJobLifecycle,
+  deriveMyJobsTab,
+  myJobsNextAction,
+  releaseCountdownLabel,
+  releaseDeadlineMs,
+  trackStepIndex,
+  JOB_LIFECYCLE_LABELS,
+} = await import(lifecycleUrl);
 
 test('confirmed is derived as assigned + held — never stored', () => {
   const base = { status: 'assigned', en_route_at: null, arrived_at: null };
@@ -67,6 +75,121 @@ test('the completed fork follows the payment and the dispute', () => {
   );
   // Legacy: completed with no payment at all is simply completed.
   assert.equal(deriveJobLifecycle({ job: done, payment: null }), 'completed');
+});
+
+test('the 72h clock is mirrored on read: an elapsed hold reads as completed', () => {
+  // phase51's auto-release is checked on read (job_payment_state), and there
+  // is no cron — so a held payment past completed_at + 72h has already
+  // released from the server's point of view the moment anything looks. The
+  // client mirror renders that truth early, exactly like effectiveOfferStatus.
+  const HOUR = 3_600_000;
+  const completedAt = '2026-08-01T00:00:00Z';
+  const deadline = Date.parse(completedAt) + 72 * HOUR;
+  const done = {
+    status: 'completed',
+    en_route_at: null,
+    arrived_at: null,
+    completed_at: completedAt,
+  };
+
+  assert.equal(releaseDeadlineMs(done), deadline);
+  // Inside the window: still awaiting approval.
+  assert.equal(
+    deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline - HOUR),
+    'awaiting_approval'
+  );
+  // Past the window: the hold has effectively released.
+  assert.equal(
+    deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline + HOUR),
+    'completed'
+  );
+  // An open dispute freezes release — the server refuses the auto-release
+  // while one exists, and so does the mirror.
+  assert.equal(
+    deriveJobLifecycle(
+      { job: done, payment: { status: 'held' }, hasOpenDispute: true },
+      deadline + HOUR
+    ),
+    'disputed'
+  );
+  // Pre-phase51 jobs carry no completed_at: the clock never runs.
+  const legacy = { ...done, completed_at: null };
+  assert.equal(releaseDeadlineMs(legacy), null);
+  assert.equal(
+    deriveJobLifecycle({ job: legacy, payment: { status: 'held' } }, deadline + HOUR),
+    'awaiting_approval'
+  );
+});
+
+test('the hub tabs bucket exactly as the 4D-1a mapping says', () => {
+  // Active — open/taking bids, assigned (funded or not), en_route, arrived,
+  // in_progress, draft.
+  for (const state of [
+    'draft', 'open', 'pending_payment', 'confirmed', 'en_route', 'arrived', 'in_progress',
+  ]) {
+    assert.equal(deriveMyJobsTab(state), 'active', `${state} must be Active`);
+  }
+  // Review — work finished, money still HELD (awaiting approval or frozen).
+  assert.equal(deriveMyJobsTab('awaiting_approval'), 'review');
+  assert.equal(deriveMyJobsTab('disputed'), 'review');
+  // Closed — released/paid_out (derived 'completed'), cancelled.
+  assert.equal(deriveMyJobsTab('completed'), 'closed');
+  assert.equal(deriveMyJobsTab('cancelled'), 'closed');
+  // A status this client cannot classify stays VISIBLE, never hidden.
+  assert.equal(deriveMyJobsTab('unknown'), 'active');
+});
+
+test('next-action lines derive from lifecycle facts, and Review never means ratings', () => {
+  const HOUR = 3_600_000;
+  const now = Date.parse('2026-08-10T00:00:00Z');
+
+  // The dispatch's three examples, verbatim in spirit:
+  assert.equal(
+    myJobsNextAction({ perspective: 'customer', state: 'open', bidCount: 3 }),
+    '3 bids to review'
+  );
+  assert.equal(
+    myJobsNextAction({
+      perspective: 'customer',
+      state: 'awaiting_approval',
+      releaseDeadline: now + 41 * HOUR + 1,
+      nowMs: now,
+    }),
+    'Approval needed — releases in 41h'
+  );
+  assert.equal(
+    myJobsNextAction({ perspective: 'customer', state: 'completed', reviewedByMe: false }),
+    'Leave a review'
+  );
+
+  // A completed-but-unrated job belongs in CLOSED carrying that action — the
+  // Review tab is about held money, never star-ratings.
+  assert.equal(deriveMyJobsTab('completed'), 'closed');
+  assert.equal(
+    myJobsNextAction({ perspective: 'worker', state: 'completed', reviewedByMe: true }),
+    'Closed'
+  );
+
+  // The countdown, both sides of the hour floor.
+  assert.equal(releaseCountdownLabel(now + 41 * HOUR + 1, now), '41h');
+  assert.equal(releaseCountdownLabel(now + HOUR / 2, now), '<1h');
+
+  // Money copy follows the payment state machine: a held payment "releases";
+  // nothing is called paid before release.
+  for (const perspective of ['customer', 'worker']) {
+    for (const state of ['awaiting_approval', 'disputed', 'in_progress', 'confirmed']) {
+      const line = myJobsNextAction({ perspective, state });
+      assert.doesNotMatch(line, /\bpaid\b/i, `${perspective}/${state} must not claim paid`);
+    }
+  }
+
+  // Every lifecycle state yields a non-empty line in both perspectives.
+  for (const perspective of ['customer', 'worker']) {
+    for (const state of Object.keys(JOB_LIFECYCLE_LABELS)) {
+      const line = myJobsNextAction({ perspective, state });
+      assert.ok(line && typeof line === 'string', `${perspective}/${state} needs a line`);
+    }
+  }
 });
 
 test('every derived state has a label and a track position that make sense', () => {

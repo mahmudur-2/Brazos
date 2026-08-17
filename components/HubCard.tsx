@@ -34,6 +34,13 @@ type HubCardProps = {
    *  StatusBadge. Used when the status key alone under-states the row
    *  ("Pending" on a counter that is actually waiting on the viewer). */
   statusLabel?: string;
+  /**
+   * The card's derived NEXT-ACTION line ("3 bids to review", "Approval
+   * needed — releases in 41h") — the primary label of the card's action
+   * area; "View details" demotes to a secondary line beneath it. Derived by
+   * the caller through lib/jobLifecycle.ts, never invented here.
+   */
+  nextAction?: string;
   onPress: () => void;
 };
 
@@ -49,6 +56,7 @@ export function HubCard({
   priceLabel,
   status,
   statusLabel,
+  nextAction,
   onPress,
 }: HubCardProps) {
   const accent = categoryAccent(category);
@@ -101,10 +109,22 @@ export function HubCard({
             {formatBudget(priceCents)}
           </Text>
         </View>
-        <View style={styles.detailsAffordance}>
-          <Text style={styles.detailsText}>View details</Text>
-          <Ionicons name="arrow-forward" size={16} color={colors.forest} />
-        </View>
+        {nextAction ? (
+          <View style={styles.nextActionWrap}>
+            <View style={styles.nextActionRow}>
+              <Ionicons name="arrow-forward-circle" size={16} color={colors.forest} />
+              <Text style={styles.nextActionText} numberOfLines={2}>
+                {nextAction}
+              </Text>
+            </View>
+            <Text style={styles.detailsSecondary}>View details</Text>
+          </View>
+        ) : (
+          <View style={styles.detailsAffordance}>
+            <Text style={styles.detailsText}>View details</Text>
+            <Ionicons name="arrow-forward" size={16} color={colors.forest} />
+          </View>
+        )}
       </View>
     </Card>
   );
@@ -187,6 +207,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderRadius: radius.md,
     backgroundColor: colors.mint,
+  },
+  // The next-action is the card's primary action label; "View details" sits
+  // under it as the demoted secondary line.
+  nextActionWrap: {
+    flex: 1,
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  nextActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  nextActionText: {
+    flexShrink: 1,
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '800',
+    color: colors.forest,
+    textAlign: 'right',
+  },
+  detailsSecondary: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
   time: {
     fontSize: 12,
