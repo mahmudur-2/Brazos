@@ -325,8 +325,9 @@ test('every entry point from the audit still opens Chat with a shape Chat accept
     ['screens/TrackWorkerScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
     ['screens/WorkerJobScreen.tsx', /navigation\.navigate\('Chat', \{ jobId: job\.id \}\)/],
     // Stage 4A: the feed stopped opening Chat itself and delegates to the same
-    // router the push tap uses, so its entry point IS the delegation.
-    ['screens/NotificationsScreen.tsx', /handleNotificationData\(notification\.data\)/],
+    // router the push tap uses, so its entry point IS the delegation — since
+    // Stage 4D carrying ModeContext for the router's cross-mode gate.
+    ['screens/NotificationsScreen.tsx', /handleNotificationData\(notification\.data, modeBridge\)/],
     // Both Chat shapes are still built — now as resolved targets rather than
     // at the call site — and dispatched by the single navigateChecked below.
     ['lib/notificationRoutes.ts', /screen: 'Chat',\s*params: \{ directThreadId: data\.directThreadId \}/],

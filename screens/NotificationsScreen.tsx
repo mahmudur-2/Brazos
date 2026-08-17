@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
+import { useNotificationModeBridge } from '../hooks/useNotificationModeBridge';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import {
@@ -41,13 +42,16 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
  * releases, disputes — written by the database triggers, deduped, prefs-
  * gated). Tap-through is delegated entirely to lib/notificationRoutes.ts, the
  * resolver the push-tap path uses, so a notification opens the same place
- * whether it was tapped here or in the OS tray. Every destination it can
- * produce sits in the shared My Jobs / Messages / Profile tabs, which exist
- * identically in BOTH modes (§F) — so a tap lands correctly whichever mode
- * the user is in, and no silent mode switch is ever needed for these payloads.
+ * whether it was tapped here or in the OS tray. Every destination sits in the
+ * shared My Jobs / Messages / Profile tabs, mounted in BOTH modes (§F) — and
+ * since Stage 4D the resolver additionally asks which mode OWNS the
+ * destination: an event about the other side of the marketplace prompts the
+ * one authoritative switchMode() (mandatory confirmation) before routing.
+ * The bridge below only forwards ModeContext; this screen never switches.
  */
 export function NotificationsScreen() {
   const { user } = useAuth();
+  const modeBridge = useNotificationModeBridge();
 
   const [rows, setRows] = useState<AppNotification[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -93,7 +97,7 @@ export function NotificationsScreen() {
         if (error) console.warn('[Notifications] mark-read failed', error.message);
       });
     }
-    void handleNotificationData(notification.data);
+    void handleNotificationData(notification.data, modeBridge);
   }
 
   async function markAll() {

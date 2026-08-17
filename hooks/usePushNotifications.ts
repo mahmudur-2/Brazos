@@ -4,6 +4,7 @@ import * as Notifications from 'expo-notifications';
 import { handleNotificationData } from '../lib/notificationRoutes';
 import { registerPushToken } from '../lib/pushNotifications';
 import { useAuth } from './useAuth';
+import { useNotificationModeBridge } from './useNotificationModeBridge';
 
 /**
  * Wires push notification taps to navigation, and keeps the device's token
@@ -14,6 +15,10 @@ import { useAuth } from './useAuth';
  */
 export function usePushNotifications() {
   const { user } = useAuth();
+  // ModeContext for the router's cross-mode gate — a stable object reading
+  // the LATEST mode at tap time, so the [] -deps listener effects below never
+  // capture a stale mode.
+  const modeBridge = useNotificationModeBridge();
   // A cold-start tap must only be consumed once. Without this guard, any
   // re-render that re-ran the effect would re-navigate to the same screen,
   // because getLastNotificationResponseAsync() keeps returning that response
@@ -46,14 +51,14 @@ export function usePushNotifications() {
       .then((response) => {
         if (!active || !response || handledColdStart.current) return;
         handledColdStart.current = true;
-        handleNotificationData(response.notification.request.content.data);
+        handleNotificationData(response.notification.request.content.data, modeBridge);
       })
       .catch((err) => console.error('[push] getLastNotificationResponseAsync failed', err));
 
     return () => {
       active = false;
     };
-  }, []);
+  }, [modeBridge]);
 
   // --- Warm start: app was backgrounded or already open -------------------
   useEffect(() => {
@@ -62,9 +67,9 @@ export function usePushNotifications() {
       // Any tap arriving through this listener is a fresh one, so the
       // cold-start replay is no longer relevant.
       handledColdStart.current = true;
-      handleNotificationData(response.notification.request.content.data);
+      handleNotificationData(response.notification.request.content.data, modeBridge);
     });
 
     return () => subscription.remove();
-  }, []);
+  }, [modeBridge]);
 }

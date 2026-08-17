@@ -33,7 +33,9 @@ test('the notifications feed owns no routing of its own', async () => {
     screen,
     /import \{ canRouteNotification, handleNotificationData \} from '\.\.\/lib\/notificationRoutes';/
   );
-  assert.match(screen, /handleNotificationData\(notification\.data\)/);
+  // Stage 4D: the delegation carries ModeContext through the bridge, for the
+  // router's cross-mode gate — still no routing of the screen's own.
+  assert.match(screen, /handleNotificationData\(notification\.data, modeBridge\)/);
 
   // No second routing switch, and no direct cross-tab dispatch of its own.
   assert.doesNotMatch(screen, /navigateAcrossTabs\(/);

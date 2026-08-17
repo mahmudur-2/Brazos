@@ -1,5 +1,6 @@
 import { fetchJobById } from './jobs';
 import type { OpenJob } from './jobs';
+import type { AppMode } from '../modes/types';
 import { navigateAcrossTabs } from './navigationRef';
 
 /**
@@ -47,6 +48,59 @@ const TAB_FOR_SCREEN: Record<string, string> = {
   ProfileMain: 'Profile',
 };
 
+/**
+ * Which mode OWNS each destination (Stage 4D mode purity). ClientJobDetail is
+ * the poster's own job — customer activity; WorkerJob and the bid screen are
+ * the worker's side of the marketplace. `null` marks a genuinely shared
+ * surface (the inbox, the profile), which never asks for a switch. Every
+ * destination still RESOLVES in both trees — the MyJobs tab is mounted in
+ * both — so this is a UX contract about which perspective the user should be
+ * standing in, not about technical reachability.
+ */
+const MODE_FOR_SCREEN: Record<string, AppMode | null> = {
+  Chat: null,
+  ClientJobDetail: 'customer',
+  WorkerJob: 'worker',
+  JobDetail: 'worker',
+  ProfileMain: null,
+};
+
+/**
+ * ModeContext, as the router needs it — supplied by the React caller through
+ * hooks/useNotificationModeBridge.ts, because this module lives outside the
+ * component tree and must never mirror mode state into a second authority.
+ */
+export type NotificationModeBridge = {
+  /** The resolved mode, or null while resolution is pending (cold start). */
+  getMode: () => AppMode | null;
+  /**
+   * ModeProvider's switchMode: the confirmation is mandatory and lives inside
+   * the provider; resolves true only once the target tree is mounted, false
+   * when declined or refused.
+   */
+  switchMode: (
+    target: AppMode,
+    options: { confirm: { title: string; message?: string; confirmText?: string } }
+  ) => Promise<boolean>;
+};
+
+/** The cross-mode prompt's copy, per destination mode. */
+const CROSS_MODE_CONFIRM: Record<AppMode, { title: string; message: string; confirmText: string }> =
+  {
+    customer: {
+      title: 'Switch to Customer Mode?',
+      message:
+        'This update is about a job you posted. Viewing it means switching to Customer Mode — your worker-side work stays exactly where it is.',
+      confirmText: 'Switch',
+    },
+    worker: {
+      title: 'Switch to Worker Mode?',
+      message:
+        'This update is about work you’re doing. Viewing it means switching to Worker Mode — your posted jobs stay exactly where they are.',
+      confirmText: 'Switch',
+    },
+  };
+
 function toNotificationData(raw: unknown): NotificationData | null {
   if (!raw || typeof raw !== 'object') return null;
   const data = raw as Record<string, unknown>;
@@ -72,8 +126,14 @@ function toNotificationData(raw: unknown): NotificationData | null {
  * it renders, and it cannot await a round-trip to do that.
  */
 type RouteTarget =
-  | { kind: 'direct'; tab: string; screen: string; params?: object }
-  | { kind: 'job'; tab: string; screen: 'ClientJobDetail' | 'JobDetail'; jobId: string };
+  | { kind: 'direct'; tab: string; screen: string; params?: object; mode: AppMode | null }
+  | {
+      kind: 'job';
+      tab: string;
+      screen: 'ClientJobDetail' | 'JobDetail';
+      jobId: string;
+      mode: AppMode | null;
+    };
 
 /** Pure: reads the payload, touches neither the network nor the navigator. */
 function resolveTarget(data: NotificationData | null): RouteTarget | null {
@@ -82,9 +142,11 @@ function resolveTarget(data: NotificationData | null): RouteTarget | null {
   const tab = TAB_FOR_SCREEN[data.screen];
   if (!tab) return null;
 
+  const mode = MODE_FOR_SCREEN[data.screen] ?? null;
+
   // Profile needs no record.
   if (data.screen === 'ProfileMain') {
-    return { kind: 'direct', tab, screen: 'ProfileMain' };
+    return { kind: 'direct', tab, screen: 'ProfileMain', mode };
   }
 
   // phase57: a pre-hire chat notification carries a direct thread, never a
@@ -96,6 +158,7 @@ function resolveTarget(data: NotificationData | null): RouteTarget | null {
       tab,
       screen: 'Chat',
       params: { directThreadId: data.directThreadId },
+      mode,
     };
   }
 
@@ -103,12 +166,12 @@ function resolveTarget(data: NotificationData | null): RouteTarget | null {
 
   // These take only an id, so they can be routed without a round-trip.
   if (data.screen === 'Chat' || data.screen === 'WorkerJob') {
-    return { kind: 'direct', tab, screen: data.screen, params: { jobId: data.jobId } };
+    return { kind: 'direct', tab, screen: data.screen, params: { jobId: data.jobId }, mode };
   }
 
   // ClientJobDetail / JobDetail need the job row itself.
   if (data.screen === 'ClientJobDetail' || data.screen === 'JobDetail') {
-    return { kind: 'job', tab, screen: data.screen, jobId: data.jobId };
+    return { kind: 'job', tab, screen: data.screen, jobId: data.jobId, mode };
   }
 
   // Named in TAB_FOR_SCREEN but not handled above. Fail closed rather than
@@ -144,9 +207,13 @@ export function canRouteNotification(raw: unknown): boolean {
  * turned into a plain linking URL.
  *
  * Both consumers come through here: the push tap (hooks/usePushNotifications)
- * and the in-app feed (screens/NotificationsScreen).
+ * and the in-app feed (screens/NotificationsScreen). Each passes ModeContext
+ * through the bridge, because of the gate below.
  */
-export async function handleNotificationData(raw: unknown): Promise<void> {
+export async function handleNotificationData(
+  raw: unknown,
+  bridge: NotificationModeBridge
+): Promise<void> {
   const data = toNotificationData(raw);
   const target = resolveTarget(data);
 
@@ -157,6 +224,23 @@ export async function handleNotificationData(raw: unknown): Promise<void> {
       console.error('[push] notification missing jobId for screen', data.screen);
     }
     return;
+  }
+
+  // The cross-mode gate (Stage 4D): a destination OWNED by the other mode
+  // asks for the switch first — through switchMode() itself, whose
+  // confirmation is mandatory and cannot be skipped — and routes only after
+  // the provider reports the target tree mounted. Declining drops the
+  // navigation: the user stays exactly where they are, and the event stays
+  // readable in the feed. While mode resolution is still pending (the
+  // cold-start replay), the gate stands down and the dispatch keeps its
+  // standing contract: every destination lives in a tab mounted in BOTH
+  // trees, so it resolves either way.
+  const currentMode = bridge.getMode();
+  if (target.mode && currentMode && currentMode !== target.mode) {
+    const switched = await bridge.switchMode(target.mode, {
+      confirm: CROSS_MODE_CONFIRM[target.mode],
+    });
+    if (!switched) return;
   }
 
   if (target.kind === 'direct') {

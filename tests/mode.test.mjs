@@ -155,9 +155,28 @@ test('sign-out disarms resolution so the next account cannot race Setup', () => 
 
 test('a switch always confirms, and there is no flag to skip it', () => {
   assert.match(provider, /const confirmed = await confirmAsync\(\{/);
-  assert.match(provider, /if \(!confirmed\) return;/);
+  // Stage 4D: switchMode reports its outcome, so a declined confirm returns
+  // false — same refusal, now observable by the cross-mode notification gate.
+  assert.match(provider, /if \(!confirmed\) return false;/);
   // The options bag deliberately exposes copy, not an opt-out.
   assert.doesNotMatch(provider, /skipConfirm|force\s*[?:]|silent\s*[?:]/);
+});
+
+test('an awaited switch resolves only after the target tree is committed', () => {
+  // Stage 4D: cross-mode notification routing awaits switchMode() and then
+  // dispatches — so the promise must not settle until the [mode] effect has
+  // run with the new value, which happens after the swapped tree's own
+  // effects (children before parents). A decline or refusal resolves false.
+  assert.match(
+    provider,
+    /switchMode: \(target: AppMode, options\?: SwitchModeOptions\) => Promise<boolean>/
+  );
+  assert.match(provider, /pendingSwitchResolvers\.current\.push\(\{ target, resolve \}\)/);
+  const resolverEffect = provider.match(
+    /useEffect\(\(\) => \{\s*if \(pendingSwitchResolvers[\s\S]*?\}, \[mode\]\);/
+  );
+  assert.ok(resolverEffect, 'the resolver must fire from the [mode] effect');
+  assert.match(resolverEffect[0], /entry\.resolve\(true\)/);
 });
 
 test('there is one transition owner', () => {

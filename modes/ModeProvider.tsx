@@ -84,7 +84,14 @@ export type ModeContextValue = {
   ready: boolean;
   /** True from the moment a switch is requested until its transition ends. */
   switching: boolean;
-  switchMode: (target: AppMode, options?: SwitchModeOptions) => Promise<void>;
+  /**
+   * Resolves TRUE only after the requested tree has actually been committed —
+   * the earliest moment a caller may dispatch navigation into it (Stage 4D's
+   * cross-mode notification routing needs exactly that). FALSE when nothing
+   * switched: declined, no session, or a switch already running. Requesting
+   * the mode you are already in resolves true immediately.
+   */
+  switchMode: (target: AppMode, options?: SwitchModeOptions) => Promise<boolean>;
   /**
    * Starts the initial resolution. Called once by the mode shell, which mounts
    * only after auth + legal + setup have all resolved — and that matters,
@@ -194,16 +201,40 @@ export function ModeProvider({ children }: PropsWithChildren) {
     };
   }, [armed, userId, resolvedFor]);
 
+  /**
+   * Switches awaited by their callers (Stage 4D). The overlay flips `mode` at
+   * its midpoint; the [mode] effect below runs AFTER that render commits —
+   * and after the newly mounted tree's own effects, children before parents —
+   * so resolving here is the earliest moment a dispatch into the new tree can
+   * find it mounted. Entries that never match (the provider unmounting
+   * mid-switch) simply never resolve, which drops the caller's follow-up
+   * navigation rather than dispatching it into the wrong tree.
+   */
+  const pendingSwitchResolvers = useRef<
+    Array<{ target: AppMode; resolve: (switched: boolean) => void }>
+  >([]);
+
+  useEffect(() => {
+    if (pendingSwitchResolvers.current.length === 0) return;
+    pendingSwitchResolvers.current = pendingSwitchResolvers.current.filter((entry) => {
+      if (entry.target !== mode) return true;
+      entry.resolve(true);
+      return false;
+    });
+  }, [mode]);
+
   const switchMode = useCallback(
-    async (target: AppMode, options?: SwitchModeOptions) => {
-      if (!userId) return;
-      // Already there, or a switch is already running. Both are no-ops rather
-      // than errors: a double tap should do nothing, not stack transitions.
-      if (target === mode) return;
-      if (requestingRef.current || busy) return;
+    async (target: AppMode, options?: SwitchModeOptions): Promise<boolean> => {
+      if (!userId) return false;
+      // Already there: trivially satisfied — a caller routing after the
+      // switch may dispatch immediately. A switch already running stays a
+      // refusal: a double tap should do nothing, not stack transitions.
+      if (target === mode) return true;
+      if (requestingRef.current || busy) return false;
 
       requestingRef.current = true;
       setRequesting(true);
+      let settled: Promise<boolean> | null = null;
       try {
         const copy = options?.confirm ?? defaultConfirmation(target);
         const confirmed = await confirmAsync({
@@ -215,7 +246,11 @@ export function ModeProvider({ children }: PropsWithChildren) {
         // Declining lands the user exactly where they already were — §F's
         // "decline lands on the current mode's home", which is free here
         // because nothing has moved yet.
-        if (!confirmed) return;
+        if (!confirmed) return false;
+
+        settled = new Promise<boolean>((resolve) => {
+          pendingSwitchResolvers.current.push({ target, resolve });
+        });
 
         startTransition({
           destination: target,
@@ -235,9 +270,13 @@ export function ModeProvider({ children }: PropsWithChildren) {
           }
         });
       } finally {
+        // The request window closes when the transition takes over ownership
+        // of the guard (`busy`) — exactly as before; the settled promise is
+        // awaited OUTSIDE it so a slow animation never pins `requesting`.
         requestingRef.current = false;
         setRequesting(false);
       }
+      return settled ? await settled : false;
     },
     [busy, mode, startTransition, userId]
   );

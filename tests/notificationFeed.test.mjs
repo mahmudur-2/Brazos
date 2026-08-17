@@ -260,18 +260,38 @@ test('tap-through stays inside the shared tabs', async () => {
   // the push tap uses, so its destinations ARE TAB_FOR_SCREEN's — the exact
   // set is asserted in tests/offerCopyAndRouting.test.mjs. What must hold
   // here is that the feed kept none of its own cross-tab dispatch.
-  assert.match(screen, /handleNotificationData\(notification\.data\)/);
+  assert.match(screen, /handleNotificationData\(notification\.data, modeBridge\)/);
   assert.doesNotMatch(screen, /navigateAcrossTabs\(/);
 
   // And that nothing on the tap path can reach the mode-defining Home tab,
-  // which is the one destination that would require a mode change.
+  // which is the one destination that would require navigating cross-tree.
   const start = routes.indexOf('const TAB_FOR_SCREEN');
   assert.ok(start > 0, 'TAB_FOR_SCREEN must exist');
   const map = routes.slice(start, routes.indexOf('};', start));
   assert.ok(!/'Home'/.test(map), 'a notification must never route to the mode-defining Home tab');
 
-  assert.ok(
-    !/switchMode|switchToOtherMode/.test(screen + routes),
-    'no silent mode switching from a tap'
+  // Stage 4D: a destination OWNED by the other mode prompts the ONE
+  // authoritative switchMode() — whose confirmation is mandatory and lives in
+  // ModeProvider — and routes only after it resolves true. Never silently:
+  // the feed itself invokes no switch (it only forwards ModeContext through
+  // the bridge hook), and the router's gate is the awaited, confirm-guarded
+  // call with an explicit declined-drops-the-navigation branch. Comments are
+  // stripped first — the screen's own doc header NAMES switchMode in prose.
+  const screenCode = screen
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+  assert.doesNotMatch(
+    screenCode,
+    /switchMode\(/,
+    'the feed must never invoke a mode switch itself'
   );
+  assert.match(screen, /useNotificationModeBridge\(\)/);
+  assert.match(routes, /await bridge\.switchMode\(target\.mode, \{/);
+  assert.match(routes, /confirm: CROSS_MODE_CONFIRM\[target\.mode\]/);
+  assert.match(routes, /if \(!switched\) return;/);
+  // The bridge is a forwarder, not a second authority: no mode state of its
+  // own, no way around the provider's confirm.
+  const bridge = await read('hooks/useNotificationModeBridge.ts');
+  assert.match(bridge, /latest\.current\.switchMode\(target, options\)/);
+  assert.match(bridge, /latest\.current\.ready \? latest\.current\.mode : null/);
 });
