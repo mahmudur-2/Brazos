@@ -1,37 +1,39 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
-import { SegmentedControl } from '../components/SegmentedControl';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { goBackOrHome } from '../lib/navigationRef';
-import { completionPercent } from '../lib/profiles';
 import {
-  bestValueOfferId,
-  effectiveOfferStatus,
-  OFFER_SORT_OPTIONS,
-  sortOffers,
-  type OfferSort,
-  type OfferWithWorker,
-} from '../lib/offers';
+  BID_ORDER_RULE,
+  highestRatedBadgeId,
+  knownRating,
+  onTimePercent,
+  sortBidsDeterministic,
+  totalCompletedJobs,
+  trustRowFor,
+} from '../lib/compareBids';
+import { effectiveOfferStatus, type OfferWithWorker } from '../lib/offers';
+import { fetchWorkerJobStats } from '../lib/portfolio';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, emeraldColors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing } from '../lib/theme';
 
 /**
- * Screen 28 — Compare Bids. A comparison surface, deliberately not an auction
- * board: rows show the fields that materially affect value and trust — the
- * worker's real record, the full terms, when it arrived — with sorting where
- * "best value" (rating + completion + price blended, lib/offers) is the
- * default and lowest-price is one option among three, never the layout.
+ * Screen 28 — Compare Bids (4D-3 §5). One full-width card per bid, stacked
+ * vertically — bid count is unbounded, so a fixed grid cannot hold it. The
+ * order is deterministic and STATED on screen (lib/compareBids.ts); there is
+ * no blended score and no ranking language. The only badge is "HIGHEST
+ * RATED", and only when the top rating is a defensible fact (3+ reviews,
+ * every rival's rating known and strictly lower).
  *
  * Selecting a row opens Bid Detail (29), where accept/counter/decline live
- * behind their consequence copy — the irreversible act stays one deliberate
- * step away from the ranking view.
+ * behind their consequence copy — accept_offer() stays the only assignment
+ * path and this screen performs no write of any kind.
  */
 export function CompareBidsScreen() {
   const navigation = useNavigation<MyJobsStackNavigation>();
@@ -39,14 +41,45 @@ export function CompareBidsScreen() {
   const job = params.job;
 
   const { offers, loading, error, refresh } = useJobOffers(job.id);
-  const [sort, setSort] = useState<OfferSort>('value');
+  // Completed-job totals per worker, from worker_job_stats() (D3: the total
+  // is the SUM of per-category rows). Absent key = UNKNOWN, never zero.
+  const [completedByWorker, setCompletedByWorker] = useState<Record<string, number>>({});
 
   const pending = useMemo(
     () => offers.filter((offer) => effectiveOfferStatus(offer) === 'pending'),
     [offers]
   );
-  const sorted = useMemo(() => sortOffers(pending, sort), [pending, sort]);
-  const bestId = useMemo(() => bestValueOfferId(pending), [pending]);
+  const sorted = useMemo(() => sortBidsDeterministic(pending), [pending]);
+  const badgeId = useMemo(() => highestRatedBadgeId(pending), [pending]);
+
+  useEffect(() => {
+    let active = true;
+    const wanted = [...new Set(pending.map((bid) => bid.worker_id))].filter(
+      (id) => !(id in completedByWorker)
+    );
+    if (wanted.length === 0) return;
+    (async () => {
+      const entries = await Promise.all(
+        wanted.map(async (workerId) => {
+          const { data, error: statsError } = await fetchWorkerJobStats(workerId);
+          // A failed read stays UNKNOWN — the row omits the figure rather
+          // than inventing one.
+          return [workerId, statsError ? null : totalCompletedJobs(data)] as const;
+        })
+      );
+      if (!active) return;
+      setCompletedByWorker((prev) => {
+        const next = { ...prev };
+        for (const [workerId, total] of entries) {
+          if (total != null) next[workerId] = total;
+        }
+        return next;
+      });
+    })();
+    return () => {
+      active = false;
+    };
+  }, [pending, completedByWorker]);
 
   const state: ScreenState =
     loading && offers.length === 0
@@ -64,19 +97,25 @@ export function CompareBidsScreen() {
   return (
     <DetailScreen
       title="Compare bids"
-      subtitle={job.title}
       onBack={goBackOrHome}
       state={state}
       sections={[
         {
           content: (
-            <View style={styles.sortWrap}>
-              <SegmentedControl
-                options={OFFER_SORT_OPTIONS}
-                value={sort}
-                onChange={setSort}
-                palette={emeraldColors}
-              />
+            <View style={styles.headerBlock}>
+              {/* §5.2 — the mockup's framing: count, title, and the line.
+                  No new protection copy lives here (D6). */}
+              <View style={styles.headerCard}>
+                <Text style={styles.headerEyebrow} numberOfLines={1}>
+                  {pending.length} {pending.length === 1 ? 'bid' : 'bids'} · {job.title}
+                </Text>
+                <Text style={styles.headerTitle}>Compare the full offer.</Text>
+                <Text style={styles.headerFraming}>
+                  Price matters, but fit, reliability and included work determine value.
+                </Text>
+              </View>
+              {/* §5.4 — the order is deterministic and stated. */}
+              <Text style={styles.orderRule}>{BID_ORDER_RULE}</Text>
             </View>
           ),
         },
@@ -87,7 +126,8 @@ export function CompareBidsScreen() {
                 <CompareRow
                   key={bid.id}
                   bid={bid}
-                  isBestValue={bid.id === bestId && pending.length > 1}
+                  highestRated={bid.id === badgeId}
+                  completedJobs={completedByWorker[bid.worker_id] ?? null}
                   onPress={() =>
                     navigation.navigate('BidDetail', { job, offerId: bid.id })
                   }
@@ -103,23 +143,26 @@ export function CompareBidsScreen() {
 
 function CompareRow({
   bid,
-  isBestValue,
+  highestRated,
+  completedJobs,
   onPress,
 }: {
   bid: OfferWithWorker;
-  isBestValue: boolean;
+  highestRated: boolean;
+  completedJobs: number | null;
   onPress: () => void;
 }) {
   const worker = bid.worker;
+  const rating = knownRating(worker);
   const ratingCount = worker?.rating_count ?? 0;
-  const completion = completionPercent(worker?.completion_rate);
+  const trust = trustRowFor(onTimePercent(worker?.on_time_pct), completedJobs);
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
-        isBestValue && styles.rowBest,
+        highestRated && styles.rowHighest,
         pressed && styles.rowPressed,
       ]}
       accessibilityRole="button"
@@ -127,10 +170,10 @@ function CompareRow({
         bid.amount_cents
       )}`}
     >
-      {isBestValue ? (
-        <View style={styles.bestTag}>
-          <Ionicons name="sparkles" size={11} color={colors.emerald} />
-          <Text style={styles.bestTagText}>Best value</Text>
+      {highestRated ? (
+        <View style={styles.highestTag}>
+          <Ionicons name="star" size={11} color={colors.emerald} />
+          <Text style={styles.highestTagText}>Highest rated</Text>
         </View>
       ) : null}
 
@@ -140,29 +183,46 @@ function CompareRow({
           <Text style={styles.rowName} numberOfLines={1}>
             {worker?.full_name ?? 'Worker'}
           </Text>
-          <View style={styles.rowProof}>
-            <Ionicons name="star" size={13} color={colors.gold} />
-            <Text style={styles.rowProofStrong}>
-              {ratingCount > 0 ? (worker?.rating_avg ?? 0).toFixed(1) : 'New'}
-            </Text>
-            <Text style={styles.rowProofMuted}>
-              {ratingCount > 0
-                ? `(${ratingCount})`
-                : 'no reviews yet'}
-            </Text>
-            {completion != null ? (
-              <Text style={styles.rowProofMuted}>· {completion}% completed</Text>
-            ) : null}
-          </View>
+          {rating != null ? (
+            <View style={styles.rowRating}>
+              <Ionicons name="star" size={13} color={colors.gold} />
+              <Text style={styles.rowRatingStrong}>{rating.toFixed(1)}</Text>
+              <Text style={styles.rowRatingMuted}>({ratingCount})</Text>
+            </View>
+          ) : null}
         </View>
         <Text style={styles.rowAmount}>{formatBudget(bid.amount_cents)}</Text>
       </View>
 
-      {bid.message ? (
-        <Text style={styles.rowPitch} numberOfLines={2}>
-          “{bid.message}”
-        </Text>
-      ) : null}
+      {/* D4 — facts render only when known; a worker whose record is a null
+          on_time_pct and a KNOWN sub-3 job count reads "New worker" and
+          nothing else. Unknown stays blank, never zero. */}
+      {trust.kind === 'new' ? (
+        <Text style={styles.trustNew}>New worker</Text>
+      ) : (
+        <>
+          {trust.onTimePct != null || trust.completedJobs != null ? (
+            <View style={styles.trustRow}>
+              {trust.onTimePct != null ? (
+                <Text style={styles.trustFact}>{trust.onTimePct}% on time</Text>
+              ) : null}
+              {trust.onTimePct != null && trust.completedJobs != null ? (
+                <Text style={styles.trustDot}>·</Text>
+              ) : null}
+              {trust.completedJobs != null ? (
+                <Text style={styles.trustFact}>
+                  {trust.completedJobs} completed {trust.completedJobs === 1 ? 'job' : 'jobs'}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+          {bid.message ? (
+            <Text style={styles.rowPitch} numberOfLines={1}>
+              “{bid.message}”
+            </Text>
+          ) : null}
+        </>
+      )}
 
       <View style={styles.rowFooter}>
         <Text style={styles.rowMeta}>
@@ -175,8 +235,38 @@ function CompareRow({
 }
 
 const styles = StyleSheet.create({
-  sortWrap: {
-    marginBottom: -spacing.sm,
+  headerBlock: {
+    gap: spacing.sm,
+  },
+  headerCard: {
+    gap: spacing.xs,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.mint,
+  },
+  headerEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: colors.emerald,
+  },
+  headerTitle: {
+    fontSize: 22,
+    lineHeight: 27,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  headerFraming: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textMuted,
+  },
+  orderRule: {
+    fontSize: 12,
+    color: colors.textMuted,
   },
   list: {
     gap: spacing.md,
@@ -189,14 +279,14 @@ const styles = StyleSheet.create({
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
   },
-  rowBest: {
+  rowHighest: {
     borderColor: colors.emerald,
     borderWidth: 2,
   },
   rowPressed: {
     opacity: 0.8,
   },
-  bestTag: {
+  highestTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
@@ -206,7 +296,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: radius.pill,
   },
-  bestTagText: {
+  highestTagText: {
     fontSize: 10,
     fontWeight: '800',
     color: colors.emerald,
@@ -228,18 +318,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.ink,
   },
-  rowProof: {
+  rowRating: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: spacing.xs,
   },
-  rowProofStrong: {
+  rowRatingStrong: {
     fontSize: 13,
     fontWeight: '700',
     color: colors.text,
   },
-  rowProofMuted: {
+  rowRatingMuted: {
     fontSize: 12,
     color: colors.textMuted,
   },
@@ -247,6 +336,26 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '800',
     color: colors.ink,
+  },
+  trustNew: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  trustRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: spacing.xs,
+  },
+  trustFact: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  trustDot: {
+    fontSize: 13,
+    color: colors.textMuted,
   },
   rowPitch: {
     fontSize: 13,
@@ -257,8 +366,6 @@ const styles = StyleSheet.create({
   rowFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    // The badge that used to hold the left slot is gone; the meta line keeps
-    // its right-aligned position.
     justifyContent: 'flex-end',
     gap: spacing.sm,
   },

@@ -11,6 +11,9 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+const stripComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
 const toDataUrl = (js) =>
   'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
 
@@ -284,4 +287,130 @@ test('§4.4 · the rebook strip tops the search surface and "Hire someone again"
   // a future re-route is a deliberate act.
   const sheetRow = root.slice(root.indexOf("key: 'hire-again'"));
   assert.ok(sheetRow.includes("navigateAcrossTabs('Profile', 'SavedWorkers')"));
+});
+
+// ---------------------------------------------------------------------------
+// §5 — Compare Bids: deterministic order, defensible badge, honest trust row
+// ---------------------------------------------------------------------------
+
+const compareBidsModule = importLibModule('lib/compareBids.ts');
+
+const bid = (id, amount, rating, ratingCount, createdAt = `2026-08-0${id.length}T00:00:00Z`) => ({
+  id,
+  amount_cents: amount,
+  created_at: createdAt,
+  worker: rating == null && ratingCount == null
+    ? null
+    : { rating_avg: rating, rating_count: ratingCount },
+});
+
+test('§5.4 · the sort is total and stable: rating desc, price asc, time asc, id', async () => {
+  const { sortBidsDeterministic } = await compareBidsModule;
+
+  const a = bid('a', 7000, 4.5, 10, '2026-08-01T00:00:00Z');
+  const b = bid('b', 6000, 4.5, 3, '2026-08-02T00:00:00Z'); // same rating, cheaper
+  const c = bid('c', 6000, 4.5, 8, '2026-08-01T00:00:00Z'); // ties price, earlier
+  const d = bid('d', 5000, 4.9, 4, '2026-08-03T00:00:00Z'); // highest rating
+  const e = bid('e', 1000, null, 0, '2026-08-01T00:00:00Z'); // unrated, cheapest of all
+
+  const order = (list) => sortBidsDeterministic(list).map((x) => x.id);
+
+  assert.deepEqual(order([a, b, c, d, e]), ['d', 'c', 'b', 'a', 'e']);
+  // Total: any input permutation yields the identical output order.
+  assert.deepEqual(order([e, d, c, b, a]), ['d', 'c', 'b', 'a', 'e']);
+  assert.deepEqual(order([c, a, e, b, d]), ['d', 'c', 'b', 'a', 'e']);
+
+  // Null ratings sort LAST, never interleaved by a substituted zero: the
+  // unrated cheapest bid still trails a low-but-real 1.0 rating.
+  const low = bid('l', 9000, 1.0, 5);
+  assert.deepEqual(order([e, low]), ['l', 'e']);
+
+  // Full tie except id — the id breaks it, both directions.
+  const t1 = bid('t1', 4000, 4.0, 4, '2026-08-05T00:00:00Z');
+  const t2 = bid('t2', 4000, 4.0, 9, '2026-08-05T00:00:00Z');
+  assert.deepEqual(order([t2, t1]), ['t1', 't2']);
+  assert.deepEqual(order([t1, t2]), ['t1', 't2']);
+});
+
+test('§5.1 · HIGHEST RATED fails closed: ties, thin records, and unknowns kill it', async () => {
+  const { highestRatedBadgeId } = await compareBidsModule;
+
+  const top = bid('top', 6000, 4.9, 5);
+  const mid = bid('mid', 5000, 4.5, 7);
+  const low = bid('low', 4000, 4.0, 3);
+
+  // The clean case: strictly higher than every KNOWN rival rating, 3+ reviews.
+  assert.equal(highestRatedBadgeId([mid, top, low]), 'top');
+
+  // A tie at the top — no badge.
+  const tie = bid('tie', 7000, 4.9, 6);
+  assert.equal(highestRatedBadgeId([top, tie, low]), null);
+
+  // Top rating built on fewer than 3 reviews — no badge.
+  const thin = bid('thin', 3000, 5.0, 2);
+  assert.equal(highestRatedBadgeId([thin, mid]), null);
+
+  // Any UNRATED rival makes the comparison unknowable — no badge.
+  const unrated = bid('u', 2000, null, 0);
+  assert.equal(highestRatedBadgeId([top, unrated]), null);
+
+  // A lone bid has nobody to out-rate — no badge.
+  assert.equal(highestRatedBadgeId([top]), null);
+  assert.equal(highestRatedBadgeId([]), null);
+});
+
+test('§5.3 · null on_time_pct never renders as 0%, and the completed figure is a SUM', async () => {
+  const { onTimePercent, totalCompletedJobs, trustRowFor } = await compareBidsModule;
+
+  assert.equal(onTimePercent(null), null);
+  assert.equal(onTimePercent(undefined), null);
+  assert.equal(onTimePercent(98), 98);
+  assert.equal(onTimePercent(0.5), 50, 'a 0–1 stored scale normalizes like completion_rate');
+
+  // D3 — per-category rows sum to the total; a single-category worker is not
+  // undercounted to their largest category.
+  assert.equal(totalCompletedJobs([{ count: 2 }, { count: 3 }, { count: 1 }]), 6);
+  assert.equal(totalCompletedJobs([{ count: 7 }]), 7);
+  assert.equal(totalCompletedJobs([]), 0);
+
+  // D4 — "New worker" needs a null on_time_pct AND a KNOWN sub-3 job count.
+  assert.deepEqual(trustRowFor(null, 2), { kind: 'new' });
+  assert.deepEqual(trustRowFor(null, 0), { kind: 'new' });
+  assert.equal(trustRowFor(null, 3).kind, 'facts');
+  assert.equal(trustRowFor(98, 1).kind, 'facts', 'a known on_time_pct is a record, not a blank');
+  const unknown = trustRowFor(null, null);
+  assert.equal(unknown.kind, 'facts');
+  assert.equal(unknown.onTimePct, null);
+  assert.equal(unknown.completedJobs, null, 'unknown stays unknown — renders nothing');
+});
+
+test('§5 · the screen states the order, renders no ranking claim and no stray percentage [static]', async () => {
+  const screen = await read('screens/CompareBidsScreen.tsx');
+  const lib = await read('lib/compareBids.ts');
+
+  // The stated rule is the implemented rule's own constant.
+  assert.match(lib, /BID_ORDER_RULE = 'Sorted by rating, then lowest price, then earliest bid\.'/);
+  assert.match(screen, /\{BID_ORDER_RULE\}/);
+
+  // No ranking language, no blended score, no second acceptance path.
+  assert.doesNotMatch(screen, /best value|best fit|top pick|recommended|suggested/i);
+  assert.ok(!screen.includes('sortOffers'), 'the blended sort left this surface');
+  assert.ok(!screen.includes('bestValueOfferId'), 'the value badge left this surface');
+  assert.ok(!screen.includes('OFFER_SORT_OPTIONS'), 'no user-selectable ranking modes');
+  // Comments may (and do) NAME the assignment rule; the CODE must not touch
+  // it — acceptance stays one deliberate step away, on Bid Detail.
+  const screenCode = stripComments(screen);
+  assert.ok(
+    !screenCode.includes('accept_offer') && !screenCode.includes('acceptOffer'),
+    'acceptance stays on Bid Detail'
+  );
+  assert.match(screen, /navigation\.navigate\('BidDetail'/, 'rows route to the existing path');
+
+  // The offer message is one line.
+  assert.match(screen, /rowPitch\} numberOfLines=\{1\}/);
+
+  // The only percent on this screen is on_time_pct's own rendering.
+  assert.ok(!screen.includes('completionPercent'), 'completion% left this surface');
+  const strippedPercents = screen.replace(/% on time/g, '');
+  assert.ok(!strippedPercents.includes('%'), 'no percentage that is not on_time_pct');
 });
