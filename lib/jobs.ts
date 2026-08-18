@@ -2,6 +2,7 @@ import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 import { supabase } from './supabase';
 import { transitionJobStatusWithoutRpc } from './jobStatusCompatibility';
+import { moneyCeilingError } from './validation';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -368,8 +369,28 @@ export function jobMatchesSkills(job: { category: JobCategory }, categories: Set
   return categories.has(job.category);
 }
 
+/** phase75 ceiling mirror over every budget figure a job carries. Refused
+ *  here, before the RPC, so the poster reads a sentence instead of the
+ *  database CHECK's raw refusal. */
+function jobBudgetCeilingError(input: NewJobInput): string | null {
+  return (
+    moneyCeilingError(input.budgetCents) ??
+    moneyCeilingError(input.budgetMinCents) ??
+    moneyCeilingError(input.budgetMaxCents)
+  );
+}
+
 /** Create an open job and its optional exact location in one transaction. */
 export async function createJob(_clientId: string, input: NewJobInput) {
+  const ceilingError = jobBudgetCeilingError(input);
+  if (ceilingError) {
+    return {
+      data: null,
+      error: { message: ceilingError },
+      locationError: null as { message: string } | null,
+    };
+  }
+
   const { data, error } = await supabase
     .rpc('create_job', {
       p_title: input.title,
@@ -404,6 +425,15 @@ export async function createJob(_clientId: string, input: NewJobInput) {
  * transaction.
  */
 export async function updateJob(jobId: string, input: NewJobInput) {
+  const ceilingError = jobBudgetCeilingError(input);
+  if (ceilingError) {
+    return {
+      data: null,
+      error: { message: ceilingError },
+      locationError: null as { message: string } | null,
+    };
+  }
+
   const { data, error } = await supabase
     .rpc('update_job_details', {
       p_job_id: jobId,

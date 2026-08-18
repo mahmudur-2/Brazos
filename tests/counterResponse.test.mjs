@@ -21,6 +21,12 @@ const offersModule = (async () => {
     .replace(
       /import \{ PUBLIC_PROFILE_COLUMNS[^}]*\} from '\.\/profiles';/,
       "const PUBLIC_PROFILE_COLUMNS = 'id';"
+    )
+    // The ceiling only gates the RPC writers, which nothing here calls; its
+    // real behavior is executed in tests/moneyCeiling.test.mjs.
+    .replace(
+      /import \{ moneyCeilingError \} from '\.\/validation';/,
+      'const moneyCeilingError = () => null;'
     );
   assert.match(stubbed, /const supabase = null;/, 'the supabase import must be stubbed');
   assert.match(

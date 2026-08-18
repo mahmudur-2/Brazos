@@ -6,6 +6,36 @@
  * truth for what's ultimately accepted.
  */
 
+import { formatBudget } from './jobs';
+
+/**
+ * phase75's money ceiling, mirrored EXACTLY — the database CHECK constraints
+ * on jobs, job_offers and payments all read `<= 10000000`, so exactly at the
+ * ceiling is accepted and one cent above is not. Tips carry the tighter
+ * sandbox_tip_worker() cap (phase51), which rejects `> 100000` — the same
+ * inclusive shape. The constraints remain the enforcement; this mirror exists
+ * so an over-ceiling amount is refused with a written sentence before the RPC
+ * instead of surfacing as a raw CHECK violation. It lives here and not in
+ * lib/offers.ts because the ceiling binds job budgets, offer amounts and
+ * payments alike — it is not an offers concern.
+ */
+export const MONEY_CEILING_CENTS = 10_000_000;
+export const TIP_CEILING_CENTS = 100_000;
+
+/**
+ * Null when the amount is at or under the ceiling (or absent — an empty
+ * budget is legal and checked elsewhere); otherwise the user-facing refusal.
+ * Integer cents in, always — dollars never reach this.
+ */
+export function moneyCeilingError(
+  amountCents: number | null | undefined,
+  ceilingCents: number = MONEY_CEILING_CENTS
+): string | null {
+  if (amountCents == null || amountCents <= ceilingCents) return null;
+  const limit = formatBudget(ceilingCents);
+  return `That amount is over the ${limit} limit. Enter ${limit} or less.`;
+}
+
 /** Loose "looks like an email" check — not RFC 5322-exact, just enough to
  *  catch obviously malformed input like "asdf" or "foo@bar" before it
  *  reaches Supabase as a raw, unfriendly error. */

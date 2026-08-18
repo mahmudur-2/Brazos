@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import type { JobCategory } from './jobs';
 import type { Message } from './messages';
 import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
+import { moneyCeilingError } from './validation';
 
 /**
  * The one negotiation module. Replaces lib/bids.ts and lib/jobRequests.ts,
@@ -215,6 +216,13 @@ export function offerIdOf(message: Message): string | null {
 // Writes — all RPC, all validated server-side
 // ---------------------------------------------------------------------------
 
+/** phase75 ceiling mirror (MAX_COUNTERS_PER_SIDE precedent: refuse with an
+ *  explanation before the server does). Shaped with an optional `code` so it
+ *  unifies with the PostgrestError branch callers already narrow on. */
+function ceilingRefusal(message: string): { message: string; code?: string } {
+  return { message };
+}
+
 export type NewMarketplaceOffer = {
   jobId: string;
   amountCents: number;
@@ -224,6 +232,11 @@ export type NewMarketplaceOffer = {
 /** A worker bids on a public open job. create_offer() derives the worker and
  *  the customer from the authenticated user and the job. */
 export async function createMarketplaceOffer(input: NewMarketplaceOffer) {
+  const ceilingError = moneyCeilingError(input.amountCents);
+  if (ceilingError) {
+    return { data: null as string | null, error: ceilingRefusal(ceilingError) };
+  }
+
   const { data, error } = await supabase.rpc('create_offer', {
     p_amount_cents: input.amountCents,
     p_job_id: input.jobId,
@@ -258,6 +271,11 @@ export type NewDirectOffer = {
  * publicly — that guarantee is phase18's and it is unchanged.
  */
 export async function createDirectOffer(input: NewDirectOffer) {
+  const ceilingError = moneyCeilingError(input.amountCents);
+  if (ceilingError) {
+    return { data: null as string | null, error: ceilingRefusal(ceilingError) };
+  }
+
   const { data, error } = await supabase.rpc('create_offer', {
     p_amount_cents: input.amountCents,
     p_worker_id: input.workerId,
@@ -277,6 +295,11 @@ export async function createDirectOffer(input: NewDirectOffer) {
 
 /** Counter an offer. Supersedes the parent and creates the child atomically. */
 export async function counterOffer(offerId: string, amountCents: number) {
+  const ceilingError = moneyCeilingError(amountCents);
+  if (ceilingError) {
+    return { data: null as string | null, error: ceilingRefusal(ceilingError) };
+  }
+
   const { data, error } = await supabase.rpc('counter_offer', {
     p_offer_id: offerId,
     p_amount_cents: amountCents,

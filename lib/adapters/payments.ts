@@ -1,5 +1,6 @@
 import { supabase } from '../supabase';
 import type { Payment } from '../payments';
+import { moneyCeilingError, TIP_CEILING_CENTS } from '../validation';
 
 /**
  * The payment-provider boundary (BRAZOS_MASTER_PLAN.md §A layer 5;
@@ -85,6 +86,12 @@ function createSandboxPaymentProvider(): PaymentProvider {
     protectJobPayment: (jobId) => call('sandbox_hold_job_payment', jobId),
     releaseJobPayment: (jobId) => call('sandbox_release_job_payment', jobId),
     tipWorker: async (jobId, amountCents) => {
+      // sandbox_tip_worker()'s own $1,000 cap (phase51), mirrored so an
+      // over-cap tip is refused with a sentence before the RPC.
+      const ceilingError = moneyCeilingError(amountCents, TIP_CEILING_CENTS);
+      if (ceilingError) {
+        return { data: null, error: { message: ceilingError } };
+      }
       const { data, error } = await supabase.rpc('sandbox_tip_worker', {
         p_job_id: jobId,
         p_amount_cents: amountCents,
