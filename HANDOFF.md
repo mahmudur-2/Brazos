@@ -2,149 +2,76 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-18 - stage 4D-3.5 + 4D-2 + 4E (merged dispatch)
+## 2026-08-18 (overnight) - Stage 4D audit, P0 privacy fix, gates, truth-up
 
 **No SQL executed, no database contacted, no schema object touched, no
 dependency added, nothing pushed, no locked file edited, no `.env` read.**
-Six feature commits plus this docs commit, in dispatch order (batch A → B →
-C), each landed on a green `npm run verify`. Suite: **620 pass at the base
-gate → 665 pass / 0 fail / 0 skipped** at the end. New suites:
-`tests/themeTokens.test.mjs` (batch A), `tests/workerDiscovery.test.mjs`
-(batch B), `tests/workerHeroCard.test.mjs` (batch C); pure modules are
-EXECUTED (strip-types / direct-import patterns), screen wiring pinned
-`[static]`. Two existing assertions were amended because the behaviour they
-pinned legitimately changed, neither weakened: `tests/discovery.test.mjs`
-(distanceAvailable gained the `radiusActive` disjunct) and
-`tests/selfService.test.mjs` (the save button gained the `hireable`
-conjunct).
+Eleven commits before this one, all twelve dispatch items executed (none
+skipped), every code commit on a green `npm run verify`. Suite: **665 pass
+at the base gate → 696 pass / 0 fail / 0 skipped** at the end. Base gate
+note: `git merge-base` is denied by the permission matrix; ancestry was
+proven by identity (HEAD *was* b858053).
 
-### Batch A — token layer (4D-3.5), light-pinned
+### The P0 — GPS-coordinate location leak (cf144aa): CONFIRMED, FIXED
 
-- `ui/tokens.ts` now exports `light` (Heritage, values unchanged) and `dark`
-  (Emerald Prestige: near-black emerald bg `#0A1613`, dark-green cards
-  `#132A22`, gold hairline `line #4A3D24`, gold primary `forest #D9B978`
-  with dark `onForest`), key parity enforced by
-  `satisfies Record<ColorToken, string>`. Per-key intent is documented on the
-  palette for 4D-4's device tuning.
-- `lib/ThemeContext.tsx` (new) + `hooks/useThemeColors.ts`: the resolver
-  returns light UNCONDITIONALLY this stage. No Appearance/useColorScheme read
-  anywhere, no persistence, app.json untouched (`userInterfaceStyle: "light"`
-  — flipping it is 4D-4's native build, trap T1).
-- `withAlpha(token, alpha)` (`ui/colorAlpha.ts`, re-exported through tokens
-  and theme) replaced every scrim/on-fill rgba literal byte-for-byte;
-  lib/theme gained `black` and `mediaChrome` tokens and re-exports `layout`,
-  `controls`, `emeraldRadius` (§I radius scale) for screens. lib/theme's
-  `darkColors` brand hues now spread from the tokens `dark` palette (one
-  definition of dark-forest); its other dark values are its own and are
-  unreachable until 4D-4 either way.
-- The A0 hex measure (`git grep -c -E "#[0-9a-fA-F]{3,8}" -- screens
-  components ui navigation modes`): **48 before → 60 after**, the rise being
-  ui/tokens.ts itself growing by the 17-key dark palette (25 → 42 at the
-  definition site — correct). Outside token-definition files, locked screens
-  and the frozen web map, hex went 8 → 3: `components/AuthNotice.tsx` ×2 and
-  `components/ModeTransitionOverlay.tsx:449` ×1, all deliberate leaves —
-  see LOCKED_FILE_PATCHES **A10/A11** (authTheme is read-only this run and is
-  the token home for the auth-surface strays; `#FFF3D6` is a brand-asset
-  shimmer tint paired with the transition PNGs, T3). CountryPicker's one-off
-  auth sheet scrim rgba also stays, queued in A10.
-- Net user-visible change from batch A: none (the acceptance bar). One
-  sub-visible caveat recorded: on the frozen web PWA in a dark-scheme
-  browser, `components/MapPinIcon.tsx` previously dark-adapted via
-  useColorScheme and is now pinned light like everything else — iOS (the
-  product platform) is pinned by app.json either way.
+The externally-alleged chain was real and live: on double reverse-geocode
+failure `lib/geolocation.ts` labeled the place with its raw four-decimal
+GPS pair ("40.6501, -73.9496" ≈ 10 m), PostJobScreen accepted it,
+`create_job` stored it in public `jobs.location`, and `OPEN_JOB_COLUMNS`
+served it to every signed-in browser. Fixed fail-closed, client-only:
 
-### Batch B — worker discovery (4D-2), worker tree only
+- Empty label on double failure (never coordinates); any coordinate-shaped
+  geocode output scrubbed by the same rule.
+- `lib/locationPrivacy.ts` (new, pure) — the ONE coordinate-shape rule:
+  full-string two signed decimals with 3+ places; never broader, so real
+  addresses with numbers pass.
+- Write boundary: createJob / updateJob / createDirectOffer refuse
+  coordinate-shaped `p_location` with a written sentence (fits
+  isSafeToShow's 160-char gate).
+- Open-market mask in `toOpenJob`: coordinate-shaped STORED rows render as
+  absent (browse/search/map/detail/market preview). Owner and
+  assigned-worker surfaces (mapJobRow) deliberately unmasked.
+- 11 tests in tests/locationPrivacy.test.mjs (executed rules + wiring pins).
 
-1. **Map (B1).** `lib/mapClustering.ts` — pure fixed-grid clustering (the
-   dispatch's pre-made decision: no library), executed by node --test;
-   deterministic pins with count-weighted centroids. Worker mode on the
-   shared MapScreen renders count-badged pins (Text badges, safe with
-   `tracksViewChanges={false}`); pin tap → bottom Sheet of WorkerJobCards
-   for the member cells → JobDetail in the Map stack. Customer mode keeps
-   the glow/CellJobs experience untouched; the tier legend hides in worker
-   mode (pins state their counts). New `HotspotMapProps` members are all
-   OPTIONAL — `components/HotspotMap.web.tsx` is byte-untouched and ignores
-   them, so worker-mode-on-web keeps the pre-4D-2 glow view (frozen surface;
-   iOS is the product).
-2. **Cards (B2).** WorkerJobCard `variant="full"` gains distance
-   (`formatDistanceMiles`, only from a real `distance_miles`) and the
-   arrival window (the ONE `arrivalWindowLabel` formatter). Compact Home
-   cards keep the locked reference's exact field list. The no-photo state
-   stays the category-glyph tile — never stock imagery; no fixture has
-   photos and the state is test-pinned.
-3. **Filter (B3).** `lib/discoveryFilter.ts` (pure rules: options 2/5/10/25,
-   per-account versioned key, fail-safe coercion to Any) +
-   `lib/discoveryFilterStorage.ts` (AsyncStorage, modeStorage pattern — the
-   pre-made decision, NOT SecureStore) + `components/DistanceChips.tsx` on
-   both the map (filters cells via cellsWithinMiles once the native map
-   reports a real fix) and WorkerResults (radius routes all/skills through
-   jobs_within_radius; jobs without recorded coordinates drop only while a
-   radius is APPLIED — that is what a distance filter means). Honesty rules:
-   nearby mode always ARRIVES at the promised 5 regardless of the persisted
-   value and its title tracks the chip; a user-chosen radius pins search's
-   5→10→15 widening ladder; a dead location is announced in writing and the
-   feed stays unfiltered rather than faked.
-4. **Detail (B4) + reasons (B5).** JobDetail leads with the scope of work
-   (description directly under the title); approximate `jobs.location` only
-   (no job_locations surface — test-pinned). `lib/matchReasons.ts` derives
-   the three boolean checkmarks (category / distance ≤ persisted radius,
-   default the 5-mile promise / budget ceiling ≥ cheapest published FLAT
-   listed price — hourly/quote rows are incomparable and contribute
-   nothing). Unknown or unmet renders nothing; no percentages or scores,
-   test-guarded. `budgetCeiling` is now exported from lib/jobFilters (one
-   rule); `NEARBY_RADIUS_MILES` moved to lib/discoveryFilter with
-   WorkerResultsScreen re-exporting it so the LOCKED BrowseJobsScreen import
-   path (`from './WorkerResultsScreen'`) resolves unchanged.
+**Pending migration (operator prerequisite named):** a server-side CHECK on
+`jobs.location` refusing coordinate-shaped values was deliberately NOT
+authored. Prerequisite: inspect staging (and any real) rows first — e.g.
+`select id, location from jobs where location ~ '^\s*-?\d{1,3}\.\d{3,}\s*,\s*-?\d{1,3}\.\d{3,}\s*$';`
+— because existing violating rows would abort the ALTER. Scrub or accept
+them, then author the CHECK as a numbered phase.
 
-### Batch C — worker hero card (4E)
+### The other ten commits
 
-`lib/workerHeroCard.ts` composes lib/compareBids.ts (knownRating,
-totalCompletedJobs over worker_job_stats, onTimePercent, trustRowFor) —
-reuse, not a second copy, guarded by test. Hero trust content is
-positive-only, non-null only: rating (only with counted reviews — the old
-"New" / "no reviews yet" placeholders are GONE, and the ProfileReviews entry
-exists only when there are reviews), jobs completed (null while the stats
-read is unanswered/failed; a KNOWN zero also renders nothing), responds-in
-(`profiles.response_time` verbatim, trimmed). compareBids' KNOWN-new verdict
-renders "New worker" and replaces the fact rows. The hero's completion% line
-left the surface (the plan's trust row is exactly the three facts).
-Tombstoned profiles (rebook's canHire, one predicate) carry no offer, book,
-or save affordance — the mockups' verification pill, five-tab customer bar
-and Hire-on-a-deleted-user are recorded defects and were not reproduced.
+| commit | what it did |
+| --- | --- |
+| f92cd0c | docs/audits/STAGE4D_AUDIT.md — full 4D regression audit (range bbdf7e0..b858053 + repo-wide invariant sweeps). 1 BLOCKER (the P0, fixed), 1 DEFECT (raw error.message on two LOCKED auth screens — logged), 4 RISK (response_time phrasing; useLegalGate fail-open; jobStatusCompatibility shim; Terms "escrows" denial — all logged), 10 NOTE verifications. Mode purity, lifecycle single-source, money-through-formatBudget, hex allowlist, copy rules: all hold. |
+| 37da53f | tests/stage4dInvariants.test.mjs — executed coverage for what had none: arrivalWindowLabel (both-or-neither, 12h edges, hour-24 wrap, TZ-safe date), budgetRangeLabel/hasBudget, the no-"paid"-before-release vocabulary over every lifecycle label and next-action, and the B3 radius-ladder pin. |
+| 201858b | Price guidance label is exactly "Suggested starting range" (pre-decided; label only, one producer in lib/priceGuidance.ts). |
+| 7d0b066 | Dead code: components/SectionHeader.tsx and ui/templates/ListScreen.tsx deleted (zero-importer proof); four stranded exports un-exported. hooks/useChat.ts (LOCKED) and BrowseJobsScreen (locked 48, unmounted by design) logged, untouched. ui/primitives/JobCard.tsx is LIVE (catalog + mode tests) but its docblock still claims to replace cards that exist — stale, left for a docs pass. |
+| c1b17b0 | Money ceiling refusals read the pre-decided verbatim copy: "Amount must be $100,000 or less." / "Tip must be $1,000 or less." (mirror itself landed in 4D-B; both exact strings now test-pinned at the one-cent-over boundary). |
+| 4eafe45 | ONE bid-ordering rule (pre-decided): lib/compareBids.ts is the single source. ClientJobDetail consumes sortBidsForChip; chips are exactly "Lowest price" / "Highest rated"; default (no chip) = the stated deterministic rule. offerValueScore / sortOffers / bestValueOfferId / OFFER_SORT_OPTIONS and the "Best value" badge are DELETED with a do-not-reintroduce note; SegmentedControl accepts a null value (nothing selected). |
+| 4f1354c | Release gates accept new-format keys, fail closed: URL ref is authoritative (refFromRestUrl); eyJ keys decode + cross-check; sb_publishable_/sb_pu_ accepted as format (live control probe verifies pairing); anything else — sb_secret_ included — refused. verify-schema parity matches (publishable continues with "key format carries no ref; URL ref is authoritative"; other unresolvable keys still exit 3). EXPECTED_REF and every ref literal untouched. |
+| 41c545b | Explicit projections for all five audited runtime select('*') sites (conversations, reactions ×2, portfolio, notificationPrefs) plus their same-module bare .select() returning calls; tests/projections.test.mjs pins list ⇄ type equality parsed from source. Nothing was unprovable. |
+| 628987c | Docs truth-up: PROD_APPLY.md/PROD_APPLY_READY.sql/PROD_VERIFY.sql carry SUPERSEDED headers (51-58 only; production path = staging-dump rebuild); master plan loses done items (money mirror, customer-safe preview — verified at JobDetailScreen:483, 42P17 via phase60) and its gate entry now describes the URL-derived gate; sharedStacks' KNOWN GAP comment records the gap as closed; REVIEW_GUIDE stops promising pre-hire "Message Wren first" (phase66); brazos-product-spec.md gets the ARCHIVED banner; LOCKED_FILE_PATCHES gains A12. |
+| 8a5c873 | Privacy policy: three false statements corrected verbatim (deletion behavior incl. "media files not yet automatically removed from storage" per phase67's deliberate no-cleanup; Profile → Delete Account is the real control; completion media sits in the public job-photos bucket until private storage lands). Terms untouched. legalGate.test.mjs pins the corrected facts. |
 
-### Judgment calls a reviewer should see
+### Judgment calls this run
 
-- **Dark `forest` is GOLD.** The Prestige spec says "gold primary", and
-  brand.forest's documented role IS the primary (CTAs, display titles,
-  active nav). Screens using forest as a large card fill will read wrong in
-  dark BY DESIGN until 4D-4's sweep restyles those cards onto `surface`; the
-  intent note lives on the palette. `sage success` has no §I key — it lives
-  in lib/theme's status pairs, untouched this run.
-- **Alphas stay inline numbers.** withAlpha keeps the COLOUR a token read;
-  the opacity is a per-surface style parameter like any other number.
-  Nearly-token scrim hues were NOT converged (CountryPicker `#0B2019`,
-  JobVideo's `#0F1F17` family got its own `mediaChrome` token instead)
-  because batch A's bar was zero visible change.
-- **Spacing/radius migration was exact-value only.** On-scale literals
-  migrated; the large residue of 0–7pt optical nudges, size-derived circle
-  radii (width/2), and off-scale one-offs (ChatBubble's 40pt row insets,
-  JobProgress's ±12 connector pair) stay literal — snapping them changes
-  rendering and inventing scale names corrupts the documented 4-base system.
-- **The distance filter is per-surface state, not a live bus.** Map and
-  results both read storage at mount and write on change; two simultaneously
-  mounted surfaces don't live-sync until remount. Accepted as the
-  modeStorage-pattern cost; a change-notify layer was not worth the moving
-  part.
-- **Map sheet distance join is an enhancement read.** One
-  jobs_within_radius call sized to the pin; if it fails the cards render
-  without distance rather than blocking.
-- **`response_time` renders as "Responds in {value}"** — the column is a
-  nullable free-text string the app never writes; the label assumes the
-  stored value is a duration phrase ("2 hours"). If ops ever writes another
-  shape there, the copy needs a second look.
-- **B5's budget reason uses the job's stated CEILING** (the exported
-  budgetCeiling), reading "within what the customer is willing to pay" —
-  and only against FLAT published prices.
+- **"Highest rated" chip = the default order made explicit.** The factual
+  rule already leads with rating; the chip exists so the user can SAY it.
+  "Lowest price" leads with amount and keeps the full deterministic chain
+  as tiebreak — no blended score anywhere, per the final decision.
+- **The Terms' "escrows" stays.** It is a DENIAL ("not a payment Brazos
+  holds, guarantees, escrows, or collects") inside the one file tonight's
+  dispatch forbade touching; the settled copy rule targets product claims
+  of protection. Flagged for the next legal session.
+- **PRIVACY_VERSION was NOT bumped.** The policy module's own header says a
+  substance change should bump it so users re-accept; tonight's edits make
+  the draft truthful but re-acceptance is a product call the dispatch did
+  not order. Operator decides (see queue).
+- **sb_secret_ keys are refused by the new gate** even though the dispatch
+  only said "any other format = fail closed" — a secret key in a client
+  bundle must never pass a format check.
 
 ## Applied reality - staging `zzkumxcjtbqoselzptig`
 
@@ -156,11 +83,13 @@ operator-applied to staging; phases 67-73 applied and verified green
 covering phase74/75 have still never been exercised** - that run remains the
 next operator action (needs `.env` + live staging, never inside an
 autonomous run). Expected: every group OK, zero MISSING, zero PENDING; no
-unapplied migration exists in the repository.
+unapplied migration exists in the repository. The pending location-CHECK
+migration above is not yet authored, so nothing new awaits apply.
 
 **Production (`avkighsiufeefyycbebf`) still has none of the migrations.**
 Standing decision: rebuild from a staging dump once staging is beta-ready;
-`PROD_APPLY.md` is the ordered fallback. Production was never contacted.
+`PROD_APPLY.md` is now marked SUPERSEDED and is history/fallback only.
+Production was never contacted.
 
 ### anon-EXECUTE evidence - preserve on any rewrite
 
@@ -193,29 +122,22 @@ phase74 nor phase75 disturbs the finding.
 
 ## Needs the operator - outside any run
 
-**A. Run `node scripts/verify-schema.mjs` against staging** - the only thing
-that makes "phase74/75 applied" official; their two groups have never run.
-**The env-parity gate fails closed (4D-B).** If `.env`'s `SUPABASE_KEY` is a
-new-format `sb_…` publishable key the run will stop at the parity gate
-(exit 3) with the remedy in the message; check the prefix first:
-`sed -n 's/^SUPABASE_KEY=\(...\).*/\1/p' .env` prints only the first three
-characters (`eyJ` = will proceed, `sb_` = will stop — swap in the legacy
-`eyJ…` anon key for the staging project). No agent run can read the prefix
-itself: `.env` is mechanically denied to agents.
+**A. Run `node scripts/verify-schema.mjs` against staging** — still the
+only thing that makes "phase74/75 applied" official; their two groups have
+never run. NEW since tonight: the parity gate is format-aware — a
+new-format `sb_…` publishable key in `.env` no longer stops the run (it
+prints "key format carries no ref; URL ref is authoritative" and
+continues); only a key in neither recognized format exits 3. The old
+"swap in the legacy eyJ key first" instruction is obsolete.
 
-**B. The next TestFlight build will fail its own gate** (unchanged from
-Stage 4A): the EAS `preview` environment's `SUPABASE_KEY` is a new-format
-publishable key (`sb_pu…`); `refFromJwt` cannot resolve it, so
-`evaluateGate` fails closed. Replace with the legacy `eyJ…` anon key -
-**production's**, because the `testflight` profile selects the `preview`
-environment and `EXPECTED_REF.testflight` is the production ref. The
-related verify-schema silent-degradation noted here previously was FIXED in
-4D-B — it now fails closed the same way.
+**B. TestFlight retry is now possible WITHOUT swapping keys.** The EAS
+gate derives the ref from SUPABASE_URL; the `preview` environment's
+existing `sb_pu…` publishable key passes the format check. Run one
+TestFlight build to confirm the gate goes green end-to-end.
 
-**C. "preview" names two different things.** `EXPECTED_REF` maps
-`preview → STAGING_REF`, but the EAS **environment** named `preview` holds
-production credentials and is what the `testflight` profile selects.
-Nothing is broken; the docblock on `EXPECTED_REF` explains.
+**C. "preview" still names two different things** (EAS environment holding
+production credentials vs. the unreachable EXPECTED_REF row). Nothing is
+broken; the docblock on EXPECTED_REF explains. Unchanged.
 
 **D. `EXPO_PUBLIC_PAYMENTS_MODE` governs whether payments run.** For
 payments on a release build set it to `sandbox` in `.env` and restart Metro
@@ -225,46 +147,45 @@ payments on a release build set it to `sandbox` in `.env` and restart Metro
 for single-transaction migrations is "Success. No rows returned." plus a
 green verify-schema; phase74/75 each end with a visible-acceptance SELECT.
 
-**F. Device-test backlog.** Still pending from 4D-1a/4D-1b and 4D-3 (see the
-2026-08-18 4D-3 HANDOFF in git history for the full earlier list): worker
-cold start, worker search field, cross-mode bid-notification prompt, four
-customer tabs + [ + ] sheet, My Jobs buckets, the 4D-3 post-flow aids,
-Compare Bids ordering, Saved & past workers, bid chips, "Book at listed
-price", Flat price / Ask me, completeness meter. **New from this run — no
-offline test can confirm:**
-- Map (worker): pins cluster/split while pinch-zooming; pin tap opens the
-  sheet; a sheet card opens JobDetail and Back returns to the map; the pin
-  badge renders its count on FIRST render (tracksViewChanges=false capture);
-  customer mode still shows the glow cells and CellJobs drill-down.
-- Distance chips: selection survives an app kill (AsyncStorage); the map
-  filters pins once location resolves; "Location is off" notes appear when
-  permission is denied; nearby's title follows the chip; the same selection
-  appears on both surfaces after remount.
-- Cards: distance and arrival-window rows appear on radius surfaces and the
-  map sheet; no distance row on the plain feed; no-photo jobs render the
-  category tile.
-- Detail: description sits above the fold on a real device with a 3-photo
-  hero; match checkmarks appear/disappear with profile categories, radius
-  and a listed flat price; none render as ✗.
-- Hero card: a profile with zero reviews shows NO rating row and no
-  placeholder; a deleted user's profile shows history but no offer/book/
-  save controls; "New worker" appears only for a known sub-3 count with
-  null on-time.
-- Batch A bar: flip through every screen — nothing visibly changed.
+**F. Location-CHECK migration (from the P0).** Before authoring it: run the
+data inspection named at the top of this file against staging; scrub or
+accept any coordinate-shaped `jobs.location` rows; then a numbered phase
+adds the CHECK. The client already refuses and masks, so this is
+defense-in-depth, not urgent-first.
 
-**G. Unlock decision — WelcomeScreen's "Verified workers" line.** With the
-badge removed everywhere else, locked screen 02 is the only remaining
-user-visible verification claim. Removing or rewording it requires
-unlocking that screen; the 4D-B suite's allow-list names it so the
-exception stays visible.
+**G. Locked patches A10-A12 (docs/LOCKED_FILE_PATCHES.md).** A12 is new
+tonight: WelcomeScreen "Verified workers" → "Real customer reviews",
+"Protected payment" → "Clear upfront pricing" — both current claims are
+false under the shipped product and Terms. Should land before any external
+beta. (A12 supersedes the old standing item about the WelcomeScreen
+verification line.)
 
-**H. LOCKED_FILE_PATCHES grew A10 + A11 (4D-3.5).** A10 adds the auth-surface
-token homes to READ-ONLY lib/authTheme.ts (then three one-line unlocked
-call-site migrations); A11 lists the locked screens' remaining colour
-literals with exact replacements for the T4 unlock/theming session.
+**H. PRIVACY_VERSION decision.** lib/legal/privacyPolicy.ts changed
+substantively tonight (three factual corrections). Its header says a
+substance change should bump PRIVACY_VERSION in lib/legal/index.ts so
+users re-accept. Not bumped autonomously — decide whether the corrected
+WORKING DRAFT warrants re-acceptance now or at the counsel-reviewed
+version.
 
-**I. 4D-2 and 4E are DONE (this run); 4D-4 is the next dispatch** — dark
-resolution (Appearance + stored preference + setting UI), dark map style
-(T2), dark brand assets (T3), `userInterfaceStyle: "automatic"` (T1, native
-build), and the both-themes full-screen sweep, per
-`docs/audits/STAGE4D_PLAN.md`.
+**I. Device-test backlog.** Everything from the 2026-08-18 4D HANDOFF list
+(see git history for the full text) remains, plus new from tonight:
+- ClientJobDetail bid list: with >1 bid, no chip is selected by default and
+  the order is rating → price → earliest; "Lowest price" and "Highest
+  rated" chips select and re-sort; NO "Best value" badge appears anywhere.
+- Post flow: with airplane mode (geocode dead), "Use my current location"
+  keeps typed text, saves coords, and asks for an area name; a job cannot
+  be posted with a coordinate-shaped location string typed by hand (the
+  written refusal appears).
+- Price guidance step reads "Suggested starting range: …".
+- Profile → Legal → Privacy Policy shows the corrected §7 (Delete Account
+  path, media-retention honesty).
+
+**J. `node --test` needs Node with type-stripping** (the suite imports .ts
+directly) — the environment already satisfies this; noting it because
+tests/projections.test.mjs and tests/locationPrivacy.test.mjs added more
+direct-import surface.
+
+**K. 4D-4 remains the next feature dispatch** — dark resolution
+(Appearance + stored preference + setting UI), dark map style (T2), dark
+brand assets (T3), `userInterfaceStyle: "automatic"` (T1, native build),
+and the both-themes full-screen sweep, per `docs/audits/STAGE4D_PLAN.md`.
