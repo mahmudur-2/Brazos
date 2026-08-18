@@ -67,6 +67,35 @@ test('an unresolvable key ref is a PROBLEM, not a skip', async () => {
   assert.match(problems[0], /cannot be proven/);
 });
 
+test('a recognized publishable key continues — the URL ref is authoritative', async () => {
+  const { envParityProblems } = await parityModule;
+
+  // No ref to compare is BY DESIGN for this format: not a parity failure.
+  assert.deepEqual(
+    envParityProblems({
+      appRef: 'stagingref',
+      keyRef: null,
+      keyIsPublishable: true,
+      toolingRef: 'stagingref',
+    }),
+    []
+  );
+
+  // …and the running script prints the exact URL-authoritative note.
+  const src = await read('scripts/verify-schema.mjs');
+  assert.match(src, /key format carries no ref; URL ref is authoritative/);
+
+  // A publishable key does not excuse a broken URL.
+  const broken = envParityProblems({
+    appRef: null,
+    keyRef: null,
+    keyIsPublishable: true,
+    toolingRef: null,
+  });
+  assert.equal(broken.length, 1);
+  assert.match(broken[0], /SUPABASE_URL/);
+});
+
 test('a missing tooling ref still warns rather than fails', async () => {
   const { envParityProblems } = await parityModule;
 
@@ -87,15 +116,17 @@ test('the inline gate actually consumes the extracted decision', async () => {
   // The extraction must not be decorative: the running gate builds its
   // problem list from the exported function, and no inline skip-shaped key
   // comparison survives.
-  assert.match(src, /const problems = envParityProblems\(\{ appRef, keyRef, toolingRef \}\);/);
+  assert.match(src, /const problems = envParityProblems\(\{\s*appRef,\s*keyRef,\s*keyIsPublishable: kind === 'publishable',\s*toolingRef,\s*\}\);/);
   assert.doesNotMatch(src, /if \(keyRef && appRef && keyRef !== appRef\)/);
 
-  // The parsers stay the shared implementation — refFromJwt is untouched and
-  // still imported from supabase-ref.mjs (the EAS pre-install gate shares it).
+  // The parsers stay the shared implementation — refFromJwt and the keyKind
+  // classifier both come from supabase-ref.mjs (the EAS pre-install gate
+  // shares them, so the two gates cannot disagree on what a key format is).
   assert.match(
     src,
-    /import \{ refFromRestUrl, refFromPgUrl, refFromJwt \} from '\.\/supabase-ref\.mjs';/
+    /import \{ keyKind, refFromRestUrl, refFromPgUrl, refFromJwt \} from '\.\/supabase-ref\.mjs';/
   );
   const refs = await read('scripts/supabase-ref.mjs');
   assert.match(refs, /export function refFromJwt\(k\) \{/);
+  assert.match(refs, /export function keyKind\(k\) \{/);
 });

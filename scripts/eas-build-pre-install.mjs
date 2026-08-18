@@ -17,20 +17,29 @@
  *   - EAS_BUILD_PROFILE unset                  → "not an EAS build"
  *   - profile not in EXPECTED_REF              → "unknown profile"
  *   - SUPABASE_URL / SUPABASE_KEY absent       → named absence
- *   - a source that parses to no project ref   → named parse failure
+ *   - a ref-bearing source that parses to no
+ *     project ref                              → named parse failure
  *   - sources disagreeing, or any source not equal to the profile's expected
  *     ref                                      → named, listing every ref found
- * Sources checked: the URL env var, the key (legacy JWT keys embed the ref;
- * an sb_publishable_… key resolves to nothing and fails closed), and every
- * dotenv-style file react-native-dotenv could see in the build directory —
- * none should exist on an EAS worker, but a local runner (`eas build
+ *   - a key that is neither a legacy eyJ… JWT nor a new-format publishable
+ *     key (sb_secret_… included)               → named refusal
+ *
+ * THE URL IS THE AUTHORITATIVE REF SOURCE: refFromRestUrl(SUPABASE_URL) must
+ * resolve and equal the profile's expected ref, or the build fails. Key
+ * handling follows its format (keyKind in supabase-ref.mjs): a legacy eyJ…
+ * key embeds the ref and is decoded and cross-checked; a new-format
+ * sb_publishable_… / sb_pu_… key carries NO ref by design and is accepted as
+ * a format — the app's own live control probe is what verifies key/project
+ * pairing at runtime; anything else fails closed. Every dotenv-style file
+ * react-native-dotenv could see in the build directory is checked the same
+ * way — none should exist on an EAS worker, but a local runner (`eas build
  * --local`) has the developer's .env in view and it must agree too.
  * Refs only are ever compared and printed — never a URL or key value.
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { refFromRestUrl, refFromJwt } from './supabase-ref.mjs';
+import { keyKind, refFromRestUrl, refFromJwt } from './supabase-ref.mjs';
 
 const STAGING_REF = 'zzkumxcjtbqoselzptig';
 
@@ -123,10 +132,13 @@ export function loadEnvFiles(dir, env = {}) {
 
 /**
  * Pure fail-closed verdict over an environment plus the env files visible to
- * the build. Every source that can carry a project ref must resolve, agree
- * with every other source, and equal the profile's expected ref; an unset or
- * unknown profile, an absent variable, an unreadable file or an unparseable
- * value is a named failure. Returns { ok, profile, expected, sources,
+ * the build. The URL is the authoritative ref source and must resolve and
+ * equal the profile's expected ref. A key contributes a ref only when it is
+ * a legacy JWT (decoded and cross-checked); a new-format publishable key is
+ * accepted as a format and recorded in `notes` (the live control probe
+ * verifies key/project pairing); any other key format is a named failure.
+ * An unset or unknown profile, an absent variable, or an unreadable file is
+ * a named failure. Returns { ok, profile, expected, sources, notes,
  * problems } — refs only, never a URL or key value.
  */
 export function evaluateGate(env, envFiles = []) {
@@ -137,6 +149,7 @@ export function evaluateGate(env, envFiles = []) {
       profile: null,
       expected: null,
       sources: [],
+      notes: [],
       problems: ['not an EAS build: EAS_BUILD_PROFILE is unset'],
     };
   }
@@ -148,12 +161,33 @@ export function evaluateGate(env, envFiles = []) {
       profile,
       expected: null,
       sources: [],
+      notes: [],
       problems: [`unknown profile "${profile}"`],
     };
   }
   const expected = EXPECTED_REF[profile];
   const problems = [];
   const sources = [];
+  const notes = [];
+
+  // A key source contributes by format: legacy JWTs carry the ref and join
+  // `sources` for the resolve/agree/expected checks; publishable keys carry
+  // none by design and are noted, not failed; anything else is refused.
+  function addKeySource(name, key) {
+    const kind = keyKind(key);
+    if (kind === 'legacy-jwt') {
+      sources.push({ name, ref: refFromJwt(key) });
+    } else if (kind === 'publishable') {
+      notes.push(
+        `${name} is a new-format publishable key (no embedded ref); the URL ref is ` +
+          'authoritative and the live control probe verifies key/project pairing'
+      );
+    } else {
+      problems.push(
+        `${name} is neither a legacy eyJ… anon key nor an sb_ publishable key — refused`
+      );
+    }
+  }
 
   if (!env.SUPABASE_URL) {
     problems.push('SUPABASE_URL is absent from the build environment');
@@ -163,7 +197,7 @@ export function evaluateGate(env, envFiles = []) {
   if (!env.SUPABASE_KEY) {
     problems.push('SUPABASE_KEY is absent from the build environment');
   } else {
-    sources.push({ name: 'env:SUPABASE_KEY', ref: refFromJwt(env.SUPABASE_KEY) });
+    addKeySource('env:SUPABASE_KEY', env.SUPABASE_KEY);
   }
 
   for (const file of envFiles) {
@@ -179,7 +213,7 @@ export function evaluateGate(env, envFiles = []) {
       sources.push({ name: `${file.name}:SUPABASE_URL`, ref: refFromRestUrl(file.vars.SUPABASE_URL) });
     }
     if (file.vars.SUPABASE_KEY !== undefined) {
-      sources.push({ name: `${file.name}:SUPABASE_KEY`, ref: refFromJwt(file.vars.SUPABASE_KEY) });
+      addKeySource(`${file.name}:SUPABASE_KEY`, file.vars.SUPABASE_KEY);
     }
   }
 
@@ -195,7 +229,7 @@ export function evaluateGate(env, envFiles = []) {
     problems.push(`project refs disagree: ${distinct.join(' vs ')}`);
   }
 
-  return { ok: problems.length === 0, profile, expected, sources, problems };
+  return { ok: problems.length === 0, profile, expected, sources, notes, problems };
 }
 
 // ---- CLI — what `npm run eas-build-pre-install` actually executes ----------
@@ -217,6 +251,9 @@ if (isMain) {
   );
   for (const source of verdict.sources) {
     console.log(`  ${source.name} → ${source.ref ?? 'UNRESOLVED'}`);
+  }
+  for (const note of verdict.notes) {
+    console.log(`  note: ${note}`);
   }
   if (!verdict.ok) {
     console.error(`BUILD GATE FAILED: ${verdict.problems.join('; ')}`);

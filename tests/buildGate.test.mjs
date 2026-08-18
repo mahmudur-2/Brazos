@@ -22,9 +22,13 @@ const GATE = fileURLToPath(new URL('../scripts/eas-build-pre-install.mjs', impor
 const STAGING = EXPECTED_REF.development;
 const PRODUCTION = EXPECTED_REF.production;
 
-// A legacy-shaped Supabase key is a JWT whose payload carries { ref }.
+// A legacy-shaped Supabase key is a JWT whose payload carries { ref }. The
+// header must be real base64 JSON so the fixture starts with eyJ like every
+// actual legacy key — the gate classifies key format by that prefix.
 const jwtFor = (ref) =>
-  `header.${Buffer.from(JSON.stringify({ ref })).toString('base64')}.signature`;
+  `${Buffer.from(JSON.stringify({ alg: 'HS256' })).toString('base64')}.${Buffer.from(
+    JSON.stringify({ ref })
+  ).toString('base64')}.signature`;
 const urlFor = (ref) => `https://${ref}.supabase.co`;
 
 const stagingEnv = () => ({
@@ -127,13 +131,38 @@ test('a visible .env file disagreeing with the build env fails closed', () => {
   assertFailure(result, '.env:SUPABASE_URL', 'project refs disagree');
 });
 
-test('a key with no embedded ref fails closed instead of passing silently', () => {
+test('a new-format publishable key with the matching URL passes — the URL ref is authoritative', () => {
   const result = runGate({
     EAS_BUILD_PROFILE: 'development',
     SUPABASE_URL: urlFor(STAGING),
-    SUPABASE_KEY: 'sb_publishable_not_a_jwt',
+    SUPABASE_KEY: 'sb_publishable_abc123',
   });
-  assertFailure(result, 'env:SUPABASE_KEY does not resolve');
+  assert.equal(result.status, 0, `stdout: ${result.stdout}\nstderr: ${result.stderr}`);
+  assert.match(result.stdout, /gate: OK — "development" builds against /);
+  assert.match(result.stdout, /new-format publishable key/);
+  assert.match(result.stdout, /live control probe/);
+  // Refs only — the key value itself is never printed.
+  assert.ok(!result.stdout.includes('sb_publishable_abc123'), 'gate printed the key');
+});
+
+test('a publishable key cannot rescue a wrong-project URL — the URL check still fails closed', () => {
+  const result = runGate({
+    EAS_BUILD_PROFILE: 'development',
+    SUPABASE_URL: urlFor(PRODUCTION),
+    SUPABASE_KEY: 'sb_publishable_abc123',
+  });
+  assertFailure(result, `resolves to ${PRODUCTION}, expected ${STAGING}`);
+});
+
+test('a key in neither format fails closed — sb_secret_ never ships in a client bundle', () => {
+  for (const key of ['sb_secret_abc123', 'not-a-key-at-all']) {
+    const result = runGate({
+      EAS_BUILD_PROFILE: 'development',
+      SUPABASE_URL: urlFor(STAGING),
+      SUPABASE_KEY: key,
+    });
+    assertFailure(result, 'env:SUPABASE_KEY is neither a legacy');
+  }
 });
 
 test('every profile in the expected-ref map is one of the four known profiles', () => {

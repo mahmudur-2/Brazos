@@ -18,7 +18,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { refFromRestUrl, refFromPgUrl, refFromJwt } from './supabase-ref.mjs';
+import { keyKind, refFromRestUrl, refFromPgUrl, refFromJwt } from './supabase-ref.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -55,25 +55,33 @@ const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 
 /**
  * The parity DECISION, pure and exported so the test suite can execute it
- * without touching .env or a live database: given the three resolved refs
- * (null = unresolvable/absent), return every reason the gate must refuse.
+ * without touching .env or a live database: given the resolved refs (null =
+ * unresolvable/absent) and the key's format, return every reason the gate
+ * must refuse.
  *
- * An unresolvable key ref is a PROBLEM, never a skip. A new-format `sb_…`
- * publishable key has no JWT payload, so refFromJwt() returns null — and the
- * old inline `if (keyRef && …)` silently skipped the comparison and printed
- * "parity: OK" while having proven nothing. A missing toolingRef stays a
- * warning (the caller prints it), not a problem: the app-side comparison is
- * still meaningful without it.
+ * Key handling follows format (keyKind in supabase-ref.mjs), matching the
+ * EAS build gate: a legacy eyJ… key embeds the ref and MUST agree with the
+ * URL; a new-format publishable key carries no ref BY DESIGN — that is not
+ * a parity failure, the URL ref is authoritative and the live probes below
+ * are what verify the key actually belongs to that project; any other
+ * unresolvable key (corrupt JWT, sb_secret_…, garbage) is a PROBLEM, never
+ * a skip — the old inline `if (keyRef && …)` silently skipped the
+ * comparison and printed "parity: OK" while having proven nothing. A
+ * missing toolingRef stays a warning (the caller prints it), not a problem:
+ * the app-side comparison is still meaningful without it.
  */
-export function envParityProblems({ appRef, keyRef, toolingRef }) {
+export function envParityProblems({ appRef, keyRef, keyIsPublishable = false, toolingRef }) {
   const problems = [];
   if (!appRef) problems.push('SUPABASE_URL in .env does not look like a Supabase project URL');
   if (!keyRef) {
-    problems.push(
-      'SUPABASE_KEY carries no readable project ref, so key-vs-URL parity cannot be proven. ' +
-        'Likely cause: a new-format sb_… publishable key, which has no JWT payload. ' +
-        'Remedy: use the legacy eyJ… anon key for the project the .env SUPABASE_URL points at.'
-    );
+    if (!keyIsPublishable) {
+      problems.push(
+        'SUPABASE_KEY carries no readable project ref and is not a recognized new-format ' +
+          'publishable key, so key-vs-URL parity cannot be proven. Remedy: use the legacy ' +
+          'eyJ… anon key or the sb_publishable_… key for the project the .env SUPABASE_URL ' +
+          'points at.'
+      );
+    }
   } else if (appRef && keyRef !== appRef) {
     problems.push(`the anon key belongs to ${keyRef} but SUPABASE_URL points at ${appRef}`);
   }
@@ -88,15 +96,26 @@ export function envParityProblems({ appRef, keyRef, toolingRef }) {
 
 {
   const appRef = refFromRestUrl(BASE);
-  const keyRef = refFromJwt(KEY);
+  const kind = keyKind(KEY);
+  const keyRef = kind === 'legacy-jwt' ? refFromJwt(KEY) : null;
   const toolingRef = refFromPgUrl(process.env.SUPABASE_DB_URL_STAGING);
 
   console.log('env parity');
   console.log(`  app .env SUPABASE_URL ref : ${appRef ?? 'UNRESOLVED'}`);
-  console.log(`  app .env SUPABASE_KEY ref : ${keyRef ?? 'UNRESOLVED'}`);
+  console.log(
+    `  app .env SUPABASE_KEY ref : ${keyRef ?? (kind === 'publishable' ? 'NONE (publishable key)' : 'UNRESOLVED')}`
+  );
   console.log(`  SUPABASE_DB_URL_STAGING   : ${toolingRef ?? 'NOT SET'}`);
+  if (kind === 'publishable') {
+    console.log('  note: key format carries no ref; URL ref is authoritative');
+  }
 
-  const problems = envParityProblems({ appRef, keyRef, toolingRef });
+  const problems = envParityProblems({
+    appRef,
+    keyRef,
+    keyIsPublishable: kind === 'publishable',
+    toolingRef,
+  });
   if (!toolingRef) {
     console.log('  WARNING: SUPABASE_DB_URL_STAGING is not set in this shell, so the');
     console.log('           app-vs-tooling comparison could not be made. The SQL proofs');

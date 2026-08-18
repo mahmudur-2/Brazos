@@ -34,3 +34,22 @@ export function refFromJwt(k) {
     return null;
   }
 }
+
+/**
+ * SUPABASE_KEY format classification — one rule for both gates.
+ *
+ *   'legacy-jwt'  — eyJ… anon key; its payload embeds the project ref, so
+ *                   the gates decode and cross-check it against the URL.
+ *   'publishable' — new-format sb_publishable_… / sb_pu_… key; carries NO
+ *                   ref BY DESIGN, so the REST URL is the authoritative ref
+ *                   source and the live control probe is what verifies the
+ *                   key actually belongs to that project.
+ *   'unknown'     — anything else, including sb_secret_… (a secret key must
+ *                   never ship in a client bundle). Both gates fail closed.
+ */
+export function keyKind(k) {
+  const s = String(k ?? '');
+  if (/^eyJ/.test(s)) return 'legacy-jwt';
+  if (/^sb_publishable_/.test(s) || /^sb_pu_/.test(s)) return 'publishable';
+  return 'unknown';
+}
