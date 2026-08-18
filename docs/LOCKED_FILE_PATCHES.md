@@ -425,3 +425,33 @@ Deliberately NOT queued (brand-artwork tints, per the same rule that left
 hairlines the unlock designer should resolve against the token set).
 
 **Release blocker:** **NO.**
+
+### A12 · WelcomeScreen — two false claim badges (2026-08-18 overnight audit)
+
+Operator-applied (locked screen 02). Both floating badges state things the
+shipped product does not do: the verification badge and every "verified"
+claim left the product in 4D-B (43d1e7f) except this locked line, and the
+Terms state Brazos does not currently process payments, so "Protected
+payment" is false under the shipped product and the Terms alike. Exact
+replacements, by line as of this run:
+
+```diff
+ screens/WelcomeScreen.tsx:158
+-          <Text style={styles.badgeText}>Verified workers</Text>
++          <Text style={styles.badgeText}>Real customer reviews</Text>
+ screens/WelcomeScreen.tsx:170
+-          <Text style={styles.badgeText}>Protected payment</Text>
++          <Text style={styles.badgeText}>Clear upfront pricing</Text>
+```
+
+Icons may stay (shield-checkmark reads fine over reviews; lock-closed reads
+fine over pricing) or be swapped at the operator's discretion — the copy is
+the defect, not the glyphs. Supersedes HANDOFF's standing item G ("Unlock
+decision — WelcomeScreen's Verified workers line") by giving it the exact
+patch.
+
+**Risk unpatched:** a first-run surface makes a trust claim (verification)
+and a payment claim (protection) the product cannot back — App Review and
+user-trust exposure, not a functional break.
+
+**Release blocker:** **NO**, but it should land before any external beta.

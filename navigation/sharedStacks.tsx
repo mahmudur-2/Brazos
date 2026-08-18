@@ -55,14 +55,13 @@ import { ComponentCatalog } from '../dev-tools/ComponentCatalog';
  * CustomerRoot.tsx and WorkerRoot.tsx. That is where the two trees differ, and
  * it is the only place they differ.
  *
- * KNOWN, DOCUMENTED GAP (deferred to Phase 8, recorded in BRAZOS_BUILD_STATE.md):
- * `JobDetail` — the worker bid screen — is registered in the Map and MyJobs
- * stacks, so a customer drilling into a map cell can still reach a worker
- * surface. Closing that needs the customer-safe `MarketJobPreview` route, which
- * §E/§J assign to Phase 8's discovery work; building it here would be a new
- * feature screen, which Phase 2 explicitly excludes. Phase 2 closes the two
- * leaks it owns — Customer Home's "View all" and its job cards — and leaves
- * this one flagged rather than silently half-fixed.
+ * The old known gap here — `JobDetail` (the worker bid screen) being
+ * registered in the shared Map and MyJobs stacks, reachable by a customer
+ * drilling into a map cell — is CLOSED, at the screen rather than at these
+ * registrations: JobDetailScreen delegates customer mode on someone else's
+ * job to the customer-safe `MarketJobPreview` (Phase 8, §10), so no route
+ * through these stacks can render EST. PAY or a bid CTA to a customer.
+ * tests/discovery.test.mjs pins the delegation.
  */
 
 const MyJobsStack = createNativeStackNavigator<MyJobsStackParamList>();

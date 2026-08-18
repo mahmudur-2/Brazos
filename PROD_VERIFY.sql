@@ -1,3 +1,10 @@
+-- ============================================================
+-- SUPERSEDED 2026-08-18 — DO NOT APPLY. Covers phases 51-58 only;
+-- phases 59-75 are absent. The production path is a rebuild from a
+-- staging schema dump (standing decision, BRAZOS_MASTER_PLAN.md).
+-- Kept for history only.
+-- ============================================================
+
 -- PROD_VERIFY.sql — READ-ONLY sentinel check for the phase51-58 apply.
 -- One row per sentinel that scripts/verify-schema.mjs asserts.
 -- PASS requires BOTH: the zero-argument function exists in schema public,

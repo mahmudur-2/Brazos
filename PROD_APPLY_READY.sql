@@ -1,4 +1,11 @@
 -- ============================================================
+-- SUPERSEDED 2026-08-18 — DO NOT APPLY. Covers phases 51-58 only;
+-- phases 59-75 are absent. The production path is a rebuild from a
+-- staging schema dump (standing decision, BRAZOS_MASTER_PLAN.md).
+-- Kept for history only.
+-- ============================================================
+
+-- ============================================================
 -- PROD_APPLY step: supabase/phase51_active_work_lifecycle.sql
 -- ============================================================
 

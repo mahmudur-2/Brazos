@@ -17,8 +17,9 @@ proven by lifecycle-proof + the phase proofs; rendering is not).
 
 ## 2 · Compare & bid surfaces (C)
 - "Open with two bids to compare" → two pending bids ($38 / $42), Compare
-  works, Bid Detail shows "Message Wren first" (pre-hire chat opens the
-  pair thread). **[device-only]**
+  works. Bid Detail shows NO message entry — phase66 locks free-form
+  messaging until an offer is accepted and a worker is assigned; pre-hire
+  negotiation is the offer/counter cards only. **[device-only]**
 
 ## 3 · Lifecycle states (C)
 - "Confirmed — funds held, before arrival": payment card says held/protected;

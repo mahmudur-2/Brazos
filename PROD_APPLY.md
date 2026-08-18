@@ -1,7 +1,14 @@
+ > **SUPERSEDED 2026-08-18 — DO NOT APPLY. Covers phases 51-58 only; phases
+> 59-75 are absent. The production path is a rebuild from a staging schema
+> dump (standing decision, BRAZOS_MASTER_PLAN.md). Kept for history only.**
+
 # PROD_APPLY — production migration queue (human-executed; NEVER by an agent)
 
-Source of truth: BRAZOS_BUILD_STATE.md. Everything below was applied to
+Everything below was applied to
 staging in this order and verified green there; production has none of it.
+(The "Source of truth: BRAZOS_BUILD_STATE.md" line this file used to open
+with is gone — that file is retired; docs/README.md classifies what owns
+what now.)
 Apply strictly in order; after EVERY step run
 `node scripts/verify-schema.mjs` against production `.env` and stop on
 anything but green. All eight migrations are idempotent (safe to paste

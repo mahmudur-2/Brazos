@@ -89,11 +89,6 @@ Six more leave with Stage 4C — phase74 and phase75, applied to staging on
   Revoking SELECT would make the harness report those objects missing.
   Closing it means rebuilding verify-schema's existence probe on a SECURITY
   DEFINER introspection function first.
-- **Client-side money ceiling mirror.** *Named cause:* the $100,000 bound is
-  enforced only in the database, so a user who exceeds it sees a raw
-  constraint violation rather than a written message. Mirror it in `lib/`
-  alongside `MAX_COUNTERS_PER_SIDE` (`lib/offers.ts`) when the redesign
-  touches those forms.
 - **Retire the RPC-missing shims.** `lib/jobStatusCompatibility.ts` and
   `isMissingRpc()` in `lib/profiles.ts` exist only for deployments predating
   phase30/phase31. Retire them once every environment the app runs against is
@@ -101,25 +96,18 @@ Six more leave with Stage 4C — phase74 and phase75, applied to staging on
 - **Remove the deprecated database functions.** `accept_bid()` and
   `respond_job_request()` have zero app callers and are scheduled for removal
   in a numbered migration.
-- **Customer-safe market preview route.** `JobDetail` is registered in the Map
-  and MyJobs stacks, so a customer drilling into a map cell can still reach a
-  worker surface. Closing it needs a new customer-facing preview screen.
-- **The next TestFlight build fails its own gate — replace the EAS `preview`
-  environment's `SUPABASE_KEY` with a legacy `eyJ…` anon key.** *Named cause:*
-  the value is a new-format publishable key (`sb_pu…`), and `refFromJwt`
-  (`scripts/supabase-ref.mjs`) returns null for it because there is no JWT
-  payload to decode. `evaluateGate` then reports `env:SUPABASE_KEY does not
-  resolve to a Supabase project ref` and exits 1 **before dependencies
-  install**. The gate is working exactly as designed — fail closed on anything
-  it cannot prove — so this is a configuration fix, not a code fix, and it is
-  an operator action outside any run. It must be the legacy anon key for the
-  **production** project, because `EXPECTED_REF.testflight` is `PRODUCTION_REF`.
-  *Second-order:* `scripts/verify-schema.mjs` shares the same `refFromJwt`, and
-  its parity check only compares when the key ref is truthy
-  (`if (keyRef && appRef && keyRef !== appRef)`). If staging ever moves to a
-  new-format key, that check degrades **silently** to `UNRESOLVED` and still
-  prints `parity: OK` rather than failing. Worth making it fail closed the way
-  the EAS gate does.
+- **Confirm a TestFlight build passes the URL-derived gate with the
+  new-format key.** The gate rewrite (2026-08-18) made
+  `refFromRestUrl(SUPABASE_URL)` the authoritative ref source: a legacy
+  `eyJ…` key is still decoded and cross-checked, a new-format
+  `sb_publishable_…` key is accepted as a format (the live control probe
+  verifies key/project pairing), and anything else — `sb_secret_…`
+  included — fails closed. The old operator instruction to paste
+  production's legacy key into the EAS `preview` environment is OBSOLETE;
+  what remains is running one TestFlight build to see the gate pass with
+  the environment's existing `sb_pu…` key. `scripts/verify-schema.mjs`
+  carries the matching format-aware parity (publishable continues with a
+  printed URL-authoritative note; any other unresolvable key still exits 3).
 - **"preview" means two different things across `eas.json` and the build
   gate.** *Named cause:* `EXPECTED_REF` (`scripts/eas-build-pre-install.mjs`)
   maps `preview → STAGING_REF`, but `eas.json` declares no `preview` BUILD
@@ -208,8 +196,10 @@ Each item cites `COMPLETION_REVIEW_2026-08-15.md` (CR) or
 - **Retire `current_user_is_banned()`.** It fails OPEN on a missing profile row
   and no function body calls it; its only caller is `lib/profiles.ts:132`.
   Removal needs its own migration plus that client sweep.
-- **`42P17` RLS recursion on job delete**, and a stale map pin after an address
-  edit.
+- A stale map pin after an address edit. (The `42P17` RLS recursion on job
+  delete that used to share this line was fixed by
+  `supabase/phase60_jobs_delete_policy_recursion.sql`, applied and verified
+  on staging 2026-08-16.)
 - **Worker hero-card parity with the design reference** — never built, not a
   regression.
 

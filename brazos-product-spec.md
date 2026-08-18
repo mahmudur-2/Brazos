@@ -1,3 +1,6 @@
+> **ARCHIVED PRODUCT VISION — aspirational, NOT current state. Implemented
+> truth lives in docs/architecture.md.**
+
 # BRAZOS — Product Specification
 
 *Local labor marketplace · bidding-based · bilingual-first · Brooklyn-launched*
