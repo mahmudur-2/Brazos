@@ -53,7 +53,6 @@ import type { Message } from '../lib/messages';
 type ListProps = {
   variant: 'list';
   offer: OfferWithWorker;
-  isBestValue?: boolean;
   canAccept: boolean;
   accepting?: boolean;
   disabled?: boolean;
@@ -119,7 +118,6 @@ export function OfferCard(props: OfferCardProps) {
 
 function OfferListCard({
   offer,
-  isBestValue = false,
   canAccept,
   accepting = false,
   disabled = false,
@@ -142,14 +140,7 @@ function OfferListCard({
   const canAcceptThisOffer = canAccept && offer.status === 'pending';
 
   return (
-    <Card palette={palette} style={[styles.card, isBestValue && styles.bestValueCard]}>
-      {isBestValue && (
-        <View style={styles.bestValueTag}>
-          <Ionicons name="sparkles" size={12} color={colors.emerald} />
-          <Text style={styles.bestValueText}>Best value</Text>
-        </View>
-      )}
-
+    <Card palette={palette} style={styles.card}>
       <View style={styles.headerRow}>
         <Pressable
           style={({ pressed }) => [styles.profileHit, pressed && styles.profilePressed]}
@@ -488,28 +479,6 @@ const styles = StyleSheet.create({
     borderRadius: radius.xl,
     borderColor: colors.mint2,
     padding: spacing.lg,
-  },
-  bestValueCard: {
-    borderColor: colors.emerald,
-    borderWidth: 2,
-  },
-  bestValueTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    alignSelf: 'flex-start',
-    backgroundColor: colors.mint,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.pill,
-    marginBottom: spacing.md,
-  },
-  bestValueText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: colors.emerald,
-    textTransform: 'uppercase',
-    letterSpacing: 0.7,
   },
   headerRow: {
     flexDirection: 'row',

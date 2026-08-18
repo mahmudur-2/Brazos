@@ -1,12 +1,14 @@
 /**
- * Compare Bids derivations (4D-3 §5) — pure and import-free so tests execute
- * them. The screen renders what these functions decide; it re-derives nothing.
+ * Bid-ordering derivations — pure and import-free so tests execute them.
+ * The screens render what these functions decide; they re-derive nothing.
  *
  * The ordering is DETERMINISTIC AND STATED (D5): rating desc, then price asc,
  * then earliest bid, with the offer id as a final total tiebreak so equal
  * rows cannot swap between renders. No blended score, no match language —
- * the blended "value" sort in lib/offers.ts stays only where D8 puts the
- * surface out of this run's scope (ClientJobDetailScreen).
+ * anywhere. This module is the SINGLE ordering source (operator decision
+ * 2026-08-18): the blended offerValueScore / "Best value" chip that lived in
+ * lib/offers.ts is deleted, and ClientJobDetailScreen consumes these rules
+ * exactly as CompareBidsScreen already did.
  */
 
 export type CompareWorker = {
@@ -34,29 +36,66 @@ export function knownRating(worker: CompareWorker): number | null {
   return count > 0 && avg != null ? avg : null;
 }
 
+/** Rating desc; unknown ratings sort LAST as a block (never interleaved by
+ *  a substituted zero). 0 when the ratings alone cannot separate the pair. */
+function byRatingDesc(a: CompareBid, b: CompareBid): number {
+  const ra = knownRating(a.worker);
+  const rb = knownRating(b.worker);
+  if (ra == null && rb == null) return 0;
+  if (ra == null) return 1;
+  if (rb == null) return -1;
+  return rb - ra;
+}
+
+/** The full §5.4 comparator: rating desc → amount asc → created asc → id. */
+function compareBidsDefault(a: CompareBid, b: CompareBid): number {
+  return (
+    byRatingDesc(a, b) ||
+    a.amount_cents - b.amount_cents ||
+    a.created_at.localeCompare(b.created_at) ||
+    a.id.localeCompare(b.id)
+  );
+}
+
 /**
  * §5.4 — rating_avg DESC, then amount ASC, then created_at ASC, then id.
- * Bids with no known rating sort LAST as a block (never interleaved by a
- * substituted zero) and tiebreak among themselves the same way.
+ * Bids with no known rating sort LAST as a block and tiebreak among
+ * themselves the same way. This is also the DEFAULT order everywhere bids
+ * are listed (no chip selected).
  */
 export function sortBidsDeterministic<T extends CompareBid>(bids: readonly T[]): T[] {
-  return [...bids].sort((a, b) => {
-    const ra = knownRating(a.worker);
-    const rb = knownRating(b.worker);
-    if (ra != null || rb != null) {
-      if (ra == null) return 1;
-      if (rb == null) return -1;
-      if (ra !== rb) return rb - ra;
-    }
-    if (a.amount_cents !== b.amount_cents) return a.amount_cents - b.amount_cents;
-    const byTime = a.created_at.localeCompare(b.created_at);
-    if (byTime !== 0) return byTime;
-    return a.id.localeCompare(b.id);
-  });
+  return [...bids].sort(compareBidsDefault);
 }
 
 /** The §5.4 rule, stated on screen exactly as implemented above. */
 export const BID_ORDER_RULE = 'Sorted by rating, then lowest price, then earliest bid.';
+
+// ---------------------------------------------------------------------------
+// Sort chips (operator decision 2026-08-18: one ordering rule, factual only)
+// ---------------------------------------------------------------------------
+
+export type BidSortChip = 'price' | 'rating';
+
+/** Exactly these two chips — the blended "Best value" chip is gone. */
+export const BID_SORT_CHIPS: { label: string; value: BidSortChip }[] = [
+  { label: 'Lowest price', value: 'price' },
+  { label: 'Highest rated', value: 'rating' },
+];
+
+/**
+ * The chip-aware order. No chip (null) = the default deterministic rule.
+ * "Highest rated" restates the default's leading key, so it is the same
+ * order made explicit. "Lowest price" leads with amount and keeps the full
+ * deterministic chain as its tiebreak, so equal rows can never swap between
+ * renders under any chip.
+ */
+export function sortBidsForChip<T extends CompareBid>(
+  bids: readonly T[],
+  chip: BidSortChip | null
+): T[] {
+  if (chip !== 'price') return sortBidsDeterministic(bids);
+  return [...bids].sort((a, b) => a.amount_cents - b.amount_cents || compareBidsDefault(a, b));
+}
 
 /**
  * §5.1 DEVIATION 2 — the only badge this surface may render. "HIGHEST RATED"

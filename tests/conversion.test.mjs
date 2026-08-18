@@ -334,6 +334,56 @@ test('§5.4 · the sort is total and stable: rating desc, price asc, time asc, i
   assert.deepEqual(order([t1, t2]), ['t1', 't2']);
 });
 
+test('§5.4 · chips: no chip = the default rule; price leads by amount; rating restates the default', async () => {
+  const { BID_SORT_CHIPS, sortBidsDeterministic, sortBidsForChip } = await compareBidsModule;
+
+  // Exactly two chips, exactly this copy — the blended "Best value" is gone.
+  assert.deepEqual(BID_SORT_CHIPS, [
+    { label: 'Lowest price', value: 'price' },
+    { label: 'Highest rated', value: 'rating' },
+  ]);
+
+  const a = bid('a', 7000, 4.5, 10, '2026-08-01T00:00:00Z');
+  const b = bid('b', 6000, 4.5, 3, '2026-08-02T00:00:00Z');
+  const d = bid('d', 5000, 4.9, 4, '2026-08-03T00:00:00Z');
+  const e = bid('e', 1000, null, 0, '2026-08-01T00:00:00Z');
+  const list = [a, b, d, e];
+
+  const ids = (result) => result.map((x) => x.id);
+
+  // No chip selected = the deterministic default, byte for byte.
+  assert.deepEqual(ids(sortBidsForChip(list, null)), ids(sortBidsDeterministic(list)));
+
+  // "Highest rated" is the default's leading key made explicit — same order.
+  assert.deepEqual(ids(sortBidsForChip(list, 'rating')), ids(sortBidsDeterministic(list)));
+
+  // "Lowest price" leads with amount; the unrated cheapest bid now leads.
+  assert.deepEqual(ids(sortBidsForChip(list, 'price')), ['e', 'd', 'b', 'a']);
+
+  // Price ties fall back to the SAME deterministic chain (rating desc first),
+  // so equal rows can never swap between renders under any chip.
+  const p1 = bid('p1', 4000, 4.8, 5, '2026-08-05T00:00:00Z');
+  const p2 = bid('p2', 4000, 3.0, 5, '2026-08-04T00:00:00Z');
+  assert.deepEqual(ids(sortBidsForChip([p2, p1], 'price')), ['p1', 'p2']);
+});
+
+test('§5.4 · ClientJobDetail consumes the one ordering source; the blended sort is fully gone [static]', async () => {
+  const detail = await read('screens/ClientJobDetailScreen.tsx');
+  assert.match(detail, /sortBidsForChip\(pendingBids, sort\)/);
+  assert.match(detail, /BID_SORT_CHIPS/);
+  assert.match(detail, /useState<BidSortChip \| null>\(null\)/, 'default = no chip = the stated rule');
+
+  // The deleted symbols exist NOWHERE in app code any more.
+  const offers = await read('lib/offers.ts');
+  for (const gone of ['offerValueScore', 'sortOffers(', 'bestValueOfferId', 'OFFER_SORT_OPTIONS']) {
+    assert.ok(!detail.includes(gone), `${gone} must not be referenced by ClientJobDetail`);
+    assert.ok(!stripComments(offers).includes(gone), `${gone} must be deleted from lib/offers.ts`);
+  }
+  const card = await read('components/OfferCard.tsx');
+  assert.ok(!card.includes('Best value'), 'the Best value badge left the card');
+  assert.ok(!card.includes('isBestValue'), 'the badge prop left the card');
+});
+
 test('§5.1 · HIGHEST RATED fails closed: ties, thin records, and unknowns kill it', async () => {
   const { highestRatedBadgeId } = await compareBidsModule;
 

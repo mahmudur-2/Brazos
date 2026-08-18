@@ -5,7 +5,10 @@ type Option<T extends string> = { label: string; value: T };
 
 type SegmentedControlProps<T extends string> = {
   options: Option<T>[];
-  value: T;
+  /** null = nothing selected — a caller whose default state is outside the
+   *  options (e.g. ClientJobDetail's stated default bid order) renders every
+   *  segment unselected until the user picks one. */
+  value: T | null;
   onChange: (value: T) => void;
   palette?: ColorPalette;
 };

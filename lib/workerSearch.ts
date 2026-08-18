@@ -379,9 +379,11 @@ export type WorkerMatch = {
 };
 
 // --- Scoring ---------------------------------------------------------------
-// Same conventions as offerValueScore() in lib/offers.ts: a worker with no
-// reputation data yet scores neutral, never zero, so a brand-new account is
-// not buried below one with a bad record. Weights sum to 1.
+// A worker with no reputation data yet scores neutral, never zero, so a
+// brand-new account is not buried below one with a bad record. Weights sum
+// to 1. (This SEARCH ranking is separate from bid ordering, which is the
+// factual lib/compareBids.ts rule — the old blended offerValueScore these
+// conventions once mirrored was deleted 2026-08-18.)
 
 function ratingScore(profile: Profile): number {
   const count = profile.rating_count ?? 0;

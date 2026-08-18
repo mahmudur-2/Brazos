@@ -48,14 +48,8 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
-import {
-  acceptOffer,
-  bestValueOfferId,
-  OFFER_SORT_OPTIONS,
-  sortOffers,
-  type OfferSort,
-  type OfferWithWorker,
-} from '../lib/offers';
+import { acceptOffer, type OfferWithWorker } from '../lib/offers';
+import { BID_SORT_CHIPS, sortBidsForChip, type BidSortChip } from '../lib/compareBids';
 import { jobStage } from '../lib/jobStage';
 import { deriveJobLifecycle } from '../lib/jobLifecycle';
 import {
@@ -87,7 +81,9 @@ export function ClientJobDetailScreen() {
 
   const { user } = useAuth();
   const { offers: bids, loading, error, refresh: refreshBids } = useJobOffers(job.id);
-  const [sort, setSort] = useState<OfferSort>('value');
+  // null = no chip selected = the stated deterministic default order
+  // (lib/compareBids.ts — the single ordering source).
+  const [sort, setSort] = useState<BidSortChip | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [pendingAccept, setPendingAccept] = useState<OfferWithWorker | null>(null);
@@ -189,7 +185,7 @@ export function ClientJobDetailScreen() {
     // React Navigation can retarget this retained route to another job. Modal,
     // viewer, sort, and payment state belong to the old job and must not follow.
     refreshRunRef.current += 1;
-    setSort('value');
+    setSort(null);
     setRefreshing(false);
     setPendingAccept(null);
     setViewerUri(null);
@@ -250,8 +246,7 @@ export function ClientJobDetailScreen() {
     };
   }, [user]);
 
-  const sortedBids = useMemo(() => sortOffers(pendingBids, sort), [pendingBids, sort]);
-  const bestId = useMemo(() => bestValueOfferId(pendingBids), [pendingBids]);
+  const sortedBids = useMemo(() => sortBidsForChip(pendingBids, sort), [pendingBids, sort]);
 
   async function onRefresh() {
     const runId = ++refreshRunRef.current;
@@ -583,7 +578,7 @@ export function ClientJobDetailScreen() {
               <Text style={styles.emptyText}>
                 {bids.length > 0
                   ? 'Previous bids were withdrawn or closed. New pending bids will appear here.'
-                  : 'When workers bid on this job, they’ll appear here ranked by value.'}
+                  : 'When workers bid on this job, they’ll appear here.'}
               </Text>
             </View>
           ) : (
@@ -608,7 +603,7 @@ export function ClientJobDetailScreen() {
               </View>
               {pendingBids.length > 1 && (
                 <SegmentedControl
-                  options={OFFER_SORT_OPTIONS}
+                  options={BID_SORT_CHIPS}
                   value={sort}
                   onChange={setSort}
                   palette={emeraldColors}
@@ -628,7 +623,6 @@ export function ClientJobDetailScreen() {
                       variant="list"
                       offer={bid}
                       palette={emeraldColors}
-                      isBestValue={bid.id === bestId && pendingBids.length > 1}
                       canAccept={canAccept}
                       accepting={acceptingId === bid.id}
                       disabled={acceptingId !== null && acceptingId !== bid.id}

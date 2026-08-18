@@ -619,66 +619,7 @@ export function countersRemaining(chain: Offer[], userId: string): number {
   return Math.max(0, MAX_COUNTERS_PER_SIDE - used);
 }
 
-// ---------------------------------------------------------------------------
-// Value score — ranks offers by a blend of price, rating, and completion rate,
-// so a pricier proven worker can outrank a cheaper unknown (price is weighted
-// but not dominant). Returns 0..1, higher is better.
-// ---------------------------------------------------------------------------
-
-export type OfferSort = 'value' | 'price' | 'rating';
-
-export const OFFER_SORT_OPTIONS: { label: string; value: OfferSort }[] = [
-  { label: 'Best value', value: 'value' },
-  { label: 'Lowest price', value: 'price' },
-  { label: 'Highest rated', value: 'rating' },
-];
-
-function ratingScore(worker: Profile | null): number {
-  if (!worker || !worker.rating_count || worker.rating_count === 0) return 0.6; // neutral for new workers
-  const avg = worker.rating_avg ?? 0;
-  return Math.max(0, Math.min(avg / 5, 1));
-}
-
-function completionScore(worker: Profile | null): number {
-  const rate = worker?.completion_rate;
-  if (rate == null) return 0.7; // baseline when reputation data is absent
-  const frac = rate <= 1 ? rate : rate / 100;
-  return Math.max(0, Math.min(frac, 1));
-}
-
-export function offerValueScore(offer: OfferWithWorker, minPriceCents: number): number {
-  const priceScore = offer.amount_cents > 0 ? minPriceCents / offer.amount_cents : 1; // cheapest = 1
-  return (
-    0.4 * ratingScore(offer.worker) +
-    0.34 * Math.max(0, Math.min(priceScore, 1)) +
-    0.26 * completionScore(offer.worker)
-  );
-}
-
-/** Return a new sorted array of offers for the given sort mode. */
-export function sortOffers(offers: OfferWithWorker[], mode: OfferSort): OfferWithWorker[] {
-  const minPrice = offers.reduce(
-    (min, o) => (o.amount_cents > 0 && o.amount_cents < min ? o.amount_cents : min),
-    Number.POSITIVE_INFINITY
-  );
-  const safeMin = Number.isFinite(minPrice) ? minPrice : 1;
-  const arr = [...offers];
-
-  if (mode === 'price') {
-    return arr.sort((a, b) => a.amount_cents - b.amount_cents);
-  }
-  if (mode === 'rating') {
-    return arr.sort(
-      (a, b) =>
-        (b.worker?.rating_avg ?? 0) - (a.worker?.rating_avg ?? 0) ||
-        (b.worker?.rating_count ?? 0) - (a.worker?.rating_count ?? 0)
-    );
-  }
-  return arr.sort((a, b) => offerValueScore(b, safeMin) - offerValueScore(a, safeMin));
-}
-
-/** Id of the highest value-score offer, for a "Best value" highlight. */
-export function bestValueOfferId(offers: OfferWithWorker[]): string | null {
-  if (offers.length === 0) return null;
-  return sortOffers(offers, 'value')[0].id;
-}
+// The blended "value score" ordering (offerValueScore / sortOffers /
+// bestValueOfferId / the "Best value" chip) was DELETED 2026-08-18, final
+// operator decision: lib/compareBids.ts is the single bid-ordering source —
+// factual, deterministic and stated. Do not reintroduce a blended score.
