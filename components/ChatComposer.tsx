@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { VoiceNote } from './VoiceNote';
 import type { RecorderPhase } from '../hooks/useVoiceRecorder';
 import { formatClipDuration } from '../lib/messages';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Every round control (camera, photo, mic, send) shares this size, and the
@@ -69,6 +69,8 @@ export function ChatComposer({
   showCameraAndMic = Platform.OS !== 'web',
   allowAttachments = true,
 }: ChatComposerProps) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const isArming = recorderPhase === 'pending';
   const isRecording = recorderPhase === 'recording';
   const isPreviewing = recorderPhase === 'preview';
@@ -163,6 +165,7 @@ export function ChatComposer({
         </View>
       ) : (
         <TextInput
+          keyboardAppearance={isDark ? 'dark' : 'light'}
           style={styles.input}
           value={text}
           onChangeText={onChangeText}
@@ -184,7 +187,8 @@ export function ChatComposer({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     // Every control shares COMPOSER_CONTROL_SIZE, so centring aligns them all
@@ -271,4 +275,5 @@ const styles = StyleSheet.create({
   sendBtnDisabled: {
     opacity: 0.4,
   },
-});
+  }),
+);

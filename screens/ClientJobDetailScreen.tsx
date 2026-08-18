@@ -67,10 +67,21 @@ import {
   JOB_CATEGORY_LABELS,
 } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, emeraldColors, radius, spacing, typography } from '../lib/theme';
+import {
+  emeraldColorsFor,
+  radius,
+  spacing,
+  themedStyles,
+  typographyFor,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 export function ClientJobDetailScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
+  const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ClientJobDetail'>>();
   // Seeded from the hub card, then re-read canonically on every focus so an
@@ -1024,7 +1035,9 @@ export function ClientJobDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) => {
+  const typography = typographyFor(colors);
+  return StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1050,7 +1063,12 @@ const styles = StyleSheet.create({
     borderColor: colors.mint2,
   },
   jobHeroActive: {
-    backgroundColor: colors.forest,
+    // 4D-B recorded intent, carried out in the 4D-4 sweep: forest was a CARD
+    // fill here, and under Prestige forest is the gold primary — a gold card
+    // is wrong in both themes. The active hero now sits on surface with a
+    // forest (gold in dark) accent border; the hero text tokens below
+    // follow (their *Light names date from the forest-fill era).
+    backgroundColor: colors.surface,
     borderColor: colors.forest,
   },
   heroTopRow: {
@@ -1065,13 +1083,13 @@ const styles = StyleSheet.create({
     textAlign: 'right',
   },
   heroTextLight: {
-    color: colors.mint2,
+    color: colors.textMuted,
   },
   heroTitleLight: {
-    color: colors.onPrimary,
+    color: colors.text,
   },
   heroEyebrowLight: {
-    color: colors.goldSoft,
+    color: colors.emerald,
   },
   iconCircle: {
     width: 36,
@@ -1469,4 +1487,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
   },
+  });
 });

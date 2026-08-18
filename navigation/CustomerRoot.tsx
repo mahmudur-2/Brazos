@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ActionSheet } from '../components/ActionSheet';
 import { navigateAcrossTabs } from '../lib/navigationRef';
+import { useThemeColors } from '../lib/theme';
 import type {
   CustomerHomeStackParamList,
   CustomerParamList,
@@ -116,6 +117,7 @@ function CreateActionScreen() {
 
 export function CustomerRoot() {
   const insets = useSafeAreaInsets();
+  const { palette } = useThemeColors();
   const [createOpen, setCreateOpen] = useState(false);
 
   /** Close the sheet, then dispatch through the one guarded cross-tab path. */
@@ -126,7 +128,7 @@ export function CustomerRoot() {
 
   return (
     <>
-      <Tab.Navigator screenOptions={bottomNavScreenOptions(insets.bottom)}>
+      <Tab.Navigator screenOptions={bottomNavScreenOptions(insets.bottom, palette)}>
         {/* No tabPress listener. Re-pressing the Home tab pops this stack to its
             root, which is Customer Home — the correct destination in this mode.
             The listener that used to intercept that existed only because both

@@ -19,11 +19,13 @@ import { goBackOrHome } from '../lib/navigationRef';
 import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
 import { supabase } from '../lib/supabase';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const REFRESH_DEBOUNCE_MS = 1500;
 
 export function CellJobsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MapStackNavigation>();
   const { params } = useRoute<RouteProp<MapStackParamList, 'CellJobs'>>();
   const [jobs, setJobs] = useState<OpenJob[]>([]);
@@ -140,7 +142,8 @@ export function CellJobsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -192,4 +195,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
   },
-});
+  }),
+);

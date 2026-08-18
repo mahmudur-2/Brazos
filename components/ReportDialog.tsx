@@ -14,7 +14,15 @@ import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { createReport, REPORT_REASONS, type ReportReason } from '../lib/moderation';
-import { colors, radius, shadows, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 type ReportDialogProps = {
   visible: boolean;
@@ -35,6 +43,8 @@ export function ReportDialog({
   onClose,
   onSubmitted,
 }: ReportDialogProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -153,7 +163,8 @@ export function ReportDialog({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
@@ -222,4 +233,5 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.lg,
   },
-});
+  }),
+);

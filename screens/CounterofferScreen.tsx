@@ -5,7 +5,7 @@ import { OfferComposer } from '../components/OfferComposer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { goBackOrHome } from '../lib/navigationRef';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 30 — Counteroffer, the OfferComposer's counter entry from the
@@ -20,6 +20,8 @@ import { colors, spacing } from '../lib/theme';
  * this route is the bid-side counter that never existed before Phase 5.)
  */
 export function CounterofferScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'Counteroffer'>>();
 
@@ -56,7 +58,8 @@ export function CounterofferScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -68,4 +71,5 @@ const styles = StyleSheet.create({
     padding: spacing.lg,
     paddingBottom: spacing.xxl,
   },
-});
+  }),
+);

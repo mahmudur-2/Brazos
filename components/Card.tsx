@@ -6,7 +6,13 @@ import {
   type ViewStyle,
 } from 'react-native';
 import type { PropsWithChildren } from 'react';
-import { colors, radius, shadows, spacing, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 type CardProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
@@ -21,8 +27,10 @@ export function Card({
   style,
   onPress,
   onLongPress,
-  palette = colors,
+  palette: paletteProp,
 }: CardProps) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
   const paletteStyle = {
     backgroundColor: palette.surface,
     borderColor: palette.border,

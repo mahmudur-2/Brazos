@@ -1,7 +1,16 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PropsWithChildren } from 'react';
-import { colors, controls, layout, radius, spacing, type as typeScale, withAlpha } from '../tokens';
+import {
+  controls,
+  layout,
+  radius,
+  spacing,
+  withAlpha,
+  type EmeraldPalette,
+  type as typeScale,
+} from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 /**
  * The generic bottom sheet / modal (§I).
@@ -33,6 +42,8 @@ export function Sheet({
   dismissOnBackdropPress = true,
   children,
 }: SheetProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
 
   return (
@@ -86,7 +97,8 @@ export function Sheet({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   root: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -143,4 +155,5 @@ const styles = StyleSheet.create({
     padding: layout.screenGutter,
     gap: spacing.md,
   },
-});
+  }),
+);

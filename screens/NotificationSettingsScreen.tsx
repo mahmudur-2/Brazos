@@ -35,7 +35,7 @@ import {
   type PushRegistration,
 } from '../lib/pushNotifications';
 import { skillCategoryLabel } from '../lib/skillCategories';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Notification preferences.
@@ -46,6 +46,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * already-delivered notification.
  */
 export function NotificationSettingsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { user } = useAuth();
   const { profile } = useProfile();
 
@@ -291,7 +293,8 @@ export function NotificationSettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -388,4 +391,5 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     textAlign: 'center',
   },
-});
+  }),
+);

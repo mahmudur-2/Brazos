@@ -4,7 +4,7 @@ import { SuccessScreen } from '../ui/templates/SuccessScreen';
 import { formatBudget } from '../lib/jobs';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import type { BidSentRouteParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 53 — Bid Sent (worker), on the SuccessScreen template.
@@ -14,6 +14,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * 7 days. No match odds, no "you're likely to win", no invented urgency.
  */
 export function BidSentScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { params } = useRoute<RouteProp<BidSentRouteParamList, 'BidSent'>>();
 
   return (
@@ -55,7 +57,8 @@ export function BidSentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   receipt: {
     gap: spacing.sm,
     padding: spacing.lg,
@@ -79,4 +82,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 19,
   },
-});
+  }),
+);

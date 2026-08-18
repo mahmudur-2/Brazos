@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase';
 import { deleteMyAccount, fetchAccountDeletionBlockers } from '../lib/accountDeletion';
 import { formatBlockerList, type BlockerRow } from '../lib/accountDeletionBlockers';
 import type { ProfileStackNavigation } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Delete account — App Store Guideline 5.1.1(v).
@@ -36,6 +36,8 @@ import { colors, radius, spacing } from '../lib/theme';
 const CONFIRM_WORD = 'DELETE';
 
 export function DeleteAccountScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
 
   const [loading, setLoading] = useState(true);
@@ -212,6 +214,8 @@ export function DeleteAccountScreen() {
 }
 
 function BlockerRowView({ row, onOpen }: { row: BlockerRow; onOpen: () => void }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const body = (
     <>
       <Text style={styles.blockerGroup}>{row.group}</Text>
@@ -244,6 +248,8 @@ function BlockerRowView({ row, onOpen }: { row: BlockerRow; onOpen: () => void }
 }
 
 function Line({ text }: { text: string }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.line}>
       <Ionicons name="ellipse" size={6} color={colors.textSubtle} style={styles.bullet} />
@@ -252,7 +258,8 @@ function Line({ text }: { text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   card: {
     gap: spacing.sm,
     padding: spacing.lg,
@@ -340,4 +347,5 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
-});
+  }),
+);

@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
-import { colors, radius, spacing, type as typeScale } from '../tokens';
+import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 /**
  * §I "MediaUploader" (BRAZOS_MASTER_PLAN.md §J Phase 4 — the one Phase 1
@@ -78,6 +79,8 @@ export function MediaUploader({
   disabled,
   label,
 }: MediaUploaderProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const [uploading, setUploading] = useState(false);
   // Only tiles added through this component instance are ever candidates for
   // delete-on-remove; a caller may seed `items` with media it already owns
@@ -191,7 +194,8 @@ export function MediaUploader({
 
 const TILE_SIZE = 84;
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   wrap: {
     gap: spacing.sm,
   },
@@ -246,4 +250,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+  }),
+);

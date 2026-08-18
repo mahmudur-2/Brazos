@@ -16,7 +16,7 @@ import { PLATFORM_FEE_RATE } from '../lib/payments';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screens 59 + 60 (Phase 11, consolidated) — the worker's wallet and the
@@ -27,6 +27,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * wherever money could be misread as real.
  */
 export function EarningsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { user } = useAuth();
 
   const [summary, setSummary] = useState<EarningsSummary | null>(null);
@@ -179,6 +181,8 @@ export function EarningsScreen() {
 }
 
 function Bucket({ label, cents, note }: { label: string; cents: number; note: string }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.bucket}>
       <Text style={styles.bucketLabel}>{label}</Text>
@@ -188,7 +192,8 @@ function Bucket({ label, cents, note }: { label: string; cents: number; note: st
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   bucketRow: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -266,4 +271,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 20,
   },
-});
+  }),
+);

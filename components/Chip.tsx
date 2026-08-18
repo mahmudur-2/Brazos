@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -64,13 +64,15 @@ export function Chip({
   accessibilityLabel,
   accessibilityHint,
 }: ChipProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const small = size === 'sm';
   const isFilter = variant === 'filter';
 
   // Resolved once, so the icon and the label can never disagree about which
   // variant is being rendered.
   const iconColor = selected
-    ? colors.onPrimary
+    ? (isFilter ? colors.onForest : colors.onPrimary)
     : variant === 'service' || variant === 'outlineGold'
       ? colors.forest
       : variant === 'soft'
@@ -80,7 +82,7 @@ export function Chip({
           : (accentColor ?? colors.textMuted);
 
   const labelColor = selected
-    ? colors.onPrimary
+    ? (isFilter ? colors.onForest : colors.onPrimary)
     : variant === 'service' || variant === 'outlineGold'
       ? colors.forest
       : variant === 'soft'
@@ -132,7 +134,8 @@ export function Chip({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -184,4 +187,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
-});
+  }),
+);

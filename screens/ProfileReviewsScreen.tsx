@@ -30,7 +30,7 @@ import {
 } from '../lib/reviews';
 import { formatTimeAgo } from '../lib/time';
 import type { ProfileReviewsRouteParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const PAGE_SIZE = 20;
 const STARS = [5, 4, 3, 2, 1] as const;
@@ -44,6 +44,8 @@ const STARS = [5, 4, 3, 2, 1] as const;
  * header can never claim "2 reviews" above three of them.
  */
 export function ProfileReviewsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { params } =
     useRoute<RouteProp<ProfileReviewsRouteParamList, 'ProfileReviews'>>();
 
@@ -251,7 +253,8 @@ export function ProfileReviewsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -400,4 +403,5 @@ const styles = StyleSheet.create({
   footerSpinner: {
     marginVertical: spacing.lg,
   },
-});
+  }),
+);

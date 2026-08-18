@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+import { radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -60,12 +60,14 @@ export function Button({
   disabled = false,
   variant = 'primary',
   size = 'md',
-  palette = colors,
+  palette: paletteProp,
   icon,
   iconPosition = 'trailing',
   style,
   ...rest
 }: ButtonProps) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
   const isDisabled = disabled || loading;
   const isSecondary = variant === 'secondary';
   const isDestructive = variant === 'destructive';

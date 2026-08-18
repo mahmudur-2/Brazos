@@ -9,7 +9,7 @@ import {
   acceptOfferActionLabel,
   offerResponseHeading,
 } from '../lib/offerCopy';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * THE actionable offer/counteroffer block — one component, both surfaces.
@@ -75,6 +75,8 @@ export function OfferResponseActions({
   onDecline,
   compact = false,
 }: OfferResponseActionsProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const buttonSize = compact ? 'sm' : 'md';
 
   return (
@@ -128,7 +130,8 @@ export function OfferResponseActions({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   root: {
     // The gap IS the fix: every child keeps its measured height and the
     // separation cannot be swallowed by a sibling's fixed height.
@@ -183,4 +186,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 17,
   },
-});
+  }),
+);

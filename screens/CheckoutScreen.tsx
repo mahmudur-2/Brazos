@@ -17,7 +17,7 @@ import { fetchJobPayment, platformFeeCents, type Payment } from '../lib/payments
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 31 — Protected Checkout, over the payment ADAPTER
@@ -36,6 +36,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * the second lock on that door).
  */
 export function CheckoutScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'Checkout'>>();
   const { job, missing } = useOwnedJobDetail(params.job);
@@ -309,6 +311,8 @@ function ExplainRow({
   strong: string;
   text: string;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.explainRow}>
       <Ionicons name={icon} size={18} color={colors.emerald} />
@@ -319,7 +323,8 @@ function ExplainRow({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   sandboxBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -402,4 +407,5 @@ const styles = StyleSheet.create({
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
   },
-});
+  }),
+);

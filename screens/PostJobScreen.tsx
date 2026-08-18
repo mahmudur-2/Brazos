@@ -65,7 +65,15 @@ import {
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
-import { colors, emeraldColors, radius, shadows, spacing } from '../lib/theme';
+import {
+  emeraldColorsFor,
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { MediaUploader } from '../ui/primitives';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 
@@ -153,6 +161,9 @@ const POST_STEPS = [
 ] as const;
 
 export function PostJobScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
+  const emeraldColors = emeraldColorsFor(colors);
   // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
   // and Hire Again entry points, so its types are standalone rather than tied
   // to one stack.
@@ -1075,9 +1086,9 @@ export function PostJobScreen() {
                   accessibilityLabel="Use my current location"
                 >
                   {locating ? (
-                    <ActivityIndicator size="small" color={colors.onPrimary} />
+                    <ActivityIndicator size="small" color={colors.onForest} />
                   ) : (
-                    <Ionicons name="location" size={20} color={colors.onPrimary} />
+                    <Ionicons name="location" size={20} color={colors.onForest} />
                   )}
                 </Pressable>
               </View>
@@ -1471,7 +1482,7 @@ export function PostJobScreen() {
               <Animated.View
                 style={[styles.successCircle, { transform: [{ scale: successScale }] }]}
               >
-                <Ionicons name="checkmark" size={48} color={colors.onPrimary} />
+                <Ionicons name="checkmark" size={48} color={colors.onForest} />
               </Animated.View>
               <Text style={styles.successEyebrow}>
                 {isEditing ? 'CHANGES SAVED' : 'REQUEST SENT'}
@@ -1523,7 +1534,8 @@ export function PostJobScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1875,4 +1887,5 @@ const styles = StyleSheet.create({
     width: '100%',
     borderRadius: radius.lg,
   },
-});
+  }),
+);

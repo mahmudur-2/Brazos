@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type Block =
   | { kind: 'h1' | 'h2' | 'h3' | 'p'; text: string }
@@ -70,6 +70,8 @@ function parse(markdown: string): Block[] {
 }
 
 export function MarkdownText({ markdown }: { markdown: string }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const blocks = useMemo(() => parse(markdown), [markdown]);
 
   return (
@@ -93,7 +95,8 @@ export function MarkdownText({ markdown }: { markdown: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   container: {
     gap: spacing.sm,
   },
@@ -136,4 +139,5 @@ const styles = StyleSheet.create({
     lineHeight: 21,
     color: colors.text,
   },
-});
+  }),
+);

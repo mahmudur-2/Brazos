@@ -96,6 +96,10 @@ export const colors = {
 
 export type ColorToken = keyof typeof colors;
 
+/** A resolved §I palette — either `light` or `dark` below. What the theme
+ *  hook hands to ui/ primitives and templates (4D-4). */
+export type EmeraldPalette = Record<ColorToken, string>;
+
 // ---------------------------------------------------------------------------
 // Dual palettes — Heritage (light) and Emerald Prestige (dark)
 // ---------------------------------------------------------------------------

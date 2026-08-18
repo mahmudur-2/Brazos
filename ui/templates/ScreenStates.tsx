@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { EmptyState } from '../primitives';
-import { colors, layout, radius, spacing } from '../tokens';
+import { layout, radius, spacing } from '../tokens';
+import { useThemeColors } from '../../lib/theme';
 import { Skeleton } from '../../components/Skeleton';
 
 /**
@@ -58,6 +59,7 @@ export function isReady(state: ScreenState | undefined): boolean {
 }
 
 export function ScreenStateView({ state }: { state: Exclude<ScreenState, { kind: 'ready' }> }) {
+  const { emerald: colors } = useThemeColors();
   switch (state.kind) {
     case 'loading':
       if (state.variant === 'spinner') {

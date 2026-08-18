@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useMode } from '../modes';
-import { colors } from '../lib/theme';
+import { useThemeColors } from '../lib/theme';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
 
@@ -29,6 +29,7 @@ import { WorkerRoot } from './WorkerRoot';
  */
 export function ModeShell() {
   const { mode, ready, armResolution } = useMode();
+  const { palette } = useThemeColors();
 
   // Resolution starts here rather than when the session appears, because this
   // component mounts only after auth + legal + setup have all resolved — and
@@ -40,8 +41,8 @@ export function ModeShell() {
 
   if (!ready) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.loader, { backgroundColor: palette.background }]}>
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
@@ -54,6 +55,5 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
 });

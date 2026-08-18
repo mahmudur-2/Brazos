@@ -33,7 +33,7 @@ import {
 } from '../lib/disputes';
 import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 36 — Approve or report an issue (Phase 6, customer side).
@@ -48,6 +48,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * §9 ordering: review & tip (screen 37) comes AFTER release, never before.
  */
 export function ApproveOrDisputeScreen() {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ApproveOrDispute'>>();
   const { job, missing } = useOwnedJobDetail(params.job);
@@ -318,6 +320,7 @@ export function ApproveOrDisputeScreen() {
               </Pressable>
             ))}
             <TextInput
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.detailsInput}
               value={details}
               onChangeText={setDetails}
@@ -400,7 +403,8 @@ export function ApproveOrDisputeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
@@ -524,4 +528,5 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.surface,
   },
-});
+  }),
+);

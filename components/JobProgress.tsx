@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, spacing, type ColorPalette } from '../lib/theme';
+import { spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const STEPS = [
   { key: 'assigned', label: 'Assigned' },
@@ -16,11 +16,13 @@ const ORDER: Record<string, number> = {
 
 export function JobProgress({
   status,
-  palette = colors,
+  palette: paletteProp,
 }: {
   status: string;
   palette?: ColorPalette;
 }) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
   const current = ORDER[status] ?? 0;
 
   return (

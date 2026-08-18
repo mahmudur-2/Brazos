@@ -1,7 +1,15 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { colors, radius, shadows, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -30,6 +38,8 @@ export function ActionSheet({
   items,
   onClose,
 }: ActionSheetProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -73,7 +83,8 @@ export function ActionSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
@@ -134,4 +145,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.textMuted,
   },
-});
+  }),
+);

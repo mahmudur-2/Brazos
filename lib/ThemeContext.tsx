@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { ActivityIndicator, Appearance, StyleSheet, View, useColorScheme } from 'react-native';
 import { colors, darkColors, type ColorPalette } from './theme';
+import { dark as emeraldDark, light as emeraldLight, type EmeraldPalette } from '../ui/tokens';
 import {
   DEFAULT_THEME_PREFERENCE,
   resolveColorScheme,
@@ -46,6 +47,8 @@ export type ThemeColors = {
   /** The resolved palette — the ONLY object components may style from. */
   palette: ColorPalette;
   isDark: boolean;
+  /** The resolved §I token palette, for ui/ primitives and templates. */
+  emerald: EmeraldPalette;
   /** The stored choice, for the Appearance setting screen. */
   preference: ThemePreference;
   /** Persists, repaints, and syncs native surfaces — the one mutation path. */
@@ -95,10 +98,11 @@ export function ThemeProvider({ children }: PropsWithChildren) {
   const effective = preference ?? DEFAULT_THEME_PREFERENCE;
   const isDark = resolveColorScheme(effective, systemScheme) === 'dark';
   const palette: ColorPalette = isDark ? darkColors : colors;
+  const emerald: EmeraldPalette = isDark ? emeraldDark : emeraldLight;
 
   const value = useMemo<ThemeColors>(
-    () => ({ palette, isDark, preference: effective, setPreference }),
-    [palette, isDark, effective, setPreference],
+    () => ({ palette, emerald, isDark, preference: effective, setPreference }),
+    [palette, emerald, isDark, effective, setPreference],
   );
 
   if (preference === null) {

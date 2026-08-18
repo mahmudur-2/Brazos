@@ -17,7 +17,7 @@ import {
 } from '../lib/jobs';
 import type { Profile } from '../lib/profiles';
 import { formatTimeAgo } from '../lib/time';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type MarketJobPreviewProps = {
   job: OpenJob;
@@ -45,6 +45,8 @@ type MarketJobPreviewProps = {
  * silently).
  */
 export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { switching, switchToOtherMode } = useModeSwitch();
   const accent = categoryAccent(job.category);
 
@@ -177,7 +179,8 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   headerCard: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -278,4 +281,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 19,
   },
-});
+  }),
+);

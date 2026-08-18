@@ -11,7 +11,7 @@ import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 
@@ -28,6 +28,8 @@ import { goBackOrHome } from '../lib/navigationRef';
  * "worker is on the way" progress — that's Phase 6's real machinery.
  */
 export function JobConfirmedScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'JobConfirmed'>>();
   const job = params.job;
@@ -142,7 +144,8 @@ export function JobConfirmedScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   details: {
     gap: spacing.md,
     padding: spacing.lg,
@@ -201,4 +204,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 17,
   },
-});
+  }),
+);

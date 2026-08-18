@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import { colors, radius } from '../../lib/theme';
+import { radius, themedStyles, useThemeColors, type ColorPalette } from '../../lib/theme';
 
 /**
  * §I's `BottomNav` primitive — deferred from Phase 1, built here because Phase 2
@@ -123,29 +123,16 @@ const TAB_BOTTOM_GAP = 3;
 // (the Math.min below), since they need less, not more.
 export const TAB_BAR_SAFE_BOTTOM = 16;
 
-// Deliberately hardcoded, NOT sourced from useThemeColors() — that hook's
-// useColorScheme() dependency was forcing the navigator's screenOptions (and
-// this style object) to recompute on every system light/dark flip. Android has
-// a well-known rendering bug where a `transparent` background combined with a
-// nonzero `elevation` renders as a solid black rectangle instead of a proper
-// shadow — see the elevation:0 override below, which only reliably wins over
-// the library's own default elevation:8 (BottomTabBar.js's `bottom` style) once
-// it's actually applied; a recompute is exactly the kind of moment where a
-// transient style could briefly fall back to that default. An opaque background
-// makes that whole bug class structurally impossible regardless of timing, on
-// top of removing the theme dependency itself. Values below reuse the app's
-// existing light-palette tokens (not new hex literals) so this can't silently
-// drift. Proper light/dark tab bar theming comes later.
-//
-// Emerald reskin: the active tint is `forest` (the atlas's deep green, which is
-// also what the Home screen's own chrome uses) rather than `primary`, and the
-// hairline is the ordinary border rather than gold — the reference separates
-// the bar with a plain hairline and carries the accent colour on the active
-// item itself, not on the edge.
-const TAB_BAR_BACKGROUND = colors.surface;
-const TAB_HAIRLINE_COLOR = colors.border;
-const TAB_ACTIVE_COLOR = colors.forest;
-const TAB_INACTIVE_COLOR = colors.textMuted;
+// Bar colours come from the RESOLVED palette (4D-4): bottomNavScreenOptions
+// takes it as a parameter so it stays a plain function the catalog can call,
+// and the trees pass the palette from useThemeColors — so the bar repaints on
+// a theme change. Both palettes keep the background OPAQUE (surface), which is
+// what keeps the well-known Android transparent-background + elevation
+// black-rectangle bug structurally impossible — the elevation:0 override below
+// still accompanies it, exactly as before. Emerald reskin note (unchanged):
+// the active tint is `forest` (gold under Prestige) rather than `primary`, and
+// the hairline is the ordinary border — the accent rides the active item, not
+// the edge.
 
 /** How tall the whole bar is on a device reporting this bottom inset. */
 export function bottomNavHeight(insetBottom: number): number {
@@ -166,6 +153,8 @@ export function BottomNavItem({
   focused: boolean;
   color: string;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const tab = TAB_BY_KEY.get(routeName);
   const [active, inactive] = tab?.icons ?? (['ellipse', 'ellipse-outline'] as const);
   const label = tab?.label ?? routeName;
@@ -191,7 +180,7 @@ export function BottomNavItem({
  * `insetBottom` is passed in rather than read from a hook here so this stays a
  * plain function the catalog can also call.
  */
-export function bottomNavScreenOptions(insetBottom: number) {
+export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalette) {
   // getTabBarHeight() (bottom-tabs internals) uses a custom tabBarStyle.height
   // VERBATIM when one is set, rather than adding the safe-area inset on top of
   // it the way the default 49px computation does — so the inset has to be
@@ -203,8 +192,8 @@ export function bottomNavScreenOptions(insetBottom: number) {
 
   return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
     headerShown: false,
-    tabBarActiveTintColor: TAB_ACTIVE_COLOR,
-    tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
+    tabBarActiveTintColor: palette.forest,
+    tabBarInactiveTintColor: palette.textMuted,
     tabBarShowLabel: false,
     tabBarIcon: ({ focused, color }) => (
       <BottomNavItem routeName={route.name} focused={focused} color={color} />
@@ -222,8 +211,8 @@ export function bottomNavScreenOptions(insetBottom: number) {
       // the 70 it needs — re-creating the overflow the height was sized to
       // avoid.
       paddingBottom: bottomInset,
-      backgroundColor: TAB_BAR_BACKGROUND,
-      borderTopColor: TAB_HAIRLINE_COLOR,
+      backgroundColor: palette.surface,
+      borderTopColor: palette.border,
       elevation: 0,
     },
   });
@@ -257,11 +246,13 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
  * Rendered through the dummy Create route's `tabBarButton`, which replaces the
  * library's pressable inside an `overflow: visible` item wrapper — so the
  * raised square can poke above the hairline without touching the bar's own
- * style object. The BUTTON is opaque forest with its own shadow; the bar keeps
- * its opaque background and `elevation: 0` (see the comment block above
- * TAB_BAR_BACKGROUND — nothing here reintroduces transparency on the bar).
+ * style object. The BUTTON is opaque forest (gold under Prestige) with its own
+ * shadow; the bar keeps its opaque background and `elevation: 0` (see the
+ * comment above bottomNavScreenOptions — nothing reintroduces transparency).
  */
 export function CenterCreateButton({ onPress }: { onPress: () => void }) {
+  const { palette: colors, emerald, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.createSlot}>
       <Pressable
@@ -271,7 +262,10 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         accessibilityLabel="Create"
         accessibilityHint="Post a job, hire someone again, or open your jobs"
       >
-        <Ionicons name="add" size={34} color={colors.ink} />
+        {/* Light keeps the 4D-1a dark-ink glyph on forest; dark needs the
+            §I onForest (near-black) so the glyph reads on the gold fill —
+            ColorPalette has no onForest, hence the emerald read. */}
+        <Ionicons name="add" size={34} color={isDark ? emerald.onForest : colors.ink} />
       </Pressable>
     </View>
   );
@@ -296,6 +290,8 @@ export function BottomNavPreview({
   /** Insert the static customer [ + ] between Discover and Messages. */
   showCreateAction?: boolean;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const bottomInset = Math.min(insetBottom, TAB_BAR_SAFE_BOTTOM);
 
   // The customer layout raises the action between its 2nd and 3rd tabs; a
@@ -324,7 +320,7 @@ export function BottomNavPreview({
             <BottomNavItem
               routeName={item.key}
               focused={item.key === activeKey}
-              color={item.key === activeKey ? TAB_ACTIVE_COLOR : TAB_INACTIVE_COLOR}
+              color={item.key === activeKey ? colors.forest : colors.textMuted}
             />
           </View>
         )
@@ -333,7 +329,8 @@ export function BottomNavPreview({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   // Fills TAB_ICON_WRAPPER_HEIGHT and packs against the bottom instead of the
   // top — see the comment on TAB_ICON_WRAPPER_HEIGHT/TAB_BOTTOM_GAP.
   tabItemContent: {
@@ -382,9 +379,9 @@ const styles = StyleSheet.create({
   createButtonPressed: { opacity: 0.88, transform: [{ translateY: -14 }, { scale: 0.96 }] },
   previewBar: {
     flexDirection: 'row',
-    backgroundColor: TAB_BAR_BACKGROUND,
+    backgroundColor: colors.surface,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: TAB_HAIRLINE_COLOR,
+    borderTopColor: colors.border,
   },
   previewItem: {
     flex: 1,
@@ -392,4 +389,5 @@ const styles = StyleSheet.create({
     padding: 5,
     height: TAB_ICON_WRAPPER_HEIGHT + 10,
   },
-});
+  }),
+);

@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from './Button';
 import { dollarsToCents } from '../lib/jobs';
-import { colors, radius, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 type AmountPromptProps = {
   visible: boolean;
@@ -30,6 +37,8 @@ export function AmountPrompt({
   onCancel,
   onSubmit,
 }: AmountPromptProps) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +71,7 @@ export function AmountPrompt({
           <View style={styles.inputRow}>
             <Text style={styles.currency}>$</Text>
             <TextInput
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.input}
               value={value}
               onChangeText={(t) => {
@@ -92,7 +102,8 @@ export function AmountPrompt({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.45),
@@ -153,4 +164,5 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 46,
   },
-});
+  }),
+);

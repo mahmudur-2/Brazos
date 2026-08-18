@@ -2,6 +2,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { WorkerHomeStackParamList, WorkerParamList } from '../lib/navigation';
+import { useThemeColors } from '../lib/theme';
 import { BidSentScreen } from '../screens/BidSentScreen';
 import { ChatScreen } from '../screens/ChatScreen';
 import { JobDetailScreen } from '../screens/JobDetailScreen';
@@ -72,9 +73,10 @@ function WorkerHomeStackNavigator() {
 
 export function WorkerRoot() {
   const insets = useSafeAreaInsets();
+  const { palette } = useThemeColors();
 
   return (
-    <Tab.Navigator screenOptions={bottomNavScreenOptions(insets.bottom)}>
+    <Tab.Navigator screenOptions={bottomNavScreenOptions(insets.bottom, palette)}>
       <Tab.Screen name="Home" component={WorkerHomeStackNavigator} />
       <Tab.Screen name="Map" component={MapStackNavigator} options={{ tabBarLabel: 'Map' }} />
       <Tab.Screen

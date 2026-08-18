@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, type as typeScale } from '../tokens';
+import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import { useThemeColors } from '../../lib/theme';
 
 /**
  * The enum-driven status pill (§I).
@@ -58,12 +59,12 @@ import type { PaymentStatus } from '../../lib/payments';
 
 type Tone = 'neutral' | 'progress' | 'positive' | 'attention';
 
-const TONES: Record<Tone, { bg: string; border: string; fg: string }> = {
+const tonesFor = (colors: EmeraldPalette): Record<Tone, { bg: string; border: string; fg: string }> => ({
   neutral: { bg: colors.bg, border: colors.line, fg: colors.muted },
   progress: { bg: colors.mint, border: colors.secondaryBorder, fg: colors.emerald },
   positive: { bg: colors.mint, border: colors.secondaryBorder, fg: colors.forest },
   attention: { bg: colors.dangerSurface, border: colors.dangerBorder, fg: colors.danger },
-};
+});
 
 const JOB_TONES: Record<JobStatus, Tone> = {
   draft: 'neutral',
@@ -152,6 +153,7 @@ type StatusPillProps =
   | { kind: 'payment'; status: PaymentStatus };
 
 export function StatusPill(props: StatusPillProps) {
+  const { emerald: colors } = useThemeColors();
   const { label, tone } =
     props.kind === 'job'
       ? { label: JOB_LABELS[props.status], tone: JOB_TONES[props.status] }
@@ -159,7 +161,7 @@ export function StatusPill(props: StatusPillProps) {
         ? { label: OFFER_LABELS[props.status], tone: OFFER_TONES[props.status] }
         : { label: PAYMENT_LABELS[props.status], tone: PAYMENT_TONES[props.status] };
 
-  const palette = TONES[tone];
+  const palette = tonesFor(colors)[tone];
 
   return (
     <View

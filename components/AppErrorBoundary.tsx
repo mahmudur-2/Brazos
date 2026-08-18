@@ -1,6 +1,6 @@
 import { Component, Fragment, type ErrorInfo, type PropsWithChildren, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type AppErrorBoundaryState = {
   crashed: boolean;
@@ -26,7 +26,10 @@ type AppErrorBoundaryState = {
  *
  * A class component is required (React exposes no hook for error boundaries)
  * and it is hand-rolled — no error-boundary dependency is installed and none
- * may be added.
+ * may be added. The fallback UI is a separate function component so it can
+ * read the resolved theme (4D-4): the boundary sits BELOW ThemeProvider, and
+ * a crash in the screen tree never unmounts the provider above it, so the
+ * hook is safe in every scenario where this fallback can render at all.
  */
 export class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBoundaryState> {
   state: AppErrorBoundaryState = { crashed: false, generation: 0 };
@@ -54,29 +57,36 @@ export class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBound
 
   render(): ReactNode {
     if (this.state.crashed) {
-      return (
-        <View style={styles.container}>
-          <Text style={styles.title}>Something went wrong</Text>
-          <Text style={styles.body}>
-            The app ran into a problem it couldn’t recover from on its own. Your
-            account, jobs, and messages are safe.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={this.reset}
-            style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          >
-            <Text style={styles.buttonLabel}>Try again</Text>
-          </Pressable>
-        </View>
-      );
+      return <CrashFallback onReset={this.reset} />;
     }
 
     return <Fragment key={this.state.generation}>{this.props.children}</Fragment>;
   }
 }
 
-const styles = StyleSheet.create({
+function CrashFallback({ onReset }: { onReset: () => void }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Something went wrong</Text>
+      <Text style={styles.body}>
+        The app ran into a problem it couldn’t recover from on its own. Your
+        account, jobs, and messages are safe.
+      </Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onReset}
+        style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
+      >
+        <Text style={styles.buttonLabel}>Try again</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -114,4 +124,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-});
+  }),
+);

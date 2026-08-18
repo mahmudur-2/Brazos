@@ -14,7 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { sharePhoto } from '../lib/sharing';
 import { alertAsync } from '../lib/dialog';
-import { colors, withAlpha } from '../lib/theme';
+import { themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
 type PhotoViewerProps = {
   visible: boolean;
@@ -64,6 +64,8 @@ export function PhotoViewer({
   onClose,
   allowShare = true,
 }: PhotoViewerProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { width, height } = useWindowDimensions();
   const [sharing, setSharing] = useState(false);
 
@@ -357,7 +359,8 @@ export function PhotoViewer({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: colors.black,
@@ -379,4 +382,5 @@ const styles = StyleSheet.create({
   shareBtn: {
     left: 20,
   },
-});
+  }),
+);

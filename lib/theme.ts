@@ -49,6 +49,11 @@ export const colors = {
   // Cream content (text/icons) shown on a solid primary-filled surface —
   // buttons, selected chips, own chat bubbles, progress dots, etc.
   onPrimary: '#F4F1E8',
+  /** Content on a `forest` fill. Light keeps the exact cream already used on
+   *  those fills (byte-identical rendering); dark flips to the §I onForest
+   *  near-black, because `forest` is the GOLD primary role under Prestige and
+   *  cream cannot read on gold. */
+  onForest: '#F4F1E8',
   // Rating-star gold. Kept as an explicit token (not tied to status/primary)
   // since gold stars are a near-universal convention independent of theme.
   star: '#F59E0B',
@@ -128,6 +133,7 @@ export const darkColors: ColorPalette = {
   primaryDark: '#2E6B4C',
   primarySoft: '#1E3328',
   onPrimary: '#F4F1E8',
+  onForest: emeraldDark.onForest,
   star: '#F59E0B',
 
   // Brand hues in dark come from the ONE authoritative dark palette
@@ -240,6 +246,43 @@ export const shadows: Record<'card' | 'raised', ViewStyle> = {
 };
 
 /**
+ * The Emerald Trust mapping as a FUNCTION of the resolved palette (4D-4).
+ * `emeraldColors` above is exactly this mapping applied to the light palette;
+ * it stays exported for legacy/locked callers. Swept screens call this with
+ * the palette from useThemeColors so the mapping follows the theme — under
+ * Prestige, `forest` is the gold primary role (see ui/tokens.ts `dark`).
+ */
+export function emeraldColorsFor(palette: ColorPalette): ColorPalette {
+  return {
+    ...palette,
+    primary: palette.forest,
+    primaryDark: palette.forest,
+    primarySoft: palette.mint,
+    text: palette.ink,
+    border: palette.mint2,
+    neutralBg: palette.mint,
+  };
+}
+
+/**
+ * `typography` above bakes the LIGHT text colors in at module scope (its
+ * values predate theming). Swept screens that spread those styles take them
+ * from here instead, colored by the resolved palette; the sizes and weights
+ * are the same six entries and deliberately stay in one place — this function
+ * reads them from `typography` so the two can never drift.
+ */
+export function typographyFor(palette: ColorPalette): Record<keyof typeof typography, TextStyle> {
+  return {
+    title: { ...typography.title, color: palette.text },
+    heading: { ...typography.heading, color: palette.text },
+    subheading: { ...typography.subheading, color: palette.text },
+    body: { ...typography.body, color: palette.text },
+    label: { ...typography.label, color: palette.textMuted },
+    caption: { ...typography.caption, color: palette.textSubtle },
+  };
+}
+
+/**
  * Trap-1 helper (4D-4): color-bearing styles must be COMPUTED from the
  * resolved palette, never captured at module scope — a stylesheet built at
  * import time freezes whatever palette was live and never repaints on a
@@ -255,10 +298,10 @@ export const shadows: Record<'card' | 'raised', ViewStyle> = {
  * keyed on the palette object) and the result is shared by every instance,
  * so this costs what the module-scope StyleSheet it replaces cost.
  */
-export function themedStyles<T>(
-  factory: (colors: ColorPalette) => T,
-): (palette: ColorPalette) => T {
-  const cache = new WeakMap<ColorPalette, T>();
+export function themedStyles<P extends object, T>(
+  factory: (colors: P) => T,
+): (palette: P) => T {
+  const cache = new WeakMap<P, T>();
   return (palette) => {
     const cached = cache.get(palette);
     if (cached) return cached;

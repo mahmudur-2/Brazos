@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
+import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
@@ -207,4 +209,73 @@ test('[static] Profile → Appearance is typed, registered, and applies through 
   // Styled from the resolved palette, not the static light snapshot.
   assert.match(screen, /useThemeColors/);
   assert.match(screen, /themedStyles/);
+});
+
+// ---------------------------------------------------------------------------
+// The permanent hex-literal contract (commit 3 of 4D-4)
+//
+// Within screens/, components/, ui/, hooks/, navigation/, and modes/, no file
+// may contain a raw colour literal — #-hex or rgb(/rgba(/hsl( — because a raw
+// literal is invisible to the palette and ships a light artifact into dark
+// mode. 'transparent' is fine. Comment-stripped, so prose may NAME a hex.
+// (lib/authTheme.ts holds the auth surface's literals and lives outside the
+// scanned directories; it is additionally never-modified this run.)
+// ---------------------------------------------------------------------------
+
+const stripCommentsForScan = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+/** File-level allowances, each with its reason on the record. */
+const LITERAL_FILE_ALLOWLIST = {
+  // The definition layer — the one place palette hex values are supposed to live.
+  'ui/tokens.ts': 'the token definition layer',
+  // withAlpha's serializer emits rgba() strings; it is how literals are avoided.
+  'ui/colorAlpha.ts': 'the rgba() serializer behind withAlpha',
+  // LOCKED screens (CLAUDE.md "Locked — never modify"): stay light by operator
+  // decision; their literals move when the operator unlocks them.
+  'screens/LaunchScreen.tsx': 'LOCKED screen',
+  'screens/WelcomeScreen.tsx': 'LOCKED screen',
+  'screens/SignInScreen.tsx': 'LOCKED screen',
+  'screens/EmailSignInScreen.tsx': 'LOCKED screen',
+  'screens/CreateAccountScreen.tsx': 'LOCKED screen',
+  'screens/EmailCreateAccountScreen.tsx': 'LOCKED screen',
+  'screens/VerifyPhoneScreen.tsx': 'LOCKED screen',
+  'screens/SetupScreen.tsx': 'LOCKED screen',
+  'screens/LegalGateScreen.tsx': 'LOCKED screen',
+  'screens/HomeScreen.tsx': 'LOCKED screen (customer Home, atlas set)',
+  'screens/BrowseJobsScreen.tsx': 'LOCKED screen (atlas 48, unmounted)',
+  // The mode-transition shimmer core pairs with the baked LIGHT transition
+  // PNGs — the 4D-3.5 allowance, unchanged; migrates when the assets do.
+  'components/ModeTransitionOverlay.tsx': 'shimmer tint paired with baked light PNGs',
+  // Auth surface (stays light this run; lib/authTheme.ts is never-modified,
+  // so these cannot move into tokens yet — logged as the authTheme follow-up).
+  'components/AuthNotice.tsx': 'auth surface; token home is frozen authTheme',
+  'components/CountryPicker.tsx': 'auth surface scrim; token home is frozen authTheme',
+};
+
+test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navigation/, modes/', async () => {
+  const roots = ['screens', 'components', 'ui', 'hooks', 'navigation', 'modes'];
+  const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+  const files = [];
+  for (const root of roots) {
+    const entries = await readdir(join(repoRoot, root), { withFileTypes: true, recursive: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.(ts|tsx)$/.test(entry.name)) continue;
+      files.push(relative(repoRoot, join(entry.parentPath, entry.name)).replace(/\\/g, '/'));
+    }
+  }
+  assert.ok(files.length > 100, `scan must enumerate the six directories (saw ${files.length})`);
+
+  const offenders = [];
+  for (const path of files) {
+    if (LITERAL_FILE_ALLOWLIST[path]) continue;
+    // Frozen web implementations are never modified (CLAUDE.md frozen list).
+    if (/\.web\.tsx?$/.test(path)) continue;
+    const source = stripCommentsForScan(await read(path));
+    const hex = source.match(/#[0-9a-fA-F]{3,8}\b/);
+    const fn = source.match(/\b(?:rgba?|hsla?)\(/);
+    if (hex) offenders.push(`${path}: ${hex[0]}`);
+    else if (fn) offenders.push(`${path}: ${fn[0]}`);
+  }
+  assert.deepEqual(offenders, [], `raw colour literals crept in:\n${offenders.join('\n')}`);
 });

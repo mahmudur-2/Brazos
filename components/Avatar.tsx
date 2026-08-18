@@ -1,5 +1,5 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
-import { colors } from '../lib/theme';
+import { themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { getInitials } from '../lib/profiles';
 
 type AvatarProps = {
@@ -9,6 +9,8 @@ type AvatarProps = {
 };
 
 export function Avatar({ name, uri, size = 44 }: AvatarProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const dimension = { width: size, height: size, borderRadius: size / 2 };
 
   if (uri) {
@@ -22,7 +24,8 @@ export function Avatar({ name, uri, size = 44 }: AvatarProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   image: {
     backgroundColor: colors.border,
   },
@@ -35,4 +38,5 @@ const styles = StyleSheet.create({
     color: colors.onPrimary,
     fontWeight: '700',
   },
-});
+  }),
+);

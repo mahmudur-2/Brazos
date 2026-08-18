@@ -36,7 +36,14 @@ import {
 } from '../lib/portfolio';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { colors, radius, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 const OTHER_KEY = '__other__';
 
@@ -94,6 +101,8 @@ export function PortfolioPicker({
   onClose,
   onChanged,
 }: PortfolioPickerProps) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const [candidates, setCandidates] = useState<PortfolioCandidate[]>([]);
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -434,6 +443,7 @@ export function PortfolioPicker({
 
                 {category === OTHER_KEY && (
                   <TextInput
+                    keyboardAppearance={isDark ? 'dark' : 'light'}
                     style={styles.customCategoryInput}
                     value={customCategory}
                     onChangeText={setCustomCategory}
@@ -448,6 +458,7 @@ export function PortfolioPicker({
                   A real sentence or two — this is what clients read to judge your work.
                 </Text>
                 <TextInput
+                  keyboardAppearance={isDark ? 'dark' : 'light'}
                   style={styles.descriptionInput}
                   value={description}
                   onChangeText={setDescription}
@@ -505,7 +516,8 @@ export function PortfolioPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   screenOverlay: {
     position: 'absolute',
     top: 0,
@@ -723,4 +735,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.danger,
   },
-});
+  }),
+);

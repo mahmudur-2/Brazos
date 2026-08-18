@@ -13,7 +13,15 @@ import {
   type OpenJob,
 } from '../../lib/jobs';
 import { formatTimeAgo } from '../../lib/time';
-import { colors, layout, radius, shadows, spacing, type as typeScale } from '../tokens';
+import {
+  layout,
+  radius,
+  shadows,
+  spacing,
+  type EmeraldPalette,
+  type as typeScale,
+} from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 /**
  * §I's mode-aware `JobCard` — deferred from Phase 1 because it requires
@@ -79,6 +87,8 @@ export function JobCard({
   onBid,
   distanceMiles,
 }: JobCardProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   // The whole mode split, in one line. Nothing above can override it.
   const perspective = useModePerspective();
   const isWorker = perspective === 'worker';
@@ -193,7 +203,8 @@ export function JobCard({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -316,4 +327,5 @@ const styles = StyleSheet.create({
     ...typeScale.title,
     color: colors.forest,
   },
-});
+  }),
+);

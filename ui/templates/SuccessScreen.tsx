@@ -2,7 +2,15 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
-import { colors, controls, layout, radius, spacing, type as typeScale } from '../tokens';
+import {
+  controls,
+  layout,
+  radius,
+  spacing,
+  type EmeraldPalette,
+  type as typeScale,
+} from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -43,6 +51,8 @@ export function SuccessScreen({
   actions,
   insideTabs = true,
 }: SuccessScreenProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScrollView
@@ -90,7 +100,8 @@ export function SuccessScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -159,4 +170,5 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
-});
+  }),
+);

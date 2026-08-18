@@ -28,7 +28,7 @@ import type {
   WorkerHomeStackNavigation,
   WorkerHomeStackParamList,
 } from '../lib/navigation';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 // The value now lives in lib/discoveryFilter.ts (4D-2) so lib modules can
 // read it without importing a screen; re-exported here because the LOCKED
@@ -61,6 +61,8 @@ type GeoState = 'loading' | 'ready' | 'denied' | 'unavailable';
  * on zero results, and is never labeled "within N miles" when it does.
  */
 export function WorkerResultsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
   const { user } = useAuth();
@@ -447,7 +449,8 @@ function emptyBody(
   return 'New jobs appear here automatically as clients post them.';
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.homeBackground,
@@ -526,4 +529,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.emerald,
   },
-});
+  }),
+);

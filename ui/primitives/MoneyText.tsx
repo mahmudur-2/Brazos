@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { formatBudget } from '../../lib/jobs';
-import { colors, spacing, type as typeScale } from '../tokens';
+import { spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 import type { PaymentStatus } from './StatusPill';
 
 /**
@@ -47,6 +48,8 @@ type MoneyTextProps = {
 };
 
 export function MoneyText({ cents, state, size = 'md', captionHidden = false }: MoneyTextProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const amountColor = state && !SETTLED.includes(state) ? colors.muted : colors.ink;
   const caption = state ? CAPTIONS[state] : null;
 
@@ -65,7 +68,8 @@ export function MoneyText({ cents, state, size = 'md', captionHidden = false }: 
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   wrap: {
     gap: spacing.xs / 2,
   },
@@ -79,4 +83,5 @@ const styles = StyleSheet.create({
     ...typeScale.sub,
     color: colors.muted,
   },
-});
+  }),
+);

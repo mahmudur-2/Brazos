@@ -55,12 +55,14 @@ import type {
   WorkerSearchRouteParamList,
 } from '../lib/navigation';
 import {
-  colors,
-  emeraldColors as EMERALD_PALETTE,
+  emeraldColorsFor,
   fonts,
   radius,
   shadows,
   spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
 } from '../lib/theme';
 
 /** Chips offered before anything has been typed. The first six of the shared
@@ -78,6 +80,9 @@ type SearchState =
   | { kind: 'results'; matches: WorkerMatch[]; categories: string[]; mode: RankingMode };
 
 export function WorkerSearchScreen() {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const EMERALD_PALETTE = emeraldColorsFor(colors);
   const navigation = useNavigation<CustomerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerSearchRouteParamList, 'WorkerSearch'>>();
   const { user } = useAuth();
@@ -252,6 +257,7 @@ export function WorkerSearchScreen() {
           <View style={styles.searchRow}>
             <Ionicons name="search" size={20} color={colors.emerald} />
             <TextInput
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.searchInput}
               value={query}
               onChangeText={(text) => {
@@ -294,7 +300,7 @@ export function WorkerSearchScreen() {
               accessibilityRole="button"
               accessibilityLabel="Search workers"
             >
-              <Ionicons name="arrow-forward" size={20} color={colors.white} />
+              <Ionicons name="arrow-forward" size={20} color={colors.onForest} />
             </Pressable>
           </View>
 
@@ -483,6 +489,8 @@ function SearchStateScroll({
    *  strip) sits above the state card and must hug the top of the surface. */
   alignTop?: boolean;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <FadeIn style={styles.resultsFlex} resetKey={resetKey}>
       <ScrollView
@@ -514,6 +522,9 @@ function SearchStateCard({
   tone?: 'brand' | 'danger';
   children?: ReactNode;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
+  const EMERALD_PALETTE = emeraldColorsFor(colors);
   const danger = tone === 'danger';
   return (
     <Card palette={EMERALD_PALETTE} style={styles.stateCard}>
@@ -552,6 +563,9 @@ function WorkerResultCard({
   match: WorkerMatch;
   onPress: () => void;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
+  const EMERALD_PALETTE = emeraldColorsFor(colors);
   const { profile, matchedCategories } = match;
   const name = profile.full_name?.trim() || 'Worker';
   const ratingCount = profile.rating_count ?? 0;
@@ -623,7 +637,8 @@ function WorkerResultCard({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -958,4 +973,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: colors.mint,
   },
-});
+  }),
+);

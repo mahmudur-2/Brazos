@@ -2,7 +2,8 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { colors, layout, radius, spacing, type as typeScale } from '../tokens';
+import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
 
 /**
@@ -53,6 +54,8 @@ export function DetailScreen({
   state,
   insideTabs = true,
 }: DetailScreenProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} right={headerRight} />
@@ -92,7 +95,8 @@ export function DetailScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.bg,
@@ -128,4 +132,5 @@ const styles = StyleSheet.create({
     borderTopColor: colors.line,
     backgroundColor: colors.surface,
   },
-});
+  }),
+);

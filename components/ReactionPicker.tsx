@@ -1,6 +1,14 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { REACTION_EMOJIS } from '../lib/reactions';
-import { colors, radius, shadows, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 type ReactionPickerProps = {
   visible: boolean;
@@ -18,6 +26,8 @@ export function ReactionPicker({
   onRemove,
   onClose,
 }: ReactionPickerProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
@@ -49,7 +59,8 @@ export function ReactionPicker({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
@@ -105,4 +116,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.danger,
   },
-});
+  }),
+);

@@ -5,7 +5,7 @@ import { Button } from './Button';
 import { Card } from './Card';
 import { OfferResponseActions } from './OfferResponseActions';
 import { StatusBadge } from './StatusBadge';
-import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import {
   firstNameOf,
   offerExpiryLabel,
@@ -127,8 +127,11 @@ function OfferListCard({
   onViewProfile,
   onOpenDetail,
   onLongPressAvatar,
-  palette = colors,
+  palette: paletteProp,
 }: ListProps) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
+  const styles = stylesFor(colors);
   const worker = offer.worker;
   const name = worker?.full_name ?? 'Worker';
   const ratingCount = worker?.rating_count ?? 0;
@@ -299,6 +302,8 @@ function OfferThreadCard({
   onWithdraw,
   onOpenJob,
 }: ThreadProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const event = message.request_event ?? 'created';
   const amount = message.request_amount_cents;
   // Any card the caller gave a destination is tappable — a live offer is not a
@@ -474,7 +479,8 @@ function OfferThreadCard({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   card: {
     borderRadius: radius.xl,
     borderColor: colors.mint2,
@@ -741,4 +747,5 @@ const styles = StyleSheet.create({
   counterBtn: {
     width: '100%',
   },
-});
+  }),
+);

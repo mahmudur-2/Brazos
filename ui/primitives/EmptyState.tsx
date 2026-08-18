@@ -1,7 +1,15 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { colors, controls, layout, radius, spacing, type as typeScale } from '../tokens';
+import {
+  controls,
+  layout,
+  radius,
+  spacing,
+  type EmeraldPalette,
+  type as typeScale,
+} from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -36,6 +44,8 @@ export function EmptyState({
   onAction,
   tone = 'neutral',
 }: EmptyStateProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const glyphColor = tone === 'attention' ? colors.danger : colors.emerald;
   const glyphBg = tone === 'attention' ? colors.dangerSurface : colors.mint;
 
@@ -60,7 +70,8 @@ export function EmptyState({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   wrap: {
     flex: 1,
     alignItems: 'center',
@@ -103,4 +114,5 @@ const styles = StyleSheet.create({
     ...typeScale.title,
     color: colors.onForest,
   },
-});
+  }),
+);

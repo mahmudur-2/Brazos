@@ -3,7 +3,7 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { useAuth } from '../hooks/useAuth';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import {
   categoryAccent,
   formatBidCount,
@@ -45,6 +45,8 @@ export function BrowseJobCard({
   bidCount?: number;
   onPress: () => void;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
   const accent = categoryAccent(job.category);
@@ -117,7 +119,8 @@ export function BrowseJobCard({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   card: {
     // Tighter than the default card padding: the thumbnail needs the width
     // more than the card needs the margin.
@@ -207,4 +210,5 @@ const styles = StyleSheet.create({
     width: '35%',
     height: 14,
   },
-});
+  }),
+);

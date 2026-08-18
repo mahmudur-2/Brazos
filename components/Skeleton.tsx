@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Animated, Easing, Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
-import { colors, radius } from '../lib/theme';
+import { radius, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -47,6 +47,8 @@ function stop() {
  * thumbnail, a line of text, or anything else without a variant prop.
  */
 export function Skeleton({ style }: { style?: StyleProp<ViewStyle> }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   // Ref-counted so the loop only runs while something is actually waiting,
   // rather than ticking for the life of the process.
   useEffect(() => {
@@ -64,9 +66,11 @@ export function Skeleton({ style }: { style?: StyleProp<ViewStyle> }) {
   return <Animated.View style={[styles.block, { opacity: pulse }, style]} />;
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   block: {
     backgroundColor: colors.neutralBg,
     borderRadius: radius.sm,
   },
-});
+  }),
+);

@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import { paymentsMode } from '../lib/adapters/payments';
 import { goBackOrHome } from '../lib/navigationRef';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 45 (Phase 9) — Payment methods, told honestly. There is no card
@@ -13,6 +13,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * disabled) and what the sandbox actually does with money states.
  */
 export function PaymentMethodsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const sandbox = paymentsMode === 'sandbox';
 
   return (
@@ -73,6 +75,8 @@ export function PaymentMethodsScreen() {
 }
 
 function Row({ text }: { text: string }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.row}>
       <Ionicons name="checkmark-circle-outline" size={18} color={colors.emerald} />
@@ -81,7 +85,8 @@ function Row({ text }: { text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   modeCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -125,4 +130,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 19,
   },
-});
+  }),
+);

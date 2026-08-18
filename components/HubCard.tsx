@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { Card } from './Card';
 import { StatusBadge } from './StatusBadge';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { categoryAccent, formatBudget, type JobCategory } from '../lib/jobs';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -59,6 +59,8 @@ export function HubCard({
   nextAction,
   onPress,
 }: HubCardProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const accent = categoryAccent(category);
   // A stored URL can still be dead (deleted object, expired host); falling back
   // on error keeps a broken image from rendering as a grey hole in the list.
@@ -130,7 +132,8 @@ export function HubCard({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   card: {
     gap: spacing.md,
     borderRadius: radius.xl,
@@ -243,4 +246,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.forest,
   },
-});
+  }),
+);

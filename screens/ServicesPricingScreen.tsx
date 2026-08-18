@@ -21,7 +21,7 @@ import {
   type WorkerService,
 } from '../lib/services';
 import { fetchMyProfile, updateProfile, type Profile } from '../lib/profiles';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screens 64 + 66 (Phase 9, consolidated) — the worker's self-service
@@ -32,6 +32,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * says so instead of pretending.
  */
 export function ServicesPricingScreen() {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const { user } = useAuth();
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -199,6 +201,7 @@ export function ServicesPricingScreen() {
           />
         </View>
         <TextInput
+          keyboardAppearance={isDark ? 'dark' : 'light'}
           style={styles.input}
           value={note}
           onChangeText={setNote}
@@ -261,6 +264,7 @@ export function ServicesPricingScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Add a service</Text>
         <TextInput
+          keyboardAppearance={isDark ? 'dark' : 'light'}
           style={styles.input}
           value={title}
           onChangeText={setTitle}
@@ -280,6 +284,7 @@ export function ServicesPricingScreen() {
         {priceMode === 'flat' ? (
           <View style={styles.priceRow}>
             <TextInput
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               style={[styles.input, styles.priceInput]}
               value={price}
               onChangeText={setPrice}
@@ -340,7 +345,8 @@ export function ServicesPricingScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   card: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -478,4 +484,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.onPrimary,
   },
-});
+  }),
+);

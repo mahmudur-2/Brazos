@@ -14,7 +14,7 @@ import {
   formatBudget,
   type JobCategory,
 } from '../lib/jobs';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /** Preset budget floors — round numbers a worker actually thinks in. */
 const MIN_BUDGET_PRESETS_CENTS = [2500, 5000, 10000] as const;
@@ -43,6 +43,8 @@ export function JobFilterSheet({
   onApply,
   distanceAvailable,
 }: JobFilterSheetProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const [draft, setDraft] = useState<JobFilterModel>(value);
 
   // Re-seed the draft each time the sheet opens with what is actually applied.
@@ -167,7 +169,8 @@ export function JobFilterSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   section: {
     marginBottom: spacing.lg,
     gap: spacing.sm,
@@ -250,4 +253,5 @@ const styles = StyleSheet.create({
   actionButton: {
     flex: 1,
   },
-});
+  }),
+);

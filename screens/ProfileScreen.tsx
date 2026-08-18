@@ -42,7 +42,15 @@ import { useMode } from '../modes/ModeProvider';
 import { uploadAvatar } from '../lib/storage';
 import { isValidPhone } from '../lib/validation';
 import type { ProfileStackNavigation } from '../lib/navigation';
-import { colors, emeraldRadius, radius, spacing, withAlpha } from '../lib/theme';
+import {
+  emeraldRadius,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 const LANGUAGE_OPTIONS = [
   { label: 'English', value: 'en' },
@@ -59,6 +67,8 @@ function languageLabel(value: string) {
 }
 
 export function ProfileScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
   const { user, logout } = useAuth();
   const { profile, loading, setProfile } = useProfile();
@@ -922,7 +932,8 @@ export function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1158,4 +1169,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.warning,
   },
-});
+  }),
+);

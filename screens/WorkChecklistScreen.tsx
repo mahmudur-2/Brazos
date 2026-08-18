@@ -17,7 +17,7 @@ import {
   type ChecklistItem,
 } from '../lib/checklist';
 import type { MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 57 — Work checklist (Phase 6, worker side).
@@ -29,6 +29,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * record and the database (not just this screen) refuses further edits.
  */
 export function WorkChecklistScreen() {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkChecklist'>>();
   const { user } = useAuth();
   const { job, loading, error, refresh } = useJob(params.jobId);
@@ -154,6 +156,7 @@ export function WorkChecklistScreen() {
       footerNote={
         editable ? (
           <TextInput
+            keyboardAppearance={isDark ? 'dark' : 'light'}
             style={styles.input}
             value={draft}
             onChangeText={setDraft}
@@ -233,7 +236,8 @@ export function WorkChecklistScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -332,4 +336,5 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.surface,
   },
-});
+  }),
+);

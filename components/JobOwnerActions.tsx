@@ -2,7 +2,7 @@ import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useJobOwnerActions } from '../hooks/useJobOwnerActions';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type JobOwnerActionsProps = {
   jobId: string;
@@ -23,6 +23,8 @@ type JobOwnerActionsProps = {
  * reads as one component.
  */
 export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActionsProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const {
     canManage,
     deleting,
@@ -69,7 +71,8 @@ export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActi
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: spacing.sm,
@@ -82,4 +85,5 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 44,
   },
-});
+  }),
+);

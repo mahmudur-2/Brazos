@@ -42,7 +42,7 @@ import type {
   ProfileReviewsRouteParamList,
   WorkerProfileRouteParamList,
 } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Read-only view of another user's profile — the public face of a worker's
@@ -55,6 +55,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * completed-job stats come from the worker_job_stats() RPC (phase17).
  */
 export function WorkerProfileScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   // PostJob is registered alongside WorkerProfile in every stack that can
   // reach this screen, so the offer button below can push it from any of them.
   // (tests/crossTabNavigation.test.mjs executes that claim per stack — it was
@@ -437,7 +439,8 @@ export function WorkerProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   availabilityCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -608,4 +611,5 @@ const styles = StyleSheet.create({
   hireAction: {
     marginTop: spacing.md,
   },
-});
+  }),
+);

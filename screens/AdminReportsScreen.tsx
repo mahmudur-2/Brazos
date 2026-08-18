@@ -25,10 +25,12 @@ import {
   unbanUser,
   type AdminReport,
 } from '../lib/moderation';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 export function AdminReportsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -218,7 +220,8 @@ export function AdminReportsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -315,4 +318,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
   },
-});
+  }),
+);

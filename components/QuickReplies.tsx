@@ -1,7 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { chatTemplatesForMode } from '../lib/messages';
 import { useMode } from '../modes';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 // No gradient library in this project (expo-linear-gradient isn't
 // installed, and adding a native module tonight would need a rebuild) — a
@@ -29,6 +29,8 @@ type QuickRepliesProps = {
  * refusing to shrink) makes the row's size independent of that entirely.
  */
 export function QuickReplies({ onSelect, disabled = false }: QuickRepliesProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   // Mode decides the set (Phase 7): the same chat thread offers "On my way"
   // to the worker side and "Any update?" to the customer side. Perspective
   // comes from ModeContext, never a hand-passed prop (repo rule).
@@ -74,7 +76,8 @@ const CHIP_HEIGHT = CHIP_TEXT_LINE + CHIP_PAD_V * 2 + 2;
 /** Row height: the chip plus even breathing room above and below. */
 const QUICK_REPLIES_HEIGHT = CHIP_HEIGHT + spacing.sm * 2;
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   wrap: {
     height: QUICK_REPLIES_HEIGHT,
     // Both are required. flexGrow:0 stops it expanding into spare space;
@@ -124,4 +127,5 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.primary,
   },
-});
+  }),
+);

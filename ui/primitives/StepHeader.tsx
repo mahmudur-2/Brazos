@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { colors, layout, radius, spacing, type as typeScale } from '../tokens';
+import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 /**
  * The wizard progress header (§I) — a segmented bar plus "Step N of M" and the
@@ -20,6 +21,8 @@ type StepHeaderProps = {
 };
 
 export function StepHeader({ step, steps }: StepHeaderProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const total = steps.length;
   // Guard rather than trust: an out-of-range index would otherwise render an
   // empty label and a bar that looks finished.
@@ -51,7 +54,8 @@ export function StepHeader({ step, steps }: StepHeaderProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   wrap: {
     gap: spacing.sm,
     paddingHorizontal: layout.screenGutter,
@@ -91,4 +95,5 @@ const styles = StyleSheet.create({
     // Shrinks and truncates rather than pushing the counter off-screen.
     flexShrink: 1,
   },
-});
+  }),
+);

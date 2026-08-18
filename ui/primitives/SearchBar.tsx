@@ -8,7 +8,8 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, controls, radius, spacing, type as typeScale } from '../tokens';
+import { controls, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 /**
  * The shared search field (§I).
@@ -46,6 +47,8 @@ export function SearchBar({
   style,
   accessibilityLabel,
 }: SearchBarProps) {
+  const { emerald: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   if (onPress) {
     return (
       <Pressable
@@ -72,6 +75,7 @@ export function SearchBar({
     <View style={[styles.field, style]}>
       <Ionicons name="search" size={18} color={colors.emerald} />
       <TextInput
+        keyboardAppearance={isDark ? 'dark' : 'light'}
         style={styles.input}
         value={value}
         onChangeText={onChangeText}
@@ -99,7 +103,8 @@ export function SearchBar({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   field: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -130,4 +135,5 @@ const styles = StyleSheet.create({
   placeholder: {
     color: colors.muted,
   },
-});
+  }),
+);

@@ -1,6 +1,14 @@
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { Button } from './Button';
-import { colors, radius, shadows, spacing, withAlpha, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 type ConfirmDialogProps = {
   visible: boolean;
@@ -34,8 +42,11 @@ export function ConfirmDialog({
   loading = false,
   onConfirm,
   onCancel,
-  palette = colors,
+  palette: paletteProp,
 }: ConfirmDialogProps) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
+  const styles = stylesFor(colors);
   return (
     <Modal
       visible={visible}
@@ -86,7 +97,8 @@ export function ConfirmDialog({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
@@ -115,4 +127,5 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     marginTop: spacing.lg,
   },
-});
+  }),
+);

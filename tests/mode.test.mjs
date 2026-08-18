@@ -318,8 +318,10 @@ test('each tree carries its Stage 4D tab contract', () => {
   assert.match(customerRoot, /tabBarButton: \(\) => <CenterCreateButton/);
   // Same bar configuration in both trees, so the chrome under LOCKED screens
   // 07/48 cannot drift between modes.
-  assert.match(customerRoot, /bottomNavScreenOptions\(insets\.bottom\)/);
-  assert.match(workerRoot, /bottomNavScreenOptions\(insets\.bottom\)/);
+  // 4D-4: the options factory takes the resolved palette so the bar repaints
+  // on a theme change — still the ONE implementation, now theme-aware.
+  assert.match(customerRoot, /bottomNavScreenOptions\(insets\.bottom, palette\)/);
+  assert.match(workerRoot, /bottomNavScreenOptions\(insets\.bottom, palette\)/);
 });
 
 test('the locked customer Home "View map" dispatch still resolves on the tab navigator', () => {

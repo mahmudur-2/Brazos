@@ -30,7 +30,15 @@ import type { WorkerHomeStackNavigation } from '../lib/navigation';
 import { updateProfile } from '../lib/profiles';
 import { greetingFor } from '../lib/time';
 import { useMode } from '../modes';
-import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
 const PREVIEW_COUNT = 3;
@@ -60,6 +68,8 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
  *     disagree with what tapping it opens.
  */
 export function WorkerHomeScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { user } = useAuth();
   const { profile, setProfile } = useProfile();
@@ -365,7 +375,8 @@ export function WorkerHomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   content: {
@@ -495,4 +506,5 @@ const styles = StyleSheet.create({
   noticeError: { fontSize: 14, color: colors.danger },
   retry: { fontSize: 14, fontWeight: '700', color: colors.forest },
   empty: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
-});
+  }),
+);

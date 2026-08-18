@@ -87,7 +87,7 @@ import { removeReaction, setReaction } from '../lib/reactions';
 import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /** One entry in the merged timeline: a message, or the job it belongs to. */
 type TimelineItem =
@@ -95,6 +95,8 @@ type TimelineItem =
   | { kind: 'message'; key: string; message: Message };
 
 export function ChatScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   // Chat is nested in more than one tab's stack, so its nav/route types are
   // declared standalone (ChatRouteParamList) rather than tied to one parent
   // stack — it only needs goBack() and its own params.
@@ -1282,7 +1284,8 @@ export function ChatScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1458,4 +1461,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
   },
-});
+  }),
+);

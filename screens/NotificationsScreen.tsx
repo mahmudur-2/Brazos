@@ -16,7 +16,7 @@ import {
 } from '../lib/notifications';
 import { goBackOrHome } from '../lib/navigationRef';
 import { canRouteNotification, handleNotificationData } from '../lib/notificationRoutes';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 /**
@@ -50,6 +50,8 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
  * The bridge below only forwards ModeContext; this screen never switches.
  */
 export function NotificationsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { user } = useAuth();
   const modeBridge = useNotificationModeBridge();
 
@@ -190,7 +192,8 @@ export function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   markAll: {
     fontSize: 13,
     fontWeight: '800',
@@ -242,4 +245,5 @@ const styles = StyleSheet.create({
     backgroundColor: colors.emerald,
     marginTop: 6,
   },
-});
+  }),
+);

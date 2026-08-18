@@ -4,7 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import { Chip } from './Chip';
 import { Skeleton } from './Skeleton';
 import { useAuth } from '../hooks/useAuth';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import {
   arrivalWindowLabel,
   categoryAccent,
@@ -64,6 +71,8 @@ export function WorkerJobCard({
    *  renders NOTHING: distance is real data or absent, never estimated. */
   distanceMiles?: number | null;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
   const accent = categoryAccent(job.category);
@@ -184,6 +193,8 @@ export function WorkerJobCard({
 /** The same silhouette with nothing in it, so the feed does not jump when the
  *  data lands. */
 export function WorkerJobCardSkeleton() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.card}>
       <Skeleton style={styles.thumb} />
@@ -196,7 +207,8 @@ export function WorkerJobCardSkeleton() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -292,4 +304,5 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: radius.sm,
   },
-});
+  }),
+);

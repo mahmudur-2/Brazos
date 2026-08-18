@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../lib/theme';
+import { useThemeColors } from '../lib/theme';
 
 type StarRatingProps = {
   value: number;
@@ -9,6 +9,7 @@ type StarRatingProps = {
 };
 
 export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
+  const { palette: colors } = useThemeColors();
   const readOnly = !onChange;
 
   return (

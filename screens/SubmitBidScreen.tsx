@@ -8,7 +8,7 @@ import { useMode, useModeSwitch } from '../modes';
 import { goBackOrHome } from '../lib/navigationRef';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import type { SubmitBidRouteParamList } from '../lib/navigation';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 52 — Submit Bid (worker). The OfferComposer's marketplace-bid entry,
@@ -21,6 +21,8 @@ import { colors, spacing } from '../lib/theme';
  * must not land on a form inviting a second submission of the same bid.
  */
 export function SubmitBidScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<SubmitBidRouteParamList, 'SubmitBid'>>();
   const { mode } = useMode();
@@ -92,7 +94,8 @@ export function SubmitBidScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -125,4 +128,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-});
+  }),
+);

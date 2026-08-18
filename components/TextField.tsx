@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+import { radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type TextFieldProps = {
   label: string;
@@ -19,10 +19,12 @@ export function TextField({
   label,
   error,
   hint,
-  palette = colors,
+  palette: paletteProp,
   style,
   ...rest
 }: TextFieldProps) {
+  const { palette: colors, isDark } = useThemeColors();
+  const palette = paletteProp ?? colors;
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
@@ -30,6 +32,7 @@ export function TextField({
         {hint ? <Text style={[styles.hint, { color: palette.textMuted }]}>{hint}</Text> : null}
       </View>
       <TextInput
+        keyboardAppearance={isDark ? 'dark' : 'light'}
         style={[
           styles.input,
           {

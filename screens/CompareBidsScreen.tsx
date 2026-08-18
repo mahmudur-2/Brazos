@@ -21,7 +21,7 @@ import { fetchWorkerJobStats } from '../lib/portfolio';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 28 — Compare Bids (4D-3 §5). One full-width card per bid, stacked
@@ -36,6 +36,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * path and this screen performs no write of any kind.
  */
 export function CompareBidsScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'CompareBids'>>();
   const job = params.job;
@@ -152,6 +154,8 @@ function CompareRow({
   completedJobs: number | null;
   onPress: () => void;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const worker = bid.worker;
   const rating = knownRating(worker);
   const ratingCount = worker?.rating_count ?? 0;
@@ -234,7 +238,8 @@ function CompareRow({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   headerBlock: {
     gap: spacing.sm,
   },
@@ -374,4 +379,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.emerald,
   },
-});
+  }),
+);

@@ -2,7 +2,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { Card } from './Card';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 type ConversationRowProps = {
@@ -39,6 +39,8 @@ export function ConversationRow({
   onLongPress,
   onLongPressAvatar,
 }: ConversationRowProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <Card
       onPress={onPress}
@@ -100,7 +102,8 @@ export function ConversationRow({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -173,4 +176,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.onPrimary,
   },
-});
+  }),
+);

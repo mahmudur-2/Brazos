@@ -3,7 +3,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { formatClipDuration } from '../lib/messages';
-import { colors, radius, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  useThemeColors,
+  withAlpha,
+} from '../lib/theme';
 
 type VoiceNoteProps = {
   url: string;
@@ -30,6 +35,7 @@ const BARS = [0.35, 0.6, 0.85, 0.5, 1, 0.7, 0.4, 0.9, 0.55, 0.75, 0.45, 0.65,
  * note keep its own position independently of the others.
  */
 export function VoiceNote({ url, durationMs, isOwn }: VoiceNoteProps) {
+  const { palette: colors } = useThemeColors();
   const player = useAudioPlayer({ uri: url });
   const status = useAudioPlayerStatus(player);
 

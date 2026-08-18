@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { colors, spacing, type ColorPalette } from '../lib/theme';
+import { spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type ScreenHeaderProps = {
   title: string;
@@ -26,10 +26,12 @@ export function ScreenHeader({
   onBack,
   right,
   onPressTitle,
-  palette = colors,
+  palette: paletteProp,
   titleIcon,
   titleSize,
 }: ScreenHeaderProps) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
   const titleText = (
     <Text
       style={[

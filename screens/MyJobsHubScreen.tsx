@@ -32,7 +32,7 @@ import { effectiveOfferStatus, type PendingOffer } from '../lib/offers';
 import { draftHasContent, loadPostJobDraft, type PostJobDraft } from '../lib/postJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 /** "Cleaning · Bushwick" — the same category+location line the browse feed's
@@ -64,6 +64,8 @@ function FilterTabs({
   value: Filter;
   onChange: (filter: Filter) => void;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.tabs} accessibilityRole="tablist">
       {FILTERS.map((option) => {
@@ -91,6 +93,8 @@ function FilterTabs({
 }
 
 function SectionHeading({ title, count }: { title: string; count: number }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.sectionHeaderRow}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -110,6 +114,8 @@ function bidNextAction(status: string, awaitingMe: boolean): string {
 }
 
 export function MyJobsHubScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { user } = useAuth();
   // Perspective comes from ModeContext — never a hand-passed prop (CLAUDE.md).
@@ -238,7 +244,7 @@ export function MyJobsHubScreen() {
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
         <View style={styles.headerMark}>
-          <Ionicons name="briefcase-outline" size={22} color={colors.onPrimary} />
+          <Ionicons name="briefcase-outline" size={22} color={colors.onForest} />
         </View>
         <View style={styles.headerCopy}>
           <Text style={styles.eyebrow}>YOUR WORK</Text>
@@ -309,7 +315,7 @@ export function MyJobsHubScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Post another job"
                   >
-                    <Ionicons name="add" size={20} color={colors.onPrimary} />
+                    <Ionicons name="add" size={20} color={colors.onForest} />
                     <Text style={styles.primaryCtaText}>Post another job</Text>
                   </Pressable>
                 ) : null}
@@ -517,7 +523,8 @@ export function MyJobsHubScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -688,7 +695,7 @@ const styles = StyleSheet.create({
   primaryCtaText: {
     fontSize: 16,
     fontWeight: '800',
-    color: colors.onPrimary,
+    color: colors.onForest,
   },
   draftCard: {
     minHeight: 72,
@@ -805,4 +812,5 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.82,
   },
-});
+  }),
+);

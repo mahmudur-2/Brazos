@@ -23,7 +23,14 @@ import {
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, emeraldColors, radius, spacing } from '../lib/theme';
+import {
+  emeraldColorsFor,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * Screen 29 — Bid Detail. The complete authoritative terms of one bid, the
@@ -33,6 +40,9 @@ import { colors, emeraldColors, radius, spacing } from '../lib/theme';
  * continuous motion, with the job assigned the moment accept_offer() commits.
  */
 export function BidDetailScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
+  const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'BidDetail'>>();
   const job = params.job;
@@ -338,7 +348,8 @@ export function BidDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   headerCard: {
     gap: spacing.sm,
     padding: spacing.lg,
@@ -450,4 +461,5 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-});
+  }),
+);

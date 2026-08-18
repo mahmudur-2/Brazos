@@ -1,6 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing, type as typeScale, withAlpha } from '../tokens';
+import { radius, spacing, withAlpha, type EmeraldPalette, type as typeScale } from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 /**
  * A responsive grid of media thumbnails (§I).
@@ -38,6 +39,8 @@ export function MediaGrid({
   onRemoveItem,
   emptyLabel,
 }: MediaGridProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   if (items.length === 0) {
     return emptyLabel ? (
       <View style={styles.empty}>
@@ -98,7 +101,8 @@ export function MediaGrid({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -160,4 +164,5 @@ const styles = StyleSheet.create({
     ...typeScale.sub,
     color: colors.muted,
   },
-});
+  }),
+);

@@ -21,7 +21,7 @@ import {
   JOB_LIFECYCLE_LABELS,
 } from '../lib/jobLifecycle';
 import type { MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Screen 56 — Route & arrival (Phase 6, worker side).
@@ -34,6 +34,8 @@ import { colors, radius, spacing } from '../lib/theme';
  * screen 33 (TrackWorker).
  */
 export function RouteArrivalScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'RouteArrival'>>();
   const { user } = useAuth();
   const { job, loading, error, refresh } = useJob(params.jobId);
@@ -231,6 +233,8 @@ function StepRow({
   label: string;
   doneNote: string | null;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <View style={styles.stepRow}>
       <View style={[styles.stepDot, done && styles.stepDotDone]}>
@@ -244,7 +248,8 @@ function StepRow({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   statusCard: {
     padding: spacing.lg,
     gap: spacing.sm,
@@ -332,4 +337,5 @@ const styles = StyleSheet.create({
   stepLabelDone: {
     color: colors.ink,
   },
-});
+  }),
+);

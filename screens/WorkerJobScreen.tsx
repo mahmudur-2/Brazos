@@ -53,7 +53,14 @@ import {
   uploadJobPhoto,
 } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 /** Same cap as a job posting's photos, for consistency. */
 const MAX_DONE_PHOTOS = 5;
@@ -74,6 +81,8 @@ function formatDuration(ms: number): string {
 }
 
 export function WorkerJobScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkerJob'>>();
   const { user } = useAuth();
@@ -617,7 +626,8 @@ export function WorkerJobScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   paymentCard: {
     gap: spacing.sm,
   },
@@ -793,4 +803,5 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm + 2,
     fontSize: 14,
   },
-});
+  }),
+);

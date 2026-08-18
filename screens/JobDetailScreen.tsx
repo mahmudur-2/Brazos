@@ -77,7 +77,14 @@ import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
-import { colors, radius, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * "$45–$54" / "$54" — the job's budget as the worker would actually receive it.
@@ -99,6 +106,8 @@ function payoutEstimateLabel(job: OpenJob): string | null {
 }
 
 export function JobDetailScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   // Registered in three different stacks (Home, MyJobs, Map) — like Chat, its
   // nav/route types are standalone rather than tied to one parent stack.
   const navigation = useNavigation();
@@ -957,7 +966,8 @@ export function JobDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1256,4 +1266,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: spacing.md,
   },
-});
+  }),
+);

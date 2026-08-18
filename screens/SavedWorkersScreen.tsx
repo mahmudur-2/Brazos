@@ -15,7 +15,7 @@ import { canHire, pastOnlyIds } from '../lib/rebook';
 import { fetchSavedWorkers, unsaveWorker } from '../lib/savedWorkers';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes/ModeProvider';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /** The lightest shape a row needs — the batch profile read returns a subset
  *  of Profile, and the rating/availability extras render only when present. */
@@ -31,6 +31,8 @@ type PersonRow = Pick<Profile, 'id' | 'full_name' | 'avatar_url'> &
  * hireWorkerId flow already implements.
  */
 export function SavedWorkersScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
   const { mode } = useMode();
@@ -200,7 +202,8 @@ export function SavedWorkersScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   list: {
     gap: spacing.sm,
   },
@@ -249,4 +252,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: colors.emerald,
   },
-});
+  }),
+);

@@ -23,7 +23,7 @@ import {
   type PortfolioItem,
 } from '../lib/portfolio';
 import { confirmAsync } from '../lib/dialog';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type PastWorkProps = {
   workerId: string;
@@ -52,6 +52,8 @@ export function PastWork({
   onManage,
   refreshToken = 0,
 }: PastWorkProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const [items, setItems] = useState<PortfolioItem[]>([]);
   const [stats, setStats] = useState<CategoryStat[]>([]);
   const [loading, setLoading] = useState(true);
@@ -219,6 +221,8 @@ function FilterTab({
   active: boolean;
   onPress: () => void;
 }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   return (
     <Pressable onPress={onPress} style={[styles.tab, active && styles.tabActive]}>
       <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
@@ -226,7 +230,8 @@ function FilterTab({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -330,4 +335,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     lineHeight: 17,
   },
-});
+  }),
+);

@@ -6,7 +6,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { LEGAL_DOCUMENTS } from '../lib/legal';
 import { goBackOrHome } from '../lib/navigationRef';
 import type { LegalDocumentRouteParamList } from '../lib/navigation';
-import { colors, spacing } from '../lib/theme';
+import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * Read-only view of one legal document, reachable from Profile at any time —
@@ -14,6 +14,8 @@ import { colors, spacing } from '../lib/theme';
  * the two can't drift.
  */
 export function LegalDocumentScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const route = useRoute<RouteProp<LegalDocumentRouteParamList, 'LegalDocument'>>();
   // route.params.document is typed as 'terms' | 'privacy', but the value
   // still comes from outside this screen's control (a deep link, or a stale
@@ -46,7 +48,8 @@ export function LegalDocumentScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -72,4 +75,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: colors.textSubtle,
   },
-});
+  }),
+);

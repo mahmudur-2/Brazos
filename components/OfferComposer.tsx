@@ -33,7 +33,7 @@ import {
   isCounterLimitError,
   type Offer,
 } from '../lib/offers';
-import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 /**
  * The one offer-terms form (BRAZOS_MASTER_PLAN.md §E: "OfferComposer — one
@@ -124,7 +124,10 @@ export function OfferAmountField({
   );
 }
 
-export function OfferComposer({ context, onSubmitted, palette = colors }: OfferComposerProps) {
+export function OfferComposer({ context, onSubmitted, palette: paletteProp }: OfferComposerProps) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
+  const styles = stylesFor(colors);
   const [amount, setAmount] = useState('');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -408,7 +411,8 @@ export function OfferComposer({ context, onSubmitted, palette = colors }: OfferC
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   wrap: {
     gap: spacing.lg,
   },
@@ -500,4 +504,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 19,
   },
-});
+  }),
+);

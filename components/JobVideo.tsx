@@ -2,7 +2,14 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { colors, radius, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * One short video attached to a job posting.
@@ -16,6 +23,8 @@ import { colors, radius, spacing, withAlpha } from '../lib/theme';
  * controls, at the volume the device is set to, after a deliberate press.
  */
 export function JobVideo({ uri, label }: { uri: string; label: string }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const [active, setActive] = useState(false);
   const player = useVideoPlayer(uri, (p) => {
     // A frame shortly into the clip is usually more useful than its opening
@@ -86,7 +95,8 @@ export function JobVideo({ uri, label }: { uri: string; label: string }) {
 const TILE_WIDTH = 220;
 const TILE_HEIGHT = 132;
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   poster: {
     width: TILE_WIDTH,
     height: TILE_HEIGHT,
@@ -137,4 +147,5 @@ const styles = StyleSheet.create({
     backgroundColor: withAlpha(colors.mediaChrome, 0.82),
   },
   fullscreenButtonPressed: { opacity: 0.78 },
-});
+  }),
+);

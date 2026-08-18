@@ -19,7 +19,7 @@ import {
   type JobLifecycleState,
 } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 /**
@@ -40,6 +40,8 @@ const TIMELINE: { state: JobLifecycleState; label: string; caption: string }[] =
 ];
 
 export function TrackWorkerScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'TrackWorker'>>();
   const { job, missing } = useOwnedJobDetail(params.job);
@@ -217,7 +219,8 @@ export function TrackWorkerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   noticeCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -323,4 +326,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 19,
   },
-});
+  }),
+);

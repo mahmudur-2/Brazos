@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
-import { colors, controls, layout, spacing, type as typeScale } from '../tokens';
+import { controls, layout, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import { themedStyles, useThemeColors } from '../../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -39,6 +40,8 @@ export function ListRow({
   tone = 'default',
   style,
 }: ListRowProps) {
+  const { emerald: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const titleColor = tone === 'danger' ? colors.danger : colors.ink;
   const glyphColor = tone === 'danger' ? colors.danger : colors.emerald;
 
@@ -79,7 +82,8 @@ export function ListRow({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: EmeraldPalette) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -110,4 +114,5 @@ const styles = StyleSheet.create({
   trailing: {
     flexShrink: 0,
   },
-});
+  }),
+);

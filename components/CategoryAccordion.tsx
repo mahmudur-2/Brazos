@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SKILL_CATEGORIES } from '../lib/skillCategories';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type CategoryAccordionProps = {
   selected: string[];
@@ -27,6 +27,8 @@ export function CategoryAccordion({
   onAddCustom,
   onRemoveCustom,
 }: CategoryAccordionProps) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const [expanded, setExpanded] = useState(false);
   const [customInput, setCustomInput] = useState('');
 
@@ -97,6 +99,7 @@ export function CategoryAccordion({
 
           <View style={styles.otherRow}>
             <TextInput
+              keyboardAppearance={isDark ? 'dark' : 'light'}
               style={styles.otherInput}
               value={customInput}
               onChangeText={setCustomInput}
@@ -120,7 +123,8 @@ export function CategoryAccordion({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   summaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -188,4 +192,5 @@ const styles = StyleSheet.create({
   otherAddBtnDisabled: {
     opacity: 0.4,
   },
-});
+  }),
+);

@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+import { radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type Option<T extends string> = { label: string; value: T };
 
@@ -17,8 +17,10 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
-  palette = colors,
+  palette: paletteProp,
 }: SegmentedControlProps<T>) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
   return (
     <View
       style={[styles.container, { backgroundColor: palette.neutralBg }]}

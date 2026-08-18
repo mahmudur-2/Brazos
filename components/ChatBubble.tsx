@@ -1,7 +1,15 @@
 import { Pressable, Image, StyleSheet, Text, View } from 'react-native';
 import { AvatarPressable } from './AvatarPressable';
 import { VoiceNote } from './VoiceNote';
-import { colors, radius, shadows, spacing, withAlpha } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 import { formatClockTime } from '../lib/time';
 import { messagePreviewText, type Message } from '../lib/messages';
 import type { Reaction } from '../lib/reactions';
@@ -34,6 +42,8 @@ export function ChatBubble({
   replyToName,
   onLongPressAvatar,
 }: ChatBubbleProps) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const isUnsent = !!message.unsent_at;
 
   return (
@@ -146,7 +156,8 @@ export function ChatBubble({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'flex-end',
@@ -296,4 +307,5 @@ const styles = StyleSheet.create({
   reactionEmoji: {
     fontSize: 13,
   },
-});
+  }),
+);

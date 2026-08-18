@@ -25,7 +25,14 @@ import {
   type Review,
 } from '../lib/reviews';
 import { deleteJobPhoto, uploadReviewPhoto } from '../lib/storage';
-import { colors, radius, spacing, withAlpha, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 // Reviews render as a short quoted block wherever they're shown (this same
 // card once submitted, a worker's profile) — plenty of room for real
@@ -58,8 +65,11 @@ export function ReviewSection({
   prompt,
   onSubmitted,
   scrollRef,
-  palette = colors,
+  palette: paletteProp,
 }: ReviewSectionProps) {
+  const { palette: colors } = useThemeColors();
+  const palette = paletteProp ?? colors;
+  const styles = stylesFor(colors);
   const [existing, setExisting] = useState<Review | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -399,7 +409,8 @@ export function ReviewSection({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: '700',
@@ -488,4 +499,5 @@ const styles = StyleSheet.create({
     color: colors.textSubtle,
     marginTop: spacing.md,
   },
-});
+  }),
+);

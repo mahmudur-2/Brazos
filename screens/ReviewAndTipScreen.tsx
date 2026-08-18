@@ -32,7 +32,14 @@ import {
 import { fetchProfileById } from '../lib/profiles';
 import { dollarsToCents, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, emeraldColors, radius, spacing } from '../lib/theme';
+import {
+  emeraldColorsFor,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /** Round tip suggestions, in cents. Presets, not a fee schedule — the
  *  customer types any amount they want below them. */
@@ -52,6 +59,9 @@ const TIP_PRESETS_CENTS = [500, 1000, 2000];
  * not here.
  */
 export function ReviewAndTipScreen() {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ReviewAndTip'>>();
   const { job, missing } = useOwnedJobDetail(params.job);
@@ -289,6 +299,7 @@ export function ReviewAndTipScreen() {
                   </View>
                   {tipChoice === 'custom' ? (
                     <TextInput
+                      keyboardAppearance={isDark ? 'dark' : 'light'}
                       style={styles.customInput}
                       value={customTip}
                       onChangeText={setCustomTip}
@@ -334,7 +345,8 @@ export function ReviewAndTipScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -417,4 +429,5 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.surface,
   },
-});
+  }),
+);
