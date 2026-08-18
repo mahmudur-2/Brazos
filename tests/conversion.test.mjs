@@ -182,3 +182,106 @@ test('§3.2 · guidance shows only for a seeded category while the budget is emp
   assert.match(screen, /const guidanceLines = isFreshPost \? priceGuidanceLines\(category\) : null;/);
   assert.match(screen, /\(bothBudgetsEmpty \|\| !budgetFocused\)/);
 });
+
+// ---------------------------------------------------------------------------
+// §4 — rebook: saved and past workers
+// ---------------------------------------------------------------------------
+
+const rebookModule = importLibModule('lib/rebook.ts');
+
+test('§4.1 · a worker in both populations appears once, under Saved', async () => {
+  const { pastOnlyIds, rebookStripItems } = await rebookModule;
+
+  const savedIds = new Set(['w1', 'w2']);
+  assert.deepEqual(pastOnlyIds(['w2', 'w3', 'w1', 'w4'], savedIds), ['w3', 'w4']);
+  assert.deepEqual(pastOnlyIds([], savedIds), []);
+  assert.deepEqual(pastOnlyIds(['w9'], new Set()), ['w9']);
+
+  // The strip applies the same rule even when handed overlapping inputs.
+  const both = { id: 'w1', full_name: 'Ada Reyes', avatar_url: null };
+  const items = rebookStripItems(
+    [both],
+    [both, { id: 'w2', full_name: 'Bo Chen', avatar_url: null }]
+  );
+  assert.deepEqual(
+    items.map((i) => [i.id, i.saved]),
+    [
+      ['w1', true],
+      ['w2', false],
+    ],
+    'the duplicate renders once, and as Saved'
+  );
+});
+
+test('§4.3 · a tombstoned profile carries no Hire, and the label is phase67\'s, verbatim', async () => {
+  const { DELETED_USER_LABEL, canHire, isTombstonedName, rebookStripItems } =
+    await rebookModule;
+
+  assert.equal(DELETED_USER_LABEL, 'Deleted user');
+  // Pin the label against the migration that writes it — the client constant
+  // and the tombstone UPDATE must never drift apart.
+  const phase67 = await read('supabase/phase67_account_deletion.sql');
+  assert.match(phase67, /set full_name\s+= 'Deleted user',/);
+
+  assert.equal(canHire('Deleted user'), false);
+  assert.equal(isTombstonedName('Deleted user'), true);
+  assert.equal(canHire('Ada Reyes'), true);
+  assert.equal(canHire(null), true, 'a merely-missing name is not a tombstone');
+
+  // The strip is a hire shortcut, so tombstones never enter it at all.
+  const items = rebookStripItems(
+    [{ id: 'w1', full_name: 'Deleted user', avatar_url: null }],
+    [{ id: 'w2', full_name: 'Deleted user', avatar_url: null }]
+  );
+  assert.deepEqual(items, []);
+});
+
+test('§4 · SavedWorkersScreen: sections, suppressed Hire, no writes, no verification vocabulary [static]', async () => {
+  const screen = await read('screens/SavedWorkersScreen.tsx');
+
+  // Empty sections are omitted entirely (conditional spread), not rendered
+  // as empty headers.
+  assert.match(screen, /\.\.\.\(saved\.length > 0/);
+  assert.match(screen, /\.\.\.\(past\.length > 0/);
+
+  // The trust line's availability suffix requires accepting_work to be
+  // EXPLICITLY false — null is unknown and renders nothing.
+  assert.match(
+    screen,
+    /profile\.accepting_work === false \? ' · Not taking work right now' : ''/
+  );
+
+  // The dedup goes through the shared rule, not a local re-derivation.
+  assert.match(screen, /pastOnlyIds\(/);
+
+  // Hire is a navigation into the prefilled composer — the screen itself
+  // performs no offer write of any kind.
+  assert.match(screen, /navigation\.navigate\('PostJob', \{\s*hireWorkerId: profile\.id/);
+  assert.ok(!screen.includes('createDirectOffer'), 'no direct-offer write from this screen');
+  assert.ok(!screen.includes('supabase.rpc'), 'no raw RPC from this screen');
+  assert.ok(!screen.includes('accept_offer'), 'no acceptance path from this screen');
+
+  // A tombstoned row renders no Hire control.
+  assert.match(screen, /\{canHire\(profile\.full_name\) \? \(/);
+
+  // The verification badge died at 43d1e7f and must not return here.
+  assert.ok(!/verif/i.test(screen), 'no verification vocabulary on this surface');
+});
+
+test('§4.4 · the rebook strip tops the search surface and "Hire someone again" resolves to SavedWorkers [static]', async () => {
+  const search = await read('screens/WorkerSearchScreen.tsx');
+  const root = await read('navigation/CustomerRoot.tsx');
+
+  assert.match(search, /rebookStripItems\(/);
+  assert.match(search, /Hire someone again/);
+  assert.match(search, /navigateAcrossTabs\('Profile', 'SavedWorkers'\)/);
+  // Strip taps open the SAME prefilled composer as the Hire control.
+  assert.match(search, /hireWorkerId: item\.id/);
+  // An empty strip renders nothing — the block is gated on having items.
+  assert.match(search, /rebook\.length > 0 \? \(/);
+
+  // §1.6 — the centre [+] sheet's row already lands on this screen; pin it so
+  // a future re-route is a deliberate act.
+  const sheetRow = root.slice(root.indexOf("key: 'hire-again'"));
+  assert.ok(sheetRow.includes("navigateAcrossTabs('Profile', 'SavedWorkers')"));
+});

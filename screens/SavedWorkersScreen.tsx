@@ -9,10 +9,12 @@ import { useAuth } from '../hooks/useAuth';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { fetchRehirableWorkerIds } from '../lib/jobs';
-import { goBackOrHome } from '../lib/navigationRef';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
+import { canHire, pastOnlyIds } from '../lib/rebook';
 import { fetchSavedWorkers, unsaveWorker } from '../lib/savedWorkers';
 import type { ProfileStackNavigation } from '../lib/navigation';
+import { useMode } from '../modes/ModeProvider';
 import { colors, radius, spacing } from '../lib/theme';
 
 /** The lightest shape a row needs — the batch profile read returns a subset
@@ -31,6 +33,7 @@ type PersonRow = Pick<Profile, 'id' | 'full_name' | 'avatar_url'> &
 export function SavedWorkersScreen() {
   const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
+  const { mode } = useMode();
 
   const [saved, setSaved] = useState<{ worker_id: string; profiles: Profile }[]>([]);
   const [past, setPast] = useState<PersonRow[]>([]);
@@ -47,19 +50,27 @@ export function SavedWorkersScreen() {
     ]);
     if (savedRes.error) setLoadError(userMessage(savedRes.error));
     else setSaved(savedRes.data);
+    // §4.1 — a worker in both populations appears ONLY under Saved, so the
+    // past section is deduped against the saved ids before profiles are even
+    // fetched. When the saved read failed nothing is known to subtract; the
+    // retryable error state below owns that case.
+    const savedIdSet = savedRes.error
+      ? new Set<string>()
+      : new Set(savedRes.data.map((r) => r.worker_id));
     // A failed past-workers read must not masquerade as "no one here yet"
     // (hardening A6): surface it into the same retryable error state.
     if (pastIdsRes.error) {
       const message = userMessage(pastIdsRes.error);
       setLoadError((prev) => prev ?? message);
-    } else if (pastIdsRes.data.size > 0) {
-      const { data: profiles, error: profilesError } = await fetchProfilesByIds([
-        ...pastIdsRes.data,
-      ]);
-      if (profilesError) setLoadError((prev) => prev ?? userMessage(profilesError));
-      else setPast(profiles);
     } else {
-      setPast([]);
+      const wantedIds = pastOnlyIds(pastIdsRes.data, savedIdSet);
+      if (wantedIds.length > 0) {
+        const { data: profiles, error: profilesError } = await fetchProfilesByIds(wantedIds);
+        if (profilesError) setLoadError((prev) => prev ?? userMessage(profilesError));
+        else setPast(profiles);
+      } else {
+        setPast([]);
+      }
     }
     setLoaded(true);
   }, [user]);
@@ -93,8 +104,14 @@ export function SavedWorkersScreen() {
               kind: 'empty',
               title: 'No one here yet',
               body: 'Save a worker from their profile, or finish a job with someone — both show up here for quick rehiring.',
-              actionLabel: 'Back',
-              onAction: goBackOrHome,
+              // §4.1 — the way out of an empty people surface is finding
+              // people. Worker search lives in the customer tree only, so the
+              // worker-mode fallback stays Back rather than a dead dispatch.
+              actionLabel: mode === 'customer' ? 'Find workers' : 'Back',
+              onAction:
+                mode === 'customer'
+                  ? () => navigateAcrossTabs('Discover', 'WorkerSearch', { autoFocus: false })
+                  : goBackOrHome,
             }
           : { kind: 'ready' };
 
@@ -124,19 +141,24 @@ export function SavedWorkersScreen() {
           </Text>
         </View>
       </Pressable>
-      <Pressable
-        style={styles.hireButton}
-        onPress={() =>
-          navigation.navigate('PostJob', {
-            hireWorkerId: profile.id,
-            hireWorkerName: profile.full_name ?? 'this worker',
-          })
-        }
-        accessibilityRole="button"
-        accessibilityLabel={`Hire ${profile.full_name ?? 'worker'} again`}
-      >
-        <Text style={styles.hireButtonText}>Hire</Text>
-      </Pressable>
+      {/* A tombstoned account cannot complete a hire, so its row carries no
+          Hire control — the label and any historical reviews still render,
+          because those are real. */}
+      {canHire(profile.full_name) ? (
+        <Pressable
+          style={styles.hireButton}
+          onPress={() =>
+            navigation.navigate('PostJob', {
+              hireWorkerId: profile.id,
+              hireWorkerName: profile.full_name ?? 'this worker',
+            })
+          }
+          accessibilityRole="button"
+          accessibilityLabel={`Hire ${profile.full_name ?? 'worker'} again`}
+        >
+          <Text style={styles.hireButtonText}>Hire</Text>
+        </Pressable>
+      ) : null}
       {options.saved ? (
         <Pressable
           onPress={() => removeSaved(profile.id)}

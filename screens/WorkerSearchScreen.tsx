@@ -21,7 +21,12 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
@@ -31,7 +36,11 @@ import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { userMessage } from '../lib/errorMessage';
-import { goBackOrHome } from '../lib/navigationRef';
+import { fetchRehirableWorkerIds } from '../lib/jobs';
+import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import { fetchProfilesByIds } from '../lib/profiles';
+import { rebookStripItems, type RebookStripItem } from '../lib/rebook';
+import { fetchSavedWorkers } from '../lib/savedWorkers';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
   findWorkers,
@@ -82,10 +91,55 @@ export function WorkerSearchScreen() {
   );
   const [state, setState] = useState<SearchState>({ kind: 'idle' });
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  // §4.4 — the Saved / Worked-for-you-before sections collapsed into one
+  // horizontal strip at the top of this surface's landing state.
+  const [rebook, setRebook] = useState<RebookStripItem[]>([]);
 
   // Guards a slow response from overwriting a newer one — a fast second search
   // finishing first would otherwise leave the older results on screen.
   const runRef = useRef(0);
+
+  const loadRebook = useCallback(async () => {
+    if (!user) {
+      setRebook([]);
+      return;
+    }
+    const [savedRes, pastIdsRes] = await Promise.all([
+      fetchSavedWorkers(user.id),
+      fetchRehirableWorkerIds(user.id),
+    ]);
+    // The strip is a rebook shortcut, not this surface's content: a failed
+    // read renders no strip (and says so in the log) rather than blocking
+    // search behind a retry state.
+    if (savedRes.error || pastIdsRes.error) {
+      console.warn(
+        '[WorkerSearch] rebook strip read failed',
+        (savedRes.error ?? pastIdsRes.error)?.message
+      );
+      return;
+    }
+    const savedProfiles = savedRes.data.map((r) => r.profiles);
+    const savedIdSet = new Set(savedProfiles.map((p) => p.id));
+    const pastIds = [...pastIdsRes.data].filter((id) => !savedIdSet.has(id));
+    let pastProfiles: { id: string; full_name: string | null; avatar_url: string | null }[] =
+      [];
+    if (pastIds.length > 0) {
+      const { data, error } = await fetchProfilesByIds(pastIds);
+      if (error) {
+        console.warn('[WorkerSearch] rebook strip profiles failed', error.message);
+        return;
+      }
+      pastProfiles = data;
+    }
+    setRebook(rebookStripItems(savedProfiles, pastProfiles));
+  }, [user]);
+
+  // Refresh on focus: a hire or an unsave elsewhere changes who belongs here.
+  useFocusEffect(
+    useCallback(() => {
+      void loadRebook();
+    }, [loadRebook])
+  );
 
   const run = useCallback(
     async (text: string, category: string | null) => {
@@ -305,7 +359,63 @@ export function WorkerSearchScreen() {
             </SearchStateCard>
           </SearchStateScroll>
         ) : state.kind === 'idle' ? (
-          <SearchStateScroll resetKey="idle">
+          <SearchStateScroll resetKey="idle" alignTop={rebook.length > 0}>
+            {/* §4.4 — Saved first (bookmark-marked), then past workers, one
+                strip. Renders nothing when both populations are empty;
+                tombstoned accounts are excluded (nothing to hire). */}
+            {rebook.length > 0 ? (
+              <View style={styles.rebookBlock}>
+                <View style={styles.rebookHeaderRow}>
+                  <Text style={styles.rebookTitle}>Hire someone again</Text>
+                  <Pressable
+                    onPress={() => navigateAcrossTabs('Profile', 'SavedWorkers')}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="See all saved and past workers"
+                  >
+                    <Text style={styles.rebookSeeAll}>See all</Text>
+                  </Pressable>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.rebookRow}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {rebook.map((item) => {
+                    const displayName = item.name?.trim() || 'Worker';
+                    const firstName = displayName.split(/\s+/)[0];
+                    return (
+                      <Pressable
+                        key={item.id}
+                        style={({ pressed }) => [
+                          styles.rebookItem,
+                          pressed && styles.controlPressed,
+                        ]}
+                        onPress={() =>
+                          navigation.navigate('PostJob', {
+                            hireWorkerId: item.id,
+                            hireWorkerName: displayName,
+                          })
+                        }
+                        accessibilityRole="button"
+                        accessibilityLabel={`Hire ${displayName} again`}
+                      >
+                        <Avatar name={displayName} uri={item.avatarUrl} size={56} />
+                        <View style={styles.rebookNameRow}>
+                          {item.saved ? (
+                            <Ionicons name="bookmark" size={11} color={colors.emerald} />
+                          ) : null}
+                          <Text style={styles.rebookName} numberOfLines={1}>
+                            {firstName}
+                          </Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            ) : null}
             <SearchStateCard
               icon="people-outline"
               eyebrow="START WITH THE TASK"
@@ -362,11 +472,21 @@ export function WorkerSearchScreen() {
   );
 }
 
-function SearchStateScroll({ children, resetKey }: { children: ReactNode; resetKey: string }) {
+function SearchStateScroll({
+  children,
+  resetKey,
+  alignTop = false,
+}: {
+  children: ReactNode;
+  resetKey: string;
+  /** Top-align instead of centering — for when real content (the rebook
+   *  strip) sits above the state card and must hug the top of the surface. */
+  alignTop?: boolean;
+}) {
   return (
     <FadeIn style={styles.resultsFlex} resetKey={resetKey}>
       <ScrollView
-        contentContainerStyle={styles.stateScrollContent}
+        contentContainerStyle={[styles.stateScrollContent, alignTop && styles.stateScrollTop]}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
@@ -618,6 +738,50 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
+  },
+  stateScrollTop: {
+    justifyContent: 'flex-start',
+  },
+  rebookBlock: {
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  rebookHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  rebookTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  rebookSeeAll: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.emerald,
+  },
+  rebookRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    paddingRight: spacing.sm,
+  },
+  rebookItem: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    width: 72,
+  },
+  rebookNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    maxWidth: 72,
+  },
+  rebookName: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.text,
   },
   stateCard: {
     alignItems: 'center',
