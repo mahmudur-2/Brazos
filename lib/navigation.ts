@@ -386,6 +386,8 @@ export type ProfileStackParamList = {
   ProfileMain: undefined;
   AdminReports: undefined;
   NotificationSettings: undefined;
+  /** Profile → Appearance (4D-4): the Light/Dark/System theme setting. */
+  Appearance: undefined;
   /** Screens 64+66 (Phase 9): the worker's services & pricing manager with
    *  the availability toggle and the honest verification state. */
   ServicesPricing: undefined;

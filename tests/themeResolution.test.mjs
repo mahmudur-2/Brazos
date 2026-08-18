@@ -177,3 +177,34 @@ test('[static] no file under screens/ imports ui/tokens.ts directly', async () =
     );
   }
 });
+
+// ---------------------------------------------------------------------------
+// The Appearance setting — wired end to end (commit 2)
+// ---------------------------------------------------------------------------
+
+test('[static] Profile → Appearance is typed, registered, and applies through setPreference', async () => {
+  const [routes, stacks, profile, screen] = await Promise.all([
+    read('lib/navigation.ts'),
+    read('navigation/sharedStacks.tsx'),
+    read('screens/ProfileScreen.tsx'),
+    read('screens/AppearanceScreen.tsx'),
+  ]);
+
+  // Typed on the Profile stack, registered once, reachable from a Profile row.
+  assert.match(routes, /Appearance: undefined;/);
+  assert.match(stacks, /<ProfileStack\.Screen name="Appearance" component=\{AppearanceScreen\} \/>/);
+  assert.match(profile, /navigation\.navigate\('Appearance'\)/);
+
+  // The screen offers exactly the three preferences by their labels and
+  // indicates the current one; a tap goes through the provider's one
+  // mutation path (setPreference persists + repaints + syncs native).
+  assert.match(screen, /THEME_PREFERENCES\.map/);
+  for (const label of ["system: 'System'", "light: 'Light'", "dark: 'Dark'"]) {
+    assert.ok(screen.includes(label), `option label missing: ${label}`);
+  }
+  assert.match(screen, /const selected = option === preference;/);
+  assert.match(screen, /setPreference\(option\)/);
+  // Styled from the resolved palette, not the static light snapshot.
+  assert.match(screen, /useThemeColors/);
+  assert.match(screen, /themedStyles/);
+});

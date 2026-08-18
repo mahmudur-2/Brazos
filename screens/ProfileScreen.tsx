@@ -697,6 +697,16 @@ export function ProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
             </Pressable>
 
+            {/* 4D-4 — the Light/Dark/System theme setting. */}
+            <Pressable
+              style={[styles.settingsRow, styles.settingsRowDivider]}
+              onPress={() => navigation.navigate('Appearance')}
+            >
+              <Ionicons name="contrast-outline" size={20} color={colors.textMuted} />
+              <Text style={styles.settingsLabel}>Appearance</Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
+            </Pressable>
+
             {/* Phase 11 — the ledger-derived wallet. */}
             <Pressable
               style={[styles.settingsRow, styles.settingsRowDivider]}

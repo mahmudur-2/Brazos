@@ -24,6 +24,7 @@ import { LegalDocumentScreen } from '../screens/LegalDocumentScreen';
 import { MapScreen } from '../screens/MapScreen';
 import { MessagesInboxScreen } from '../screens/MessagesInboxScreen';
 import { MyJobsHubScreen } from '../screens/MyJobsHubScreen';
+import { AppearanceScreen } from '../screens/AppearanceScreen';
 import { NotificationSettingsScreen } from '../screens/NotificationSettingsScreen';
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
@@ -139,6 +140,7 @@ export function ProfileStackNavigator() {
         name="NotificationSettings"
         component={NotificationSettingsScreen}
       />
+      <ProfileStack.Screen name="Appearance" component={AppearanceScreen} />
       <ProfileStack.Screen name="LegalDocument" component={LegalDocumentScreen} />
       <ProfileStack.Screen name="ProfileReviews" component={ProfileReviewsScreen} />
       {/* Phase 9 — worker self-service + the customer people surface. */}
