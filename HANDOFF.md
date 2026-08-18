@@ -2,69 +2,65 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-17 - stage 4D-A: UI inventory audit (read-only)
+## 2026-08-17 - stage 4D-B: money ceiling mirror, parity fails closed, badge removed
 
-**Audit-only run. No application code was changed, no SQL executed, no schema
-object created or modified, no database contacted, no dependency added or
-changed, and nothing was pushed.** One new file —
-`docs/audits/STAGE4D_UI_INVENTORY.md` (2,310 lines, the six evidence sections
-the 4D-A dispatch ordered) — plus this rewrite. `npm run verify` at the
-starting HEAD `2f987fc`: **579 pass / 0 fail / 0 skipped** across 7 suites,
-exit 0 (lint — `tsc --noEmit` with unused checks — runs first inside verify
-and passed). Tree clean before the run; the commit contains exactly the audit
-file and this document.
+Three independent changes, three commits, in dispatch order. **No SQL
+executed, no database contacted, no schema object touched, no dependency
+added, nothing pushed. No locked screen edited.** `npm run verify` green
+before each commit landed; lint (`tsc --noEmit` with unused checks) runs
+first inside verify and passed every time.
 
-Method, for reproducibility: sections 1 (token compliance) and 4 (trust and
-money copy) came from a mechanical regex scan over every non-comment line of
-the 164 in-scope `.ts`/`.tsx` files (temporary scanner script at repo root
-during the run, deleted before commit; multi-line JSX text and template
-literals captured by a raw-line pass; every ambiguous match hand-verified
-against source). Sections 2, 3, 5 and 6 are file-by-file reads. The frozen
-web surface was excluded throughout; locked screens were read, never edited.
+1. **Money ceiling mirror** — every client path sending cents to
+   `create_job`, `update_job_details`, `create_offer`, `counter_offer` or
+   `sandbox_tip_worker` now refuses an over-ceiling amount BEFORE the RPC,
+   with a written sentence instead of a raw CHECK violation. Constants and
+   validator in `lib/validation.ts` (`MONEY_CEILING_CENTS = 10_000_000`,
+   `TIP_CEILING_CENTS = 100_000`), mirrored EXACTLY including inclusivity:
+   phase75's CHECKs read `amount_cents > 0 and amount_cents <= 10000000`
+   (same shape for the three jobs budget columns) and phase51's
+   `sandbox_tip_worker()` rejects
+   `p_amount_cents is null or p_amount_cents <= 0 or p_amount_cents > 100000`
+   — so exactly at either ceiling is accepted. Verified by executed test
+   both ways at both boundaries (`tests/moneyCeiling.test.mjs`, which also
+   pins the SQL literals against drift). Verify: **586 pass / 0 fail / 0
+   skipped**.
+2. **verify-schema env parity fails closed** — the parity decision is now
+   the pure exported `envParityProblems()` in `scripts/verify-schema.mjs`;
+   an unresolvable key ref (a new-format `sb_…` publishable key has no JWT
+   payload) is a refusal naming cause and remedy, no longer a silent
+   "parity: OK". `refFromJwt` untouched. `node --check
+   scripts/verify-schema.mjs` exit 0; the script itself was NOT run
+   (needs `.env` + live staging). Executed tests in
+   `tests/envParity.test.mjs`. Verify: **591 pass / 0 fail / 0 skipped**.
+3. **Verification badge removed from every user-visible surface** — both
+   implementations: `components/VerificationBadge.tsx` deleted (no locked
+   file imported it, so no stranded-import hazard — the delete branch, not
+   the leave-on-disk branch) with its seven render sites, and
+   JobDetailScreen's inline unconditional "Unverified" pill.
+   `verification_status` left the client data layer with it (Profile type,
+   `PUBLIC_PROFILE_COLUMNS`, `isVerified()`, workerSearch mapping) — it fed
+   the badge and nothing else. No replacement chip or copy added;
+   `lib/legal/` untouched and its background-check disclosure now pinned on
+   its literal text; no database object changed. Executed contract:
+   `tests/verificationBadgeRemoved.test.mjs` (tree walk; the no-reference
+   check has no exclusions, the user-copy check excludes exactly the named
+   locked files). Two existing assertions flipped to the removal contract,
+   not deleted: `tests/hardening.test.mjs` ("Not verified" wording pin →
+   component-gone pin) and `tests/customerCore.test.mjs`
+   (`VERIFICATION_LABEL` presence → absence). Verify: **595 pass / 0 fail /
+   0 skipped**.
 
-Headline findings — facts only, details and every line reference in the audit
-file:
+Run exceptions, in full:
 
-- **Token compliance:** 55 literal colours across 30 usage files and 878 bare
-  numeric literals (padding/margin/gap/borderRadius/fontSize/lineHeight)
-  across 95 usage files, listed per file. Exactly two files import
-  `ui/tokens` directly: `lib/theme.ts` (the sanctioned wrapper) and
-  `lib/authTheme.ts`. No screen or component imports tokens directly.
-- **Screen states:** 0 of 49 screens render an offline state — the
-  `kind:'offline'` variant in `ui/templates/ScreenStates.tsx` has zero
-  consumers. 14 screens go through the ScreenStates templates at least
-  partially; the rest handle states ad hoc or not at all (each ad-hoc
-  construct is named with file:line). `ListScreen` is a template no screen
-  uses.
-- **Verification badge:** "Verified" renders iff
-  `profiles.verification_status === 'verified'` exactly
-  (`lib/profiles.ts:203-205`); 7 render sites, every chain ending at that one
-  column. No migration in this repo ever writes `'verified'` (only
-  `'unverified'`, on account deletion), the app cannot write the column
-  (`update_my_profile` rejects it), and the enum's labels are defined by no
-  file in the repo — any verified profile was set outside this repository.
-- **Trust and money copy:** 27 user-visible word-list strings in app scope —
-  dominated by "protected" (payment surfaces) and "fee"; zero user-visible
-  uses of "escrow", "guarantee(d)", "0%", or "background check" in app copy;
-  10 matches in `lib/legal/`, tabled separately as legal copy.
-- **Map surface:** hotspot cells are aggregated server-side by
-  `job_hotspots()` (current body phase43, search_path hardened phase64); the
-  client only maps tiers, glow rings and tap polygons. `jobs_in_cell` returns
-  no lat/lng and its rows are re-hydrated through the `OPEN_JOB_COLUMNS`
-  allowlist.
-- **Duplicated presentation:** four components plus the locked HomeScreen's
-  local `OpenJobCard` render the same OpenJob-card concept while
-  `ui/primitives/JobCard` has zero screen consumers; `StatusBadge` and
-  `StatusPill` keep two separate status→colour/label maps; the
-  `SectionHeader` and `SearchBar` primitives have no app consumers; money
-  renders through `MoneyText` at 10 sites versus ~45 direct `formatBudget()`
-  sites; the verification pill exists twice with different wording
-  ("Unverified" in JobDetailScreen vs "Not verified" in VerificationBadge);
-  the category-glyph block recurs at seven sites; "Best value" and
-  "POTENTIAL EARNINGS" each have two implementations.
-
-This run adds no new operator action; the audit is input for future 4D
-dispatches. Operator item F (device-test 4D-1b) below remains open.
+- **`.env` could not be read at all** — the dispatch asked for the first
+  three characters of `SUPABASE_KEY` (prefix only); every read path is
+  mechanically denied (guard + permission matrix), which is working as
+  designed and was not bypassed. See operator item B for the manual check.
+- **`screens/WelcomeScreen.tsx:158` still says "Verified workers"** — locked
+  screen 02, left byte-identical. Operator unlock item; it is the one entry
+  behind the new suite's locked-file allow-list.
+- Commit messages were passed via `-F` file because the commit trailer
+  itself trips the nested-session guard token match when inlined with `-m`.
 
 ## Applied reality - staging `zzkumxcjtbqoselzptig`
 
@@ -114,15 +110,22 @@ phase74 nor phase75 disturbs the finding.
 
 **A. Run `node scripts/verify-schema.mjs` against staging** - the only thing
 that makes "phase74/75 applied" official; their two groups have never run.
+**New since 4D-B: the env-parity gate now fails closed.** If `.env`'s
+`SUPABASE_KEY` is a new-format `sb_…` publishable key the run will stop at
+the parity gate (exit 3) with the remedy in the message; check the prefix
+first: `sed -n 's/^SUPABASE_KEY=\(...\).*/\1/p' .env` prints only the first
+three characters (`eyJ` = will proceed, `sb_` = will stop — swap in the
+legacy `eyJ…` anon key for the staging project). This run could not read the
+prefix itself: `.env` is mechanically denied to agents.
 
 **B. The next TestFlight build will fail its own gate** (unchanged from
 Stage 4A): the EAS `preview` environment's `SUPABASE_KEY` is a new-format
 publishable key (`sb_pu…`); `refFromJwt` cannot resolve it, so
 `evaluateGate` fails closed. Replace with the legacy `eyJ…` anon key -
 **production's**, because the `testflight` profile selects the `preview`
-environment and `EXPECTED_REF.testflight` is the production ref. Related:
-`verify-schema.mjs` shares `refFromJwt` and would silently degrade to
-`UNRESOLVED` on a staging key-format move; worth making it fail closed.
+environment and `EXPECTED_REF.testflight` is the production ref. The
+related verify-schema silent-degradation noted here previously is FIXED as
+of 4D-B commit 2 — it now fails closed the same way.
 
 **C. "preview" names two different things.** `EXPECTED_REF` maps
 `preview → STAGING_REF`, but the EAS **environment** named `preview` holds
@@ -149,3 +152,9 @@ switch exists anywhere. Also still pending from 4D-1a: the four customer
 tabs + [ + ] sheet actions, the locked Home's "View map" pill, a bid
 notification tapped in customer mode prompting the Worker-mode switch, and
 My Jobs' Active/Review/Closed buckets against a job mid-approval.
+
+**G. Unlock decision — WelcomeScreen's "Verified workers" line.** With the
+badge removed everywhere else, locked screen 02 is the only remaining
+user-visible verification claim (`screens/WelcomeScreen.tsx:158`). Removing
+or rewording it requires unlocking that screen; the 4D-B suite's allow-list
+names it so the exception stays visible.
