@@ -2,73 +2,69 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-17 - stage4D batch 1b: one worker home
+## 2026-08-17 - stage 4D-A: UI inventory audit (read-only)
 
-**App-code-only run. No SQL was executed, no schema object was created or
-modified, no database was contacted, no dependency was added or changed, and
-nothing was pushed.** Three code commits plus this rewrite, per
-the 4D-1b dispatch ("one worker home"):
+**Audit-only run. No application code was changed, no SQL executed, no schema
+object created or modified, no database contacted, no dependency added or
+changed, and nothing was pushed.** One new file —
+`docs/audits/STAGE4D_UI_INVENTORY.md` (2,310 lines, the six evidence sections
+the 4D-A dispatch ordered) — plus this rewrite. `npm run verify` at the
+starting HEAD `2f987fc`: **579 pass / 0 fail / 0 skipped** across 7 suites,
+exit 0 (lint — `tsc --noEmit` with unused checks — runs first inside verify
+and passed). Tree clean before the run; the commit contains exactly the audit
+file and this document.
 
-1. `f9d40cd` - every job-list intent resolves to `WorkerResults{mode:'all'}`
-   while BrowseJobs was still mounted: WorkerHome's "View all"
-   (was `navigate('BrowseJobs')`) and MapScreen's worker-gated "See All
-   Jobs" (was `navigateAcrossTabs('Home','BrowseJobs')`), both mirroring
-   the locked screen 48's own "View all" dispatch byte-for-byte. The worker
-   Home stack now declares `initialRouteName="WorkerHome"` explicitly.
-2. `e222a8b` - the search field moves up to WorkerHome (D2): placed between
-   the greeting/switch row and the taking-new-work card, mirroring 48's
-   inline field (48 does NOT use `ui/primitives/SearchBar` - checked) and
-   its exact dispatch `WorkerResults{mode:'search', query: trimmed}` with
-   the same trim-and-guard. KeyboardAvoidingView + keyboardShouldPersistTaps
-   added per `.claude/rules/native-ui.md`; nothing visual.
-3. `0fe3470` - BrowseJobs UNMOUNTED: registration + import removed from
-   `navigation/WorkerRoot.tsx`; `BrowseJobs` removed from
-   `WorkerHomeStackParamList` so a future `navigate('BrowseJobs')` is a
-   compile error. The locked `screens/BrowseJobsScreen.tsx` itself is
-   untouched - on disk, registered nowhere, dispatched to by nothing.
-   New executed contract T1-T7 in `tests/workerHome.test.mjs`; mode /
-   setupOnboarding / crossTabNavigation suites flipped to the new truth,
-   none weakened. Stale prose corrected (`docs/architecture.md` still
-   claimed the worker stack rooted at `BrowseJobs` - pre-4D-1a state).
+Method, for reproducibility: sections 1 (token compliance) and 4 (trust and
+money copy) came from a mechanical regex scan over every non-comment line of
+the 164 in-scope `.ts`/`.tsx` files (temporary scanner script at repo root
+during the run, deleted before commit; multi-line JSX text and template
+literals captured by a raw-line pass; every ambiguous match hand-verified
+against source). Sections 2, 3, 5 and 6 are file-by-file reads. The frozen
+web surface was excluded throughout; locked screens were read, never edited.
 
-**The defect this run closed:** two unrelated availability stores were both
-user-visible - WorkerHome's "Taking new work" writes server-side
-`profiles.accepting_work` (phase53, what customers see) while the old browse
-screen's "Online/Offline" wrote a device-local AsyncStorage value nobody
-else can read (confirmed contradicting on device). The device-local writer
-is now unreachable by construction: its only consumer is the unmounted
-locked screen (T6 asserts exactly that consumer set).
+Headline findings — facts only, details and every line reference in the audit
+file:
 
-**D3 took its leave-in-place branch, deliberately.** Screen 48 is
-`hooks/useWorkerAvailability.ts`'s SOLE consumer, but the dispatch's
-delete-the-hook branch is unexecutable: the locked screen is type-checked
-(tsconfig has no `include` narrowing, so unmounted files still compile) and
-deleting the hook would strand a locked import. The hook stays on disk,
-byte-identical, exactly like the locked screen that consumes it. No test of
-the hook's own device-local behavior existed to delete. Removing both
-together is a future unlock-session item.
+- **Token compliance:** 55 literal colours across 30 usage files and 878 bare
+  numeric literals (padding/margin/gap/borderRadius/fontSize/lineHeight)
+  across 95 usage files, listed per file. Exactly two files import
+  `ui/tokens` directly: `lib/theme.ts` (the sanctioned wrapper) and
+  `lib/authTheme.ts`. No screen or component imports tokens directly.
+- **Screen states:** 0 of 49 screens render an offline state — the
+  `kind:'offline'` variant in `ui/templates/ScreenStates.tsx` has zero
+  consumers. 14 screens go through the ScreenStates templates at least
+  partially; the rest handle states ad hoc or not at all (each ad-hoc
+  construct is named with file:line). `ListScreen` is a template no screen
+  uses.
+- **Verification badge:** "Verified" renders iff
+  `profiles.verification_status === 'verified'` exactly
+  (`lib/profiles.ts:203-205`); 7 render sites, every chain ending at that one
+  column. No migration in this repo ever writes `'verified'` (only
+  `'unverified'`, on account deletion), the app cannot write the column
+  (`update_my_profile` rejects it), and the enum's labels are defined by no
+  file in the repo — any verified profile was set outside this repository.
+- **Trust and money copy:** 27 user-visible word-list strings in app scope —
+  dominated by "protected" (payment surfaces) and "fee"; zero user-visible
+  uses of "escrow", "guarantee(d)", "0%", or "background check" in app copy;
+  10 matches in `lib/legal/`, tabled separately as legal copy.
+- **Map surface:** hotspot cells are aggregated server-side by
+  `job_hotspots()` (current body phase43, search_path hardened phase64); the
+  client only maps tiers, glow rings and tap polygons. `jobs_in_cell` returns
+  no lat/lng and its rows are re-hydrated through the `OPEN_JOB_COLUMNS`
+  allowlist.
+- **Duplicated presentation:** four components plus the locked HomeScreen's
+  local `OpenJobCard` render the same OpenJob-card concept while
+  `ui/primitives/JobCard` has zero screen consumers; `StatusBadge` and
+  `StatusPill` keep two separate status→colour/label maps; the
+  `SectionHeader` and `SearchBar` primitives have no app consumers; money
+  renders through `MoneyText` at 10 sites versus ~45 direct `formatBudget()`
+  sites; the verification pill exists twice with different wording
+  ("Unverified" in JobDetailScreen vs "Not verified" in VerificationBadge);
+  the category-glyph block recurs at seven sites; "Best value" and
+  "POTENTIAL EARNINGS" each have two implementations.
 
-**Landing-route finding (dispatch section 0.3):** switchMode() never
-resolved a route name - it swaps whole navigator trees (ModeShell), and the
-worker Home stack previously relied on declaration order alone. No
-`initialRouteName` existed anywhere in the repo, no persisted navigation
-state exists (`NavigationContainer` has no `initialState`/`onStateChange`),
-and `lib/setupLanding.ts` resolves a MODE, not a route. The reported
-sometimes-lands-on-BrowseJobs symptom therefore had no reproducible
-route-resolution mechanism in the current source; the fix is structural
-regardless - explicit initialRouteName (T4) plus the unmount, after which no
-BrowseJobs route exists to land on (T1-T3).
-
-`npm run verify` GREEN at the base (571/571) and after every commit:
-571 after commit 1, 572 after commit 2 (+1 search-field test), **579 after
-commit 3** (+7 T-contract tests). 0 fail, 0 skipped throughout. No locked
-file, no `design-reference/`, no frozen web/PWA surface, no `supabase/`
-object, no `.claude/` file, no `package.json` change in the diff
-(`git diff 142517a..HEAD`).
-
-Note: the previous HANDOFF forecast 4D-1b as "trust rows, hero job detail,
-progress unification, inbox chips" - the actual 4D-1b dispatch was this
-consolidation instead; that other work remains undispatched.
+This run adds no new operator action; the audit is input for future 4D
+dispatches. Operator item F (device-test 4D-1b) below remains open.
 
 ## Applied reality - staging `zzkumxcjtbqoselzptig`
 
@@ -141,7 +137,7 @@ payments on a release build set it to `sandbox` in `.env` and restart Metro
 for single-transaction migrations is "Success. No rows returned." plus a
 green verify-schema; phase74/75 each end with a visible-acceptance SELECT.
 
-**F. Device-test 4D-1b** (this run is suite-verified only; no simulator was
+**F. Device-test 4D-1b** (that run was suite-verified only; no simulator was
 run): cold-start into worker mode and switch customer→worker repeatedly -
 the arrival screen must be WorkerHome ("Your work today") every time, with
 nothing pushed above it and no "Get hired. / Get paid." screen reachable;
