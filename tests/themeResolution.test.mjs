@@ -285,7 +285,8 @@ test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navi
 // ---------------------------------------------------------------------------
 
 test('[static] MapKit tiles follow the resolved theme; no Google-only style ships', async () => {
-  const nativeMap = await read('components/HotspotMap.native.tsx');
+  // Comment-stripped: the docblock NAMES customMapStyle to explain its absence.
+  const nativeMap = stripCommentsForScan(await read('components/HotspotMap.native.tsx'));
   // No Google provider is configured anywhere, so iOS renders Apple Maps —
   // where customMapStyle is Google-only and inert. It must not ship.
   assert.doesNotMatch(nativeMap, /customMapStyle/);
