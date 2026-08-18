@@ -153,6 +153,12 @@ test('the results list and the sheet share the one filter model', async () => {
   assert.match(results, /JobFilterSheet/);
   const sheet = await read('components/JobFilterSheet.tsx');
   assert.match(sheet, /from '\.\.\/lib\/jobFilters'/);
-  // Distance sort is only OFFERED where rows can carry a distance.
-  assert.match(results, /distanceAvailable = params\.mode === 'nearby' \|\| params\.mode === 'search'/);
+  // Distance sort is only OFFERED where rows can carry a distance. Amended
+  // for 4D-2 B3: a chosen distance chip routes "all"/"skills" through
+  // jobs_within_radius too, so those rows now carry distance_miles as well —
+  // the rule gained a disjunct, it did not lose one.
+  assert.match(
+    results,
+    /distanceAvailable =\s*params\.mode === 'nearby' \|\| params\.mode === 'search' \|\| radiusActive/
+  );
 });

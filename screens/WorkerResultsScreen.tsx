@@ -3,15 +3,19 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { DistanceChips } from '../components/DistanceChips';
 import { JobFilterSheet } from '../components/JobFilterSheet';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
+import { useAuth } from '../hooks/useAuth';
 import { useOfferCounts } from '../hooks/useOfferCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { goBackOrHome } from '../lib/navigationRef';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
+import { type DistanceFilterMiles } from '../lib/discoveryFilter';
+import { readDistanceFilter, writeDistanceFilter } from '../lib/discoveryFilterStorage';
 import {
   DEFAULT_JOB_FILTERS,
   activeJobFilterCount,
@@ -57,6 +61,7 @@ type GeoState = 'loading' | 'ready' | 'denied' | 'unavailable';
 export function WorkerResultsScreen() {
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
+  const { user } = useAuth();
   const { profile } = useProfile();
   const { jobs, loading: jobsLoading, error: jobsError, refresh } = useOpenJobs();
   // Pull-to-refresh is the recovery path for a failed load — before it, the
@@ -70,8 +75,48 @@ export function WorkerResultsScreen() {
     [profile?.categories]
   );
 
-  const needsGeo = params.mode === 'nearby' || params.mode === 'search';
-  const [geoState, setGeoState] = useState<GeoState>(needsGeo ? 'loading' : 'ready');
+  // 4D-2 B3 — the distance filter. `undefined` = still reading the persisted
+  // selection; `null` = Any distance. The "nearby" mode is a stated-radius
+  // surface: Worker Home's pill promised "within 5 miles", so it ALWAYS
+  // arrives at that promise rather than at the persisted value — changing the
+  // chip afterwards updates the title with it, so the header never claims a
+  // radius the list is not actually applying.
+  const [radius, setRadius] = useState<DistanceFilterMiles | null | undefined>(
+    params.mode === 'nearby' ? NEARBY_RADIUS_MILES : undefined
+  );
+  const userId = user?.id ?? null;
+  useEffect(() => {
+    if (params.mode === 'nearby') return;
+    if (!userId) {
+      setRadius(null);
+      return;
+    }
+    let active = true;
+    readDistanceFilter(userId).then((stored) => {
+      if (active) setRadius(stored);
+    });
+    return () => {
+      active = false;
+    };
+    // userId, not the user object — the object reference rotates on every
+    // hourly token refresh (see docs/LOCKED_FILE_PATCHES.md §2); the id
+    // does not, and re-reading storage on a refresh would be pure churn.
+  }, [params.mode, userId]);
+
+  function selectRadius(next: DistanceFilterMiles | null) {
+    setRadius(next);
+    if (userId) writeDistanceFilter(userId, next);
+  }
+
+  const radiusResolved = radius !== undefined;
+  const radiusActive = radius != null;
+  const needsGeo =
+    params.mode === 'nearby' ||
+    params.mode === 'search' ||
+    ((params.mode === 'all' || params.mode === 'skills') && radiusActive);
+  const [geoState, setGeoState] = useState<GeoState>(
+    params.mode === 'nearby' || params.mode === 'search' ? 'loading' : 'ready'
+  );
   const [geoJobs, setGeoJobs] = useState<OpenJob[]>([]);
   const [geoMessage, setGeoMessage] = useState<string | null>(null);
   const [resolvedLabel, setResolvedLabel] = useState<string | null>(null);
@@ -81,10 +126,16 @@ export function WorkerResultsScreen() {
   const [filters, setFilters] = useState<JobFilterModel>(DEFAULT_JOB_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Distance sort only means something when rows carry distance_miles.
-  const distanceAvailable = params.mode === 'nearby' || params.mode === 'search';
+  const distanceAvailable =
+    params.mode === 'nearby' || params.mode === 'search' || radiusActive;
 
   useEffect(() => {
-    if (!needsGeo) return;
+    if (!radiusResolved) return;
+    if (!needsGeo) {
+      setGeoState('ready');
+      setGeoJobs([]);
+      return;
+    }
     let active = true;
 
     (async () => {
@@ -96,7 +147,7 @@ export function WorkerResultsScreen() {
         if (params.query) center = await geocodeQuery(params.query);
         // A query that isn't a real place (e.g. "Cleaning") just yields no
         // geo results — the text match below still covers it.
-      } else if (params.lat != null && params.lng != null) {
+      } else if (params.mode === 'nearby' && params.lat != null && params.lng != null) {
         // Already resolved by Worker Home's own pill — reuse it rather than
         // asking the GPS again, so this screen's result set can never drift
         // from the count that was tapped to get here.
@@ -121,13 +172,22 @@ export function WorkerResultsScreen() {
         return;
       }
 
-      // "nearby" is always exactly the stated radius. "search" alone may
-      // widen on zero results — never mislabeled as "within 5 miles" when it
-      // does, since only the nearby mode's title says that.
-      const radii = params.mode === 'search' ? [5, 10, 15] : [NEARBY_RADIUS_MILES];
+      // "nearby" is always exactly the stated radius (the chip's, defaulting
+      // to the pill's 5). "search" alone may widen on zero results — but a
+      // user-chosen radius pins it, because a stated selection must never be
+      // silently exceeded. "all"/"skills" only reach here with a chosen
+      // radius, which is applied as-is.
+      const radii =
+        params.mode === 'search'
+          ? radiusActive
+            ? [radius as number]
+            : [5, 10, 15]
+          : params.mode === 'nearby'
+            ? [radius ?? NEARBY_RADIUS_MILES]
+            : [radius as number];
       let data: OpenJob[] = [];
-      for (const radius of radii) {
-        const result = await fetchJobsWithinRadius(center.lat, center.lng, radius);
+      for (const r of radii) {
+        const result = await fetchJobsWithinRadius(center.lat, center.lng, r);
         if (!active) return;
         data = result.data;
         if (data.length > 0) break;
@@ -141,12 +201,21 @@ export function WorkerResultsScreen() {
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needsGeo, params.mode, params.query]);
+  }, [needsGeo, radiusResolved, params.mode, params.query, radius]);
+
+  // A chosen radius with no usable location must not silently pretend to
+  // filter: the base set stays the full feed and a written note says so.
+  const radiusUnavailable =
+    (params.mode === 'all' || params.mode === 'skills') &&
+    radiusActive &&
+    (geoState === 'denied' || geoState === 'unavailable');
 
   const results = useMemo(() => {
+    const radiusBase =
+      radiusActive && !radiusUnavailable && geoState === 'ready' ? geoJobs : jobs;
     let base: OpenJob[];
     if (params.mode === 'skills') {
-      base = jobs.filter((job) => jobMatchesSkills(job, myCategories));
+      base = radiusBase.filter((job) => jobMatchesSkills(job, myCategories));
     } else if (params.mode === 'nearby') {
       base = geoJobs;
     } else if (params.mode === 'search') {
@@ -164,14 +233,24 @@ export function WorkerResultsScreen() {
       for (const job of geoJobs) merged.set(job.id, job);
       base = Array.from(merged.values());
     } else {
-      base = jobs;
+      base = radiusBase;
     }
     return applyJobFilters(base, filters);
-  }, [params.mode, params.query, jobs, myCategories, geoJobs, filters]);
+  }, [
+    params.mode,
+    params.query,
+    jobs,
+    myCategories,
+    geoJobs,
+    filters,
+    radiusActive,
+    radiusUnavailable,
+    geoState,
+  ]);
 
   const filterCount = activeJobFilterCount(filters);
 
-  const loading = jobsLoading || geoState === 'loading';
+  const loading = jobsLoading || geoState === 'loading' || !radiusResolved;
 
   const subtitle =
     params.mode === 'search' && params.query
@@ -180,10 +259,17 @@ export function WorkerResultsScreen() {
         : `"${params.query}"`
       : undefined;
 
+  // The nearby header states its radius, so it tracks the chip: the title
+  // must never claim a radius the list is not applying.
+  const title =
+    params.mode === 'nearby'
+      ? `Jobs Within ${radius ?? NEARBY_RADIUS_MILES} Miles`
+      : MODE_TITLES[params.mode];
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
-        title={MODE_TITLES[params.mode]}
+        title={title}
         subtitle={subtitle}
         onBack={goBackOrHome}
         right={
@@ -206,6 +292,19 @@ export function WorkerResultsScreen() {
         }
       />
 
+      {radiusResolved ? (
+        <DistanceChips
+          value={radius ?? null}
+          onChange={selectRadius}
+          includeAny={params.mode !== 'nearby'}
+        />
+      ) : null}
+      {radiusUnavailable ? (
+        <Text style={styles.radiusNote}>
+          Location is off — showing jobs at any distance.
+        </Text>
+      ) : null}
+
       {loading ? (
         <View style={styles.listContent}>
           {[0, 1, 2, 3].map((i) => (
@@ -216,14 +315,21 @@ export function WorkerResultsScreen() {
         <FlatList
           data={results}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <WorkerJobCard
-              job={item}
-              bidCount={bidCounts[item.id]}
-              variant="full"
-              onPress={() => navigation.navigate('JobDetail', { job: item })}
-            />
-          )}
+          renderItem={({ item }) => {
+            // Radius results are jobs_within_radius rows carrying the
+            // server-computed distance; the plain feed carries none. Unknown
+            // renders nothing on the card — never a client-side guess.
+            const distance = (item as { distance_miles?: unknown }).distance_miles;
+            return (
+              <WorkerJobCard
+                job={item}
+                bidCount={bidCounts[item.id]}
+                variant="full"
+                distanceMiles={typeof distance === 'number' ? distance : null}
+                onPress={() => navigation.navigate('JobDetail', { job: item })}
+              />
+            );
+          }}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
           initialNumToRender={8}
@@ -270,7 +376,14 @@ export function WorkerResultsScreen() {
                     color={colors.forest}
                   />
                 </View>
-                <Text style={styles.emptyTitle}>{emptyTitle(params.mode, geoState, jobsError)}</Text>
+                <Text style={styles.emptyTitle}>
+                  {emptyTitle(
+                    params.mode,
+                    geoState,
+                    jobsError,
+                    radiusActive && !radiusUnavailable ? (radius as number) : null
+                  )}
+                </Text>
                 <Text style={styles.emptyText}>
                   {emptyBody(params.mode, geoMessage, params.query)}
                 </Text>
@@ -294,15 +407,22 @@ export function WorkerResultsScreen() {
 function emptyTitle(
   mode: WorkerHomeStackParamList['WorkerResults']['mode'],
   geoState: GeoState,
-  jobsError: string | null
+  jobsError: string | null,
+  radiusMiles: number | null
 ): string {
   if (jobsError) return "Couldn't load jobs";
   if (geoState === 'denied') return 'Location is off';
   if (geoState === 'unavailable') return "Couldn't get your location";
-  if (mode === 'skills') return 'No matching jobs right now';
-  if (mode === 'nearby') return `No jobs within ${NEARBY_RADIUS_MILES} miles`;
+  if (mode === 'skills') {
+    return radiusMiles != null
+      ? `No skill matches within ${radiusMiles} miles`
+      : 'No matching jobs right now';
+  }
+  if (mode === 'nearby') return `No jobs within ${radiusMiles ?? NEARBY_RADIUS_MILES} miles`;
   if (mode === 'search') return 'No jobs found';
-  return 'No open jobs right now';
+  return radiusMiles != null
+    ? `No jobs within ${radiusMiles} miles`
+    : 'No open jobs right now';
 }
 
 function emptyBody(
@@ -385,6 +505,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: colors.onPrimary,
+  },
+  radiusNote: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+    fontSize: 13,
+    color: colors.textMuted,
   },
   clearFilters: {
     marginTop: spacing.sm,

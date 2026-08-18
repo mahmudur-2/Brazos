@@ -6,6 +6,7 @@ import { Skeleton } from './Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { colors, radius, shadows, spacing } from '../lib/theme';
 import {
+  arrivalWindowLabel,
   categoryAccent,
   formatBudget,
   JOB_CATEGORY_ICONS,
@@ -13,6 +14,7 @@ import {
   jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
+import { formatDistanceMiles } from '../lib/discoveryFilter';
 import { formatTimeAgo } from '../lib/time';
 
 const THUMB_SIZE = 84;
@@ -43,6 +45,7 @@ export function WorkerJobCard({
   bidCount,
   onPress,
   variant = 'compact',
+  distanceMiles,
 }: {
   job: OpenJob;
   /** Undefined means not known yet (or phase38's batched RPC isn't deployed).
@@ -50,10 +53,16 @@ export function WorkerJobCard({
    *  guessed at when this is undefined — see bidLabel below. */
   bidCount?: number;
   onPress: () => void;
-  /** 'full' adds the "posted X ago" line, for the more spacious Worker
-   *  Results screen — Home stays 'compact' (its own default) to match the
-   *  reference's exact field list there. */
+  /** 'full' adds the "posted X ago" line — plus, since 4D-2, the distance
+   *  and arrival-window lines — for the spacious discovery surfaces (Worker
+   *  Results, the map's pin sheet). Home stays 'compact' (its own default)
+   *  to match the reference's exact field list there. */
   variant?: 'compact' | 'full';
+  /** Server-computed distance (jobs_within_radius' half-mile-snapped
+   *  `distance_miles`) — never a client guess at a job's coordinates, which
+   *  stay unreadable in `job_locations`. Null/undefined means unknown and
+   *  renders NOTHING: distance is real data or absent, never estimated. */
+  distanceMiles?: number | null;
 }) {
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
@@ -114,6 +123,24 @@ export function WorkerJobCard({
             <Ionicons name="location-outline" size={13} color={colors.textMuted} />
             <Text style={styles.metaText} numberOfLines={1}>
               {job.location}
+            </Text>
+          </View>
+        ) : null}
+
+        {variant === 'full' && typeof distanceMiles === 'number' ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="navigate-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              {formatDistanceMiles(distanceMiles)}
+            </Text>
+          </View>
+        ) : null}
+
+        {variant === 'full' && arrivalWindowLabel(job) ? (
+          <View style={styles.metaRow}>
+            <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
+            <Text style={styles.metaText} numberOfLines={1}>
+              Arrive {arrivalWindowLabel(job)}
             </Text>
           </View>
         ) : null}

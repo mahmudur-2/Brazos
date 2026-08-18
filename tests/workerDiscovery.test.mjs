@@ -15,6 +15,9 @@ import { dirname, join } from 'node:path';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
+const stripComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
 const clusteringUrl = pathToFileURL(join(root, 'lib/mapClustering.ts')).href;
 const { clusterPoints } = await import(clusteringUrl);
 
@@ -150,4 +153,114 @@ test('[static] B1 · the shared props stay optional so the frozen web map ignore
   // even mention the new props.
   const webMap = await read('components/HotspotMap.web.tsx');
   assert.doesNotMatch(webMap, /onSelectPin|onRegionChangeComplete|onUserLocation/);
+});
+
+// ---------------------------------------------------------------------------
+// B3 — the distance filter rules, executed
+// ---------------------------------------------------------------------------
+
+const discoveryFilterUrl = pathToFileURL(join(root, 'lib/discoveryFilter.ts')).href;
+const {
+  DISTANCE_FILTER_OPTIONS,
+  coerceStoredDistanceFilter,
+  distanceChipLabel,
+  distanceFilterStorageKey,
+  encodeDistanceFilter,
+  formatDistanceMiles,
+} = await import(discoveryFilterUrl);
+
+test('B3 · storage round-trips every option, including Any', () => {
+  assert.equal(coerceStoredDistanceFilter(encodeDistanceFilter(null)), null);
+  for (const option of DISTANCE_FILTER_OPTIONS) {
+    assert.equal(coerceStoredDistanceFilter(encodeDistanceFilter(option)), option);
+  }
+});
+
+test('B3 · unrecognized stored values coerce to Any, never to a fake radius', () => {
+  assert.equal(coerceStoredDistanceFilter(null), null);
+  assert.equal(coerceStoredDistanceFilter(''), null);
+  assert.equal(coerceStoredDistanceFilter('7'), null);
+  assert.equal(coerceStoredDistanceFilter('NaN'), null);
+  assert.equal(coerceStoredDistanceFilter('25mi'), null);
+  assert.equal(coerceStoredDistanceFilter('-5'), null);
+});
+
+test('B3 · the storage key is per-account and versioned', () => {
+  assert.equal(distanceFilterStorageKey('u1'), 'brazos.discovery.distance.v1.u1');
+  assert.notEqual(distanceFilterStorageKey('u1'), distanceFilterStorageKey('u2'));
+});
+
+test('B3 · chip labels and distance formatting', () => {
+  assert.equal(distanceChipLabel(null), 'Any distance');
+  assert.equal(distanceChipLabel(5), '5 mi');
+  // Half-mile-snapped server values render without invented precision.
+  assert.equal(formatDistanceMiles(0.5), '0.5 mi away');
+  assert.equal(formatDistanceMiles(2), '2 mi away');
+  assert.equal(formatDistanceMiles(2.5), '2.5 mi away');
+  assert.equal(formatDistanceMiles(10), '10 mi away');
+});
+
+test('B3 · the storage half follows the modeStorage pattern: AsyncStorage, best-effort, per-account key', async () => {
+  const storage = stripComments(await read('lib/discoveryFilterStorage.ts'));
+  assert.match(storage, /@react-native-async-storage\/async-storage/);
+  assert.doesNotMatch(storage, /SecureStore/i);
+  assert.match(storage, /distanceFilterStorageKey\(userId\)/);
+  assert.match(storage, /catch/);
+});
+
+// ---------------------------------------------------------------------------
+// B2 + B3 — cards and screens, pinned
+// ---------------------------------------------------------------------------
+
+test('[static] B2 · the full worker card carries distance and the arrival window, unknown renders nothing', async () => {
+  const card = await read('components/WorkerJobCard.tsx');
+  // Distance renders only from a real number (the server-computed
+  // distance_miles); null/undefined renders no row at all.
+  assert.match(card, /typeof distanceMiles === 'number'/);
+  assert.match(card, /formatDistanceMiles\(distanceMiles\)/);
+  // The arrival window comes from the ONE shared formatter in lib/jobs.ts —
+  // no second derivation of the window label.
+  assert.match(card, /arrivalWindowLabel\(job\)/);
+  assert.doesNotMatch(card, /formatHour/);
+  // Both are full-variant rows: the compact Home card keeps the locked
+  // reference's exact field list.
+  assert.match(card, /variant === 'full' && typeof distanceMiles === 'number'/);
+  assert.match(card, /variant === 'full' && arrivalWindowLabel\(job\)/);
+});
+
+test('[static] B2 · the no-photo state is the category-glyph tile, never stock imagery', async () => {
+  const card = await read('components/WorkerJobCard.tsx');
+  assert.match(card, /thumbFallback/);
+  assert.match(card, /categoryAccent\(job\.category\)/);
+  assert.match(card, /onError=\{\(\) => setImageFailed\(true\)\}/);
+  // No remote placeholder/stock fallback URL anywhere in the card.
+  assert.doesNotMatch(stripComments(card), /https?:\/\//);
+});
+
+test('[static] B3 · both discovery surfaces render the shared chips and persist through the one storage module', async () => {
+  const [results, map, chips] = await Promise.all([
+    read('screens/WorkerResultsScreen.tsx'),
+    read('screens/MapScreen.tsx'),
+    read('components/DistanceChips.tsx'),
+  ]);
+  for (const screen of [results, map]) {
+    assert.match(screen, /<DistanceChips/);
+    assert.match(screen, /readDistanceFilter\(userId\)/);
+    assert.match(screen, /writeDistanceFilter\(userId, next\)/);
+  }
+  // One chip control, one filter vocabulary.
+  assert.match(chips, /DISTANCE_FILTER_OPTIONS/);
+  assert.match(chips, /distanceChipLabel/);
+});
+
+test('[static] B3 · the nearby title tracks the applied radius and a dead location is announced, not faked', async () => {
+  const results = await read('screens/WorkerResultsScreen.tsx');
+  // The header may never claim a radius the list is not applying.
+  assert.match(results, /`Jobs Within \$\{radius \?\? NEARBY_RADIUS_MILES\} Miles`/);
+  // A chosen radius with no usable location keeps the full feed and says so.
+  assert.match(results, /Location is off — showing jobs at any distance\./);
+  const map = await read('screens/MapScreen.tsx');
+  assert.match(map, /Location is off — showing all areas\./);
+  // A user-chosen radius pins the search widening ladder.
+  assert.match(results, /radiusActive\s*\?\s*\[radius as number\]\s*:\s*\[5, 10, 15\]/);
 });
