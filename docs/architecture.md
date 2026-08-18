@@ -71,9 +71,13 @@ rather than rendering a guessed tree and swapping it.
 `ModeShell` mounts exactly one root: `CustomerRoot` or `WorkerRoot`. Mutual
 exclusion is the enforcement mechanism — a worker screen cannot render in
 customer mode because it is not mounted — and it gives `switchMode()` its stack
-reset for free. Both trees have the same five tabs in the same order (Home, Map,
-MyJobs, Messages, Profile). **Only the Home tab differs**, and that difference
-is what mode means here: customer Home roots at `HomeMain`, worker Home roots
+reset for free. Since Stage 4D the two BARS differ: the worker bar keeps the
+five classic tabs (Home, Map, MyJobs, Messages, Profile); the customer bar
+shows Home · Discover · [ + ] · Messages · Profile, with Map and MyJobs still
+REGISTERED as hidden routes (the locked Customer Home dispatches
+`navigate('Map')`, and notification routing targets MyJobs in both modes —
+see `ui/primitives/BottomNav.tsx` for the mechanism). The Home tab is the
+mode-defining tab: customer Home roots at `HomeMain`, worker Home roots
 at `WorkerHome` (explicit `initialRouteName`, 4D-1b) and carries the bid flow
 (`WorkerResults`, `JobDetail`, `SubmitBid`, `BidSent`). The locked atlas-48
 browse screen (`screens/BrowseJobsScreen.tsx`) is unmounted since 4D-1b —
@@ -91,10 +95,76 @@ production bundle has no route to it at all.
 
 Every param list lives in `lib/navigation.ts`. The two trees are separately
 typed, so cross-tree navigation is a compile error. Headers are off everywhere
-(`headerShown: false`); screens render `components/ScreenHeader`. Known gap:
-`JobDetail` is registered in the Map and MyJobs stacks, so a customer drilling
-into a map cell can still reach a worker surface; closing it needs a
-customer-safe market preview route.
+(`headerShown: false`); screens render `components/ScreenHeader`. The old
+customer-reaches-a-worker-surface gap is closed AT THE SCREEN: `JobDetail`
+delegates customer mode to `components/MarketJobPreview.tsx`, so no
+navigation path can render EST. PAY or a bid CTA to a customer.
+
+## Design tokens and theme resolution
+
+`ui/tokens.ts` is the authoritative token file and since 4D-3.5 exports TWO
+palettes with identical key names, compile-checked by
+`satisfies Record<ColorToken, string>`: `light` (Heritage — the existing §I
+values, unchanged) and `dark` (Emerald Prestige: near-black emerald bg,
+dark-green cards, gold hairline `line`, gold primary with a dark `onForest`).
+`lib/theme.ts` wraps it for screens (CLAUDE.md: screens never import
+ui/tokens.ts directly) and re-exports the §I helpers — `withAlpha`, `layout`,
+`controls`, and the §I radius scale as `emeraldRadius`. `darkColors`' seven
+brand hues are spread from the tokens `dark` palette, so dark-forest has one
+definition.
+
+Resolution is a context: `lib/ThemeContext.tsx`'s ThemeProvider (mounted once
+in App.tsx, above auth and mode) feeds `hooks/useThemeColors.ts`, the single
+reactive read. **In this stage the provider returns the light palette
+unconditionally** — no `useColorScheme()`/Appearance read anywhere, no stored
+preference, and app.json keeps `userInterfaceStyle: "light"`. 4D-4 turns the
+provider's value into real state (AsyncStorage preference + Appearance) and
+does the both-themes screen sweep; nothing resolves to `dark` before then.
+
+Translucent colours are derived, never restated: `withAlpha(token, alpha)`
+(`ui/colorAlpha.ts`, pure and executed by tests byte-for-byte against the
+values the 4D-3.5 sweep replaced) is the one way a scrim or on-fill
+translucency comes from a palette hex. `tests/themeTokens.test.mjs` keeps the
+migrated files free of raw hex/rgba literals.
+
+## Worker discovery (4D-2)
+
+The worker Map tab renders clustered pins: `lib/mapClustering.ts` (pure
+fixed-grid aggregation, no clustering library, executed directly by tests)
+merges `job_hotspots()` cells into count-badged pins by the visible region's
+`latitudeDelta`; deterministic keys, member order and count-weighted
+centroids. Tapping a pin opens a bottom sheet of `WorkerJobCard`s for the
+pin's member cells (`fetchOpenJobsInCells`), and a card opens `JobDetail`
+inside the Map stack. Customer mode keeps the pre-4D-2 glow-cell drill-down,
+and the new `HotspotMapProps` members are optional so the frozen web map
+ignores them.
+
+Distance is server truth or absent: cards carry `jobs_within_radius()`'s
+half-mile-snapped `distance_miles` where the surface has it (radius results;
+the map sheet joins it through one radius read sized to the pin), and render
+nothing otherwise — the client never guesses at coordinates `job_locations`
+keeps unreadable. The distance filter is a single-select chip row
+(`components/DistanceChips.tsx`) whose rules live in `lib/discoveryFilter.ts`
+(also home of the canonical `NEARBY_RADIUS_MILES = 5`, re-exported by
+WorkerResultsScreen for the locked BrowseJobsScreen import) and whose
+selection persists per account via `lib/discoveryFilterStorage.ts`
+(AsyncStorage, modeStorage pattern). WorkerResults routes all/skills through
+the radius when one is chosen, arrives at the stated 5 in nearby mode with a
+title that tracks the chip, and announces a dead location instead of silently
+unfiltering.
+
+The market job detail leads with the scope of work (description directly
+under the title), shows the approximate area only, and renders
+`lib/matchReasons.ts`'s output: three deterministic boolean checkmarks —
+category ∈ profile categories, known distance within the persisted radius
+(default the nearby promise), and the feed filter's own `budgetCeiling`
+covering the viewer's cheapest published flat price. Unknown or unmet facts
+render nothing; percentages and scores are banned and test-guarded. The
+worker hero card (`lib/workerHeroCard.ts`, 4E) composes lib/compareBids.ts —
+`knownRating`, `totalCompletedJobs` over `worker_job_stats`, `trustRowFor`'s
+"New worker" verdict — into positive-only trust rows (rating · jobs
+completed · responds-in), and a tombstoned profile (rebook's `canHire`)
+carries no offer, book, or save affordance.
 
 ## Jobs and lifecycle
 

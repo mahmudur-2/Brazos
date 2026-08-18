@@ -347,3 +347,81 @@ today's unhandled GO_BACK, minus the red box.
 screen ever becomes deep-linkable.
 
 **Release blocker:** **NO.**
+
+### A10 · lib/authTheme.ts — token homes for the auth surface's stray literals (4D-3.5)
+
+**File:** `lib/authTheme.ts` (READ-ONLY per the 4D-3.5/4D-2/4E dispatch).
+
+The 4D-3.5 token sweep migrated every colour literal in unlocked files whose
+token home was writable. Three call sites' only correct home is this file, so
+their literals were deliberately LEFT and are listed in that run's report:
+`components/AuthNotice.tsx:31` (`'#3E4F47'`), `components/AuthNotice.tsx:50`
+(`'#F5E7E4'`), `components/CountryPicker.tsx:204`
+(`'rgba(11, 32, 25, 0.42)'`).
+
+**Diff (add inside `authColors`, after the `danger` entry at line 42):**
+
+```diff
+   /** --danger */
+   danger: '#9C3F35',
++  /** Danger surface behind auth error notices — §I's exact dangerSurface. */
++  dangerSurface: '#F5E7E4',
++  /** Body text on an auth notice (components/AuthNotice.tsx). */
++  noticeText: '#3E4F47',
++  /** Muted helper text on the auth create/sign-in forms (#526059 sites). */
++  noticeMuted: '#526059',
++  /** Gold-dark emphasis text on the verify-phone warning (#7A5A18 sites). */
++  warningText: '#7A5A18',
++  /** The country-picker sheet scrim (components/CountryPicker.tsx:204). */
++  sheetScrim: 'rgba(11, 32, 25, 0.42)',
+```
+
+**Follow-up in UNLOCKED files once applied** (ordinary edits, no unlock
+needed): AuthNotice:31 `'#3E4F47'` → `authColors.noticeText`; AuthNotice:50
+`'#F5E7E4'` → `authColors.dangerSurface`; CountryPicker:204 the rgba literal
+→ `authColors.sheetScrim`; then add the three files to
+`tests/themeTokens.test.mjs`'s MIGRATED_FILES list.
+
+**Risk unpatched:** none functional — purely the last unmigrated colour
+literals outside locked/frozen surfaces.
+
+**Release blocker:** **NO.**
+
+### A11 · Locked screens — remaining colour literals, for the unlock session (4D-3.5)
+
+Queued so the operator's T4 theming session (STAGE4D_PLAN.md) has the exact
+sites. All are LOCKED screens; values in comments are excluded. Exact
+replacements, by file and line as of the 4D-3.5 run:
+
+```diff
+ screens/BrowseJobsScreen.tsx:45
+-const AVAILABILITY_ONLINE_COLOR = '#0DBC5A';
++const AVAILABILITY_ONLINE_COLOR = colors.availabilityOnline;
+ screens/HomeScreen.tsx:653 (the paired glow)
+-    backgroundColor: '#7DE7A4',
++    backgroundColor: colors.availabilityOnlineSoft,
+ screens/HomeScreen.tsx:655
+-  liveDot: { ... backgroundColor: '#0DBC5A' },
++  liveDot: { ... backgroundColor: colors.availabilityOnline },
+ screens/EmailCreateAccountScreen.tsx:243, screens/EmailSignInScreen.tsx:182
+-    backgroundColor: '#F5E7E4',
++    backgroundColor: authColors.dangerSurface,   (A10's token)
+ screens/CreateAccountScreen.tsx:213, screens/EmailCreateAccountScreen.tsx:261
+-    color: '#526059',
++    color: authColors.noticeMuted,               (A10's token)
+ screens/VerifyPhoneScreen.tsx:519 and :523
+-    color: '#7A5A18',
++    color: authColors.warningText,               (A10's token)
+```
+
+Prerequisite for the two `availabilityOnline*` lines: add to BOTH palettes in
+`lib/theme.ts` (an unlocked edit any run can make when this is authorized):
+`availabilityOnline: '#0DBC5A'` / `availabilityOnlineSoft: '#7DE7A4'` in
+`colors`, with dark-palette counterparts chosen in the unlock session.
+
+Deliberately NOT queued (brand-artwork tints, per the same rule that left
+`components/ModeTransitionOverlay.tsx:449`): WelcomeScreen:50 `#DEEAD9`
+(artwork ring disc), HomeScreen:597 `#F1EAE2` / :665 `#E7E3DB` (reference
+hairlines the unlock designer should resolve against the token set).
+
+**Release blocker:** **NO.**
