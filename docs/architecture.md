@@ -137,7 +137,11 @@ succeeding. Writes: `create_offer`, `counter_offer`, `decline_offer`,
 `withdraw_offer`, `accept_offer`. Reads: `job_offer_count`, `job_offer_counts`,
 `my_pending_offers`. The counter cap is ten per side per chain, enforced under
 the job row lock server-side and mirrored in the client so a spent action is
-disabled rather than merely rejected.
+disabled rather than merely rejected. `create_offer()` caps `p_message` at 500
+characters; the bid composer mirrors that cap the same way
+(`lib/offerMessage.ts`) and appends at most one availability line ("Can start
+today · about 1-2h") — when the line would not fit, the chips disable with a
+written reason instead of a send ever being truncated.
 
 ## Money
 
@@ -239,7 +243,13 @@ else: `rating_avg` / `rating_count` (trigger-maintained from `reviews`);
 `completion_rate`, `on_time_pct`, `response_time` (nullable — treat null as
 unknown, never as zero); `categories`; `worker_job_stats(p_worker)`, a security
 definer aggregate because a visitor cannot read another user's completed jobs
-under RLS; and `portfolio_items`. Never invent any of it.
+under RLS (it returns per-category counts — the total is their sum); and
+`portfolio_items`. Never invent any of it. Where bids present a worker,
+`lib/compareBids.ts` enforces the null-is-unknown rule as code: facts render
+only when known, unknown renders nothing, and "New worker" appears only when a
+sub-3 completed-job count is actually known alongside a null `on_time_pct`.
+The worker's own profile (worker mode only) carries a four-step completeness
+meter (`lib/profileCompleteness.ts`) that disappears entirely at 4/4.
 
 ## Notifications
 
