@@ -5,7 +5,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { VerificationBadge } from '../components/VerificationBadge';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { StatusPill } from '../ui/primitives/StatusPill';
@@ -183,11 +182,6 @@ export function BidDetailScreen() {
                           <Text style={styles.workerName} numberOfLines={1}>
                             {offer.worker?.full_name ?? 'Worker'}
                           </Text>
-                          {offer.worker ? (
-                            <VerificationBadge
-                              status={offer.worker.verification_status}
-                            />
-                          ) : null}
                         </View>
                         <Text style={styles.workerMeta}>
                           {(offer.worker?.rating_count ?? 0) > 0

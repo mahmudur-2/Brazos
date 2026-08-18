@@ -4,7 +4,6 @@ import { useNavigation, useRoute, type RouteProp } from '@react-navigation/nativ
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { VerificationBadge } from '../components/VerificationBadge';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useJobOffers } from '../hooks/useJobOffers';
@@ -166,7 +165,6 @@ function CompareRow({
       ) : null}
 
       <View style={styles.rowFooter}>
-        {worker ? <VerificationBadge status={worker.verification_status} /> : <View />}
         <Text style={styles.rowMeta}>
           Bid {formatTimeAgo(bid.created_at)} · full terms{' '}
           <Ionicons name="chevron-forward" size={11} color={colors.emerald} />
@@ -259,7 +257,9 @@ const styles = StyleSheet.create({
   rowFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    // The badge that used to hold the left slot is gone; the meta line keeps
+    // its right-aligned position.
+    justifyContent: 'flex-end',
     gap: spacing.sm,
   },
   rowMeta: {

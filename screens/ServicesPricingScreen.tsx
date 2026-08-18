@@ -4,7 +4,6 @@ import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { FormScreen } from '../ui/templates/FormScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
-import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
@@ -187,17 +186,6 @@ export function ServicesPricingScreen() {
         />
       </View>
 
-      <View style={styles.card}>
-        <View style={styles.verificationRow}>
-          <Text style={styles.cardTitle}>Verification</Text>
-          <VerificationBadge status={profile?.verification_status} />
-        </View>
-        <Text style={styles.cardNote}>
-          Identity verification isn’t connected in this build — no provider,
-          no checks. The badge shows exactly what the database records.
-        </Text>
-      </View>
-
       <Text style={styles.sectionTitle}>Your services</Text>
       {services.length === 0 ? (
         <Text style={styles.cardNote}>
@@ -337,12 +325,6 @@ const styles = StyleSheet.create({
   availabilityCopy: {
     flex: 1,
     gap: 4,
-  },
-  verificationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.md,
   },
   sectionTitle: {
     fontSize: 16,

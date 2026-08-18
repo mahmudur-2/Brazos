@@ -16,7 +16,6 @@ const offers = read('lib/offers.ts');
 const reviews = read('lib/reviews.ts');
 const storage = read('lib/storage.ts');
 const pushHook = read('hooks/usePushNotifications.ts');
-const verificationBadge = read('components/VerificationBadge.tsx');
 const home = read('screens/HomeScreen.tsx');
 const jobDetail = read('screens/JobDetailScreen.tsx');
 
@@ -332,8 +331,12 @@ test('worker search ranks on stored evidence and claims nothing more', () => {
 });
 
 test('unsupported identity and proximity claims are absent', () => {
-  assert.doesNotMatch(verificationBadge, /ID-checked/i);
-  assert.match(verificationBadge, /Not verified/);
+  // Stage 4D-B removed the verification badge outright (it rendered
+  // "Not verified" on 100% of workers — no migration ever writes 'verified').
+  // The two assertions that pinned its honest wording moved with it: the
+  // no-badge-anywhere contract now lives in
+  // tests/verificationBadgeRemoved.test.mjs.
+  assert.ok(!existsSync('components/VerificationBadge.tsx'));
   assert.doesNotMatch(home, /Nearby open jobs/i);
   assert.doesNotMatch(jobDetail, /Similar jobs nearby/i);
 });

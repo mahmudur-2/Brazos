@@ -158,10 +158,14 @@ test('Customer job detail keeps evidence and honest lifecycle recovery states', 
   assert.match(chat, /threadJobId: activeJob\?\.id/);
 });
 
-test('Worker job detail uses the real photo gallery and an honest verification state', async () => {
+test('Worker job detail uses the real photo gallery and no verification pill', async () => {
   const detail = codeOnly(await read('screens/JobDetailScreen.tsx'));
 
-  assert.match(detail, /const VERIFICATION_LABEL = 'Unverified'/);
+  // Stage 4D-B: the unconditional "Unverified" pill is gone — it stamped a
+  // distrust signal on every poster while carrying zero information. The
+  // absence is the contract now (tests/verificationBadgeRemoved.test.mjs
+  // asserts it tree-wide; this pins the screen that owned the inline copy).
+  assert.doesNotMatch(detail, /VERIFICATION_LABEL|Unverified/);
   assert.match(detail, /const galleryPhotos = job\.photos \?\? \[\]/);
   assert.match(detail, /pagingEnabled/);
   assert.match(detail, /onMomentumScrollEnd/);

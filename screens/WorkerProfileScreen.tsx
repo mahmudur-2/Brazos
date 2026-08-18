@@ -17,7 +17,6 @@ import { Card } from '../components/Card';
 import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import {
   completionPercent,
@@ -197,7 +196,6 @@ export function WorkerProfileScreen() {
                   <Text style={styles.name} numberOfLines={1}>
                     {name}
                   </Text>
-                  <VerificationBadge status={profile?.verification_status} />
                 </View>
                 {/* The rating row is the way into the full reviews list, so it
                     behaves as a button — with a chevron saying so and enough

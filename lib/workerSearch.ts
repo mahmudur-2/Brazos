@@ -563,7 +563,6 @@ type ServerMatch = {
   workerId?: string;
   fullName?: string | null;
   avatarUrl?: string | null;
-  verificationStatus?: string | null;
   ratingAvg?: number | null;
   ratingCount?: number | null;
   categories?: string[] | null;
@@ -596,7 +595,6 @@ function toWorkerMatch(row: ServerMatch): WorkerMatch | null {
       id: row.workerId,
       full_name: row.fullName ?? null,
       avatar_url: row.avatarUrl ?? null,
-      verification_status: row.verificationStatus ?? null,
       rating_avg: row.ratingAvg ?? null,
       rating_count: row.ratingCount ?? null,
       categories: row.categories ?? [],

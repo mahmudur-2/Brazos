@@ -32,7 +32,6 @@ import { ReviewSection } from '../components/ReviewSection';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
 import { StatusBadge } from '../components/StatusBadge';
-import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { useJobOffers } from '../hooks/useJobOffers';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
@@ -744,9 +743,6 @@ export function ClientJobDetailScreen() {
                     <Text style={styles.workerName} numberOfLines={1}>
                       {assignedWorker?.full_name ?? 'Assigned worker'}
                     </Text>
-                    {assignedWorker ? (
-                      <VerificationBadge status={assignedWorker.verification_status} />
-                    ) : null}
                   </View>
                   <Text style={styles.workerMeta}>
                     {formatBudget(job.final_amount_cents ?? job.budget_cents)} agreed

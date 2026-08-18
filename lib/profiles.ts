@@ -9,7 +9,6 @@ export type Profile = {
   phone: string | null;
   avatar_url: string | null;
   role: string | null;
-  verification_status: string | null;
   rating_avg: number | null;
   rating_count: number | null;
   bio?: string | null;
@@ -44,7 +43,7 @@ export type ProfileUpdate = {
 };
 
 export const PUBLIC_PROFILE_COLUMNS =
-  'id, full_name, avatar_url, role, verification_status, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time, accepting_work, availability_note';
+  'id, full_name, avatar_url, role, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time, accepting_work, availability_note';
 
 const SELF_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, phone, is_admin, banned`;
 
@@ -198,10 +197,6 @@ export function getInitials(name?: string | null): string {
   const first = parts[0][0] ?? '';
   const last = parts.length > 1 ? parts[parts.length - 1][0] : '';
   return (first + last).toUpperCase();
-}
-
-export function isVerified(status?: string | null): boolean {
-  return status === 'verified';
 }
 
 /** Normalize completion_rate (accepts 0-1 or 0-100) to a 0-100 percent, or null. */

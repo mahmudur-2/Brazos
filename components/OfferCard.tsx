@@ -5,7 +5,6 @@ import { Button } from './Button';
 import { Card } from './Card';
 import { OfferResponseActions } from './OfferResponseActions';
 import { StatusBadge } from './StatusBadge';
-import { VerificationBadge } from './VerificationBadge';
 import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
 import {
   firstNameOf,
@@ -202,15 +201,12 @@ function OfferListCard({
         </View>
       </View>
 
-      {(worker || canRehire) && (
+      {canRehire && (
         <View style={styles.trustRow}>
-          {worker ? <VerificationBadge status={worker.verification_status} /> : null}
-          {canRehire && (
-            <View style={styles.rehireTag}>
-              <Ionicons name="repeat" size={12} color={colors.emerald} />
-              <Text style={styles.rehireText}>Worked for you before</Text>
-            </View>
-          )}
+          <View style={styles.rehireTag}>
+            <Ionicons name="repeat" size={12} color={colors.emerald} />
+            <Text style={styles.rehireText}>Worked for you before</Text>
+          </View>
         </View>
       )}
 

@@ -29,7 +29,6 @@ import { Card } from '../components/Card';
 import { Chip } from '../components/Chip';
 import { FadeIn } from '../components/FadeIn';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { VerificationBadge } from '../components/VerificationBadge';
 import { useAuth } from '../hooks/useAuth';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -455,7 +454,6 @@ function WorkerResultCard({
             <Text style={styles.name} numberOfLines={1}>
               {name}
             </Text>
-            <VerificationBadge status={profile.verification_status} />
           </View>
 
           <View style={styles.proofRow}>

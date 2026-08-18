@@ -74,10 +74,6 @@ import type { JobDetailRouteParamList } from '../lib/navigation';
 import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
 import { colors, radius, spacing } from '../lib/theme';
 
-// There is no identity-verification provider yet. Keep this explicit rather
-// than presenting a trust signal the product cannot currently substantiate.
-const VERIFICATION_LABEL = 'Unverified';
-
 /**
  * "$45–$54" / "$54" — the job's budget as the worker would actually receive it.
  *
@@ -525,10 +521,6 @@ export function JobDetailScreen() {
                 </Text>
                 <Text style={styles.time}>Posted {formatTimeAgo(job.created_at)}</Text>
               </View>
-              <View style={styles.unverifiedBadge}>
-                <Ionicons name="shield-outline" size={15} color={colors.neutral} />
-                <Text style={styles.unverifiedText}>{VERIFICATION_LABEL}</Text>
-              </View>
             </View>
 
             <Text style={styles.title}>{job.title}</Text>
@@ -956,20 +948,6 @@ const styles = StyleSheet.create({
   time: {
     fontSize: 13,
     color: colors.textMuted,
-  },
-  unverifiedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.sm - 1,
-    borderRadius: radius.pill,
-    backgroundColor: colors.neutralBg,
-  },
-  unverifiedText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: colors.neutral,
   },
   title: {
     fontSize: 30,
