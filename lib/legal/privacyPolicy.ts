@@ -76,8 +76,10 @@ The app collects photos in four places, with different visibility:
 
 - Job photos, attached by a Client when posting. Visible to anyone who can see
   that job.
-- Completion photos, attached by a Worker when marking a job done. Visible to
-  the Client and the Worker on that job.
+- Completion photos, attached by a Worker when marking a job done. Shown in
+  the app to the Client and the Worker on that job. Job media files are
+  currently stored in a public storage bucket, so someone with an exact file
+  link could access them; private storage for completion media is planned.
 - Portfolio photos. A Worker may choose to feature completion photos on their
   profile. THESE ARE PUBLIC — visible to anyone who views that profile,
   including people not involved in the original job. The app warns you before
@@ -154,14 +156,14 @@ third-party advertising.
 
 ## 7. Deleting your account
 
-You can request deletion of your account at any time through the in-app
-reporting tool until a dedicated deletion control is available.
+You can delete your account in the app: Profile → Delete Account.
 
-On deletion we remove your profile, your photos, your push tokens, and your
-notification preferences. Content that is part of another user's record — a
-review you left, and messages within a shared job thread — may be retained in
-a form disassociated from your profile, and moderation records are retained as
-described above.
+On deletion we deactivate your account, permanently delete your sign-in
+identity, and remove your name, photo, and contact details from your profile.
+Content tied to past jobs — photos, messages, reviews — may be retained so
+other users' job records stay intact and for dispute or legal needs. Uploaded
+media files are not yet automatically removed from storage. Moderation
+records are retained as described above.
 
 Deletion is permanent and cannot be undone.
 

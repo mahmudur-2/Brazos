@@ -262,3 +262,43 @@ test('shared components used by other screens were not repainted for this one', 
   }
   assert.doesNotMatch(gate, /SegmentedControl/, 'the status rows replaced it here only');
 });
+
+// ===========================================================================
+// Privacy-policy factual contract (2026-08-18 corrections)
+// ===========================================================================
+
+test('the privacy policy states the deletion and media facts the code proves', () => {
+  const policy = read('lib/legal/privacyPolicy.ts');
+
+  // The working-draft banner survives every edit until counsel reviews it.
+  assert.match(policy, /Working draft — pending legal review/);
+
+  // Deletion is the real in-app control (ProfileStack registers
+  // DeleteAccount), not the old reporting-tool workaround.
+  assert.match(policy, /You can delete your account in the app: Profile → Delete Account\./);
+  assert.doesNotMatch(
+    policy,
+    /request deletion of your account at any time through the in-app\s*reporting tool/
+  );
+
+  // What deletion actually does (phase67): deactivate + delete the sign-in
+  // identity + scrub the profile; job content may be retained; storage files
+  // are NOT yet auto-removed (phase67 header: "No storage cleanup").
+  assert.match(policy, /deactivate your account, permanently delete your sign-in\s*identity/);
+  assert.match(policy, /not yet automatically removed from storage/);
+  assert.doesNotMatch(
+    policy,
+    /On deletion we remove your profile, your photos/,
+    'the old photos-are-removed claim must not return'
+  );
+
+  // Completion media honesty: the shared job-photos bucket is public
+  // (lib/storage.ts), so the policy must say a direct file link could reach
+  // the file until private storage lands.
+  assert.match(policy, /public storage bucket/);
+  assert.match(policy, /private storage for completion media is planned/);
+
+  // The corrections were policy-only: the Terms module is byte-identical to
+  // what the gate shipped (COMMIT 11 rule — do not touch termsOfService.ts).
+  assert.match(read('lib/legal/termsOfService.ts'), /TERMS_OF_SERVICE/);
+});
