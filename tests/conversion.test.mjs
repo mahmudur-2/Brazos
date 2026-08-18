@@ -548,8 +548,8 @@ test('§6.2 · over-ceiling amounts refuse with written text before any RPC', as
   const { moneyCeilingError, MONEY_CEILING_CENTS } = await validationModule;
 
   assert.equal(moneyCeilingError(MONEY_CEILING_CENTS), null, 'exactly at the ceiling is legal');
-  const refusal = moneyCeilingError(MONEY_CEILING_CENTS + 1);
-  assert.ok(refusal && /limit/.test(refusal), 'the refusal is a written sentence');
+  // Verbatim refusal copy — operator decision 2026-08-18.
+  assert.equal(moneyCeilingError(MONEY_CEILING_CENTS + 1), 'Amount must be $100,000 or less.');
 });
 
 // ---------------------------------------------------------------------------

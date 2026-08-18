@@ -33,7 +33,11 @@ export function moneyCeilingError(
 ): string | null {
   if (amountCents == null || amountCents <= ceilingCents) return null;
   const limit = formatBudget(ceilingCents);
-  return `That amount is over the ${limit} limit. Enter ${limit} or less.`;
+  // Verbatim refusal copy (operator decision 2026-08-18): the tip cap names
+  // itself, everything else is an amount.
+  return ceilingCents === TIP_CEILING_CENTS
+    ? `Tip must be ${limit} or less.`
+    : `Amount must be ${limit} or less.`;
 }
 
 /**

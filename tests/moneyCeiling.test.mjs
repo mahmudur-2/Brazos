@@ -72,7 +72,8 @@ test('exactly at the ceiling is accepted; one cent above is refused', async () =
 
   assert.equal(moneyCeilingError(MONEY_CEILING_CENTS), null);
   assert.equal(moneyCeilingError(10_000_000), null);
-  assert.equal(typeof moneyCeilingError(10_000_001), 'string');
+  // Verbatim refusal copy — operator decision 2026-08-18.
+  assert.equal(moneyCeilingError(10_000_001), 'Amount must be $100,000 or less.');
 
   // Absent amounts are legal — an empty budget is not an over-ceiling budget.
   assert.equal(moneyCeilingError(null), null);
@@ -83,9 +84,8 @@ test('the tip cap boundary holds both ways', async () => {
   const { moneyCeilingError, TIP_CEILING_CENTS } = await validationModule;
 
   assert.equal(moneyCeilingError(100_000, TIP_CEILING_CENTS), null);
-  const refused = moneyCeilingError(100_001, TIP_CEILING_CENTS);
-  assert.equal(typeof refused, 'string');
-  assert.match(refused, /\$1,000/);
+  // Verbatim refusal copy — operator decision 2026-08-18.
+  assert.equal(moneyCeilingError(100_001, TIP_CEILING_CENTS), 'Tip must be $1,000 or less.');
   // The general ceiling does not bind tips down — only the explicit cap does.
   assert.equal(moneyCeilingError(100_001), null);
 });
