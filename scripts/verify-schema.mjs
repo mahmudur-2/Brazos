@@ -53,6 +53,39 @@ const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
 // live in supabase-ref.mjs, shared with the EAS production pre-install gate.
 // ---------------------------------------------------------------------------
 
+/**
+ * The parity DECISION, pure and exported so the test suite can execute it
+ * without touching .env or a live database: given the three resolved refs
+ * (null = unresolvable/absent), return every reason the gate must refuse.
+ *
+ * An unresolvable key ref is a PROBLEM, never a skip. A new-format `sb_…`
+ * publishable key has no JWT payload, so refFromJwt() returns null — and the
+ * old inline `if (keyRef && …)` silently skipped the comparison and printed
+ * "parity: OK" while having proven nothing. A missing toolingRef stays a
+ * warning (the caller prints it), not a problem: the app-side comparison is
+ * still meaningful without it.
+ */
+export function envParityProblems({ appRef, keyRef, toolingRef }) {
+  const problems = [];
+  if (!appRef) problems.push('SUPABASE_URL in .env does not look like a Supabase project URL');
+  if (!keyRef) {
+    problems.push(
+      'SUPABASE_KEY carries no readable project ref, so key-vs-URL parity cannot be proven. ' +
+        'Likely cause: a new-format sb_… publishable key, which has no JWT payload. ' +
+        'Remedy: use the legacy eyJ… anon key for the project the .env SUPABASE_URL points at.'
+    );
+  } else if (appRef && keyRef !== appRef) {
+    problems.push(`the anon key belongs to ${keyRef} but SUPABASE_URL points at ${appRef}`);
+  }
+  if (toolingRef && appRef && toolingRef !== appRef) {
+    problems.push(
+      `the app targets ${appRef} but the SQL proofs/migrations target ${toolingRef} — ` +
+        'every gate below would be green about a database the app never touches'
+    );
+  }
+  return problems;
+}
+
 {
   const appRef = refFromRestUrl(BASE);
   const keyRef = refFromJwt(KEY);
@@ -63,17 +96,7 @@ const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
   console.log(`  app .env SUPABASE_KEY ref : ${keyRef ?? 'UNRESOLVED'}`);
   console.log(`  SUPABASE_DB_URL_STAGING   : ${toolingRef ?? 'NOT SET'}`);
 
-  const problems = [];
-  if (!appRef) problems.push('SUPABASE_URL in .env does not look like a Supabase project URL');
-  if (keyRef && appRef && keyRef !== appRef) {
-    problems.push(`the anon key belongs to ${keyRef} but SUPABASE_URL points at ${appRef}`);
-  }
-  if (toolingRef && appRef && toolingRef !== appRef) {
-    problems.push(
-      `the app targets ${appRef} but the SQL proofs/migrations target ${toolingRef} — ` +
-        'every gate below would be green about a database the app never touches'
-    );
-  }
+  const problems = envParityProblems({ appRef, keyRef, toolingRef });
   if (!toolingRef) {
     console.log('  WARNING: SUPABASE_DB_URL_STAGING is not set in this shell, so the');
     console.log('           app-vs-tooling comparison could not be made. The SQL proofs');
