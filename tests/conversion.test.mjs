@@ -102,14 +102,16 @@ test('§3.2 · the guidance copy is exact, formatBudget-formatted, and claims no
 
   const cleaning = priceGuidanceLines('cleaning');
   assert.ok(cleaning);
-  assert.equal(cleaning[0], 'Typical range: $60–$120');
+  // "Suggested starting range" — product decision 2026-08-18. "Typical"
+  // overclaimed what a static seed table knows.
+  assert.equal(cleaning[0], 'Suggested starting range: $60–$120');
   assert.equal(cleaning[1], 'A guide, not a quote. You set the budget.');
 
   for (const { key } of SKILL_CATEGORIES) {
     const lines = priceGuidanceLines(key);
     if (!lines) continue;
     const joined = lines.join(' ');
-    assert.match(lines[0], /^Typical range: \$[\d,]+–\$[\d,]+$/);
+    assert.match(lines[0], /^Suggested starting range: \$[\d,]+–\$[\d,]+$/);
     assert.doesNotMatch(
       joined,
       /\b(here|nearby|in your area|near you|local|locally|around you)\b/i,

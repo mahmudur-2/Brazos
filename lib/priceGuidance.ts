@@ -1,7 +1,9 @@
 import { formatBudget } from './jobs';
 
 /**
- * Static "typical range" guidance for the posting flow (4D-3 §3). Pure data +
+ * Static price-range guidance for the posting flow (4D-3 §3), labeled
+ * "Suggested starting range" (product decision 2026-08-18 — the ranges are
+ * static seeds, and "typical" overclaimed what they know). Pure data +
  * lookup, no screen imports, so tests execute it directly.
  *
  * Keyed by the exact category keys in lib/skillCategories.ts — the enum-backed
@@ -50,7 +52,7 @@ export function priceGuidanceLines(
   const range = priceGuidanceFor(category);
   if (!range) return null;
   return [
-    `Typical range: ${formatBudget(range.minCents)}–${formatBudget(range.maxCents)}`,
+    `Suggested starting range: ${formatBudget(range.minCents)}–${formatBudget(range.maxCents)}`,
     'A guide, not a quote. You set the budget.',
   ];
 }
