@@ -37,6 +37,11 @@ export type PortfolioCandidate = {
 
 export type CategoryStat = { category: JobCategory; count: number };
 
+// Explicit projection — exactly the PortfolioItem type above, pinned by
+// tests/projections.test.mjs so the list and the type cannot drift apart.
+const PORTFOLIO_ITEM_COLUMNS =
+  'id, worker_id, source_job_id, photo_url, category, caption, display_order, created_at';
+
 /**
  * A worker's featured gallery. Readable for ANY worker id — portfolio_items
  * has a permissive SELECT policy precisely so a visitor can see it (phase17).
@@ -44,7 +49,7 @@ export type CategoryStat = { category: JobCategory; count: number };
 export async function fetchPortfolio(workerId: string) {
   const { data, error } = await supabase
     .from('portfolio_items')
-    .select('*')
+    .select(PORTFOLIO_ITEM_COLUMNS)
     .eq('worker_id', workerId)
     .order('display_order', { ascending: true })
     .order('created_at', { ascending: false });
@@ -132,7 +137,7 @@ export async function addPortfolioItem(input: NewPortfolioItem, displayOrder: nu
       caption: input.caption.trim(),
       display_order: displayOrder,
     })
-    .select()
+    .select(PORTFOLIO_ITEM_COLUMNS)
     .single();
 
   return { data: data as PortfolioItem | null, error };

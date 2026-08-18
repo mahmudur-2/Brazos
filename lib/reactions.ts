@@ -12,11 +12,15 @@ export type Reaction = {
   created_at: string;
 };
 
+// Explicit projection — exactly the Reaction type above, pinned by
+// tests/projections.test.mjs so the list and the type cannot drift apart.
+const REACTION_COLUMNS = 'id, message_id, job_id, user_id, emoji, created_at';
+
 /** All reactions across every message in a job (small dataset, fetched at once). */
 export async function fetchReactionsForJob(jobId: string) {
   const { data, error } = await supabase
     .from('message_reactions')
-    .select('*')
+    .select(REACTION_COLUMNS)
     .eq('job_id', jobId);
 
   return { data: (data ?? []) as Reaction[], error };
@@ -33,7 +37,7 @@ export async function fetchReactionsForMessages(messageIds: string[]) {
   }
   const { data, error } = await supabase
     .from('message_reactions')
-    .select('*')
+    .select(REACTION_COLUMNS)
     .in('message_id', unique);
 
   return { data: (data ?? []) as Reaction[], error };
@@ -61,7 +65,7 @@ export async function setReaction(params: {
       },
       { onConflict: 'message_id,user_id' }
     )
-    .select()
+    .select(REACTION_COLUMNS)
     .maybeSingle();
 
   return { data: data as Reaction | null, error };

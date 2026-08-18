@@ -69,10 +69,15 @@ export const DEFAULT_PREFS: Omit<NotificationPrefs, 'user_id'> = {
  * miss so a user whose row somehow doesn't exist gets a working settings
  * screen rather than an error.
  */
+// Explicit projection — exactly the NotificationPrefs type above, pinned by
+// tests/projections.test.mjs so the list and the type cannot drift apart.
+const NOTIFICATION_PREFS_COLUMNS =
+  'user_id, messages, bids, job_updates, hire_requests, nearby_jobs, nearby_radius_miles, home_lat, home_lng';
+
 export async function fetchNotificationPrefs(userId: string) {
   const { data, error } = await supabase
     .from('notification_prefs')
-    .select('*')
+    .select(NOTIFICATION_PREFS_COLUMNS)
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -82,7 +87,7 @@ export async function fetchNotificationPrefs(userId: string) {
     const { data: created, error: createError } = await supabase
       .from('notification_prefs')
       .insert({ user_id: userId })
-      .select()
+      .select(NOTIFICATION_PREFS_COLUMNS)
       .maybeSingle();
     return { data: created as NotificationPrefs | null, error: createError };
   }
@@ -112,7 +117,7 @@ export async function updateNotificationPrefs(
     .from('notification_prefs')
     .update({ ...patch, updated_at: new Date().toISOString() })
     .eq('user_id', userId)
-    .select()
+    .select(NOTIFICATION_PREFS_COLUMNS)
     .maybeSingle();
 
   return { data: data as NotificationPrefs | null, error };

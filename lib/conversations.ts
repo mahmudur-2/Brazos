@@ -63,11 +63,18 @@ export function resolveOtherId(
   return other ?? userId;
 }
 
+// Explicit projection — exactly the Conversation type above, pinned by
+// tests/projections.test.mjs so the list and the type cannot drift apart.
+// Never `select('*')`: the view is ours today, but a widened view must not
+// silently start shipping new columns to every inbox load.
+const CONVERSATION_COLUMNS =
+  'job_id, direct_thread_id, job_title, client_id, assigned_worker_id, last_message_id, last_message_sender_id, last_message_content, last_message_image_url, last_message_audio_url, last_message_unsent_at, last_message_at, my_read_at';
+
 /** All of the user's conversations (threads with >=1 message), newest first. */
 export async function fetchConversations(userId: string) {
   const { data, error } = await supabase
     .from('conversations')
-    .select('*')
+    .select(CONVERSATION_COLUMNS)
     .or(`client_id.eq.${userId},assigned_worker_id.eq.${userId}`)
     .order('last_message_at', { ascending: false });
 
