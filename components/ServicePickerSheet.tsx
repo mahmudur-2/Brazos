@@ -10,7 +10,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { SkillCategory } from '../lib/skillCategories';
-import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
+import { colors, fonts, radius, shadows, spacing, withAlpha } from '../lib/theme';
 
 type ServicePickerSheetProps = {
   visible: boolean;
@@ -118,7 +118,7 @@ export function ServicePickerSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(19,32,27,0.42)',
+    backgroundColor: withAlpha(colors.ink, 0.42),
     justifyContent: 'flex-end',
   },
   sheet: {

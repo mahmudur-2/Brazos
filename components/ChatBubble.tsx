@@ -1,7 +1,7 @@
 import { Pressable, Image, StyleSheet, Text, View } from 'react-native';
 import { AvatarPressable } from './AvatarPressable';
 import { VoiceNote } from './VoiceNote';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import { colors, radius, shadows, spacing, withAlpha } from '../lib/theme';
 import { formatClockTime } from '../lib/time';
 import { messagePreviewText, type Message } from '../lib/messages';
 import type { Reaction } from '../lib/reactions';
@@ -206,7 +206,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   quoteOwn: {
-    backgroundColor: 'rgba(244,241,232,0.16)',
+    backgroundColor: withAlpha(colors.onPrimary, 0.16),
   },
   quoteOther: {
     backgroundColor: colors.primarySoft,
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
   quoteTextOwn: {
-    color: 'rgba(244,241,232,0.8)',
+    color: withAlpha(colors.onPrimary, 0.8),
   },
   quoteThumb: {
     width: 32,
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-end',
   },
   timeOwn: {
-    color: 'rgba(244,241,232,0.75)',
+    color: withAlpha(colors.onPrimary, 0.75),
   },
   reactionBadge: {
     position: 'absolute',

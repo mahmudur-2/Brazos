@@ -72,7 +72,7 @@ import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing, withAlpha } from '../lib/theme';
 
 /**
  * "$45–$54" / "$54" — the job's budget as the worker would actually receive it.
@@ -894,7 +894,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+    backgroundColor: withAlpha(colors.black, 0.38),
   },
   photoCount: {
     position: 'absolute',
@@ -906,7 +906,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(0, 0, 0, 0.58)',
+    backgroundColor: withAlpha(colors.black, 0.58),
   },
   photoCountText: {
     color: colors.white,

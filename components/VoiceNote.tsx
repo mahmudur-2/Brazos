@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { formatClipDuration } from '../lib/messages';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing, withAlpha } from '../lib/theme';
 
 type VoiceNoteProps = {
   url: string;
@@ -34,7 +34,7 @@ export function VoiceNote({ url, durationMs, isOwn }: VoiceNoteProps) {
   const status = useAudioPlayerStatus(player);
 
   const tint = isOwn ? colors.onPrimary : colors.primary;
-  const trackTint = isOwn ? 'rgba(244,241,232,0.35)' : colors.border;
+  const trackTint = isOwn ? withAlpha(colors.onPrimary, 0.35) : colors.border;
 
   // Prefer the player's loaded duration; fall back to the value stored at
   // send time so the bubble isn't blank before the clip loads.

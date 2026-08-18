@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
   },
   tile: {
     width: 168,
-    gap: 4,
+    gap: spacing.xs,
   },
   photo: {
     width: 168,

@@ -10,6 +10,7 @@ import { usePushNotifications } from './hooks/usePushNotifications';
 import { configurePushHandling } from './lib/pushNotifications';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
 import { colors } from './lib/theme';
+import { ThemeProvider } from './lib/ThemeContext';
 import { LaunchCompleteContext } from './lib/launchContext';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { ModeTransitionProvider } from './components/ModeTransitionOverlay';
@@ -151,45 +152,51 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <AuthProvider>
-        <LaunchGate>
-          {/* Sits between the launch layer and the navigator so the mode-switch
-              panel covers every screen — including the tab bar — while the
-              destination tree is swapped in underneath it. ModeProvider is
-              nested INSIDE it because switchMode() drives the panel: one
-              transition, one owner. */}
-          <ModeTransitionProvider>
-            <ModeProvider>
-              <NavigationContainer
-                ref={navigationRef}
-                // A cold-start tap is delivered before this mounts, so the
-                // routing it requested is parked and replayed here.
-                onReady={flushPendingNavigation}
-              >
-                {/* The one application-level boundary. Inside the container so
-                    navigationRef and the parked cold-start replay survive a
-                    crash-and-reset; outside RootNavigator so the reset key
-                    remounts every navigator — recovery is a fresh mount, not a
-                    re-render of the crashed state. The launch overlay sits
-                    entirely outside it. */}
-                <AppErrorBoundary>
-                  <RootNavigator />
-                </AppErrorBoundary>
-                {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
-                    app.json's userInterfaceStyle, Android's default status bar
-                    fill) to the system light/dark setting, which on a dark-mode
-                    device rendered as a solid black strip above every screen's
-                    light cream content. The app is light-only for now (see the
-                    tab bar / Map hardcoding elsewhere), so the status bar
-                    matches. LaunchScreen pushes its own light variant over this
-                    while it is up, and unmounting pops back to this one. The
-                    mode-switch panel does the same for its own duration. */}
-                <StatusBar style="dark" backgroundColor={colors.background} />
-              </NavigationContainer>
-            </ModeProvider>
-          </ModeTransitionProvider>
-        </LaunchGate>
-      </AuthProvider>
+      {/* Theme resolution sits outermost of the app-state providers: it
+          depends on neither auth nor mode, and 4D-4's Light/Dark/System
+          resolver must already be above every surface that will re-render on
+          a palette change. Pinned to light in this stage — lib/ThemeContext. */}
+      <ThemeProvider>
+        <AuthProvider>
+          <LaunchGate>
+            {/* Sits between the launch layer and the navigator so the mode-switch
+                panel covers every screen — including the tab bar — while the
+                destination tree is swapped in underneath it. ModeProvider is
+                nested INSIDE it because switchMode() drives the panel: one
+                transition, one owner. */}
+            <ModeTransitionProvider>
+              <ModeProvider>
+                <NavigationContainer
+                  ref={navigationRef}
+                  // A cold-start tap is delivered before this mounts, so the
+                  // routing it requested is parked and replayed here.
+                  onReady={flushPendingNavigation}
+                >
+                  {/* The one application-level boundary. Inside the container so
+                      navigationRef and the parked cold-start replay survive a
+                      crash-and-reset; outside RootNavigator so the reset key
+                      remounts every navigator — recovery is a fresh mount, not a
+                      re-render of the crashed state. The launch overlay sits
+                      entirely outside it. */}
+                  <AppErrorBoundary>
+                    <RootNavigator />
+                  </AppErrorBoundary>
+                  {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
+                      app.json's userInterfaceStyle, Android's default status bar
+                      fill) to the system light/dark setting, which on a dark-mode
+                      device rendered as a solid black strip above every screen's
+                      light cream content. The app is light-only for now (see the
+                      tab bar / Map hardcoding elsewhere), so the status bar
+                      matches. LaunchScreen pushes its own light variant over this
+                      while it is up, and unmounting pops back to this one. The
+                      mode-switch panel does the same for its own duration. */}
+                  <StatusBar style="dark" backgroundColor={colors.background} />
+                </NavigationContainer>
+              </ModeProvider>
+            </ModeTransitionProvider>
+          </LaunchGate>
+        </AuthProvider>
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

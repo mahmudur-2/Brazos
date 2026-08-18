@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing, withAlpha } from '../lib/theme';
 
 /**
  * One short video attached to a job posting.
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   posterPressed: { opacity: 0.9 },
   posterVideo: { ...StyleSheet.absoluteFillObject },
-  posterScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(15, 31, 23, 0.32)' },
+  posterScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: withAlpha(colors.mediaChrome, 0.32) },
   posterContent: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(15, 31, 23, 0.78)',
+    backgroundColor: withAlpha(colors.mediaChrome, 0.78),
   },
   posterText: { fontSize: 12, fontWeight: '700', color: colors.white },
   playerWrap: {
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(15, 31, 23, 0.82)',
+    backgroundColor: withAlpha(colors.mediaChrome, 0.82),
   },
   fullscreenButtonPressed: { opacity: 0.78 },
 });

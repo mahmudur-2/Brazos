@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
   },
   info: {
     flex: 1,
-    gap: 4,
+    gap: spacing.xs,
     // Keeps content clear of the pay block regardless of title/chip length.
     minWidth: 0,
   },

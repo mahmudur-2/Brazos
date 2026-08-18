@@ -1,7 +1,7 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import { colors, radius, shadows, spacing, withAlpha } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -76,7 +76,7 @@ export function ActionSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31,46,34,0.35)',
+    backgroundColor: withAlpha(colors.text, 0.35),
     justifyContent: 'flex-end',
     padding: spacing.lg,
   },

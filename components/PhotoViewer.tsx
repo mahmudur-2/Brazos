@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { sharePhoto } from '../lib/sharing';
 import { alertAsync } from '../lib/dialog';
+import { colors, withAlpha } from '../lib/theme';
 
 type PhotoViewerProps = {
   visible: boolean;
@@ -329,7 +330,7 @@ export function PhotoViewer({
           hitSlop={12}
           accessibilityLabel="Close"
         >
-          <Ionicons name="close" size={26} color="#F4F1E8" />
+          <Ionicons name="close" size={26} color={colors.onPrimary} />
         </Pressable>
 
         {allowShare && (
@@ -341,12 +342,12 @@ export function PhotoViewer({
             accessibilityLabel="Share photo"
           >
             {sharing ? (
-              <ActivityIndicator size="small" color="#F4F1E8" />
+              <ActivityIndicator size="small" color={colors.onPrimary} />
             ) : (
               <Ionicons
                 name={Platform.OS === 'ios' ? 'share-outline' : 'share-social-outline'}
                 size={24}
-                color="#F4F1E8"
+                color={colors.onPrimary}
               />
             )}
           </Pressable>
@@ -359,7 +360,7 @@ export function PhotoViewer({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: colors.black,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -368,7 +369,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: withAlpha(colors.black, 0.45),
     alignItems: 'center',
     justifyContent: 'center',
   },

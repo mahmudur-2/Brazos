@@ -25,7 +25,7 @@ import {
   type Review,
 } from '../lib/reviews';
 import { deleteJobPhoto, uploadReviewPhoto } from '../lib/storage';
-import { colors, radius, spacing, type ColorPalette } from '../lib/theme';
+import { colors, radius, spacing, withAlpha, type ColorPalette } from '../lib/theme';
 
 // Reviews render as a short quoted block wherever they're shown (this same
 // card once submitted, a worker's profile) — plenty of room for real
@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(31,46,34,0.6)',
+    backgroundColor: withAlpha(colors.text, 0.6),
     alignItems: 'center',
     justifyContent: 'center',
   },

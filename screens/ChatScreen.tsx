@@ -1355,11 +1355,11 @@ const styles = StyleSheet.create({
   },
   requestRowOwn: {
     justifyContent: 'flex-end',
-    paddingLeft: 24,
+    paddingLeft: spacing.xl,
   },
   requestRowOther: {
     justifyContent: 'flex-start',
-    paddingRight: 24,
+    paddingRight: spacing.xl,
   },
   replyBar: {
     flexDirection: 'row',

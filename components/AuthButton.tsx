@@ -7,7 +7,7 @@ import {
   StyleSheet,
   Text,
 } from 'react-native';
-import { authColors, authRadius, authSizes, authType } from '../lib/authTheme';
+import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     borderRadius: authRadius.button,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: authSpacing.lg,
     borderWidth: 1,
     borderColor: 'transparent',
   },

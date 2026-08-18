@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from './Button';
 import { dollarsToCents } from '../lib/jobs';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing, withAlpha } from '../lib/theme';
 
 type AmountPromptProps = {
   visible: boolean;
@@ -95,7 +95,7 @@ export function AmountPrompt({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31,46,34,0.45)',
+    backgroundColor: withAlpha(colors.text, 0.45),
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing.lg,

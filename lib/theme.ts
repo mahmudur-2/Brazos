@@ -1,5 +1,14 @@
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
-import { brand } from '../ui/tokens';
+import { brand, dark as emeraldDark } from '../ui/tokens';
+
+// lib/theme.ts is the standard import surface for screens (CLAUDE.md): the
+// §I helpers below are re-exported here so no screen ever needs to import
+// ui/tokens.ts directly. `emeraldRadius` is §I's radius scale (10/13/14/17/
+// 20/22) under an explicit name, since this file's own older `radius` scale
+// (8/12/16/24) already claims the size names; the VALUES of both live in
+// exactly one place.
+export { withAlpha, layout, controls } from '../ui/tokens';
+export { radius as emeraldRadius } from '../ui/tokens';
 
 /**
  * Brazos design system — "Forest and earth".
@@ -71,6 +80,14 @@ export const colors = {
   neutralBg: '#EDE7DA',
 
   white: '#FFFFFF',
+  /** Pure black — lightbox chrome, full-screen photo scrims and the
+   *  mode-transition dim. A lightbox is black in BOTH themes (the industry
+   *  convention this app follows), so the dark palette keeps the same value. */
+  black: '#000000',
+  /** Deep forest chrome behind media affordances (JobVideo's poster scrim and
+   *  pill). Deliberately darker than `text` and cooler than `ink`: it sits on
+   *  top of arbitrary video frames, where those two read washed out. */
+  mediaChrome: '#0F1F17',
 } as const;
 
 // `colors` is `as const`, so `typeof colors` would lock every field to its
@@ -106,18 +123,20 @@ export const darkColors: ColorPalette = {
   onPrimary: '#F4F1E8',
   star: '#F59E0B',
 
-  // Emerald tokens, lifted for dark surfaces. `forest` stays a fill colour
-  // rather than being brightened: it is the colour of a filled card, and a
-  // card that lightens in dark mode inverts the depth it exists to create.
-  // `gold`/`mint`/`ink` are the ones that must move, since they are used as
-  // content on, or tint behind, that fill.
-  forest: '#0B3B2E',
-  emerald: '#4E9E82',
-  gold: '#D9B978',
-  goldSoft: '#2C2617',
-  mint: '#1C2E27',
-  mint2: '#263D34',
-  ink: '#F1EDE1',
+  // Brand hues in dark come from the ONE authoritative dark palette
+  // (ui/tokens.ts `dark`, the Emerald Prestige set) rather than being
+  // restated here — the same de-duplication Phase 1 did for the light brand.
+  // This supersedes the earlier inline dark set this block used to carry
+  // (which kept forest a deep fill): under Prestige, `forest` is the gold
+  // PRIMARY role — see the intent notes on `dark` in ui/tokens.ts. Nothing
+  // resolves to this palette until 4D-4, so the change renders nowhere yet.
+  forest: emeraldDark.forest,
+  emerald: emeraldDark.emerald,
+  gold: emeraldDark.gold,
+  goldSoft: emeraldDark.goldSoft,
+  mint: emeraldDark.mint,
+  mint2: emeraldDark.mint2,
+  ink: emeraldDark.ink,
   homeBackground: '#10170F',
   homeSlate: '#9CB09E',
 
@@ -141,6 +160,8 @@ export const darkColors: ColorPalette = {
   neutralBg: '#2A2620',
 
   white: '#FFFFFF',
+  black: '#000000',
+  mediaChrome: '#0F1F17',
 } as const;
 
 export const spacing = {

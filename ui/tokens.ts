@@ -97,6 +97,67 @@ export const colors = {
 export type ColorToken = keyof typeof colors;
 
 // ---------------------------------------------------------------------------
+// Dual palettes — Heritage (light) and Emerald Prestige (dark)
+// ---------------------------------------------------------------------------
+
+/**
+ * The Heritage light palette — exactly the §I palette above, under the name
+ * the theme system resolves. `light` and `dark` carry IDENTICAL key sets
+ * (STAGE4D_PLAN.md "Theme system"), enforced at compile time by the
+ * `satisfies` clause on `dark`: a key added to `colors` without a dark
+ * counterpart, or a dark-only key, is a type error, not a runtime surprise.
+ */
+export const light = colors;
+
+/**
+ * Emerald Prestige — the dark palette, authored to STAGE4D_PLAN.md's spec:
+ * near-black emerald background, dark-green cards, gold hairline borders,
+ * gold primary. ("Sage success" lives in lib/theme.ts's status pairs — this
+ * §I palette has never carried a success key in either mode.)
+ *
+ * NOTHING RESOLVES TO THIS PALETTE YET. 4D-3.5 ships the resolver pinned to
+ * `light` (lib/ThemeContext.tsx); these values first render when 4D-4 adds
+ * the Light/Dark/System setting, flips app.json `userInterfaceStyle` to
+ * "automatic" (T1), and does the full-screen sweep in both themes. Until that
+ * sweep, per-key intent is recorded here so 4D-4 tunes values on a device
+ * instead of re-deriving intent:
+ *
+ * - `forest` is the PRIMARY role (its docblock above: CTAs, display titles,
+ *   active nav) — in Prestige that role is GOLD, with `onForest` flipped to a
+ *   near-black so the gold fill keeps its contrast. Screens that use forest
+ *   as a large CARD fill rather than as the primary accent read wrong under
+ *   this mapping by design — restyling those cards onto `surface` is exactly
+ *   the 4D-4 sweep's job, not a reason to un-gold the primary.
+ * - `line` doubles as the "gold hairline border" anchor: a dimmed gold, not a
+ *   neutral grey, is what makes Prestige read as Prestige.
+ * - `emerald`/`gold`/`goldSoft`/`mint`/`mint2`/`ink` follow the established
+ *   dark-surface liftings lib/theme.ts's darkColors pioneered; that file now
+ *   reads its dark brand hues from HERE (one definition, per CLAUDE.md).
+ */
+export const dark = {
+  forest: '#D9B978',
+  emerald: '#4E9E82',
+  gold: '#D9B978',
+  goldSoft: '#2C2617',
+  mint: '#1C2E27',
+  mint2: '#2A4237',
+  ink: '#F1EDE1',
+
+  bg: '#0A1613',
+  surface: '#132A22',
+  muted: '#9FAFA5',
+  line: '#4A3D24',
+  danger: '#D97561',
+  dangerSurface: '#33201B',
+  dangerBorder: '#4C2E26',
+  secondaryBorder: '#2E4A3E',
+  navInactive: '#77857B',
+  onForest: '#20180A',
+} as const satisfies Record<ColorToken, string>;
+
+export { withAlpha } from './colorAlpha';
+
+// ---------------------------------------------------------------------------
 // Spacing (§I: 4-base — 4/8/12/16/20/24/32)
 // ---------------------------------------------------------------------------
 

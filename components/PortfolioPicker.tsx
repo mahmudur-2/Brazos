@@ -36,7 +36,7 @@ import {
 } from '../lib/portfolio';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing, withAlpha } from '../lib/theme';
 
 const OTHER_KEY = '__other__';
 
@@ -600,7 +600,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(31,46,34,0.45)',
+    backgroundColor: withAlpha(colors.text, 0.45),
   },
   detailKeyboardWrap: {
     flex: 1,
@@ -652,7 +652,7 @@ const styles = StyleSheet.create({
   categoryChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.pill,

@@ -53,7 +53,7 @@ import {
   uploadJobPhoto,
 } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, radius, spacing, withAlpha } from '../lib/theme';
 
 /** Same cap as a job posting's photos, for consistency. */
 const MAX_DONE_PHOTOS = 5;
@@ -760,7 +760,7 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 15,
-    backgroundColor: 'rgba(31,46,34,0.6)',
+    backgroundColor: withAlpha(colors.text, 0.6),
     alignItems: 'center',
     justifyContent: 'center',
   },

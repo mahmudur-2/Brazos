@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   },
   modeCopy: {
     flex: 1,
-    gap: 4,
+    gap: spacing.xs,
   },
   modeTitle: {
     fontSize: 16,

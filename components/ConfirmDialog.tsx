@@ -1,6 +1,6 @@
 import { Modal, StyleSheet, Text, View } from 'react-native';
 import { Button } from './Button';
-import { colors, radius, shadows, spacing, type ColorPalette } from '../lib/theme';
+import { colors, radius, shadows, spacing, withAlpha, type ColorPalette } from '../lib/theme';
 
 type ConfirmDialogProps = {
   visible: boolean;
@@ -89,7 +89,7 @@ export function ConfirmDialog({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31,46,34,0.35)',
+    backgroundColor: withAlpha(colors.text, 0.35),
   },
   centerWrap: {
     flex: 1,

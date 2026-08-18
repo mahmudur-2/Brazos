@@ -42,7 +42,7 @@ import { useMode } from '../modes/ModeProvider';
 import { uploadAvatar } from '../lib/storage';
 import { isValidPhone } from '../lib/validation';
 import type { ProfileStackNavigation } from '../lib/navigation';
-import { colors, radius, spacing } from '../lib/theme';
+import { colors, emeraldRadius, radius, spacing, withAlpha } from '../lib/theme';
 
 const LANGUAGE_OPTIONS = [
   { label: 'English', value: 'en' },
@@ -1013,13 +1013,13 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(31,46,34,0.45)',
+    backgroundColor: withAlpha(colors.text, 0.45),
     alignItems: 'center',
     justifyContent: 'center',
   },
   menuSheet: {
     width: 240,
-    borderRadius: 14,
+    borderRadius: emeraldRadius.md,
     backgroundColor: colors.surface,
     overflow: 'hidden',
     paddingVertical: spacing.xs,

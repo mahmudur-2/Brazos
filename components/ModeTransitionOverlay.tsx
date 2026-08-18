@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
   },
   dim: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000000',
+    backgroundColor: colors.black,
   },
   panel: {
     position: 'absolute',

@@ -14,7 +14,7 @@ import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { createReport, REPORT_REASONS, type ReportReason } from '../lib/moderation';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import { colors, radius, shadows, spacing, withAlpha } from '../lib/theme';
 
 type ReportDialogProps = {
   visible: boolean;
@@ -156,7 +156,7 @@ export function ReportDialog({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(31,46,34,0.35)',
+    backgroundColor: withAlpha(colors.text, 0.35),
   },
   centerWrap: {
     flex: 1,

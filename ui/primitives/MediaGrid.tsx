@@ -1,6 +1,6 @@
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { colors, radius, spacing, type as typeScale } from '../tokens';
+import { colors, radius, spacing, type as typeScale, withAlpha } from '../tokens';
 
 /**
  * A responsive grid of media thumbnails (§I).
@@ -128,7 +128,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: 2,
     borderRadius: radius.pill,
-    backgroundColor: 'rgba(19, 32, 27, 0.72)',
+    backgroundColor: withAlpha(colors.ink, 0.72),
   },
   videoLabel: {
     ...typeScale.caption,
@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(19, 32, 27, 0.72)',
+    backgroundColor: withAlpha(colors.ink, 0.72),
   },
   empty: {
     flexDirection: 'row',

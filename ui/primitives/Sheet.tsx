@@ -1,7 +1,7 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PropsWithChildren } from 'react';
-import { colors, controls, layout, radius, spacing, type as typeScale } from '../tokens';
+import { colors, controls, layout, radius, spacing, type as typeScale, withAlpha } from '../tokens';
 
 /**
  * The generic bottom sheet / modal (§I).
@@ -93,7 +93,7 @@ const styles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(19, 32, 27, 0.45)',
+    backgroundColor: withAlpha(colors.ink, 0.45),
   },
   sheet: {
     backgroundColor: colors.surface,

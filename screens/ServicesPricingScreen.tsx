@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   availabilityCopy: {
     flex: 1,
-    gap: 4,
+    gap: spacing.xs,
   },
   sectionTitle: {
     fontSize: 16,

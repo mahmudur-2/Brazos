@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
   requestPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
     alignSelf: 'flex-start',
     backgroundColor: colors.primary,
     paddingHorizontal: spacing.sm,
