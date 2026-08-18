@@ -414,3 +414,192 @@ test('§5 · the screen states the order, renders no ranking claim and no stray 
   const strippedPercents = screen.replace(/% on time/g, '');
   assert.ok(!strippedPercents.includes('%'), 'no percentage that is not on_time_pct');
 });
+
+// ---------------------------------------------------------------------------
+// §6.1 — bid composer availability chips
+// ---------------------------------------------------------------------------
+
+const offerMessageModule = importLibModule('lib/offerMessage.ts');
+
+test('§6.1 · zero selections leave the message byte-identical to today', async () => {
+  const { availabilityLine, composeOfferMessage } = await offerMessageModule;
+
+  assert.equal(availabilityLine(null, null), null);
+  // Today's path is message.trim() — with no line, that is exactly the output.
+  assert.equal(composeOfferMessage('  I bring my own tools.  ', null), 'I bring my own tools.');
+  assert.equal(composeOfferMessage('', null), '');
+});
+
+test('§6.1 · the appended line matches the dispatch, one line, both fragments optional', async () => {
+  const { availabilityLine, composeOfferMessage } = await offerMessageModule;
+
+  assert.equal(
+    availabilityLine({ kind: 'today' }, '1to2h'),
+    'Can start today · about 1-2h'
+  );
+  assert.equal(availabilityLine({ kind: 'tomorrow' }, null), 'Can start tomorrow');
+  assert.equal(availabilityLine(null, '2to4h'), 'About 2-4h');
+  assert.equal(
+    availabilityLine({ kind: 'day', label: 'Wed, Aug 26' }, 'under1h'),
+    'Can start Wed, Aug 26 · under 1h'
+  );
+
+  const composed = composeOfferMessage('Pitch.', availabilityLine({ kind: 'today' }, '4hplus'));
+  assert.equal(composed, 'Pitch.\nCan start today · about 4h+');
+  assert.equal(composed.split('\n').length, 2, 'exactly ONE trailing line');
+});
+
+test('§6.1 · the 500 cap is mirrored: chips stand down before a send could exceed it', async () => {
+  const { OFFER_MESSAGE_MAX, chipsAvailable, longestAvailabilityLineLength } =
+    await offerMessageModule;
+
+  assert.equal(OFFER_MESSAGE_MAX, 500);
+  // Pin the server's own literal — create_offer's latest revision.
+  const phase61 = await read('supabase/phase61_marketplace_thread_identity.sql');
+  assert.match(phase61, /if length\(coalesce\(p_message, ''\)\) > 500 then/);
+
+  const longest = longestAvailabilityLineLength(['Wed, Aug 26']);
+  assert.ok(longest >= 'Can start Wed, Aug 26 · about 1-2h'.length);
+
+  // Exactly at the boundary the chips still fit; one more character and they
+  // disable rather than ever truncating a send.
+  const fits = 'a'.repeat(OFFER_MESSAGE_MAX - 1 - longest);
+  assert.equal(chipsAvailable(fits, longest), true);
+  assert.equal(chipsAvailable(`${fits}b`, longest), false);
+  assert.equal(chipsAvailable('a'.repeat(500), longest), false);
+});
+
+test('§6.1 · the day list starts after Tomorrow and labels like the posting flow', async () => {
+  const { upcomingStartDays } = await offerMessageModule;
+
+  const days = upcomingStartDays(3, new Date(2026, 7, 18)); // Tue Aug 18 2026
+  assert.equal(days.length, 3);
+  assert.deepEqual(
+    days.map((d) => d.iso),
+    ['2026-08-20', '2026-08-21', '2026-08-22'],
+    'today and tomorrow are their own chips — the list begins the day after'
+  );
+  assert.match(days[0].label, /^\w{3}, \w{3} \d{1,2}$/);
+});
+
+test('§6.1 · composer wiring: bid-only chips, cleared on overflow, assembled through the one path [static]', async () => {
+  const composer = await read('components/OfferComposer.tsx');
+
+  // The chips live in the bid branch; a counter has no message and no chips.
+  assert.match(composer, /\{isBid \? \(\s*<View style=\{styles\.chipSection\}>/);
+  // The send assembles through the shared helpers — never a hand-built string.
+  assert.match(
+    composer,
+    /message: composeOfferMessage\(message, availabilityLine\(startChoice, duration\)\)/
+  );
+  // Overflow disables AND clears, with the written reason.
+  assert.match(composer, /pointerEvents=\{chipsOk \? 'auto' : 'none'\}/);
+  assert.match(composer, /if \(!chipsOk && \(startMode !== null \|\| pickedDay !== null \|\| duration !== null\)\)/);
+  assert.match(composer, /Shorten the pitch to\s+use these\./);
+  // The pitch field mirrors the server cap as a full field, not an error.
+  assert.match(composer, /maxLength=\{OFFER_MESSAGE_MAX\}/);
+});
+
+// ---------------------------------------------------------------------------
+// §6.2 / §6.3 — service booking and explicit pricing states
+// ---------------------------------------------------------------------------
+
+test('§6.2 · a null price reads "Ask about this" and prefills no amount; ceilings run first [static]', async () => {
+  const profileScreen = await read('screens/WorkerProfileScreen.tsx');
+
+  assert.match(
+    profileScreen,
+    /service\.price_cents != null \? 'Book at listed price' : 'Ask about this'/
+  );
+  // The amount prefill exists ONLY in the priced branch.
+  assert.match(
+    profileScreen,
+    /\.\.\.\(service\.price_cents != null \? \{ initialAmountCents: service\.price_cents \} : null\)/
+  );
+  // A stored over-ceiling price is refused with the written sentence before
+  // any navigation — and the composer's createDirectOffer mirrors it again.
+  assert.match(profileScreen, /moneyCeilingError\(service\.price_cents\)/);
+  // The control opens the composer; this screen sends nothing itself.
+  assert.ok(!stripComments(profileScreen).includes('createDirectOffer'));
+
+  // The wizard seeds its amount only for the hire flow.
+  const postJob = await read('screens/PostJobScreen.tsx');
+  assert.match(postJob, /params\?\.hireWorkerId && params\?\.initialAmountCents != null/);
+});
+
+test('§6.3 · pricing is an explicit two-state choice; Ask me clears; ceilings refuse in writing [static]', async () => {
+  const screen = await read('screens/ServicesPricingScreen.tsx');
+
+  assert.match(screen, /\{ label: 'Flat price', value: 'flat' \}/);
+  assert.match(screen, /\{ label: 'Ask me', value: 'ask' \}/);
+  assert.match(screen, /if \(next === 'ask'\) setPrice\(''\)/);
+  // The add control is gated on the written ceiling refusal…
+  assert.match(screen, /const canAdd = title\.trim\(\)\.length > 0 && priceValid && !priceCeilingProblem && !adding;/);
+  assert.match(screen, /\{priceCeilingProblem\}/);
+  // …and the writes stay direct RLS-scoped DML through lib/services.ts.
+  assert.ok(!stripComments(screen).includes('supabase.rpc'), 'no RPC was added for this table');
+  // D8: no same-day-availability toggle exists to back.
+  assert.ok(!/same.?day/i.test(screen));
+});
+
+test('§6.2 · over-ceiling amounts refuse with written text before any RPC', async () => {
+  const { moneyCeilingError, MONEY_CEILING_CENTS } = await validationModule;
+
+  assert.equal(moneyCeilingError(MONEY_CEILING_CENTS), null, 'exactly at the ceiling is legal');
+  const refusal = moneyCeilingError(MONEY_CEILING_CENTS + 1);
+  assert.ok(refusal && /limit/.test(refusal), 'the refusal is a written sentence');
+});
+
+// ---------------------------------------------------------------------------
+// §6.4 — profile completeness meter
+// ---------------------------------------------------------------------------
+
+const completenessModule = importLibModule('lib/profileCompleteness.ts');
+
+test('§6.4 · four steps, complete at 4/4 (where the meter disappears)', async () => {
+  const { profileCompleteness } = await completenessModule;
+
+  const done = profileCompleteness({
+    avatarUrl: 'https://x/avatar.jpg',
+    bio: 'I fix things.',
+    publishedServiceCount: 3,
+    portfolioCount: 1,
+  });
+  assert.equal(done.complete, true);
+  assert.equal(done.done, 4);
+  assert.equal(done.total, 4);
+
+  const partial = profileCompleteness({
+    avatarUrl: null,
+    bio: '   ',
+    publishedServiceCount: 2,
+    portfolioCount: 0,
+  });
+  assert.equal(partial.complete, false);
+  assert.equal(partial.done, 0);
+  assert.deepEqual(
+    partial.steps.map((s) => [s.key, s.done]),
+    [
+      ['avatar', false],
+      ['bio', false],
+      ['services', false],
+      ['portfolio', false],
+    ],
+    'a whitespace bio and two published services are not done steps'
+  );
+});
+
+test('§6.4 · the meter renders own-worker-profile only, and never at 4/4 [static]', async () => {
+  const own = await read('screens/ProfileScreen.tsx');
+  const other = await read('screens/WorkerProfileScreen.tsx');
+
+  assert.match(
+    own,
+    /user && mode === 'worker' && meterCounts && !completeness\.complete && !isEditing/
+  );
+  // Each unmet step routes to the surface that fixes it.
+  assert.match(own, /navigation\.navigate\('ServicesPricing'\)/);
+  assert.match(own, /setPickerOpen\(true\)/);
+  // No other user's profile carries a meter.
+  assert.ok(!other.includes('profileCompleteness'));
+});

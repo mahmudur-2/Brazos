@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -8,7 +8,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
@@ -30,9 +30,15 @@ import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { formatPhoneDisplay } from '../lib/phone';
-import { fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
+import { fetchPortfolio, fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
+import {
+  profileCompleteness,
+  type CompletenessStepKey,
+} from '../lib/profileCompleteness';
+import { fetchWorkerServices } from '../lib/services';
 import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
 import { updateProfile } from '../lib/profiles';
+import { useMode } from '../modes/ModeProvider';
 import { uploadAvatar } from '../lib/storage';
 import { isValidPhone } from '../lib/validation';
 import type { ProfileStackNavigation } from '../lib/navigation';
@@ -56,6 +62,7 @@ export function ProfileScreen() {
   const navigation = useNavigation<ProfileStackNavigation>();
   const { user, logout } = useAuth();
   const { profile, loading, setProfile } = useProfile();
+  const { mode } = useMode();
 
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -89,6 +96,13 @@ export function ProfileScreen() {
   // Backs the above-the-fold summary line — same worker_job_stats() RPC
   // PastWork's own stat line further down the page already calls.
   const [jobStats, setJobStats] = useState<CategoryStat[]>([]);
+  // §6.4 — published-services and portfolio counts behind the completeness
+  // meter. Null = not yet known, and an UNKNOWN count renders no meter at
+  // all rather than a guessed one.
+  const [meterCounts, setMeterCounts] = useState<{
+    services: number;
+    portfolio: number;
+  } | null>(null);
 
   const loadedRef = useRef<string | null>(null);
 
@@ -131,6 +145,50 @@ export function ProfileScreen() {
     // usually followed by adding it to the portfolio, so re-checking here
     // too keeps this line from going stale without a dedicated subscription.
   }, [user, portfolioVersion]);
+
+  // §6.4 — refreshed on focus so publishing a service or featuring a photo
+  // elsewhere moves the meter the moment this screen returns. Worker mode
+  // only; a failed read leaves the counts unknown and the meter hidden.
+  const loadMeterCounts = useCallback(async () => {
+    if (!user || mode !== 'worker') return;
+    const [servicesRes, portfolioRes] = await Promise.all([
+      fetchWorkerServices(user.id),
+      fetchPortfolio(user.id),
+    ]);
+    if (servicesRes.error || portfolioRes.error) return;
+    setMeterCounts({
+      services: servicesRes.data.filter((s) => s.published).length,
+      portfolio: portfolioRes.data.length,
+    });
+  }, [user, mode]);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadMeterCounts();
+      // portfolioVersion: the on-screen picker adds items without a focus
+      // change, so it re-runs this the same way it re-runs the stats line.
+    }, [loadMeterCounts, portfolioVersion])
+  );
+
+  const completeness = profileCompleteness({
+    avatarUrl: profile?.avatar_url ?? null,
+    bio: profile?.bio ?? null,
+    publishedServiceCount: meterCounts?.services ?? 0,
+    portfolioCount: meterCounts?.portfolio ?? 0,
+  });
+
+  /** Each unmet meter step routes to the surface that fixes it. */
+  function meterAction(key: CompletenessStepKey) {
+    if (key === 'avatar' || key === 'bio') {
+      setIsEditing(true);
+      return;
+    }
+    if (key === 'services') {
+      navigation.navigate('ServicesPricing');
+      return;
+    }
+    setPickerOpen(true);
+  }
 
   function toggleCategory(c: string) {
     setCategories((prev) =>
@@ -570,6 +628,45 @@ export function ProfileScreen() {
             )}
           </Card>
 
+          {/* §6.4 — the worker profile completeness meter: own profile,
+              worker mode only, and only while a step is unmet — at 4/4 it
+              disappears entirely (a prompt, not a scoreboard). Hidden until
+              the counts are KNOWN, so it never claims incompleteness off an
+              unloaded read. */}
+          {user && mode === 'worker' && meterCounts && !completeness.complete && !isEditing ? (
+            <Card>
+              <View style={styles.meterHeader}>
+                <Text style={styles.meterTitle}>Complete your worker profile</Text>
+                <Text style={styles.meterCount}>
+                  {completeness.done} of {completeness.total}
+                </Text>
+              </View>
+              {completeness.steps.map((step) => (
+                <Pressable
+                  key={step.key}
+                  style={styles.meterRow}
+                  disabled={step.done}
+                  onPress={() => meterAction(step.key)}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: step.done }}
+                  accessibilityLabel={step.label}
+                >
+                  <Ionicons
+                    name={step.done ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={20}
+                    color={step.done ? colors.emerald : colors.textSubtle}
+                  />
+                  <Text style={[styles.meterLabel, step.done && styles.meterLabelDone]}>
+                    {step.label}
+                  </Text>
+                  {!step.done ? (
+                    <Ionicons name="chevron-forward" size={16} color={colors.textSubtle} />
+                  ) : null}
+                </Pressable>
+              ))}
+            </Card>
+          ) : null}
+
           {user && (
             <PastWork
               workerId={user.id}
@@ -952,6 +1049,40 @@ const styles = StyleSheet.create({
   menuCancelText: {
     fontSize: 15,
     fontWeight: '600',
+    color: colors.textMuted,
+  },
+  meterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    marginBottom: spacing.xs,
+  },
+  meterTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  meterCount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.emerald,
+  },
+  meterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+  },
+  meterLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.ink,
+  },
+  meterLabelDone: {
+    fontWeight: '400',
     color: colors.textMuted,
   },
   settingsTitle: {

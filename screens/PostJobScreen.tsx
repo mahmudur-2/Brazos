@@ -200,8 +200,14 @@ export function PostJobScreen() {
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locating, setLocating] = useState(false);
   // The hire flow's single offer amount. Fresh posts and edits use the
-  // MIN/MAX range below instead (screen 15).
-  const [budget, setBudget] = useState('');
+  // MIN/MAX range below instead (screen 15). "Book at listed price" (§6.2)
+  // seeds it with the service's stored cents; the field stays fully editable
+  // and the send still passes the composer validation + ceiling mirror.
+  const [budget, setBudget] = useState(
+    params?.hireWorkerId && params?.initialAmountCents != null
+      ? String(params.initialAmountCents / 100)
+      : ''
+  );
   const [budgetMin, setBudgetMin] = useState('');
   const [budgetMax, setBudgetMax] = useState('');
   // Exact service address — job_private_details on publish, never public.

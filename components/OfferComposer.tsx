@@ -1,11 +1,23 @@
-import { useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { Card } from './Card';
+import { Chip } from './Chip';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import {
+  availabilityLine,
+  chipsAvailable,
+  composeOfferMessage,
+  DURATION_OPTIONS,
+  longestAvailabilityLineLength,
+  OFFER_MESSAGE_MAX,
+  upcomingStartDays,
+  type DurationChoice,
+  type StartChoice,
+} from '../lib/offerMessage';
 import {
   budgetRangeLabel,
   dollarsToCents,
@@ -118,7 +130,41 @@ export function OfferComposer({ context, onSubmitted, palette = colors }: OfferC
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
 
+  // §6.1 — the two optional availability chip groups, bid entry only (a
+  // counter carries no message). Nothing is selected by default; zero
+  // selections leave the sent message byte-identical to the plain pitch.
+  const [startMode, setStartMode] = useState<'today' | 'tomorrow' | 'pick' | null>(null);
+  const [pickedDay, setPickedDay] = useState<{ iso: string; label: string } | null>(null);
+  const [duration, setDuration] = useState<DurationChoice | null>(null);
+
   const isBid = context.kind === 'bid';
+
+  const dayChoices = useMemo(() => upcomingStartDays(12), []);
+  const longestLine = useMemo(
+    () => longestAvailabilityLineLength(dayChoices.map((d) => d.label)),
+    [dayChoices]
+  );
+  // The server caps p_message at 500; the chips stand down — disabled, with
+  // the written reason below — while even the worst-case line wouldn't fit.
+  // Never a truncated send, never a raw database error.
+  const chipsOk = chipsAvailable(message, longestLine);
+
+  useEffect(() => {
+    if (!chipsOk && (startMode !== null || pickedDay !== null || duration !== null)) {
+      setStartMode(null);
+      setPickedDay(null);
+      setDuration(null);
+    }
+  }, [chipsOk, startMode, pickedDay, duration]);
+
+  const startChoice: StartChoice | null =
+    startMode === 'today'
+      ? { kind: 'today' }
+      : startMode === 'tomorrow'
+        ? { kind: 'tomorrow' }
+        : startMode === 'pick' && pickedDay
+          ? { kind: 'day', label: pickedDay.label }
+          : null;
 
   async function handleSubmit() {
     if (submittingRef.current) return;
@@ -143,7 +189,9 @@ export function OfferComposer({ context, onSubmitted, palette = colors }: OfferC
         const { data: offerId, error } = await createMarketplaceOffer({
           jobId: context.job.id,
           amountCents,
-          message: message.trim(),
+          // The pitch plus at most ONE trailing availability line. With no
+          // chips selected this is exactly message.trim(), as it always was.
+          message: composeOfferMessage(message, availabilityLine(startChoice, duration)),
         });
         if (error || !offerId) {
           const msg =
@@ -245,7 +293,96 @@ export function OfferComposer({ context, onSubmitted, palette = colors }: OfferC
           numberOfLines={3}
           style={styles.multiline}
           editable={!submitting}
+          // Mirror of create_offer()'s own 500-character cap, so the limit
+          // reads as a full field instead of a database error.
+          maxLength={OFFER_MESSAGE_MAX}
         />
+      ) : null}
+
+      {isBid ? (
+        <View style={styles.chipSection}>
+          <View
+            style={[styles.chipGroups, !chipsOk && styles.chipGroupsDisabled]}
+            pointerEvents={chipsOk ? 'auto' : 'none'}
+          >
+            <View style={styles.chipGroup}>
+              <Text style={styles.chipLabel}>When can you start</Text>
+              <View style={styles.chipRow}>
+                <Chip
+                  label="Today"
+                  variant="filter"
+                  selected={startMode === 'today'}
+                  onPress={() => {
+                    setPickedDay(null);
+                    setStartMode((m) => (m === 'today' ? null : 'today'));
+                  }}
+                />
+                <Chip
+                  label="Tomorrow"
+                  variant="filter"
+                  selected={startMode === 'tomorrow'}
+                  onPress={() => {
+                    setPickedDay(null);
+                    setStartMode((m) => (m === 'tomorrow' ? null : 'tomorrow'));
+                  }}
+                />
+                <Chip
+                  label="Pick a day"
+                  variant="filter"
+                  selected={startMode === 'pick'}
+                  onPress={() => {
+                    setPickedDay(null);
+                    setStartMode((m) => (m === 'pick' ? null : 'pick'));
+                  }}
+                />
+              </View>
+              {startMode === 'pick' ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.chipRow}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {dayChoices.map((d) => (
+                    <Chip
+                      key={d.iso}
+                      label={d.label}
+                      variant="filter"
+                      selected={pickedDay?.iso === d.iso}
+                      onPress={() =>
+                        setPickedDay((prev) => (prev?.iso === d.iso ? null : d))
+                      }
+                    />
+                  ))}
+                </ScrollView>
+              ) : null}
+            </View>
+
+            <View style={styles.chipGroup}>
+              <Text style={styles.chipLabel}>How long</Text>
+              <View style={styles.chipRow}>
+                {DURATION_OPTIONS.map((option) => (
+                  <Chip
+                    key={option.value}
+                    label={option.label}
+                    variant="filter"
+                    selected={duration === option.value}
+                    onPress={() =>
+                      setDuration((d) => (d === option.value ? null : option.value))
+                    }
+                  />
+                ))}
+              </View>
+            </View>
+          </View>
+          {!chipsOk ? (
+            <Text style={styles.chipReason}>
+              Your pitch is close to the {OFFER_MESSAGE_MAX}-character limit, so
+              there’s no room left for an availability line. Shorten the pitch to
+              use these.
+            </Text>
+          ) : null}
+        </View>
       ) : null}
 
       {/* The exact consequence, stated before the tap. */}
@@ -324,6 +461,33 @@ const styles = StyleSheet.create({
     height: 90,
     paddingTop: spacing.md,
     textAlignVertical: 'top',
+  },
+  chipSection: {
+    gap: spacing.sm,
+  },
+  chipGroups: {
+    gap: spacing.md,
+  },
+  chipGroupsDisabled: {
+    opacity: 0.45,
+  },
+  chipGroup: {
+    gap: spacing.sm,
+  },
+  chipLabel: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  chipReason: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
   },
   consequenceRow: {
     flexDirection: 'row',

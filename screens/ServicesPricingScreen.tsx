@@ -2,12 +2,14 @@ import { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { SegmentedControl } from '../components/SegmentedControl';
 import { FormScreen } from '../ui/templates/FormScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { dollarsToCents, JOB_CATEGORIES, JOB_CATEGORY_LABELS } from '../lib/jobs';
+import { moneyCeilingError } from '../lib/validation';
 import { goBackOrHome } from '../lib/navigationRef';
 import {
   addWorkerService,
@@ -41,6 +43,10 @@ export function ServicesPricingScreen() {
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
   const [priceUnit, setPriceUnit] = useState<ServicePriceUnit>('flat');
+  // §6.3 — the priced-vs-ask choice is EXPLICIT, not "empty field means ask".
+  // 'flat' = price_cents set (the flat//hr unit still applies); 'ask' =
+  // price_cents null, rendered everywhere as "Ask for a quote".
+  const [priceMode, setPriceMode] = useState<'flat' | 'ask'>('flat');
   const [category, setCategory] = useState<string>('other');
   const [adding, setAdding] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -79,9 +85,24 @@ export function ServicesPricingScreen() {
         ? { kind: 'error', message: loadError, onRetry: () => void load() }
         : { kind: 'ready' };
 
-  const priceCents = price.trim() ? dollarsToCents(price) : null;
-  const priceValid = priceCents === null || (!Number.isNaN(priceCents) && priceCents > 0);
-  const canAdd = title.trim().length > 0 && priceValid && !adding;
+  const priceCents = priceMode === 'flat' && price.trim() ? dollarsToCents(price) : null;
+  // "Flat price" requires an actual amount — the implicit empty-means-ask
+  // state is gone; "Ask me" is its own explicit choice.
+  const priceValid =
+    priceMode === 'ask' || (priceCents != null && !Number.isNaN(priceCents) && priceCents > 0);
+  // phase75 ceiling, refused here with the written sentence BEFORE any write
+  // (worker_services carries no CHECK of its own, and a stored over-ceiling
+  // price would poison "Book at listed price" downstream).
+  const priceCeilingProblem =
+    priceCents != null && !Number.isNaN(priceCents) ? moneyCeilingError(priceCents) : null;
+  const canAdd = title.trim().length > 0 && priceValid && !priceCeilingProblem && !adding;
+
+  function changePriceMode(next: 'flat' | 'ask') {
+    setPriceMode(next);
+    // §6.3 — switching to "Ask me" clears the amount; switching back
+    // restores an editable empty field (price stays '').
+    if (next === 'ask') setPrice('');
+  }
 
   async function addService() {
     if (!user || !canAdd) return;
@@ -89,7 +110,10 @@ export function ServicesPricingScreen() {
     const { data, error } = await addWorkerService(user.id, {
       title,
       category,
-      priceCents: priceCents === null || Number.isNaN(priceCents) ? null : priceCents,
+      priceCents:
+        priceMode === 'ask' || priceCents === null || Number.isNaN(priceCents)
+          ? null
+          : priceCents,
       priceUnit,
       position: services.length,
     });
@@ -245,28 +269,46 @@ export function ServicesPricingScreen() {
           maxLength={80}
           accessibilityLabel="Service title"
         />
-        <View style={styles.priceRow}>
-          <TextInput
-            style={[styles.input, styles.priceInput]}
-            value={price}
-            onChangeText={setPrice}
-            placeholder="Price in dollars — empty = ask"
-            placeholderTextColor={colors.textSubtle}
-            keyboardType="decimal-pad"
-            maxLength={8}
-            accessibilityLabel="Price in dollars, leave empty for ask for a quote"
-          />
-          <Pressable
-            style={styles.unitToggle}
-            onPress={() => setPriceUnit((u) => (u === 'flat' ? 'hourly' : 'flat'))}
-            accessibilityRole="button"
-            accessibilityLabel={`Price unit ${priceUnit}`}
-          >
-            <Text style={styles.unitToggleText}>
-              {priceUnit === 'flat' ? 'flat' : '/hr'}
-            </Text>
-          </Pressable>
-        </View>
+        <SegmentedControl
+          options={[
+            { label: 'Flat price', value: 'flat' },
+            { label: 'Ask me', value: 'ask' },
+          ]}
+          value={priceMode}
+          onChange={changePriceMode}
+        />
+        {priceMode === 'flat' ? (
+          <View style={styles.priceRow}>
+            <TextInput
+              style={[styles.input, styles.priceInput]}
+              value={price}
+              onChangeText={setPrice}
+              placeholder="Price in dollars"
+              placeholderTextColor={colors.textSubtle}
+              keyboardType="decimal-pad"
+              maxLength={8}
+              accessibilityLabel="Price in dollars"
+            />
+            <Pressable
+              style={styles.unitToggle}
+              onPress={() => setPriceUnit((u) => (u === 'flat' ? 'hourly' : 'flat'))}
+              accessibilityRole="button"
+              accessibilityLabel={`Price unit ${priceUnit}`}
+            >
+              <Text style={styles.unitToggleText}>
+                {priceUnit === 'flat' ? 'flat' : '/hr'}
+              </Text>
+            </Pressable>
+          </View>
+        ) : (
+          <Text style={styles.cardNote}>
+            Shown as “Ask for a quote” on your profile — you price the work in
+            the offer instead.
+          </Text>
+        )}
+        {priceCeilingProblem ? (
+          <Text style={styles.priceProblem}>{priceCeilingProblem}</Text>
+        ) : null}
         <View style={styles.categoryWrap}>
           {JOB_CATEGORIES.map((c) => (
             <Pressable
@@ -374,6 +416,11 @@ const styles = StyleSheet.create({
   },
   priceInput: {
     flex: 1,
+  },
+  priceProblem: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.danger,
   },
   unitToggle: {
     paddingHorizontal: spacing.lg,

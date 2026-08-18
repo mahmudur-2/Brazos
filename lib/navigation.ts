@@ -129,6 +129,10 @@ export type CustomerHomeStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
@@ -165,6 +169,10 @@ export type DiscoverStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
 };
@@ -215,6 +223,10 @@ export type WorkerHomeStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
   /**
@@ -290,6 +302,10 @@ export type MyJobsStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
@@ -315,6 +331,10 @@ export type MessagesStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
@@ -349,6 +369,10 @@ export type MapStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
@@ -386,6 +410,10 @@ export type ProfileStackParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
@@ -519,6 +547,10 @@ export type PostJobRouteParamList = {
         initialTitle?: string;
         initialDescription?: string;
         initialCategory?: JobCategory;
+        /** Prefill for the hire flow's single offer amount, integer cents —
+         *  e.g. a worker_services listed price ("Book at listed price").
+         *  Read only when hireWorkerId is set; fresh posts ignore it. */
+        initialAmountCents?: number;
       }
     | undefined;
 };

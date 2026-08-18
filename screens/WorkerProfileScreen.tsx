@@ -31,6 +31,8 @@ import {
   servicePriceLabel,
   type WorkerService,
 } from '../lib/services';
+import { alertAsync } from '../lib/dialog';
+import { moneyCeilingError } from '../lib/validation';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import type {
@@ -142,6 +144,34 @@ export function WorkerProfileScreen() {
       active = false;
     };
   }, [params.workerId, isSelf]);
+
+  /**
+   * §6.2 — "Book at listed price": the direct-offer composer prefilled with
+   * the service's own terms, NEVER a one-tap send (the composer still needs
+   * a location and confirms the amount). A null price is the "Ask me" case
+   * and prefills no amount; a stored over-ceiling price is refused here with
+   * the written ceiling sentence before any RPC could see it — and
+   * createDirectOffer() mirrors the same ceiling again at send time.
+   */
+  function bookService(service: WorkerService) {
+    if (service.price_cents != null) {
+      const ceilingProblem = moneyCeilingError(service.price_cents);
+      if (ceilingProblem) {
+        void alertAsync('Check this price', ceilingProblem);
+        return;
+      }
+    }
+    navigation.navigate('PostJob', {
+      hireWorkerId: params.workerId,
+      hireWorkerName: profile?.full_name ?? params.workerName ?? 'this worker',
+      initialTitle: service.title,
+      initialDescription: service.description ?? undefined,
+      initialCategory: (JOB_CATEGORIES as readonly string[]).includes(service.category)
+        ? (service.category as JobCategory)
+        : undefined,
+      ...(service.price_cents != null ? { initialAmountCents: service.price_cents } : null),
+    });
+  }
 
   async function toggleSaved() {
     if (!user || isSelf || savingBookmark) return;
@@ -280,41 +310,44 @@ export function WorkerProfileScreen() {
             <Card style={styles.servicesCard}>
               <Text style={styles.servicesTitle}>Services & pricing</Text>
               {services.map((service) => (
-                <Pressable
-                  key={service.id}
-                  style={styles.serviceRow}
-                  onPress={
-                    !isSelf && canOffer
-                      ? () =>
-                          navigation.navigate('PostJob', {
-                            hireWorkerId: params.workerId,
-                            hireWorkerName:
-                              profile?.full_name ?? params.workerName ?? 'this worker',
-                            initialTitle: service.title,
-                            initialCategory: (JOB_CATEGORIES as readonly string[]).includes(
-                              service.category
-                            )
-                              ? (service.category as JobCategory)
-                              : undefined,
-                          })
-                      : undefined
-                  }
-                  accessibilityRole={!isSelf && canOffer ? 'button' : 'text'}
-                  accessibilityLabel={`${service.title}, ${servicePriceLabel(service)}`}
-                >
-                  <View style={styles.serviceCopy}>
-                    <Text style={styles.serviceName} numberOfLines={1}>
-                      {service.title}
-                      {service.published ? '' : '  ·  Draft'}
-                    </Text>
-                    {service.description ? (
-                      <Text style={styles.serviceDescription} numberOfLines={2}>
-                        {service.description}
+                <View key={service.id} style={styles.serviceRow}>
+                  <View style={styles.serviceMain}>
+                    <View style={styles.serviceCopy}>
+                      <Text style={styles.serviceName} numberOfLines={1}>
+                        {service.title}
+                        {service.published ? '' : '  ·  Draft'}
                       </Text>
-                    ) : null}
+                      {service.description ? (
+                        <Text style={styles.serviceDescription} numberOfLines={2}>
+                          {service.description}
+                        </Text>
+                      ) : null}
+                    </View>
+                    <Text style={styles.servicePrice}>{servicePriceLabel(service)}</Text>
                   </View>
-                  <Text style={styles.servicePrice}>{servicePriceLabel(service)}</Text>
-                </Pressable>
+                  {/* §6.2 — published rows carry the booking entry for a
+                      viewer who can offer; a null price is the "Ask me" case
+                      and opens the same composer with no amount. */}
+                  {!isSelf && canOffer && service.published ? (
+                    <Pressable
+                      style={({ pressed }) => [
+                        styles.serviceBook,
+                        pressed && styles.serviceBookPressed,
+                      ]}
+                      onPress={() => bookService(service)}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        service.price_cents != null
+                          ? `Book ${service.title} at ${servicePriceLabel(service)}`
+                          : `Ask about ${service.title}`
+                      }
+                    >
+                      <Text style={styles.serviceBookText}>
+                        {service.price_cents != null ? 'Book at listed price' : 'Ask about this'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                </View>
               ))}
             </Card>
           ) : null}
@@ -380,17 +413,39 @@ const styles = StyleSheet.create({
     color: colors.ink,
   },
   serviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingVertical: spacing.sm,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     minHeight: 48,
   },
+  serviceMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+  },
   serviceCopy: {
     flex: 1,
     gap: 2,
+  },
+  serviceBook: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: spacing.lg,
+    minHeight: 40,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.emerald,
+    backgroundColor: colors.primarySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  serviceBookPressed: {
+    opacity: 0.8,
+  },
+  serviceBookText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: colors.emerald,
   },
   serviceName: {
     fontSize: 15,
