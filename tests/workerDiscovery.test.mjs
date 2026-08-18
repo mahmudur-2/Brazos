@@ -253,6 +253,173 @@ test('[static] B3 · both discovery surfaces render the shared chips and persist
   assert.match(chips, /distanceChipLabel/);
 });
 
+// ---------------------------------------------------------------------------
+// B5 — deterministic match reasons, executed
+// ---------------------------------------------------------------------------
+
+// matchReasons has VALUE imports from two sibling lib modules; node's ESM
+// loader resolves runtime specifiers literally (no extension inference), so
+// the conversion.test.mjs pattern applies: strip types, rewrite the two
+// relative specifiers to absolute file URLs (both targets execute directly —
+// their own imports are type-only), and import as a data URL.
+const { stripTypeScriptTypes } = await import('node:module');
+const toDataUrl = (js) =>
+  'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+const { deriveMatchReasons } = await (async () => {
+  const js = stripTypeScriptTypes(await read('lib/matchReasons.ts'), { mode: 'strip' })
+    .replace(
+      "from './jobFilters'",
+      `from '${pathToFileURL(join(root, 'lib/jobFilters.ts')).href}'`
+    )
+    .replace(
+      "from './discoveryFilter'",
+      `from '${pathToFileURL(join(root, 'lib/discoveryFilter.ts')).href}'`
+    );
+  assert.ok(!js.includes("from './"), 'every relative import must be rewritten');
+  return import(toDataUrl(js));
+})();
+
+const reasonInput = (overrides = {}) => ({
+  job: {
+    category: 'cleaning',
+    budget_cents: 10000,
+    budget_min_cents: null,
+    budget_max_cents: null,
+    ...(overrides.job ?? {}),
+  },
+  workerCategories: ['cleaning', 'moving'],
+  distanceMiles: 2,
+  radiusMiles: 5,
+  listedFlatPriceCents: 8000,
+  ...Object.fromEntries(Object.entries(overrides).filter(([k]) => k !== 'job')),
+});
+
+test('B5 · all three reasons hold on matching known facts, in fixed order', () => {
+  const reasons = deriveMatchReasons(reasonInput());
+  assert.deepEqual(
+    reasons.map((r) => r.key),
+    ['category', 'distance', 'budget']
+  );
+  assert.deepEqual(
+    reasons.map((r) => r.label),
+    ['Matches your skills', 'Within 5 miles', 'Budget covers your listed price']
+  );
+});
+
+test('B5 · unknown facts yield NOTHING — never a guess, never a negative', () => {
+  // Profile categories not loaded yet ≠ no categories.
+  assert.deepEqual(
+    deriveMatchReasons(reasonInput({ workerCategories: null, distanceMiles: null, listedFlatPriceCents: null })),
+    []
+  );
+  // Known-but-unmet facts also yield nothing (no ✗ badges).
+  assert.deepEqual(
+    deriveMatchReasons(
+      reasonInput({
+        workerCategories: ['moving'],
+        distanceMiles: 9,
+        listedFlatPriceCents: 20000,
+        job: { category: 'cleaning', budget_cents: 10000 },
+      })
+    ),
+    []
+  );
+});
+
+test('B5 · the distance threshold is the radius filter, falling back to the 5-mile nearby promise', () => {
+  const withFilter = deriveMatchReasons(reasonInput({ radiusMiles: 10, distanceMiles: 8 }));
+  assert.ok(withFilter.some((r) => r.key === 'distance' && r.label === 'Within 10 miles'));
+  const anyFilter = deriveMatchReasons(reasonInput({ radiusMiles: null, distanceMiles: 4.5 }));
+  assert.ok(anyFilter.some((r) => r.key === 'distance' && r.label === 'Within 5 miles'));
+  assert.ok(
+    !deriveMatchReasons(reasonInput({ radiusMiles: null, distanceMiles: 6 })).some(
+      (r) => r.key === 'distance'
+    )
+  );
+});
+
+test('B5 · the budget reason compares against the SAME ceiling rule the feed filter uses', () => {
+  // Range: ceiling is the max.
+  const range = deriveMatchReasons(
+    reasonInput({
+      job: { category: 'cleaning', budget_cents: null, budget_min_cents: 4000, budget_max_cents: 9000 },
+      listedFlatPriceCents: 8500,
+    })
+  );
+  assert.ok(range.some((r) => r.key === 'budget'));
+  // No stated budget at all: unknown, no claim either way.
+  const open = deriveMatchReasons(
+    reasonInput({
+      job: { category: 'cleaning', budget_cents: null, budget_min_cents: null, budget_max_cents: null },
+    })
+  );
+  assert.ok(!open.some((r) => r.key === 'budget'));
+  // Exact equality counts as covered.
+  const exact = deriveMatchReasons(reasonInput({ listedFlatPriceCents: 10000 }));
+  assert.ok(exact.some((r) => r.key === 'budget'));
+});
+
+test('B5 · no percentages, no scores, no ranking language in the module code or labels', async () => {
+  // Comment-stripped: the docblock legitimately STATES the ban; the code and
+  // the rendered labels are what must never carry the vocabulary.
+  const source = stripComments(await read('lib/matchReasons.ts')).toLowerCase();
+  assert.ok(!source.includes('%'));
+  assert.ok(!/\bscor|\brank|percent|best fit/.test(source));
+});
+
+// ---------------------------------------------------------------------------
+// B4 + B5 — market job detail, pinned
+// ---------------------------------------------------------------------------
+
+test('[static] B4 · the scope of work renders directly under the title, above the logistics rows', async () => {
+  const detail = await read('screens/JobDetailScreen.tsx');
+  const title = detail.indexOf('<Text style={styles.title}>{job.title}</Text>');
+  const description = detail.indexOf('{job.description ?');
+  const locationRow = detail.indexOf('location-outline" size={20}');
+  assert.ok(title > 0 && description > title, 'description must follow the title');
+  assert.ok(locationRow > description, 'logistics rows must follow the scope of work');
+});
+
+test('[static] B4 · the detail renders approximate location only — no address field it has no right to', async () => {
+  const detail = stripComments(await read('screens/JobDetailScreen.tsx'));
+  // job.location is the approximate area string on the jobs row; the exact
+  // address surface (job_locations / fetchJobLocation / address_line) must
+  // not appear on the open-market detail.
+  assert.match(detail, /job\.location \?\? 'No location set'/);
+  assert.doesNotMatch(detail, /fetchJobLocation|address_line|job_locations/);
+});
+
+test('[static] B5 · the screen renders the module output and derives no reason itself', async () => {
+  const detail = await read('screens/JobDetailScreen.tsx');
+  assert.match(detail, /deriveMatchReasons\(/);
+  assert.match(detail, /matchReasons\.map\(\(reason\)/);
+  // Inputs are real data or null: profile categories, persisted radius, the
+  // cheapest published flat price, the route-carried server distance.
+  assert.match(detail, /readDistanceFilter\(userId\)/);
+  assert.match(detail, /fetchWorkerServices\(userId\)/);
+  assert.match(detail, /price_unit === 'flat'/);
+  assert.match(detail, /typeof routeDistance === 'number' \? routeDistance : null/);
+  // The comparison logic itself lives in the module, not the screen.
+  const stripped = stripComments(detail);
+  assert.doesNotMatch(stripped, /<=\s*threshold|budgetCeiling\(/);
+});
+
+test('[static] B5 · match reasons render only for the worker view of another poster\'s job', async () => {
+  const detail = await read('screens/JobDetailScreen.tsx');
+  assert.match(detail, /mode === 'worker' && !isOwnJob\s*\?\s*deriveMatchReasons/);
+  assert.match(detail, /matchReasons\.length > 0 \?/);
+});
+
+test('[static] · NEARBY_RADIUS_MILES stays canonical in lib and re-exported for the locked import path', async () => {
+  const lib = await read('lib/discoveryFilter.ts');
+  assert.match(lib, /export const NEARBY_RADIUS_MILES = 5;/);
+  const results = await read('screens/WorkerResultsScreen.tsx');
+  assert.match(results, /export { NEARBY_RADIUS_MILES };/);
+  // The LOCKED browse screen's import keeps resolving from the same path.
+  const browse = await read('screens/BrowseJobsScreen.tsx');
+  assert.match(browse, /import { NEARBY_RADIUS_MILES } from '\.\/WorkerResultsScreen';/);
+});
+
 test('[static] B3 · the nearby title tracks the applied radius and a dead location is announced, not faked', async () => {
   const results = await read('screens/WorkerResultsScreen.tsx');
   // The header may never claim a radius the list is not applying.

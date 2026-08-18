@@ -40,6 +40,11 @@ import { useAuth } from '../hooks/useAuth';
 import { useOpenJobDetail } from '../hooks/useJobDetail';
 import { useMode } from '../modes';
 import { useOpenJobs } from '../hooks/useOpenJobs';
+import { useProfile } from '../hooks/useProfile';
+import { deriveMatchReasons } from '../lib/matchReasons';
+import { type DistanceFilterMiles } from '../lib/discoveryFilter';
+import { readDistanceFilter } from '../lib/discoveryFilterStorage';
+import { fetchWorkerServices } from '../lib/services';
 import {
   arrivalWindowLabel,
   budgetRangeLabel,
@@ -180,6 +185,71 @@ export function JobDetailScreen() {
       return b.created_at.localeCompare(a.created_at);
     })
     .slice(0, 3);
+
+  // --- 4D-2 B5: deterministic match-reason inputs. All three facts are
+  // fetched real data or stay null (unknown renders nothing); the RULE lives
+  // in lib/matchReasons.ts — this screen only gathers inputs and renders the
+  // module's output.
+  const { profile: myProfile } = useProfile();
+  const userId = user?.id ?? null;
+  const [myRadius, setMyRadius] = useState<DistanceFilterMiles | null>(null);
+  const [myListedPriceCents, setMyListedPriceCents] = useState<number | null>(null);
+  // Present only when the surface that opened this detail carried the
+  // server-computed distance (a radius result or the map's pin sheet).
+  const routeDistance = (params.job as { distance_miles?: unknown }).distance_miles;
+  const distanceMiles = typeof routeDistance === 'number' ? routeDistance : null;
+
+  useEffect(() => {
+    if (mode !== 'worker' || !userId) return;
+    let active = true;
+    readDistanceFilter(userId).then((stored) => {
+      if (active) setMyRadius(stored);
+    });
+    return () => {
+      active = false;
+    };
+  }, [mode, userId]);
+
+  useEffect(() => {
+    if (mode !== 'worker' || !userId || isOwnJob) return;
+    let active = true;
+    (async () => {
+      const { data, error: servicesError } = await fetchWorkerServices(userId);
+      if (!active || servicesError) return;
+      // The cheapest PUBLISHED flat price for this job's category. Hourly
+      // and quote-only rows cannot be compared to a job budget without
+      // inventing hours, so they contribute nothing (unknown, not zero).
+      const flats = data
+        .filter(
+          (service) =>
+            service.published &&
+            service.category === job.category &&
+            service.price_unit === 'flat' &&
+            service.price_cents != null
+        )
+        .map((service) => service.price_cents as number);
+      setMyListedPriceCents(flats.length > 0 ? Math.min(...flats) : null);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [mode, userId, isOwnJob, job.category]);
+
+  const matchReasons =
+    mode === 'worker' && !isOwnJob
+      ? deriveMatchReasons({
+          job: {
+            category: job.category,
+            budget_cents: job.budget_cents,
+            budget_min_cents: job.budget_min_cents,
+            budget_max_cents: job.budget_max_cents,
+          },
+          workerCategories: myProfile?.categories ?? null,
+          distanceMiles,
+          radiusMiles: myRadius,
+          listedFlatPriceCents: myListedPriceCents,
+        })
+      : [];
 
   // The one canonical re-read: the chain's live pending revision plus every
   // revision behind it. Every action lands back here — success or REFUSAL —
@@ -525,8 +595,17 @@ export function JobDetailScreen() {
 
             <Text style={styles.title}>{job.title}</Text>
 
+            {/* 4D-2 B4: the scope of work sits directly under the title —
+                above the fold — so a worker reads WHAT the job is before the
+                logistics rows rather than after them. */}
+            {job.description ? <Text style={styles.description}>{job.description}</Text> : null}
+
             <View style={styles.detailRow}>
               <Ionicons name="location-outline" size={20} color={colors.textMuted} />
+              {/* Approximate area only. The exact address lives in
+                  job_locations, readable by the poster and the assigned
+                  worker — enforced by RLS, and this screen renders no field
+                  it has no right to. */}
               <Text style={styles.detailText}>{job.location ?? 'No location set'}</Text>
             </View>
             <View style={styles.detailRow}>
@@ -542,7 +621,20 @@ export function JobDetailScreen() {
               </View>
             ) : null}
 
-            {job.description ? <Text style={styles.description}>{job.description}</Text> : null}
+            {/* B5: deterministic match reasons — boolean facts from
+                lib/matchReasons.ts, rendered only when they hold. No
+                percentages, no scores, no negative badges: an unmet or
+                unknown reason renders nothing at all. */}
+            {matchReasons.length > 0 ? (
+              <View style={styles.matchReasons}>
+                {matchReasons.map((reason) => (
+                  <View key={reason.key} style={styles.matchReasonRow}>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                    <Text style={styles.matchReasonText}>{reason.label}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
 
             {job.videos?.length > 0 ? (
               <ScrollView
@@ -971,7 +1063,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.text,
     lineHeight: 24,
+    // Snug under the title since 4D-2 B4 moved the scope of work above the
+    // logistics rows; the title's own marginBottom provides the separation.
+    marginTop: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  matchReasons: {
     marginTop: spacing.lg,
+    gap: spacing.sm,
+  },
+  matchReasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  matchReasonText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
   },
   videoRow: {
     gap: spacing.sm,

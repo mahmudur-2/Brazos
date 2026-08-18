@@ -41,8 +41,14 @@ export function activeJobFilterCount(model: JobFilterModel): number {
   return count;
 }
 
-/** The budget figure a filter compares against: the stated ceiling. */
-function budgetCeiling(job: OpenJob): number | null {
+/** The budget figure a filter compares against: the stated ceiling.
+ *  Exported since 4D-2 so lib/matchReasons.ts compares against the SAME
+ *  figure — one budget-ceiling rule, never a second copy. */
+export function budgetCeiling(job: {
+  budget_cents: number | null;
+  budget_min_cents?: number | null;
+  budget_max_cents?: number | null;
+}): number | null {
   return job.budget_max_cents ?? job.budget_cents ?? job.budget_min_cents ?? null;
 }
 

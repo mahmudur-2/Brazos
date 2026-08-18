@@ -14,7 +14,7 @@ import { useProfile } from '../hooks/useProfile';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { goBackOrHome } from '../lib/navigationRef';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
-import { type DistanceFilterMiles } from '../lib/discoveryFilter';
+import { NEARBY_RADIUS_MILES, type DistanceFilterMiles } from '../lib/discoveryFilter';
 import { readDistanceFilter, writeDistanceFilter } from '../lib/discoveryFilterStorage';
 import {
   DEFAULT_JOB_FILTERS,
@@ -30,8 +30,10 @@ import type {
 } from '../lib/navigation';
 import { colors, spacing } from '../lib/theme';
 
-/** Kept in sync with BrowseJobsScreen's own "within 5 miles" pill. */
-export const NEARBY_RADIUS_MILES = 5;
+// The value now lives in lib/discoveryFilter.ts (4D-2) so lib modules can
+// read it without importing a screen; re-exported here because the LOCKED
+// BrowseJobsScreen imports it from this path.
+export { NEARBY_RADIUS_MILES };
 
 const MODE_TITLES: Record<WorkerHomeStackParamList['WorkerResults']['mode'], string> = {
   all: 'Available Jobs',
