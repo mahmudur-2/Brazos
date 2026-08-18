@@ -159,3 +159,40 @@ passed on device (corrected fact). Still open from the previous list: the
 post-flow airplane-mode location behaviors, "Suggested starting range"
 copy, and the corrected Privacy §7 — fold them into the both-themes
 flip-through (item B).
+
+## AMENDMENT (same run, after commit 6) — Block 2: SKIPPED as a unit
+
+**Voice search (dispatch commits 7-9) did not ship. Zero of its code was
+written.** The pre-approved dependency could not be installed: the exact
+call `npm install expo-speech-recognition@sdk-54 --save-exact` was
+mechanically denied by the repository guard —
+`PreToolUse guard.ps1: BLOCK GUARD-DEPS dependency-mutation`. The deny
+matrix is a protected control this run may not bypass (CLAUDE.md), and the
+dispatch's own pre-decided branch for both "a deny rule blocks an action"
+and "the dependency cannot be installed cleanly" is: skip all of Block 2,
+record exactly why, finish the run with Block 1 intact — which this is.
+
+The install itself is sound when run by the operator: the `sdk-54`
+dist-tag exists on npm and resolves to `expo-speech-recognition@3.1.3`
+(verified via `npm view` this run; sdk-53→2.1.5, sdk-55→3.1.3 for
+reference). Nothing in package.json changed.
+
+**To revive Block 2:** (1) operator runs the install above (and registers
+the library's Expo config plugin in app.json plugins if the package ships
+one — it does, per its docs — Block 2's only allowed plugin change);
+(2) re-dispatch commits 7-9 exactly as written in the 4D-4 prompt: the
+lib/ provider boundary with explicit ON-DEVICE recognition (report
+unavailable rather than fall back to network), the press-and-hold mic in
+ui/primitives/SearchBar.tsx behind the existing onChangeText contract with
+an opt-out prop, and the two verbatim iOS strings, proven via the resolved
+config:
+
+> NSMicrophoneUsageDescription: "BRAZOS uses your microphone only while
+> you hold the mic button to search by voice."
+> NSSpeechRecognitionUsageDescription: "Speech is recognized on your
+> device to turn what you say into a search. Nothing is sent to a server."
+
+These sentences are the contract the implementation must keep literally
+true (hold-to-talk; on-device only). Until then the app has no speech
+recognition and no new permission strings — the EAS build in item A ships
+dark mode alone.
