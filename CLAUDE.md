@@ -76,16 +76,18 @@ typed, so cross-tree navigation must be a compile error. Route param types
 live in `lib/navigation.ts`.
 
 ## Locked — never modify
-
 Screens 01–07 and 48: `screens/LaunchScreen.tsx`, `screens/WelcomeScreen.tsx`,
 `screens/SignInScreen.tsx`, `screens/EmailSignInScreen.tsx`,
 `screens/CreateAccountScreen.tsx`, `screens/EmailCreateAccountScreen.tsx`,
 `screens/VerifyPhoneScreen.tsx`, `screens/SetupScreen.tsx`,
 `screens/LegalGateScreen.tsx`, `screens/HomeScreen.tsx`,
-`screens/BrowseJobsScreen.tsx`. Also `design-reference/` (`screen_map.json`
-and everything beside it) — the mockup PNGs are not in the repo, and
-references are direction, not canvases, so never position absolutely to match
-them. AI screens 09–11 and all LLM dependencies are out of scope: manual
+`screens/BrowseJobsScreen.tsx`.
+## Design references
+
+`docs/mockups/` holds the Emerald Prestige screen designs, and
+`design-reference/` holds `screen_map.json` and everything beside it.
+References are direction, not canvases — never position absolutely to match
+them. AI screens 09-11 and all LLM dependencies are out of scope: manual
 posting produces a `JobDraft` and nothing may depend on AI.
 
 **Frozen web/PWA surface:** `public/`, `hosting/`, `dist/`,
