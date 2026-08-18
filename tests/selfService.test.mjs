@@ -124,8 +124,11 @@ test('the public profile shows availability truth and gates drafts', async () =>
   // authority; the filter keeps the owner's own draft label honest).
   assert.match(src, /s\.published \|\| isSelf/);
   assert.match(src, /servicePriceLabel/);
-  // Save/unsave exists and is absent on your own profile.
-  assert.match(src, /!isSelf && user \?/);
+  // Save/unsave exists and is absent on your own profile. Amended for 4E:
+  // a tombstoned (deleted) account is also unsaveable — the same §4.3
+  // dead-end-tap rule that suppresses Hire — so the condition gained the
+  // canHire-backed `hireable` conjunct.
+  assert.match(src, /!isSelf && user && hireable \?/);
 });
 
 test('PaymentMethods never renders a fake stored method', async () => {

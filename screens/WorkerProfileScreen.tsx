@@ -19,12 +19,14 @@ import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import {
-  completionPercent,
   fetchProfileById,
   isProfileActive,
   type Profile,
 } from '../lib/profiles';
 import { canRehireWorker, JOB_CATEGORIES, JOB_CATEGORY_LABELS, type JobCategory } from '../lib/jobs';
+import { fetchWorkerJobStats } from '../lib/portfolio';
+import { canHire } from '../lib/rebook';
+import { deriveWorkerHeroTrust } from '../lib/workerHeroCard';
 import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
 import {
   fetchWorkerServices,
@@ -44,8 +46,9 @@ import { colors, radius, spacing } from '../lib/theme';
 
 /**
  * Read-only view of another user's profile — the public face of a worker's
- * reputation: rating, verification, the categories they work in, and their
- * curated Past Work gallery.
+ * reputation: the 4E hero trust content (rating · jobs completed ·
+ * responds-in, positive-only and non-null only — lib/workerHeroCard.ts),
+ * the categories they work in, and their curated Past Work gallery.
  *
  * Everything here is readable by any signed-in user: `profiles` is already
  * public-readable, portfolio_items has a permissive SELECT policy, and the
@@ -81,6 +84,10 @@ export function WorkerProfileScreen() {
   const [services, setServices] = useState<WorkerService[]>([]);
   const [savedByMe, setSavedByMe] = useState(false);
   const [savingBookmark, setSavingBookmark] = useState(false);
+  // 4E — worker_job_stats rows for the hero trust content. Null until the
+  // RPC answers (and null again on failure): UNKNOWN renders nothing, and
+  // can never produce the "New worker" verdict (lib/workerHeroCard.ts).
+  const [jobStats, setJobStats] = useState<ReadonlyArray<{ count: number }> | null>(null);
   /**
    * Banned/suspended accounts can't be transacted with. `banned` is not
    * publicly readable (phase29), so this asks the narrow RPC instead. Starts
@@ -145,6 +152,17 @@ export function WorkerProfileScreen() {
     };
   }, [params.workerId, isSelf]);
 
+  useEffect(() => {
+    let active = true;
+    setJobStats(null);
+    fetchWorkerJobStats(params.workerId).then(({ data, error: statsError }) => {
+      if (active && !statsError) setJobStats(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [params.workerId]);
+
   /**
    * §6.2 — "Book at listed price": the direct-offer composer prefilled with
    * the service's own terms, NEVER a one-tap send (the composer still needs
@@ -187,11 +205,16 @@ export function WorkerProfileScreen() {
   // Headings address the person, so they use the first name the way a message
   // to them would; the button stays the same in both cases.
   const firstName = name.trim().split(/\s+/)[0] || name;
+  // 4E: a tombstoned account cannot be hired or saved — the mockup's
+  // Hire-on-a-deleted-user is a recorded defect, and lib/rebook.ts's canHire
+  // is the ONE predicate for it (create_offer's own gate refuses it
+  // server-side regardless). The profile itself still renders: the history
+  // and any reviews are real.
+  const hireable = canHire(profile?.full_name);
   // Signed in, not looking at yourself, and the other account is in good
   // standing. No completed-job history required — that is the whole fix.
-  const canOffer = !!user && !isSelf && recipientActive;
-  const ratingCount = profile?.rating_count ?? 0;
-  const completion = completionPercent(profile?.completion_rate);
+  const canOffer = !!user && !isSelf && recipientActive && hireable;
+  const heroTrust = deriveWorkerHeroTrust({ profile, stats: jobStats });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -227,39 +250,59 @@ export function WorkerProfileScreen() {
                     {name}
                   </Text>
                 </View>
-                {/* The rating row is the way into the full reviews list, so it
-                    behaves as a button — with a chevron saying so and enough
-                    vertical hit slop to clear 44pt without pushing the header
-                    layout around. */}
-                <Pressable
-                  onPress={() =>
-                    navigation.navigate('ProfileReviews', {
-                      userId: params.workerId,
-                      name,
-                    })
-                  }
-                  hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    ratingCount > 0
-                      ? `See all ${ratingCount} reviews for ${name}`
-                      : `See reviews for ${name}`
-                  }
-                  style={({ pressed }) => [styles.proofRow, pressed && styles.proofRowPressed]}
-                >
-                  <Ionicons name="star" size={14} color={colors.star} />
-                  <Text style={styles.proofStrong}>
-                    {ratingCount > 0 ? (profile?.rating_avg ?? 0).toFixed(1) : 'New'}
-                  </Text>
-                  <Text style={styles.proofMuted}>
-                    {ratingCount > 0
-                      ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
-                      : 'no reviews yet'}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={13} color={colors.textSubtle} />
-                </Pressable>
-                {completion != null && (
-                  <Text style={styles.proofMuted}>{completion}% completed</Text>
+                {/* 4E hero trust content — positive-only, real columns,
+                    non-null only (lib/workerHeroCard.ts). A rating with zero
+                    counted reviews is not a fact, so with none there is no
+                    rating row at all — no "New" stand-in, no "no reviews
+                    yet" placeholder — and nothing to open ProfileReviews on
+                    either, so the reviews entry exists only with reviews. */}
+                {heroTrust.rating ? (
+                  <Pressable
+                    onPress={() =>
+                      navigation.navigate('ProfileReviews', {
+                        userId: params.workerId,
+                        name,
+                      })
+                    }
+                    hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`See all ${heroTrust.rating.count} reviews for ${name}`}
+                    style={({ pressed }) => [styles.proofRow, pressed && styles.proofRowPressed]}
+                  >
+                    <Ionicons name="star" size={14} color={colors.star} />
+                    <Text style={styles.proofStrong}>{heroTrust.rating.average.toFixed(1)}</Text>
+                    <Text style={styles.proofMuted}>
+                      {`(${heroTrust.rating.count} ${
+                        heroTrust.rating.count === 1 ? 'review' : 'reviews'
+                      })`}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={13} color={colors.textSubtle} />
+                  </Pressable>
+                ) : null}
+                {heroTrust.newWorker ? (
+                  <View style={styles.proofRow}>
+                    <Ionicons name="leaf-outline" size={13} color={colors.emerald} />
+                    <Text style={styles.proofMuted}>New worker</Text>
+                  </View>
+                ) : (
+                  <>
+                    {heroTrust.completedJobs != null ? (
+                      <View style={styles.proofRow}>
+                        <Ionicons name="briefcase-outline" size={13} color={colors.textMuted} />
+                        <Text style={styles.proofMuted}>
+                          {`${heroTrust.completedJobs} ${
+                            heroTrust.completedJobs === 1 ? 'job' : 'jobs'
+                          } completed`}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {heroTrust.respondsIn ? (
+                      <View style={styles.proofRow}>
+                        <Ionicons name="time-outline" size={13} color={colors.textMuted} />
+                        <Text style={styles.proofMuted}>{`Responds in ${heroTrust.respondsIn}`}</Text>
+                      </View>
+                    ) : null}
+                  </>
                 )}
               </View>
             </View>
@@ -296,7 +339,9 @@ export function WorkerProfileScreen() {
             </Card>
           ) : null}
 
-          {!isSelf && user ? (
+          {/* Saving a tombstoned account would be a dead-end bookmark — the
+              same §4.3 reasoning that suppresses Hire suppresses Save. */}
+          {!isSelf && user && hireable ? (
             <Button
               title={savedByMe ? 'Saved — tap to remove' : `Save ${firstName} for later`}
               variant="secondary"
