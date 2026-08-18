@@ -279,3 +279,20 @@ test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navi
   }
   assert.deepEqual(offenders, [], `raw colour literals crept in:\n${offenders.join('\n')}`);
 });
+
+// ---------------------------------------------------------------------------
+// The map surface (commit 4): Apple Maps tiles follow the in-app theme
+// ---------------------------------------------------------------------------
+
+test('[static] MapKit tiles follow the resolved theme; no Google-only style ships', async () => {
+  const nativeMap = await read('components/HotspotMap.native.tsx');
+  // No Google provider is configured anywhere, so iOS renders Apple Maps —
+  // where customMapStyle is Google-only and inert. It must not ship.
+  assert.doesNotMatch(nativeMap, /customMapStyle/);
+  assert.doesNotMatch(nativeMap, /PROVIDER_GOOGLE/);
+  // react-native-maps 1.20.1 exposes a per-MapView iOS appearance prop; the
+  // tiles follow the RESOLVED theme (covers a pinned preference that differs
+  // from the OS trait), and the overlays read the same palette.
+  assert.match(nativeMap, /userInterfaceStyle=\{isDark \? 'dark' : 'light'\}/);
+  assert.match(nativeMap, /useThemeColors/);
+});

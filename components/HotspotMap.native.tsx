@@ -11,7 +11,7 @@ import {
   tierForCount,
   type HotspotMapProps,
 } from '../lib/hotspots';
-import { colors, radius, spacing } from '../lib/theme';
+import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type PermState = 'loading' | 'granted' | 'denied' | 'skipped';
 
@@ -33,6 +33,8 @@ export function HotspotMap({
   onRegionChangeComplete,
   onUserLocation,
 }: HotspotMapProps) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const [perm, setPerm] = useState<PermState>('loading');
   const mapRef = useRef<MapView>(null);
   // Kept in a ref so obtaining a GPS fix (an effect below) always reports to
@@ -149,9 +151,12 @@ export function HotspotMap({
         showsUserLocation={perm === 'granted'}
         showsMyLocationButton={perm === 'granted'}
         toolbarEnabled={false}
-        // Hardcoded light — see the DARK_MAP_STYLE comment above.
-        userInterfaceStyle="light"
-        customMapStyle={[]}
+        // Apple Maps (MapKit) — no Google provider is configured, so
+        // customMapStyle would be Google-only and inert here. Tiles follow
+        // the RESOLVED in-app theme through this per-MapView iOS prop
+        // (react-native-maps 1.20.1), which also covers a pinned Light/Dark
+        // preference that differs from the OS trait.
+        userInterfaceStyle={isDark ? 'dark' : 'light'}
         onRegionChangeComplete={onRegionChangeComplete}
       >
         {pins !== undefined
@@ -246,7 +251,8 @@ export function HotspotMap({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   flex: {
     flex: 1,
   },
@@ -331,7 +337,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pinCount: {
-    color: colors.onPrimary,
+    color: colors.onForest,
     fontSize: 15,
     fontWeight: '800',
   },
@@ -345,4 +351,5 @@ const styles = StyleSheet.create({
     borderColor: colors.gold,
     transform: [{ rotate: '45deg' }],
   },
-});
+  }),
+);

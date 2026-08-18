@@ -138,9 +138,10 @@ test('[static] B1 · MapScreen: worker mode clusters cells into pins and opens t
   // Customer path untouched: glow cells still drill into CellJobs.
   assert.match(screen, /navigation\.navigate\('CellJobs'/);
   assert.match(screen, /const isWorker = mode === 'worker';/);
-  // The frozen-web pins (tests/pwa.test.mjs): fixed light palette, no theme hook.
+  // 4D-4: the map screen is themed now — resolved palette for chrome, tiles
+  // follow via HotspotMap.native; the WEB map file itself stays frozen.
   assert.match(screen, /backgroundColor: colors\.background/);
-  assert.doesNotMatch(screen, /useThemeColors/);
+  assert.match(screen, /useThemeColors/);
 });
 
 test('[static] B1 · the shared props stay optional so the frozen web map ignores them', async () => {

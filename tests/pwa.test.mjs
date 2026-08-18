@@ -90,7 +90,10 @@ test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web 
   assert.match(webMap, /onSelectCellRef\.current\(cell\)/);
   assert.match(webMap, /aggregated cell centers and counts/);
   assert.match(mapScreen, /backgroundColor: colors\.background/);
-  assert.doesNotMatch(mapScreen, /useThemeColors/);
+  // 4D-4: the map SCREEN is themed — chrome reads the resolved palette and
+  // the native MapView follows the in-app theme. The WEB map stays frozen
+  // and light (HotspotMap.web.tsx above), which is what this suite guards.
+  assert.match(mapScreen, /useThemeColors/);
   assert.equal(JSON.parse(packageJson).dependencies.ol, '^10.10.0');
   assert.equal(JSON.parse(packageJson).dependencies['maplibre-gl'], undefined);
   assert.equal(JSON.parse(packageJson).dependencies.leaflet, undefined);

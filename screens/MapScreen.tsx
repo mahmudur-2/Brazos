@@ -31,12 +31,21 @@ import { userMessage } from '../lib/errorMessage';
 import { useMode } from '../modes';
 import type { MapStackNavigation } from '../lib/navigation';
 import { navigateAcrossTabs } from '../lib/navigationRef';
-import { colors, radius, shadows, spacing } from '../lib/theme';
+import {
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /** Matches HotspotMap.native's DEFAULT_REGION span — the pre-interaction zoom. */
 const INITIAL_LAT_DELTA = 0.08;
 
 export function MapScreen() {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
   const navigation = useNavigation<MapStackNavigation>();
   const { cells, loading, error, refresh } = useHotspots();
   const { mode } = useMode();
@@ -183,8 +192,9 @@ export function MapScreen() {
       style={styles.safe}
       edges={['top']}
     >
-      {/* The map screen intentionally uses the app's fixed cream palette so
-          iOS dark mode cannot expose dark gaps around the light map. */}
+      {/* 4D-4: chrome and tiles resolve together — the MapView follows the
+          in-app theme (HotspotMap.native userInterfaceStyle), so palette-
+          driven chrome no longer exposes light-map-on-dark-chrome gaps. */}
       <View style={styles.headerWrap}>
         <ScreenHeader
           title="Find Jobs Near You"
@@ -380,7 +390,8 @@ export function MapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -396,12 +407,9 @@ const styles = StyleSheet.create({
   legend: {
     flexGrow: 0,
     borderBottomWidth: 1,
-    // No explicit background before this — it inherited the SafeAreaView's
-    // palette.background, which goes near-black in dark mode. That left a
-    // black strip between the (already hardcoded-white) header above it and
-    // the map below, since nothing here was opaque. Same fix as the header:
-    // fixed light, not palette-driven, matching the rest of the app for now.
-    backgroundColor: colors.background,
+    // Opaque on purpose: without a background this strip inherited nothing
+    // and could read as a gap between header and map. Resolved palette now,
+    // matching the tiles, which follow the same theme (4D-4).
   },
   legendContent: {
     paddingHorizontal: spacing.lg,
@@ -504,4 +512,5 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 20,
   },
-});
+  }),
+);
