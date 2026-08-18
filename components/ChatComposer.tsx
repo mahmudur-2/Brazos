@@ -14,7 +14,7 @@ import { colors, radius, spacing } from '../lib/theme';
  * relative to the input twice now; 46 is a deliberately large jump; a couple
  * of pixels would not have been a "noticeable" difference on a phone screen.
  */
-export const COMPOSER_CONTROL_SIZE = 46;
+const COMPOSER_CONTROL_SIZE = 46;
 const ICON_GLYPH_SIZE = 26;
 const SEND_GLYPH_SIZE = 22;
 

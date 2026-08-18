@@ -72,7 +72,7 @@ const CHIP_TEXT_LINE = 18;
 const CHIP_PAD_V = 7;
 const CHIP_HEIGHT = CHIP_TEXT_LINE + CHIP_PAD_V * 2 + 2;
 /** Row height: the chip plus even breathing room above and below. */
-export const QUICK_REPLIES_HEIGHT = CHIP_HEIGHT + spacing.sm * 2;
+const QUICK_REPLIES_HEIGHT = CHIP_HEIGHT + spacing.sm * 2;
 
 const styles = StyleSheet.create({
   wrap: {

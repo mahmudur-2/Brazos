@@ -443,7 +443,7 @@ export function ComponentCatalog() {
         </Section>
 
         <Text style={styles.footer}>
-          Templates (FormScreen / ListScreen / DetailScreen / SuccessScreen) are full-screen and
+          Templates (FormScreen / DetailScreen / SuccessScreen) are full-screen and
           are checked on a real screen rather than inside this scroller.
         </Text>
       </ScrollView>

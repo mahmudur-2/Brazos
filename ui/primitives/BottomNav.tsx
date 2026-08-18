@@ -144,8 +144,8 @@ export const TAB_BAR_SAFE_BOTTOM = 16;
 // item itself, not on the edge.
 const TAB_BAR_BACKGROUND = colors.surface;
 const TAB_HAIRLINE_COLOR = colors.border;
-export const TAB_ACTIVE_COLOR = colors.forest;
-export const TAB_INACTIVE_COLOR = colors.textMuted;
+const TAB_ACTIVE_COLOR = colors.forest;
+const TAB_INACTIVE_COLOR = colors.textMuted;
 
 /** How tall the whole bar is on a device reporting this bottom inset. */
 export function bottomNavHeight(insetBottom: number): number {
