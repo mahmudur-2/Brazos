@@ -27,6 +27,12 @@ const offersModule = (async () => {
     .replace(
       /import \{ moneyCeilingError \} from '\.\/validation';/,
       'const moneyCeilingError = () => null;'
+    )
+    // Same for the location-shape guard — executed in
+    // tests/locationPrivacy.test.mjs.
+    .replace(
+      /import \{ coordinateLocationError \} from '\.\/locationPrivacy';/,
+      'const coordinateLocationError = () => null;'
     );
   assert.match(stubbed, /const supabase = null;/, 'the supabase import must be stubbed');
   assert.match(

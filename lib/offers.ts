@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import type { JobCategory } from './jobs';
+import { coordinateLocationError } from './locationPrivacy';
 import type { Message } from './messages';
 import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
 import { moneyCeilingError } from './validation';
@@ -274,6 +275,17 @@ export async function createDirectOffer(input: NewDirectOffer) {
   const ceilingError = moneyCeilingError(input.amountCents);
   if (ceilingError) {
     return { data: null as string | null, error: ceilingRefusal(ceilingError) };
+  }
+
+  // Same write-boundary rule as createJob/updateJob: this RPC also creates a
+  // jobs row, and its location label must never be a raw GPS pair (see
+  // lib/locationPrivacy.ts).
+  const locationShapeError = coordinateLocationError(input.location);
+  if (locationShapeError) {
+    return {
+      data: null as string | null,
+      error: { message: locationShapeError } as { message: string; code?: string },
+    };
   }
 
   const { data, error } = await supabase.rpc('create_offer', {

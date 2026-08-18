@@ -2,6 +2,7 @@ import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 import { supabase } from './supabase';
 import { transitionJobStatusWithoutRpc } from './jobStatusCompatibility';
+import { coordinateLocationError, publicLocationLabel } from './locationPrivacy';
 import { moneyCeilingError } from './validation';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -263,7 +264,11 @@ export function toOpenJob(row: any): OpenJob {
     title: row.title,
     description: row.description,
     category: row.category,
-    location: row.location ?? null,
+    // Open-market mask: a coordinate-shaped stored label renders as absent
+    // (lib/locationPrivacy.ts) — rows stored before the write guard existed
+    // must not put a GPS fix on the public feed. Owner surfaces map through
+    // mapJobRow, which is deliberately unmasked.
+    location: publicLocationLabel(row.location ?? null),
     budget_cents: row.budget_cents ?? null,
     // Absent from queries that predate phase49 (e.g. the map drill-down RPC's
     // projection) and correctly null there — same fallback rule as photos.
@@ -391,6 +396,18 @@ export async function createJob(_clientId: string, input: NewJobInput) {
     };
   }
 
+  // The public location label must never be a raw GPS pair — refused here,
+  // before the RPC, with a sentence instead of a stored doorstep (see
+  // lib/locationPrivacy.ts for why this is a privacy boundary).
+  const locationShapeError = coordinateLocationError(input.location);
+  if (locationShapeError) {
+    return {
+      data: null,
+      error: { message: locationShapeError },
+      locationError: null as { message: string } | null,
+    };
+  }
+
   const { data, error } = await supabase
     .rpc('create_job', {
       p_title: input.title,
@@ -430,6 +447,17 @@ export async function updateJob(jobId: string, input: NewJobInput) {
     return {
       data: null,
       error: { message: ceilingError },
+      locationError: null as { message: string } | null,
+    };
+  }
+
+  // Same coordinate-shape refusal as createJob — an edit must not be the
+  // path that publishes a GPS pair either.
+  const locationShapeError = coordinateLocationError(input.location);
+  if (locationShapeError) {
+    return {
+      data: null,
+      error: { message: locationShapeError },
       locationError: null as { message: string } | null,
     };
   }

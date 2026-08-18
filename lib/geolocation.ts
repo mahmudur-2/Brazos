@@ -1,4 +1,5 @@
 import * as Location from 'expo-location';
+import { publicLocationLabel } from './locationPrivacy';
 import { reverseGeocodeArea } from './reverseGeocode';
 
 export type ResolvedPlace = {
@@ -65,12 +66,15 @@ function formatNativePlace(place: Location.LocationGeocodedAddress): string {
  * uses — granting it in either place covers both), reads the current GPS
  * position, and reverse-geocodes it to a neighbourhood-level area name.
  *
- * Label resolution is a three-tier fallback, each tier degrading gracefully
+ * Label resolution is a two-tier fallback, each tier degrading gracefully
  * so a posted job always keeps its coordinates (and therefore its map pin)
  * even when the fancier lookups fail:
  *   1. Nominatim (see lib/reverseGeocode.ts) — "Neighborhood, Borough, ST".
  *   2. expo-location's native reverseGeocodeAsync — borough/city only.
- *   3. Raw "lat, lng" — always available once we have a GPS fix.
+ * When both fail the label is EMPTY — never the raw coordinates. A
+ * "40.6501, -73.9496" label stored as a job's public location is a ~10 m fix
+ * on someone's home (see lib/locationPrivacy.ts); the caller's existing
+ * location input is where the user types an area name instead.
  *
  * Returns the raw coordinates too, so the caller can store them for the
  * hotspot map even though only the neighbourhood-level label is shown.
@@ -117,14 +121,17 @@ export async function resolveCurrentPlace(): Promise<ResolveResult> {
     } catch (err) {
       // Reverse geocoding can fail independently of the GPS fix (no
       // network, or no provider on some Android builds). The coordinates
-      // are still good, so fall through to the coordinate label below.
+      // are still good; only the label stays empty.
       console.error('[geolocation] native reverseGeocodeAsync failed', err);
     }
   }
 
-  if (!label) {
-    label = `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
-  }
-
-  return { ok: true, place: { label, lat: latitude, lng: longitude } };
+  // PRIVACY: the label is never the raw coordinates. Double geocode failure
+  // leaves it empty (the user types an area name in the existing location
+  // input), and a coordinate-shaped string from either geocode tier is
+  // scrubbed by the same one rule the write boundary enforces.
+  return {
+    ok: true,
+    place: { label: publicLocationLabel(label) ?? '', lat: latitude, lng: longitude },
+  };
 }

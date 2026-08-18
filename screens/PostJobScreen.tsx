@@ -545,8 +545,18 @@ export function PostJobScreen() {
       await alertAsync('Location unavailable', result.message);
       return;
     }
-    setLocation(result.place.label);
     setCoords({ lat: result.place.lat, lng: result.place.lng });
+    // The label is empty when both geocode tiers failed (never raw
+    // coordinates — lib/geolocation.ts). Keep whatever the user typed and
+    // ask for an area name rather than blanking the field.
+    if (result.place.label) {
+      setLocation(result.place.label);
+    } else {
+      await alertAsync(
+        'Area name needed',
+        "We saved your map location, but couldn't turn it into an area name. Type the neighborhood or area in yourself."
+      );
+    }
   }
 
   /**
