@@ -50,6 +50,8 @@ import {
   loadPostJobDraft,
   savePostJobDraft,
 } from '../lib/postJobDraft';
+import { priceGuidanceLines } from '../lib/priceGuidance';
+import { descriptionCharsNeeded } from '../lib/validation';
 import { createDirectOffer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
@@ -218,6 +220,11 @@ export function PostJobScreen() {
   // edit/hire-again success doesn't reference a newly created job.
   const [publishedJob, setPublishedJob] = useState<Job | null>(null);
   const [step, setStep] = useState(0);
+  // §3.4 photo nudge — dismissal is part of the draft, never a global setting.
+  const [photoNudgeDismissed, setPhotoNudgeDismissed] = useState(false);
+  // Focus state for the two budget fields, so the typical-range guidance can
+  // step aside while an amount is actually being typed (§3.2).
+  const [budgetFocused, setBudgetFocused] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   // The amount an offer is about to be sent at, held while the confirmation
   // is open. Null means nothing is pending.
@@ -324,6 +331,7 @@ export function PostJobScreen() {
         setPhotos(draft.photos);
         setVideos(draft.videos);
         setStep(Math.min(draft.step, POST_STEPS.length - 1));
+        setPhotoNudgeDismissed(draft.photoNudgeDismissed);
         // A restored draft's media belongs to no saved job (the job does not
         // exist yet), so it follows the same rule as a photo added this
         // session: removing it — or abandoning the draft again — deletes it
@@ -360,8 +368,9 @@ export function PostJobScreen() {
       photos,
       videos,
       step,
+      photoNudgeDismissed,
     });
-  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step]);
+  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step, photoNudgeDismissed]);
 
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
@@ -830,6 +839,16 @@ export function PostJobScreen() {
     }) ?? 'Flexible';
   const scheduleDates = upcomingDates();
 
+  // §3 conversion aids — fresh posts only. Edit keeps legacy content legal
+  // (no floor retro-applied to an old description) and a hire request is a
+  // negotiated single amount, not a budget to be guided.
+  const descNeeded = isFreshPost ? descriptionCharsNeeded(description) : 0;
+  const guidanceLines = isFreshPost ? priceGuidanceLines(category) : null;
+  const bothBudgetsEmpty = !budgetMin.trim() && !budgetMax.trim();
+  const showPriceGuidance = !!guidanceLines && (bothBudgetsEmpty || !budgetFocused);
+  const showPhotoNudge =
+    isFreshPost && step === 1 && photos.length === 0 && !photoNudgeDismissed;
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
@@ -921,6 +940,14 @@ export function PostJobScreen() {
                 numberOfLines={4}
                 style={styles.multiline}
               />
+              {/* §3.3 — the floor is a disabled Continue plus this written
+                  count, never a raw error and never a silently dead button. */}
+              {descNeeded > 0 ? (
+                <Text style={styles.floorHint}>
+                  {descNeeded} more {descNeeded === 1 ? 'character' : 'characters'} needed
+                  before you can continue.
+                </Text>
+              ) : null}
             </View>
           )}
 
@@ -1136,6 +1163,16 @@ export function PostJobScreen() {
                 />
               ) : (
                 <View style={styles.field}>
+                  {/* §3.2 — static typical range for the chosen category.
+                      Steps aside while an amount is being typed; categories
+                      with no seeded range render nothing. No locality claim:
+                      the table is static and cannot support one. */}
+                  {showPriceGuidance && guidanceLines ? (
+                    <View style={styles.guidanceCard}>
+                      <Text style={styles.guidanceRange}>{guidanceLines[0]}</Text>
+                      <Text style={styles.guidanceNote}>{guidanceLines[1]}</Text>
+                    </View>
+                  ) : null}
                   <View style={styles.budgetRow}>
                     <View style={styles.budgetField}>
                       <TextField
@@ -1145,6 +1182,8 @@ export function PostJobScreen() {
                         onChangeText={setBudgetMin}
                         placeholder="e.g. 40"
                         keyboardType="numeric"
+                        onFocus={() => setBudgetFocused(true)}
+                        onBlur={() => setBudgetFocused(false)}
                       />
                     </View>
                     <View style={styles.budgetField}>
@@ -1155,6 +1194,8 @@ export function PostJobScreen() {
                         onChangeText={setBudgetMax}
                         placeholder="e.g. 60"
                         keyboardType="numeric"
+                        onFocus={() => setBudgetFocused(true)}
+                        onBlur={() => setBudgetFocused(false)}
                       />
                     </View>
                   </View>
@@ -1265,6 +1306,23 @@ export function PostJobScreen() {
 
         </ScrollView>
 
+        {/* §3.4 — a nudge, not a gate: it never touches the footer button's
+            disabled state, and dismissing it is remembered on this draft only. */}
+        {showPhotoNudge ? (
+          <View style={styles.nudgeRow}>
+            <Ionicons name="image-outline" size={18} color={colors.emerald} />
+            <Text style={styles.nudgeText}>Jobs with a photo get more bids.</Text>
+            <Pressable
+              onPress={() => setPhotoNudgeDismissed(true)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss photo tip"
+            >
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : null}
+
         <View style={styles.footer}>
           {step > 0 && (
             <Button
@@ -1290,7 +1348,10 @@ export function PostJobScreen() {
             onPress={step < POST_STEPS.length - 1 ? handleContinue : handleSubmit}
             palette={emeraldColors}
             loading={submitting}
-            disabled={uploadingPhoto || uploadingVideo}
+            // The description floor (§3.3) disables Continue on the Describe
+            // step only, alongside its written count above. The photo nudge
+            // deliberately has no place in this expression.
+            disabled={uploadingPhoto || uploadingVideo || (step === 0 && descNeeded > 0)}
             style={styles.footerPrimary}
           />
         </View>
@@ -1550,6 +1611,49 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 17,
     marginTop: -spacing.xs,
+  },
+  floorHint: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+    marginTop: -spacing.sm,
+  },
+  guidanceCard: {
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.mint,
+  },
+  guidanceRange: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.forest,
+  },
+  guidanceNote: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.textMuted,
+  },
+  nudgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.xl,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.mint,
+  },
+  nudgeText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.forest,
   },
   budgetRow: {
     flexDirection: 'row',

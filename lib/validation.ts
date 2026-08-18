@@ -36,6 +36,20 @@ export function moneyCeilingError(
   return `That amount is over the ${limit} limit. Enter ${limit} or less.`;
 }
 
+/**
+ * The posting flow's description floor (4D-3 §3.3): 20 characters after
+ * trimming. Client-only — no database CHECK backs it, so pre-existing shorter
+ * descriptions stay legal; the floor is a conversion aid on new input, not an
+ * integrity rule. Enforced by disabling the advance control with a written
+ * remaining count, never a raw error.
+ */
+export const JOB_DESCRIPTION_MIN_CHARS = 20;
+
+/** Characters still needed before the description clears the floor. 0 = clear. */
+export function descriptionCharsNeeded(text: string): number {
+  return Math.max(0, JOB_DESCRIPTION_MIN_CHARS - text.trim().length);
+}
+
 /** Loose "looks like an email" check — not RFC 5322-exact, just enough to
  *  catch obviously malformed input like "asdf" or "foo@bar" before it
  *  reaches Supabase as a raw, unfriendly error. */
