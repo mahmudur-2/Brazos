@@ -9,6 +9,13 @@ import { brand, dark as emeraldDark } from '../ui/tokens';
 // exactly one place.
 export { withAlpha, layout, controls } from '../ui/tokens';
 export { radius as emeraldRadius } from '../ui/tokens';
+// The ONE reactive palette read (4D-4): re-exported here so screens can take
+// it from their standard import surface. The implementation lives in
+// hooks/useThemeColors.ts, backed by lib/ThemeContext.tsx — this is the same
+// binding, not a second hook. The import cycle this creates
+// (theme → hooks/useThemeColors → ThemeContext → theme) is deliberate and
+// safe: every module involved defers palette VALUE access to call time.
+export { useThemeColors } from '../hooks/useThemeColors';
 
 /**
  * Brazos design system — "Forest and earth".
@@ -231,5 +238,34 @@ export const shadows: Record<'card' | 'raised', ViewStyle> = {
     },
   }) as ViewStyle,
 };
+
+/**
+ * Trap-1 helper (4D-4): color-bearing styles must be COMPUTED from the
+ * resolved palette, never captured at module scope — a stylesheet built at
+ * import time freezes whatever palette was live and never repaints on a
+ * theme change. Wrap the stylesheet factory in this at module scope:
+ *
+ *   const stylesFor = themedStyles((colors) =>
+ *     StyleSheet.create({ card: { backgroundColor: colors.surface } }));
+ *   // in the component:
+ *   const { palette } = useThemeColors();
+ *   const styles = stylesFor(palette);
+ *
+ * Nothing runs at import time; the factory runs once per palette (WeakMap
+ * keyed on the palette object) and the result is shared by every instance,
+ * so this costs what the module-scope StyleSheet it replaces cost.
+ */
+export function themedStyles<T>(
+  factory: (colors: ColorPalette) => T,
+): (palette: ColorPalette) => T {
+  const cache = new WeakMap<ColorPalette, T>();
+  return (palette) => {
+    const cached = cache.get(palette);
+    if (cached) return cached;
+    const built = factory(palette);
+    cache.set(palette, built);
+    return built;
+  };
+}
 
 export const theme = { colors, spacing, radius, typography, fonts, shadows } as const;

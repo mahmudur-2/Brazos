@@ -1,15 +1,15 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState, type PropsWithChildren } from 'react';
+import { useEffect, useMemo, useState, type PropsWithChildren } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { NavigationContainer } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { setAudioModeAsync } from 'expo-audio';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { usePushNotifications } from './hooks/usePushNotifications';
+import { useThemeColors } from './hooks/useThemeColors';
 import { configurePushHandling } from './lib/pushNotifications';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
-import { colors } from './lib/theme';
 import { ThemeProvider } from './lib/ThemeContext';
 import { LaunchCompleteContext } from './lib/launchContext';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
@@ -45,6 +45,7 @@ function MainTabs() {
 
 function RootNavigator() {
   const { user, loading } = useAuth();
+  const { palette } = useThemeColors();
   const legal = useLegalGate();
   const setup = useSetupStatus();
 
@@ -60,8 +61,8 @@ function RootNavigator() {
   // holds the identical loader for that last step.
   if (loading || (user && (legal.state === 'loading' || setup.state === 'loading'))) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color={colors.primary} />
+      <View style={[styles.loader, { backgroundColor: palette.background }]}>
+        <ActivityIndicator size="large" color={palette.primary} />
       </View>
     );
   }
@@ -129,6 +130,66 @@ function LaunchGate({ children }: PropsWithChildren) {
   );
 }
 
+/**
+ * Everything that must re-render on a theme change, under one hook read.
+ *
+ * NavigationContainer gets a navigation theme derived from the resolved
+ * palette — background and card above all — so screen transitions and modal
+ * backdrops never flash white in dark mode; the status bar style derives from
+ * the same resolution. LaunchScreen (locked, light by design) pushes its own
+ * status-bar variant over this while it is up, and the mode-switch panel does
+ * the same for its own duration; unmounting pops back to this one.
+ */
+function ThemedNavigation() {
+  const { palette, isDark } = useThemeColors();
+
+  const navigationTheme = useMemo(() => {
+    const base = isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: palette.primary,
+        background: palette.background,
+        card: palette.surface,
+        text: palette.text,
+        border: palette.border,
+        notification: palette.danger,
+      },
+    };
+  }, [palette, isDark]);
+
+  return (
+    /* Sits between the launch layer and the navigator so the mode-switch
+       panel covers every screen — including the tab bar — while the
+       destination tree is swapped in underneath it. ModeProvider is
+       nested INSIDE it because switchMode() drives the panel: one
+       transition, one owner. */
+    <ModeTransitionProvider>
+      <ModeProvider>
+        <NavigationContainer
+          ref={navigationRef}
+          theme={navigationTheme}
+          // A cold-start tap is delivered before this mounts, so the
+          // routing it requested is parked and replayed here.
+          onReady={flushPendingNavigation}
+        >
+          {/* The one application-level boundary. Inside the container so
+              navigationRef and the parked cold-start replay survive a
+              crash-and-reset; outside RootNavigator so the reset key
+              remounts every navigator — recovery is a fresh mount, not a
+              re-render of the crashed state. The launch overlay sits
+              entirely outside it. */}
+          <AppErrorBoundary>
+            <RootNavigator />
+          </AppErrorBoundary>
+          <StatusBar style={isDark ? 'light' : 'dark'} backgroundColor={palette.background} />
+        </NavigationContainer>
+      </ModeProvider>
+    </ModeTransitionProvider>
+  );
+}
+
 export default function App() {
   // Foreground presentation + the Android channel. Set before anything can
   // arrive, and independent of auth — a notification can land while the app is
@@ -152,51 +213,20 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      {/* Theme resolution sits outermost of the app-state providers: it
-          depends on neither auth nor mode, and 4D-4's Light/Dark/System
-          resolver must already be above every surface that will re-render on
-          a palette change. Pinned to light in this stage — lib/ThemeContext. */}
-      <ThemeProvider>
-        <AuthProvider>
-          <LaunchGate>
-            {/* Sits between the launch layer and the navigator so the mode-switch
-                panel covers every screen — including the tab bar — while the
-                destination tree is swapped in underneath it. ModeProvider is
-                nested INSIDE it because switchMode() drives the panel: one
-                transition, one owner. */}
-            <ModeTransitionProvider>
-              <ModeProvider>
-                <NavigationContainer
-                  ref={navigationRef}
-                  // A cold-start tap is delivered before this mounts, so the
-                  // routing it requested is parked and replayed here.
-                  onReady={flushPendingNavigation}
-                >
-                  {/* The one application-level boundary. Inside the container so
-                      navigationRef and the parked cold-start replay survive a
-                      crash-and-reset; outside RootNavigator so the reset key
-                      remounts every navigator — recovery is a fresh mount, not a
-                      re-render of the crashed state. The launch overlay sits
-                      entirely outside it. */}
-                  <AppErrorBoundary>
-                    <RootNavigator />
-                  </AppErrorBoundary>
-                  {/* Hardcoded light, not "auto" — "auto" ties icon color (and, via
-                      app.json's userInterfaceStyle, Android's default status bar
-                      fill) to the system light/dark setting, which on a dark-mode
-                      device rendered as a solid black strip above every screen's
-                      light cream content. The app is light-only for now (see the
-                      tab bar / Map hardcoding elsewhere), so the status bar
-                      matches. LaunchScreen pushes its own light variant over this
-                      while it is up, and unmounting pops back to this one. The
-                      mode-switch panel does the same for its own duration. */}
-                  <StatusBar style="dark" backgroundColor={colors.background} />
-                </NavigationContainer>
-              </ModeProvider>
-            </ModeTransitionProvider>
-          </LaunchGate>
-        </AuthProvider>
-      </ThemeProvider>
+      <AuthProvider>
+        <LaunchGate>
+          {/* Theme resolution sits INSIDE the launch gate deliberately (4D-4):
+              the provider reads the stored preference before the themed tree
+              first paints, holding a neutral loader for that beat — and the
+              locked launch layer, which renders from the first frame, covers
+              that gate, so a cold start in dark mode never flashes light.
+              Everything that repaints on a palette change lives below this
+              line; the launch layer itself is locked and light by design. */}
+          <ThemeProvider>
+            <ThemedNavigation />
+          </ThemeProvider>
+        </LaunchGate>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }
@@ -207,10 +237,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
   },
+  // Colorless: the background comes from the resolved palette at render time.
   loader: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.background,
   },
 });

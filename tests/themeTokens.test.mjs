@@ -10,8 +10,8 @@ import test from 'node:test';
 //   1. ui/colorAlpha.ts and ui/tokens.ts are EXECUTED (the moneyCeiling
 //      pattern; react-native is stubbed for tokens) so withAlpha's output and
 //      light/dark key parity are facts, not source patterns.
-//   2. The resolver plumbing (provider pinned to light, no Appearance read,
-//      app.json untouched) is pinned against source, marked [static].
+//   2. The resolver plumbing (preference + system resolution, native sync,
+//      app.json "automatic") is pinned against source, marked [static].
 //   3. Every file the 4D-3.5 sweep migrated is scanned, comment-stripped, for
 //      raw hex or rgba() literals — the regression this suite exists to stop.
 //      Key-parity BETWEEN the palettes is additionally enforced at compile
@@ -126,38 +126,50 @@ test('[static] dark palette is compile-checked against ColorToken', async () => 
 });
 
 // ---------------------------------------------------------------------------
-// Resolver plumbing — pinned light, no Appearance read, app.json untouched
+// Resolver plumbing — 4D-4: preference + system resolution, native sync
 // ---------------------------------------------------------------------------
 
-test('[static] the theme resolver is pinned to light with no Appearance read', async () => {
+test('[static] the theme resolver honors preference and system, and syncs native surfaces', async () => {
   const [hookSource, providerSource, app, appJson] = await Promise.all([
     read('hooks/useThemeColors.ts'),
     read('lib/ThemeContext.tsx'),
     read('App.tsx'),
     read('app.json'),
   ]);
-  // Comment-stripped: the docblocks legitimately NAME the APIs they explain
-  // are absent; only code may not touch them.
+  // Comment-stripped: the docblocks legitimately NAME the APIs they explain;
+  // only code is held to the contract.
   const hook = stripComments(hookSource);
   const provider = stripComments(providerSource);
 
-  // The hook reads the provider and ONLY the provider.
+  // The hook reads the provider and ONLY the provider — the OS appearance is
+  // an input the provider resolves, never something a consumer samples.
   assert.doesNotMatch(hook, /useColorScheme/);
   assert.match(hook, /useTheme\(\)/);
   assert.match(hook, /from '\.\.\/lib\/ThemeContext'/);
 
-  // The provider returns light unconditionally in 4D-3.5 — no Appearance
-  // API, no stored preference, no dark resolution path yet.
-  assert.doesNotMatch(provider, /useColorScheme|Appearance|AsyncStorage|SecureStore/);
-  assert.match(provider, /isDark: false/);
-  assert.match(provider, /palette: colors/);
+  // 4D-4: the provider is where all three inputs meet — the stored
+  // preference (via lib/themePreferenceStorage), the live system appearance
+  // (useColorScheme subscribes to Appearance changes), and the pure
+  // resolution rule (lib/themePreference). A pinned choice is pushed to the
+  // native side so the keyboard, alerts, share sheets and MapKit tiles
+  // follow the app, applied at bootstrap and on every change.
+  assert.match(provider, /useColorScheme\(\)/);
+  assert.match(provider, /readThemePreference/);
+  assert.match(provider, /writeThemePreference/);
+  assert.match(provider, /resolveColorScheme\(/);
+  assert.match(provider, /Appearance\.setColorScheme\(/);
+  // Storage mechanics live in lib/themePreferenceStorage.ts, not here.
+  assert.doesNotMatch(provider, /AsyncStorage|SecureStore/);
 
-  // Mounted once, above the app-state providers.
+  // Mounted once; navigation and the status bar derive from the resolution.
   assert.match(app, /<ThemeProvider>/);
   assert.match(app, /from '\.\/lib\/ThemeContext'/);
+  assert.match(app, /theme=\{navigationTheme\}/);
+  assert.doesNotMatch(stripComments(app), /<StatusBar style="dark"/);
 
-  // 4D-4 owns flipping this to "automatic" (needs a native build — T1).
-  assert.equal(JSON.parse(appJson).expo.userInterfaceStyle, 'light');
+  // 4D-4 flipped this to "automatic" (T1) — native surfaces follow the
+  // trait, which Appearance.setColorScheme then steers per the preference.
+  assert.equal(JSON.parse(appJson).expo.userInterfaceStyle, 'automatic');
 });
 
 // ---------------------------------------------------------------------------
