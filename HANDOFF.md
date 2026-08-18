@@ -2,65 +2,54 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-17 - stage 4D-B: money ceiling mirror, parity fails closed, badge removed
+## 2026-08-18 - 4D-3 dispatch STOPPED at base gate 2: 4D-2 never landed
 
-Three independent changes, three commits, in dispatch order. **No SQL
-executed, no database contacted, no schema object touched, no dependency
-added, nothing pushed. No locked screen edited.** `npm run verify` green
-before each commit landed; lint (`tsc --noEmit` with unused checks) runs
-first inside verify and passed every time.
+**Zero code changes. No SQL executed, no database contacted, no dependency
+added, nothing pushed, no locked file touched.** The only commit this run
+made is this HANDOFF rewrite.
 
-1. **Money ceiling mirror** — every client path sending cents to
-   `create_job`, `update_job_details`, `create_offer`, `counter_offer` or
-   `sandbox_tip_worker` now refuses an over-ceiling amount BEFORE the RPC,
-   with a written sentence instead of a raw CHECK violation. Constants and
-   validator in `lib/validation.ts` (`MONEY_CEILING_CENTS = 10_000_000`,
-   `TIP_CEILING_CENTS = 100_000`), mirrored EXACTLY including inclusivity:
-   phase75's CHECKs read `amount_cents > 0 and amount_cents <= 10000000`
-   (same shape for the three jobs budget columns) and phase51's
-   `sandbox_tip_worker()` rejects
-   `p_amount_cents is null or p_amount_cents <= 0 or p_amount_cents > 100000`
-   — so exactly at either ceiling is accepted. Verified by executed test
-   both ways at both boundaries (`tests/moneyCeiling.test.mjs`, which also
-   pins the SQL literals against drift). Verify: **586 pass / 0 fail / 0
-   skipped**.
-2. **verify-schema env parity fails closed** — the parity decision is now
-   the pure exported `envParityProblems()` in `scripts/verify-schema.mjs`;
-   an unresolvable key ref (a new-format `sb_…` publishable key has no JWT
-   payload) is a refusal naming cause and remedy, no longer a silent
-   "parity: OK". `refFromJwt` untouched. `node --check
-   scripts/verify-schema.mjs` exit 0; the script itself was NOT run
-   (needs `.env` + live staging). Executed tests in
-   `tests/envParity.test.mjs`. Verify: **591 pass / 0 fail / 0 skipped**.
-3. **Verification badge removed from every user-visible surface** — both
-   implementations: `components/VerificationBadge.tsx` deleted (no locked
-   file imported it, so no stranded-import hazard — the delete branch, not
-   the leave-on-disk branch) with its seven render sites, and
-   JobDetailScreen's inline unconditional "Unverified" pill.
-   `verification_status` left the client data layer with it (Profile type,
-   `PUBLIC_PROFILE_COLUMNS`, `isVerified()`, workerSearch mapping) — it fed
-   the badge and nothing else. No replacement chip or copy added;
-   `lib/legal/` untouched and its background-check disclosure now pinned on
-   its literal text; no database object changed. Executed contract:
-   `tests/verificationBadgeRemoved.test.mjs` (tree walk; the no-reference
-   check has no exclusions, the user-copy check excludes exactly the named
-   locked files). Two existing assertions flipped to the removal contract,
-   not deleted: `tests/hardening.test.mjs` ("Not verified" wording pin →
-   component-gone pin) and `tests/customerCore.test.mjs`
-   (`VERIFICATION_LABEL` presence → absence). Verify: **595 pass / 0 fail /
-   0 skipped**.
+The 4D-3 dispatch (customer conversion, trust and rebook: hero customer job
+detail, five-step progress unification, positive-only trust rows, Compare
+Bids vertical stack, Saved & past workers) opens with a five-item base gate.
+Item 2 requires a 4D-2 HANDOFF commit in `git log --oneline -10` and states:
+"If 4D-2 has not landed, STOP - this batch reads surfaces 4D-2 unified." The
+dispatch's STOP CONDITIONS repeat it. 4D-2 has not landed:
 
-Run exceptions, in full:
+- No commit in the entire history mentions 4D-2
+  (`git log --all --oneline --grep="4D-2"` returns nothing). The stage-4D
+  batches that exist are 4D-1a, 4D-1b, 4D-A (read-only audit), 4D-B.
+- `docs/audits/STAGE4D_PLAN.md:147` defines 4D-2 as "Worker discovery
+  (worker tree only)": map rebuild, photo-first job cards, distance filter
+  chips, market job detail with scope above the fold, deterministic
+  match-reason checkmarks. None of that work is in the log under any label.
+- The dispatch's own fingerprint for 4D-2 - its Phase 0.4 asks whether
+  "4D-2's own-postings filter" leaked from worker discovery into a customer
+  fetch - matches nothing: `fetchOpenJobs()` (`lib/jobs.ts:297`) filters on
+  `status = 'open'` only, and no `.neq('client_id', ...)` exists anywhere in
+  `lib/` or `hooks/`. The only own-postings skips in the tree are
+  `screens/BrowseJobsScreen.tsx:111` (locked screen, unmounted since 4D-1b,
+  pre-existing) and `lib/earningsMath.ts:53` (potential-earnings sum, not a
+  discovery fetch). There is no filter to leak because the batch that would
+  have added it never ran.
+- 4D-1b's HANDOFF closed by noting the trust-rows / hero-detail / progress
+  work "remains undispatched". Since then only 4D-A and 4D-B landed.
 
-- **`.env` could not be read at all** — the dispatch asked for the first
-  three characters of `SUPABASE_KEY` (prefix only); every read path is
-  mechanically denied (guard + permission matrix), which is working as
-  designed and was not bypassed. See operator item B for the manual check.
-- **`screens/WelcomeScreen.tsx:158` still says "Verified workers"** — locked
-  screen 02, left byte-identical. Operator unlock item; it is the one entry
-  behind the new suite's locked-file allow-list.
-- Commit messages were passed via `-F` file because the commit trailer
-  itself trips the nested-session guard token match when inlined with `-m`.
+Rest of the gate, raw, for the record: branch `mainexpo` OK; tree clean OK
+(`git status --porcelain` empty); `git grep -n "BrowseJobs" -- navigation/`
+empty OK; `npm run verify` GREEN at gate HEAD 5163a1e - **595 pass / 0 fail
+/ 0 skipped**. The tree is ready for whichever dispatch comes next.
+
+**One 4D-3 dispatch premise is already stale.** It asserts "Not verified" is
+still rendered on worker rows, "confirmed in a live screenshot of staging" -
+that screenshot predates 4D-B. Commit 43d1e7f deleted
+`components/VerificationBadge.tsx` and its seven render sites plus
+JobDetailScreen's inline "Unverified" pill;
+`git grep "Not verified" -- screens components ui lib hooks` returns nothing
+today, and `tests/verificationBadgeRemoved.test.mjs` already pins the
+absence with a tree walk. If 4D-3 is re-issued, its D1 is already done and
+its D1 "PROVE IT" test already exists (the sole remaining user-visible
+verification claim is locked `screens/WelcomeScreen.tsx:158` - operator item
+G below). D2-D6 remain real, undone work.
 
 ## Applied reality - staging `zzkumxcjtbqoselzptig`
 
@@ -108,6 +97,16 @@ phase74 nor phase75 disturbs the finding.
 
 ## Needs the operator - outside any run
 
+**NEW - sequencing decision for the UI track.** The 4D-3 run stopped exactly
+where its gate told it to; it made no judgment call. Two ways forward:
+(a) dispatch 4D-2 (worker discovery, per `docs/audits/STAGE4D_PLAN.md:147`)
+first, then re-issue 4D-3 unchanged; or (b) if the read-dependency on 4D-2
+is no longer real, re-issue 4D-3 with base-gate item 2 amended to name the
+batches that actually landed (4D-1b HANDOFF `2f987fc`, 4D-B HANDOFF
+`2ff0e59`). If (b), also drop or rewrite Phase 0.4 - the own-postings filter
+it hunts for was never added - and note that D1 is already satisfied by 4D-B
+so the run can spend itself on D2-D6.
+
 **A. Run `node scripts/verify-schema.mjs` against staging** - the only thing
 that makes "phase74/75 applied" official; their two groups have never run.
 **New since 4D-B: the env-parity gate now fails closed.** If `.env`'s
@@ -115,7 +114,7 @@ that makes "phase74/75 applied" official; their two groups have never run.
 the parity gate (exit 3) with the remedy in the message; check the prefix
 first: `sed -n 's/^SUPABASE_KEY=\(...\).*/\1/p' .env` prints only the first
 three characters (`eyJ` = will proceed, `sb_` = will stop — swap in the
-legacy `eyJ…` anon key for the staging project). This run could not read the
+legacy `eyJ…` anon key for the staging project). No agent run can read the
 prefix itself: `.env` is mechanically denied to agents.
 
 **B. The next TestFlight build will fail its own gate** (unchanged from
