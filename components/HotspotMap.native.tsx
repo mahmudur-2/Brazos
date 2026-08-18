@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Circle, Polygon } from 'react-native-maps';
+import MapView, { Circle, Marker, Polygon } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { Button } from './Button';
 import { MapPinIcon } from './MapPinIcon';
@@ -24,9 +24,21 @@ const DEFAULT_REGION = {
   longitudeDelta: 0.08,
 };
 
-export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
+export function HotspotMap({
+  cells,
+  loading,
+  onSelectCell,
+  pins,
+  onSelectPin,
+  onRegionChangeComplete,
+  onUserLocation,
+}: HotspotMapProps) {
   const [perm, setPerm] = useState<PermState>('loading');
   const mapRef = useRef<MapView>(null);
+  // Kept in a ref so obtaining a GPS fix (an effect below) always reports to
+  // the CURRENT caller without re-running the location effect per render.
+  const onUserLocationRef = useRef(onUserLocation);
+  onUserLocationRef.current = onUserLocation;
 
   useEffect(() => {
     let active = true;
@@ -51,6 +63,10 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
           accuracy: Location.Accuracy.Balanced,
         });
         if (!active) return;
+        onUserLocationRef.current?.({
+          lat: loc.coords.latitude,
+          lng: loc.coords.longitude,
+        });
         mapRef.current?.animateToRegion(
           {
             latitude: loc.coords.latitude,
@@ -136,8 +152,31 @@ export function HotspotMap({ cells, loading, onSelectCell }: HotspotMapProps) {
         // Hardcoded light — see the DARK_MAP_STYLE comment above.
         userInterfaceStyle="light"
         customMapStyle={[]}
+        onRegionChangeComplete={onRegionChangeComplete}
       >
-        {cells.flatMap((cell) => {
+        {pins !== undefined
+          ? pins.map((pin) => (
+              <Marker
+                key={pin.key}
+                coordinate={{ latitude: pin.lat, longitude: pin.lng }}
+                onPress={() => onSelectPin?.(pin)}
+                anchor={{ x: 0.5, y: 1 }}
+                // The pin content is static text, so re-capturing the marker
+                // view on every map frame is pure cost. Text also renders
+                // synchronously — no icon-font race at capture time, which is
+                // why the badge is a count rather than a glyph.
+                tracksViewChanges={false}
+                accessibilityLabel={`${pin.count} open ${pin.count === 1 ? 'job' : 'jobs'} here`}
+              >
+                <View style={styles.pinWrap}>
+                  <View style={styles.pinBadge}>
+                    <Text style={styles.pinCount}>{pin.count}</Text>
+                  </View>
+                  <View style={styles.pinTail} />
+                </View>
+              </Marker>
+            ))
+          : cells.flatMap((cell) => {
           const tier = tierForCount(cell.job_count);
           if (!tier) return [];
 
@@ -273,5 +312,37 @@ const styles = StyleSheet.create({
   emptyBannerText: {
     flex: 1,
     fontSize: 13,
+  },
+  pinWrap: {
+    alignItems: 'center',
+  },
+  // A count badge on a teardrop-ish stem (reference: Discover_Map_Dark's
+  // briefcase pins) — forest fill, gold hairline, cream count. Diameter stays
+  // over the 44pt touch floor via the Marker's own hit area plus the tail.
+  pinBadge: {
+    minWidth: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.sm,
+    backgroundColor: colors.forest,
+    borderWidth: 1.5,
+    borderColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinCount: {
+    color: colors.onPrimary,
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  pinTail: {
+    width: 10,
+    height: 10,
+    marginTop: -5,
+    backgroundColor: colors.forest,
+    borderBottomWidth: 1.5,
+    borderRightWidth: 1.5,
+    borderColor: colors.gold,
+    transform: [{ rotate: '45deg' }],
   },
 });

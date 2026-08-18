@@ -1,5 +1,7 @@
 import { supabase } from './supabase';
+import { withAlpha } from '../ui/colorAlpha';
 import { fetchOpenJobsByIds, toOpenJob, type OpenJob } from './jobs';
+import type { ClusterPin } from './mapClustering';
 
 // Aggregated grid cell returned by the job_hotspots() RPC. Never contains
 // individual job coordinates — only the cell center + counts.
@@ -99,14 +101,6 @@ const GLOW_RINGS: { scale: number; alpha: number }[] = [
   { scale: 0.5, alpha: 0.55 },
 ];
 
-function withAlpha(hex: string, alpha: number): string {
-  const clean = hex.replace('#', '');
-  const r = parseInt(clean.slice(0, 2), 16);
-  const g = parseInt(clean.slice(2, 4), 16);
-  const b = parseInt(clean.slice(4, 6), 16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 export type GlowRing = {
   key: string;
   radiusMeters: number;
@@ -125,13 +119,37 @@ export function glowRingsForCell(cell: HotspotCell): GlowRing[] {
   }));
 }
 
+/** The subset of react-native-maps' Region the clustering zoom signal needs. */
+export type MapRegionSnapshot = {
+  latitude: number;
+  longitude: number;
+  latitudeDelta: number;
+  longitudeDelta: number;
+};
+
 // Shared props for the platform-specific map implementations
 // (HotspotMap.native.tsx uses react-native-maps; HotspotMap.web.tsx uses
 // OpenLayers because react-native-maps has no web support).
+//
+// The optional members below are the 4D-2 worker-discovery surface. They are
+// OPTIONAL by design: the web implementation is frozen (CLAUDE.md) and simply
+// never reads them, so on web the map keeps its pre-4D-2 glow-cell behavior
+// in every mode while the native map renders clustered pins when a caller
+// passes them. When `pins` is present (even empty) the native map suppresses
+// the glow overlay — the two presentations never stack.
 export type HotspotMapProps = {
   cells: HotspotCell[];
   loading: boolean;
   onSelectCell: (cell: HotspotCell) => void;
+  /** Clustered worker-discovery pins (lib/mapClustering.ts output). */
+  pins?: ClusterPin[];
+  onSelectPin?: (pin: ClusterPin) => void;
+  /** Fires when the user settles a pan/zoom — the clustering zoom signal. */
+  onRegionChangeComplete?: (region: MapRegionSnapshot) => void;
+  /** Fires once when the device's own position is obtained (permission
+   *  granted and a fix acquired). Never fires otherwise — an absent location
+   *  stays unknown, it is never guessed. */
+  onUserLocation?: (location: { lat: number; lng: number }) => void;
 };
 
 /**
