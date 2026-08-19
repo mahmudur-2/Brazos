@@ -22,7 +22,14 @@ import {
   type WorkerService,
 } from '../lib/services';
 import { fetchMyProfile, updateProfile, type Profile } from '../lib/profiles';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * Screens 64 + 66 (Phase 9, consolidated) — the worker's self-service
@@ -318,13 +325,21 @@ export function ServicesPricingScreen() {
           {JOB_CATEGORIES.map((c) => (
             <Pressable
               key={c}
-              style={[styles.categoryChip, category === c && styles.categoryChipActive]}
+              style={[
+                styles.categoryChip,
+                isDark && styles.categoryChipDark,
+                category === c && styles.categoryChipActive,
+              ]}
               onPress={() => setCategory(c)}
               accessibilityRole="button"
               accessibilityState={{ selected: category === c }}
             >
               <Text
-                style={[styles.categoryChipText, category === c && styles.categoryChipTextActive]}
+                style={[
+                  styles.categoryChipText,
+                  isDark && styles.categoryChipTextDark,
+                  category === c && styles.categoryChipTextActive,
+                ]}
               >
                 {JOB_CATEGORY_LABELS[c]}
               </Text>
@@ -352,11 +367,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.md,
     borderRadius: radius.xl,
     borderWidth: 1,
-    borderColor: colors.mint2,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   cardTitle: {
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 22,
     fontWeight: '800',
     color: colors.ink,
   },
@@ -375,7 +391,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   sectionTitle: {
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 22,
     fontWeight: '800',
     color: colors.ink,
   },
@@ -398,7 +415,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   serviceTitle: {
-    fontSize: 15,
+    fontFamily: fonts.display,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.ink,
   },
@@ -409,7 +427,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.lg,
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     fontSize: 15,
@@ -449,6 +467,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexWrap: 'wrap',
     gap: spacing.sm,
   },
+  // Masters 23/24 draw the category grid as gold-OUTLINE pills with gold
+  // glyphs and cream labels; a chosen one keeps the sage fill so the two
+  // states stay obviously different. Light keeps the Heritage pair.
   categoryChip: {
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -456,6 +477,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
+  },
+  categoryChipDark: {
+    borderColor: colors.gold,
+    backgroundColor: 'transparent',
   },
   categoryChipActive: {
     borderColor: colors.emerald,
@@ -466,6 +491,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '600',
     color: colors.textMuted,
   },
+  categoryChipTextDark: { color: colors.ink },
   categoryChipTextActive: {
     color: colors.emerald,
   },
