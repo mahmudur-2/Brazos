@@ -35,7 +35,14 @@ import {
   type PushRegistration,
 } from '../lib/pushNotifications';
 import { skillCategoryLabel } from '../lib/skillCategories';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * Notification preferences.
@@ -45,8 +52,18 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from
  * them. Turning one off stops the send server-side rather than hiding an
  * already-delivered notification.
  */
+/** Master 39 gives every preference row a glyph. Presentation only, keyed
+ *  off the toggle key the row already carries. */
+const TOGGLE_ICONS: Partial<Record<NotificationToggleKey, keyof typeof Ionicons.glyphMap>> = {
+  messages: 'chatbubble-outline',
+  bids: 'pricetag-outline',
+  job_updates: 'briefcase-outline',
+  hire_requests: 'person-add-outline',
+  nearby_jobs: 'location-outline',
+};
+
 export function NotificationSettingsScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
   const { profile } = useProfile();
@@ -219,6 +236,16 @@ export function NotificationSettingsScreen() {
                   key={item.key}
                   style={[styles.row, index > 0 && styles.rowDivider]}
                 >
+                  {/* Master 39 leads each preference with its own ringed
+                      glyph. The icon is presentation, keyed off the same
+                      toggle key the row already carries. */}
+                  <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
+                    <Ionicons
+                      name={TOGGLE_ICONS[item.key] ?? 'notifications-outline'}
+                      size={18}
+                      color={isDark ? colors.gold : colors.primary}
+                    />
+                  </View>
                   <View style={styles.rowText}>
                     <Text style={styles.rowLabel}>{item.label}</Text>
                     <Text style={styles.rowHint}>{item.hint}</Text>
@@ -348,8 +375,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     gap: 2,
   },
+  // Master 39 rings every preference glyph in gold.
+  rowGlyph: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowGlyphDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   rowLabel: {
-    fontSize: 15,
+    fontFamily: fonts.display,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
   },
@@ -359,7 +399,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.textMuted,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 20,
+    fontFamily: fonts.display,
     fontWeight: '700',
     color: colors.text,
   },
@@ -375,7 +416,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   link: {
     fontSize: 14,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.emerald,
     marginTop: spacing.sm,
   },
   categoryBlock: {
