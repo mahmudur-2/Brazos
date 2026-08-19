@@ -42,7 +42,7 @@ export function Sheet({
   dismissOnBackdropPress = true,
   children,
 }: SheetProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
 
@@ -80,7 +80,9 @@ export function Sheet({
                 accessibilityRole="button"
                 accessibilityLabel="Close"
               >
-                <Text style={styles.closeLabel}>Done</Text>
+                {/* Master 11 draws the sheet's Done in gold; light keeps
+                    the Heritage emerald. */}
+                <Text style={[styles.closeLabel, isDark && styles.closeLabelDark]}>Done</Text>
               </Pressable>
             </View>
           ) : null}
@@ -148,6 +150,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     ...typeScale.title,
     color: colors.emerald,
   },
+  closeLabelDark: { color: colors.gold },
   scroll: {
     flexGrow: 0,
   },

@@ -61,7 +61,7 @@ type GeoState = 'loading' | 'ready' | 'denied' | 'unavailable';
  * on zero results, and is never labeled "within N miles" when it does.
  */
 export function WorkerResultsScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
@@ -286,7 +286,12 @@ export function WorkerResultsScreen() {
             }
             style={styles.filterButton}
           >
-            <Ionicons name="options-outline" size={20} color={colors.ink} />
+            {/* Master 12 draws this glyph in gold; light keeps the ink. */}
+            <Ionicons
+              name="options-outline"
+              size={20}
+              color={isDark ? colors.gold : colors.ink}
+            />
             {filterCount > 0 ? (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{filterCount}</Text>

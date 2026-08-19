@@ -43,7 +43,7 @@ export function JobFilterSheet({
   onApply,
   distanceAvailable,
 }: JobFilterSheetProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const [draft, setDraft] = useState<JobFilterModel>(value);
 
@@ -70,19 +70,19 @@ export function JobFilterSheet({
   return (
     <Sheet visible={visible} onClose={onClose} title="Filter jobs">
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>CATEGORIES</Text>
+        <Text style={[styles.sectionLabel, isDark && styles.sectionLabelDark]}>CATEGORIES</Text>
         <View style={styles.chipWrap}>
           {JOB_CATEGORIES.map((category) => {
             const active = draft.categories.has(category);
             return (
               <Pressable
                 key={category}
-                style={[styles.chip, active && styles.chipActive]}
+                style={[styles.chip, isDark && styles.chipDark, active && styles.chipActive]}
                 onPress={() => toggleCategory(category)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                <Text style={[styles.chipText, isDark && styles.chipTextDark, active && styles.chipTextActive]}>
                   {JOB_CATEGORY_LABELS[category]}
                 </Text>
               </Pressable>
@@ -93,14 +93,14 @@ export function JobFilterSheet({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>MINIMUM BUDGET</Text>
+        <Text style={[styles.sectionLabel, isDark && styles.sectionLabelDark]}>MINIMUM BUDGET</Text>
         <View style={styles.chipWrap}>
           {MIN_BUDGET_PRESETS_CENTS.map((cents) => {
             const active = draft.minBudgetCents === cents;
             return (
               <Pressable
                 key={cents}
-                style={[styles.chip, active && styles.chipActive]}
+                style={[styles.chip, isDark && styles.chipDark, active && styles.chipActive]}
                 onPress={() =>
                   setDraft((prev) => ({
                     ...prev,
@@ -110,7 +110,7 @@ export function JobFilterSheet({
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
               >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                <Text style={[styles.chipText, isDark && styles.chipTextDark, active && styles.chipTextActive]}>
                   {formatBudget(cents)}+
                 </Text>
               </Pressable>
@@ -124,7 +124,7 @@ export function JobFilterSheet({
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>SORT</Text>
+        <Text style={[styles.sectionLabel, isDark && styles.sectionLabelDark]}>SORT</Text>
         {sortOptions.map((option) => {
           const active = draft.sort === option.value;
           return (
@@ -135,10 +135,12 @@ export function JobFilterSheet({
               accessibilityRole="radio"
               accessibilityState={{ selected: active }}
             >
-              <View style={[styles.radio, active && styles.radioActive]}>
+              {/* Gold in both radio states under dark (master 11); light keeps
+                  the Heritage emerald-when-chosen. */}
+              <View style={[styles.radio, isDark ? styles.radioDark : active && styles.radioActive]}>
                 {active ? <View style={styles.radioDot} /> : null}
               </View>
-              <Text style={[styles.sortLabel, active && styles.sortLabelActive]}>
+              <Text style={[styles.sortLabel, isDark && styles.sortLabelDark, active && styles.sortLabelActive]}>
                 {option.label}
               </Text>
             </Pressable>
@@ -175,12 +177,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: spacing.lg,
     gap: spacing.sm,
   },
+  // Master 11: each section is a gold small-caps eyebrow; light keeps muted.
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
     color: colors.textMuted,
     letterSpacing: 0.8,
   },
+  sectionLabelDark: { color: colors.gold, letterSpacing: 1.4 },
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -196,6 +200,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     minHeight: 36,
     justifyContent: 'center',
   },
+  // Unselected pills are gold line-work with a cream label (master 11);
+  // selected keeps the sage fill so the two states stay obviously different.
+  chipDark: {
+    borderColor: colors.gold,
+    backgroundColor: 'transparent',
+  },
   chipActive: {
     borderColor: colors.emerald,
     backgroundColor: colors.mint,
@@ -205,6 +215,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '600',
     color: colors.textMuted,
   },
+  chipTextDark: { color: colors.ink },
   chipTextActive: {
     color: colors.emerald,
   },
@@ -229,6 +240,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Master 11's radio: a gold ring in EVERY state, gold-filled when chosen.
+  // The ring is what makes the row read as a radio at all, so unlike the
+  // chips it does not go dim when unselected.
+  radioDark: {
+    borderColor: colors.gold,
+  },
   radioActive: {
     borderColor: colors.emerald,
   },
@@ -243,6 +260,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '600',
     color: colors.textMuted,
   },
+  sortLabelDark: { color: colors.ink },
   sortLabelActive: {
     color: colors.ink,
   },

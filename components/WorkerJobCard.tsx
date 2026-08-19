@@ -74,6 +74,7 @@ export function WorkerJobCard({
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const metaGlyph = isDark ? colors.gold : colors.textMuted;
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
   const accent = categoryAccent(job.category);
@@ -106,7 +107,7 @@ export function WorkerJobCard({
       {showImage ? (
         <Image
           source={{ uri: thumbUrl }}
-          style={styles.thumb}
+          style={[styles.thumb, isDark && styles.thumbDark]}
           resizeMode="cover"
           onError={() => setImageFailed(true)}
           accessible
@@ -141,10 +142,12 @@ export function WorkerJobCard({
           {isOwn ? <Chip label="Your job" variant="soft" size="sm" /> : null}
         </View>
 
+        {/* Master 12: the meta rows read gold glyph + cream text; light keeps
+            the Heritage muted pair. */}
         {job.location ? (
           <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Ionicons name="location-outline" size={13} color={metaGlyph} />
+            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
               {job.location}
             </Text>
           </View>
@@ -152,8 +155,8 @@ export function WorkerJobCard({
 
         {variant === 'full' && typeof distanceMiles === 'number' ? (
           <View style={styles.metaRow}>
-            <Ionicons name="navigate-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Ionicons name="navigate-outline" size={13} color={metaGlyph} />
+            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
               {formatDistanceMiles(distanceMiles)}
             </Text>
           </View>
@@ -161,8 +164,8 @@ export function WorkerJobCard({
 
         {variant === 'full' && arrivalWindowLabel(job) ? (
           <View style={styles.metaRow}>
-            <Ionicons name="calendar-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Ionicons name="calendar-outline" size={13} color={metaGlyph} />
+            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
               Arrive {arrivalWindowLabel(job)}
             </Text>
           </View>
@@ -170,8 +173,8 @@ export function WorkerJobCard({
 
         {bidLabel ? (
           <View style={styles.metaRow}>
-            <Ionicons name="people-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Ionicons name="people-outline" size={13} color={metaGlyph} />
+            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
               {bidLabel}
             </Text>
           </View>
@@ -179,8 +182,8 @@ export function WorkerJobCard({
 
         {variant === 'full' ? (
           <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={13} color={colors.textMuted} />
-            <Text style={styles.metaText} numberOfLines={1}>
+            <Ionicons name="time-outline" size={13} color={metaGlyph} />
+            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
               Posted {formatTimeAgo(job.created_at)}
             </Text>
           </View>
@@ -203,12 +206,16 @@ export function WorkerJobCard({
           {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
         </Text>
       </View>
-      <Ionicons
-        name="chevron-forward"
-        size={18}
-        color={colors.navInactive}
-        style={styles.chevron}
-      />
+      {/* Master 43's compact feed card ends in a chevron; master 12's full
+          list card does not. One card, both drawings — the variant decides. */}
+      {variant === 'compact' ? (
+        <Ionicons
+          name="chevron-forward"
+          size={18}
+          color={colors.navInactive}
+          style={styles.chevron}
+        />
+      ) : null}
     </Pressable>
   );
 }
@@ -256,6 +263,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.md,
     backgroundColor: colors.neutralBg,
   },
+  // Master 12 rings the tile — photo or glyph — in the same gold hairline.
+  thumbDark: {
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   thumbFallback: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -263,7 +275,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   thumbFallbackDark: {
     backgroundColor: colors.mint,
     borderWidth: 1,
-    borderColor: colors.mint2,
+    borderColor: colors.border,
   },
   info: {
     flex: 1,
@@ -277,9 +289,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexWrap: 'wrap',
     gap: spacing.xs + 2,
   },
+  // Decision 9: a card title is display type. Master 12 draws these serif.
   title: {
     flexShrink: 1,
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.ink,
   },
@@ -296,6 +310,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
   },
+  metaTextDark: { color: colors.ink },
   breakIce: {
     flexDirection: 'row',
     alignItems: 'center',
