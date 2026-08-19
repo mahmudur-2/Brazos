@@ -47,6 +47,122 @@ test('the worker feed route has exactly one name, declared and registered once',
   );
 });
 
+test('every WorkerResults entry point is inside a stack that registers it', async () => {
+  // emerald(4). The device report was `NAVIGATE {"name":"WorkerResults",
+  // "params":{"mode":…}} was not handled by any navigator`, on modes 'all' and
+  // 'skills', with a third expected for the radius chip.
+  //
+  // WHAT THE REPO ACTUALLY HOLDS: the screen EXISTS (screens/
+  // WorkerResultsScreen.tsx) and IS REGISTERED (navigation/WorkerRoot.tsx, one
+  // registration, asserted above). Every live dispatch is in WorkerHomeScreen,
+  // which is the ROOT of that same stack, so an in-stack navigate resolves. The
+  // only other callers go through navigateAcrossTabs(), which asks the mounted
+  // navigator first and logs-and-drops rather than throwing. There is no
+  // unregistered-route defect at HEAD.
+  //
+  // The one file that reproduces that error signature exactly is
+  // BrowseJobsScreen — four dispatches, the same mode set, and registered by NO
+  // navigator since 4D-1b unmounted it. This test is the general rule that
+  // covers both: a screen may dispatch WorkerResults only if it is unmounted,
+  // or if every stack that mounts it also registers WorkerResults.
+  const [customerRoot, workerRoot, shared] = await Promise.all([
+    read('navigation/CustomerRoot.tsx'),
+    read('navigation/WorkerRoot.tsx'),
+    read('navigation/sharedStacks.tsx'),
+  ]);
+  const allNavigators = customerRoot + workerRoot + shared;
+
+  // Which stacks register WorkerResults, by the component they mount.
+  const stacksRegisteringIt = new Set(
+    [...allNavigators.matchAll(/<(\w+)\.Screen name="WorkerResults"/g)].map((m) => m[1])
+  );
+  assert.deepEqual(
+    [...stacksRegisteringIt],
+    ['WorkerHomeStack'],
+    'WorkerResults is a worker Home stack route and nothing else may register it'
+  );
+
+  for (const file of dir('screens').filter((f) => f.endsWith('.tsx'))) {
+    const source = stripComments(await read(`screens/${file}`));
+    if (!/navigation\.navigate\(\s*'WorkerResults'/.test(source)) continue;
+
+    const component = file.replace(/\.tsx$/, '');
+    const mountedIn = [
+      ...allNavigators.matchAll(new RegExp(`<(\\w+)\\.Screen name="[^"]+" component=\\{${component}\\}`, 'g')),
+    ].map((m) => m[1]);
+
+    if (mountedIn.length === 0) {
+      // Unmounted, so it cannot throw. BrowseJobsScreen is this case, and the
+      // next test holds its whole target list against the worker stack so a
+      // future remount cannot dangle.
+      continue;
+    }
+    for (const stack of mountedIn) {
+      assert.ok(
+        stacksRegisteringIt.has(stack),
+        `screens/${file} dispatches WorkerResults but is mounted in ${stack}, ` +
+          'which does not register it — that is the NAVIGATE-not-handled crash'
+      );
+    }
+  }
+});
+
+test('every mode WorkerResults is dispatched with is a mode it handles', async () => {
+  // emerald(4)'s "wire all modes". A mode literal the screen does not handle
+  // fails silently rather than loudly: MODE_TITLES[mode] is undefined, so the
+  // header renders blank and the list falls through whatever branch is last.
+  // Three sources have to agree — the callers, the param-list union, and the
+  // screen's own title map.
+  const [routes, resultsScreen] = await Promise.all([
+    read('lib/navigation.ts'),
+    read('screens/WorkerResultsScreen.tsx'),
+  ]);
+
+  const declared = routes
+    .slice(routes.indexOf('  WorkerResults: {'))
+    .match(/mode: ((?:'[a-z]+'(?: \| )?)+);/)?.[1]
+    .split(' | ')
+    .map((m) => m.replace(/'/g, ''));
+  assert.ok(declared?.length, 'expected a mode union on the WorkerResults param list');
+
+  const titlesStart = resultsScreen.indexOf('const MODE_TITLES');
+  assert.ok(titlesStart >= 0, 'expected a MODE_TITLES map in WorkerResultsScreen');
+  const titlesBody = resultsScreen.slice(
+    titlesStart,
+    resultsScreen.indexOf('};', titlesStart)
+  );
+  const handled = [...titlesBody.matchAll(/^\s{2}(\w+): /gm)].map((m) => m[1]);
+  assert.deepEqual(
+    [...handled].sort(),
+    [...declared].sort(),
+    'MODE_TITLES must handle exactly the modes the param list declares'
+  );
+
+  // Every literal any caller actually sends, mounted or not.
+  const dispatched = new Set();
+  for (const file of dir('screens').filter((f) => f.endsWith('.tsx'))) {
+    const source = stripComments(await read(`screens/${file}`));
+    for (const call of source.matchAll(
+      /navigate\w*\(\s*(?:'Home',\s*)?'WorkerResults',\s*\{([\s\S]{0,160}?)\}/g
+    )) {
+      const mode = call[1].match(/mode: '([a-z]+)'/);
+      if (mode) dispatched.add(mode[1]);
+    }
+  }
+  assert.ok(dispatched.size >= 4, `expected every mode to have a caller, saw ${[...dispatched]}`);
+  for (const mode of dispatched) {
+    assert.ok(
+      declared.includes(mode),
+      `a caller dispatches WorkerResults with mode '${mode}', which the route does not declare`
+    );
+  }
+  // ...and none of the four is orphaned: the two the device pass named ('all',
+  // 'skills') and the radius chip's third ('nearby') all have live callers.
+  for (const mode of declared) {
+    assert.ok(dispatched.has(mode), `no caller ever dispatches WorkerResults mode '${mode}'`);
+  }
+});
+
 test('the locked browse screen could still resolve every target if remounted', async () => {
   // Atlas 48 is UNMOUNTED since 4D-1b (nothing registers or dispatches to
   // it), so the generalized mounted-screen sweep below no longer sees it.
