@@ -64,32 +64,39 @@ export function Chip({
   accessibilityLabel,
   accessibilityHint,
 }: ChipProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const small = size === 'sm';
   const isFilter = variant === 'filter';
 
   // Resolved once, so the icon and the label can never disagree about which
-  // variant is being rendered.
+  // variant is being rendered. Prestige (master 44 / cross-cutting chip
+  // vocabulary): in dark, service chips are sage with a GREEN glyph and a
+  // CREAM label (master 44 draws them that way), and gold-outline chips
+  // carry a gold glyph + cream label; light keeps the Heritage forest.
   const iconColor = selected
     ? (isFilter ? colors.onForest : colors.onPrimary)
-    : variant === 'service' || variant === 'outlineGold'
-      ? colors.forest
-      : variant === 'soft'
-        ? colors.emerald
-        : isFilter
-          ? (accentColor ?? colors.ink)
-          : (accentColor ?? colors.textMuted);
+    : variant === 'service'
+      ? (isDark ? colors.emerald : colors.forest)
+      : variant === 'outlineGold'
+        ? (isDark ? colors.gold : colors.forest)
+        : variant === 'soft'
+          ? colors.emerald
+          : isFilter
+            ? (accentColor ?? colors.ink)
+            : (accentColor ?? colors.textMuted);
 
   const labelColor = selected
     ? (isFilter ? colors.onForest : colors.onPrimary)
-    : variant === 'service' || variant === 'outlineGold'
-      ? colors.forest
-      : variant === 'soft'
-        ? colors.emerald
-        : isFilter
-          ? colors.ink
-          : colors.textMuted;
+    : variant === 'service'
+      ? (isDark ? colors.ink : colors.forest)
+      : variant === 'outlineGold'
+        ? (isDark ? colors.ink : colors.forest)
+        : variant === 'soft'
+          ? colors.emerald
+          : isFilter
+            ? colors.ink
+            : colors.textMuted;
 
   const content = (
     <>
@@ -107,6 +114,9 @@ export function Chip({
     styles.chip,
     onPress && styles.chipInteractive,
     small && styles.chipSmall,
+    // Dark service chips wear the masters' sage fill; light keeps the white
+    // pill unchanged (no style, so the base chip shows through).
+    variant === 'service' && isDark && styles.chipServiceDark,
     variant === 'outlineGold' && styles.chipOutlineGold,
     variant === 'soft' && styles.chipSoft,
     isFilter && styles.chipFilter,
@@ -158,6 +168,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   chipSelected: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
+  },
+  chipServiceDark: {
+    backgroundColor: colors.mint,
+    borderColor: colors.mint2,
   },
   chipOutlineGold: {
     backgroundColor: 'transparent',

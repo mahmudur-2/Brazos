@@ -66,6 +66,14 @@ export const colors = {
   homeBackground: '#FAF5F1',
   /** The blue-slate secondary text used by the approved Customer Home reference. */
   homeSlate: '#526477',
+  /** The Home reference's own soft hairline (search pill, map pill). Kept as
+   *  a token so the unlocked screen carries no literals; dark maps it to the
+   *  Prestige gold hairline. */
+  homeHairline: '#F1EAE2',
+  /** The Live Nearby pulse dot and its halo — reference greens in light,
+   *  the Prestige emerald family in dark. */
+  homeLive: '#0DBC5A',
+  homeLiveHalo: '#7DE7A4',
 
   text: '#1F2E22',
   textMuted: '#6B7566',
@@ -158,6 +166,9 @@ export const darkColors: ColorPalette = {
   ink: emeraldDark.ink,
   homeBackground: '#08110E',
   homeSlate: '#93A096',
+  homeHairline: '#55482E',
+  homeLive: emeraldDark.emerald,
+  homeLiveHalo: emeraldDark.mint2,
 
   text: '#F1EDE1',
   textMuted: '#93A096',

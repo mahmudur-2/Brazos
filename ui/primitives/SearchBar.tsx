@@ -181,7 +181,10 @@ export function SearchBar({
         accessibilityRole="search"
         accessibilityLabel={accessibilityLabel ?? placeholder}
       >
-        <Ionicons name="search" size={18} color={colors.emerald} />
+        {/* Masters 43 and 44 draw the search glyph cream, not gold (master 1's
+            gold glyph is that screen's own gold-heavy treatment); light keeps
+            its Heritage emerald. */}
+        <Ionicons name="search" size={18} color={isDark ? colors.ink : colors.emerald} />
         {/* Plain Text, not a disabled TextInput: a disabled input stays
             focusable on some platforms and reads as broken rather than as a
             button. */}
@@ -197,7 +200,7 @@ export function SearchBar({
 
   return (
     <View style={[styles.field, style]}>
-      <Ionicons name="search" size={18} color={colors.emerald} />
+      <Ionicons name="search" size={18} color={isDark ? colors.ink : colors.emerald} />
       <TextInput
         keyboardAppearance={isDark ? 'dark' : 'light'}
         style={[styles.input, showingInterim && styles.inputInterim]}

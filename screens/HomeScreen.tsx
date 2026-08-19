@@ -9,7 +9,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,7 +22,6 @@ import { useBidCounts } from '../hooks/useBidCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { alertAsync } from '../lib/dialog';
 import {
   categoryAccent,
   formatBudget,
@@ -37,10 +35,23 @@ import { greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
-import { colors, fonts, radius, shadows, spacing } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  shadows,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
+import { SearchBar } from '../ui/primitives';
 
+// Light keeps the approved Heritage brand crops; dark renders the Prestige
+// master-44 artwork (assets/prestige is dark-only by standing decision).
 const POST_MARK = require('../assets/brand/customer-home-post-mark-hd.png');
 const HOME_HERO_ART = require('../assets/brand/customer-home-chair.png');
+const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png');
+const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 const PREVIEW_COUNT = 4;
 const HOME_SERVICE_ROWS = [HOME_QUICK_SERVICES.slice(0, 2), HOME_QUICK_SERVICES.slice(2, 4)];
 
@@ -61,7 +72,8 @@ function previewNeighborhood(location: string): string {
   return location.split(',')[0]?.trim() || location;
 }
 
-/** Approved Emerald customer-home composition, retaining the existing data and routes. */
+/** Customer Home to golden master 44 (Prestige 1a), retaining the existing
+ *  data and routes; light keeps the approved Heritage composition. */
 export function HomeScreen() {
   const { profile } = useProfile();
   const { user } = useAuth();
@@ -70,10 +82,11 @@ export function HomeScreen() {
   const reducedMotion = useReducedMotion();
   const design = useHomeDesignSettings();
   const { switchMode, switching } = useMode();
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
-  const searchRef = useRef<TextInput>(null);
   const livePulse = useRef(new Animated.Value(0)).current;
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
@@ -106,7 +119,7 @@ export function HomeScreen() {
     ],
   };
 
-  // PHASE 2 WIRING (no visual change to this LOCKED screen).
+  // PHASE 2 WIRING (unchanged by the Prestige restyle).
   //
   // "View all" and the Live Nearby cards both used to push worker surfaces
   // (Worker Home / the worker bid screen) onto the customer's own Home stack —
@@ -162,14 +175,6 @@ export function HomeScreen() {
     navigation.getParent()?.navigate('Map');
   }
 
-  async function explainVoice() {
-    await alertAsync(
-      'Voice search is coming',
-      'Voice input is not switched on yet. Type what you need for now — the same smart matching runs either way.'
-    );
-    searchRef.current?.focus();
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <KeyboardAvoidingView
@@ -188,8 +193,8 @@ export function HomeScreen() {
         >
           <View style={styles.intro}>
             <Image
-              source={HOME_HERO_ART}
-              style={styles.homeHeroArt}
+              source={isDark ? PRESTIGE_HERO_ART : HOME_HERO_ART}
+              style={[styles.homeHeroArt, isDark && styles.homeHeroArtDark]}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
             />
@@ -201,7 +206,12 @@ export function HomeScreen() {
                     {firstName ? ',' : ''}
                   </Text>
                   {firstName ? (
-                    <Text style={styles.greeting} numberOfLines={1}>
+                    // Master 44: the name line carries the gold; light keeps
+                    // the Heritage slate.
+                    <Text
+                      style={[styles.greeting, isDark && styles.greetingName]}
+                      numberOfLines={1}
+                    >
                       {firstName}
                     </Text>
                   ) : null}
@@ -215,14 +225,17 @@ export function HomeScreen() {
                   accessibilityHint="Opens the jobs you can bid on"
                   accessibilityState={{ disabled: switching }}
                 >
-                  <Ionicons name="build" size={23} color={colors.forest} />
-                  <Text style={styles.modeSwitchText}>Switch to Worker</Text>
+                  <Ionicons name="build" size={23} color={isDark ? colors.emerald : colors.forest} />
+                  <Text style={[styles.modeSwitchText, isDark && styles.modeSwitchTextDark]}>
+                    Switch to Worker
+                  </Text>
                 </Pressable>
               </View>
 
               <Text
                 style={[
                   styles.headline,
+                  isDark && styles.headlineDark,
                   {
                     fontSize: design.heroFontSize,
                     lineHeight: Math.round(design.heroFontSize * (45 / 39)),
@@ -238,44 +251,34 @@ export function HomeScreen() {
             </View>
           </View>
 
-          <Pressable
+          {/* The shared SearchBar (Prestige 1a): the mic is the REAL voice
+              search, rendered only when the on-device boundary is available —
+              master 44's contract — replacing the old always-on stub that
+              apologised when tapped. The gold sparkle keeps the smart-matching
+              mark in the trailing slot. */}
+          <SearchBar
+            value={query}
+            onChangeText={setQuery}
+            onSubmit={submitSearch}
+            placeholder="Describe a service or project"
+            autoCapitalize="sentences"
+            autoCorrect
             style={[
               styles.searchField,
               { minHeight: design.searchHeight, borderRadius: design.searchRadius },
             ]}
-            onPress={() => searchRef.current?.focus()}
-            accessibilityRole="search"
-          >
-            <Ionicons name="search" size={27} color={colors.ink} />
-            <TextInput
-              ref={searchRef}
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              onSubmitEditing={submitSearch}
-              placeholder="Describe a service or problem"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="sentences"
-              returnKeyType="search"
-            />
-            <Pressable
-              onPress={explainVoice}
-              hitSlop={8}
-              style={styles.micButton}
-              accessibilityRole="button"
-              accessibilityLabel="Voice search"
-              accessibilityHint="Voice input is not available yet"
-            >
-              <Ionicons name="mic-outline" size={25} color={colors.forest} />
-            </Pressable>
-            <View style={styles.searchDivider} />
-            <Ionicons
-              name="sparkles"
-              size={23}
-              color={colors.gold}
-              accessibilityLabel="Smart matching is on"
-            />
-          </Pressable>
+            trailing={
+              <>
+                <View style={styles.searchDivider} />
+                <Ionicons
+                  name="sparkles"
+                  size={23}
+                  color={colors.gold}
+                  accessibilityLabel="Smart matching is on"
+                />
+              </>
+            }
+          />
 
           <View style={styles.serviceRows}>
             {HOME_SERVICE_ROWS.map((row, rowIndex) => (
@@ -287,7 +290,9 @@ export function HomeScreen() {
                     icon={service.icon}
                     variant="service"
                     style={[
-                      styles.goldOutlineChip,
+                      // Dark wears the Chip's own sage treatment (master 44);
+                      // light keeps the Heritage gold outline.
+                      !isDark && styles.goldOutlineChip,
                       rowIndex === 1 && styles.compactServiceChip,
                     ]}
                     onPress={() => searchCategory(service.key)}
@@ -299,7 +304,11 @@ export function HomeScreen() {
                     label="Other"
                     icon="chevron-down"
                     variant="service"
-                    style={[styles.goldOutlineChip, styles.compactServiceChip, styles.otherChip]}
+                    style={[
+                      !isDark && styles.goldOutlineChip,
+                      styles.compactServiceChip,
+                      styles.otherChip,
+                    ]}
                     onPress={() => setMoreOpen(true)}
                     accessibilityLabel="Other services"
                     accessibilityHint="Opens the full list of services"
@@ -309,11 +318,18 @@ export function HomeScreen() {
             ))}
           </View>
 
-          <View style={styles.heroCard}>
+          {/* Master 44's promo card: dark is a hairlined surface card with the
+              gold B drape and the screen's ONE solid-forest conversion pill
+              (decision 3); light keeps the Heritage forest card with its white
+              button and brand mark. */}
+          <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
             <View style={styles.heroBody}>
-              <View style={styles.heroCopy}>
+              <View style={[styles.heroCopy, isDark && styles.heroCopyDark]}>
                 <Text style={styles.heroEyebrow}>FASTEST WAY TO START</Text>
-                <Text style={styles.heroHeadline} maxFontSizeMultiplier={1.3}>
+                <Text
+                  style={[styles.heroHeadline, isDark && styles.heroHeadlineDark]}
+                  maxFontSizeMultiplier={1.3}
+                >
                   Describe the job. BRAZOS handles the rest.
                 </Text>
               </View>
@@ -321,6 +337,7 @@ export function HomeScreen() {
                 onPress={() => startJobDraft()}
                 style={({ pressed }) => [
                   styles.heroButton,
+                  isDark && styles.heroButtonDark,
                   {
                     minHeight: design.ctaHeight,
                     borderRadius: design.ctaRadius,
@@ -330,12 +347,14 @@ export function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Post a job"
               >
-                <Text style={styles.heroButtonText}>Post a job</Text>
+                <Text style={[styles.heroButtonText, isDark && styles.heroButtonTextDark]}>
+                  {isDark ? 'Post a job ›' : 'Post a job'}
+                </Text>
               </Pressable>
             </View>
             <Image
-              source={POST_MARK}
-              style={styles.heroMark}
+              source={isDark ? PRESTIGE_B_DRAPE : POST_MARK}
+              style={[styles.heroMark, isDark && styles.heroMarkDark]}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
             />
@@ -357,8 +376,8 @@ export function HomeScreen() {
                 accessibilityLabel="View map"
                 accessibilityHint="Opens the map of nearby work"
               >
-                <Ionicons name="location" size={17} color={colors.forest} />
-                <Text style={styles.mapPillText}>View map</Text>
+                <Ionicons name="location" size={17} color={isDark ? colors.emerald : colors.forest} />
+                <Text style={[styles.mapPillText, isDark && styles.mapPillTextDark]}>View map</Text>
               </Pressable>
               <Pressable
                 onPress={browseOpenJobs}
@@ -366,8 +385,12 @@ export function HomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="View all open jobs"
               >
-                <Text style={styles.viewAllText}>View all</Text>
-                <Ionicons name="arrow-forward" size={19} color={colors.forest} />
+                <Text style={[styles.viewAllText, isDark && styles.viewAllTextDark]}>View all</Text>
+                <Ionicons
+                  name="arrow-forward"
+                  size={19}
+                  color={isDark ? colors.emerald : colors.forest}
+                />
               </Pressable>
             </View>
 
@@ -439,6 +462,8 @@ function OpenJobCard({
   onPress: () => void;
 }) {
   const design = useHomeDesignSettings();
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
   const accent = categoryAccent(job.category);
   const [thumbFailed, setThumbFailed] = useState(false);
   const thumbUrl = jobThumbnailUrl(job);
@@ -457,6 +482,7 @@ function OpenJobCard({
       onPress={onPress}
       style={({ pressed }) => [
         styles.jobCard,
+        isDark && styles.jobCardDark,
         { borderRadius: design.jobCardRadius },
         pressed && styles.jobCardPressed,
       ]}
@@ -472,11 +498,19 @@ function OpenJobCard({
             onError={() => setThumbFailed(true)}
           />
         ) : (
-          <View style={[styles.jobThumb, styles.jobThumbFallback, { backgroundColor: accent.bg }]}>
+          // Masters (12/44): the no-photo tile is the deep-green tile with the
+          // gold category glyph in dark; light keeps the category accents.
+          <View
+            style={[
+              styles.jobThumb,
+              styles.jobThumbFallback,
+              isDark ? styles.jobThumbFallbackDark : { backgroundColor: accent.bg },
+            ]}
+          >
             <Ionicons
               name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
               size={28}
-              color={accent.icon}
+              color={isDark ? colors.gold : accent.icon}
             />
           </View>
         )}
@@ -486,8 +520,12 @@ function OpenJobCard({
               {job.title}
             </Text>
             <View style={styles.jobPriceBlock}>
-              <Text style={styles.jobPriceCaption}>EST. PRICE</Text>
-              <Text style={styles.jobPrice} numberOfLines={1}>
+              {/* Eyebrow law (decision 6): structural label gold in dark,
+                  money value emerald serif; light keeps the Heritage pair. */}
+              <Text style={[styles.jobPriceCaption, isDark && styles.jobPriceCaptionDark]}>
+                EST. PRICE
+              </Text>
+              <Text style={[styles.jobPrice, isDark && styles.jobPriceDark]} numberOfLines={1}>
                 {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
               </Text>
             </View>
@@ -519,8 +557,14 @@ function OpenJobCard({
       {similarToday > 0 ? (
         <View style={styles.jobMeta}>
           <View style={styles.demandRow}>
-            <Ionicons name="trending-up" size={16} color={colors.forest} />
-            <Text style={styles.demandText}>High demand in your area</Text>
+            <Ionicons
+              name="trending-up"
+              size={16}
+              color={isDark ? colors.emerald : colors.forest}
+            />
+            <Text style={[styles.demandText, isDark && styles.demandTextDark]}>
+              High demand in your area
+            </Text>
           </View>
           <Text style={styles.jobMetaText} numberOfLines={1}>
             {similarToday} similar {similarToday === 1 ? 'job' : 'jobs'} posted today
@@ -531,7 +575,8 @@ function OpenJobCard({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.homeBackground },
   flex: { flex: 1 },
   scroll: { flex: 1, backgroundColor: colors.homeBackground },
@@ -553,6 +598,7 @@ const styles = StyleSheet.create({
   },
   greetingBlock: { flexShrink: 1, gap: 2 },
   greeting: { fontSize: 18, fontWeight: '500', color: colors.homeSlate },
+  greetingName: { color: colors.gold },
   modeSwitch: {
     flexShrink: 0,
     flexDirection: 'row',
@@ -569,6 +615,7 @@ const styles = StyleSheet.create({
   // feedback lands on touch-down rather than after an animation starts.
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
+  modeSwitchTextDark: { color: colors.emerald },
   headline: {
     maxWidth: '73%',
     fontFamily: fonts.display,
@@ -578,6 +625,9 @@ const styles = StyleSheet.create({
     letterSpacing: -0.3,
     color: colors.ink,
   },
+  // The wider Prestige crop takes more of the band, so the headline holds a
+  // narrower column in dark — master 44 breaks it after 'off'.
+  headlineDark: { maxWidth: '62%' },
   heroSubtitle: {
     maxWidth: '73%',
     marginTop: spacing.sm,
@@ -586,25 +636,26 @@ const styles = StyleSheet.create({
     color: colors.homeSlate,
   },
   homeHeroArt: { position: 'absolute', zIndex: 0, width: 112, height: 124, right: -6, top: 47 },
+  // Master 44 gives the Prestige crop more of the headline band than the
+  // Heritage brand mark takes; same absolute box the approved composition
+  // already uses, dark-specific dimensions.
+  homeHeroArtDark: { width: 150, height: 132, right: -10, top: 34 },
+  // Laid over the shared SearchBar so the reference geometry wins; the input,
+  // clear control and (when available) the voice mic ride SearchBar itself.
   searchField: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.md,
-    minHeight: 70,
     paddingHorizontal: 18,
-    borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: '#F1EAE2',
+    borderColor: colors.homeHairline,
     backgroundColor: colors.surface,
     ...shadows.card,
   },
-  searchInput: { flex: 1, fontSize: 17, color: colors.ink, paddingVertical: 0 },
-  micButton: { minWidth: 36, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
   serviceRows: { gap: spacing.sm },
   serviceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
   // Same gold hairline as the "Switch to Worker" pill above, so the quick-
-  // service row reads as part of the same control family.
+  // service row reads as part of the same control family (light only — dark
+  // wears the Chip's sage treatment).
   goldOutlineChip: { borderWidth: 1.25, borderColor: colors.gold },
   compactServiceChip: { paddingHorizontal: 10 },
   // Fills whatever room is left in row 2 next to House Cleaning/TV Mounting —
@@ -618,8 +669,14 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     ...shadows.card,
   },
+  heroCardDark: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   heroBody: { padding: 16, gap: 12 },
   heroCopy: { gap: 4, paddingRight: 68 },
+  heroCopyDark: { paddingRight: 96 },
   heroEyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: colors.gold },
   heroHeadline: {
     fontFamily: fonts.display,
@@ -629,7 +686,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.white,
   },
+  heroHeadlineDark: { color: colors.ink },
   heroMark: { position: 'absolute', top: 12, right: 10, width: 79, height: 101 },
+  heroMarkDark: { top: 16, right: 8, width: 92, height: 75 },
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,
@@ -638,21 +697,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
+  heroButtonDark: { backgroundColor: colors.forest, borderWidth: 1, borderColor: colors.mint2 },
   heroButtonPressed: { opacity: 0.9 },
   heroButtonText: { fontFamily: fonts.display, fontSize: 24, fontWeight: '700', color: colors.forest },
+  heroButtonTextDark: { color: colors.onForest },
   section: { gap: 12 },
   liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   liveNearbyTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
-  sectionTitle: { fontSize: 22, fontWeight: '700', color: colors.ink },
+  sectionTitle: { fontFamily: fonts.display, fontSize: 22, fontWeight: '700', color: colors.ink },
   liveIndicator: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
   liveDotHalo: {
     position: 'absolute',
     width: 14,
     height: 14,
     borderRadius: radius.pill,
-    backgroundColor: '#7DE7A4',
+    backgroundColor: colors.homeLiveHalo,
   },
-  liveDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: '#0DBC5A' },
+  liveDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: colors.homeLive },
   mapPill: {
     flexShrink: 0,
     flexDirection: 'row',
@@ -662,26 +723,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: '#E7E3DB',
+    borderColor: colors.homeHairline,
     backgroundColor: colors.surface,
   },
   mapPillPressed: { opacity: 0.82 },
   mapPillText: { fontSize: 14, fontWeight: '600', color: colors.forest },
+  mapPillTextDark: { color: colors.emerald },
   viewAll: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44 },
   viewAllPressed: { opacity: 0.78 },
   viewAllText: { fontSize: 15, fontWeight: '600', color: colors.forest },
+  viewAllTextDark: { color: colors.emerald },
   cardList: { gap: spacing.md },
   jobCard: { borderRadius: 20, backgroundColor: colors.surface, overflow: 'hidden', ...shadows.card },
+  jobCardDark: { borderWidth: 1, borderColor: colors.border },
   jobCardPressed: { opacity: 0.9 },
   jobBody: { flexDirection: 'row', gap: spacing.md, padding: 14 },
   jobThumb: { width: 104, height: 104, borderRadius: radius.md, backgroundColor: colors.neutralBg },
   jobThumbFallback: { alignItems: 'center', justifyContent: 'center' },
+  jobThumbFallbackDark: { backgroundColor: colors.mint },
   jobMain: { flex: 1, gap: spacing.xs + 2 },
   jobHeadRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   jobTitle: { flex: 1, fontSize: 18, lineHeight: 22, fontWeight: '700', color: colors.ink },
   jobPriceBlock: { alignItems: 'flex-end', maxWidth: 102 },
   jobPriceCaption: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: colors.homeSlate },
-  jobPrice: { fontSize: 24, fontWeight: '800', color: colors.forest },
+  jobPriceCaptionDark: { color: colors.gold },
+  jobPrice: { fontFamily: fonts.display, fontSize: 24, fontWeight: '800', color: colors.forest },
+  jobPriceDark: { color: colors.emerald },
   jobPlaceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   jobPlace: { flex: 1, fontSize: 14, color: colors.homeSlate },
   jobFootRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: spacing.sm },
@@ -700,6 +767,7 @@ const styles = StyleSheet.create({
   },
   demandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, flexShrink: 1 },
   demandText: { fontSize: 13, fontWeight: '600', color: colors.forest },
+  demandTextDark: { color: colors.emerald },
   jobMetaText: { flexShrink: 1, fontSize: 13, color: colors.homeSlate },
   notice: { gap: spacing.xs },
   noticeError: { fontSize: 14, color: colors.danger },
@@ -718,4 +786,5 @@ const styles = StyleSheet.create({
   skeletonText: { flex: 1, gap: spacing.sm },
   skeletonLine: { height: 12 },
   skeletonLineShort: { width: '55%' },
-});
+  }),
+);
