@@ -107,19 +107,20 @@ function enclosingObject(source, index) {
   return null;
 }
 
-test('[static] the HotspotMap pin hairline is per-theme: gold in light, onForest in dark', () => {
+test('[static] the HotspotMap pin is master 33: forest fill, ONE gold hairline, cream count', () => {
   const source = stripComments(read('components/HotspotMap.native.tsx'));
-  // The base badge and tail carry the forest fill and border WIDTH only; the
-  // border COLOR arrives from exactly one of the two per-theme overrides.
+  // Golden master 33 rings the pin in gold. The per-theme split this carried
+  // under palette v1 existed because forest WAS the gold primary there, so a
+  // gold hairline vanished into its own fill; v2 restored forest to a deep
+  // green (guarded distinct below), which makes one rule correct in both.
   const badge = enclosingObject(source, source.indexOf('minWidth: 40'));
   assert.match(badge, /backgroundColor: colors\.forest/);
-  assert.doesNotMatch(badge, /borderColor/);
-  assert.match(source, /pinBadgeLight: \{\s*borderColor: colors\.gold,\s*\}/);
-  assert.match(source, /pinBadgeDark: \{\s*borderColor: colors\.onForest,\s*\}/);
-  assert.match(source, /pinTailLight: \{\s*borderColor: colors\.gold,\s*\}/);
-  assert.match(source, /pinTailDark: \{\s*borderColor: colors\.onForest,\s*\}/);
-  assert.match(source, /isDark \? styles\.pinBadgeDark : styles\.pinBadgeLight/);
-  assert.match(source, /isDark \? styles\.pinTailDark : styles\.pinTailLight/);
+  assert.match(badge, /borderColor: colors\.gold/);
+  const tail = enclosingObject(source, source.indexOf('marginTop: -5'));
+  assert.match(tail, /backgroundColor: colors\.forest/);
+  assert.match(tail, /borderColor: colors\.gold/);
+  // No per-theme override survives, in either direction.
+  assert.doesNotMatch(source, /pinBadgeLight|pinBadgeDark|pinTailLight|pinTailDark/);
   // The count itself already sat on onForest — that stays.
   assert.match(source, /pinCount: \{\s*color: colors\.onForest/);
 });

@@ -32,6 +32,7 @@ import { useMode } from '../modes';
 import type { MapStackNavigation } from '../lib/navigation';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import {
+  fonts,
   radius,
   shadows,
   spacing,
@@ -44,8 +45,10 @@ import {
 const INITIAL_LAT_DELTA = 0.08;
 
 export function MapScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // Master 33's chrome is gold line-work; light keeps the Heritage primary.
+  const accent = isDark ? colors.gold : colors.primary;
   const navigation = useNavigation<MapStackNavigation>();
   const { cells, loading, error, refresh } = useHotspots();
   const { mode } = useMode();
@@ -101,6 +104,13 @@ export function MapScreen() {
     if (!radiusApplied || !userLoc || radius == null) return cells;
     return cellsWithinMiles(cells, userLoc.lat, userLoc.lng, radius);
   }, [cells, radiusApplied, userLoc, radius]);
+
+  // Master 33's "N matching jobs" figure: the open-job counts of exactly the
+  // cells the map is showing. Derived, never a stand-in.
+  const visibleJobCount = useMemo(
+    () => visibleCells.reduce((total, cell) => total + cell.job_count, 0),
+    [visibleCells]
+  );
 
   const cellById = useMemo(() => {
     const map = new Map<string, HotspotCell>();
@@ -221,15 +231,62 @@ export function MapScreen() {
             mode === 'worker' ? (
               <Pressable
                 // Reuses the existing complete open-jobs list rather than
-                // duplicating it inside MapStack.
+                // duplicating it inside MapStack. Master 33 puts this at the
+                // header's right as a gold-outline squircle and repeats the
+                // same intent as the footer card's "View list".
                 onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
                 hitSlop={10}
+                style={({ pressed }) => [styles.squircle, pressed && styles.squirclePressed]}
+                accessibilityRole="button"
+                accessibilityLabel="See all jobs"
               >
-                <Text style={styles.seeAll}>See All Jobs</Text>
+                <Ionicons name="options-outline" size={20} color={accent} />
               </Pressable>
             ) : null
           }
         />
+      </View>
+
+      {/* Master 33's header card. Everything in it is real: the radius is the
+          persisted filter, the legend the lib/hotspots tiers. */}
+      <View style={styles.cardWrap}>
+        <View style={styles.mapCard}>
+          <Text style={styles.cardEyebrow}>MAP DISCOVERY</Text>
+          <Text style={styles.cardTitle}>Open jobs on the map</Text>
+
+          {isWorker && radius !== undefined ? (
+            <View style={styles.chipsWrap}>
+              <DistanceChips value={radius ?? null} onChange={selectRadius} />
+              {radiusUnavailable ? (
+                <Text style={styles.radiusNote}>
+                  Location is off — showing all areas.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
+          {/* The tier legend explains the customer glow overlay's colors.
+              Worker mode renders count-badged pins instead — the number IS
+              the legend — so the row would only describe something no longer
+              on screen. */}
+          {!isWorker ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.legend}
+              contentContainerStyle={styles.legendContent}
+            >
+              {HOTSPOT_TIERS.map((t) => (
+                <View key={t.key} style={styles.legendItem}>
+                  <View style={[styles.legendDot, { backgroundColor: t.stroke }]} />
+                  <Text style={[styles.legendLabel, { color: colors.textMuted }]}>
+                    {t.label}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          ) : null}
+        </View>
       </View>
 
       {error ? (
@@ -242,41 +299,6 @@ export function MapScreen() {
           </Pressable>
         </View>
       ) : null}
-
-      {/* B3: the persisted distance filter, over the map's pin set. Only
-          meaningful with a real position — a chosen radius with no location
-          is announced rather than silently ignored or faked. */}
-      {isWorker && radius !== undefined && (
-        <View style={styles.chipsWrap}>
-          <DistanceChips value={radius ?? null} onChange={selectRadius} />
-          {radiusUnavailable ? (
-            <Text style={styles.radiusNote}>
-              Location is off — showing all areas.
-            </Text>
-          ) : null}
-        </View>
-      )}
-
-      {/* The tier legend explains the customer glow overlay's colors. Worker
-          mode renders count-badged pins instead — the number IS the legend —
-          so the row would only describe something no longer on screen. */}
-      {!isWorker && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={[styles.legend, { borderBottomColor: colors.border }]}
-          contentContainerStyle={styles.legendContent}
-        >
-          {HOTSPOT_TIERS.map((t) => (
-            <View key={t.key} style={styles.legendItem}>
-              <View style={[styles.legendDot, { backgroundColor: t.stroke }]} />
-              <Text style={[styles.legendLabel, { color: colors.textMuted }]}>
-                {t.label}
-              </Text>
-            </View>
-          ))}
-        </ScrollView>
-      )}
 
       <View style={styles.mapWrap}>
         <HotspotMap
@@ -291,6 +313,41 @@ export function MapScreen() {
           onUserLocation={isWorker ? setUserLoc : undefined}
         />
       </View>
+
+      {/* Master 33's footer card. The count is the sum of the cells actually
+          in view — never a placeholder, and absent entirely while the read is
+          still in flight. */}
+      {!loading && !error ? (
+        <View style={styles.cardWrap}>
+          <View style={styles.mapCard}>
+            <Text style={styles.cardEyebrow}>NEAR YOU</Text>
+            <View style={styles.footerRow}>
+              <View style={styles.footerCopy}>
+                <Text style={styles.cardTitle}>
+                  {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
+                </Text>
+                <Text style={styles.footerSub}>
+                  List view remains the clearest way to compare.
+                </Text>
+              </View>
+              {isWorker ? (
+                <Pressable
+                  onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
+                  style={({ pressed }) => [
+                    styles.listPill,
+                    pressed && styles.squirclePressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="View the list of open jobs"
+                >
+                  <Text style={styles.listPillText}>View list</Text>
+                  <Ionicons name="arrow-forward" size={16} color={accent} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+        </View>
+      ) : null}
 
       {selected && (
         <View style={styles.sheet}>
@@ -399,21 +456,77 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   headerWrap: {
     backgroundColor: colors.background,
   },
-  seeAll: {
-    fontSize: 14,
+  // Master 33's gold-outline squircle control, at the header's right.
+  squircle: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  squirclePressed: { opacity: 0.8 },
+  // The two cards master 33 floats over the map: one above it, one below.
+  cardWrap: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+    backgroundColor: colors.background,
+  },
+  mapCard: {
+    gap: spacing.sm,
+    padding: spacing.lg - 2,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  cardEyebrow: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: colors.gold,
+  },
+  cardTitle: {
+    fontFamily: fonts.display,
+    fontSize: 24,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.ink,
+  },
+  footerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  footerCopy: { flex: 1, gap: 2 },
+  footerSub: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
+  },
+  listPill: {
+    flexShrink: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg - 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  listPillText: {
+    fontFamily: fonts.display,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.gold,
   },
   legend: {
     flexGrow: 0,
-    borderBottomWidth: 1,
-    // Opaque on purpose: without a background this strip inherited nothing
-    // and could read as a gap between header and map. Resolved palette now,
-    // matching the tiles, which follow the same theme (4D-4).
   },
   legendContent: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
     gap: spacing.md,
   },
   legendItem: {
@@ -484,12 +597,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.primary,
   },
+  // Inside the header card now (master 33), so it carries no gutter of its
+  // own and no background of its own.
   chipsWrap: {
-    backgroundColor: colors.background,
+    gap: spacing.xs,
   },
   radiusNote: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.sm,
     fontSize: 13,
     color: colors.textMuted,
   },

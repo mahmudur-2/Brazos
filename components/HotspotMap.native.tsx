@@ -174,10 +174,10 @@ export function HotspotMap({
                 accessibilityLabel={`${pin.count} open ${pin.count === 1 ? 'job' : 'jobs'} here`}
               >
                 <View style={styles.pinWrap}>
-                  <View style={[styles.pinBadge, isDark ? styles.pinBadgeDark : styles.pinBadgeLight]}>
+                  <View style={styles.pinBadge}>
                     <Text style={styles.pinCount}>{pin.count}</Text>
                   </View>
-                  <View style={[styles.pinTail, isDark ? styles.pinTailDark : styles.pinTailLight]} />
+                  <View style={styles.pinTail} />
                 </View>
               </Marker>
             ))
@@ -332,19 +332,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.forest,
     borderWidth: 1.5,
+    // Master 33 rings the pin in GOLD, and Prestige v2 restored `forest` to a
+    // deep green, so the per-theme split this carried under v1 (where forest
+    // WAS the gold primary and a gold hairline vanished into its own fill) no
+    // longer has a reason to exist. One rule, both palettes.
+    borderColor: colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // The hairline is per-theme because under Prestige `forest` IS the gold
-  // primary — a gold hairline vanishes into its own fill there. Light keeps
-  // the reference's gold, byte-identical; dark joins the count on onForest,
-  // which exists for content that must sit on a forest fill. Exactly one of
-  // the two applies, so the badge never renders borderWidth without a color.
-  pinBadgeLight: {
-    borderColor: colors.gold,
-  },
-  pinBadgeDark: {
-    borderColor: colors.onForest,
   },
   pinCount: {
     color: colors.onForest,
@@ -358,13 +352,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.forest,
     borderBottomWidth: 1.5,
     borderRightWidth: 1.5,
-    transform: [{ rotate: '45deg' }],
-  },
-  pinTailLight: {
     borderColor: colors.gold,
-  },
-  pinTailDark: {
-    borderColor: colors.onForest,
+    transform: [{ rotate: '45deg' }],
   },
   }),
 );
