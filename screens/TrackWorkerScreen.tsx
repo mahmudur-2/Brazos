@@ -19,7 +19,14 @@ import {
   type JobLifecycleState,
 } from '../lib/jobLifecycle';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 /**
@@ -40,7 +47,9 @@ const TIMELINE: { state: JobLifecycleState; label: string; caption: string }[] =
 ];
 
 export function TrackWorkerScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
+  // Master 14 draws this screen entirely in gold line-work.
+  const accent = isDark ? colors.gold : colors.emerald;
   const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'TrackWorker'>>();
@@ -123,8 +132,10 @@ export function TrackWorkerScreen() {
       sections={[
         {
           content: (
-            <View style={styles.noticeCard}>
-              <Ionicons name="navigate-outline" size={18} color={colors.emerald} />
+            <View style={[styles.noticeCard, isDark && styles.cardDark]}>
+              <View style={[styles.noticeGlyph, isDark && styles.noticeGlyphDark]}>
+                <Ionicons name="navigate-outline" size={18} color={accent} />
+              </View>
               <Text style={styles.noticeText}>
                 Status comes from {workerName ?? 'your worker'}’s own updates —
                 this build has no live location tracking, so what you see here
@@ -147,17 +158,27 @@ export function TrackWorkerScreen() {
                       <View
                         style={[
                           styles.timelineDot,
+                          isDark && styles.timelineDotPendingDark,
                           done && styles.timelineDotDone,
-                          isCurrent && styles.timelineDotCurrent,
+                          done && isDark && styles.timelineDotDoneDark,
+                          isCurrent && !isDark && styles.timelineDotCurrent,
                         ]}
                       >
                         {done ? (
-                          <Ionicons name="checkmark" size={12} color={colors.onPrimary} />
+                          <Ionicons
+                            name="checkmark"
+                            size={14}
+                            color={isDark ? colors.gold : colors.onPrimary}
+                          />
                         ) : null}
                       </View>
                       {index < TIMELINE.length - 1 ? (
                         <View
-                          style={[styles.timelineLine, index < currentIndex && styles.timelineLineDone]}
+                          style={[
+                            styles.timelineLine,
+                            index < currentIndex && styles.timelineLineDone,
+                            index < currentIndex && isDark && styles.timelineLineDoneDark,
+                          ]}
                         />
                       ) : null}
                     </View>
@@ -181,8 +202,10 @@ export function TrackWorkerScreen() {
               {
                 title: 'Scheduled window',
                 content: (
-                  <View style={styles.infoCard}>
-                    <Ionicons name="time-outline" size={18} color={colors.emerald} />
+                  <View style={[styles.infoCard, isDark && styles.cardDark]}>
+                    <View style={[styles.noticeGlyph, isDark && styles.noticeGlyphDark]}>
+                      <Ionicons name="time-outline" size={18} color={accent} />
+                    </View>
                     <Text style={styles.infoText}>{arrivalWindowLabel(job)}</Text>
                   </View>
                 ),
@@ -194,8 +217,10 @@ export function TrackWorkerScreen() {
               {
                 title: 'Payment',
                 content: (
-                  <View style={styles.paymentCard}>
-                    <Text style={styles.eyebrow}>SANDBOX — NO REAL MONEY</Text>
+                  <View style={[styles.paymentCard, isDark && styles.cardDark]}>
+                    <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
+                      SANDBOX — NO REAL MONEY
+                    </Text>
                     <MoneyText cents={payment.amount_cents} state={payment.status} />
                     {hasOpenDispute ? (
                       <Text style={styles.paymentNote}>
@@ -231,6 +256,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
     backgroundColor: colors.mint,
   },
+  // Master 14 draws every surface here as a hairlined card, and rings the
+  // notice's own send-glyph. Light keeps the Heritage sage wash.
+  cardDark: {
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  noticeGlyph: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeGlyphDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   noticeText: {
     flex: 1,
     fontSize: 13,
@@ -248,10 +290,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     width: 24,
   },
+  // Master 14's vertical timeline is line-work, exactly like master 17's
+  // horizontal stepper: a done node is the deep-green disc inside a GOLD ring
+  // with a gold check, the connector behind it gold. Light keeps the Heritage
+  // filled emerald node.
   timelineDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     borderWidth: 2,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -262,17 +308,34 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.emerald,
     backgroundColor: colors.emerald,
   },
+  timelineDotDoneDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: colors.forest,
+  },
   timelineDotCurrent: {
     borderColor: colors.forest,
   },
+  timelineDotPendingDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: colors.background,
+  },
+  // Expressed as a BORDER rather than a filled 2pt view: master 14's gold
+  // connector is line-work, and saying so in the style is what keeps the
+  // "gold never fills a control" scan honest instead of allow-listed.
   timelineLine: {
     width: 2,
     flex: 1,
     minHeight: 26,
-    backgroundColor: colors.border,
+    borderLeftWidth: 2,
+    borderLeftColor: colors.border,
   },
   timelineLineDone: {
-    backgroundColor: colors.emerald,
+    borderLeftColor: colors.emerald,
+  },
+  timelineLineDoneDark: {
+    borderLeftColor: colors.gold,
   },
   timelineCopy: {
     flex: 1,
@@ -280,7 +343,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   timelineLabel: {
-    fontSize: 15,
+    fontFamily: fonts.display,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.textMuted,
   },
@@ -321,6 +385,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.textMuted,
     letterSpacing: 0.8,
   },
+  eyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
   paymentNote: {
     fontSize: 13,
     color: colors.textMuted,

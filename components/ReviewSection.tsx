@@ -26,6 +26,7 @@ import {
 } from '../lib/reviews';
 import { deleteJobPhoto, uploadReviewPhoto } from '../lib/storage';
 import {
+  fonts,
   radius,
   spacing,
   themedStyles,
@@ -411,8 +412,10 @@ export function ReviewSection({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // Decision 9: a card heading is display type (master 15's "Your review").
   title: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 19,
     fontWeight: '700',
     color: colors.text,
   },
@@ -484,7 +487,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: spacing.md,
   },
   doneTitle: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 19,
     fontWeight: '700',
     color: colors.text,
   },
