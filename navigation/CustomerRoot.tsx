@@ -36,28 +36,48 @@ import {
  * trees unmounts every stack in this one, so coming back always starts at the
  * tab roots rather than wherever the user had wandered.
  *
- * PRESTIGE BAR (decision 4) + THE CREATION SLOT (D3):
- * `Home · Map · [ + ] · My Jobs · Messages · Profile`. The five tabs are
- * decision 4's — the same five the worker tree carries, in the same order,
- * Map never Discover. The centre [ + ] is the dark device pass reversing the
- * half of decision 4 that retired it: no golden master draws one, but posting
- * a job is the customer's whole reason for opening the app and it had been
- * pushed two taps behind a tab. It is an ACTION, not a destination — its
- * tabBarButton opens the creation sheet and never dispatches navigation, so
- * `Create` is never focused and never draws an active state. The three sheet
- * actions are exactly the ones it carried before 0d, and each still keeps the
- * standing surface 0d gave it, so the sheet is a shortcut and never the only
- * way to anything. The WORKER tree is untouched.
+ * THE CUSTOMER BAR (emerald D1) + THE CREATION SLOT (D3/D4):
+ * `Home · Discover · [ + ] · Messages · Profile` — five slots, of which four
+ * are destinations and one is an action.
  *
- * WHY Discover IS STILL REGISTERED, JUST HIDDEN
- * SavedWorkersScreen dispatches `navigateAcrossTabs('Discover',
- * 'WorkerSearch', …)` — an untargeted NAVIGATE that React Navigation 7
- * resolves against this tab navigator and its ancestors ONLY (it no longer
- * searches child navigators; see @react-navigation/core's useOnAction, which
- * gates child propagation on `action.target`) — so the browse surface must
- * stay a route on this navigator even though decision 4's bar gives it no
- * item. The Home stack still mounts WorkerSearch for the pushed-from-Home
- * search path, exactly as before.
+ * This REVERSES two earlier decisions, both on direct operator instruction:
+ *
+ *   1. **My Jobs is no longer a customer tab.** Decision 4 gave both trees the
+ *      same five tabs; the operator does not want My Jobs among the
+ *      customer's. Only the BAR ITEM went. The screen, the stack, the route
+ *      and every navigation into it are untouched, and the customer's standing
+ *      way in — the [ + ] sheet's "My jobs" action — is unchanged and pinned
+ *      by a test. The WORKER tree keeps its My Jobs tab.
+ *   2. **Map became Discover** — label, glyph AND destination — reversing
+ *      decision 4 / manifest Appendix B-2's "Map, never Discover". The
+ *      destination is not new: `DiscoverStackNavigator` below has existed
+ *      since 4D-1a as a registered-but-hidden route, rooted at the customer's
+ *      own browse surface (WorkerSearchScreen — real worker profiles,
+ *      categories and services, never job postings). D1 asked for "the old
+ *      discover icon / name / function"; the function was recovered rather
+ *      than invented, and the glyph is D1's magnifier.
+ *
+ * The centre [ + ] stays exactly as D3 built it and emerald D4 confirms it: an
+ * ACTION, not a destination — its tabBarButton opens the creation sheet and
+ * never dispatches navigation, so `Create` is never focused and never draws an
+ * active state. The three sheet actions are the ones it carried before 0d, and
+ * each still keeps a standing surface, so the sheet is a shortcut and never
+ * the only way to anything.
+ *
+ * WHY Map AND MyJobs ARE STILL REGISTERED, JUST HIDDEN
+ * Every remaining dispatch at them is an UNTARGETED NAVIGATE, which React
+ * Navigation 7 resolves against this tab navigator and its ancestors ONLY (it
+ * no longer searches child navigators; see @react-navigation/core's
+ * useOnAction, which gates child propagation on `action.target`). So the route
+ * has to exist on THIS navigator or the tap throws:
+ *   - `HomeScreen`'s "View map" pill → `getParent()?.navigate('Map')`
+ *   - the [ + ] sheet's "My jobs" → `navigateAcrossTabs('MyJobs')`
+ *   - notification routing → `TAB_FOR_SCREEN` sends ClientJobDetail, WorkerJob
+ *     and JobDetail through the `MyJobs` tab in BOTH trees
+ * Hiding the item (HIDDEN_TAB_ITEM_OPTIONS) removes the slot from the bar's
+ * layout without removing the route, which is why no deep link needed
+ * retargeting. The Home stack still mounts WorkerSearch for the
+ * pushed-from-Home search path, exactly as before.
  */
 
 const CustomerHomeStack = createNativeStackNavigator<CustomerHomeStackParamList>();
@@ -133,8 +153,13 @@ export function CustomerRoot() {
             both modes shared one stack and popping it could silently change
             mode. */}
         <Tab.Screen name="Home" component={CustomerHomeStackNavigator} />
-        <Tab.Screen name="Map" component={MapStackNavigator} options={{ tabBarLabel: 'Map' }} />
-        {/* D3's creation slot, dead centre of the six drawn slots. */}
+        {/* D1's slot: the browse surface, in the position Map used to hold. */}
+        <Tab.Screen
+          name="Discover"
+          component={DiscoverStackNavigator}
+          options={{ tabBarLabel: 'Discover' }}
+        />
+        {/* The creation slot, dead centre of the five drawn slots. */}
         <Tab.Screen
           name="Create"
           component={CreateActionScreen}
@@ -146,21 +171,22 @@ export function CustomerRoot() {
           }}
         />
         <Tab.Screen
-          name="MyJobs"
-          component={MyJobsStackNavigator}
-          options={{ tabBarLabel: 'My Jobs' }}
-        />
-        <Tab.Screen
           name="Messages"
           component={MessagesStackNavigator}
           options={{ tabBarLabel: 'Messages' }}
         />
         <Tab.Screen name="Profile" component={ProfileStackNavigator} />
-        {/* Hidden route — dispatchable, absent from the bar. See the header
-            comment for the contract that requires it. */}
+        {/* Hidden routes — dispatchable, absent from the bar. D1 took their bar
+            items, not their reachability. See the header comment for the four
+            live dispatches that require them to stay here. */}
         <Tab.Screen
-          name="Discover"
-          component={DiscoverStackNavigator}
+          name="Map"
+          component={MapStackNavigator}
+          options={HIDDEN_TAB_ITEM_OPTIONS}
+        />
+        <Tab.Screen
+          name="MyJobs"
+          component={MyJobsStackNavigator}
           options={HIDDEN_TAB_ITEM_OPTIONS}
         />
       </Tab.Navigator>

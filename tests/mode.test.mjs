@@ -284,32 +284,69 @@ test('the shell holds rather than guessing while the mode resolves', () => {
   assert.match(shell, /<ActivityIndicator/);
 });
 
-test('each tree carries the Prestige tab contract (decision 4 + D3)', () => {
+test('each tree carries its own tab contract (emerald D1 + D4)', () => {
   const tabs = (source) =>
     [...source.matchAll(/<Tab\.Screen\s+name="(\w+)"/g)].map((m) => m[1]);
-  // ONE bar: the same five DESTINATIONS in the same order in both trees —
-  // Map, never Discover (manifest Appendix B-2).
+  // The WORKER bar is untouched by D1 — decision 4's five, in order. Its Map
+  // is a JOB map and is correct.
   assert.deepEqual(tabs(workerRoot), ['Home', 'Map', 'MyJobs', 'Messages', 'Profile']);
-  // The customer tree carries D3's creation ACTION between Map and My Jobs —
-  // the dark device pass reversing the half of decision 4 that retired it.
-  // The five destinations and their order are unchanged around it.
+  // The CUSTOMER tree, after emerald D1: four destinations and one action
+  // drawn, two destinations registered-but-hidden. Registration order IS bar
+  // order, so the drawn five must come first and in exactly this sequence —
+  // Home · Discover · [ + ] · Messages · Profile.
   assert.deepEqual(tabs(customerRoot), [
     'Home',
-    'Map',
+    'Discover',
     'Create',
-    'MyJobs',
     'Messages',
     'Profile',
-    'Discover',
+    'Map',
+    'MyJobs',
   ]);
-  // Discover stays registered HIDDEN: SavedWorkers dispatches into it, and
-  // React Navigation 7 resolves untargeted NAVIGATEs on the tab navigator
-  // only. The hidden route is registered last so the bar order is the six.
-  assert.match(
+  // D1 reversal 1: My Jobs left the customer BAR. Not the route — see the
+  // reachability test below, which is the half that actually matters.
+  // D1 reversal 2: Map → Discover, reversing manifest B-2's "Map, never
+  // Discover". Both retired items keep their routes, hidden.
+  for (const hidden of ['Map', 'MyJobs']) {
+    assert.match(
+      customerRoot,
+      new RegExp(`name="${hidden}"[\\s\\S]{0,160}?options=\\{HIDDEN_TAB_ITEM_OPTIONS\\}`),
+      `${hidden} must stay registered on the customer tab navigator, hidden`
+    );
+  }
+  // ...and Discover is the VISIBLE one now, so the pair cannot be swapped back
+  // by accident: it carries a label, never the hidden options.
+  assert.match(customerRoot, /name="Discover"[\s\S]{0,160}?tabBarLabel: 'Discover'/);
+  assert.doesNotMatch(
     customerRoot,
-    /name="Discover"[\s\S]{0,120}?options=\{HIDDEN_TAB_ITEM_OPTIONS\}/
+    /name="Discover"[\s\S]{0,160}?options=\{HIDDEN_TAB_ITEM_OPTIONS\}/,
+    'Discover is a drawn tab since D1, not a hidden route'
   );
-  // D3 is CUSTOMER ONLY. The worker bar keeps the five-tab pill with no
+  // The bar-composition constants agree with the tree, so the pill and the
+  // navigator can never draw different sets. CUSTOMER_BAR_TABS holds only the
+  // DESTINATIONS; the action is spliced in at CUSTOMER_CREATE_SLOT.
+  assert.match(
+    bottomNav,
+    /export const CUSTOMER_BAR_TABS: BottomNavTabKey\[\] = \['Home', 'Discover', 'Messages', 'Profile'\];/
+  );
+  assert.match(bottomNav, /export const CUSTOMER_CREATE_SLOT = 2;/);
+  assert.match(
+    bottomNav,
+    /export const WORKER_BAR_TABS: BottomNavTabKey\[\] = \['Home', 'Map', 'MyJobs', 'Messages', 'Profile'\];/
+  );
+  // Splicing the action in at that index puts it dead centre of five slots.
+  const customerBar = ['Home', 'Discover', 'Messages', 'Profile'];
+  const drawn = [];
+  customerBar.forEach((key, index) => {
+    if (index === 2) drawn.push('[+]');
+    drawn.push(key);
+  });
+  assert.deepEqual(drawn, ['Home', 'Discover', '[+]', 'Messages', 'Profile']);
+  assert.equal(drawn[Math.floor(drawn.length / 2)], '[+]', 'the [ + ] is the centre slot');
+  // D1 names the glyph: a magnifier, not 4D-1a's compass and not Map's pin.
+  assert.match(bottomNav, /key: 'Discover'[^}]*icons: \['search', 'search-outline'\]/);
+  assert.match(bottomNav, /key: 'Map'[^}]*icons: \['location', 'location-outline'\]/);
+  // D4 is CUSTOMER ONLY. The worker bar keeps the five-tab pill with no
   // action slot and no sheet — asserted, not merely left unwritten.
   assert.doesNotMatch(workerRoot, /CenterCreateButton|name="Create"|ActionSheet/);
   // The slot is an ACTION, not a destination: its button replaces the
@@ -323,13 +360,60 @@ test('each tree carries the Prestige tab contract (decision 4 + D3)', () => {
   assert.match(workerRoot, /bottomNavScreenOptions\(insets\.bottom, palette\)/);
 });
 
-test('the locked customer Home "View map" dispatch still resolves on the tab navigator', () => {
-  // The LOCKED screen's pill dispatches an untargeted NAVIGATE at the tab
-  // navigator (getParent). React Navigation 7 resolves that against the tab
-  // navigator and its ancestors only — never child navigators — so the route
-  // must stay registered HERE (hidden), not inside the Home stack.
+test('the customer Home "View map" dispatch still resolves on the tab navigator', () => {
+  // Home's pill dispatches an untargeted NAVIGATE at the tab navigator
+  // (getParent). React Navigation 7 resolves that against the tab navigator
+  // and its ancestors only — never child navigators — so the route must stay
+  // registered HERE, not inside the Home stack. emerald D1 took Map's BAR
+  // ITEM; this is the assertion that its route survived, which is what keeps
+  // the pill from throwing NAVIGATE-not-handled.
   assert.match(home, /getParent\(\)\?\.navigate\('Map'\)/);
-  assert.match(customerRoot, /<Tab\.Screen name="Map" component=\{MapStackNavigator\}/);
+  assert.match(customerRoot, /name="Map"\s+component=\{MapStackNavigator\}/);
+  // Registered on the TAB navigator, not smuggled into a child stack.
+  const homeStack = customerRoot.slice(
+    customerRoot.indexOf('function CustomerHomeStackNavigator'),
+    customerRoot.indexOf('function DiscoverStackNavigator')
+  );
+  assert.doesNotMatch(homeStack, /name="Map"/);
+});
+
+test('a customer can still reach My Jobs after D1 took its tab', () => {
+  // THE test emerald D1 requires. Removing a bar item must not remove a
+  // destination: three independent paths to My Jobs have to survive, and each
+  // is pinned here rather than assumed.
+  //
+  // 1. The route is still registered on the customer tab navigator, so an
+  //    untargeted navigate('MyJobs') resolves.
+  assert.match(customerRoot, /name="MyJobs"\s+component=\{MyJobsStackNavigator\}/);
+  // 2. The [ + ] sheet's "My jobs" action still dispatches it, through the one
+  //    guarded cross-tab path.
+  const codeOnly = (source) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  const sheet = codeOnly(customerRoot);
+  assert.match(sheet, /key: 'my-jobs'/);
+  assert.match(sheet, /label: 'My jobs'/);
+  assert.match(sheet, /navigateAcrossTabs\('MyJobs'\)/);
+  // 3. Notification routing still lands there in BOTH trees: TAB_FOR_SCREEN
+  //    sends all three job destinations through the MyJobs tab, and that only
+  //    works because the route above stayed registered.
+  const notificationRoutes = read('lib/notificationRoutes.ts');
+  for (const screen of ['ClientJobDetail', 'WorkerJob', 'JobDetail']) {
+    assert.match(
+      notificationRoutes,
+      new RegExp(`${screen}: 'MyJobs',`),
+      `${screen} notifications must still route through the MyJobs tab`
+    );
+  }
+  // And the hub itself is untouched — D1 removed a tab slot, not a screen.
+  assert.match(read('navigation/sharedStacks.tsx'), /name="MyJobsHub" component=\{MyJobsHubScreen\}/);
+  // The WORKER tree keeps My Jobs as a drawn tab, so the removal is customer-
+  // only exactly as D1 says.
+  assert.match(workerRoot, /name="MyJobs"[\s\S]{0,160}?tabBarLabel: 'My Jobs'/);
+  assert.doesNotMatch(
+    workerRoot,
+    /name="MyJobs"[\s\S]{0,160}?HIDDEN_TAB_ITEM_OPTIONS/,
+    'the worker My Jobs tab must stay visible'
+  );
 });
 
 test('the [ + ] sheet is a shortcut: each action also keeps a standing surface', () => {
@@ -342,7 +426,9 @@ test('the [ + ] sheet is a shortcut: each action also keeps a standing surface',
   assert.match(read('screens/MyJobsHubScreen.tsx'), /navigate\('PostJob'\)/);
   // Hire someone again: SavedWorkers lives on the shared Profile stack.
   assert.match(read('navigation/sharedStacks.tsx'), /name="SavedWorkers"/);
-  // My jobs is a VISIBLE customer tab — asserted by the tab-contract test.
+  // My jobs: since emerald D1 the sheet is the customer's PRIMARY way in, not
+  // a shortcut past a tab — so its reachability gets its own test above rather
+  // than riding on the tab contract.
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   // Exactly those three, and every one dispatched through the ONE guarded

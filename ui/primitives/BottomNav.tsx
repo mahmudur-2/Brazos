@@ -24,26 +24,34 @@ import { glow, radius, themedStyles, useThemeColors, withAlpha, type ColorPalett
  * there, which is the point of the catalog.
  *
  * MODE AWARENESS lives in the two trees (navigation/CustomerRoot.tsx,
- * navigation/WorkerRoot.tsx). Since Prestige 0d (pre-made decision 4) both
- * bars carry the SAME five tabs in the same order — Home / Map / My Jobs /
- * Messages / Profile, Map never Discover (manifest Appendix B-2) — drawn as a
- * floating pill with an emerald active item under a soft glow.
+ * navigation/WorkerRoot.tsx). The two bars are no longer the same five tabs:
+ * emerald D1 gave the customer its own composition, and the worker kept 0d's.
+ * Both are drawn as a floating pill with an emerald active item under a soft
+ * glow.
  *
- * THE CENTER [ + ] IS BACK, CUSTOMER ONLY (dark device pass, D3). 0d retired
- * the 4D-era creation slot because no golden master draws one and each of its
- * three actions had a standing surface. The operator has reversed that half of
- * decision 4: posting a job is the customer's whole reason for opening the app
- * and it was two taps behind a tab. The slot returns between Map and My Jobs,
- * with exactly the three actions it carried before, and it is still an ACTION,
- * not a destination — its route is never focused and never draws active.
- * The WORKER bar is untouched: five tabs, no action slot. This is structural,
- * so unlike everything else in that pass it is visible in BOTH themes, and it
- * is a deliberate, recorded deviation from the golden-master set.
+ *   WORKER    Home · Map · My Jobs · Messages · Profile        (0d, unchanged)
+ *   CUSTOMER  Home · Discover · [ + ] · Messages · Profile     (emerald D1)
  *
- * The customer tree still REGISTERS Discover as a route — its bar item hidden
- * via HIDDEN_TAB_ITEM_OPTIONS — because SavedWorkers dispatches into it;
- * React Navigation 7 does not search child navigators for an untargeted
- * NAVIGATE, so the route must stay on the tab navigator itself.
+ * THE CENTER [ + ] IS BACK, CUSTOMER ONLY (dark device pass, D3; kept by
+ * emerald D4). 0d retired the 4D-era creation slot because no golden master
+ * draws one and each of its three actions had a standing surface. The operator
+ * reversed that half of decision 4: posting a job is the customer's whole
+ * reason for opening the app and it was two taps behind a tab. It is an
+ * ACTION, not a destination — its route is never focused and never draws
+ * active. This is structural, so unlike a paint change it is visible in BOTH
+ * themes, and it is a deliberate, recorded deviation from the master set.
+ *
+ * WHAT emerald D1 CHANGED, AND WHAT IT DELIBERATELY DID NOT
+ * The customer bar lost its My Jobs ITEM and its Map ITEM; it gained a
+ * Discover item pointing at the customer browse surface. Neither destination
+ * was deleted — both stay REGISTERED on the tab navigator behind
+ * HIDDEN_TAB_ITEM_OPTIONS, because React Navigation 7 resolves an untargeted
+ * NAVIGATE against the tab navigator and its ancestors only (never down into
+ * child navigators), so every existing dispatch — the [ + ] sheet's "My jobs",
+ * SavedWorkers' jump into Discover, the customer Home's "View map" pill, and
+ * all notification routing through the MyJobs tab — must find its route right
+ * there on the navigator. Removing a route to remove a bar item would have
+ * turned four working taps into crashes.
  */
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -64,23 +72,42 @@ export const BOTTOM_NAV_TABS: {
   { key: 'Map', label: 'Map', icons: ['location', 'location-outline'] },
   { key: 'MyJobs', label: 'My Jobs', icons: ['briefcase', 'briefcase-outline'] },
   // The customer's browse surface (workers and services — never job
-  // postings). A compass, per the 4D-1a dispatch: same slot the Map tab
-  // occupied, different promise.
-  { key: 'Discover', label: 'Discover', icons: ['compass', 'compass-outline'] },
+  // postings). A MAGNIFIER, not the compass 4D-1a gave it and not the map pin
+  // Map keeps: emerald D1 names the search glyph explicitly, and searching is
+  // what the destination underneath (WorkerSearchScreen) actually does.
+  { key: 'Discover', label: 'Discover', icons: ['search', 'search-outline'] },
   { key: 'Messages', label: 'Messages', icons: ['chatbubbles', 'chatbubbles-outline'] },
   { key: 'Profile', label: 'Profile', icons: ['person', 'person-outline'] },
 ];
 
-/** The worker bar — the five classic tabs, unchanged. */
+/** The worker bar — the five classic tabs, unchanged. Its Map is a JOB map and
+ *  is correct; emerald D1 touches the customer bar only. */
 export const WORKER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Messages', 'Profile'];
 
-/** The customer bar — decision 4's same five as the worker bar, with D3's
- *  creation ACTION raised between them at CUSTOMER_CREATE_SLOT. Kept as its
- *  own export (not an alias) so the trees keep naming their own contract. */
-export const CUSTOMER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Messages', 'Profile'];
+/**
+ * The customer bar — FOUR destinations plus D4's creation ACTION, drawn as the
+ * five slots emerald D1 specifies: `Home · Discover · [ + ] · Messages ·
+ * Profile`.
+ *
+ * Two operator reversals live in this one line, both deliberate:
+ *   - **My Jobs left the customer bar.** The screen, its route and every
+ *     navigation to it are untouched — only the bar ITEM is gone. The customer
+ *     reaches it through the [ + ] sheet's "My jobs" action, and the route
+ *     stays registered (hidden) on the tab navigator so notification routing
+ *     and every cross-tab jump still resolve. tests/mode.test.mjs asserts both
+ *     halves of that.
+ *   - **Map became Discover**, reversing decision 4 / manifest B-2's "Map,
+ *     never Discover". Label, glyph AND destination: the slot now points at
+ *     the customer's own browse surface (the Discover stack, rooted at
+ *     WorkerSearchScreen) rather than the shared job map. Map itself stays
+ *     REGISTERED and hidden — the customer Home's "View map" pill dispatches
+ *     it, so removing the route would break that tap.
+ */
+export const CUSTOMER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Discover', 'Messages', 'Profile'];
 
-/** Where the [ + ] sits in CUSTOMER_BAR_TABS — after Map, before My Jobs, so
- *  it lands dead centre of the six slots the customer bar actually draws. */
+/** Where the [ + ] sits in CUSTOMER_BAR_TABS — after Discover, before
+ *  Messages, so it lands dead centre of the five slots the customer bar
+ *  actually draws. */
 export const CUSTOMER_CREATE_SLOT = 2;
 
 const TAB_BY_KEY = new Map(BOTTOM_NAV_TABS.map((tab) => [tab.key as string, tab]));
@@ -253,20 +280,22 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
  * installed @react-navigation/bottom-tabs 7.18.3 BottomTabBar.js, which merges
  * `tabBarItemStyle` onto each item's container).
  *
- * The customer tree uses this for Discover: SavedWorkersScreen dispatches
- * `navigateAcrossTabs('Discover', 'WorkerSearch', …)` — an untargeted
- * NAVIGATE handled by the tab navigator itself, which React Navigation 7
- * never forwards down into child navigators — so the browse surface must
- * stay registered on the navigator even though decision 4's five-tab bar
- * (Map, never Discover) gives it no bar item.
+ * The customer tree uses this for the two destinations emerald D1 took off its
+ * bar — `Map` and `MyJobs`. Both are still dispatched by live code
+ * (HomeScreen's "View map" pill via getParent(), the [ + ] sheet's "My jobs",
+ * and every notification whose TAB_FOR_SCREEN entry is MyJobs), and all of
+ * those are untargeted NAVIGATEs handled by the tab navigator itself, which
+ * React Navigation 7 never forwards down into child navigators. So the routes
+ * must stay registered on the navigator even though the bar draws no item for
+ * them. Discover was hidden this way before D1 and is now the visible slot.
  */
 export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
   tabBarItemStyle: { display: 'none' },
 };
 
 /**
- * D3's customer creation slot: a raised disc between Map and My Jobs that
- * OPENS A SHEET rather than navigating.
+ * The customer creation slot (D3, kept by emerald D4): a raised disc between
+ * Discover and Messages that OPENS A SHEET rather than navigating.
  *
  * The gold is LINE-WORK — a gold ring and a gold glyph on the deep-green
  * conversion fill — not a gold fill. Decision 3 forbids gold fills and

@@ -457,9 +457,22 @@ export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParam
 /** The customer tree. §F's `CustomerParamList`. */
 export type CustomerParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
+  /**
+   * HIDDEN route since emerald D1 — registered and dispatchable, absent from
+   * the bar. The customer Home's "View map" pill dispatches it with an
+   * untargeted `getParent()?.navigate('Map')`, which React Navigation 7
+   * resolves on the tab navigator only, so the route stays here. The WORKER
+   * tree still draws Map as a visible tab.
+   */
   Map: NavigatorScreenParams<MapStackParamList> | undefined;
-  /** Hosts the whole customer hire + active-work loop and every notification
-   *  / cross-tab jump that targets the MyJobs tab. */
+  /**
+   * HIDDEN route since emerald D1 — registered and dispatchable, absent from
+   * the bar. Still hosts the whole customer hire + active-work loop and every
+   * notification / cross-tab jump that targets the MyJobs tab
+   * (lib/notificationRoutes.ts's TAB_FOR_SCREEN sends ClientJobDetail,
+   * WorkerJob and JobDetail through it in BOTH trees), plus the [ + ] sheet's
+   * "My jobs" action. Losing the bar item cost none of that.
+   */
   MyJobs: NavigatorScreenParams<MyJobsStackParamList> | undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
@@ -473,10 +486,11 @@ export type CustomerParamList = {
    */
   Create: undefined;
   /**
-   * HIDDEN route — registered, dispatchable, absent from the bar
-   * (HIDDEN_TAB_ITEM_OPTIONS in ui/primitives/BottomNav.tsx): the customer
-   * browse surface (workers and services, never job postings). SavedWorkers
-   * dispatches into it, so it must stay on the tab navigator.
+   * VISIBLE customer tab since emerald D1, in the slot Map used to hold: the
+   * customer browse surface (workers and services, never job postings). It was
+   * registered-but-hidden from 4D-1a until D1 — SavedWorkers has always
+   * dispatched into it — so D1 gave a bar item to an existing destination
+   * rather than inventing a screen.
    */
   Discover: NavigatorScreenParams<DiscoverStackParamList> | undefined;
 };
