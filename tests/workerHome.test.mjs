@@ -373,6 +373,150 @@ test('T6: one availability writer on the mounted worker surface — the server-s
   assert.deepEqual(users.sort(), ['screens/BrowseJobsScreen.tsx']);
 });
 
+// ---------------------------------------------------------------------------
+// emerald D5 — the shared toggle, and the bug underneath it
+// ---------------------------------------------------------------------------
+//
+// The device pass found Worker Home's "Online" and Services & availability's
+// "Taking new work" disagreeing. They are the SAME phase53 accepting_work
+// fact. D5 requires that track colour and knob position derive from one
+// boolean in one place, and that the two surfaces cannot diverge. Both halves
+// are asserted here: the control cannot express a contradiction, and the fact
+// behind it is singular.
+
+test('D5: the toggle track is state-blind in dark, and only the knob carries state', async () => {
+  const toggle = stripComments(await read('ui/primitives/Toggle.tsx'));
+
+  // THE TRACK. In dark it is a neutral surface under the ordinary hairline,
+  // identical ON and OFF — written without a `value` term at all, so it is not
+  // merely the same colour today but structurally unable to carry state.
+  const trackColor = toggle.match(/const trackColor = ([^;]+);/);
+  assert.ok(trackColor, 'Toggle must resolve a track colour');
+  const darkBranch = trackColor[1].slice(0, trackColor[1].indexOf('?') + 1 || undefined);
+  assert.match(trackColor[1], /isDark \? palette\.neutralBg/);
+  assert.doesNotMatch(
+    darkBranch,
+    /\bvalue\b/,
+    'the dark track must not depend on the toggle value'
+  );
+  // D5 retires red from this control outright, and no emerald track in dark.
+  assert.doesNotMatch(
+    trackColor[1].split(':')[0] + trackColor[1].match(/isDark \? [^:]+/)[0],
+    /palette\.danger|palette\.emerald/,
+    'the dark track may be neither the danger red nor emerald'
+  );
+
+  // THE KNOB. Gold and glowing when ON, cream when OFF — every part of it
+  // reading the same `value`, and the position doing the same.
+  assert.match(toggle, /const knobColor = isDark[\s\S]{0,120}?value[\s\S]{0,80}?withAlpha\(palette\.gold, 0\.92\)/);
+  assert.match(toggle, /const knobBorder = isDark && value \? palette\.gold : 'transparent';/);
+  assert.match(toggle, /const knobGlow = isDark && value \? glow\.halo\(withAlpha\(palette\.gold, 0\.55\)\) : null;/);
+  assert.match(toggle, /toValue: value \? 1 : 0/);
+  assert.match(toggle, /outputRange: \[0, TRAVEL\]/);
+
+  // GOLD IS LINE-WORK. The knob's face is a TINT and its ring is the metal, so
+  // tests/goldOnForest.test.mjs's "no gold fill" rule holds without an
+  // allowlist entry — the compromise D5 names.
+  assert.doesNotMatch(
+    toggle,
+    /backgroundColor:\s*\w+\.gold\b/,
+    'the ON knob must be a gold ring over a gold tint, never a gold fill'
+  );
+
+  // LIGHT IS UNTOUCHED: the Heritage arrangement is still emerald track,
+  // white knob, no rim.
+  assert.match(trackColor[1], /value \? palette\.emerald : palette\.border/);
+  assert.match(toggle, /: palette\.white;/);
+});
+
+test('D5: the two availability toggles cannot show different states', async () => {
+  const [servicesScreen, useProfileHook] = await Promise.all([
+    read('screens/ServicesPricingScreen.tsx'),
+    read('hooks/useProfile.ts'),
+  ]);
+  const servicesCode = stripComments(servicesScreen);
+  const hookCode = stripComments(useProfileHook);
+
+  // 1. ONE EXPRESSION. Both screens derive the boolean the same way from the
+  //    same field, and hand it to the same shared control unmodified.
+  for (const [path, source] of [
+    ['screens/WorkerHomeScreen.tsx', code],
+    ['screens/ServicesPricingScreen.tsx', servicesCode],
+  ]) {
+    assert.match(
+      source,
+      /const accepting = profile\?\.accepting_work \?\? true;/,
+      `${path} must read the availability fact exactly one way`
+    );
+    assert.match(source, /<Toggle\s+value=\{accepting\}/, `${path} must pass it unmodified`);
+  }
+
+  // 2. ONE COPY OF THE ROW. This is what actually diverged: each screen used
+  //    to hold its own profile state, and Services & availability re-fetches
+  //    on focus while Worker Home did not — so a write on one was invisible to
+  //    the other until the app restarted. useProfile is a shared store now.
+  assert.match(hookCode, /useSyncExternalStore\(subscribe, getSnapshot\)/);
+  assert.match(hookCode, /const listeners = new Set<\(\) => void>\(\);/);
+  assert.match(hookCode, /function publish\(next: Partial<ProfileSnapshot>\)/);
+  assert.doesNotMatch(
+    servicesCode,
+    /useState<Profile \| null>/,
+    'Services & availability must not hold a private copy of the profile row'
+  );
+  assert.match(servicesCode, /const \{ profile, setProfile \} = useProfile\(\);/);
+  assert.match(code, /const \{ profile, setProfile \} = useProfile\(\);/);
+
+  // 3. AND BOTH WRITES PUBLISH. A save on either screen reaches the other
+  //    without a round-trip, which is the half a shared read alone misses.
+  assert.match(code, /if \(data\) setProfile\(data\);/);
+  assert.match(servicesCode, /if \(data\) setProfile\(data\);/);
+});
+
+test('D5: every notification preference uses the same shared toggle', async () => {
+  // D5 covers Worker Home availability, Services & availability, and all five
+  // notification preferences — so none of them may be a hand-rolled switch
+  // with its own state colours.
+  const prefs = stripComments(await read('screens/NotificationSettingsScreen.tsx'));
+  assert.match(prefs, /import \{ Toggle, useFloatingNavClearance \} from '\.\.\/ui\/primitives';/);
+  assert.doesNotMatch(prefs, /<Switch\b/, 'no screen may reintroduce the native Switch');
+  // The five rows are ONE <Toggle> mapped over the preference list, which is
+  // why they cannot drift from each other in the first place.
+  assert.match(prefs, /NOTIFICATION_TOGGLES\.map\(\(item, index\) => \{/);
+  assert.match(prefs, /<Toggle\b/);
+  const keys = [
+    ...stripComments(await read('lib/notificationPrefs.ts')).matchAll(/^\s{4}key: '(\w+)'/gm),
+  ];
+  assert.ok(keys.length >= 5, `expected the five preference keys, saw ${keys.length}`);
+  // Every surface D5 NAMES is on the shared control, and the native Switch
+  // survives in exactly two places, both outside that scope. Pinned as a set
+  // rather than asserted empty, so a NEW hand-rolled switch is still a
+  // failure while these two stay honestly recorded:
+  //   - BrowseJobsScreen: the atlas-48 screen, UNMOUNTED since 4D-1b.
+  //   - SetupScreen: the onboarding permission rows. Part of the auth flow,
+  //     which has no dark treatment at all (see themeResolution's auth test),
+  //     so a dark toggle there would be the only dark control on a light
+  //     screen. Logged for the operator rather than converted under D5.
+  const switchUsers = [];
+  for (const file of sourceFiles) {
+    if (/<Switch\b/.test(stripComments(await read(file)))) switchUsers.push(file);
+  }
+  assert.deepEqual(switchUsers.sort(), [
+    'screens/BrowseJobsScreen.tsx',
+    'screens/SetupScreen.tsx',
+  ]);
+  for (const path of [
+    'screens/WorkerHomeScreen.tsx',
+    'screens/ServicesPricingScreen.tsx',
+    'screens/NotificationSettingsScreen.tsx',
+  ]) {
+    assert.doesNotMatch(
+      stripComments(await read(path)),
+      /<Switch\b/,
+      `${path} is in D5's scope and must use the shared Toggle`
+    );
+  }
+});
+
 test('T7: the worker Home stack keeps its routes, in order, minus BrowseJobs', () => {
   const names = [
     ...stripComments(workerRoot).matchAll(/<WorkerHomeStack\.Screen\s+name="([^"]+)"/g),

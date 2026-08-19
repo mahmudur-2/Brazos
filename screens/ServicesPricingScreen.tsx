@@ -7,6 +7,7 @@ import { Toggle } from '../ui/primitives';
 import { FormScreen } from '../ui/templates/FormScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
+import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { dollarsToCents, JOB_CATEGORIES, JOB_CATEGORY_LABELS } from '../lib/jobs';
@@ -21,7 +22,7 @@ import {
   type ServicePriceUnit,
   type WorkerService,
 } from '../lib/services';
-import { fetchMyProfile, updateProfile, type Profile } from '../lib/profiles';
+import { fetchMyProfile, updateProfile } from '../lib/profiles';
 import {
   fonts,
   radius,
@@ -44,7 +45,12 @@ export function ServicesPricingScreen() {
   const styles = stylesFor(colors);
   const { user } = useAuth();
 
-  const [profile, setProfile] = useState<Profile | null>(null);
+  // emerald(6)/D5: the availability fact has ONE home. This screen used to
+  // hold its own private copy of the profile row, which is why its "Taking new
+  // work" toggle and Worker Home's "Online" toggle could show different states
+  // of the same phase53 accepting_work field. Both read the shared store now,
+  // and this screen's own fetch publishes into it.
+  const { profile, setProfile } = useProfile();
   const [services, setServices] = useState<WorkerService[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);

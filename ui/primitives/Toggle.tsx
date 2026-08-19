@@ -1,28 +1,43 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Platform, Pressable, StyleSheet } from 'react-native';
-import { radius, useThemeColors, withAlpha } from '../../lib/theme';
+import { glow, radius, useThemeColors, withAlpha } from '../../lib/theme';
 
 /**
- * The one toggle (Prestige, pre-made decision 7): a cream knob in BOTH
- * states; ON rides the emerald track under a gold hairline rim, OFF the
- * danger red. Light keeps its Heritage arrangement — emerald track, white
- * knob, no rim.
+ * The one toggle. In dark: a NEUTRAL track that never changes colour, and a
+ * knob that carries the whole state — gold and glowing when ON, cream when
+ * OFF, sliding left to right as normal. Light keeps its Heritage arrangement
+ * untouched: emerald track, white knob, no rim.
  *
- * DARK STATE COLOUR IS AN OPERATOR CALL (dark device pass, D1). On a real
- * phone the mint ON-track and the near-black OFF-track were the same dark
- * green smudge — the control read as decoration, not as state. ON now takes
- * the emerald the Worker Home potential-earnings figure uses and OFF takes
- * the danger token, the same red master 43 gives its offline dot. This
- * deliberately deviates from the set's "no master uses a red control" note:
- * the toggle is the one control whose OFF state is a fact the user must be
- * able to read at a glance (they are invisible to customers), and the same
- * master pairs that fact with that red two rows below. Light is untouched.
+ * emerald D5 REVERSES THE PREVIOUS RUN'S D1 ENTIRELY. That pass had made the
+ * dark track emerald when ON and DANGER RED when OFF, arguing that a worker's
+ * offline state must be legible at a glance. Masters 23 and 43 agree with each
+ * other and neither draws it that way; the emerald/red pairing has no master
+ * support at all. Red is retired from this control. "Not taking new work" is a
+ * choice, not an error, and colouring it like a failure was the one thing the
+ * masters were unanimous about not doing.
+ *
+ * WHY A NEUTRAL TRACK FIXES A BUG AND NOT JUST A COLOUR. The device pass found
+ * Worker Home's "Online" and Services & availability's "Taking new work"
+ * disagreeing — the same phase53 `accepting_work` fact, read by two screens,
+ * showing two different colours. With the track carrying state, ANY two
+ * surfaces that derive a colour from that fact can contradict each other, and
+ * the toggle sits beside other derivations of the same boolean (a pulse dot, a
+ * status word, a visibility line). With the track constant, there is nothing
+ * left for a second derivation to disagree WITH: the knob's colour and the
+ * knob's position are the only stateful things here, and both read the same
+ * `value` prop through the same `position` animation. tests/mode.test.mjs
+ * pins that, and pins that both screens hand this control the identical
+ * expression.
+ *
+ * THE GOLD KNOB IS LINE-WORK, NOT A FILL. Decision 3 forbids gold fills and
+ * tests/goldOnForest.test.mjs enforces it tree-wide, so the ON knob is a gold
+ * RING around a gold-TINTED face under a gold halo — the compromise emerald
+ * D5 names, and the same resolution prestige(4b) and fidelity(6) reached for
+ * the timeline connector and the centre [ + ]. It is NOT allowlisted.
  *
  * Drawn rather than RN's Switch because the masters' rim cannot exist there:
  * iOS ignores any attempt to border the native track, and per-platform
  * track/thumb props were producing three different toggles across the app.
- * The decision resolves conflict B-5 (gold knob on 23 vs cream on 39) — the
- * knob is cream everywhere; only the rim is gold.
  *
  * Same call shape as the Switch sites it replaced: value / onValueChange /
  * disabled / accessibilityLabel. The 44pt touch floor is met with hitSlop
@@ -55,11 +70,24 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
     }).start();
   }, [position, value]);
 
-  // ON is emerald in both palettes (light already was); OFF is the danger red
-  // in dark and keeps the Heritage neutral border in light.
-  const trackColor = value ? palette.emerald : isDark ? palette.danger : palette.border;
-  const rimColor = value && isDark ? withAlpha(palette.gold, 0.6) : 'transparent';
-  const knobColor = isDark ? palette.onPrimary : palette.white;
+  // THE TRACK IS STATE-BLIND IN DARK (D5). Deliberately written without a
+  // `value` term so it is not merely the same colour today but structurally
+  // incapable of carrying state: a neutral dark surface under the ordinary
+  // hairline, identical ON and OFF. Light is untouched and keeps its Heritage
+  // emerald-when-on track.
+  const trackColor = isDark ? palette.neutralBg : value ? palette.emerald : palette.border;
+  const trackBorder = isDark ? palette.border : 'transparent';
+
+  // ...so the KNOB carries the whole state, and every part of it reads the one
+  // `value` prop. Gold as line-work: a gold ring around a gold-tinted face,
+  // never a gold fill (decision 3 / tests/goldOnForest.test.mjs).
+  const knobColor = isDark
+    ? value
+      ? withAlpha(palette.gold, 0.92)
+      : palette.onPrimary
+    : palette.white;
+  const knobBorder = isDark && value ? palette.gold : 'transparent';
+  const knobGlow = isDark && value ? glow.halo(withAlpha(palette.gold, 0.55)) : null;
 
   return (
     <Pressable
@@ -71,14 +99,15 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
       accessibilityState={{ checked: value, disabled }}
       style={[
         styles.track,
-        { backgroundColor: trackColor, borderColor: rimColor },
+        { backgroundColor: trackColor, borderColor: trackBorder },
         disabled && styles.disabled,
       ]}
     >
       <Animated.View
         style={[
           styles.knob,
-          { backgroundColor: knobColor },
+          { backgroundColor: knobColor, borderColor: knobBorder },
+          knobGlow,
           {
             transform: [
               {
@@ -108,6 +137,9 @@ const styles = StyleSheet.create({
     width: KNOB,
     height: KNOB,
     borderRadius: radius.pill,
+    // The ring is always drawn so the knob's geometry does not shift by a
+    // pixel between states; only its colour changes (transparent when OFF).
+    borderWidth: 1,
   },
   disabled: {
     opacity: 0.5,
