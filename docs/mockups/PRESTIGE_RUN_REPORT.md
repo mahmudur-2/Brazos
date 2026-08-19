@@ -991,3 +991,539 @@ light run's scope.
 Payment methods' two new section cards, the budget-string unification, the curly
 quotes in the notification-radius heading, `AppearanceScreen`'s serif row label,
 `PostJobScreen`'s serif headings, and the centre [ + ] itself.
+
+---
+
+# Emerald correction pass 2026-08-19
+
+A dark-mode device pass on a physical iPhone produced 38 screenshots. This run
+fixes what they show plus five direct operator instructions. Both structural and
+presentational work was in scope — this was **not** a paint-only run.
+
+## (0) THE MASTER SET IS SPLIT — read this before citing any mockup
+
+**Binding design authority, highest first:**
+
+1. **NUMBERED masters only** — `docs/mockups/1_*.png` … `docs/mockups/44_*.png`.
+2. The emerald dispatch's pre-made decisions (D1–D11).
+3. This run report — a "mismatch" logged here is CORRECT and must not be reverted.
+4. `docs/mockups/BRAZOS_MOCKUP_MANIFEST.md`.
+
+**WORD-NAMED masters are NOT authority. The operator has explicitly REJECTED
+them** as an over-ornate render pass:
+
+`Compare_Bids_Dark.png` · `Discover_Map_Dark.png` · `Messages_Inbox_Dark.png` ·
+`My_Jobs_Active_Dark.png` · `My_Jobs_Closed_Dark.png` ·
+`My_Jobs_In_Progress_Dark.png` · `Notifications_Feed_Dark.png` ·
+`Notifications_Preferences_Dark.png` · `Payment_Methods_Dark.png` ·
+`Profile_Account_Safety_Dark.png` · `Profile_Details_Dark.png` ·
+`Profile_Past_Work_Settings_Dark.png`
+
+Never cite one to justify a change. Never "restore" a detail that appears only
+there. Where a numbered master is silent you may read one to understand intent,
+but the change must still be justified by a numbered master, the dispatch, or
+this report — and the fact that you read one gets logged.
+
+**There is NO master for light mode.** Every mockup is dark. Never align a light
+surface to a mockup.
+
+**Numbered masters that do not exist on disk** (verified by listing
+`docs/mockups/` at run start): 21, 28, 33–42, 45, 46. The dispatch cites 33, 34,
+39, 40, 45 and 46; those citations are unbacked by any numbered file and were
+treated as silent. Every one of them concerns something D9 freezes as UNBUILT
+anyway, so nothing was lost. Present and usable: 1–20, 22–27, 29–32, 43, 44.
+
+## (a) FIRST REPORT LINE — the locked set and deny rules AS READ AT RUN START
+
+Read from `CLAUDE.md`, `.claude/settings.json`, `.claude/hooks/guard.ps1` and
+`.claude/hooks/session-context.ps1` before any file was changed.
+
+### The CURRENT locked-screen set: **EMPTY. No screen is locked.**
+
+`CLAUDE.md` § "Locked — never modify" reads, verbatim:
+
+> None. All screens unlocked 2026-08-19 for the Prestige dark sweep.
+> `screens/BrowseJobsScreen.tsx`.
+
+The trailing `screens/BrowseJobsScreen.tsx` is a leftover fragment of the old
+list, not a re-lock: the sentence that governs is "None. All screens unlocked".
+
+`.claude/hooks/guard.ps1` **agrees, mechanically**. It still carries the
+eleven-entry `$locked` array (`launchscreen`, `welcomescreen`, `signinscreen`,
+`emailsigninscreen`, `createaccountscreen`, `emailcreateaccountscreen`,
+`verifyphonescreen`, `setupscreen`, `legalgatescreen`, `homescreen`,
+`browsejobsscreen`) — but the rule that consults it is **dead code**:
+
+```powershell
+# guard.ps1:175-176
+        # UNLOCKED 2026-08-19 by operator for the Prestige dark sweep
+if ($false) { Write-Deny 'GUARD-PATH-LOCKED' 'locked-screen' }
+```
+
+`if ($false)` can never fire, and `$locked` is never read by anything else. So
+**GUARD-PATH-LOCKED cannot block any path**, and no screen is locked by either
+authority.
+
+**Consequence for emerald(5):** `screens/SignInScreen.tsx` and
+`screens/EmailSignInScreen.tsx` are NOT locked. The dispatch's conditional
+branched to CONVERT, not to skip-and-write-a-patch.
+
+### The deny rules in force (`.claude/settings.json` → `permissions.deny`)
+
+Git, blanket: `push` (incl. force variants), `pull`, `fetch`, `reset` (incl.
+`--hard`), `clean`, `stash`, `checkout`, `switch`, `restore`, `rebase`, `merge`,
+`cherry-pick`, `revert`, `tag`, `worktree`, `submodule`, `filter-branch`, and
+commit amending — each denied for both Bash and PowerShell. Bulk staging denied:
+`git add .` / `-A` / `-u` / `--all*`.
+
+Paths: `Edit(/design-reference/**)`, `Edit(/public/**)`, `Edit(/hosting/**)`,
+`Edit(/dist/**)`, `Edit(/WEB_DEPLOYMENT.md)`, `Edit(**/*.web.ts)`,
+`Edit(**/*.web.tsx)`, `Edit(/.claude/**)`. Secrets: `Read`+`Edit` denied on
+`./start.ps1`, `./.env`, `./.env.*`.
+
+Production Supabase: the production project ref is denied as a substring in any
+command, either shell. Databases: `psql`, `pg_dump`, `pg_restore`, `pg_dumpall`,
+`supabase`. Nested sessions: any `claude` / `claude.exe` invocation. Dynamic
+execution: `Invoke-Expression`, encoded-command flags, `cmd` shell-out, and the
+inline-eval flags of node and python.
+
+### The hooks in force
+
+`.claude/hooks/guard.ps1` (PreToolUse on `Bash|PowerShell|Edit|Write|
+NotebookEdit`) — **fails closed**: only exit 2 blocks, and the entire body runs
+inside a try/catch whose catch exits 2, so any ambiguity is a block. Ten command
+rules: GUARD-PRODREF, GUARD-NESTED-CLAUDE, GUARD-DYNEXEC, GUARD-GIT,
+GUARD-HOOKSPATH, GUARD-DB, GUARD-DEPS, GUARD-SECRET, GUARD-CLAUDEDIR,
+GUARD-BRANCH (mutating git verbs blocked unless the branch resolves to exactly
+`mainexpo`), plus the path rules GUARD-PATH-ESCAPE / -CLAUDEDIR / -FROZEN /
+-SECRET and the dead GUARD-PATH-LOCKED above.
+`.claude/hooks/session-context.ps1` (SessionStart) reports branch/HEAD/tree.
+
+**Nothing under `.claude/` was modified, weakened or bypassed during this run.**
+
+*Observed while working, recorded for the operator, NOT acted on:* four guard
+rules fire on commands that do nothing of what they are named for, because all
+four match on raw command TEXT rather than on what the command does.
+GUARD-CLAUDEDIR blocks any command containing both `.claude/` and a `>`
+character, so a plain directory listing of the hooks folder with stderr
+redirected is refused as a "claude-config-mutation". GUARD-PRODREF blocks any
+command whose text contains the production ref — so even appending a paragraph
+of documentation that merely NAMES that ref is refused. GUARD-DYNEXEC blocks any
+command whose text contains an inline-eval flag — so appending a paragraph that
+merely LISTS the denied flags is refused as dynamic code execution.
+GUARD-PATH-ESCAPE blocks `Write`/`Edit` anywhere outside the project directory,
+which includes the session's own scratchpad, so no working file can be staged
+outside the repo. All four fail in the safe direction and none was worked
+around: this section describes those literals instead of quoting them, and every
+append to this report was made with the file tools rather than a shell heredoc.
+Worth knowing when a future run wonders why a harmless command was denied.
+
+## (b) BASELINE
+
+`npm run verify`, bare, stdout redirected to a file, exit code read from `$?`,
+never piped: **exit 0 · 758 pass · 0 fail · 0 skipped · 7 suites.** That pass
+count is the floor for every commit below.
+
+## (c) THE COMMITS
+
+Base gate at run start: branch `mainexpo`, `de048e9` (fidelity(7)) an ancestor
+of HEAD, tree clean. Every commit below was staged by explicit path — never a
+wildcard — with `git diff --cached --name-status` inspected first, and nothing
+was pushed.
+
+|Prefix|Hash|Verify|
+|-|-|-|
+|emerald(1)|`4af3a35`|exit 0 · 759 pass · 0 fail · 0 skipped|
+|emerald(2)|`e28e780`|exit 0 · 761 pass · 0 fail · 0 skipped|
+|emerald(3)|`c2e9d6b`|exit 0 · 763 pass · 0 fail · 0 skipped|
+|emerald(4)|`315b481`|exit 0 · 765 pass · 0 fail · 0 skipped|
+|emerald(5)|`9ec0b18`|exit 0 · 766 pass · 0 fail · 0 skipped|
+|emerald(6)|`bc88aa9`|exit 0 · 769 pass · 0 fail · 0 skipped|
+
+### emerald(1) — the customer bar
+
+`Home · Discover · [ + ] · Messages · Profile`. **Two reversals, both recorded
+prominently so nobody restores them:**
+
+* **My Jobs left the CUSTOMER bar.** The bar ITEM only. The screen, the stack,
+  the route and every navigation into it are untouched — `MyJobs` stays
+  registered on the tab navigator behind `HIDDEN_TAB_ITEM_OPTIONS`, because
+  every remaining dispatch at it is an untargeted NAVIGATE and React
+  Navigation 7 resolves those against the tab navigator and its ancestors
+  only. That is why **no notification deep link needed retargeting**:
+  `lib/notificationRoutes.ts`'s `TAB_FOR_SCREEN` sends `ClientJobDetail`,
+  `WorkerJob` and `JobDetail` through the `MyJobs` tab in BOTH trees, and the
+  route is still there. The worker tree keeps its My Jobs tab.
+* **Map became Discover** — label, glyph AND destination — reversing decision 4
+  and manifest Appendix B-2's "Map, never Discover". **The function was
+  RECOVERED, not invented:** `DiscoverStackNavigator` has existed since 4D-1a
+  as a registered-but-hidden route rooted at `WorkerSearchScreen` (real worker
+  profiles, categories and services, never job postings), because
+  `SavedWorkersScreen` dispatches into it. D1 gave a bar item to that existing
+  destination. The glyph is D1's magnifier, not 4D-1a's compass. `Map` itself
+  stays registered and hidden — Customer Home's "View map" pill dispatches it.
+
+Authorised assertion changes, both in `tests/mode.test.mjs`, each returned
+stronger: the tab contract now pins the exact registration order of all seven
+routes, asserts Map/MyJobs carry the hidden options while Discover carries a
+label and does not, pins `CUSTOMER_BAR_TABS` / `CUSTOMER_CREATE_SLOT` /
+`WORKER_BAR_TABS` verbatim, derives the drawn five and asserts the [ + ] is the
+centre element, and pins both glyph pairs; the "View map" assertion was
+reformatted for multi-line JSX and gained a check that Map is on the TAB
+navigator rather than a child stack. **New test required by D1:** "a customer
+can still reach My Jobs after D1 took its tab" — three independent paths pinned
+(registered route, sheet action, notification routing in both trees).
+
+### emerald(2) — D2's layer report, and D3's sizing
+
+**Every layer that was painting a ground behind or around the floating pill,
+audited in both trees against the INSTALLED @react-navigation sources:**
+
+|Layer|What it was set to|Verdict|
+|-|-|-|
+|`tabBarStyle.backgroundColor`|`palette.surface`|**This IS the pill.** Kept — it is the one painted surface by design.|
+|`options.tabBarBackground`|**NOT SET**|`BottomTabBar.tsx` falls back to `colors.card`, which `tabBarStyle` (merged last) already overrides. No second ground exists.|
+|`BottomTabView`'s container|`SafeAreaProviderCompat` — `{ flex: 1 }` + a flexDirection|**Paints nothing.**|
+|`App.tsx` LaunchGate root View|`{ flex: 1 }`|**Paints nothing.**|
+|`App.tsx` outer `SafeAreaProvider`|no style|**Paints nothing.**|
+|NavigationContainer theme|`colors.background` = `palette.background`|Reaches the SCENES only — `@react-navigation/elements`' `<Background>` paints it inside `<Screen>` — but the bar is a **sibling** of the scene container, so the theme never reached the bar row at all.|
+
+**So nothing of ours was painting it.** The pill floats by margins in normal
+layout flow and every ancestor of that margin gap was a colourless `flex: 1`,
+so what showed through was the **iOS root view — white by platform default**.
+There was no layer to turn transparent; there was a missing ground. It is
+invisible in light (white on cream reads as a seam) and glaring in dark, which
+is how it survived every light pass. The ground now lives on
+`navigation/ModeShell.tsx` — the single parent of both trees, which already
+resolves the palette — so one View covers customer and worker at once and the
+bar primitive did not grow a second painted surface.
+
+Also fixed in the pill: `BottomTabBar.tsx` sets `borderTopWidth` to a hairline
+before `tabBarStyle` merges, and a specific edge beats the `borderWidth`
+shorthand, so the top arc drew at 0.5 against 1 elsewhere. Restated explicitly.
+
+**D3, with the direction recorded because instruction and effect disagree:**
+glyph 29 → **28**, label 12 → **11**, exactly D3's numbers — but D3 is headed
+"NAV ICONS: LARGER" and these were already 29/12, a previous run having scaled
+them past the library's own 25/10 defaults. **28/11 is a 1pt REDUCTION from
+what shipped.** Applied anyway: an explicit number outranks the adjective in
+its heading, and 1pt at glyph size is imperceptible. What actually delivers
+"larger and evenly spaced" is emerald(1)'s slot arithmetic — six drawn slots to
+five means each slot went from 49.3pt to 59.2pt at the narrowest supported
+width (320pt), a real 20% more room. Even distribution was already structural
+(`styles.bottomItem { flex: 1 }` on every item, uniform 5pt padding) and is now
+pinned rather than assumed. Touch targets clear 44pt on both axes. **The bar
+height does not move**: D3 says it grows only as much as the labels need, and
+at 28/11 the stack measures 49 against a 60pt usable slot. Labels gained
+`maxFontSizeMultiplier: 1.2` — with `numberOfLines={1}` an accessibility text
+size would otherwise ellipsise "Messages"/"Discover", and D3 forbids clipping.
+
+### emerald(3) — the clearance was hardcoded AND wrong
+
+The concept existed: `layout.floatingNavClearance = 68`, applied by the three
+templates but **only when the screen had no footer**. Two defects:
+
+1. **68 is the wrong number.** The pill occupies its 70pt height PLUS the
+   margin that floats it, and that margin grows to the device's
+   home-indicator inset (34 on a notched iPhone). The real footprint is 82–104.
+   That is why surfaces which DID apply the token — Notifications feed,
+   Services & availability, Delete account, all three named by the device pass
+   — still had content under the pill.
+2. **Footer screens got nothing**, on the reasoning that "a footer already
+   occupies that space". It does not: the footer is the last element above the
+   pill, so it is the FOOTER that must clear it.
+
+`layout.floatingNavClearance` is **deleted as a token** and a test fails if it
+returns. `floatingNavHeight` (70) and `floatingNavGap` (12) are declared once
+in `ui/tokens.ts`; `TAB_BAR_CONTENT_HEIGHT` and `TAB_BAR_FLOAT_MARGIN` READ
+them; and `useFloatingNavClearance()` returns height + the float margin with
+this device's inset. The rule: **whichever element is LAST above the pill takes
+the clearance.** Applied to all three templates (17 screens) and 18 hand-rolled
+surfaces. **Not applied, deliberately:** the four tab ROOTS keep
+`paddingBottom: 0` — the operator did not report them and
+`tests/layout.test.mjs` pins that zero on purpose; MapScreen is full-bleed.
+
+### emerald(4) — WorkerResults existed and was already registered
+
+**Neither branch of "register it or build it" applied.** The component EXISTS
+(`screens/WorkerResultsScreen.tsx`, masters 12 and 13) and IS REGISTERED —
+`navigation/WorkerRoot.tsx`, one registration on `WorkerHomeStack`, landed in
+`e8cbb92` and confirmed by `f9d40cd`. It was never unregistered.
+
+All four live dispatches are in `WorkerHomeScreen` — search (`'search'`), the
+skill-match pill (`'skills'`), the radius chip (`'nearby'`) and "View all"
+(`'all'`) — and that screen is the ROOT of the same stack, so they are in-stack
+navigates that resolve. The only other callers are MapScreen's two worker-gated
+"See all jobs" controls, which go through `navigateAcrossTabs()` and
+log-and-drop rather than throw. **There is no unregistered-route defect at
+HEAD.**
+
+**Where the operator's exact error signature does come from:**
+`screens/BrowseJobsScreen.tsx` dispatches WorkerResults four times with
+precisely the reported mode set — `'search'`, a radius one, `'skills'`,
+`'all'`, which is "modes all and skills observed, expect a third for the radius
+chip" — and it is registered by **no navigator**, because 4D-1b unmounted it
+when Worker Home replaced it as the stack root. Anything rendering that file
+throws that error on exactly those controls. It is unreachable at HEAD (nothing
+imports it), so **the most probable source of the screenshots is a device
+bundle from before 4D-1b**. That is a diagnosis; there was nothing in the tree
+to change. Two new tests make the class unrepeatable instead.
+
+### emerald(5) — CONVERT branch
+
+Taken because the locked set read at run start is EMPTY (§a). Welcome and both
+Create-account screens were dark; both sign-in screens rendered Heritage light
+one tap away — same flow, two design systems.
+
+**The theming path, determined from the repo:** the already-dark siblings do
+NOT go through `lib/authTheme.ts`. They use `authSurface(palette, isDark)` from
+`lib/theme.ts` plus a `themed` opt-in prop on each shared auth component.
+**`lib/authTheme.ts` was therefore NOT modified** — the dispatch authorised a
+dark branch there if required, and it was not required. That makes the
+byte-identical-light requirement structural rather than careful: nothing any
+other consumer reads changed. **CountryPicker, named specifically, still takes
+no `themed` prop and still resolves every colour from `authColors`.** So do
+VerifyPhone, Setup, Legal gate and Launch.
+
+Treatment taken from siblings 3 and 4 as instructed: same mapping, same opt-in,
+serif headline, eyebrow on `surface.accent`, gold field glyphs. EmailSignIn's
+form-error wash was the literal `#F5E7E4` and is now the palette's own danger
+at wash strength. **The brand mark stays** — masters 3/4 draw no logo, but D11
+is explicit that a drawing of a different screen does not delete working
+composition. **The allowlist NARROWED:** both sign-in screens were carried in
+`LITERAL_FILE_ALLOWLIST` as "LOCKED screen"; both entries are deleted, so the
+raw-colour scan covers them for real now.
+
+### emerald(6) — the toggle, and the bug underneath it
+
+**D5 in full, reversing the previous run's D1 entirely.** In dark the track is
+a neutral surface under the ordinary hairline, **identical in both states**,
+and the knob carries everything: gold ring over a gold-tinted face under a gold
+halo when ON, cream when OFF. **Red is retired from this control.** Light is
+untouched. The gold knob DID collide with `tests/goldOnForest.test.mjs`, and
+took the compromise D5 anticipated — a gold ring around a gold TINT
+(`withAlpha 0.92`) rather than a fill. **It is not allowlisted.**
+
+**The underlying bug was not a paint bug.** `hooks/useProfile.ts` was a
+per-component hook: every caller got its own `useState`, its own fetch and its
+own idea of the row. Services & availability re-fetches on focus while Worker
+Home only fetched when the account changed — so flipping the toggle on one and
+walking back to the other showed the old value until restart. Services &
+availability held a *third* copy besides, its own private
+`useState<Profile>`. D5's "one boolean in one place" is now true at both
+levels: the dark track is written **without a `value` term at all**, so it
+cannot carry state even by accident; and `useProfile` is a module-level store
+published through React 19's `useSyncExternalStore`, so one row, one truth,
+every consumer re-rendered on a write. Fetch behaviour is unchanged — each
+mount still refreshes — so this is not a new caching layer.
+
+Three new tests: the toggle contract, the anti-divergence guarantee, and the
+coverage check for D5's third surface (the five notification preferences are
+one `<Toggle>` mapped over `NOTIFICATION_TOGGLES`, so they cannot drift either).
+
+### emerald(7) — one way to say chosen, one way to say dead
+
+|Prefix|Hash|Verify|
+|-|-|-|
+|emerald(7)|`7179d63`|exit 0 · 771 pass · 0 fail · 0 skipped|
+
+**D6.** The app expressed selection three ways: a gold outline on the distance
+chips, EMERALD on the service-category chips, the filter-sheet chips and radios,
+the tip presets, the portfolio chips, the report reasons and the past-work tabs,
+and a `primary`/`forest` FILL on several of those — including the flat/ask pill,
+which master 23 draws gold. `lib/theme.ts`'s new `selectedInDark()` is the one
+treatment: full-strength gold line and label, **no fill**, and the hairline tier
+(gold @ 35%) for the rest of the group. That last part mattered more than it
+sounds — the filter sheet and Services & availability gave EVERY chip a full
+gold border and then distinguished the chosen one with an emerald edge, so the
+strongest line on screen carried no information.
+
+Ten surfaces converted: `Chip` (both variants), `SegmentedControl` (label only —
+its cell fill is what separates it from the bare cells beside it),
+`JobFilterSheet` (chips, radios, radio dots, sort labels), `PortfolioPicker`,
+`PastWork` tabs, `ReportDialog`, Services & availability, ApproveOrDispute,
+ReviewAndTip presets, My Jobs hub tabs.
+
+**D7.** `disabledControl()` exports decision 3's rule for the hand-rolled
+controls that never went through `Button`. The pale sage "Add service" fill was
+`colors.emerald` — #5FAE81 in the dark palette — with `opacity: 0.5` for
+disabled, so a dead button was a paler sage button. Enabled is `primary` now;
+disabled is `neutralBg` with muted text and no border. `CategoryAccordion`'s add
+button took the same fix.
+
+**Out of scope, logged:** PostJob's `progressSegmentActive` is a stepper, not a
+selection. ChatComposer's mic/send and OfferComposer's chipGroups dim by
+opacity but are not filled controls. OtpInput's `cellActive` is FOCUS.
+SetupChoiceCard and LegalGate are auth-surface with no dark treatment.
+ReactionPicker's emoji ring and WorkerProfile's saved label are none of chip,
+pill, segment or radio.
+
+### emerald(8) — the band was not the sheet's, and the scrim was too strong in all seven
+
+|Prefix|Hash|Verify|
+|-|-|-|
+|emerald(8)|`a671758`|exit 0 · 773 pass · 0 fail · 0 skipped|
+
+**The band under Cancel was the app's unpainted ground, not the sheet's.** Every
+surface `ActionSheet` draws is on the palette and there is no grey in it. What
+showed was the same missing ground emerald(2) found under the nav pill: the iOS
+root view's platform white, seen through a 70% near-black scrim, which renders
+as exactly that — a light-grey band, full width, at the bottom. `ModeShell`'s
+paint removed the source. This commit added the safe-area handling `ActionSheet`
+never had (the `Sheet` primitive has always reserved `insets.bottom`), so the
+sheet ends above the home indicator rather than on it.
+
+**The scrim is a seven-file change, and here is why.** D8 says to match master
+11's filter sheet. Reading the tree first: the filter sheet
+(`ui/primitives/Sheet.tsx`, which IS master 11's) used `withAlpha(bg, 0.7)`. So
+did `ActionSheet`, `AmountPrompt`, `ConfirmDialog`, `ReactionPicker`,
+`ReportDialog` and `ServicePickerSheet`. **Seven independent copies of one
+number, all identical** — so the creation sheet was not an outlier and "match
+the filter sheet" would have changed nothing. The instruction's stated GOAL is
+what governs: "the header behind it stays legible while clearly dimmed", which
+0.7 over a near-black ground does not achieve. `SCRIM_DARK_ALPHA = 0.55` in
+`lib/theme.ts`, applied through `scrimInDark()`, and all seven read it. **Light
+is deliberately NOT unified** — the three light scrims (35%, 42%, 45%) stay as
+they are; they were never the complaint.
+
+### emerald(9) — the map prop was never the problem
+
+|Prefix|Hash|Verify|
+|-|-|-|
+|emerald(9)|`30af8db`|exit 0 · 773 pass · 0 fail · 0 skipped|
+
+**The diagnosis, named precisely: not the wrong component, not an unthreaded
+prop, not a stale value, not a Google-style mistake.** Every link was already
+correct, verified against the INSTALLED package:
+
+* `components/HotspotMap.native.tsx:159` sets
+  `userInterfaceStyle={isDark ? 'dark' : 'light'}` from the RESOLVED theme.
+* It is the **only** `MapView` in the tree — a new test sweeps `components/`
+  and `screens/` for `react-native-maps` imports and finds exactly this file.
+  `MapScreen` is its only consumer; TrackWorker, RouteArrival and CellJobs
+  render no map.
+* **react-native-maps 1.20.1** declares the prop (`lib/MapView.d.ts:516`),
+  exports it (`ios/AirMaps/AIRMapManager.m:89`) and implements it
+  (`ios/AirMaps/AIRMap.m:353`) by assigning `overrideUserInterfaceStyle` on its
+  `MKMapView` subclass, guarded `@available(iOS 13.0, *)`. It is the only place
+  in that file touching the property — nothing resets it.
+* No Google provider is configured, so `customMapStyle` would be inert; none
+  ships, and the existing test still pins that.
+
+So the prop reaches the native view and is applied. What it does is change the
+view's **trait collection** — and MKMapView repaints its basemap on a trait
+CHANGE. A map that has already rasterised its tiles under one appearance does
+not reliably re-rasterise when an override is applied afterwards; it keeps the
+tiles it first drew. **That is a MapKit behaviour, not our wiring.**
+
+**The fix that is ours:** key the MapView on the resolved theme, so a theme flip
+CONSTRUCTS a new map view under the right trait collection instead of asking an
+existing one to repaint. No native module, no dependency, no `app.json` change.
+The last completed region is kept in a ref and fed back as `initialRegion` so
+the remount does not cost the user their position — a ref rather than state
+because `onRegionChangeComplete` fires on every pan.
+
+### emerald(10) — one of three deltas was real
+
+|Prefix|Hash|Verify|
+|-|-|-|
+|emerald(10)|`d85c2aa`|exit 0 · 775 pass · 0 fail · 0 skipped|
+
+* **Master 26 — REAL, fixed.** The notification row rings its glyph in gold and
+  drew the GLYPH gold too, flattening ring and contents into one shape. The
+  glyph is EMERALD in dark now. It does not carry read state there for the same
+  reason the ring does not — the green dot at the row's end does. Light
+  untouched.
+* **Master 22 — condition did not hold, SKIPPED.** "Add it ONLY if an unsave
+  action already exists." It does (`lib/savedWorkers.ts`'s `unsaveWorker`) — and
+  so does the affordance: `SavedWorkersScreen` already renders a bookmark
+  Pressable per row wired to `removeSaved()`.
+* **Master 18 — condition did not hold, SKIPPED.** "Only if the screen genuinely
+  lacks it." It does not: `WorkerProfileScreen` already draws "Send an offer"
+  with master 18's explanation beside it — two variants, worked-together and
+  stranger — dispatching the existing flow (`PostJob` with `hireWorkerId`).
+
+Both skips are now pinned by a test so a future run reading masters 22 or 18
+does not add a duplicate beside the affordance that is already there.
+
+## (d) EVERY REVERSAL THIS RUN MAKES — do not restore the old behaviour
+
+1. **Map → Discover on the customer bar** (emerald(1)). Reverses decision 4 and
+   manifest Appendix B-2's "Map, never Discover". Label, glyph AND destination.
+   The worker bar keeps Map.
+2. **My Jobs left the customer bar** (emerald(1)). Reverses decision 4's
+   same-five-tabs-in-both-trees rule, customer side only. The ROUTE is still
+   registered — removing it would break the [ + ] sheet, the "View map" pill's
+   sibling path and notification routing.
+3. **The emerald/red toggle is retired** (emerald(6)). Reverses the previous
+   run's D1 entirely. The dark track is neutral and identical in both states;
+   the knob carries the state. Red is gone from this control — "not taking new
+   work" is a choice, not an error.
+4. **The nav glyph went 29 → 28 and the label 12 → 11** (emerald(2)) under a
+   heading that says "LARGER". The explicit numbers were followed; the direction
+   is recorded because it is a REDUCTION from what shipped.
+5. **`layout.floatingNavClearance` was deleted as a token** (emerald(3)) and
+   replaced by `useFloatingNavClearance()`. A test fails if a static clearance
+   token returns.
+6. **All seven modal scrims went 0.7 → 0.55 in dark** (emerald(8)), including
+   the filter sheet the dispatch named as the reference.
+
+**These stayed frozen, as D8/D9 require, and were mechanically confirmed at the
+end of the run:** no money colour moved anywhere (`git diff de048e9..HEAD` over
+`MoneyText`, `JobCard` and `WorkerJobCard` is empty); the nav active tint is
+still `palette.emerald`; the verification-badge suite still passes 4/4; no
+per-category tile fill changed (the only edit to `CategoryAccordion` is D7's
+disabled fill); and the centre [ + ] survives, now dead centre of five slots.
+
+## (e) LOGGED, NOT FIXED — for the operator
+
+**From the dispatch's own scope:**
+
+1. **Six numbered masters the dispatch cites do not exist on disk** — 33, 34,
+   39, 40, 45, 46 (also absent: 21, 28, 35–38, 41, 42). Every one concerns
+   something D9 freezes as UNBUILT, so nothing was lost, but the dispatch's
+   citations of them are unbacked.
+2. **emerald(4) fixed no code**, because there was none to fix. If the operator
+   still sees the WorkerResults crash on device, the build predates 4D-1b —
+   `screens/BrowseJobsScreen.tsx` reproduces the error signature exactly and is
+   unreachable at HEAD. A clean rebuild is the test.
+3. **Two native `<Switch>` sites survive** (emerald(6)), both outside D5's named
+   scope and now pinned as an exact set: `BrowseJobsScreen` (unmounted) and
+   `SetupScreen` (auth flow, which has no dark treatment at all — a dark toggle
+   there would be the only dark control on a light screen).
+4. **EmailSignIn did not gain sibling 4's password visibility toggle**
+   (emerald(5)). That is an interaction, not a treatment; adding one would be
+   shipping a feature under a paint commit.
+5. **The four tab ROOTS keep `paddingBottom: 0`** (emerald(3)) — Customer Home,
+   My Jobs hub, Messages inbox, Profile. The operator did not report them and
+   `tests/layout.test.mjs` pins that zero deliberately. If their last row reads
+   as jammed against the pill, this is the one-line change, and it is the
+   operator's call.
+6. **Selection surfaces D6 did not touch** (emerald(7)), each with its reason:
+   PostJob's stepper, ChatComposer's icon buttons, OfferComposer's group dim,
+   OtpInput's focus ring, SetupChoiceCard and LegalGate (auth surface),
+   ReactionPicker's emoji ring, WorkerProfile's saved label.
+7. **Worker Home's pulse dot keeps master 43's red.** D5 retires red from the
+   CONTROL; the dot is the master's own offline indicator two rows below it.
+
+**Observed while working, outside the dispatch:**
+
+8. **`.claude/hooks/guard.ps1`'s locked-screen rule is dead code** — `$locked`
+   is populated and then consulted inside `if ($false)`. Harmless today (the
+   operator unlocked everything), but the array reads as live and is not. If
+   screens are ever re-locked, that `if` must be restored or the guard will
+   silently allow every one of them.
+9. **Four guard rules block obviously harmless commands** because they match raw
+   command TEXT: GUARD-CLAUDEDIR (any command containing `.claude/` and a `>`),
+   GUARD-PRODREF and GUARD-DYNEXEC (any command whose text merely NAMES the
+   production ref or an inline-eval flag — including a documentation paragraph
+   describing them), and GUARD-PATH-ESCAPE (which blocks `Write` to the
+   session's own scratchpad). All fail safe; none was worked around.
+10. **`CLAUDE.md`'s "Locked — never modify" section ends with a dangling
+    `screens/BrowseJobsScreen.tsx`** after the sentence that unlocks everything.
+    It reads as a re-lock at a glance. Worth deleting.
+11. **`useProfile` now publishes to every consumer** (emerald(6)). Nine screens
+    read it. Behaviour is intentionally unchanged — each mount still refreshes —
+    but a write on one screen is now visible on all of them immediately, which
+    is a behaviour change worth knowing on Profile and Edit profile too, not
+    just the two availability toggles.
