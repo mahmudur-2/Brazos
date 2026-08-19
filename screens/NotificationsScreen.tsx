@@ -16,7 +16,14 @@ import {
 } from '../lib/notifications';
 import { goBackOrHome } from '../lib/navigationRef';
 import { canRouteNotification, handleNotificationData } from '../lib/notificationRoutes';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 /**
@@ -50,7 +57,7 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
  * The bridge below only forwards ModeContext; this screen never switches.
  */
 export function NotificationsScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
   const modeBridge = useNotificationModeBridge();
@@ -140,7 +147,7 @@ export function NotificationsScreen() {
       headerRight={
         unread > 0 ? (
           <Pressable onPress={() => void markAll()} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.markAll}>Mark all read</Text>
+            <Text style={[styles.markAll, isDark && styles.markAllDark]}>Mark all read</Text>
           </Pressable>
         ) : undefined
       }
@@ -158,17 +165,32 @@ export function NotificationsScreen() {
                 return (
                   <Pressable
                     key={n.id}
-                    style={[styles.row, !n.read_at && styles.rowUnread]}
+                    style={[
+                      styles.row,
+                      !n.read_at && styles.rowUnread,
+                      !n.read_at && isDark && styles.rowUnreadDark,
+                    ]}
                     onPress={routable ? () => open(n) : undefined}
                     disabled={!routable}
                     accessibilityRole={routable ? 'button' : 'text'}
                     accessibilityLabel={n.title}
                   >
-                    <Ionicons
-                      name={KIND_ICONS[n.type] ?? 'notifications-outline'}
-                      size={20}
-                      color={!n.read_at ? colors.emerald : colors.textSubtle}
-                    />
+                    {/* Master 26 rings every notification's glyph in gold,
+                        read or unread; the green dot at the row's end is what
+                        marks it unread. */}
+                    <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
+                      <Ionicons
+                        name={KIND_ICONS[n.type] ?? 'notifications-outline'}
+                        size={18}
+                        color={
+                          isDark
+                            ? colors.gold
+                            : !n.read_at
+                              ? colors.emerald
+                              : colors.textSubtle
+                        }
+                      />
+                    </View>
                     <View style={styles.rowCopy}>
                       <Text style={[styles.rowTitle, !n.read_at && styles.rowTitleUnread]} numberOfLines={1}>
                         {n.title}
@@ -194,10 +216,27 @@ export function NotificationsScreen() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // Master 26 sets "Mark all read" as gold serif; light keeps the emerald.
   markAll: {
     fontSize: 13,
     fontWeight: '800',
     color: colors.emerald,
+  },
+  markAllDark: {
+    fontFamily: fonts.display,
+    fontSize: 16,
+    color: colors.gold,
+  },
+  rowGlyph: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rowGlyphDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   list: {
     gap: spacing.sm,
@@ -217,12 +256,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
     backgroundColor: colors.mint,
   },
+  // Master 26 draws every card identically; the dot is what carries unread.
+  rowUnreadDark: {
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
   rowCopy: {
     flex: 1,
     gap: 2,
   },
   rowTitle: {
-    fontSize: 14,
+    fontFamily: fonts.display,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.text,
   },
