@@ -44,9 +44,30 @@ const sourceFiles = SOURCE_DIRS.flatMap((dir) =>
 // HANDOFF "Deliberately left light").
 const GOLD_FILL_ALLOWLIST = new Set(['components/ModeTransitionOverlay.tsx']);
 
+/**
+ * The one shape decision 3's "no gold fills" was never about: the filled part
+ * of a MEASUREMENT BAR. Masters 27 (the per-star rating distribution) and 37
+ * (the job progress bar) both run a gold fill along a deep track, and a bar's
+ * fill is DATA — how much of something there is — not a control anyone can
+ * press. Recognised by style-key convention (`…Fill`) rather than by file, so
+ * a gold button fill in the same file is still an offender.
+ *
+ * Returns the nearest enclosing style key for an offset, or null.
+ */
+function enclosingStyleKey(source, index) {
+  const before = source.slice(0, index);
+  const open = before.lastIndexOf('{');
+  if (open < 0) return null;
+  // `…  distFill: {` → "distFill". An inline `style={{ … }}` has no `name:`
+  // before its brace, so it yields null and stays an offender.
+  const key = /(\w+)\s*:\s*$/.exec(before.slice(0, open).trimEnd());
+  return key ? key[1] : null;
+}
+
 test('[static] gold is line-work, never a fill', () => {
   const offenders = [];
   let goldLinework = 0;
+  let barFills = 0;
   for (const file of sourceFiles) {
     const source = stripComments(read(file));
     goldLinework += (
@@ -54,9 +75,17 @@ test('[static] gold is line-work, never a fill', () => {
     ).length;
     for (const fill of source.matchAll(/backgroundColor:\s*\w+\.gold\b/g)) {
       if (GOLD_FILL_ALLOWLIST.has(file)) continue;
+      const key = enclosingStyleKey(source, fill.index);
+      if (key && /Fill$/.test(key)) {
+        barFills += 1;
+        continue;
+      }
       offenders.push(`${file}: ${fill[0].trim()}`);
     }
   }
+  // The bar exception must stay an exception: if it ever stops matching
+  // anything, it is dead and should be deleted rather than left as a hole.
+  assert.ok(barFills >= 1, 'the measurement-bar exception must still match a real bar fill');
   // The sweep must actually be looking at something: the tree is large and
   // gold line-work is everywhere by design.
   assert.ok(sourceFiles.length > 100, `the sweep must enumerate the tree (saw ${sourceFiles.length})`);

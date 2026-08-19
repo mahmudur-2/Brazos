@@ -30,7 +30,14 @@ import {
 } from '../lib/reviews';
 import { formatTimeAgo } from '../lib/time';
 import type { ProfileReviewsRouteParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 const PAGE_SIZE = 20;
 const STARS = [5, 4, 3, 2, 1] as const;
@@ -316,8 +323,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: spacing.lg,
   },
+  // Master 27 sets the aggregate as a large display serif.
   average: {
-    fontSize: 40,
+    fontFamily: fonts.display,
+    fontSize: 48,
     fontWeight: '800',
     color: colors.text,
   },
@@ -343,17 +352,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.textMuted,
     width: 10,
   },
+  // Master 27 runs the distribution on a deep track with a gold fill.
   distTrack: {
     flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.neutralBg,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.mint,
     overflow: 'hidden',
     marginHorizontal: spacing.xs,
   },
   distFill: {
     height: '100%',
-    backgroundColor: colors.star,
+    backgroundColor: colors.gold,
   },
   distCount: {
     fontSize: 12,
@@ -373,14 +383,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     gap: 2,
   },
+  // Master 27 sets reviewer names in the serif and their meta line green.
   reviewerName: {
-    fontSize: 15,
+    fontFamily: fonts.display,
+    fontSize: 19,
     fontWeight: '700',
     color: colors.text,
   },
   reviewMeta: {
     fontSize: 12,
-    color: colors.textMuted,
+    color: colors.emerald,
   },
   comment: {
     fontSize: 14,
