@@ -95,8 +95,14 @@ export function HubCard({
             accessibilityLabel={`Photo for ${title}`}
           />
         ) : (
-          <View style={[styles.thumb, styles.iconCircle, { backgroundColor: accent.bg }]}>
-            <Ionicons name={icon} size={24} color={accent.icon} />
+          <View
+            style={[
+              styles.thumb,
+              styles.iconCircle,
+              isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
+            ]}
+          >
+            <Ionicons name={icon} size={24} color={isDark ? colors.gold : accent.icon} />
           </View>
         )}
         <View style={styles.headerText}>
@@ -177,6 +183,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // D2: one category tile everywhere — deep-green surface, gold hairline,
+  // gold glyph. The saturated per-category fills are retired in dark; light
+  // keeps them.
+  iconCircleDark: {
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   headerText: {
     flex: 1,

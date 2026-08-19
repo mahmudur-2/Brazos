@@ -83,8 +83,14 @@ export function BrowseJobCard({
             accessibilityLabel={`Photo for ${job.title}`}
           />
         ) : (
-          <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: accent.bg }]}>
-            <Ionicons name={icon} size={30} color={accent.icon} />
+          <View
+            style={[
+              styles.thumb,
+              styles.thumbFallback,
+              isDark ? styles.thumbFallbackDark : { backgroundColor: accent.bg },
+            ]}
+          >
+            <Ionicons name={icon} size={30} color={isDark ? colors.gold : accent.icon} />
           </View>
         )}
 
@@ -153,6 +159,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // D2: one category tile everywhere — deep-green surface, gold hairline,
+  // gold glyph. The saturated per-category fills are retired in dark; light
+  // keeps them.
+  thumbFallbackDark: {
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   body: {
     flex: 1,

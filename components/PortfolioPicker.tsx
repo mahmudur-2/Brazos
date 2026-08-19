@@ -416,7 +416,16 @@ export function PortfolioPicker({
                       <Ionicons
                         name={JOB_CATEGORY_ICONS[c]}
                         size={14}
-                        color={category === c ? colors.onPrimary : categoryAccent(c).bg}
+                        // D2: the saturated per-category palette is retired in
+                        // dark wherever a category is drawn — an unselected
+                        // glyph reads gold. Light keeps its accent.
+                        color={
+                          category === c
+                            ? colors.onPrimary
+                            : isDark
+                            ? colors.gold
+                            : categoryAccent(c).bg
+                        }
                       />
                       <Text
                         style={[

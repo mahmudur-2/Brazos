@@ -592,11 +592,16 @@ export function JobDetailScreen() {
           <View style={styles.detailContent}>
             <View style={styles.detailSurface}>
             <View style={styles.jobHeader}>
-              <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
+              <View
+                style={[
+                  styles.iconCircle,
+                  isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
+                ]}
+              >
                 <Ionicons
                   name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                   size={22}
-                  color={accent.icon}
+                  color={isDark ? colors.gold : accent.icon}
                 />
               </View>
               <View style={styles.jobHeaderText}>
@@ -1065,6 +1070,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // D2: one category tile everywhere — deep-green surface, gold hairline,
+  // gold glyph. The saturated per-category fills are retired in dark; light
+  // keeps them.
+  iconCircleDark: {
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   jobHeaderText: {
     flex: 1,

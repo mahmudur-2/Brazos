@@ -45,7 +45,7 @@ type MarketJobPreviewProps = {
  * silently).
  */
 export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { switching, switchToOtherMode } = useModeSwitch();
   const accent = categoryAccent(job.category);
@@ -61,11 +61,16 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
           content: (
             <View style={styles.headerCard}>
               <View style={styles.headerTopRow}>
-                <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
+                <View
+                  style={[
+                    styles.iconCircle,
+                    isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
+                  ]}
+                >
                   <Ionicons
                     name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                     size={20}
-                    color={accent.icon}
+                    color={isDark ? colors.gold : accent.icon}
                   />
                 </View>
                 <Text style={styles.postedAt}>Posted {formatTimeAgo(job.created_at)}</Text>
@@ -201,6 +206,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // D2: one category tile everywhere — deep-green surface, gold hairline,
+  // gold glyph. The saturated per-category fills are retired in dark; light
+  // keeps them.
+  iconCircleDark: {
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   postedAt: {
     fontSize: 12,

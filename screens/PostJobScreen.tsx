@@ -161,7 +161,7 @@ const POST_STEPS = [
 ] as const;
 
 export function PostJobScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const emeraldColors = emeraldColorsFor(colors);
   // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
@@ -1043,12 +1043,14 @@ export function PostJobScreen() {
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Category</Text>
               <View style={styles.chips}>
+                {/* D2: the saturated per-category palette is retired in dark
+                    wherever a category is drawn. Light keeps it. */}
                 {JOB_CATEGORIES.map((c) => (
                   <Chip
                     key={c}
                     label={JOB_CATEGORY_LABELS[c]}
                     icon={JOB_CATEGORY_ICONS[c]}
-                    accentColor={categoryAccent(c).bg}
+                    accentColor={isDark ? colors.gold : categoryAccent(c).bg}
                     variant="filter"
                     selected={category === c}
                     onPress={() => setCategory(c)}
