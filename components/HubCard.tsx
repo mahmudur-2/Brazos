@@ -4,7 +4,14 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { Card } from './Card';
 import { StatusBadge } from './StatusBadge';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { categoryAccent, formatBudget, type JobCategory } from '../lib/jobs';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -59,7 +66,10 @@ export function HubCard({
   nextAction,
   onPress,
 }: HubCardProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
+  // Forest is near-black on a dark surface under palette v2; masters
+  // 35/36/37 draw these accents gold.
+  const chrome = isDark ? colors.gold : colors.forest;
   const styles = stylesFor(colors);
   const accent = categoryAccent(category);
   // A stored URL can still be dead (deleted object, expired host); falling back
@@ -107,24 +117,29 @@ export function HubCard({
       <View style={styles.footerRow}>
         <View style={styles.priceWrap}>
           {priceLabel ? <Text style={styles.priceLabel}>{priceLabel}</Text> : null}
-          <Text style={styles.price} numberOfLines={1}>
+          <Text style={[styles.price, isDark && styles.priceDark]} numberOfLines={1}>
             {formatBudget(priceCents)}
           </Text>
         </View>
         {nextAction ? (
           <View style={styles.nextActionWrap}>
             <View style={styles.nextActionRow}>
-              <Ionicons name="arrow-forward-circle" size={16} color={colors.forest} />
-              <Text style={styles.nextActionText} numberOfLines={2}>
+              <Ionicons name="arrow-forward-circle" size={16} color={chrome} />
+              <Text
+                style={[styles.nextActionText, isDark && styles.chromeTextDark]}
+                numberOfLines={2}
+              >
                 {nextAction}
               </Text>
             </View>
             <Text style={styles.detailsSecondary}>View details</Text>
           </View>
         ) : (
-          <View style={styles.detailsAffordance}>
-            <Text style={styles.detailsText}>View details</Text>
-            <Ionicons name="arrow-forward" size={16} color={colors.forest} />
+          <View style={[styles.detailsAffordance, isDark && styles.detailsAffordanceDark]}>
+            <Text style={[styles.detailsText, isDark && styles.chromeTextDark]}>
+              View details
+            </Text>
+            <Ionicons name="arrow-forward" size={16} color={chrome} />
           </View>
         )}
       </View>
@@ -167,9 +182,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     gap: 3,
   },
+  // Masters 35/36/37 set the job title and its price in the display serif.
   title: {
-    fontSize: 18,
-    lineHeight: 22,
+    fontFamily: fonts.display,
+    fontSize: 21,
+    lineHeight: 26,
     fontWeight: '800',
     color: colors.ink,
   },
@@ -197,10 +214,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   price: {
     flexShrink: 1,
-    fontSize: 19,
+    fontFamily: fonts.display,
+    fontSize: 24,
     fontWeight: '800',
     color: colors.forest,
   },
+  // Masters 35/36/37 set the OWNER's own figure cream, like masters 8/16/17.
+  priceDark: { color: colors.ink },
+  // Masters 35/36/37 draw "View details →" as a gold-outline chip.
   detailsAffordance: {
     minHeight: 44,
     flexDirection: 'row',
@@ -211,6 +232,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.md,
     backgroundColor: colors.mint,
   },
+  detailsAffordanceDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  chromeTextDark: { color: colors.ink },
   // The next-action is the card's primary action label; "View details" sits
   // under it as the demoted secondary line.
   nextActionWrap: {

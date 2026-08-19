@@ -32,7 +32,14 @@ import { effectiveOfferStatus, type PendingOffer } from '../lib/offers';
 import { draftHasContent, loadPostJobDraft, type PostJobDraft } from '../lib/postJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 /** "Cleaning · Bushwick" — the same category+location line the browse feed's
@@ -64,7 +71,7 @@ function FilterTabs({
   value: Filter;
   onChange: (filter: Filter) => void;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
     <View style={styles.tabs} accessibilityRole="tablist">
@@ -77,12 +84,19 @@ function FilterTabs({
             style={({ pressed }) => [
               styles.tab,
               selected && styles.tabSelected,
+              selected && isDark && styles.tabSelectedDark,
               pressed && styles.pressed,
             ]}
             accessibilityRole="tab"
             accessibilityState={{ selected }}
           >
-            <Text style={[styles.tabLabel, selected && styles.tabLabelSelected]}>
+            <Text
+              style={[
+                styles.tabLabel,
+                selected && styles.tabLabelSelected,
+                selected && isDark && styles.tabLabelSelectedDark,
+              ]}
+            >
               {option.label}
             </Text>
           </Pressable>
@@ -114,7 +128,10 @@ function bidNextAction(status: string, awaitingMe: boolean): string {
 }
 
 export function MyJobsHubScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
+  // Forest reads near-black on a dark surface under palette v2; masters
+  // 35/36/37 draw these accents gold.
+  const accent = isDark ? colors.gold : colors.forest;
   const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { user } = useAuth();
@@ -243,8 +260,14 @@ export function MyJobsHubScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <View style={styles.header}>
-        <View style={styles.headerMark}>
-          <Ionicons name="briefcase-outline" size={22} color={colors.onForest} />
+        {/* Masters 35/36/37 ring the header's briefcase squircle in gold
+            rather than filling it; light keeps the Heritage forest fill. */}
+        <View style={[styles.headerMark, isDark && styles.headerMarkDark]}>
+          <Ionicons
+            name="briefcase-outline"
+            size={22}
+            color={isDark ? colors.gold : colors.onForest}
+          />
         </View>
         <View style={styles.headerCopy}>
           <Text style={styles.eyebrow}>YOUR WORK</Text>
@@ -263,7 +286,7 @@ export function MyJobsHubScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.forest} />
+          <ActivityIndicator size="large" color={accent} />
           <Text style={styles.loadingText}>Loading your jobs…</Text>
         </View>
       ) : (
@@ -274,8 +297,8 @@ export function MyJobsHubScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.forest}
-              colors={[colors.forest]}
+              tintColor={accent}
+              colors={[accent]}
             />
           }
         >
@@ -304,7 +327,7 @@ export function MyJobsHubScreen() {
             error ? null : (
               <View style={styles.empty}>
                 <View style={styles.emptyIcon}>
-                  <Ionicons name="briefcase-outline" size={34} color={colors.forest} />
+                  <Ionicons name="briefcase-outline" size={34} color={accent} />
                 </View>
                 <Text style={styles.emptyTitle}>Nothing here yet</Text>
                 <Text style={styles.emptyText}>{emptyText}</Text>
@@ -333,7 +356,7 @@ export function MyJobsHubScreen() {
                     accessibilityLabel="Resume your job draft"
                   >
                     <View style={styles.draftIcon}>
-                      <Ionicons name="create-outline" size={20} color={colors.forest} />
+                      <Ionicons name="create-outline" size={20} color={accent} />
                     </View>
                     <View style={styles.draftCopy}>
                       <Text style={styles.draftEyebrow}>NOT PUBLISHED YET</Text>
@@ -344,7 +367,7 @@ export function MyJobsHubScreen() {
                         Resume where you left off — workers can’t see it until you publish.
                       </Text>
                     </View>
-                    <Ionicons name="arrow-forward" size={18} color={colors.forest} />
+                    <Ionicons name="arrow-forward" size={18} color={accent} />
                   </Pressable>
                 </View>
               ) : null}
@@ -509,10 +532,10 @@ export function MyJobsHubScreen() {
                   accessibilityLabel="Post another job"
                 >
                   <View style={styles.postAnotherIcon}>
-                    <Ionicons name="add" size={20} color={colors.forest} />
+                    <Ionicons name="add" size={20} color={accent} />
                   </View>
                   <Text style={styles.postAnotherText}>Post another job</Text>
-                  <Ionicons name="arrow-forward" size={18} color={colors.forest} />
+                  <Ionicons name="arrow-forward" size={18} color={accent} />
                 </Pressable>
               ) : null}
             </>
@@ -545,19 +568,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerMarkDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   headerCopy: {
     flex: 1,
     gap: 2,
   },
+  // Masters 35/36/37 set YOUR WORK gold over a display-serif title.
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 1.2,
-    color: colors.emerald,
+    letterSpacing: 1.4,
+    color: colors.gold,
   },
   headerTitle: {
-    fontSize: 28,
-    lineHeight: 32,
+    fontFamily: fonts.display,
+    fontSize: 30,
+    lineHeight: 36,
     fontWeight: '800',
     color: colors.ink,
   },
@@ -570,6 +600,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
+  // Masters 36/37: the segmented bar is a hairlined track, and the ACTIVE
+  // cell is a dark fill inside a gold border with a serif cream label.
+  // Master 35 fills its active cell green instead (B-3); decision 5 names
+  // the gold-bordered form as the rule, so that is what all three tabs use.
   tabs: {
     minHeight: 50,
     flexDirection: 'row',
@@ -594,6 +628,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
+  tabSelectedDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   tabLabel: {
     fontSize: 12,
     fontWeight: '700',
@@ -602,6 +640,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   tabLabelSelected: {
     color: colors.forest,
+  },
+  tabLabelSelectedDark: {
+    fontFamily: fonts.display,
+    fontSize: 16,
+    color: colors.ink,
   },
   center: {
     flex: 1,
@@ -629,12 +672,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  // Masters 35/36: each section is a gold small-caps eyebrow beside a sage
+  // pill whose count reads green.
   sectionTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: colors.ink,
+    color: colors.gold,
     textTransform: 'uppercase',
-    letterSpacing: 0.8,
+    letterSpacing: 1.4,
   },
   countBadge: {
     minWidth: 30,
@@ -648,7 +693,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   countBadgeText: {
     fontSize: 12,
     fontWeight: '800',
-    color: colors.forest,
+    color: colors.emerald,
   },
   empty: {
     alignItems: 'center',
