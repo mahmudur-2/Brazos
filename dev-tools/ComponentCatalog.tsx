@@ -373,8 +373,10 @@ export function ComponentCatalog() {
             );
           })}
           <View style={styles.navBox}>
-            <Text style={styles.navCaption}>customer bar — the same five (decision 4)</Text>
-            <BottomNavPreview activeKey="Home" tabs={CUSTOMER_BAR_TABS} />
+            <Text style={styles.navCaption}>
+              customer bar — decision 4’s five plus D3’s creation slot
+            </Text>
+            <BottomNavPreview activeKey="Home" tabs={CUSTOMER_BAR_TABS} showCreateAction />
           </View>
           <View style={styles.navBox}>
             <Text style={styles.navCaption}>with a notched device’s bottom inset (34pt reported)</Text>

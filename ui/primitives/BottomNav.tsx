@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { glow, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
@@ -24,18 +24,26 @@ import { glow, radius, themedStyles, useThemeColors, withAlpha, type ColorPalett
  * there, which is the point of the catalog.
  *
  * MODE AWARENESS lives in the two trees (navigation/CustomerRoot.tsx,
- * navigation/WorkerRoot.tsx). Since Prestige 0d (pre-made decision 4) the two
- * bars are the SAME five tabs in the same order — Home / Map / My Jobs /
+ * navigation/WorkerRoot.tsx). Since Prestige 0d (pre-made decision 4) both
+ * bars carry the SAME five tabs in the same order — Home / Map / My Jobs /
  * Messages / Profile, Map never Discover (manifest Appendix B-2) — drawn as a
- * floating pill with an emerald active item under a soft glow. The 4D-era
- * customer [ + ] creation slot retired with the golden masters: none of the
- * 43 draws it, and each of its three sheet actions has a standing surface
- * (PostJob from Home and the My Jobs hub, SavedWorkers on the Profile stack,
- * My Jobs as a visible tab). The customer tree still REGISTERS Discover as a
- * route — its bar item hidden via HIDDEN_TAB_ITEM_OPTIONS — because
- * SavedWorkers dispatches into it; React Navigation 7 does not search child
- * navigators for an untargeted NAVIGATE, so the route must stay on the tab
- * navigator itself.
+ * floating pill with an emerald active item under a soft glow.
+ *
+ * THE CENTER [ + ] IS BACK, CUSTOMER ONLY (dark device pass, D3). 0d retired
+ * the 4D-era creation slot because no golden master draws one and each of its
+ * three actions had a standing surface. The operator has reversed that half of
+ * decision 4: posting a job is the customer's whole reason for opening the app
+ * and it was two taps behind a tab. The slot returns between Map and My Jobs,
+ * with exactly the three actions it carried before, and it is still an ACTION,
+ * not a destination — its route is never focused and never draws active.
+ * The WORKER bar is untouched: five tabs, no action slot. This is structural,
+ * so unlike everything else in that pass it is visible in BOTH themes, and it
+ * is a deliberate, recorded deviation from the golden-master set.
+ *
+ * The customer tree still REGISTERS Discover as a route — its bar item hidden
+ * via HIDDEN_TAB_ITEM_OPTIONS — because SavedWorkers dispatches into it;
+ * React Navigation 7 does not search child navigators for an untargeted
+ * NAVIGATE, so the route must stay on the tab navigator itself.
  */
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -66,10 +74,14 @@ export const BOTTOM_NAV_TABS: {
 /** The worker bar — the five classic tabs, unchanged. */
 export const WORKER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Messages', 'Profile'];
 
-/** The customer bar — decision 4: the SAME five as the worker bar. Kept as
- *  its own export (not an alias) so the trees keep naming their own contract
- *  and a future divergence is a one-line diff, not an API change. */
+/** The customer bar — decision 4's same five as the worker bar, with D3's
+ *  creation ACTION raised between them at CUSTOMER_CREATE_SLOT. Kept as its
+ *  own export (not an alias) so the trees keep naming their own contract. */
 export const CUSTOMER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Messages', 'Profile'];
+
+/** Where the [ + ] sits in CUSTOMER_BAR_TABS — after Map, before My Jobs, so
+ *  it lands dead centre of the six slots the customer bar actually draws. */
+export const CUSTOMER_CREATE_SLOT = 2;
 
 const TAB_BY_KEY = new Map(BOTTOM_NAV_TABS.map((tab) => [tab.key as string, tab]));
 
@@ -253,6 +265,36 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
 };
 
 /**
+ * D3's customer creation slot: a raised disc between Map and My Jobs that
+ * OPENS A SHEET rather than navigating.
+ *
+ * The gold is LINE-WORK — a gold ring and a gold glyph on the deep-green
+ * conversion fill — not a gold fill. Decision 3 forbids gold fills and
+ * tests/goldOnForest.test.mjs enforces it tree-wide; the same resolution
+ * prestige(4b) reached for the timeline connector, and the shape the set
+ * already uses for a circular gold control (master 1's inset arrow, 19's send
+ * button, 46's back squircle). One rule in both themes: gold on forest is
+ * correct in both under palette v2.
+ */
+export function CenterCreateButton({ onPress }: { onPress: () => void }) {
+  const { palette: colors } = useThemeColors();
+  const styles = stylesFor(colors);
+  return (
+    <View style={styles.createSlot}>
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.createButton, pressed && styles.createButtonPressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Create"
+        accessibilityHint="Post a job, hire someone again, or open your jobs"
+      >
+        <Ionicons name="add" size={32} color={colors.gold} />
+      </Pressable>
+    </View>
+  );
+}
+
+/**
  * A static, non-navigating rendering of the bar, for the dev catalog. Uses the
  * same item renderer and the same constants as the real bar; it just cannot be
  * tapped, because there is nothing to navigate to from a catalog page.
@@ -261,31 +303,48 @@ export function BottomNavPreview({
   activeKey,
   insetBottom = 0,
   tabs = WORKER_BAR_TABS,
+  showCreateAction = false,
 }: {
   activeKey: BottomNavTabKey;
   /** Simulate a notched device's home-indicator inset. */
   insetBottom?: number;
   /** Which bar layout to draw — worker five by default. */
   tabs?: BottomNavTabKey[];
+  /** Draw D3's customer [ + ] at CUSTOMER_CREATE_SLOT. */
+  showCreateAction?: boolean;
 }) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const bottomMargin = Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
+
+  // A flat item list keeps every slot an equal flex column, exactly like the
+  // real bar, where the action is one more Tab.Screen with its own button.
+  const items: Array<{ kind: 'tab'; key: BottomNavTabKey } | { kind: 'create' }> = [];
+  tabs.forEach((key, index) => {
+    if (showCreateAction && index === CUSTOMER_CREATE_SLOT) items.push({ kind: 'create' });
+    items.push({ kind: 'tab', key });
+  });
 
   return (
     <View
       style={[styles.previewBar, { height: TAB_BAR_CONTENT_HEIGHT, marginBottom: bottomMargin }]}
       accessibilityRole="tablist"
     >
-      {tabs.map((key) => (
-        <View key={key} style={styles.previewItem}>
-          <BottomNavItem
-            routeName={key}
-            focused={key === activeKey}
-            color={key === activeKey ? colors.emerald : colors.navInactive}
-          />
-        </View>
-      ))}
+      {items.map((item) =>
+        item.kind === 'create' ? (
+          <View key="create" style={styles.previewItem}>
+            <CenterCreateButton onPress={() => {}} />
+          </View>
+        ) : (
+          <View key={item.key} style={styles.previewItem}>
+            <BottomNavItem
+              routeName={item.key}
+              focused={item.key === activeKey}
+              color={item.key === activeKey ? colors.emerald : colors.navInactive}
+            />
+          </View>
+        )
+      )}
     </View>
   );
 }
@@ -307,6 +366,38 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: TAB_LABEL_FONT_SIZE + 2,
     marginTop: 2,
   },
+  createSlot: {
+    flex: 1,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    paddingBottom: TAB_BOTTOM_GAP,
+  },
+  createButton: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.lg,
+    // The one solid conversion fill, ringed in gold — gold is line-work here,
+    // never the fill (decision 3, enforced by tests/goldOnForest.test.mjs).
+    backgroundColor: colors.forest,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Raised above the pill. iOS is the target (CLAUDE.md: Android deferred);
+    // the slice above the bar's bounds still draws because the library's item
+    // wrapper keeps overflow visible for the uikit variant.
+    transform: [{ translateY: -14 }],
+    // The button's own depth. It is an OPAQUE fill, so this elevation cannot
+    // trigger the transparent-background Android rendering bug the bar's own
+    // elevation:0 exists to avoid — and the bar's style is untouched.
+    shadowColor: colors.black,
+    shadowOpacity: 0.28,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 6,
+  },
+  createButtonPressed: { opacity: 0.88, transform: [{ translateY: -14 }, { scale: 0.96 }] },
   previewBar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,

@@ -464,6 +464,15 @@ export type CustomerParamList = {
   Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
   /**
+   * The [ + ] creation slot (D3). An ACTION, not a destination: its bar button
+   * opens the creation sheet and never dispatches navigation, so the route is
+   * never focused and never draws an active state. It is named here only
+   * because React Navigation requires every rendered Tab.Screen to be in the
+   * param list — nothing navigates to it, and a `navigate('Create')` anywhere
+   * is a defect the mode suite asserts against.
+   */
+  Create: undefined;
+  /**
    * HIDDEN route — registered, dispatchable, absent from the bar
    * (HIDDEN_TAB_ITEM_OPTIONS in ui/primitives/BottomNav.tsx): the customer
    * browse surface (workers and services, never job postings). SavedWorkers

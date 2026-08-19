@@ -284,16 +284,19 @@ test('the shell holds rather than guessing while the mode resolves', () => {
   assert.match(shell, /<ActivityIndicator/);
 });
 
-test('each tree carries the Prestige tab contract (decision 4)', () => {
+test('each tree carries the Prestige tab contract (decision 4 + D3)', () => {
   const tabs = (source) =>
     [...source.matchAll(/<Tab\.Screen\s+name="(\w+)"/g)].map((m) => m[1]);
-  // ONE bar: the same five tabs in the same order in both trees — Map, never
-  // Discover (manifest Appendix B-2). The 4D-era customer [ + ] retired with
-  // the golden masters.
+  // ONE bar: the same five DESTINATIONS in the same order in both trees —
+  // Map, never Discover (manifest Appendix B-2).
   assert.deepEqual(tabs(workerRoot), ['Home', 'Map', 'MyJobs', 'Messages', 'Profile']);
+  // The customer tree carries D3's creation ACTION between Map and My Jobs —
+  // the dark device pass reversing the half of decision 4 that retired it.
+  // The five destinations and their order are unchanged around it.
   assert.deepEqual(tabs(customerRoot), [
     'Home',
     'Map',
+    'Create',
     'MyJobs',
     'Messages',
     'Profile',
@@ -301,14 +304,19 @@ test('each tree carries the Prestige tab contract (decision 4)', () => {
   ]);
   // Discover stays registered HIDDEN: SavedWorkers dispatches into it, and
   // React Navigation 7 resolves untargeted NAVIGATEs on the tab navigator
-  // only. The hidden route is registered last so the bar order is the five.
+  // only. The hidden route is registered last so the bar order is the six.
   assert.match(
     customerRoot,
     /name="Discover"[\s\S]{0,120}?options=\{HIDDEN_TAB_ITEM_OPTIONS\}/
   );
-  // No center action, no creation sheet, no Create route — decision 4's bar
-  // has five destinations and nothing else.
-  assert.doesNotMatch(customerRoot, /CenterCreateButton|name="Create"|ActionSheet/);
+  // D3 is CUSTOMER ONLY. The worker bar keeps the five-tab pill with no
+  // action slot and no sheet — asserted, not merely left unwritten.
+  assert.doesNotMatch(workerRoot, /CenterCreateButton|name="Create"|ActionSheet/);
+  // The slot is an ACTION, not a destination: its button replaces the
+  // library's pressable outright, so Create never dispatches navigation and
+  // never renders focused, and its component draws nothing.
+  assert.match(customerRoot, /tabBarButton: \(\) => <CenterCreateButton onPress=/);
+  assert.match(customerRoot, /function CreateActionScreen\(\) \{\s*return null;/);
   // 4D-4: the options factory takes the resolved palette so the bar repaints
   // on a theme change — still the ONE implementation, now theme-aware.
   assert.match(customerRoot, /bottomNavScreenOptions\(insets\.bottom, palette\)/);
@@ -324,18 +332,28 @@ test('the locked customer Home "View map" dispatch still resolves on the tab nav
   assert.match(customerRoot, /<Tab\.Screen name="Map" component=\{MapStackNavigator\}/);
 });
 
-test('the retired [ + ] actions each keep a standing surface (decision 4)', () => {
+test('the [ + ] sheet is a shortcut: each action also keeps a standing surface', () => {
+  // D3 restored the sheet, and the surfaces decision 4 gave those three
+  // actions all remain — so the sheet is never the ONLY way to anything and
+  // retiring it again would strand nothing.
   // Post a job: Customer Home still navigates to PostJob, and the My Jobs hub
   // carries its own post affordance.
   assert.match(home, /navigate\('PostJob'/);
   assert.match(read('screens/MyJobsHubScreen.tsx'), /navigate\('PostJob'\)/);
   // Hire someone again: SavedWorkers lives on the shared Profile stack.
   assert.match(read('navigation/sharedStacks.tsx'), /name="SavedWorkers"/);
-  // My jobs: a VISIBLE customer tab now, not a sheet shortcut — asserted by
-  // the tab-contract test above. Nothing anywhere navigates to a Create slot.
+  // My jobs is a VISIBLE customer tab — asserted by the tab-contract test.
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  assert.doesNotMatch(codeOnly(customerRoot), /navigate\('Create'/);
+  // Exactly those three, and every one dispatched through the ONE guarded
+  // cross-tab path rather than a raw navigate.
+  const sheet = codeOnly(customerRoot);
+  assert.match(sheet, /navigateAcrossTabs\('Home', 'PostJob'\)/);
+  assert.match(sheet, /navigateAcrossTabs\('Profile', 'SavedWorkers'\)/);
+  assert.match(sheet, /navigateAcrossTabs\('MyJobs'\)/);
+  assert.equal((sheet.match(/key: '/g) ?? []).length, 3, 'the sheet carries exactly three actions');
+  // Create is a slot, never a destination: nothing navigates to it.
+  assert.doesNotMatch(sheet, /navigate\('Create'/);
 });
 
 test('there is exactly one bottom nav implementation', () => {
