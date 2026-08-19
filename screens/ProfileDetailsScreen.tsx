@@ -24,6 +24,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { useFloatingNavClearance } from '../ui/primitives';
 
 const LANGUAGE_LABELS: Record<string, string> = { en: 'English', es: 'Español' };
 
@@ -49,6 +50,11 @@ function memberSince(iso: string | null | undefined): string | null {
 export function ProfileDetailsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint, derived from the bar's own
+  // geometry plus this device's home-indicator inset. Overrides the static
+  // paddingBottom in styles.content, which was 24 against a pill that occupies
+  // 82-104.
+  const navClearance = useFloatingNavClearance();
   const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
   const { profile } = useProfile();
@@ -115,7 +121,10 @@ export function ProfileDetailsScreen() {
         }
       />
 
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Master 42's centred identity header. */}
         <View style={styles.identity}>
           <AvatarPressable

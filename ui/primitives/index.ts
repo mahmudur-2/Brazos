@@ -108,6 +108,7 @@ export {
   HIDDEN_TAB_ITEM_OPTIONS,
   TAB_BAR_CONTENT_HEIGHT,
   TAB_BAR_FLOAT_MARGIN,
+  useFloatingNavClearance,
   WORKER_BAR_TABS,
   type BottomNavTabKey,
 } from './BottomNav';

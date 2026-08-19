@@ -9,6 +9,7 @@ import { goBackOrHome } from '../lib/navigationRef';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import type { SubmitBidRouteParamList } from '../lib/navigation';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { useFloatingNavClearance } from '../ui/primitives';
 
 /**
  * Screen 52 — Submit Bid (worker). The OfferComposer's marketplace-bid entry,
@@ -23,6 +24,8 @@ import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib
 export function SubmitBidScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint.
+  const navClearance = useFloatingNavClearance();
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<SubmitBidRouteParamList, 'SubmitBid'>>();
   const { mode } = useMode();
@@ -63,7 +66,7 @@ export function SubmitBidScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}

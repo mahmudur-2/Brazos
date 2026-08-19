@@ -39,6 +39,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { useFloatingNavClearance } from '../ui/primitives';
 
 const PAGE_SIZE = 20;
 const STARS = [5, 4, 3, 2, 1] as const;
@@ -54,6 +55,8 @@ const STARS = [5, 4, 3, 2, 1] as const;
 export function ProfileReviewsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint.
+  const navClearance = useFloatingNavClearance();
   const { params } =
     useRoute<RouteProp<ProfileReviewsRouteParamList, 'ProfileReviews'>>();
 
@@ -141,9 +144,10 @@ export function ProfileReviewsScreen() {
         <FlatList
           data={reviews}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={
-            reviews.length === 0 ? styles.emptyContainer : styles.listContent
-          }
+          contentContainerStyle={[
+            reviews.length === 0 ? styles.emptyContainer : styles.listContent,
+            { paddingBottom: navClearance },
+          ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           showsVerticalScrollIndicator={false}
           onEndReachedThreshold={0.4}

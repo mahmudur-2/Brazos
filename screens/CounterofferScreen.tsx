@@ -6,6 +6,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import { goBackOrHome } from '../lib/navigationRef';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { useFloatingNavClearance } from '../ui/primitives';
 
 /**
  * Screen 30 — Counteroffer, the OfferComposer's counter entry from the
@@ -22,6 +23,8 @@ import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib
 export function CounterofferScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint.
+  const navClearance = useFloatingNavClearance();
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'Counteroffer'>>();
 
@@ -33,7 +36,7 @@ export function CounterofferScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}

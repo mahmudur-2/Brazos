@@ -2,6 +2,7 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
+import { useFloatingNavClearance } from '../primitives';
 import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
@@ -56,6 +57,10 @@ export function DetailScreen({
 }: DetailScreenProps) {
   const { emerald: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): whichever of the two bottom elements is last on screen takes
+  // the pill's real footprint — the action bar when there is one, otherwise
+  // the scroller.
+  const navClearance = useFloatingNavClearance();
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} right={headerRight} />
@@ -70,7 +75,7 @@ export function DetailScreen({
               styles.content,
               // With an action bar, that bar handles bottom clearance; without
               // one, the scroller has to clear the floating nav itself.
-              !actionBar && insideTabs && { paddingBottom: layout.floatingNavClearance },
+              !actionBar && insideTabs && { paddingBottom: navClearance },
             ]}
             showsVerticalScrollIndicator={false}
           >
@@ -88,7 +93,19 @@ export function DetailScreen({
             ))}
           </ScrollView>
 
-          {actionBar ? <View style={styles.actionBar}>{actionBar}</View> : null}
+          {actionBar ? (
+            <View
+              style={[
+                styles.actionBar,
+                // emerald(3): same rule as FormScreen's footer — an action bar
+                // inside the tab navigator is the last element above the pill,
+                // so it carries the clearance rather than the scroller.
+                insideTabs && { paddingBottom: layout.screenGutter + navClearance },
+              ]}
+            >
+              {actionBar}
+            </View>
+          ) : null}
         </>
       )}
     </SafeAreaView>

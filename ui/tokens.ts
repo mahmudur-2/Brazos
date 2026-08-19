@@ -172,19 +172,54 @@ export const spacing = {
   xxxl: 32,
 } as const;
 
+/**
+ * The floating nav pill's geometry, declared ONCE (emerald D3/emerald(3)).
+ *
+ * ui/primitives/BottomNav.tsx reads both of these for the bar it configures,
+ * and every screen's bottom clearance below is derived from the same two
+ * numbers — so a change to the bar's height can never desynchronise the
+ * screens that have to clear it. Before this they were two hardcoded values
+ * (a 70pt bar and a 68pt clearance) that happened to be close, and nothing
+ * connected them.
+ */
+const FLOATING_NAV_HEIGHT = 70;
+const FLOATING_NAV_GAP = 12;
+
 /** §I: "screen gutter 16; card padding 14; card gap 10". */
 export const layout = {
   screenGutter: 16,
   cardPadding: 14,
   cardGap: 10,
+  /** The pill's own height. ui/primitives/BottomNav.tsx's
+   *  TAB_BAR_CONTENT_HEIGHT is this value. */
+  floatingNavHeight: FLOATING_NAV_HEIGHT,
+  /**
+   * The pill's float gap — its inset from the screen edges, and the MINIMUM
+   * gap under it. ui/primitives/BottomNav.tsx's TAB_BAR_FLOAT_MARGIN is this
+   * value. A bottom action footer or composer uses it as extra bottom padding
+   * so its controls keep the same distance from the pill that the pill keeps
+   * from the screen edge, instead of the footer band and the pill reading as
+   * one continuous surface.
+   */
+  floatingNavGap: FLOATING_NAV_GAP,
   /**
    * §I: "bottom content never collides with the floating nav (respect its
-   * 68pt + margins)". Templates apply this as bottom content inset so a
-   * scroll view's last row clears the tab bar. Screens inside the tab
-   * navigator must NOT also add a bottom SafeArea edge — MainTabs already
-   * owns that inset (CLAUDE.md, and the bug f3e75d0 was written to fix).
+   * 68pt + margins)".
+   *
+   * THIS IS NO LONGER A TOKEN. §I's flat 68 was the whole defect emerald(3)
+   * fixes: the pill's real footprint is its height PLUS the margin that floats
+   * it, and that margin grows to the device's home-indicator inset (34 on a
+   * notched iPhone), so the true clearance is 82–104 depending on the device.
+   * 68 was short of it on every notched phone, which is why surfaces that
+   * already applied this token — Notifications, Services & availability,
+   * Delete account — still scrolled under the pill on the device pass.
+   *
+   * A static token cannot express a runtime inset, so the clearance is now the
+   * `useFloatingNavClearance()` hook in ui/primitives/BottomNav.tsx, derived
+   * from floatingNavHeight and floatingNavGap below. The two numbers stay here
+   * because they are design values; the arithmetic that needs the device lives
+   * with the bar.
    */
-  floatingNavClearance: 68,
   /**
    * On a wide window the mobile composition centres rather than stretching.
    * Mirrors lib/authTheme.ts's existing maxContentWidth for the same reason.

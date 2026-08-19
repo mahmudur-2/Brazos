@@ -26,6 +26,7 @@ import {
   StatusPill,
   StepHeader,
   TopBar,
+  useFloatingNavClearance,
   type JobStatus,
   type OfferStatus,
   type PaymentStatus,
@@ -147,6 +148,9 @@ export function ComponentCatalog() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [stateIndex, setStateIndex] = useState(0);
   const [uploaderPhotos, setUploaderPhotos] = useState<string[]>([]);
+  // emerald(3): the same derived clearance every screen uses, so the catalog
+  // keeps demonstrating what the real surfaces do.
+  const navClearance = useFloatingNavClearance();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -157,7 +161,7 @@ export function ComponentCatalog() {
       />
 
       <ScrollView
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[styles.content, { paddingBottom: navClearance + spacing.xxl }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -479,7 +483,6 @@ const styles = StyleSheet.create({
   content: {
     padding: layout.screenGutter,
     gap: spacing.xxl,
-    paddingBottom: layout.floatingNavClearance + spacing.xxl,
   },
   section: {
     gap: spacing.md,

@@ -45,6 +45,7 @@ import {
 } from '../lib/payments';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
+import { useFloatingNavClearance } from '../ui/primitives';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -82,6 +83,9 @@ import { formatTimeAgo } from '../lib/time';
 export function ClientJobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint. This is the "Job & bids"
+  // surface the device pass caught scrolling under it.
+  const navClearance = useFloatingNavClearance();
   const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ClientJobDetail'>>();
@@ -381,7 +385,7 @@ export function ClientJobDetailScreen() {
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
           keyboardShouldPersistTaps="handled"
           // Swiping the list down puts the keyboard away, so it never has to
           // be dismissed by hunting for empty space to tap.

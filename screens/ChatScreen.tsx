@@ -88,6 +88,7 @@ import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { useFloatingNavClearance } from '../ui/primitives';
 
 /** One entry in the merged timeline: a message, or the job it belongs to. */
 type TimelineItem =
@@ -97,6 +98,9 @@ type TimelineItem =
 export function ChatScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint. The Messages thread was on
+  // the device pass's list.
+  const navClearance = useFloatingNavClearance();
   // Chat is nested in more than one tab's stack, so its nav/route types are
   // declared standalone (ChatRouteParamList) rather than tied to one parent
   // stack — it only needs goBack() and its own params.
@@ -970,7 +974,13 @@ export function ChatScreen() {
           sibling above this view, not an overlay, so nothing needs
           compensating for. */}
       <KeyboardAvoidingView
-        style={styles.flex}
+        // emerald(3): the whole chat column clears the floating pill, not just
+        // the composer — the bottom-most element here is the composer, the
+        // locked notice or the blocked notice depending on state, and putting
+        // the clearance on the column covers all three rather than three
+        // places to forget. The bar does not hide on keyboard
+        // (tabBarHideOnKeyboard is off), so the pill is still there behind it.
+        style={[styles.flex, { paddingBottom: navClearance }]}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={0}
       >

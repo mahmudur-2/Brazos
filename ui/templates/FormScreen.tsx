@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { StepHeader } from '../primitives';
+import { StepHeader, useFloatingNavClearance } from '../primitives';
 import {
   controls,
   layout,
@@ -85,6 +85,10 @@ export function FormScreen({
   const { emerald: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const showFooter = Boolean(submitLabel && onSubmit);
+  // emerald(3): the pill's real footprint, read from the device rather than
+  // from a flat token. Whichever of the two bottom elements is last on screen
+  // takes it — the footer when there is one, the scroller when there is not.
+  const navClearance = useFloatingNavClearance();
 
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
@@ -107,9 +111,10 @@ export function FormScreen({
             style={styles.flex}
             contentContainerStyle={[
               styles.content,
-              // Only clear the floating nav when there is no footer to sit
-              // above it; a footer already occupies that space.
-              !showFooter && insideTabs && { paddingBottom: layout.floatingNavClearance },
+              // Only the LAST element on screen clears the pill. With a footer
+              // that is the footer, and the content then clears both by
+              // sitting above it.
+              !showFooter && insideTabs && { paddingBottom: navClearance },
             ]}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
@@ -118,7 +123,17 @@ export function FormScreen({
           </ScrollView>
 
           {showFooter ? (
-            <View style={styles.footer}>
+            <View
+              style={[
+                styles.footer,
+                // emerald(3): a footer inside the tab navigator is the last
+                // thing above the pill, so IT carries the clearance — Back /
+                // Continue, Publish job, Cash out and Delete my account were
+                // all sitting under it. Its own gutter stays underneath as the
+                // button's breathing room.
+                insideTabs && { paddingBottom: layout.screenGutter + navClearance },
+              ]}
+            >
               {footerNote ? <View style={styles.footerNote}>{footerNote}</View> : null}
               <View style={styles.footerRow}>
                 {secondaryLabel && onSecondary ? (

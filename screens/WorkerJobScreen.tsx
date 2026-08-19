@@ -46,6 +46,7 @@ import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/p
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
+import { useFloatingNavClearance } from '../ui/primitives';
 import {
   deleteJobPhoto,
   rejectionForPickedVideo,
@@ -84,6 +85,8 @@ function formatDuration(ms: number): string {
 export function WorkerJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint.
+  const navClearance = useFloatingNavClearance();
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkerJob'>>();
   const { user } = useAuth();
@@ -341,7 +344,7 @@ export function WorkerJobScreen() {
         >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
           keyboardShouldPersistTaps="handled"
           // Swiping the list down puts the keyboard away, so it never has to
           // be dismissed by hunting for empty space to tap.

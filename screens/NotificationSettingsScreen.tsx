@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { Toggle } from '../ui/primitives';
+import { Toggle, useFloatingNavClearance } from '../ui/primitives';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync } from '../lib/dialog';
@@ -65,6 +65,8 @@ const TOGGLE_ICONS: Partial<Record<NotificationToggleKey, keyof typeof Ionicons.
 export function NotificationSettingsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint.
+  const navClearance = useFloatingNavClearance();
   const { user } = useAuth();
   const { profile } = useProfile();
 
@@ -198,7 +200,7 @@ export function NotificationSettingsScreen() {
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.content}>
+        <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}>
           {loadError && (
             <View style={[styles.notice, styles.noticeWarn]}>
               <Ionicons name="alert-circle-outline" size={18} color={colors.danger} />

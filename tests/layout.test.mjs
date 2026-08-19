@@ -86,13 +86,20 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
 });
 
 test('the nav glyphs are D3 size and every slot still fits its label', async () => {
-  const bottomNav = await read('ui/primitives/BottomNav.tsx');
+  const [bottomNav, tokens] = await Promise.all([
+    read('ui/primitives/BottomNav.tsx'),
+    read('ui/tokens.ts'),
+  ]);
 
-  const number = (name) => {
-    const match = bottomNav.match(new RegExp(`${name} = (\\d+)`));
-    assert.ok(match, `${name} must be a plain number in ui/primitives/BottomNav.tsx`);
+  const numberIn = (source, where, name) => {
+    const match = source.match(new RegExp(`${name} = (\\d+)`));
+    assert.ok(match, `${name} must be a plain number in ${where}`);
     return Number(match[1]);
   };
+  const number = (name) => numberIn(bottomNav, 'ui/primitives/BottomNav.tsx', name);
+  // Since emerald(3) the pill's geometry lives in ui/tokens.ts, so both the bar
+  // and every screen that clears it read one number each.
+  const geometry = (name) => numberIn(tokens, 'ui/tokens.ts', name);
 
   // emerald D3's explicit values. Recorded as a 1pt REDUCTION from the 29/12
   // that shipped, not an increase — see the constant's comment.
@@ -103,7 +110,7 @@ test('the nav glyphs are D3 size and every slot still fits its label', async () 
   // of about size + 3; the label adds its lineHeight (size + 2) plus a 2pt
   // margin; TAB_BOTTOM_GAP closes it. BottomTabItem's non-overridable 5pt
   // padding costs 10 of the bar's height.
-  const barHeight = number('export const TAB_BAR_CONTENT_HEIGHT');
+  const barHeight = geometry('const FLOATING_NAV_HEIGHT');
   const stack =
     number('const TAB_ICON_SIZE') +
     3 +
@@ -122,7 +129,7 @@ test('the nav glyphs are D3 size and every slot still fits its label', async () 
   // Even distribution, and a ≥44pt target on the narrowest supported width.
   // Both bars draw five slots: the worker's five tabs, and the customer's four
   // destinations plus the centre action.
-  const floatMargin = number('export const TAB_BAR_FLOAT_MARGIN');
+  const floatMargin = geometry('const FLOATING_NAV_GAP');
   const narrowestScreen = 320;
   const slotWidth = (narrowestScreen - floatMargin * 2) / 5;
   assert.ok(slotWidth >= 44, `slot width ${slotWidth} must clear the 44pt touch floor`);
@@ -161,6 +168,90 @@ test('every screen inside the tab bar leaves the bottom safe-area inset to it', 
       source,
       /edges=\{\['top', 'bottom'\]\}/,
       `${path} must not reserve the bottom inset the tab bar already owns`
+    );
+  }
+});
+
+test('the floating-nav clearance is derived from the bar, in one place', async () => {
+  // emerald(3). The old §I token was a flat 68 against a pill that occupies its
+  // 70pt height PLUS the margin that floats it — up to the device's 34pt
+  // home-indicator inset. That is why surfaces which DID apply the token still
+  // had content under the pill on the device pass. A static token cannot see a
+  // runtime inset, so the clearance is a hook now.
+  const [tokens, bottomNav, primitivesIndex] = await Promise.all([
+    read('ui/tokens.ts'),
+    read('ui/primitives/BottomNav.tsx'),
+    read('ui/primitives/index.ts'),
+  ]);
+
+  // The token is gone, so nothing can quietly go back to the flat number.
+  assert.doesNotMatch(
+    tokens,
+    /floatingNavClearance:/,
+    'floatingNavClearance must not come back as a static token'
+  );
+  // The two design values it derives from live in tokens, and the bar reads
+  // them — so the bar and the screens can never disagree about the geometry.
+  assert.match(tokens, /floatingNavHeight: FLOATING_NAV_HEIGHT,/);
+  assert.match(tokens, /floatingNavGap: FLOATING_NAV_GAP,/);
+  assert.match(bottomNav, /export const TAB_BAR_CONTENT_HEIGHT = layout\.floatingNavHeight;/);
+  assert.match(bottomNav, /export const TAB_BAR_FLOAT_MARGIN = layout\.floatingNavGap;/);
+  // The hook is the height plus the margin that floats it, read from the
+  // device — not a second copy of the arithmetic.
+  assert.match(
+    bottomNav,
+    /export function useFloatingNavClearance\(\): number \{\s*const insets = useSafeAreaInsets\(\);\s*return bottomNavHeight\(insets\.bottom\);\s*\}/
+  );
+  assert.match(
+    bottomNav,
+    /return TAB_BAR_CONTENT_HEIGHT \+ Math\.max\(insetBottom, TAB_BAR_FLOAT_MARGIN\);/
+  );
+  assert.match(primitivesIndex, /useFloatingNavClearance,/);
+});
+
+test('every tab-contained scroll surface clears the floating pill', async () => {
+  // emerald(3): the named device-pass surfaces plus the peers found with them.
+  // A screen qualifies by having the clearance reach whichever element is LAST
+  // above the pill — the scroller when there is no footer, the footer or
+  // composer when there is one.
+  const surfaces = [
+    // Templates — these carry 17 screens between them, including the device
+    // pass's Notifications feed, Services & availability and Delete account.
+    'ui/templates/FormScreen.tsx',
+    'ui/templates/DetailScreen.tsx',
+    'ui/templates/SuccessScreen.tsx',
+    // Hand-rolled surfaces.
+    'screens/PostJobScreen.tsx',
+    'screens/ProfileDetailsScreen.tsx',
+    'screens/ClientJobDetailScreen.tsx',
+    'screens/ChatScreen.tsx',
+    'screens/AccountSafetyScreen.tsx',
+    'screens/NotificationSettingsScreen.tsx',
+    'screens/JobDetailScreen.tsx',
+    'screens/WorkerJobScreen.tsx',
+    'screens/SubmitBidScreen.tsx',
+    'screens/CounterofferScreen.tsx',
+    'screens/LegalDocumentScreen.tsx',
+    'screens/ProfileReviewsScreen.tsx',
+    'screens/WorkerProfileScreen.tsx',
+    'screens/AppearanceScreen.tsx',
+    'screens/AdminReportsScreen.tsx',
+    'screens/CellJobsScreen.tsx',
+    'screens/WorkerResultsScreen.tsx',
+    'screens/WorkerSearchScreen.tsx',
+  ];
+
+  for (const path of surfaces) {
+    const source = await read(path);
+    assert.match(
+      source,
+      /useFloatingNavClearance\(\)/,
+      `${path} must take its bottom clearance from the shared hook`
+    );
+    assert.match(
+      source,
+      /paddingBottom: (spacing\.\w+ \+ )?(layout\.screenGutter \+ )?navClearance/,
+      `${path} must apply the clearance to whatever sits last above the pill`
     );
   }
 });

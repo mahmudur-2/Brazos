@@ -75,7 +75,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { MediaUploader } from '../ui/primitives';
+import { MediaUploader, useFloatingNavClearance } from '../ui/primitives';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
@@ -164,6 +164,10 @@ const POST_STEPS = [
 export function PostJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the Back/Continue footer is the last element above the pill,
+  // so it carries the clearance and the scroller above it clears both. Step 1's
+  // category chips and step 4's Timing row were the two the device pass named.
+  const navClearance = useFloatingNavClearance();
   const emeraldColors = emeraldColorsFor(colors);
   // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
   // and Hire Again entry points, so its types are standalone rather than tied
@@ -1368,7 +1372,7 @@ export function PostJobScreen() {
           </View>
         ) : null}
 
-        <View style={styles.footer}>
+        <View style={[styles.footer, { paddingBottom: spacing.md + navClearance }]}>
           {step > 0 && (
             <Button
               title="Back"

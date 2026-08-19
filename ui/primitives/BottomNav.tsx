@@ -1,8 +1,9 @@
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import { glow, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
+import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
 
 /**
  * §I's `BottomNav` primitive — deferred from Phase 1, built here because Phase 2
@@ -161,7 +162,11 @@ const TAB_LABEL_FONT_SIZE = 11;
 // measure as fitting exactly on web while overflowing on device. Any harness
 // measurement of this stack taken on web reads ~13px shorter than native —
 // don't size this from a web number without adding that back.
-export const TAB_BAR_CONTENT_HEIGHT = 70;
+// The number itself lives in ui/tokens.ts as layout.floatingNavHeight, so the
+// bar and every screen that has to clear it read ONE value (emerald(3)). This
+// export stays because the bar's own arithmetic and the catalog are written in
+// terms of it.
+export const TAB_BAR_CONTENT_HEIGHT = layout.floatingNavHeight;
 const TAB_ICON_WRAPPER_HEIGHT = TAB_BAR_CONTENT_HEIGHT - 10;
 const TAB_BOTTOM_GAP = 3;
 
@@ -171,7 +176,7 @@ const TAB_BOTTOM_GAP = 3;
 // inset (34) so the pill floats clear of the home indicator — the indicator
 // lives in the background gap now, never inside the bar, which retires the
 // docked era's fold-the-inset-into-the-height arithmetic.
-export const TAB_BAR_FLOAT_MARGIN = 12;
+export const TAB_BAR_FLOAT_MARGIN = layout.floatingNavGap;
 
 // Bar colours come from the RESOLVED palette (4D-4): bottomNavScreenOptions
 // takes it as a parameter so it stays a plain function the catalog can call,
@@ -225,6 +230,32 @@ export const TAB_BAR_FLOAT_MARGIN = 12;
  *  bottom inset — the pill's height plus the margin that floats it. */
 export function bottomNavHeight(insetBottom: number): number {
   return TAB_BAR_CONTENT_HEIGHT + Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
+}
+
+/**
+ * The bottom inset a scrolling surface inside the tab navigator must reserve
+ * so its last row clears the floating pill — emerald(3)'s ONE shared solution.
+ *
+ * WHY A HOOK AND NOT A TOKEN. It used to be `layout.floatingNavClearance`, a
+ * flat 68 from §I. The pill's real footprint is its HEIGHT plus the margin that
+ * floats it, and that margin grows to the device's home-indicator inset — 34 on
+ * a notched iPhone — so the true figure is 82 on a phone with no inset and 104
+ * on one with. 68 was short of it on every notched device, which is exactly why
+ * the surfaces that DID apply the old token (Notifications, Services &
+ * availability, Delete account) still had content under the pill on the device
+ * pass, while the ones that applied nothing at all were simply worse. A static
+ * token cannot see the inset; this can.
+ *
+ * Derived from the bar's own two constants, so emerald(2)'s height change — or
+ * any future one — moves the screens with it and cannot desynchronise them.
+ *
+ * Surfaces with their own bottom action footer or composer do NOT put this on
+ * their scroll content: the footer sits below the scroller, so it is the FOOTER
+ * that has to clear the pill, and the content then clears both.
+ */
+export function useFloatingNavClearance(): number {
+  const insets = useSafeAreaInsets();
+  return bottomNavHeight(insets.bottom);
 }
 
 /**

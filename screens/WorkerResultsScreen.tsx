@@ -35,6 +35,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { useFloatingNavClearance } from '../ui/primitives';
 
 // The value now lives in lib/discoveryFilter.ts (4D-2) so lib modules can
 // read it without importing a screen; re-exported here because the LOCKED
@@ -72,6 +73,9 @@ export function WorkerResultsScreen() {
   // draw these accents gold.
   const accent = isDark ? colors.gold : colors.forest;
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint. Masters 12 and 13 are this
+  // screen, and the last job card was ending under the bar.
+  const navClearance = useFloatingNavClearance();
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
   const { user } = useAuth();
@@ -348,7 +352,7 @@ export function WorkerResultsScreen() {
               />
             );
           }}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: navClearance }]}
           showsVerticalScrollIndicator={false}
           initialNumToRender={8}
           windowSize={11}

@@ -13,6 +13,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { useFloatingNavClearance } from '../ui/primitives';
 import { THEME_PREFERENCES, type ThemePreference } from '../lib/themePreference';
 
 /**
@@ -47,11 +48,13 @@ const OPTION_ICONS: Record<ThemePreference, ComponentProps<typeof Ionicons>['nam
 export function AppearanceScreen() {
   const { palette, isDark, preference, setPreference } = useThemeColors();
   const styles = stylesFor(palette);
+  // emerald(3): the floating pill's real footprint.
+  const navClearance = useFloatingNavClearance();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Appearance" onBack={goBackOrHome} palette={palette} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}>
         <Card palette={palette} style={styles.card}>
           <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>THEME</Text>
           {THEME_PREFERENCES.map((option, index) => {

@@ -2,6 +2,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
+import { useFloatingNavClearance } from '../primitives';
 import {
   controls,
   layout,
@@ -54,12 +55,13 @@ export function SuccessScreen({
 }: SuccessScreenProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const navClearance = useFloatingNavClearance();
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          insideTabs && { paddingBottom: layout.floatingNavClearance },
+          insideTabs && { paddingBottom: navClearance },
         ]}
         showsVerticalScrollIndicator={false}
       >

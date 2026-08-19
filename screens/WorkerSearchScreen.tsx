@@ -64,7 +64,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { SearchBar } from '../ui/primitives';
+import { SearchBar, useFloatingNavClearance } from '../ui/primitives';
 
 /** Chips offered before anything has been typed. The first six of the shared
  *  skill list — enough to cover the common asks without a wall of options. */
@@ -83,6 +83,9 @@ type SearchState =
 export function WorkerSearchScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // emerald(3): the floating pill's real footprint. This is the Discover tab's
+  // root since emerald(1), so it is now a first-screen surface.
+  const navClearance = useFloatingNavClearance();
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const navigation = useNavigation<CustomerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerSearchRouteParamList, 'WorkerSearch'>>();
@@ -472,7 +475,7 @@ export function WorkerSearchScreen() {
             <FlatList
               data={state.matches}
               keyExtractor={(item) => item.profile.id}
-              contentContainerStyle={styles.listContent}
+              contentContainerStyle={[styles.listContent, { paddingBottom: navClearance }]}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode="on-drag"
               showsVerticalScrollIndicator={false}
