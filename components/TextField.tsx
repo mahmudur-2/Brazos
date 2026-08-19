@@ -28,7 +28,20 @@ export function TextField({
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
-        <Text style={[styles.label, { color: palette.text }]}>{label}</Text>
+        {/* Decision 8: a field label is a gold small-caps eyebrow. Masters 3,
+            4, 23, 24 and 30 all draw them that way (master 29 draws its two
+            cream — B-9, settled by the decision). Light keeps the Heritage
+            ink label. */}
+        <Text
+          style={[
+            styles.label,
+            { color: palette.text },
+            isDark && styles.labelDark,
+            isDark && { color: palette.gold },
+          ]}
+        >
+          {label}
+        </Text>
         {hint ? <Text style={[styles.hint, { color: palette.textMuted }]}>{hint}</Text> : null}
       </View>
       <TextInput
@@ -65,13 +78,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
   },
+  labelDark: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
+  },
   hint: {
     fontSize: 12,
   },
   input: {
     minHeight: 50,
     borderWidth: 1,
-    borderRadius: radius.md,
+    // Masters 3/4/23/24/30 draw every field as a full-round pill.
+    borderRadius: radius.pill,
     paddingHorizontal: spacing.md + 2,
     fontSize: 16,
   },

@@ -23,7 +23,6 @@ import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { CategoryAccordion } from '../components/CategoryAccordion';
-import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { PastWork } from '../components/PastWork';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -35,14 +34,12 @@ import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
-import { formatPhoneDisplay } from '../lib/phone';
 import { fetchPortfolio, fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
 import {
   profileCompleteness,
   type CompletenessStepKey,
 } from '../lib/profileCompleteness';
 import { fetchWorkerServices } from '../lib/services';
-import { skillCategoryIcon, skillCategoryLabel } from '../lib/skillCategories';
 import { updateProfile } from '../lib/profiles';
 import { useMode } from '../modes/ModeProvider';
 import { uploadAvatar } from '../lib/storage';
@@ -111,9 +108,6 @@ const HUB_SETTINGS: {
   },
 ];
 
-function languageLabel(value: string) {
-  return LANGUAGE_OPTIONS.find((o) => o.value === value)?.label ?? value;
-}
 
 export function ProfileScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -426,11 +420,6 @@ export function ProfileScreen() {
     );
   }
 
-  const selectedCategoryLabels = categories.map((c) => ({
-    key: c,
-    label: skillCategoryLabel(c),
-    icon: skillCategoryIcon(c),
-  }));
 
   // Replaces static, identical-for-every-user copy ("You can post jobs and
   // find work") with something that's actually true of this specific
@@ -548,6 +537,10 @@ export function ProfileScreen() {
             </View>
           ) : null}
 
+          {/* Masters 29/30 — the EDIT surface's own identity header. In the
+              hub state this whole block belongs to master 42's details page,
+              which is where it now lives. */}
+          {isEditing ? (
           <View style={styles.avatarRow}>
             {isEditing ? (
               // onPress (the full library/camera/remove action sheet) and
@@ -601,9 +594,11 @@ export function ProfileScreen() {
               </Pressable>
             )}
           </View>
+          ) : null}
 
+          {isEditing ? (
           <Card>
-            {isEditing ? (
+            {(
               <View style={styles.form}>
                 <TextField
                   label="Full name"
@@ -622,7 +617,7 @@ export function ProfileScreen() {
                 />
 
                 <View style={styles.field}>
-                  <Text style={styles.fieldLabel}>Language</Text>
+                  <Text style={[styles.fieldLabel, isDark && styles.fieldLabelDark]}>Language</Text>
                   <SegmentedControl
                     options={LANGUAGE_OPTIONS}
                     value={language}
@@ -644,7 +639,7 @@ export function ProfileScreen() {
                 />
 
                 <View style={styles.field}>
-                  <Text style={styles.fieldLabel}>Job categories (optional)</Text>
+                  <Text style={[styles.fieldLabel, isDark && styles.fieldLabelDark]}>Job categories (optional)</Text>
                   <CategoryAccordion
                     selected={categories}
                     onToggle={toggleCategory}
@@ -669,41 +664,9 @@ export function ProfileScreen() {
                   />
                 </View>
               </View>
-            ) : (
-              <View style={styles.readOnly}>
-                <View style={styles.readField}>
-                  <Text style={styles.fieldLabel}>Full name</Text>
-                  <Text style={styles.readValue}>{fullName || '—'}</Text>
-                </View>
-                <View style={styles.readField}>
-                  <Text style={styles.fieldLabel}>Phone number</Text>
-                  <Text style={styles.readValue}>
-                    {phone ? formatPhoneDisplay(phone) : '—'}
-                  </Text>
-                </View>
-                <View style={styles.readField}>
-                  <Text style={styles.fieldLabel}>Language</Text>
-                  <Text style={styles.readValue}>{languageLabel(language)}</Text>
-                </View>
-                <View style={styles.readField}>
-                  <Text style={styles.fieldLabel}>Bio</Text>
-                  <Text style={styles.readValue}>{bio || 'No bio yet'}</Text>
-                </View>
-                <View style={styles.readField}>
-                  <Text style={styles.fieldLabel}>Job categories</Text>
-                  {selectedCategoryLabels.length > 0 ? (
-                    <View style={styles.chips}>
-                      {selectedCategoryLabels.map((c) => (
-                        <Chip key={c.key} label={c.label} icon={c.icon} selected />
-                      ))}
-                    </View>
-                  ) : (
-                    <Text style={styles.readValue}>No categories selected</Text>
-                  )}
-                </View>
-              </View>
             )}
           </Card>
+          ) : null}
 
           {/* §6.4 — the worker profile completeness meter: own profile,
               worker mode only, and only while a step is unmet — at 4/4 it
@@ -929,8 +892,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 2,
     borderColor: colors.background,
   },
+  // Master 30 sets the email in the serif under the centred avatar.
   email: {
-    fontSize: 15,
+    fontFamily: fonts.display,
+    fontSize: 19,
     fontWeight: '600',
     color: colors.text,
     marginTop: spacing.sm,
@@ -969,12 +934,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   field: {
     gap: spacing.sm,
   },
+  // Decision 8: a field/section label is a gold small-caps eyebrow.
+  // Master 30 draws these gold, master 29 draws its two cream (B-9) - the
+  // decision settles it gold. Light keeps the Heritage muted label.
   fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.3,
+    textTransform: 'uppercase',
     color: colors.textMuted,
   },
+  fieldLabelDark: { color: colors.gold },
+  // A textarea is not a pill: the shared field is full-round for a single
+  // line, and a taller box overrides that back to the card radius.
   multiline: {
+    borderRadius: radius.lg,
     height: 84,
     paddingTop: spacing.md,
     textAlignVertical: 'top',
