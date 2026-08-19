@@ -239,7 +239,6 @@ const LITERAL_FILE_ALLOWLIST = {
   // allowance. Every other auth screen has no master and stays as it is.
   'screens/SignInScreen.tsx': 'LOCKED screen',
   'screens/EmailSignInScreen.tsx': 'LOCKED screen',
-  'screens/EmailCreateAccountScreen.tsx': 'LOCKED screen',
   'screens/VerifyPhoneScreen.tsx': 'LOCKED screen',
   'screens/SetupScreen.tsx': 'LOCKED screen',
   'screens/LegalGateScreen.tsx': 'LOCKED screen',

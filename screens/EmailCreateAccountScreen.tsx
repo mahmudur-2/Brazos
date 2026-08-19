@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
@@ -7,7 +7,15 @@ import { AuthField } from '../components/AuthField';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
 import { useAuth } from '../hooks/useAuth';
-import { authColors, authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSpacing, authType } from '../lib/authTheme';
+import {
+  authSurface,
+  fonts,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import { alertAsync } from '../lib/dialog';
 import type { AuthStackNavigation } from '../lib/navigation';
@@ -32,6 +40,12 @@ export function EmailCreateAccountScreen() {
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
+  // Master 4 draws an eye beside the password. Presentation only: it toggles
+  // what the field renders, never what it holds or submits.
+  const [passwordShown, setPasswordShown] = useState(false);
 
   const [fullName, setFullName] = useState('');
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
@@ -96,9 +110,14 @@ export function EmailCreateAccountScreen() {
   }
 
   return (
-    <AuthScaffold title="Create account" onBack={() => navigation.goBack()} backdrop="soft">
+    <AuthScaffold
+      title="Create account"
+      onBack={() => navigation.goBack()}
+      backdrop="soft"
+      themed
+    >
       <View style={styles.body}>
-        <Text style={styles.eyebrow}>CREATE ACCOUNT</Text>
+        <Text style={[styles.eyebrow, { color: surface.accent }]}>CREATE ACCOUNT</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           Sign up with your email
         </Text>
@@ -109,6 +128,8 @@ export function EmailCreateAccountScreen() {
         <View style={styles.form}>
           <AuthField
             label="Full name"
+            themed
+            leading={<Ionicons name="person-outline" size={20} color={surface.accent} />}
             value={fullName}
             onChangeText={(next) => {
               setFullName(next);
@@ -127,6 +148,7 @@ export function EmailCreateAccountScreen() {
 
           <PhoneNumberInput
             ref={phoneRef}
+            themed
             country={country}
             onChangeCountry={setCountry}
             value={phoneDigits}
@@ -143,6 +165,8 @@ export function EmailCreateAccountScreen() {
           <AuthField
             ref={emailRef}
             label="Email"
+            themed
+            leading={<Ionicons name="mail-outline" size={20} color={surface.accent} />}
             value={email}
             onChangeText={(next) => {
               setEmail(next);
@@ -164,6 +188,23 @@ export function EmailCreateAccountScreen() {
           <AuthField
             ref={passwordRef}
             label="Password"
+            themed
+            leading={<Ionicons name="lock-closed-outline" size={20} color={surface.accent} />}
+            trailing={
+              <Pressable
+                onPress={() => setPasswordShown((shown) => !shown)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={passwordShown ? 'Hide password' : 'Show password'}
+                accessibilityState={{ selected: passwordShown }}
+              >
+                <Ionicons
+                  name={passwordShown ? 'eye-off-outline' : 'eye-outline'}
+                  size={20}
+                  color={surface.accent}
+                />
+              </Pressable>
+            }
             value={password}
             onChangeText={(next) => {
               setPassword(next);
@@ -171,7 +212,7 @@ export function EmailCreateAccountScreen() {
               if (formError) setFormError(null);
             }}
             error={passwordError}
-            secureTextEntry
+            secureTextEntry={!passwordShown}
             autoCapitalize="none"
             autoComplete="new-password"
             textContentType="newPassword"
@@ -187,18 +228,25 @@ export function EmailCreateAccountScreen() {
           ) : null}
         </View>
 
-        <View style={styles.privacy}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={authColors.emerald} />
+        {/* Master 4 draws this as a hairlined card, not a sage wash. */}
+        <View style={[styles.privacy, { borderColor: surface.line }]}>
+          <Ionicons name="shield-checkmark-outline" size={20} color={surface.accent} />
           <Text style={styles.privacyText}>
             Your number stays private until a job is confirmed.
           </Text>
         </View>
 
         <View style={styles.actions}>
-          <AuthButton title="Create account" onPress={handleCreateAccount} loading={loading} />
+          <AuthButton
+            title="Create account"
+            themed
+            onPress={handleCreateAccount}
+            loading={loading}
+          />
           <AuthButton
             title="Use Phone Number Instead"
             variant="ghost"
+            themed
             // popTo(), not navigate(): React Navigation 7's navigate() pushes
             // when the target isn't current, which would stack a second
             // CreateAccount over the one the user came from and throw away what
@@ -213,24 +261,26 @@ export function EmailCreateAccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   body: {
     flexGrow: 1,
     paddingBottom: authSpacing.lg,
   },
   eyebrow: {
     ...authType.eyebrow,
-    color: authColors.emerald,
     marginTop: authSpacing.xl + authSpacing.xs,
   },
+  // Master 4's display headline is the serif.
   title: {
     ...authType.title,
-    color: authColors.ink,
+    fontFamily: fonts.display,
+    color: colors.ink,
     marginTop: authSpacing.md - 2,
   },
   subtitle: {
     ...authType.body,
-    color: authColors.muted,
+    color: colors.textMuted,
     marginTop: authSpacing.md - 2,
   },
   form: {
@@ -240,11 +290,13 @@ const styles = StyleSheet.create({
   formError: {
     padding: authSpacing.md,
     borderRadius: authRadius.field,
-    backgroundColor: '#F5E7E4',
+    // The pale wash this carried as a literal, expressed as the palette's own
+    // danger at wash strength so it reads in either theme.
+    backgroundColor: withAlpha(colors.danger, 0.14),
   },
   formErrorText: {
     ...authType.note,
-    color: authColors.danger,
+    color: colors.danger,
   },
   privacy: {
     flexDirection: 'row',
@@ -253,16 +305,18 @@ const styles = StyleSheet.create({
     marginTop: authSpacing.xl,
     padding: authSpacing.lg - 2,
     borderRadius: authRadius.field + 2,
-    backgroundColor: authColors.mint,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
   },
   privacyText: {
     ...authType.note,
     flex: 1,
-    color: '#526059',
+    color: colors.ink,
   },
   actions: {
     marginTop: 'auto',
     paddingTop: authSpacing.xxl,
     gap: authSpacing.md,
   },
-});
+  }),
+);
