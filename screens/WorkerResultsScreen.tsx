@@ -28,7 +28,13 @@ import type {
   WorkerHomeStackNavigation,
   WorkerHomeStackParamList,
 } from '../lib/navigation';
-import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 // The value now lives in lib/discoveryFilter.ts (4D-2) so lib modules can
 // read it without importing a screen; re-exported here because the LOCKED
@@ -62,6 +68,9 @@ type GeoState = 'loading' | 'ready' | 'denied' | 'unavailable';
  */
 export function WorkerResultsScreen() {
   const { palette: colors, isDark } = useThemeColors();
+  // Forest glyphs vanish on a dark surface under palette v2; masters 12/13
+  // draw these accents gold.
+  const accent = isDark ? colors.gold : colors.forest;
   const styles = stylesFor(colors);
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
@@ -351,14 +360,14 @@ export function WorkerResultsScreen() {
                 await refresh();
                 setRefreshing(false);
               }}
-              tintColor={colors.primary}
+              tintColor={accent}
             />
           }
           ListEmptyComponent={
             filterCount > 0 ? (
               <View style={styles.empty}>
                 <View style={styles.emptyIcon}>
-                  <Ionicons name="options-outline" size={30} color={colors.forest} />
+                  <Ionicons name="options-outline" size={30} color={accent} />
                 </View>
                 <Text style={styles.emptyTitle}>No jobs match your filters</Text>
                 <Text style={styles.emptyText}>
@@ -382,7 +391,7 @@ export function WorkerResultsScreen() {
                         : 'search'
                     }
                     size={30}
-                    color={colors.forest}
+                    color={accent}
                   />
                 </View>
                 <Text style={styles.emptyTitle}>
@@ -473,17 +482,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignSelf: 'center',
     paddingTop: spacing.xxl,
   },
+  // The masters' icon squircle: sage fill inside a gold hairline.
   emptyIcon: {
     width: 72,
     height: 72,
     borderRadius: 36,
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.mint,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.ink,
   },

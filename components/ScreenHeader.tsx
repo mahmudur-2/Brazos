@@ -30,8 +30,11 @@ export function ScreenHeader({
   titleIcon,
   titleSize,
 }: ScreenHeaderProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
+  // Every dark master draws the back chevron in gold — it is the one piece of
+  // chrome the whole set agrees on. Light keeps the ink chevron.
+  const backColor = isDark ? palette.gold : palette.text;
   const titleText = (
     <Text
       style={[
@@ -73,7 +76,7 @@ export function ScreenHeader({
     <View style={styles.container}>
       {onBack ? (
         <Pressable onPress={onBack} hitSlop={10} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={palette.text} />
+          <Ionicons name="chevron-back" size={26} color={backColor} />
         </Pressable>
       ) : null}
 
