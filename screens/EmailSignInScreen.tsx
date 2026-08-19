@@ -1,13 +1,22 @@
 import { useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { BrandLogo } from '../components/BrandLogo';
 import { useAuth } from '../hooks/useAuth';
-import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import {
+  authSurface,
+  fonts,
+  themedStyles,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 import type { AuthStackNavigation } from '../lib/navigation';
 import { isValidEmail } from '../lib/validation';
 
@@ -20,11 +29,26 @@ import { isValidEmail } from '../lib/validation';
  * called. The form, its validation, its error handling and its double-submit
  * guard are unchanged from that screen — only the surrounding navigation moved,
  * so the working path stays working while the phone flow is built out.
+ *
+ * THEMING (emerald(5)). Converted onto the same `authSurface()` path its
+ * already-dark sibling uses — master 4's EmailCreateAccountScreen — because
+ * there is no master for the sign-in screens and the dispatch takes their
+ * treatment from siblings 3 and 4. That means the `themed` opt-in on every
+ * shared auth component, the serif headline, the gold field glyphs in dark,
+ * and the form-error wash expressed as the palette's own danger rather than
+ * the pale literal it carried. `lib/authTheme.ts` is untouched.
+ *
+ * NOT taken from sibling 4: its password visibility toggle. That is an
+ * interaction, not a treatment, and adding one here would be building a
+ * feature under a paint commit. Logged for the operator instead.
  */
 export function EmailSignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
   const { login, bannedNotice } = useAuth();
   const passwordRef = useRef<TextInput>(null);
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,11 +86,11 @@ export function EmailSignInScreen() {
   }
 
   return (
-    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft">
+    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft" themed>
       <View style={styles.body}>
         <BrandLogo size={authSizes.logoAuth} />
 
-        <Text style={styles.eyebrow}>WELCOME BACK</Text>
+        <Text style={[styles.eyebrow, { color: surface.accent }]}>WELCOME BACK</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           Sign in to BRAZOS
         </Text>
@@ -86,6 +110,8 @@ export function EmailSignInScreen() {
         <View style={styles.form}>
           <AuthField
             label="Email"
+            themed
+            leading={<Ionicons name="mail-outline" size={20} color={surface.accent} />}
             value={email}
             onChangeText={(next) => {
               setEmail(next);
@@ -106,6 +132,8 @@ export function EmailSignInScreen() {
           <AuthField
             ref={passwordRef}
             label="Password"
+            themed
+            leading={<Ionicons name="lock-closed-outline" size={20} color={surface.accent} />}
             value={password}
             onChangeText={(next) => {
               setPassword(next);
@@ -130,10 +158,11 @@ export function EmailSignInScreen() {
         </View>
 
         <View style={styles.actions}>
-          <AuthButton title="Continue" onPress={handleContinue} loading={loading} />
+          <AuthButton title="Continue" themed onPress={handleContinue} loading={loading} />
           <AuthButton
             title="Use Phone Number Instead"
             variant="ghost"
+            themed
             // popTo(), not navigate(): React Navigation 7 changed navigate() to
             // push when the target isn't the current route, which would stack a
             // second SignIn on top of the one the user came from and throw away
@@ -148,25 +177,29 @@ export function EmailSignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   body: {
     flexGrow: 1,
     paddingTop: authSpacing.sm,
     paddingBottom: authSpacing.xl,
   },
+  // Colour comes from surface.accent at render — emerald in light, gold in
+  // dark, exactly as master 4's sibling does it.
   eyebrow: {
     ...authType.eyebrow,
-    color: authColors.emerald,
     marginTop: authSpacing.xl,
   },
+  // Sibling 4's display headline is the serif.
   title: {
     ...authType.title,
-    color: authColors.ink,
+    fontFamily: fonts.display,
+    color: colors.ink,
     marginTop: authSpacing.sm,
   },
   subtitle: {
     ...authType.body,
-    color: authColors.muted,
+    color: colors.textMuted,
     marginTop: authSpacing.sm,
   },
   notice: {
@@ -179,15 +212,19 @@ const styles = StyleSheet.create({
   formError: {
     padding: authSpacing.md,
     borderRadius: authRadius.field,
-    backgroundColor: '#F5E7E4',
+    // Was the literal #F5E7E4 — a pale Heritage wash that stayed pale on a
+    // near-black ground. Expressed as the palette's own danger at wash
+    // strength, the same resolution sibling 4 reached.
+    backgroundColor: withAlpha(colors.danger, 0.14),
   },
   formErrorText: {
     ...authType.note,
-    color: authColors.danger,
+    color: colors.danger,
   },
   actions: {
     marginTop: 'auto',
     paddingTop: authSpacing.xxl,
     gap: authSpacing.md,
   },
-});
+  }),
+);

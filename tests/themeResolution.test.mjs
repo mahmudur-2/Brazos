@@ -241,9 +241,10 @@ const LITERAL_FILE_ALLOWLIST = {
   'screens/LaunchScreen.tsx': 'LOCKED screen',
   // Welcome, Create account and Email create account are golden masters 2, 3
   // and 4: converted to useThemeColors, so they hold no literals and need no
-  // allowance. Every other auth screen has no master and stays as it is.
-  'screens/SignInScreen.tsx': 'LOCKED screen',
-  'screens/EmailSignInScreen.tsx': 'LOCKED screen',
+  // allowance. emerald(5) converted Sign in and Email sign in onto the same
+  // path, so THEIR allowances are gone too — the entries that used to sit here
+  // were removed rather than kept as dead permissions. Every remaining auth
+  // screen has no master and stays as it is.
   'screens/VerifyPhoneScreen.tsx': 'LOCKED screen',
   'screens/SetupScreen.tsx': 'LOCKED screen',
   'screens/LegalGateScreen.tsx': 'LOCKED screen',
@@ -257,6 +258,85 @@ const LITERAL_FILE_ALLOWLIST = {
   'components/AuthNotice.tsx': 'auth surface; token home is frozen authTheme',
   'components/CountryPicker.tsx': 'auth surface scrim; token home is frozen authTheme',
 };
+
+test('[static] the auth flow is one design system, and authTheme stayed frozen', async () => {
+  // emerald(5). The dark device pass found Welcome and both Create-account
+  // screens rendering dark (masters 2, 3, 4) while both SIGN-IN screens
+  // rendered Heritage light one tap away — the same flow in two design
+  // systems. They were converted onto the path their siblings already use.
+  const [authTheme, signIn, emailSignIn, countryPicker] = await Promise.all([
+    read('lib/authTheme.ts'),
+    read('screens/SignInScreen.tsx'),
+    read('screens/EmailSignInScreen.tsx'),
+    read('components/CountryPicker.tsx'),
+  ]);
+
+  // 1. THE FROZEN HALF. lib/authTheme.ts did not need a dark branch and did not
+  //    get one: it is a flat Heritage constant surface with no notion of a
+  //    resolved palette. This is what makes the conversion incapable of moving
+  //    a light pixel in any consumer that did not opt in.
+  const authThemeCode = stripCommentsForScan(authTheme);
+  for (const themeAware of ['isDark', 'useThemeColors', 'ColorPalette', 'palette']) {
+    assert.doesNotMatch(
+      authThemeCode,
+      new RegExp(`\\b${themeAware}\\b`),
+      `lib/authTheme.ts must stay theme-blind — a '${themeAware}' in it is a dark branch`
+    );
+  }
+
+  // 2. THE CONVERTED HALF. Both sign-in screens now resolve their colour the
+  //    way their siblings do, and neither reads the frozen constant any more.
+  for (const [path, source] of [
+    ['screens/SignInScreen.tsx', signIn],
+    ['screens/EmailSignInScreen.tsx', emailSignIn],
+  ]) {
+    assert.match(source, /const \{ palette: colors, isDark \} = useThemeColors\(\);/, path);
+    assert.match(source, /const surface = authSurface\(colors, isDark\);/, path);
+    assert.match(source, /const stylesFor = themedStyles\(\(colors: ColorPalette\) =>/, path);
+    assert.doesNotMatch(
+      stripCommentsForScan(source),
+      /\bauthColors\b/,
+      `${path} must not read the frozen Heritage constant any more`
+    );
+    // The shared shell and every shared control opt in, or the screen would be
+    // dark chrome around light components.
+    assert.match(source, /<AuthScaffold[\s\S]{0,200}?themed\s*>/, `${path} scaffold`);
+  }
+
+  // 3. CountryPicker — named by the dispatch — is BYTE-IDENTICAL, because
+  //    nothing it depends on moved. It still takes no `themed` prop and still
+  //    resolves every colour from the frozen constant, so its light rendering
+  //    cannot have changed.
+  const pickerCode = stripCommentsForScan(countryPicker);
+  assert.doesNotMatch(pickerCode, /\bthemed\b/, 'CountryPicker must stay Heritage-only');
+  assert.doesNotMatch(pickerCode, /useThemeColors|authSurface/, 'CountryPicker must stay Heritage-only');
+  assert.match(pickerCode, /authColors\./, 'CountryPicker still resolves from authTheme');
+
+  // 4. The opt-in reached exactly the five auth screens that have a dark
+  //    treatment, and no further: the rest of the flow is untouched, so no
+  //    other light surface moved.
+  for (const path of [
+    'screens/WelcomeScreen.tsx',
+    'screens/CreateAccountScreen.tsx',
+    'screens/EmailCreateAccountScreen.tsx',
+    'screens/SignInScreen.tsx',
+    'screens/EmailSignInScreen.tsx',
+  ]) {
+    assert.match(stripCommentsForScan(await read(path)), /\bthemed\b/, `${path} must opt in`);
+  }
+  for (const path of [
+    'screens/VerifyPhoneScreen.tsx',
+    'screens/SetupScreen.tsx',
+    'screens/LegalGateScreen.tsx',
+    'screens/LaunchScreen.tsx',
+  ]) {
+    assert.doesNotMatch(
+      stripCommentsForScan(await read(path)),
+      /\bthemed\b/,
+      `${path} has no dark treatment and must stay exactly as it renders today`
+    );
+  }
+});
 
 test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navigation/, modes/', async () => {
   const roots = ['screens', 'components', 'ui', 'hooks', 'navigation', 'modes'];

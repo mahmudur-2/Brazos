@@ -7,7 +7,14 @@ import { AuthScaffold } from '../components/AuthScaffold';
 import { BrandLogo } from '../components/BrandLogo';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
 import { useAuth } from '../hooks/useAuth';
-import { authSizes, authSpacing, authType, authColors } from '../lib/authTheme';
+import { authSizes, authSpacing, authType } from '../lib/authTheme';
+import {
+  authSurface,
+  fonts,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import type { AuthStackNavigation } from '../lib/navigation';
 import { maskE164, phoneValidationError, toE164 } from '../lib/phoneNumber';
@@ -27,10 +34,32 @@ import { phoneAuth } from '../lib/phoneAuth';
  * provider is configured at all the request comes back `provider-disabled` and
  * the screen says so plainly, pointing at the path that does work — email and
  * password, one tap away on EmailSignIn. Nobody is stranded in any mode.
+ *
+ * THEMING (emerald(5)). Until this commit the whole auth flow rendered dark
+ * except for the two sign-in screens: Welcome and both Create-account screens
+ * had been converted for masters 2, 3 and 4, and Sign in was one tap away in
+ * Heritage light. Same flow, two design systems.
+ *
+ * There is no master for this screen, so its treatment is taken from its
+ * sibling, master 3's CreateAccountScreen: the same `authSurface()` mapping,
+ * the same `themed` opt-in on every shared auth component, the same serif
+ * headline, the same gold accent in dark. `lib/authTheme.ts` is NOT involved
+ * and did not need a dark branch — it never gained one for the siblings
+ * either; it stays the surface-specific Heritage constant it always was, and
+ * the theme-aware half lives in lib/theme.ts's authSurface(). That is why
+ * converting these two screens cannot move a single light pixel anywhere else,
+ * CountryPicker included.
+ *
+ * The brand mark stays. Masters 3 and 4 draw no logo, but this screen has
+ * carried one since it was built and it is not a mockup's job to delete
+ * working composition (D11).
  */
 export function SignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
   const { bannedNotice } = useAuth();
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
 
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
   const [phoneDigits, setPhoneDigits] = useState('');
@@ -88,11 +117,11 @@ export function SignInScreen() {
   }
 
   return (
-    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft">
+    <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft" themed>
       <View style={styles.body}>
         <BrandLogo size={authSizes.logoAuth} />
 
-        <Text style={styles.eyebrow}>WELCOME BACK</Text>
+        <Text style={[styles.eyebrow, { color: surface.accent }]}>WELCOME BACK</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           Sign in to BRAZOS
         </Text>
@@ -111,6 +140,7 @@ export function SignInScreen() {
 
         <View style={styles.form}>
           <PhoneNumberInput
+            themed
             country={country}
             onChangeCountry={setCountry}
             value={phoneDigits}
@@ -131,6 +161,7 @@ export function SignInScreen() {
         <View style={styles.actions}>
           <AuthButton
             title="Continue"
+            themed
             onPress={handleContinue}
             loading={loading}
             accessibilityHint="Send a verification code to this phone number"
@@ -138,6 +169,7 @@ export function SignInScreen() {
           <AuthButton
             title="Use Email Instead"
             variant="ghost"
+            themed
             onPress={() => navigation.navigate('EmailSignIn')}
             disabled={loading}
             accessibilityHint="Sign in with your email address and password"
@@ -148,25 +180,29 @@ export function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   body: {
     flexGrow: 1,
     paddingTop: authSpacing.sm,
     paddingBottom: authSpacing.xl,
   },
+  // Colour comes from surface.accent at render — emerald in light, gold in
+  // dark, exactly as master 3's sibling does it.
   eyebrow: {
     ...authType.eyebrow,
-    color: authColors.emerald,
     marginTop: authSpacing.xl,
   },
+  // Sibling 3's display headline is the serif.
   title: {
     ...authType.title,
-    color: authColors.ink,
+    fontFamily: fonts.display,
+    color: colors.ink,
     marginTop: authSpacing.sm,
   },
   subtitle: {
     ...authType.body,
-    color: authColors.muted,
+    color: colors.textMuted,
     marginTop: authSpacing.sm,
   },
   notice: {
@@ -183,4 +219,5 @@ const styles = StyleSheet.create({
     paddingTop: authSpacing.xxl,
     gap: authSpacing.md,
   },
-});
+  }),
+);
