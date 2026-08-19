@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +16,14 @@ import { PLATFORM_FEE_RATE } from '../lib/payments';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * Screens 59 + 60 (Phase 11, consolidated) — the worker's wallet and the
@@ -96,9 +103,26 @@ export function EarningsScreen() {
                 {
                   content: (
                     <View style={styles.bucketRow}>
-                      <Bucket label="PENDING" cents={s.pendingCents} note="Held in protection" />
-                      <Bucket label="AVAILABLE" cents={s.availableCents} note="Released to you" />
-                      <Bucket label="TRANSFERRED" cents={s.transferredCents} note="Simulated cash-outs" />
+                      {/* Master 25's three stat cards, each led by its own
+                          ringed glyph. */}
+                      <Bucket
+                        label="PENDING"
+                        icon="shield-outline"
+                        cents={s.pendingCents}
+                        note="Held in protection"
+                      />
+                      <Bucket
+                        label="AVAILABLE"
+                        icon="wallet-outline"
+                        cents={s.availableCents}
+                        note="Released to you"
+                      />
+                      <Bucket
+                        label="TRANSFERRED"
+                        icon="arrow-up-circle-outline"
+                        cents={s.transferredCents}
+                        note="Simulated cash-outs"
+                      />
                     </View>
                   ),
                 },
@@ -180,11 +204,24 @@ export function EarningsScreen() {
   );
 }
 
-function Bucket({ label, cents, note }: { label: string; cents: number; note: string }) {
-  const { palette: colors } = useThemeColors();
+function Bucket({
+  label,
+  icon,
+  cents,
+  note,
+}: {
+  label: string;
+  icon: ComponentProps<typeof Ionicons>['name'];
+  cents: number;
+  note: string;
+}) {
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
-    <View style={styles.bucket}>
+    <View style={[styles.bucket, isDark && styles.bucketDark]}>
+      <View style={[styles.bucketGlyph, isDark && styles.bucketGlyphDark]}>
+        <Ionicons name={icon} size={16} color={isDark ? colors.gold : colors.emerald} />
+      </View>
       <Text style={styles.bucketLabel}>{label}</Text>
       <Text style={styles.bucketAmount}>{formatBudget(cents)}</Text>
       <Text style={styles.bucketNote}>{note}</Text>
@@ -207,14 +244,37 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
     backgroundColor: colors.mint,
   },
+  // Master 25 draws these as hairlined cards, not a sage wash; light keeps
+  // the approved Heritage sage.
+  bucketDark: {
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  bucketGlyph: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing.xs,
+    backgroundColor: colors.surface,
+  },
+  bucketGlyphDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  // Green eyebrows over serif figures — master 25's own pairing, and the
+  // eyebrow law's live-state case (these ARE the money states).
   bucketLabel: {
     fontSize: 10,
     fontWeight: '800',
     color: colors.emerald,
-    letterSpacing: 0.6,
+    letterSpacing: 1.1,
   },
   bucketAmount: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 22,
     fontWeight: '800',
     color: colors.ink,
     fontVariant: ['tabular-nums'],
@@ -258,7 +318,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   rowTitle: {
-    fontSize: 14,
+    fontFamily: fonts.display,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.ink,
   },
