@@ -827,3 +827,138 @@ Recorded so the device walk covers them rather than leaving them uncovered.
   step 19.
 
 ---
+## Audit 5 — device walk
+
+Ordered to minimise backtracking. Roughly 18 minutes. **Do the light/dark flip
+where marked rather than walking the whole thing twice.**
+
+### MUST BE CHECKED ON DEVICE
+
+Highest risk first.
+
+**Customer mode, dark. Start signed in, Customer mode, OS appearance Dark.**
+
+1. **The customer tab bar.** Look at the pill. Expect exactly **five** slots:
+   Home · Discover · [ + ] · Messages · Profile, the [ + ] raised and dead
+   centre. *FAILURE:* six slots, a My Jobs or Map item, or the [ + ] off-centre.
+2. **The band under the pill.** Look at the strip between the pill and the
+   screen bottom, and at both sides of it. Expect the app's dark ground.
+   *FAILURE:* a white or light-grey band, full width. This is the defect
+   emerald(2) fixed and the one most likely to regress.
+3. **Scroll under the pill.** On Home, scroll to the very bottom. Expect the
+   last row to stop clear of the pill. *FAILURE:* content sliding under it.
+   (Home is a tab ROOT and deliberately keeps `paddingBottom: 0` — if its last
+   row reads as jammed, that is the logged operator decision, not a bug.)
+4. **Tap [ + ].** Expect the creation sheet: "Post a job", "Hire someone again",
+   "My jobs". Look at the strip below **Cancel**. Expect scrim, ending above the
+   home indicator. *FAILURE:* a light-grey band under Cancel.
+5. **Read the header behind the sheet.** Expect it dimmed but legible.
+   *FAILURE:* crushed to black. (Scrim 0.55, was 0.7.)
+6. **Tap "My jobs" in that sheet.** Expect the My Jobs hub. *FAILURE:* nothing
+   happens, or a red navigation error. **This is the D1 reachability test.**
+7. **My Jobs hub — the filter tabs.** Tap between Active / Review / Closed.
+   Expect the chosen tab in **gold** outline and gold label, the others on a dim
+   gold hairline. *FAILURE:* an emerald chosen tab, or a filled chip.
+8. Scroll the hub to the bottom. Expect clearance under the pill.
+9. **Back to Home → tap "View map".** Expect the map. *FAILURE:* nothing
+   happens. (Map's route is now hidden but registered; this is its only entry.)
+10. **The map tiles.** Expect DARK MapKit tiles. *FAILURE:* light tiles in a
+    dark app. **Then, with the map open, flip the OS to Light and back to Dark**
+    (Control Centre brightness long-press, or Settings → Display). Expect the
+    tiles to follow, and your pan position to be preserved. *FAILURE:* tiles
+    stay in the old appearance, or the map snaps back to the default region.
+11. **Discover tab.** Tap it. Expect a **magnifier** glyph, the label
+    "Discover", and the worker-browse surface (worker profiles, categories,
+    services — never job postings), with the **keyboard DOWN**. *FAILURE:* a
+    compass or a location pin; the job map; or the keyboard opening on a plain
+    tab visit.
+12. Type in the search field. Expect the keyboard to appear in **dark**
+    appearance. *FAILURE:* a light keyboard.
+13. **Open the job filter sheet** (from a job list). Tap a budget chip. Expect
+    the chosen chip on a full gold line with a gold label, the rest on a dim
+    gold hairline; the radio dots gold. *FAILURE:* every chip carrying the same
+    strong gold border, or an emerald chosen edge.
+14. **Messages → open a thread.** Scroll to the bottom. Expect the composer
+    clear of the pill with the keyboard both closed and open.
+15. **Profile → Notification preferences.** Expect five rows, each with a
+    toggle whose track is the **same neutral colour ON and OFF**, the knob gold
+    and glowing when ON, cream when OFF. *FAILURE:* an emerald or red track.
+    Scroll to the bottom — expect clearance.
+16. **Profile → Appearance.** Flip to **Light**. Walk back through Home,
+    Discover and the [ + ] sheet. Expect Heritage light everywhere, unchanged
+    from before this pass. *FAILURE:* a gold selection chip or a neutral toggle
+    track in light — light was frozen.
+
+**Worker mode.** Switch modes (Profile → switch; the confirm is mandatory).
+
+17. **The worker tab bar.** Expect the classic **five**: Home · Map · My Jobs ·
+    Messages · Profile, **no [ + ]**. *FAILURE:* a creation slot, or a Discover
+    item. (Worker is untouched by D1/D4.)
+18. **Worker Home — the availability toggle.** Note whether it reads Online or
+    Offline. Toggle it. Expect the status word and the pulse dot to follow
+    immediately. The pulse dot keeps master 43's **red** when offline — that is
+    correct and deliberate.
+19. **Go to Services & availability** (Profile → Services). Expect "Taking new
+    work" to show the state you just set, **without restarting the app**.
+    *FAILURE:* the old value. **This is the D6 divergence test and the whole
+    reason `useProfile` became a store.** Toggle it here, walk back to Worker
+    Home, expect that to follow too.
+20. Services & availability — tap a service category chip. Gold line, no fill.
+    Check the **"Add service"** button both enabled and disabled: disabled must
+    be a flat neutral fill with muted text, **never a paler green**.
+21. Worker Home → tap the search field, the skill-match pill, the radius chip
+    and "View all" in turn. Each must land on the results screen. *FAILURE:*
+    `NAVIGATE {"name":"WorkerResults"} was not handled by any navigator` — if
+    you see that, **the build predates 4D-1b; rebuild clean before reporting it**.
+22. Worker Map → check dark tiles again from the worker tree.
+23. Scroll a job detail and the bid screen to the bottom — clearance under the
+    pill.
+
+**Auth flow — only if emerald(5)'s conversion needs eyes.** Sign out.
+
+24. **Welcome → Sign in.** Expect the sign-in screen to be **dark**, matching
+    Welcome and Create account: serif headline, gold field glyphs, gold eyebrow.
+    *FAILURE:* a light Heritage screen one tap away from a dark one.
+25. **Sign in → Email sign in.** Same treatment. Trigger a form error (submit
+    empty). Expect the error wash to read as a dark-palette danger tint.
+    *FAILURE:* a pale pink wash. Note: there is deliberately **no** password
+    visibility toggle here.
+26. **Tap the country picker** on the phone field. Expect it **unchanged** —
+    Heritage light, exactly as it always looked. *FAILURE:* any change at all;
+    it must be byte-identical.
+27. The brand mark stays on both sign-in screens. That is deliberate.
+
+### ALREADY GUARANTEED BY THE SUITE — do not spend device time here
+
+* The customer slot roster, count and the absence of a My Jobs slot.
+* That My Jobs is still reachable (route registered, sheet action, notification
+  routing in both trees) — step 6 is worth one tap anyway as a smoke test.
+* Discover's label, its magnifier glyph, and now its destination.
+* That the toggle track carries no state in dark and the knob carries all of it;
+  that both availability screens derive the boolean identically from one store;
+  that the five notification preferences are one control mapped over a list.
+* That no native `<Switch>` exists outside the two recorded sites.
+* That all seven modal scrims read one shared 0.55 and each keeps its own light
+  value.
+* That the bar row declares exactly one background and no `tabBarBackground`.
+* That nav glyphs are 28/11 and the stack fits the slot at 320 pt.
+* That the clearance is derived from the bar's two constants in one place.
+* That no `VerificationBadge` or `isVerified` exists anywhere.
+* That `authTheme` is theme-blind and `CountryPicker` is Heritage-only.
+* That no raw colour literal exists in the scanned tree.
+* That MapKit is the only map and no Google style ships.
+
+---
+
+## Verification method, per claim type
+
+* **Diff-derived** (`git diff`, `git show`, `git rev-list`): the range census,
+  every "untouched" claim, the before/after attribute tables, the added-literal
+  scan, the forbidden-path check.
+* **Source-read at HEAD**: every mechanism paragraph, the dispatch enumerations,
+  the hook-rule and null-deref checks.
+* **Library-behaviour reasoning, not executed**: that `display: 'none'` removes
+  a Yoga slot; that TabRouter seeds `state.routes` from every registration; that
+  per-screen `options` merge after `screenOptions`; that MKMapView repaints on a
+  trait change. Each is stated as reasoning, not as a test result.
+* **Not verified offline, by nature**: everything in the device-walk MUST list.
