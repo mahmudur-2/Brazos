@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authSurface, useThemeColors } from '../lib/theme';
 import { flagEmoji, type Country } from '../lib/countries';
 import {
   clampNational,
@@ -30,6 +31,11 @@ type PhoneNumberInputProps = {
   value: string;
   onChangeValue: (digits: string) => void;
   error?: string | null;
+  /**
+   * Opt in to the Prestige mapping (masters 3/4 only). Absent, the row is
+   * byte-identical to the Heritage ivory control every other auth screen has.
+   */
+  themed?: boolean;
 } & Pick<TextInputProps, 'onSubmitEditing' | 'returnKeyType' | 'editable' | 'autoFocus'>;
 
 /**
@@ -45,11 +51,28 @@ type PhoneNumberInputProps = {
  */
 export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
   function PhoneNumberInput(
-    { label = 'Phone number', country, onChangeCountry, value, onChangeValue, error, ...inputProps },
+    {
+      label = 'Phone number',
+      country,
+      onChangeCountry,
+      value,
+      onChangeValue,
+      error,
+      themed = false,
+      ...inputProps
+    },
     ref
   ) {
     const [pickerOpen, setPickerOpen] = useState(false);
     const focus = useRef(new Animated.Value(0)).current;
+    const { palette, isDark } = useThemeColors();
+    const surface = authSurface(palette, isDark);
+    // Masters 3/4: gold label, gold hairlines, gold calling code and divider,
+    // cream digits on the screen's own near-black.
+    const fill = themed ? (isDark ? surface.bg : surface.surface) : authColors.surface;
+    const line = themed ? surface.line : authColors.line;
+    const muted = themed ? surface.accent : authColors.muted;
+    const ink = themed ? surface.ink : authColors.ink;
 
     const run = (to: number) =>
       Animated.timing(focus, {
@@ -59,10 +82,12 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
       }).start();
 
     const borderColor = error
-      ? authColors.danger
+      ? themed
+        ? surface.danger
+        : authColors.danger
       : focus.interpolate({
           inputRange: [0, 1],
-          outputRange: [authColors.line, authColors.emerald],
+          outputRange: [line, themed ? palette.emerald : authColors.emerald],
         });
 
     function handleChangeText(text: string) {
@@ -94,37 +119,47 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
 
     return (
       <View style={styles.container}>
-        <Text style={styles.label}>{label}</Text>
+        <Text style={[styles.label, themed && { color: surface.accent }]}>{label}</Text>
 
         <View style={styles.row}>
           <Pressable
             onPress={() => setPickerOpen(true)}
-            style={({ pressed }) => [styles.country, pressed && styles.countryPressed]}
+            style={({ pressed }) => [
+              styles.country,
+              themed && { backgroundColor: fill, borderColor: line },
+              pressed && styles.countryPressed,
+            ]}
             accessibilityRole="button"
             accessibilityLabel={`Country: ${country.name}, plus ${country.dial}`}
             accessibilityHint="Opens the country list"
           >
             <Text style={styles.flag}>{flagEmoji(country.code)}</Text>
-            <Text style={styles.iso}>{country.code}</Text>
-            <Ionicons name="chevron-down" size={15} color={authColors.muted} />
+            <Text style={[styles.iso, themed && { color: ink }]}>{country.code}</Text>
+            <Ionicons name="chevron-down" size={15} color={muted} />
           </Pressable>
 
-          <Animated.View style={[styles.field, { borderColor }]}>
+          <Animated.View
+            style={[styles.field, themed && { backgroundColor: fill }, { borderColor }]}
+          >
             {/* Announced as part of the input's own label instead of on its
                 own, so a screen reader reads one coherent field. */}
-            <Text style={styles.dial} importantForAccessibility="no" accessibilityElementsHidden>
+            <Text
+              style={[styles.dial, themed && { color: muted }]}
+              importantForAccessibility="no"
+              accessibilityElementsHidden
+            >
               +{country.dial}
             </Text>
-            <View style={styles.divider} />
+            <View style={[styles.divider, themed && { backgroundColor: line }]} />
             <TextInput
               ref={ref}
-              style={styles.input}
+              style={[styles.input, themed && { color: ink }]}
               value={formatNational(country, value)}
               onChangeText={handleChangeText}
               onFocus={() => run(1)}
               onBlur={() => run(0)}
               placeholder={isNanp(country) ? '347 320 0610' : 'Phone number'}
-              placeholderTextColor={authColors.placeholder}
+              placeholderTextColor={themed ? surface.placeholder : authColors.placeholder}
               keyboardType="phone-pad"
               inputMode="tel"
               autoComplete="tel-national"
@@ -136,7 +171,10 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
         </View>
 
         {error ? (
-          <Text style={styles.error} accessibilityLiveRegion="polite">
+          <Text
+            style={[styles.error, themed && { color: surface.danger }]}
+            accessibilityLiveRegion="polite"
+          >
             {error}
           </Text>
         ) : null}

@@ -7,7 +7,14 @@ import { AuthField } from '../components/AuthField';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
-import { authColors, authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSpacing, authType } from '../lib/authTheme';
+import {
+  authSurface,
+  fonts,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { DEFAULT_COUNTRY, type Country } from '../lib/countries';
 import type { AuthStackNavigation } from '../lib/navigation';
 import { maskE164, phoneValidationError, toE164 } from '../lib/phoneNumber';
@@ -33,6 +40,9 @@ import { phoneAuth } from '../lib/phoneAuth';
 export function CreateAccountScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
   const phoneRef = useRef<TextInput>(null);
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
 
   const [fullName, setFullName] = useState('');
   const [country, setCountry] = useState<Country>(DEFAULT_COUNTRY);
@@ -95,9 +105,14 @@ export function CreateAccountScreen() {
   }
 
   return (
-    <AuthScaffold title="Create account" onBack={() => navigation.goBack()} backdrop="soft">
+    <AuthScaffold
+      title="Create account"
+      onBack={() => navigation.goBack()}
+      backdrop="soft"
+      themed
+    >
       <View style={styles.body}>
-        <Text style={styles.eyebrow}>CREATE ACCOUNT</Text>
+        <Text style={[styles.eyebrow, { color: surface.accent }]}>CREATE ACCOUNT</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           One account. Two ways to use it.
         </Text>
@@ -109,6 +124,8 @@ export function CreateAccountScreen() {
         <View style={styles.form}>
           <AuthField
             label="Full name"
+            themed
+            leading={<Ionicons name="person-outline" size={20} color={surface.accent} />}
             value={fullName}
             onChangeText={(next) => {
               setFullName(next);
@@ -127,6 +144,7 @@ export function CreateAccountScreen() {
 
           <PhoneNumberInput
             ref={phoneRef}
+            themed
             country={country}
             onChangeCountry={setCountry}
             value={phoneDigits}
@@ -144,8 +162,9 @@ export function CreateAccountScreen() {
           {notice ? <AuthNotice tone="info">{notice}</AuthNotice> : null}
         </View>
 
-        <View style={styles.privacy}>
-          <Ionicons name="shield-checkmark-outline" size={20} color={authColors.emerald} />
+        {/* Master 3 draws this as a hairlined card, not a sage wash. */}
+        <View style={[styles.privacy, { borderColor: surface.line }]}>
+          <Ionicons name="shield-checkmark-outline" size={20} color={surface.accent} />
           <Text style={styles.privacyText}>
             Your number stays private until a job is confirmed.
           </Text>
@@ -157,6 +176,7 @@ export function CreateAccountScreen() {
         <View style={styles.actions}>
           <AuthButton
             title="Create account"
+            themed
             onPress={handleCreateAccount}
             loading={loading}
             accessibilityHint="Send a verification code to this phone number"
@@ -164,6 +184,7 @@ export function CreateAccountScreen() {
           <AuthButton
             title="Use Email Instead"
             variant="ghost"
+            themed
             onPress={() => navigation.navigate('EmailCreateAccount')}
             disabled={loading}
             accessibilityHint="Sign up with an email address and password"
@@ -174,24 +195,26 @@ export function CreateAccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   body: {
     flexGrow: 1,
     paddingBottom: authSpacing.lg,
   },
   eyebrow: {
     ...authType.eyebrow,
-    color: authColors.emerald,
     marginTop: authSpacing.xl + authSpacing.xs,
   },
+  // Master 3's display headline is the serif.
   title: {
     ...authType.title,
-    color: authColors.ink,
+    fontFamily: fonts.display,
+    color: colors.ink,
     marginTop: authSpacing.md - 2,
   },
   subtitle: {
     ...authType.body,
-    color: authColors.muted,
+    color: colors.textMuted,
     marginTop: authSpacing.md - 2,
   },
   form: {
@@ -205,16 +228,18 @@ const styles = StyleSheet.create({
     marginTop: authSpacing.xl,
     padding: authSpacing.lg - 2,
     borderRadius: authRadius.field + 2,
-    backgroundColor: authColors.mint,
+    borderWidth: 1,
+    backgroundColor: colors.surface,
   },
   privacyText: {
     ...authType.note,
     flex: 1,
-    color: '#526059',
+    color: colors.ink,
   },
   actions: {
     marginTop: 'auto',
     paddingTop: authSpacing.xxl,
     gap: authSpacing.md,
   },
-});
+  }),
+);
