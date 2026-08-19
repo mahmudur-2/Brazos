@@ -481,11 +481,11 @@ export function ClientJobDetailScreen() {
           <Text style={styles.scopeDescription} selectable>
             {job.description}
           </Text>
-          <View style={styles.scopeTag}>
+          <View style={[styles.scopeTag, isDark && styles.scopeTagDark]}>
             <Ionicons
               name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
               size={15}
-              color={colors.emerald}
+              color={isDark ? colors.gold : colors.emerald}
             />
             <Text style={styles.scopeTagText}>
               {JOB_CATEGORY_LABELS[job.category] ?? job.category}
@@ -498,13 +498,26 @@ export function ClientJobDetailScreen() {
             <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>TIMING &amp; ADDRESS</Text>
             {arrivalWindowLabel(job) ? (
               <View style={styles.timingRow}>
-                <Ionicons name="time-outline" size={18} color={colors.emerald} />
+                {/* Master 16 sets both logistics glyphs in a gold ring. */}
+                <View style={[styles.timingGlyph, isDark && styles.timingGlyphDark]}>
+                  <Ionicons
+                    name="time-outline"
+                    size={17}
+                    color={isDark ? colors.gold : colors.emerald}
+                  />
+                </View>
                 <Text style={styles.timingText}>{arrivalWindowLabel(job)}</Text>
               </View>
             ) : null}
             {privateAddress ? (
               <View style={styles.timingRow}>
-                <Ionicons name="lock-closed-outline" size={18} color={colors.emerald} />
+                <View style={[styles.timingGlyph, isDark && styles.timingGlyphDark]}>
+                  <Ionicons
+                    name="lock-closed-outline"
+                    size={17}
+                    color={isDark ? colors.gold : colors.emerald}
+                  />
+                </View>
                 <View style={styles.timingCopy}>
                   <Text style={styles.timingText} selectable>
                     {privateAddress}
@@ -737,7 +750,11 @@ export function ClientJobDetailScreen() {
                 </View>
               ) : null}
               <Pressable
-                style={({ pressed }) => [styles.workerRow, pressed && styles.workerRowPressed]}
+                style={({ pressed }) => [
+                  styles.workerRow,
+                  isDark && styles.workerRowDark,
+                  pressed && styles.workerRowPressed,
+                ]}
                 onPress={() =>
                   job.assigned_worker_id &&
                   navigation.navigate('WorkerProfile', {
@@ -782,6 +799,8 @@ export function ClientJobDetailScreen() {
             {job.assigned_worker_id && (
               <Button
                 title={`Message ${workerName}`}
+                icon="chatbubble-outline"
+                iconPosition="leading"
                 variant="secondary"
                 palette={emeraldColors}
                 onPress={() =>
@@ -797,6 +816,8 @@ export function ClientJobDetailScreen() {
               (job.status === 'assigned' || job.status === 'in_progress') && (
                 <Button
                   title="Track worker"
+                  icon="location-outline"
+                  iconPosition="leading"
                   variant="secondary"
                   palette={emeraldColors}
                   onPress={() => navigation.navigate('TrackWorker', { job })}
@@ -832,6 +853,10 @@ export function ClientJobDetailScreen() {
               </Card>
             ) : payment && isHeld(payment) && job.status === 'assigned' ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
+                {/* Master 17 rings a shield at the payment card's right. */}
+                <View style={styles.paymentShield}>
+                  <Ionicons name="shield-outline" size={22} color={colors.gold} />
+                </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PROTECTED PAYMENT · SANDBOX</Text>
                 <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
                 <Text style={styles.paymentNote}>
@@ -841,6 +866,9 @@ export function ClientJobDetailScreen() {
               </Card>
             ) : payment ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
+                <View style={styles.paymentShield}>
+                  <Ionicons name="shield-outline" size={22} color={colors.gold} />
+                </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT · SANDBOX</Text>
                 <MoneyText cents={payment.amount_cents} state={payment.status} />
               </Card>
@@ -1200,6 +1228,19 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
+  // Master 16 rings each logistics glyph. 30pt drawn; the row is read-only,
+  // so no touch floor applies to it.
+  timingGlyph: {
+    width: 30,
+    height: 30,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  timingGlyphDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   timingCopy: {
     flex: 1,
     gap: 2,
@@ -1239,6 +1280,13 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.mint,
+  },
+  // Masters 8 and 16 both draw the scope chip as a gold OUTLINE, not a sage
+  // fill — master 16 keeps its label green, which is the tag vocabulary.
+  scopeTagDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   scopeTagText: {
     ...typography.label,
@@ -1319,6 +1367,26 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     padding: spacing.md,
     borderRadius: radius.lg,
     backgroundColor: colors.mint,
+  },
+  // Master 17 draws this as an inner hairlined card on the card's own
+  // surface, not a sage panel; light keeps the sage.
+  workerRowDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  // Master 17's shield sits in a gold ring at the payment card's right.
+  paymentShield: {
+    position: 'absolute',
+    top: spacing.lg,
+    right: spacing.lg,
+    width: 46,
+    height: 46,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   workerRowPressed: {
     opacity: 0.72,

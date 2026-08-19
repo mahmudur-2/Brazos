@@ -21,9 +21,21 @@ export function JobProgress({
   status: string;
   palette?: ColorPalette;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const current = ORDER[status] ?? 0;
+  // Masters 6 and 17 draw the stepper as line-work: a done node is the deep
+  // green disc inside a GOLD ring with a gold check, a pending node is a bare
+  // grey ring around its numeral, and the connector behind a done node is
+  // gold. Light keeps the Heritage filled dot.
+  const doneNode = isDark
+    ? { backgroundColor: palette.forest, borderWidth: 1, borderColor: palette.gold }
+    : { backgroundColor: palette.primary };
+  const pendingNode = isDark
+    ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: palette.navInactive }
+    : { backgroundColor: palette.neutralBg };
+  const checkColor = isDark ? palette.gold : palette.onPrimary;
+  const doneLine = isDark ? palette.gold : palette.primary;
 
   return (
     <View style={styles.container}>
@@ -32,15 +44,9 @@ export function JobProgress({
         return (
           <View key={step.key} style={styles.stepWrap}>
             <View style={styles.step}>
-              <View
-                style={[
-                  styles.dot,
-                  { backgroundColor: palette.neutralBg },
-                  done && { backgroundColor: palette.primary },
-                ]}
-              >
+              <View style={[styles.dot, done ? doneNode : pendingNode]}>
                 {done ? (
-                  <Ionicons name="checkmark" size={14} color={palette.onPrimary} />
+                  <Ionicons name="checkmark" size={14} color={checkColor} />
                 ) : (
                   <Text style={[styles.dotNumber, { color: palette.textMuted }]}>
                     {index + 1}
@@ -62,7 +68,7 @@ export function JobProgress({
                 style={[
                   styles.line,
                   { backgroundColor: palette.border },
-                  index < current && { backgroundColor: palette.primary },
+                  index < current && { backgroundColor: doneLine },
                 ]}
               />
             )}
