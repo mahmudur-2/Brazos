@@ -15,7 +15,14 @@ import { canHire, pastOnlyIds } from '../lib/rebook';
 import { fetchSavedWorkers, unsaveWorker } from '../lib/savedWorkers';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes/ModeProvider';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /** The lightest shape a row needs — the batch profile read returns a subset
  *  of Profile, and the rating/availability extras render only when present. */
@@ -31,7 +38,7 @@ type PersonRow = Pick<Profile, 'id' | 'full_name' | 'avatar_url'> &
  * hireWorkerId flow already implements.
  */
 export function SavedWorkersScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
@@ -148,7 +155,7 @@ export function SavedWorkersScreen() {
           because those are real. */}
       {canHire(profile.full_name) ? (
         <Pressable
-          style={styles.hireButton}
+          style={[styles.hireButton, isDark && styles.hireButtonDark]}
           onPress={() =>
             navigation.navigate('PostJob', {
               hireWorkerId: profile.id,
@@ -158,7 +165,9 @@ export function SavedWorkersScreen() {
           accessibilityRole="button"
           accessibilityLabel={`Hire ${profile.full_name ?? 'worker'} again`}
         >
-          <Text style={styles.hireButtonText}>Hire</Text>
+          <Text style={[styles.hireButtonText, isDark && styles.hireButtonTextDark]}>
+            Hire
+          </Text>
         </Pressable>
       ) : null}
       {options.saved ? (
@@ -181,6 +190,16 @@ export function SavedWorkersScreen() {
       onBack={goBackOrHome}
       state={state}
       sections={[
+        {
+          // Master 22's leaf divider, the one place in the set it appears.
+          content: (
+            <View style={styles.leafDivider} pointerEvents="none">
+              <View style={styles.leafRule} />
+              <Ionicons name="leaf-outline" size={18} color={colors.gold} />
+              <View style={styles.leafRule} />
+            </View>
+          ),
+        },
         ...(saved.length > 0
           ? [
               {
@@ -229,7 +248,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   rowName: {
-    fontSize: 15,
+    fontFamily: fonts.display,
+    fontSize: 19,
     fontWeight: '700',
     color: colors.ink,
   },
@@ -247,10 +267,36 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Master 22's Hire is a gold-OUTLINE pill with a gold serif label — gold as
+  // line-work. Light keeps the Heritage sage-filled emerald pill.
+  hireButtonDark: {
+    borderColor: colors.gold,
+    backgroundColor: 'transparent',
+  },
   hireButtonText: {
     fontSize: 13,
     fontWeight: '800',
     color: colors.emerald,
+  },
+  hireButtonTextDark: {
+    fontFamily: fonts.display,
+    fontSize: 17,
+    color: colors.gold,
+  },
+  // Master 22's gold leaf divider under the header. Two rules with the
+  // brand's own leaf between them — decoration, so it takes no touches.
+  leafDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  leafRule: {
+    flex: 1,
+    height: 0,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   }),
 );
