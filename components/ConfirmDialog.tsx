@@ -8,6 +8,7 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  scrimInDark,
 } from '../lib/theme';
 
 type ConfirmDialogProps = {
@@ -106,7 +107,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
   },
-  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
+  backdropDark: { backgroundColor: scrimInDark(colors.background) },
   centerWrap: {
     flex: 1,
     justifyContent: 'center',

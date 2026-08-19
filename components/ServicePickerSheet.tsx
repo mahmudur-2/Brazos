@@ -19,6 +19,7 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  scrimInDark,
 } from '../lib/theme';
 
 type ServicePickerSheetProps = {
@@ -140,7 +141,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: withAlpha(colors.ink, 0.42),
     justifyContent: 'flex-end',
   },
-  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
+  backdropDark: { backgroundColor: scrimInDark(colors.background) },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,

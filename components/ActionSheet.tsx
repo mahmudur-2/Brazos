@@ -1,8 +1,10 @@
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import {
   radius,
+  scrimInDark,
   shadows,
   spacing,
   themedStyles,
@@ -30,7 +32,22 @@ type ActionSheetProps = {
   onClose: () => void;
 };
 
-/** Bottom-sheet list of actions, used for the Messages long-press menu. */
+/**
+ * Bottom-sheet list of actions — the Messages long-press menu, and the
+ * customer bar's [ + ] creation sheet.
+ *
+ * emerald D8 — THE BAND UNDER "Cancel". The dark device pass photographed an
+ * unthemed light-grey band spanning the full width below Cancel. It was not
+ * this component's: the sheet's own surfaces are all on the palette. It was
+ * the app's UNPAINTED ground showing through the scrim — the same missing
+ * ground emerald(2) found under the floating nav pill, where the iOS root
+ * view's platform white was reaching the screen. A 70% near-black scrim over
+ * a white strip renders as exactly that: a light-grey band, full width, at the
+ * bottom. Painting the ground in navigation/ModeShell.tsx removed the source;
+ * what this file adds is the safe-area handling it never had, so the sheet
+ * clears the home indicator instead of ending on top of it and leaving that
+ * strip to whatever is behind.
+ */
 export function ActionSheet({
   visible,
   title,
@@ -40,9 +57,18 @@ export function ActionSheet({
 }: ActionSheetProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // ui/primitives/Sheet.tsx has always done this; this one never did.
+  const insets = useSafeAreaInsets();
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={[styles.backdrop, isDark && styles.backdropDark]} onPress={onClose}>
+      <Pressable
+        style={[
+          styles.backdrop,
+          isDark && styles.backdropDark,
+          { paddingBottom: insets.bottom + spacing.lg },
+        ]}
+        onPress={onClose}
+      >
         {/* Empty onPress absorbs taps so they don't dismiss the sheet. */}
         <Pressable style={styles.sheet} onPress={() => {}}>
           {(title || subtitle) && (
@@ -87,14 +113,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
   // D7 — a modal scrim DIMS the parent. `text` is the CREAM in dark, so the
   // one expression that dims in light lightens in dark; dark scrims with the
-  // page ground instead.
+  // page ground instead, at the shared strength (emerald D8).
+  // paddingBottom is applied at render from the safe-area inset.
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
     justifyContent: 'flex-end',
     padding: spacing.lg,
   },
-  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
+  backdropDark: { backgroundColor: scrimInDark(colors.background) },
   sheet: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,

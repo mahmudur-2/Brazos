@@ -10,7 +10,7 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { themedStyles, useThemeColors } from '../../lib/theme';
+import { scrimInDark, themedStyles, useThemeColors } from '../../lib/theme';
 
 /**
  * The generic bottom sheet / modal (§I).
@@ -113,7 +113,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     ...StyleSheet.absoluteFillObject,
     backgroundColor: withAlpha(colors.ink, 0.45),
   },
-  backdropDark: { backgroundColor: withAlpha(colors.bg, 0.7) },
+  backdropDark: { backgroundColor: scrimInDark(colors.bg) },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xxl,

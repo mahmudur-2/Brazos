@@ -9,6 +9,7 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  scrimInDark,
 } from '../lib/theme';
 
 type AmountPromptProps = {
@@ -114,7 +115,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     padding: spacing.lg,
   },
-  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
+  backdropDark: { backgroundColor: scrimInDark(colors.background) },
   sheet: {
     width: '100%',
     maxWidth: 360,

@@ -374,6 +374,32 @@ export function selectedInDark(palette: ColorPalette) {
 }
 
 /**
+ * THE modal scrim in dark (emerald D8).
+ *
+ * A scrim DIMS the page behind it; it does not erase it. Master 11 draws the
+ * filter sheet over a header that stays readable, and the dark device pass
+ * caught the creation sheet doing the opposite — the page behind it crushed to
+ * unreadable. Every sheet and dialog in the tree had independently landed on
+ * the SAME expression, `withAlpha(ground, 0.7)`, so the creation sheet was not
+ * an outlier: seven copies of one number were all too strong, and the filter
+ * sheet the operator named as the reference was one of them.
+ *
+ * 0.55 over a near-black ground is a clear dim with the page still legible
+ * underneath, which is what the master draws. One value, one place, so the
+ * next sheet cannot pick its own.
+ *
+ * LIGHT IS NOT EXPRESSED HERE. Each surface keeps the light scrim it already
+ * had (`text` @ 35% on the dialogs, `ink` @ 45% on the sheets) — those were
+ * never the complaint, and a shared light value would have repainted six
+ * surfaces nobody reported.
+ */
+export const SCRIM_DARK_ALPHA = 0.55;
+
+export function scrimInDark(ground: string): string {
+  return alpha(ground, SCRIM_DARK_ALPHA);
+}
+
+/**
  * THE one disabled treatment (emerald D7, restating decision 3).
  *
  * A flat neutral fill, muted text, NO border — in every variant, so a dead

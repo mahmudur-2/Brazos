@@ -8,6 +8,7 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  scrimInDark,
 } from '../lib/theme';
 
 type ReactionPickerProps = {
@@ -71,7 +72,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
   },
-  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
+  backdropDark: { backgroundColor: scrimInDark(colors.background) },
   sheet: {
     width: '100%',
     maxWidth: 320,

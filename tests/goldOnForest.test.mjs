@@ -274,3 +274,77 @@ test('[static] disabled is a neutral fill, never an opacity dim on a live colour
   assert.match(addButton, /backgroundColor: colors\.primary/);
   assert.doesNotMatch(addButton, /colors\.emerald/);
 });
+
+// ===========================================================================
+// emerald D8 — ONE scrim, at the strength master 11 draws
+// ===========================================================================
+
+test('[static] every modal scrim in dark is the one shared strength', () => {
+  const theme = stripComments(read('lib/theme.ts'));
+  assert.match(theme, /export const SCRIM_DARK_ALPHA = 0\.55;/);
+  assert.match(theme, /export function scrimInDark\(ground: string\): string/);
+  assert.match(functionBody(theme, 'export function scrimInDark'), /alpha\(ground, SCRIM_DARK_ALPHA\)/);
+
+  // Every sheet, dialog and picker with a dark scrim. They had independently
+  // landed on the SAME 0.7 — including ui/primitives/Sheet.tsx, which draws
+  // master 11's filter sheet and is the reference the operator named — so the
+  // creation sheet was not an outlier: seven copies of one number were all too
+  // strong. A scrim dims the page; it does not erase it.
+  const scrimFiles = [
+    'components/ActionSheet.tsx',
+    'components/AmountPrompt.tsx',
+    'components/ConfirmDialog.tsx',
+    'components/ReactionPicker.tsx',
+    'components/ReportDialog.tsx',
+    'components/ServicePickerSheet.tsx',
+    'ui/primitives/Sheet.tsx',
+  ];
+  for (const file of scrimFiles) {
+    const source = stripComments(read(file));
+    assert.match(
+      source,
+      /backdropDark: \{ backgroundColor: scrimInDark\(colors\.(background|bg)\) \}/,
+      `${file} must take its dark scrim from the one helper`
+    );
+    // ...and its LIGHT scrim is untouched: still each surface's own value,
+    // which is deliberately NOT unified — the three that exist (35%, 42%, 45%)
+    // were never the complaint, and a shared light number would have repainted
+    // six surfaces nobody reported.
+    assert.match(
+      source,
+      /backgroundColor: withAlpha\(colors\.(text|ink), 0\.\d+\)/,
+      `${file} must keep the light scrim it already had`
+    );
+  }
+  // No file may go back to hand-rolling one.
+  for (const file of sourceFiles) {
+    const source = stripComments(read(file));
+    assert.doesNotMatch(
+      source,
+      /backdropDark: \{ backgroundColor: withAlpha\(/,
+      `${file} must not hand-roll a dark scrim`
+    );
+  }
+});
+
+test('[static] the creation sheet clears the home indicator', () => {
+  // emerald D8's band. The sheet's own surfaces were always on the palette —
+  // what showed below Cancel was the app's UNPAINTED ground reaching through a
+  // 70% scrim, the same platform white emerald(2) found under the nav pill.
+  // The source is fixed in navigation/ModeShell.tsx; this is the safe-area
+  // handling ActionSheet never had, which ui/primitives/Sheet.tsx has always
+  // had — so the sheet ends above the home indicator rather than on it.
+  const sheet = stripComments(read('components/ActionSheet.tsx'));
+  assert.match(sheet, /const insets = useSafeAreaInsets\(\);/);
+  assert.match(sheet, /\{ paddingBottom: insets\.bottom \+ spacing\.lg \}/);
+  assert.match(
+    stripComments(read('ui/primitives/Sheet.tsx')),
+    /paddingBottom: insets\.bottom \+ spacing\.lg/,
+    'the two sheets must reserve the inset the same way'
+  );
+  // The ground that was showing through is painted, in one place, for both trees.
+  assert.match(
+    stripComments(read('navigation/ModeShell.tsx')),
+    /backgroundColor: palette\.background/
+  );
+});
