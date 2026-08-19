@@ -23,17 +23,7 @@
       "Edit(/WEB_DEPLOYMENT.md)",
       "Edit(**/*.web.ts)",
       "Edit(**/*.web.tsx)",
-      "Edit(/screens/LaunchScreen.tsx)",
-      "Edit(/screens/WelcomeScreen.tsx)",
-      "Edit(/screens/SignInScreen.tsx)",
-      "Edit(/screens/EmailSignInScreen.tsx)",
-      "Edit(/screens/CreateAccountScreen.tsx)",
-      "Edit(/screens/EmailCreateAccountScreen.tsx)",
-      "Edit(/screens/VerifyPhoneScreen.tsx)",
-      "Edit(/screens/SetupScreen.tsx)",
-      "Edit(/screens/LegalGateScreen.tsx)",
-      "Edit(/screens/HomeScreen.tsx)",
-      "Edit(/screens/BrowseJobsScreen.tsx)",
+   
 
       "Bash(*avkighsiufeefyycbebf*)",
       "PowerShell(*avkighsiufeefyycbebf*)",

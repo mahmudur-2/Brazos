@@ -44,7 +44,11 @@ const NEGATION =
 const linesOf = (text) => text.split(/\r?\n/);
 
 test('CLAUDE.md still carries the load-bearing literals', () => {
-  const claude = read('CLAUDE.md');
+  // The operator's 2026-08-19 unlock edit re-saved CLAUDE.md through an editor
+  // that escapes markdown underscores (`transition\_job\_status`). The literals
+  // are still present and still load-bearing; fold the escaping away rather
+  // than weakening any assertion. CLAUDE.md itself is committed verbatim.
+  const claude = read('CLAUDE.md').replace(/\\_/g, '_');
 
   // The trunk, named as policy rather than as machine state.
   assert.match(claude, /\bmainexpo\b/);

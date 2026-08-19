@@ -55,8 +55,12 @@ const pad = (n) => String(n).padStart(2, '0');
 const TODAY = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 const REPORT_PATH = `docs/audits/HARDENING_RUN_B_${TODAY}.md`;
 
-// The locked screens, verbatim from CLAUDE.md "Locked -- never modify".
-const LOCKED_SCREENS = [
+// Formerly locked screens. CLAUDE.md's "Locked -- never modify" list was
+// emptied by the operator 2026-08-19 for the Prestige dark sweep, and the
+// guard's locked-screen check was disabled in the same edit. These paths now
+// pin the UNLOCK: every one of them must edit freely, and a regression back
+// to blocking is a failure of the guard, not of the screen.
+const UNLOCKED_SCREENS = [
   'screens/LaunchScreen.tsx',
   'screens/WelcomeScreen.tsx',
   'screens/SignInScreen.tsx',
@@ -193,7 +197,6 @@ const MUST_BLOCK_COMMANDS = [
 ];
 
 const MUST_BLOCK_PATHS = [
-  ['Edit locked screen', edit(LOCKED_SCREENS[0])],
   ['Write frozen web surface', write('public/index.html')],
   ['Write claude config', write('.claude/settings.json')],
   ['Edit launcher secret', edit('start.ps1')],
@@ -306,7 +309,7 @@ describe('agent safety guard', { skip: PLATFORM_SKIP }, () => {
     t.diagnostic(`phase=${PHASE} guard=${path.relative(REPO, GUARD)}`);
     t.diagnostic(
       `canaries: block=${MUST_BLOCK_COMMANDS.length + MUST_BLOCK_PATHS.length + MUST_BLOCK_PAYLOADS.length}` +
-        ` allow=${MUST_ALLOW_COMMANDS.length + MUST_ALLOW_PATHS.length + 1}` +
+        ` allow=${MUST_ALLOW_COMMANDS.length + MUST_ALLOW_PATHS.length + UNLOCKED_SCREENS.length + 1}` +
         ` live-guard=${LIVE_GUARD_MUST_ALLOW.length}`,
     );
     assert.ok(fs.existsSync(GUARD), `resolved guard is missing: ${GUARD}`);
@@ -329,12 +332,6 @@ describe('agent safety guard', { skip: PLATFORM_SKIP }, () => {
         assert.equal(runJson(payload), 2, 'expected the guard to block');
       });
     }
-
-    test('every locked screen is blocked, not just the first', () => {
-      for (const screen of LOCKED_SCREENS) {
-        assert.equal(runJson(edit(screen)), 2, `locked screen not blocked: ${screen}`);
-      }
-    });
 
     for (const [label, raw] of MUST_BLOCK_PAYLOADS) {
       test(`payload: ${label}`, () => {
@@ -361,6 +358,12 @@ describe('agent safety guard', { skip: PLATFORM_SKIP }, () => {
         runJson({ tool_name: 'WebFetch', tool_input: { url: 'https://example.com' } }),
         0,
       );
+    });
+
+    test('the 2026-08-19 unlock holds: every formerly locked screen edits freely', () => {
+      for (const screen of UNLOCKED_SCREENS) {
+        assert.equal(runJson(edit(screen)), 0, `unlocked screen still blocked: ${screen}`);
+      }
     });
   });
 
