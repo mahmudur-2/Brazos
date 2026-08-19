@@ -12,7 +12,14 @@ import { supabase } from '../lib/supabase';
 import { deleteMyAccount, fetchAccountDeletionBlockers } from '../lib/accountDeletion';
 import { formatBlockerList, type BlockerRow } from '../lib/accountDeletionBlockers';
 import type { ProfileStackNavigation } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * Delete account — App Store Guideline 5.1.1(v).
@@ -252,7 +259,8 @@ function Line({ text }: { text: string }) {
   const styles = stylesFor(colors);
   return (
     <View style={styles.line}>
-      <Ionicons name="ellipse" size={6} color={colors.textSubtle} style={styles.bullet} />
+      {/* Masters 31/32 set each removal bullet in gold. */}
+      <Ionicons name="ellipse" size={6} color={colors.gold} style={styles.bullet} />
       <Text style={styles.body}>{text}</Text>
     </View>
   );
@@ -269,7 +277,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.surface,
   },
   cardTitle: {
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 21,
     fontWeight: '800',
     color: colors.text,
   },
@@ -300,11 +309,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'flex-start',
     gap: spacing.sm,
   },
+  // Master 32's gate heading is the hottest amber in the set — warn, never
+  // danger red. The palette's `warning` IS that amber under v2.
   blockedTitle: {
+    fontFamily: fonts.display,
     flex: 1,
-    fontSize: 15,
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.warning,
     lineHeight: 21,
   },
   blockedNote: {
@@ -326,16 +338,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: spacing.sm,
   },
+  // Master 32 sets each blocker's JOB / PAYMENT eyebrow green — a live-state
+  // label for something that is currently unsettled.
   blockerGroup: {
     fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.6,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
-    color: colors.textSubtle,
+    color: colors.emerald,
   },
   blockerLabel: {
+    fontFamily: fonts.display,
     flex: 1,
-    fontSize: 15,
+    fontSize: 18,
     fontWeight: '700',
     color: colors.text,
   },
