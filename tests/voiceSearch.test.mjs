@@ -889,7 +889,12 @@ test('[static] WorkerHome keeps the locked-48 mirror behind the conversion', () 
   assert.match(code, /onSubmit=\{submitSearch\}/);
   assert.match(code, /onPress=\{submitSearch\}/);
   assert.match(code, /styles\.searchDivider/);
-  assert.match(code, /arrow-forward-circle/);
+  // Master 43 draws that submit as a SOLID green disc with the arrow cut out
+  // of it, not an outlined circle glyph — the shape moved, the contract did
+  // not: same submitSearch(), same slot, same divider.
+  assert.match(code, /styles\.searchGo/);
+  assert.match(code, /name="arrow-forward"/);
+  assert.match(code, /searchGo: \{[^}]*backgroundColor: colors\.emerald/s);
 });
 
 test("[static] SearchBar's additive props default to the exact posture existing consumers had", () => {

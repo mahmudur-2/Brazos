@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -43,6 +44,10 @@ import {
 import { SearchBar, Toggle } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
+// Master 43's hero crop. Dark-only by standing decision: light keeps the
+// approved full-width Heritage arrangement.
+const PRESTIGE_TOOLBOX_ART = require('../assets/prestige/hero_toolbox_worker.png');
+
 const PREVIEW_COUNT = 3;
 
 type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
@@ -72,8 +77,14 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
  *     disagree with what tapping it opens.
  */
 export function WorkerHomeScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // Forest is a near-black deep green in the v2 dark palette, so a forest
+  // glyph on a dark surface is invisible paint. Two resolved accents instead:
+  // `accent` is the interactive green the masters draw, `glyph` the cream
+  // they give the count-pill icons.
+  const accent = isDark ? colors.emerald : colors.forest;
+  const glyph = isDark ? colors.ink : colors.forest;
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { user } = useAuth();
   const { profile, setProfile } = useProfile();
@@ -214,18 +225,29 @@ export function WorkerHomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor={colors.forest}
-              colors={[colors.forest]}
+              tintColor={accent}
+              colors={[accent]}
             />
           }
         >
           {/* --- Greeting + the deliberate mode switch ---------------------- */}
           <View style={styles.greetingRow}>
             <View style={styles.greetingBlock}>
+              {/* Master 43 stacks the greeting: the salutation muted, the name
+                  on its own line carrying the gold. Light keeps one line in
+                  the Heritage muted tone. */}
               <Text style={styles.greeting} numberOfLines={1}>
                 {greetingFor(new Date())}
-                {firstName ? `, ${firstName}` : ''}
+                {firstName ? ',' : ''}
               </Text>
+              {firstName ? (
+                <Text
+                  style={[styles.greeting, isDark && styles.greetingName]}
+                  numberOfLines={1}
+                >
+                  {firstName}
+                </Text>
+              ) : null}
             </View>
             <Pressable
               onPress={switchToCustomer}
@@ -236,24 +258,36 @@ export function WorkerHomeScreen() {
               accessibilityHint="Returns to posting and managing your own jobs"
               accessibilityState={{ disabled: switching }}
             >
-              <Ionicons name="person" size={19} color={colors.forest} />
-              <Text style={styles.modeSwitchText}>Switch to Customer</Text>
+              <Ionicons name="person" size={19} color={accent} />
+              <Text style={[styles.modeSwitchText, isDark && styles.modeSwitchTextDark]}>
+                Switch to Customer
+              </Text>
             </Pressable>
           </View>
 
-          {/* --- The approved hero (mockup 43): serif headline with the
-              second sentence on the palette's GREEN accent (emerald — never
-              forest, which is the gold primary under Prestige), subtitle
-              beneath. Full width: the toolbox illustration beside it is an
-              operator asset and is deliberately absent. ------------------- */}
+          {/* --- The hero (master 43): serif headline with the second
+              sentence on the palette's GREEN accent, subtitle beneath, and —
+              under the dark palette only — the toolbox artwork beside it,
+              mounted the same way master 44's armchair is. Light keeps the
+              full-width Heritage block; the crop is a dark-only asset. --- */}
           <View style={styles.heroBlock}>
-            <Text style={styles.heroHeadline} maxFontSizeMultiplier={1.25}>
-              Get hired.{'\n'}
-              <Text style={styles.heroHeadlineAccent}>Get paid.</Text>
-            </Text>
-            <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
-              Grow your reputation.
-            </Text>
+            {isDark ? (
+              <Image
+                source={PRESTIGE_TOOLBOX_ART}
+                style={styles.heroArt}
+                resizeMode="contain"
+                accessibilityIgnoresInvertColors
+              />
+            ) : null}
+            <View style={[styles.heroCopy, isDark && styles.heroCopyDark]}>
+              <Text style={styles.heroHeadline} maxFontSizeMultiplier={1.25}>
+                Get hired.{'\n'}
+                <Text style={styles.heroHeadlineAccent}>Get paid.</Text>
+              </Text>
+              <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
+                Grow your reputation.
+              </Text>
+            </View>
           </View>
 
           {/* --- Search (mirrors the locked 48's field — the one route to
@@ -275,11 +309,20 @@ export function WorkerHomeScreen() {
                 <View style={styles.searchDivider} />
                 <Pressable
                   onPress={submitSearch}
-                  hitSlop={8}
+                  hitSlop={10}
+                  style={({ pressed }) => [styles.searchGo, pressed && styles.searchGoPressed]}
                   accessibilityRole="button"
                   accessibilityLabel="Search"
                 >
-                  <Ionicons name="arrow-forward-circle" size={22} color={colors.emerald} />
+                  {/* Master 43's inset submit is a SOLID green disc — one of
+                      the three conversion fills in the whole set (decision 3)
+                      — with the background colour cut out of it as the
+                      arrow. Light keeps the Heritage forest disc. */}
+                  <Ionicons
+                    name="arrow-forward"
+                    size={16}
+                    color={isDark ? colors.background : colors.onForest}
+                  />
                 </Pressable>
               </>
             }
@@ -321,8 +364,11 @@ export function WorkerHomeScreen() {
                 </View>
                 <View style={styles.statusDotRow}>
                   <PulseDot color={accepting ? colors.emerald : colors.danger} />
-                  <Text style={styles.statusCaption}>
-                    {accepting ? 'Visible' : 'Not Visible'}
+                  {/* Master 43 spells the consequence out rather than
+                      abbreviating it; the PNG is the authority over the
+                      earlier two-word draft. Same accepting_work fact. */}
+                  <Text style={styles.statusCaption} numberOfLines={1}>
+                    {accepting ? 'Visible to customers' : 'Not visible to customers'}
                   </Text>
                 </View>
               </View>
@@ -365,7 +411,7 @@ export function WorkerHomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={matchLabel}
               >
-                <Ionicons name="sparkles-outline" size={16} color={colors.forest} />
+                <Ionicons name="sparkles-outline" size={16} color={glyph} />
                 <Text style={styles.pillText} numberOfLines={1}>
                   {hasSkills ? (
                     <>
@@ -391,7 +437,7 @@ export function WorkerHomeScreen() {
                 accessibilityRole="button"
                 accessibilityLabel={nearbyLabel}
               >
-                <Ionicons name="location-outline" size={16} color={colors.forest} />
+                <Ionicons name="location-outline" size={16} color={glyph} />
                 <Text style={styles.pillText} numberOfLines={1}>
                   {nearbyState === 'ready' ? (
                     <>
@@ -418,8 +464,8 @@ export function WorkerHomeScreen() {
               accessibilityRole="button"
               accessibilityLabel="View all open jobs"
             >
-              <Text style={styles.viewAllText}>View all</Text>
-              <Ionicons name="arrow-forward" size={18} color={colors.forest} />
+              <Text style={[styles.viewAllText, isDark && styles.viewAllTextDark]}>View all</Text>
+              <Ionicons name="chevron-forward" size={18} color={accent} />
             </Pressable>
           </View>
 
@@ -432,7 +478,7 @@ export function WorkerHomeScreen() {
             <View style={styles.notice}>
               <Text style={styles.noticeError}>Couldn’t load open jobs.</Text>
               <Pressable onPress={() => void onRefresh()} hitSlop={8} accessibilityRole="button">
-                <Text style={styles.retry}>Try again</Text>
+                <Text style={[styles.retry, isDark && styles.retryDark]}>Try again</Text>
               </Pressable>
             </View>
           ) : previewJobs.length === 0 ? (
@@ -477,10 +523,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   greetingBlock: { flexShrink: 1, gap: 2 },
   greeting: { fontSize: 15, fontWeight: '600', color: colors.textMuted },
+  greetingName: { color: colors.gold },
   // The customer Home headline treatment, mirrored token for token (serif
-  // display face, 39/45, -0.3 tracking, ink) — full width here because the
-  // toolbox illustration is an operator asset still to come.
-  heroBlock: { gap: spacing.sm },
+  // display face, 39/45, -0.3 tracking, ink). heroBlock is the positioning
+  // context for the dark-only toolbox crop; heroCopy holds the rhythm.
+  heroBlock: {},
+  heroCopy: { gap: spacing.sm },
   heroHeadline: {
     fontFamily: fonts.display,
     fontSize: 39,
@@ -491,6 +539,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   heroHeadlineAccent: { color: colors.emerald },
   heroSubtitle: { fontSize: 16, fontWeight: '500', color: colors.homeSlate },
+  // Master 43 holds the headline in a narrow column beside the toolbox; the
+  // Prestige crop is dark-only, so light keeps the full-width block.
+  heroCopyDark: { maxWidth: '58%' },
+  heroArt: { position: 'absolute', zIndex: 0, right: -10, top: 18, width: 162, height: 108 },
   modeSwitch: {
     flexShrink: 0,
     flexDirection: 'row',
@@ -505,6 +557,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
+  modeSwitchTextDark: { color: colors.emerald },
   // The locked 48's searchField/searchDivider, value for value — laid over
   // the shared SearchBar's own field so the mirror's geometry wins; the
   // input styling inside now rides SearchBar itself.
@@ -525,6 +578,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: 26,
     backgroundColor: colors.border,
   },
+  // Master 43's inset submit disc: 32pt drawn, the 44pt floor met by the
+  // Pressable's hitSlop rather than by growing the pill.
+  searchGo: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.emerald,
+  },
+  searchGoPressed: { opacity: 0.85 },
   // ONE container, surface-filled with a GOLD hairline — never a forest
   // fill: under Prestige forest is the gold primary, and gold-family text on
   // it disappears (the defect e195012 repaired on ClientJobDetail's hero).
@@ -605,7 +669,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // distinct from the summary card's availability dot above, which tracks
   // the worker's own accepting_work state.
   feedDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: colors.emerald },
-  sectionTitle: { fontSize: 20, fontWeight: '800', color: colors.ink },
+  sectionTitle: { fontFamily: fonts.display, fontSize: 22, fontWeight: '800', color: colors.ink },
   viewAll: {
     flexShrink: 0,
     flexDirection: 'row',
@@ -615,10 +679,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   viewAllPressed: { opacity: 0.78 },
   viewAllText: { fontSize: 15, fontWeight: '600', color: colors.forest },
+  viewAllTextDark: { color: colors.emerald },
   cardList: { gap: spacing.md },
   notice: { gap: spacing.xs },
   noticeError: { fontSize: 14, color: colors.danger },
   retry: { fontSize: 14, fontWeight: '700', color: colors.forest },
+  retryDark: { color: colors.emerald },
   empty: { fontSize: 14, color: colors.textMuted, lineHeight: 20 },
   }),
 );

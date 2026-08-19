@@ -5,6 +5,7 @@ import { Chip } from './Chip';
 import { Skeleton } from './Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import {
+  fonts,
   radius,
   shadows,
   spacing,
@@ -71,7 +72,7 @@ export function WorkerJobCard({
    *  renders NOTHING: distance is real data or absent, never estimated. */
   distanceMiles?: number | null;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
@@ -94,7 +95,11 @@ export function WorkerJobCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [
+        styles.card,
+        isDark && styles.cardDark,
+        pressed && styles.cardPressed,
+      ]}
       accessibilityRole="button"
       accessibilityLabel={job.title}
     >
@@ -108,8 +113,17 @@ export function WorkerJobCard({
           accessibilityLabel={`Photo for ${job.title}`}
         />
       ) : (
-        <View style={[styles.thumb, styles.thumbFallback, { backgroundColor: accent.bg }]}>
-          <Ionicons name={icon} size={26} color={accent.icon} />
+        // Masters 12/13/43: with no uploaded photo the tile is the deep sage
+        // square with a gold category glyph; light keeps the per-category
+        // accent pair.
+        <View
+          style={[
+            styles.thumb,
+            styles.thumbFallback,
+            isDark ? styles.thumbFallbackDark : { backgroundColor: accent.bg },
+          ]}
+        >
+          <Ionicons name={icon} size={26} color={isDark ? colors.gold : accent.icon} />
         </View>
       )}
 
@@ -180,12 +194,21 @@ export function WorkerJobCard({
         ) : null}
       </View>
 
+      {/* Eyebrow law: EST. PAY is a structural label (gold), the figure is a
+          money value (emerald) — the B-4 split between masters 12/43 green
+          and 13 gold resolves to green everywhere. */}
       <View style={styles.payBlock}>
-        <Text style={styles.payCaption}>EST. PAY</Text>
-        <Text style={styles.payValue} numberOfLines={1}>
+        <Text style={[styles.payCaption, isDark && styles.payCaptionDark]}>EST. PAY</Text>
+        <Text style={[styles.payValue, isDark && styles.payValueDark]} numberOfLines={1}>
           {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
         </Text>
       </View>
+      <Ionicons
+        name="chevron-forward"
+        size={18}
+        color={colors.navInactive}
+        style={styles.chevron}
+      />
     </Pressable>
   );
 }
@@ -218,6 +241,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     padding: spacing.md,
     ...shadows.card,
   },
+  // Every dark master draws this card as surface + gold hairline; in light
+  // the Heritage card carries its shadow alone.
+  cardDark: {
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   cardPressed: {
     opacity: 0.92,
   },
@@ -230,6 +259,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   thumbFallback: {
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  thumbFallbackDark: {
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.mint2,
   },
   info: {
     flex: 1,
@@ -284,13 +318,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     letterSpacing: 0.6,
     color: colors.textMuted,
   },
+  payCaptionDark: { color: colors.gold },
   payValue: {
     marginTop: 3,
+    fontFamily: fonts.display,
     fontSize: 26,
     lineHeight: 30,
     fontWeight: '800',
     color: colors.forest,
   },
+  payValueDark: { color: colors.emerald },
+  chevron: { alignSelf: 'center' },
   skeletonLine: {
     height: 13,
     borderRadius: radius.sm,

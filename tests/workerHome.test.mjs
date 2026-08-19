@@ -12,9 +12,11 @@ import test from 'node:test';
  *   2. The availability toggle is the phase53 profiles.accepting_work field
  *      through the existing updateProfile() path — AVAILABILITY, not
  *      presence. The 4D-6 card renders it as operator-authored status copy
- *      ("Online"/"Offline", "Visible"/"Not Visible"); the words changed by
- *      operator decision, but the fact behind them is still accepting_work,
- *      and the device-local useWorkerAvailability hook never appears here.
+ *      ("Online"/"Offline", "Visible to customers"/"Not visible to
+ *      customers" — master 43's own caption, which outranks the earlier
+ *      two-word draft). The words follow the master; the fact behind them is
+ *      still accepting_work, and the device-local useWorkerAvailability hook
+ *      never appears here.
  *   3. Every figure comes from an existing source: openJobsPotential() from
  *      lib/earningsMath.ts, jobMatchesSkills() for the skill count, phase41's
  *      jobs_within_radius (via lib/hotspots) for the nearby count — the same
@@ -68,7 +70,10 @@ test('the toggle is phase53 accepting_work through the existing profile path', (
   // availability fact; the device-local presence hook still must not appear.
   assert.doesNotMatch(code, /useWorkerAvailability/);
   assert.match(code, /\{accepting \? 'Online' : 'Offline'\}/);
-  assert.match(code, /\{accepting \? 'Visible' : 'Not Visible'\}/);
+  assert.match(
+    code,
+    /\{accepting \? 'Visible to customers' : 'Not visible to customers'\}/
+  );
   // The toggle keeps its accessible name — the heading it echoed is gone.
   assert.match(screen, /accessibilityLabel="Taking new work"/);
 });
@@ -109,10 +114,15 @@ test('the hero headline and subtitle render, second sentence on the GREEN accent
   // The accent is emerald — the palette's green in BOTH modes — never
   // forest, which is the gold primary under Prestige.
   assert.match(code, /heroHeadlineAccent: \{ color: colors\.emerald \}/);
-  // No illustration is invented, sourced, or referenced: the toolbox art
-  // beside the mockup's headline is an operator asset.
-  assert.doesNotMatch(code, /require\([^)]*\.(png|jpe?g|webp|gif)/);
-  assert.doesNotMatch(code, /<Image\b|ImageBackground/);
+  // The toolbox art beside the master's headline is the OPERATOR's asset,
+  // now placed (assets/prestige). Nothing is invented or sourced elsewhere,
+  // and — the standing boundary — baked dark artwork renders only under the
+  // dark palette, so light keeps the approved full-width arrangement.
+  const assets = [...code.matchAll(/require\('([^']*\.(?:png|jpe?g|webp|gif))'\)/g)]
+    .map((m) => m[1]);
+  assert.deepEqual(assets, ['../assets/prestige/hero_toolbox_worker.png']);
+  assert.match(code, /\{isDark \? \(\s*<Image\s+source=\{PRESTIGE_TOOLBOX_ART\}/);
+  assert.doesNotMatch(code, /ImageBackground/);
 });
 
 test('the summary card: surface fill, gold hairline, divided halves, chips inside', () => {
@@ -158,11 +168,14 @@ test('the section heading reads Available Jobs with its feed dot; retired copy s
   assert.match(screen, /<Text style=\{styles\.sectionTitle\}>Available Jobs<\/Text>/);
   // The dot marks the jobs FEED and reads from the palette.
   assert.match(code, /feedDot: \{[^}]*backgroundColor: colors\.emerald/s);
-  // 4D-6 removed the "Taking new work" heading and its explanatory
-  // paragraph; the retired visibility phrasing must never come back.
+  // 4D-6 removed the "Taking new work" HEADING and its explanatory
+  // paragraph; neither may come back. The dot's caption is a different
+  // thing — master 43 draws it as "Not visible to customers", so the guard
+  // names the retired sentences rather than banning the word "visible".
   assert.doesNotMatch(code, /Taking new work<\/Text>/);
   assert.doesNotMatch(code, /Shown on your public profile/);
-  assert.doesNotMatch(code, /visible to customers/i);
+  assert.doesNotMatch(code, /You are visible to customers/i);
+  assert.doesNotMatch(code, /so customers can find you/i);
 });
 
 // ===========================================================================
