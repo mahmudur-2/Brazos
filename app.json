@@ -65,6 +65,13 @@
           "color": "#1F4D3A"
         }
       ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "BRAZOS uses your microphone only while you hold the mic button to search by voice.",
+          "speechRecognitionPermission": "Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server."
+        }
+      ],
       "expo-video"
     ],
     "extra": {
