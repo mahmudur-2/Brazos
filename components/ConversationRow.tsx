@@ -2,7 +2,14 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { Card } from './Card';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
 type ConversationRowProps = {
@@ -39,14 +46,20 @@ export function ConversationRow({
   onLongPress,
   onLongPressAvatar,
 }: ConversationRowProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
     <Card
       onPress={onPress}
       onLongPress={onLongPress}
-      style={[unread && styles.unreadCard, awaitingRequest && styles.awaitingCard]}
+      style={[
+        unread && !isDark && styles.unreadCard,
+        awaitingRequest && styles.awaitingCard,
+      ]}
     >
+      {/* Master 34's row: the job context sits ABOVE the name as a green
+          small-caps eyebrow, the name takes the serif, and the timestamp and
+          unread mark stack in their own right column. */}
       <View style={styles.row}>
         <AvatarPressable
           name={name}
@@ -56,23 +69,6 @@ export function ConversationRow({
         />
 
         <View style={styles.content}>
-          <View style={styles.topRow}>
-            <Text style={[styles.name, unread && styles.emphasis]} numberOfLines={1}>
-              {name}
-            </Text>
-            {blocked && (
-              <Ionicons name="ban-outline" size={14} color={colors.danger} />
-            )}
-            {muted && (
-              <Ionicons
-                name="notifications-off-outline"
-                size={14}
-                color={colors.textSubtle}
-              />
-            )}
-            <Text style={styles.time}>{formatTimeAgo(lastMessageAt)}</Text>
-          </View>
-
           {/* A waiting request outranks the job title here — it's the one
               thing in this row that needs an answer, and with no push
               notifications the inbox is the only place it can surface. */}
@@ -87,13 +83,26 @@ export function ConversationRow({
             </Text>
           ) : null}
 
-          <View style={styles.previewRow}>
-            <Text
-              style={[styles.preview, unread && styles.emphasis]}
-              numberOfLines={1}
-            >
-              {preview}
-            </Text>
+          <Text style={[styles.name, unread && styles.emphasis]} numberOfLines={1}>
+            {name}
+          </Text>
+
+          <Text style={[styles.preview, unread && styles.emphasis]} numberOfLines={1}>
+            {preview}
+          </Text>
+        </View>
+
+        <View style={styles.meta}>
+          <Text style={styles.time}>{formatTimeAgo(lastMessageAt)}</Text>
+          <View style={styles.metaMarks}>
+            {blocked && <Ionicons name="ban-outline" size={14} color={colors.danger} />}
+            {muted && (
+              <Ionicons
+                name="notifications-off-outline"
+                size={14}
+                color={colors.textSubtle}
+              />
+            )}
             {unread && <View style={styles.dot} />}
           </View>
         </View>
@@ -112,46 +121,50 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     gap: 2,
   },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  meta: {
+    flexShrink: 0,
+    alignItems: 'flex-end',
     gap: spacing.sm,
   },
+  metaMarks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 12,
+  },
   name: {
-    flex: 1,
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 19,
     fontWeight: '600',
-    color: colors.text,
+    color: colors.ink,
   },
   time: {
     fontSize: 12,
     color: colors.textMuted,
   },
+  // Master 34's context eyebrow: green small-caps above the name.
   jobTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  previewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: 2,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+    color: colors.emerald,
   },
   preview: {
-    flex: 1,
     fontSize: 14,
     color: colors.textMuted,
   },
   emphasis: {
-    color: colors.text,
+    color: colors.ink,
     fontWeight: '700',
   },
+  // Master 34 marks unread with a green dot; the count badge it also draws
+  // needs a per-thread unread COUNT, which useConversations does not carry.
   dot: {
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: colors.primary,
+    backgroundColor: colors.emerald,
   },
   unreadCard: {
     backgroundColor: colors.primarySoft,

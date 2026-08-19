@@ -39,7 +39,13 @@ import {
   unmuteUser,
 } from '../lib/moderation';
 import type { MessagesStackNavigation } from '../lib/navigation';
-import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 type SheetTarget = {
   userId: string;
@@ -51,7 +57,7 @@ type SheetTarget = {
 };
 
 export function MessagesInboxScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<MessagesStackNavigation>();
   const { user } = useAuth();
@@ -378,7 +384,7 @@ export function MessagesInboxScreen() {
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
-                <Ionicons name="chatbubbles-outline" size={32} color={colors.primary} />
+                <Ionicons name="chatbubbles-outline" size={32} color={isDark ? colors.gold : colors.primary} />
               </View>
               <Text style={styles.emptyTitle}>No messages yet</Text>
               <Text style={styles.emptyText}>
@@ -466,7 +472,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: spacing.sm,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.text,
   },
