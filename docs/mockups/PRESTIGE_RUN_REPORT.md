@@ -1527,3 +1527,130 @@ disabled fill); and the centre [ + ] survives, now dead centre of five slots.
     but a write on one screen is now visible on all of them immediately, which
     is a behaviour change worth knowing on Profile and Edit profile too, not
     just the two availability toggles.
+
+## Verification 2026-08-19
+
+An independent run audited the eleven `emerald(N)` commits before they were
+pushed. It did not make them and did not read the chat log that produced them:
+every verdict is derived from `git log`, `git diff` and the source at HEAD. The
+full record — evidence, mechanism and falsifier per decision — is
+`docs/audits/EMERALD_VERIFICATION_2026-08-19.md`. This is the summary.
+
+**Verdict: SAFE TO PUSH.** No contradiction was found, no source file needed
+repair, and the floor rose from 775 to **781 pass / 0 fail / 0 skipped**.
+
+### The master set is still split — restated, because it is the thing most
+### likely to be forgotten
+
+The **NUMBERED** masters (`docs/mockups/1_*.png` … `44_*.png`) are the binding
+design authority. The twelve **WORD-NAMED** masters are **operator-REJECTED**
+and are not authority at all: `Compare_Bids_Dark.png`, `Discover_Map_Dark.png`,
+`Messages_Inbox_Dark.png`, `My_Jobs_Active_Dark.png`, `My_Jobs_Closed_Dark.png`,
+`My_Jobs_In_Progress_Dark.png`, `Notifications_Feed_Dark.png`,
+`Notifications_Preferences_Dark.png`, `Payment_Methods_Dark.png`,
+`Profile_Account_Safety_Dark.png`, `Profile_Details_Dark.png`,
+`Profile_Past_Work_Settings_Dark.png`. Never cite one to justify a change and
+never "restore" a detail that appears only there. §(0) above is unchanged and
+remains the full statement.
+
+### Audit 1 — cross-run reconciliation: CLEAN
+
+`de048e9..HEAD` is **exactly** the eleven emerald commits. There is no
+light-mode parity run anywhere in this repository, on any ref
+(`git log --all --grep="^light("` returns nothing), so the two-runs-blind-to-
+each-other collision the audit existed to find does not exist. `fidelity` is
+emerald's immediate PREDECESSOR, not a parallel run: `de048e9` is `fidelity(7)`
+and the base of the range, and every fidelity decision emerald reverses is named
+as reversed in §(d).
+
+### Audit 2 — adversarial verification: nine CONFIRMED, two PARTIAL
+
+Each of the eleven commits was re-derived from its diff rather than from this
+report's prose. Nine came back CONFIRMED. Two are PARTIAL, and both are recorded
+here because the difference matters to whoever reads this next:
+
+1. **emerald(2) ADDED a painted layer; it did not remove one.** D2 as worded
+   asks for every layer behind the tab pill to be transparent. The run
+   determined that nothing of ours was painting and that the band was the iOS
+   root view showing through a MISSING ground, so the fix is a new
+   `backgroundColor: palette.background` on `navigation/ModeShell.tsx` — the
+   opposite of the instruction. The diagnosis is correct and the band is gone.
+   **But this inversion is not in §(d)'s reversal list**, which is where a
+   future run would look, so a run reading D2 literally and deleting that View
+   brings the white band straight back. It is now fenced in two suites.
+2. **Two currency figures DID change colour**, so the money freeze is PARTIAL
+   rather than absolute. Both are selection chips whose LABEL is an amount, and
+   only in their selected dark state: `ReviewAndTipScreen`'s tip presets and
+   `JobFilterSheet`'s budget chips went emerald → gold under D6's one-selection
+   rule. Their unselected colour is unchanged, and every money surface in a
+   money role — `MoneyText`, `JobCard`, `WorkerJobCard`, `BrowseJobCard`,
+   `MarketJobPreview`, `HubCard` — is byte-identical across the range. §(d)'s
+   end-of-run confirmation checked three files and would not have surfaced this.
+
+Verified exhaustively rather than sampled: all **fifteen** dispatches at the
+`MyJobs` tab and all **five** notification deep links resolve against the still-
+registered hidden route; Discover changed label, glyph AND destination together
+(verified attribute-by-attribute against `de048e9`); `lib/authTheme.ts` and
+`components/CountryPicker.tsx` are EMPTY diffs, making byte-identity mechanical;
+the only two raw hex literals added anywhere are inside comments; no allowlist
+was widened (emerald(5) narrowed one); and the range touches no config,
+manifest, migration or frozen-web file.
+
+**emerald(4) is the lowest-risk commit in the pass, not the highest.**
+`git show 315b481 --stat` is one file, 116 lines, all tests. Zero source. There
+is no invented marketplace figure because nothing was drawn.
+
+### Audit 3 — functional breakage: NONE
+
+No source file was modified. Every change was traced for unhandled navigation,
+dead routes, null dereference and hook-rule crashes; nothing qualified. Four
+items were logged and not fixed, the first being the one worth acting on:
+**`lib/navigation.ts:449–455` is a stale comment** still describing the
+pre-emerald(1) customer bar ("the two BARS are the same five tabs — Home · Map ·
+My Jobs · Messages · Profile — with the customer tree additionally registering
+Discover as a HIDDEN route"). emerald(1) rewrote the per-field JSDoc directly
+beneath it and missed the block above. A future run reading only that block
+would restore Map and My Jobs to the customer bar.
+
+### Audit 4 — regression fences: `tests/emeraldFences.test.mjs`
+
+Six fences, each closing a hole the existing suites leave, and **each proved
+non-vacuous by mutation** — the mutation applied, the suite run, the failure
+observed, the file restored:
+
+|Fence|What it holds|Proved by|
+|-|-|-|
+|F1|The customer bar draws five slots, DERIVED from `CUSTOMER_BAR_TABS`|restoring `MyJobs` to the roster → RED|
+|F2|Every cross-tab TAB name dispatched anywhere is registered in BOTH trees|renaming the hidden `MyJobs` registration → RED|
+|F3|The Discover slot's DESTINATION (the one attribute nothing pinned)|re-pointing it at `MapStackNavigator` → RED|
+|F4|`MoneyText`'s colour rule, including the unsettled-money guard|dropping the `SETTLED` guard → RED|
+|F5|The saturated per-category tile fill stays unreachable in dark|ungating one read in two different files → RED|
+|F6|`HIDDEN_TAB_ITEM_OPTIONS` is `display: 'none'`, and `ModeShell` paints the ground|swapping the hide mechanism, and deleting the ground → RED|
+
+Deliberately NOT duplicated, because a re-assertion of a green assertion adds no
+protection: the customer slot roster (`tests/mode.test.mjs:287`), My Jobs
+reachability (`:380`), Discover's label and glyph (`:319`, `:347`), the toggle
+contract and anti-divergence guarantee (`tests/workerHome.test.mjs:387`, `:432`),
+the verification badge (`tests/verificationBadgeRemoved.test.mjs:63`), the
+transparency contract (`tests/layout.test.mjs:32`), the selection helper, the
+disabled rule and the seven scrims (`tests/goldOnForest.test.mjs:201`, `:244`,
+`:282`). **No existing assertion was weakened, deleted or relaxed.**
+
+### What is now held by a test, and what still rests on human review
+
+**Held by a test** — a future run that reverts one of these goes red: the
+customer bar's five-slot composition and the absence of a My Jobs item; My Jobs
+reachability and every cross-tab dispatch target; Discover's label, glyph and
+destination; the hide-without-unregister mechanism; the ground behind the pill;
+the state-blind toggle track and the single availability store; the seven
+scrims; the selection and disabled helpers; the derived clearance and the
+deleted static token; the nav glyph sizing; the money primitive's colour rule;
+the retired per-category fill; the absent verification badge; `authTheme` and
+`CountryPicker`; the raw-literal scan.
+
+**Rests only on human review** — no offline test can reach these, and the device
+walk in the audit document covers each: the band's rendered result on a real
+iPhone; MapKit re-rasterisation across a live OS theme flip; anything reading a
+runtime safe-area inset (scroll clearance under the pill, the sheet above the
+home indicator); keyboard appearance; label ellipsis at an accessibility text
+size; and the two availability toggles agreeing ACROSS a navigation.
