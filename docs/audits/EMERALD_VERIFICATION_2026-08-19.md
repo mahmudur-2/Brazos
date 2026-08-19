@@ -662,3 +662,168 @@ report's finding from an independent run. Out of this run's permitted file set.
 
 ---
 
+
+## Audit 4 — regression fences
+
+New suite: `tests/emeraldFences.test.mjs`, six fences. Nothing existing was
+weakened, deleted or relaxed. **Floor: 775 → 781 pass, 0 fail, 0 skipped.**
+
+### Already fenced — deliberately NOT duplicated
+
+Re-asserting a green assertion adds no protection and manufactures the
+impression of coverage. These were verified as already fenced and left alone;
+the audit brief's minimum list is satisfied by the existing assertion where one
+exists, and by a new fence where it does not.
+
+|Brief's minimum|Existing fence|New fence|
+|-|-|-|
+|Customer slot roster, count, no My Jobs slot|`tests/mode.test.mjs:287`|**F1** (derived rather than duplicated)|
+|Customer reachability of My Jobs|`tests/mode.test.mjs:380`|**F2** (generalised from 3 paths to all dispatches)|
+|The Discover label and glyph|`tests/mode.test.mjs:319`, `:347`|**F3** (the destination, which nothing pinned)|
+|The single-boolean toggle contract + anti-divergence|`tests/workerHome.test.mjs:387`, `:432`|— already complete|
+|Absence of the verification badge tree-wide|`tests/verificationBadgeRemoved.test.mjs:63` (no allowlist)|— already complete|
+|The tab-bar transparency contract|`tests/layout.test.mjs:32`|**F6** (deliberate second copy — see F6)|
+|Retirement of saturated per-category tile fills in dark|**none**|**F5**|
+|Money-figure colour immobility|**none**|**F4**|
+
+Also already covered and left alone: the D6 selection helper, the D7 disabled
+rule and the seven scrims (`tests/goldOnForest.test.mjs:201`, `:244`, `:282`);
+the nav glyph sizes and slot arithmetic (`tests/layout.test.mjs:88`); the
+derived clearance (`:175`); `authTheme`/`CountryPicker`
+(`tests/themeResolution.test.mjs:262`); the raw-literal scan (`:341`).
+
+### Every fence was proved non-vacuous by mutation
+
+Not asserted — **executed.** Each mutation below was applied to the source, the
+suite run, the failure observed, and the file restored byte-for-byte. A fence
+that stays green after the thing it guards is deleted is worse than no fence,
+so none of these claims is offered on reasoning alone.
+
+|Fence|Mutation applied|Result|
+|-|-|-|
+|F1|`CUSTOMER_BAR_TABS` gains `'MyJobs'` back|**RED**|
+|F2|`name="MyJobs"` renamed on the customer tab navigator|**RED** (F2 and F6)|
+|F3|Discover's `component` pointed back at `MapStackNavigator`|**RED**|
+|F4|`amountColor` loses its `SETTLED` guard (unsettled money looks settled)|**RED**|
+|F5|`HubCard`'s category fill ungated from `isDark`|**RED**|
+|F5|`PostJobScreen`'s Chip accent ungated from `isDark`|**RED**|
+|F6|`HIDDEN_TAB_ITEM_OPTIONS` swapped to `tabBarButton: () => null`|**RED**|
+|F6|`ModeShell`'s ground deleted|**RED**|
+
+### The fences
+
+**F1 · The customer bar draws five slots, DERIVED from the roster.**
+Parses `CUSTOMER_BAR_TABS` and `CUSTOMER_CREATE_SLOT` out of
+`ui/primitives/BottomNav.tsx`, splices the action in, and asserts the drawn
+result is five slots with `[+]` at the centre index, no `MyJobs`, and `Discover`
+present — then asserts the tree's first five registrations are the same five in
+the same order.
+*Catches:* a sixth destination on the customer bar, or the restored My Jobs item.
+*Non-vacuous:* the roster is parsed out of the source, so deleting or renaming
+`CUSTOMER_BAR_TABS` fails the parse rather than skipping the check.
+`tests/mode.test.mjs:338` derives its five from a hardcoded copy of the same
+array; this derives what that one duplicates, so a change to the constant cannot
+slip past a stale literal.
+
+**F2 · Every cross-tab TAB name dispatched anywhere is registered in BOTH trees.**
+Walks `screens/`, `components/`, `hooks/`, `lib/`, `navigation/`, `modes/` and
+`ui/`, collects the first argument of every `navigateAcrossTabs(...)` call plus
+the values of `TAB_FOR_SCREEN` and `OFFER_JOB_TAB`, and asserts each name is a
+`<Tab.Screen name="…">` in `CustomerRoot.tsx` **and** `WorkerRoot.tsx`. The one
+exemption, `Discover`, is asserted to be customer-only **and** to have its single
+dispatch behind `mode === 'customer'` in `SavedWorkersScreen.tsx`.
+*Catches:* the exact D1 failure class — removing a route to remove a bar item,
+turning a working tap into `NAVIGATE … was not handled by any navigator`. General
+rather than a spot-check: it equally catches a NEW dispatch at a tab that does
+not exist in one of the trees.
+*Non-vacuous:* the dispatch set is collected from the tree and asserted non-empty
+and to contain `MyJobs` before anything is checked, so deleting every dispatch
+fails rather than passing. `TAB_FOR_SCREEN` is asserted to hold at least five
+entries for the same reason.
+
+**F3 · The Discover slot's DESTINATION.**
+Asserts `name="Discover" component={DiscoverStackNavigator}`, that the stack is
+still rooted at `WorkerSearchScreen`, that the Discover registration does not
+name `MapStackNavigator`, and that `Map` keeps its own hidden registration.
+*Catches:* the "two of three changed" reversion — keeping the Discover label and
+magnifier while pointing the slot back at the job map.
+*Non-vacuous:* this is the one attribute of the three that nothing else pins.
+`tests/mode.test.mjs` pins the label (`:319`), the glyph (`:347`) and that
+Discover is drawn rather than hidden (`:320`); the component it renders was
+completely unasserted, which is precisely the hole.
+
+**F4 · Money-figure colour immobility.**
+Pins `MoneyText`'s exact `amountColor` expression and its `SETTLED` set, that the
+amount still goes through `formatBudget()`, that no `color` prop lets a caller
+pass one in, and that the six dedicated money surfaces hold no raw colour literal.
+*Catches:* any recolouring of the money primitive — including the serious case,
+an UNSETTLED amount rendered in the settled colour, which is a payment
+state-machine violation (§H.3) rather than a paint change.
+*Non-vacuous:* it matches an expression that exists today; deleting `amountColor`
+or its `SETTLED` guard fails the match rather than skipping it. Proved by the
+mutation above.
+*Deliberately scoped* to the money primitive and surfaces that render an amount
+AS an amount, not to every string containing a `$`. The audit's F1 finding is
+why: a chip whose label is an amount is a selection control, and a fence that
+treated a chip label and a price as the same thing would be red today or would
+have to allowlist its way out — and an allowlisted fence guards nothing.
+
+**F5 · The saturated per-category tile fill stays retired in dark.**
+Derives the consumer list by walking the tree for readers of
+`accent.bg` / `accent.icon` / `categoryAccent(…).bg|icon`, then per file counts
+GATED reads (on the FALSE branch of an `isDark ?` ternary) against TOTAL reads
+and requires them equal.
+*Catches:* a future run "simplifying" one of those ternaries back to a bare read,
+which puts `JOB_CATEGORY_COLORS`' purple, orange or amber tile back on the
+near-black ground. That table has been light-only since `fidelity(2)`, and
+nothing in the type system says so — only a test can hold it.
+*Non-vacuous:* the consumer list is derived and asserted non-empty; the check is
+per file, so reverting one fails on that file by name; and because it counts
+gated against total, adding an ungated read to a file that already has a gated
+one still fails. It is deliberately **shape-agnostic** — the contract is "on the
+false branch of an `isDark` ternary", not "inside a `backgroundColor`". That
+matters: `PostJobScreen` passes the accent as a `Chip` prop rather than a style
+and is just as correct; a narrower regex rejected it on the first run, which is
+how the shape-agnostic form was arrived at.
+
+**F6 · The mechanism that hides a tab item without unregistering its route —
+and the ground behind the pill.**
+Pins `HIDDEN_TAB_ITEM_OPTIONS` to `tabBarItemStyle: { display: 'none' }`, that
+`Map` and `MyJobs` still carry it with their real navigators, that `ModeShell`
+paints the palette-resolved ground around the tree swap, and that no
+`tabBarBackground` exists in the bar primitive.
+*Catches (first half):* swapping `display: 'none'` for another way of hiding the
+item — `tabBarButton: () => null` is the usual one — which leaves the route
+dispatchable and every existing assertion green while the bar keeps a phantom
+sixth flex slot and the customer pill visibly regresses.
+*Catches (second half):* deletion of `ModeShell`'s ground.
+*Non-vacuous:* `tests/mode.test.mjs:310` asserts Map and MyJobs CARRY
+`HIDDEN_TAB_ITEM_OPTIONS`; nothing asserted what those options ARE, so the
+indirection could be hollowed out from the inside.
+*On the one duplication in this file.* The ground is asserted here as well as at
+`tests/layout.test.mjs:47`, on purpose and only here. emerald D2's instruction
+says every layer behind the pill should be TRANSPARENT; the fix ADDED a painted
+ground, because nothing of ours was painting and the gap fell through to the iOS
+root view. That makes `layout.test.mjs:47` the assertion a future run is most
+likely to read as a contradiction of the decision it cites, and delete. Two
+independent failures are harder to talk past than one.
+
+### Cannot be fenced offline — device only
+
+Recorded so the device walk covers them rather than leaving them uncovered.
+
+* **That the white band is actually gone on an iPhone.** The fences pin the
+  ground's presence, not its rendered result. → device walk step 2.
+* **MapKit tile appearance after a live OS light/dark flip.** The remount key is
+  pinned; whether MKMapView re-rasterises is a native behaviour no static scan
+  can execute. → step 10.
+* **Keyboard appearance, safe-area clearance on a notched screen, real scroll
+  behaviour under the pill.** `useFloatingNavClearance()` reads a runtime inset
+  that is 0 in any offline harness. → steps 3, 12, 14, 23.
+* **That no label ellipsises at an accessibility text size.** The 1.2 cap is
+  pinned; the rendered width is not measurable offline. → step 1.
+* **That the two availability toggles agree ACROSS A NAVIGATION.** The store and
+  both call sites are pinned; the cross-screen behaviour needs a real mount. →
+  step 19.
+
+---
