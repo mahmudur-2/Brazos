@@ -546,3 +546,93 @@ test('[static] the installed plugin resolves those options into the two Info.pli
   assert.equal(installed.version, '3.1.3');
   assert.equal(JSON.parse(read('package.json')).dependencies['expo-speech-recognition'], '3.1.3');
 });
+
+// ===========================================================================
+// 4D-4 tail — voice search is REACHABLE: the live search surfaces render the
+// shared SearchBar (mic on for every one of them), each conversion pinned as
+// behaviour-preserving. The locked search surfaces (HomeScreen,
+// BrowseJobsScreen) are deliberately absent from this list until unlocked.
+// ===========================================================================
+
+const CONVERTED_SURFACES = ['screens/WorkerSearchScreen.tsx', 'screens/WorkerHomeScreen.tsx'];
+
+test('[static] each converted surface renders SearchBar and keeps no raw search TextInput', () => {
+  for (const path of CONVERTED_SURFACES) {
+    const source = read(path);
+    const code = stripCommentsForScan(source);
+    assert.match(
+      source,
+      /import \{ SearchBar \} from '\.\.\/ui\/primitives';/,
+      `${path} must import the shared SearchBar from the primitives barrel`
+    );
+    assert.match(code, /<SearchBar\b/, `${path} must mount the shared SearchBar`);
+    // No parallel raw input: neither a second search field nor a leftover.
+    assert.doesNotMatch(code, /\bTextInput\b/, `${path} must not keep a raw TextInput`);
+  }
+});
+
+test('[static] the mic is on for every converted surface — no opt-out, no side channel', () => {
+  for (const path of CONVERTED_SURFACES) {
+    const code = stripCommentsForScan(read(path));
+    assert.doesNotMatch(code, /disableVoiceSearch/, `${path} must not opt out of the mic`);
+    // The screen reaches voice only through SearchBar's onChangeText contract.
+    assert.doesNotMatch(code, /voiceSearch|beginHold/, `${path} must not touch the boundary itself`);
+  }
+});
+
+test('[static] WorkerSearch keeps its exact search behaviour behind the conversion', () => {
+  const source = read('screens/WorkerSearchScreen.tsx');
+  const code = stripCommentsForScan(source);
+  // Verbatim copy: placeholder and accessibility label unchanged.
+  assert.match(source, /placeholder="What do you need help with\?"/);
+  assert.match(source, /accessibilityLabel="Describe the help you need"/);
+  // Sentence-typing posture preserved through the new additive props.
+  assert.match(code, /autoCapitalize="sentences"/);
+  assert.match(code, /autoCorrect\b/);
+  // Submit-driven, not search-as-you-type: keyboard return and the retained
+  // arrow button both land on the same submit().
+  assert.match(code, /onSubmit=\{submit\}/);
+  assert.match(code, /onPress=\{submit\}/);
+  assert.match(code, /accessibilityLabel="Search workers"/);
+  // Typing still resets the run guard, the results, and the pinned chip —
+  // which is also exactly what SearchBar's clear control now performs.
+  assert.match(
+    code,
+    /runRef\.current \+= 1;\s*setQuery\(text\);\s*setState\(\{ kind: 'idle' \}\);\s*if \(pinnedCategory\) setPinnedCategory\(null\);/
+  );
+  // The Discover tab-root mount still opens without stealing the keyboard.
+  assert.match(
+    code,
+    /autoFocus=\{params\?\.autoFocus !== false && !params\?\.query && !params\?\.category\}/
+  );
+});
+
+test('[static] WorkerHome keeps the locked-48 mirror behind the conversion', () => {
+  const source = read('screens/WorkerHomeScreen.tsx');
+  const code = stripCommentsForScan(source);
+  assert.match(source, /placeholder="Search for jobs or areas"/);
+  assert.match(code, /autoCapitalize="sentences"/);
+  // The locked twin renders no clear control; the mirror keeps that.
+  assert.match(code, /disableClear/);
+  // The divider + arrow submit stay, and keyboard return and the arrow both
+  // land on the same submitSearch().
+  assert.match(code, /onSubmit=\{submitSearch\}/);
+  assert.match(code, /onPress=\{submitSearch\}/);
+  assert.match(code, /styles\.searchDivider/);
+  assert.match(code, /arrow-forward-circle/);
+});
+
+test("[static] SearchBar's additive props default to the exact posture existing consumers had", () => {
+  // Each default reproduces the previously hardcoded value, so a consumer
+  // passing nothing new (the catalog) renders byte-identically.
+  assert.match(searchBarCode, /autoCapitalize = 'none',/);
+  assert.match(searchBarCode, /autoCorrect = false,/);
+  assert.match(searchBarCode, /disableClear = false,/);
+  // The knobs feed the same TextInput attributes the literals fed before.
+  assert.match(searchBarCode, /autoCapitalize=\{autoCapitalize\}/);
+  assert.match(searchBarCode, /autoCorrect=\{autoCorrect\}/);
+  assert.match(searchBarCode, /\{value\.length > 0 && !disableClear \? \(/);
+  // The trailing slot renders inside the field; absent by default renders
+  // nothing at all.
+  assert.match(searchBarCode, /\{trailing\}/);
+});

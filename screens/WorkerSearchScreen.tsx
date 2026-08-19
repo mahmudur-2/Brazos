@@ -16,7 +16,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -64,6 +63,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { SearchBar } from '../ui/primitives';
 
 /** Chips offered before anything has been typed. The first six of the shared
  *  skill list — enough to cover the common asks without a wall of options. */
@@ -80,7 +80,7 @@ type SearchState =
   | { kind: 'results'; matches: WorkerMatch[]; categories: string[]; mode: RankingMode };
 
 export function WorkerSearchScreen() {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const navigation = useNavigation<CustomerHomeStackNavigation>();
@@ -254,55 +254,40 @@ export function WorkerSearchScreen() {
             </View>
           ) : null}
 
-          <View style={styles.searchRow}>
-            <Ionicons name="search" size={20} color={colors.emerald} />
-            <TextInput
-              keyboardAppearance={isDark ? 'dark' : 'light'}
-              style={styles.searchInput}
-              value={query}
-              onChangeText={(text) => {
-                runRef.current += 1;
-                setQuery(text);
-                setState({ kind: 'idle' });
-                // Typing means the customer is describing the job themselves, so
-                // stop forcing the chip they tapped earlier.
-                if (pinnedCategory) setPinnedCategory(null);
-              }}
-              onSubmitEditing={submit}
-              placeholder="What do you need help with?"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="sentences"
-              autoCorrect
-              returnKeyType="search"
-              // autoFocus:false is the Discover tab-root mount — opening a TAB
-              // with the keyboard up is noise; pushed-from-Home opens focused.
-              autoFocus={params?.autoFocus !== false && !params?.query && !params?.category}
-              accessibilityLabel="Describe the help you need"
-            />
-            {query.length > 0 ? (
+          {/* The shared SearchBar (mic included when the device supports it).
+              Its standard clear control performs exactly what the old custom
+              one did: onChangeText('') resets the run guard, the results and
+              the pinned chip. */}
+          <SearchBar
+            style={styles.searchRow}
+            value={query}
+            onChangeText={(text) => {
+              runRef.current += 1;
+              setQuery(text);
+              setState({ kind: 'idle' });
+              // Typing means the customer is describing the job themselves, so
+              // stop forcing the chip they tapped earlier.
+              if (pinnedCategory) setPinnedCategory(null);
+            }}
+            onSubmit={submit}
+            placeholder="What do you need help with?"
+            autoCapitalize="sentences"
+            autoCorrect
+            // autoFocus:false is the Discover tab-root mount — opening a TAB
+            // with the keyboard up is noise; pushed-from-Home opens focused.
+            autoFocus={params?.autoFocus !== false && !params?.query && !params?.category}
+            accessibilityLabel="Describe the help you need"
+            trailing={
               <Pressable
-                onPress={() => {
-                  runRef.current += 1;
-                  setQuery('');
-                  setPinnedCategory(null);
-                  setState({ kind: 'idle' });
-                }}
-                style={({ pressed }) => [styles.clearButton, pressed && styles.controlPressed]}
+                onPress={submit}
+                style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}
                 accessibilityRole="button"
-                accessibilityLabel="Clear search"
+                accessibilityLabel="Search workers"
               >
-                <Ionicons name="close" size={20} color={colors.textMuted} />
+                <Ionicons name="arrow-forward" size={20} color={colors.onForest} />
               </Pressable>
-            ) : null}
-            <Pressable
-              onPress={submit}
-              style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Search workers"
-            >
-              <Ionicons name="arrow-forward" size={20} color={colors.onForest} />
-            </Pressable>
-          </View>
+            }
+          />
 
           {!keyboardVisible ? (
             <View style={styles.serviceSection}>
@@ -685,20 +670,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
     ...shadows.card,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.ink,
-    // Android centres single-line inputs oddly without this; iOS ignores it.
-    paddingVertical: 0,
-  },
-  clearButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.pill,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   searchButton: {
     width: 46,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -6,6 +6,7 @@ import {
   TextInput,
   View,
   type StyleProp,
+  type TextInputProps,
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -55,6 +56,17 @@ type SearchBarProps = {
   accessibilityLabel?: string;
   /** Opt out of the press-and-hold mic. Present by default when available. */
   disableVoiceSearch?: boolean;
+  /** Typing posture. The defaults are the terse keyword posture this field
+   *  always had; sentence-style surfaces (worker search) pass 'sentences'
+   *  plus autoCorrect so conversion changes nothing about their keyboards. */
+  autoCapitalize?: TextInputProps['autoCapitalize'];
+  autoCorrect?: boolean;
+  /** Suppress the clear control — for a field whose design (the locked 48
+   *  mirror) never rendered one. */
+  disableClear?: boolean;
+  /** Rendered inside the field after the mic — the submit-arrow slot the
+   *  converted screens keep. Absent by default. */
+  trailing?: ReactNode;
 };
 
 export function SearchBar({
@@ -67,6 +79,10 @@ export function SearchBar({
   style,
   accessibilityLabel,
   disableVoiceSearch = false,
+  autoCapitalize = 'none',
+  autoCorrect = false,
+  disableClear = false,
+  trailing,
 }: SearchBarProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -147,11 +163,11 @@ export function SearchBar({
         onSubmitEditing={onSubmit}
         returnKeyType="search"
         autoFocus={autoFocus}
-        autoCapitalize="none"
-        autoCorrect={false}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
         accessibilityLabel={accessibilityLabel ?? placeholder}
       />
-      {value.length > 0 ? (
+      {value.length > 0 && !disableClear ? (
         <Pressable
           onPress={() => onChangeText('')}
           // The glyph is small; the hit area is not.
@@ -182,6 +198,7 @@ export function SearchBar({
           />
         </Pressable>
       ) : null}
+      {trailing}
     </View>
   );
 }

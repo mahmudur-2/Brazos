@@ -8,7 +8,6 @@ import {
   StyleSheet,
   Switch,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -39,6 +38,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { SearchBar } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
 const PREVIEW_COUNT = 3;
@@ -241,29 +241,33 @@ export function WorkerHomeScreen() {
           </View>
 
           {/* --- Search (mirrors the locked 48's field — the one route to
-              WorkerResults mode 'search') ---------------------------------- */}
-          <View style={styles.searchField}>
-            <Ionicons name="search" size={22} color={colors.textMuted} />
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              onSubmitEditing={submitSearch}
-              placeholder="Search for jobs or areas"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="sentences"
-              returnKeyType="search"
-            />
-            <View style={styles.searchDivider} />
-            <Pressable
-              onPress={submitSearch}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel="Search"
-            >
-              <Ionicons name="arrow-forward-circle" size={22} color={colors.emerald} />
-            </Pressable>
-          </View>
+              WorkerResults mode 'search'). The shared SearchBar carries the
+              input (and the mic where the device supports it); the locked
+              twin renders no clear control, so disableClear keeps the
+              mirror, and its divider + arrow submit stays verbatim. ------- */}
+          <SearchBar
+            style={styles.searchField}
+            value={query}
+            onChangeText={setQuery}
+            onSubmit={submitSearch}
+            placeholder="Search for jobs or areas"
+            autoCapitalize="sentences"
+            autoCorrect
+            disableClear
+            trailing={
+              <>
+                <View style={styles.searchDivider} />
+                <Pressable
+                  onPress={submitSearch}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Search"
+                >
+                  <Ionicons name="arrow-forward-circle" size={22} color={colors.emerald} />
+                </Pressable>
+              </>
+            }
+          />
 
           {/* --- Taking new work (phase53 availability, never presence) ----- */}
           <View style={styles.availabilityCard}>
@@ -416,7 +420,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
-  // The locked 48's searchField/searchInput/searchDivider, value for value.
+  // The locked 48's searchField/searchDivider, value for value — laid over
+  // the shared SearchBar's own field so the mirror's geometry wins; the
+  // input styling inside now rides SearchBar itself.
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -428,12 +434,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
     ...shadows.card,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 16,
-    color: colors.ink,
-    paddingVertical: 0,
   },
   searchDivider: {
     width: 1,
