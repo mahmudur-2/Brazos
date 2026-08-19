@@ -37,6 +37,7 @@ import {
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import {
+  fonts,
   radius,
   spacing,
   themedStyles,
@@ -306,14 +307,23 @@ export function PortfolioPicker({
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Feature past work</Text>
-          <Pressable onPress={handleClose} hitSlop={10} accessibilityLabel="Close">
-            <Ionicons name="close" size={24} color={colors.text} />
+          {/* Master 20 rings the close control in gold. */}
+          <Pressable
+            onPress={handleClose}
+            hitSlop={10}
+            accessibilityLabel="Close"
+            style={[styles.closeRing, isDark && styles.closeRingDark]}
+          >
+            <Ionicons name="close" size={22} color={isDark ? colors.gold : colors.text} />
           </Pressable>
         </View>
 
         <Text style={styles.subtitle}>
-          {portfolioItems.length}/{MAX_PORTFOLIO_ITEMS} featured · tap a photo to
-          add it, tap a featured one (checkmark) to edit or remove it
+          <Text style={styles.subtitleCount}>
+            {portfolioItems.length}/{MAX_PORTFOLIO_ITEMS}
+          </Text>
+          {' featured · tap a photo to add it, tap a featured one (checkmark) to '}
+          {'edit or remove it'}
         </Text>
 
         {loading ? (
@@ -537,9 +547,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingVertical: spacing.md,
   },
   headerTitle: {
-    fontSize: 20,
+    fontFamily: fonts.display,
+    fontSize: 28,
     fontWeight: '800',
     color: colors.text,
+  },
+  closeRing: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.pill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeRingDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   subtitle: {
     fontSize: 13,
@@ -548,6 +570,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: spacing.md,
     lineHeight: 18,
   },
+  // Master 20 sets the "0/20" count itself in gold, the rest of the line
+  // muted — the count is what the screen is about.
+  subtitleCount: { color: colors.gold, fontWeight: '700' },
   center: {
     flex: 1,
     alignItems: 'center',
@@ -578,6 +603,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: 150,
     borderRadius: radius.md,
     backgroundColor: colors.neutralBg,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   gridPhotoUsed: {
     borderWidth: 3,
@@ -594,12 +621,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // Master 20's per-tile caption: a gold small-caps eyebrow over the job's
+  // own title.
   gridLabel: {
     fontSize: 11,
     fontWeight: '700',
-    color: colors.primary,
+    color: colors.gold,
     textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    letterSpacing: 1.2,
     marginTop: spacing.xs,
   },
   gridJob: {
