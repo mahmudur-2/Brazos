@@ -858,7 +858,9 @@ export function PostJobScreen() {
           budget_min_cents: validMin,
           budget_max_cents: validMax,
         })
-      : 'Open to bids';
+      : // Master 35 is the poster's own view of an unset-budget job and it
+        // reads "No budget set" — the same string `formatBudget` returns.
+        'No budget set';
   const reviewTiming =
     arrivalWindowLabel({
       scheduled_date: scheduledDate,
@@ -1474,7 +1476,7 @@ export function PostJobScreen() {
                           {publishedJob.budget_cents != null ||
                           publishedJob.budget_min_cents != null
                             ? budgetRangeLabel(publishedJob)
-                            : 'Open to bids'}
+                            : 'No budget set'}
                         </Text>
                       </View>
                     </View>

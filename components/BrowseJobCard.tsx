@@ -118,8 +118,9 @@ export function BrowseJobCard({
           </View>
 
           <View style={styles.footerRow}>
+            {/* Masters 12/43's money slot: an unset budget reads "Open". */}
             <Text style={[styles.budget, isDark && styles.budgetDark]} numberOfLines={1}>
-              {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open budget'}
+              {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
             </Text>
             {/* Sits next to the pay, where a worker is already looking to
                 judge the job — not next to the title, which it would crowd. */}

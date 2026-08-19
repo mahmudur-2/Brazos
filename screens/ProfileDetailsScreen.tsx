@@ -259,8 +259,11 @@ export function ProfileDetailsScreen() {
                 color={isDark ? colors.gold : colors.primary}
               />
             </View>
+            {/* The one past-work empty sentence — the same string the hub's
+                PastWork card renders, so the two pages stop describing one
+                state two ways. */}
             <Text style={styles.dashedText}>
-              Feature photos from jobs you have finished to show clients your work.
+              Feature photos from jobs you’ve finished to show clients your work.
             </Text>
           </Pressable>
         </Card>

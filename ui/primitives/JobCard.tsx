@@ -185,7 +185,11 @@ export function JobCard({
                 style={[styles.money, isDark && { color: colors.emerald }]}
                 numberOfLines={1}
               >
-                {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open budget'}
+                {/* Masters 12 and 43 write an unset budget as "Open" in the
+                    VALUE slot under the money eyebrow — the eyebrow already
+                    says what the value is about. "Open budget" is the one form
+                    no master draws. */}
+                {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
               </Text>
             </View>
 

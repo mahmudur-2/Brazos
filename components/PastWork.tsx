@@ -128,6 +128,12 @@ export function PastWork({
           )}
 
           {items.length === 0 ? (
+            // ONE past-work empty state. The hub drew a bare centred block
+            // while the details page drew masters 42/45's dashed block, with
+            // the same sentence written two different ways — so the account
+            // holder met two empty states for one fact. This is the masters'
+            // block, and the editable sentence is now the single string the
+            // details page also renders.
             <View style={styles.empty}>
               <Ionicons name="images-outline" size={26} color={colors.textSubtle} />
               <Text style={styles.emptyText}>
@@ -256,17 +262,24 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.textSubtle,
     marginTop: spacing.xs,
   },
+  // Masters 42 and 45's dashed empty block, byte-for-byte the shape
+  // ProfileDetailsScreen's `dashed` already draws.
   empty: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
+    gap: spacing.md,
+    padding: spacing.md,
+    marginTop: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.border,
   },
   emptyText: {
-    fontSize: 13,
-    color: colors.textSubtle,
-    textAlign: 'center',
-    maxWidth: 260,
-    lineHeight: 18,
+    flex: 1,
+    fontSize: 14,
+    color: colors.textMuted,
+    lineHeight: 20,
   },
   tabsScroll: {
     flexGrow: 0,

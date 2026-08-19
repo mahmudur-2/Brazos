@@ -635,7 +635,10 @@ export function JobDetailScreen() {
             <View style={styles.detailRow}>
               <Ionicons name="cash-outline" size={20} color={metaGlyph} />
               <Text style={[styles.detailText, isDark && styles.detailTextDark]}>
-                {hasBudget(job) ? `${budgetRangeLabel(job)} budget` : 'Open budget'}
+                {/* A standalone meta line has no money eyebrow above it, so
+                    master 35's full sentence is the right form here — and it
+                    is `formatBudget`'s own string, not a fourth one. */}
+                {hasBudget(job) ? `${budgetRangeLabel(job)} budget` : 'No budget set'}
               </Text>
             </View>
             {arrivalWindowLabel(job) ? (

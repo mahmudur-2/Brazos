@@ -266,7 +266,9 @@ export function NotificationSettingsScreen() {
 
           {prefs?.nearby_jobs && (
             <Card>
-              <Text style={styles.sectionTitle}>How far is "nearby"?</Text>
+              {/* Master 39 sets typographic quotes here, as the rest of the
+                  app's copy already does with its apostrophes. */}
+              <Text style={styles.sectionTitle}>How far is “nearby”?</Text>
               <View style={styles.radiusWrap}>
                 <SegmentedControl
                   options={RADIUS_OPTIONS.map((miles) => ({

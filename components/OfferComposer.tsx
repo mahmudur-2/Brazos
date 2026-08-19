@@ -251,10 +251,11 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
             {JOB_CATEGORY_LABELS[context.job.category] ?? context.job.category}
             {context.job.location ? ` · ${context.job.location}` : ''}
           </Text>
+          {/* A labelled sentence, so it takes master 35's form. */}
           <Text style={styles.contextBudget}>
             {hasBudget(context.job)
               ? `Customer’s budget: ${budgetRangeLabel(context.job)}`
-              : 'Open budget — the customer wants your price'}
+              : 'No budget set — the customer wants your price'}
           </Text>
         </Card>
       ) : (

@@ -72,25 +72,37 @@ export function PaymentMethodsScreen() {
           ),
         },
         {
-          title: 'No stored payment methods',
+          // Master 40 CARDS every section on this screen. These last two were
+          // still riding the DetailScreen `title` + bare content shape, which
+          // draws a heading straight onto the page ground — on a dark device
+          // the screen visibly stopped being a stack of cards halfway down.
+          // They take the same card the two above already use, with the
+          // master's own eyebrows and its serif headings.
           content: (
-            <Text style={styles.bodyText}>
-              BRAZOS doesn’t store any card, bank account or wallet in this
-              build — there is no payment provider connected yet. When a real
-              provider arrives, the methods you add will appear here.
-            </Text>
+            <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+              <Text style={styles.eyebrow}>FUNDING SOURCE</Text>
+              <Text style={styles.sectionTitle}>No stored payment methods</Text>
+              <Text style={styles.bodyText}>
+                BRAZOS doesn’t store any card, bank account or wallet in this
+                build — there is no payment provider connected yet. When a real
+                provider arrives, the methods you add will appear here.
+              </Text>
+            </View>
           ),
         },
         ...(sandbox
           ? [
               {
-                title: 'What the sandbox does',
                 content: (
-                  <View style={styles.list}>
-                    <Row text="Authorize — records the agreed amount. Nothing is charged." />
-                    <Row text="Hold in protection — sets the funds aside in the ledger while the work happens." />
-                    <Row text="Release — moves the record to released after you approve the finished work (or 72 hours pass with no issue reported)." />
-                    <Row text="Every state is a real database row you can audit — none of it is real money." />
+                  <View style={[styles.sectionCard, isDark && styles.cardDark]}>
+                    <Text style={styles.eyebrow}>SANDBOX LEDGER</Text>
+                    <Text style={styles.sectionTitle}>What the sandbox does</Text>
+                    <View style={styles.list}>
+                      <Row text="Authorize — records the agreed amount. Nothing is charged." />
+                      <Row text="Hold in protection — sets the funds aside in the ledger while the work happens." />
+                      <Row text="Release — moves the record to released after you approve the finished work (or 72 hours pass with no issue reported)." />
+                      <Row text="Every state is a real database row you can audit — none of it is real money." />
+                    </View>
                   </View>
                 ),
               },
@@ -162,6 +174,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderWidth: 1,
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
+  },
+  // Same card as the hero and the mode card above it — master 40 draws every
+  // section on this screen inside one.
+  sectionCard: {
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.surface,
+  },
+  sectionTitle: {
+    fontFamily: fonts.display,
+    fontSize: 20,
+    fontWeight: '800',
+    color: colors.ink,
   },
   modeCopy: {
     flex: 1,
