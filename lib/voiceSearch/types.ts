@@ -9,8 +9,11 @@
  * The two iOS usage strings in app.json are a behavioural contract this
  * boundary enforces, not copy:
  *
- *   - "…only while you hold the mic button…"  → recognition runs only inside
- *     a hold session: begin on press-in, stop on release, never a toggle.
+ *   - "…only while you are searching by voice, and stops listening when you
+ *     finish speaking." → recognition runs only inside a bounded tap session:
+ *     one tap starts it, and it ends on ~2s of silence after speech has
+ *     begun, a hard 30s ceiling, a second tap, focus loss, backgrounding, or
+ *     unmount — never an open-ended stream.
  *   - "Speech is recognized on your device … Nothing is sent to a server."
  *     → recognition is REQUIRED to be on-device. Any state in which that
  *     cannot be guaranteed is `unavailable` — there is no network fallback
@@ -20,6 +23,26 @@
 
 /** en-US only this run — locale selection is deliberately not built. */
 export const VOICE_SEARCH_LOCALE = 'en-US';
+
+/**
+ * Continuous silence after speech has begun that ends the session. App-side:
+ * the installed vendor exposes NO usable silence signal on iOS — its
+ * `speechend` event is registered but never sent (no `sendEvent("speechend")`
+ * exists in ios/ExpoSpeechRecognitionModule.swift), and its own non-continuous
+ * stop is a fixed 3s no-result timer buried in ios/ExpoSpeechRecognizer.swift
+ * (`invalidateAndScheduleTimer`, `withTimeInterval: 3`), neither configurable
+ * nor observable — so the boundary times result events itself.
+ */
+export const VOICE_SILENCE_MS = 2000;
+
+/**
+ * Hard ceiling on any session, from the moment it begins. An independent
+ * app-side timer, armed synchronously before the first vendor call and keyed
+ * to NOTHING the recognizer reports: a microphone that stays open because a
+ * vendor callback never arrived is the failure this constant exists to
+ * prevent.
+ */
+export const VOICE_MAX_SESSION_MS = 30000;
 
 /**
  * Every degraded state is a first-class `unavailable`, never an error the
@@ -57,37 +80,38 @@ export type VoiceAvailability =
   | { status: 'available' }
   | { status: 'unavailable'; reason: VoiceUnavailableReason };
 
-export type VoiceHoldHandlers = {
+export type VoiceSessionHandlers = {
   /**
-   * The recognized phrase, at most once per hold. The ONLY egress for a
+   * The recognized phrase, at most once per session. The ONLY egress for a
    * transcript: it goes to the caller's onChangeText and nowhere else — never
    * stored, logged, or sent anywhere by this module.
    */
   onTranscript: (transcript: string) => void;
   /**
-   * The hold ended, whatever the cause (released, denied, unavailable,
-   * recognizer error, cancelled). Fires exactly once. Carries no message by
-   * design: no vendor or device error text can cross this boundary, which is
-   * how the lib/errorMessage.ts contract (no raw error text reaches a
-   * screen) is satisfied here — nothing crosses at all.
+   * The session ended, whatever the cause (stopped, silence, ceiling, denied,
+   * unavailable, recognizer error, cancelled). Fires exactly once. Carries no
+   * message by design: no vendor or device error text can cross this
+   * boundary, which is how the lib/errorMessage.ts contract (no raw error
+   * text reaches a screen) is satisfied here — nothing crosses at all.
    */
   onEnd: () => void;
 };
 
-export type VoiceHoldSession = {
-  /** The user let go: stop listening and commit the final phrase, if any. */
-  release(): void;
-  /** Tear down without committing (unmount). */
+export type VoiceSession = {
+  /** Second tap: stop listening and commit the final phrase, if any. */
+  stop(): void;
+  /** Tear down without committing (unmount, screen blur, backgrounding). */
   cancel(): void;
 };
 
 export type VoiceSearchProvider = {
   /** Whether the mic may render at all. Permission is NOT probed here — it
-   *  is requested on first use, inside beginHold. */
+   *  is requested on first use, inside beginSession. */
   getAvailability(): Promise<VoiceAvailability>;
-  /** Press-in → beginHold; release() on press-out. Never throws; a degraded
-   *  state simply ends the session (onEnd) without starting recognition. */
-  beginHold(handlers: VoiceHoldHandlers): VoiceHoldSession;
+  /** Tap → beginSession; stop() on the second tap, cancel() on blur,
+   *  background, or unmount. Never throws; a degraded state simply ends the
+   *  session (onEnd) without starting recognition. */
+  beginSession(handlers: VoiceSessionHandlers): VoiceSession;
 };
 
 // ---------------------------------------------------------------------------

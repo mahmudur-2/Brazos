@@ -68,7 +68,7 @@
       [
         "expo-speech-recognition",
         {
-          "microphonePermission": "BRAZOS uses your microphone only while you hold the mic button to search by voice.",
+          "microphonePermission": "BRAZOS uses your microphone only while you are searching by voice, and stops listening when you finish speaking.",
           "speechRecognitionPermission": "Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server."
         }
       ],

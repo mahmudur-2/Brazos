@@ -10,12 +10,14 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 
 // ===========================================================================
 // Stage 4D-4 Block 2 — the voice-search boundary, executed and scanned.
+// Tap-to-talk since the 4D-4 device pass.
 //
-// The two iOS usage strings in app.json are a behavioural contract:
-// hold-to-talk only, on-device only, nothing sent to a server. These tests
-// hold lib/voiceSearch/ to it by EXECUTING the real provider against injected
-// vendor doubles (the tests/phoneOtp.test.mjs technique) and by scanning the
-// source contracts the runtime behavior depends on.
+// The two iOS usage strings in app.json are a behavioural contract: a bounded
+// tap session that stops when you finish speaking, on-device only, nothing
+// sent to a server. These tests hold lib/voiceSearch/ to it by EXECUTING the
+// real provider against injected vendor doubles and hand-driven timers (the
+// tests/phoneOtp.test.mjs technique) and by scanning the source contracts the
+// runtime behavior depends on.
 // ===========================================================================
 
 const strip = (path) => stripTypeScriptTypes(read(path), { mode: 'strip' });
@@ -33,7 +35,7 @@ const link = (path, links = {}) => {
 const typesUrl = link('lib/voiceSearch/types.ts');
 const providerUrl = link('lib/voiceSearch/provider.ts', { './types': typesUrl });
 
-const { VOICE_SEARCH_LOCALE } = await import(typesUrl);
+const { VOICE_MAX_SESSION_MS, VOICE_SEARCH_LOCALE, VOICE_SILENCE_MS } = await import(typesUrl);
 const { createVoiceSearchProvider } = await import(providerUrl);
 
 /** Flush the provider's internal await chain (availability → permission →
@@ -43,6 +45,34 @@ const settle = async () => {
     await new Promise((resolve) => setImmediate(resolve));
   }
 };
+
+/** Hand-driven timers: nothing fires unless a test fires it, which is what
+ *  lets the ceiling be proven against a recognizer that reports nothing. */
+function fakeTimers() {
+  let nextId = 1;
+  const pending = new Map();
+  return {
+    setTimer: (callback, delayMs) => {
+      const id = nextId;
+      nextId += 1;
+      pending.set(id, { callback, delayMs });
+      return id;
+    },
+    clearTimer: (id) => {
+      pending.delete(id);
+    },
+    /** The delays still armed, in registration order — the assertion surface. */
+    delays: () => [...pending.values()].map((timer) => timer.delayMs),
+    /** Fire the one pending timer with this delay; ambiguity is a test bug. */
+    fire: (delayMs) => {
+      const matches = [...pending.entries()].filter(([, timer]) => timer.delayMs === delayMs);
+      assert.equal(matches.length, 1, `expected exactly one ${delayMs}ms timer armed`);
+      const [id, timer] = matches[0];
+      pending.delete(id);
+      timer.callback();
+    },
+  };
+}
 
 /** A recording vendor double with drivable events. */
 function fakeVendor(overrides = {}) {
@@ -84,15 +114,20 @@ function fakeVendor(overrides = {}) {
   return { vendor, calls, emit, listenerCount };
 }
 
-function iosProvider(vendor) {
-  return createVoiceSearchProvider({ platformOS: 'ios', loadVendor: () => vendor });
+function iosProvider(vendor, timers = fakeTimers()) {
+  return createVoiceSearchProvider({
+    platformOS: 'ios',
+    loadVendor: () => vendor,
+    setTimer: timers.setTimer,
+    clearTimer: timers.clearTimer,
+  });
 }
 
-/** A hold with recording handlers, so assertions read declaratively. */
-function hold(provider) {
+/** A tap session with recording handlers, so assertions read declaratively. */
+function tap(provider) {
   const transcripts = [];
   let ends = 0;
-  const session = provider.beginHold({
+  const session = provider.beginSession({
     onTranscript: (transcript) => transcripts.push(transcript),
     onEnd: () => {
       ends += 1;
@@ -108,7 +143,7 @@ function hold(provider) {
 test('every start() requires on-device recognition, en-US, non-continuous', async () => {
   const { vendor, calls, emit } = fakeVendor();
   const provider = iosProvider(vendor);
-  const h = hold(provider);
+  const h = tap(provider);
   await settle();
 
   assert.equal(calls.start.length, 1);
@@ -119,11 +154,13 @@ test('every start() requires on-device recognition, en-US, non-continuous', asyn
   assert.equal(options.requiresOnDeviceRecognition, true);
   assert.equal(options.lang, VOICE_SEARCH_LOCALE);
   assert.equal(options.lang, 'en-US');
-  // Hold-to-talk is a bounded session, never a continuous stream.
+  // Tap-to-talk is still a bounded session, never a continuous stream.
   assert.equal(options.continuous, false);
-  assert.equal(options.interimResults, false);
+  // Interim results are the silence detector's input (the installed vendor
+  // exposes no silence signal on iOS); they are never committed.
+  assert.equal(options.interimResults, true);
 
-  h.session.release();
+  h.session.stop();
   assert.equal(calls.stop, 1);
   emit('result', { isFinal: true, results: [{ transcript: 'plumber near me' }] });
   emit('end', null);
@@ -148,43 +185,56 @@ test('[static] the on-device flag is written true, once, and never false', () =>
 test('any platform but iOS is unavailable and never loads the vendor', async () => {
   for (const platformOS of ['web', 'android', 'windows', 'macos']) {
     let loads = 0;
+    const timers = fakeTimers();
     const provider = createVoiceSearchProvider({
       platformOS,
       loadVendor: () => {
         loads += 1;
         return fakeVendor().vendor;
       },
+      setTimer: timers.setTimer,
+      clearTimer: timers.clearTimer,
     });
     assert.deepEqual(await provider.getAvailability(), {
       status: 'unavailable',
       reason: 'not-ios',
     });
-    const h = hold(provider);
+    const h = tap(provider);
     await settle();
-    assert.equal(h.ended(), 1, `${platformOS}: the hold must end by itself`);
+    assert.equal(h.ended(), 1, `${platformOS}: the session must end by itself`);
     assert.deepEqual(h.transcripts, []);
     assert.equal(loads, 0, `${platformOS}: the vendor must never be loaded`);
+    assert.deepEqual(timers.delays(), [], `${platformOS}: no timer may outlive the session`);
   }
 });
 
 test('a missing or throwing native module is unavailable, not a crash', async () => {
-  const missing = createVoiceSearchProvider({ platformOS: 'ios', loadVendor: () => null });
+  const missingTimers = fakeTimers();
+  const missing = createVoiceSearchProvider({
+    platformOS: 'ios',
+    loadVendor: () => null,
+    setTimer: missingTimers.setTimer,
+    clearTimer: missingTimers.clearTimer,
+  });
   assert.deepEqual(await missing.getAvailability(), {
     status: 'unavailable',
     reason: 'module-missing',
   });
 
+  const throwingTimers = fakeTimers();
   const throwing = createVoiceSearchProvider({
     platformOS: 'ios',
     loadVendor: () => {
       throw new Error('requireNativeModule: ExpoSpeechRecognition is not available');
     },
+    setTimer: throwingTimers.setTimer,
+    clearTimer: throwingTimers.clearTimer,
   });
   assert.deepEqual(await throwing.getAvailability(), {
     status: 'unavailable',
     reason: 'module-missing',
   });
-  const h = hold(throwing);
+  const h = tap(throwing);
   await settle();
   assert.equal(h.ended(), 1);
 });
@@ -223,9 +273,9 @@ test('every degraded vendor state maps to its own unavailable reason', async () 
     const { vendor, calls } = fakeVendor(overrides);
     const provider = iosProvider(vendor);
     assert.deepEqual(await provider.getAvailability(), { status: 'unavailable', reason });
-    const h = hold(provider);
+    const h = tap(provider);
     await settle();
-    assert.equal(h.ended(), 1, `${reason}: the hold must end by itself`);
+    assert.equal(h.ended(), 1, `${reason}: the session must end by itself`);
     assert.equal(calls.start.length, 0, `${reason}: start() must be unreachable`);
   }
 });
@@ -237,7 +287,7 @@ test('an underscore locale spelling still counts as installed', async () => {
   assert.deepEqual(await iosProvider(vendor).getAvailability(), { status: 'available' });
 });
 
-test('a permission denial (or a throwing request) ends the hold without starting', async () => {
+test('a permission denial (or a throwing request) ends the session without starting', async () => {
   for (const overrides of [
     { requestPermissionsAsync: async () => ({ granted: false }) },
     {
@@ -249,9 +299,9 @@ test('a permission denial (or a throwing request) ends the hold without starting
     const { vendor, calls } = fakeVendor(overrides);
     const provider = iosProvider(vendor);
     // Render-time availability deliberately excludes permission — it is
-    // requested on first use, inside the hold.
+    // requested on first use, inside the session.
     assert.deepEqual(await provider.getAvailability(), { status: 'available' });
-    const h = hold(provider);
+    const h = tap(provider);
     await settle();
     assert.equal(h.ended(), 1);
     assert.deepEqual(h.transcripts, []);
@@ -259,13 +309,13 @@ test('a permission denial (or a throwing request) ends the hold without starting
   }
 });
 
-test('a grant is remembered; a denial is re-asked on the next hold', async () => {
+test('a grant is remembered; a denial is re-asked on the next session', async () => {
   const granting = fakeVendor();
   const provider = iosProvider(granting.vendor);
-  const first = hold(provider);
+  const first = tap(provider);
   await settle();
   granting.emit('end', null);
-  const second = hold(provider);
+  const second = tap(provider);
   await settle();
   granting.emit('end', null);
   assert.equal(granting.calls.permissionRequests, 1, 'a grant must not re-prompt');
@@ -281,9 +331,9 @@ test('a grant is remembered; a denial is re-asked on the next hold', async () =>
   // The override above increments itself, so start from the double's count.
   denying.calls.permissionRequests = 0;
   const denied = iosProvider(denying.vendor);
-  hold(denied);
+  tap(denied);
   await settle();
-  hold(denied);
+  tap(denied);
   await settle();
   assert.equal(denying.calls.permissionRequests, 2, 'a denial must ask again next time');
 });
@@ -295,9 +345,9 @@ test('a grant is remembered; a denial is re-asked on the next hold', async () =>
 test('without on-device support nothing starts — no fallback path to a network recognizer', async () => {
   const { vendor, calls } = fakeVendor({ supportsOnDeviceRecognition: () => false });
   const provider = iosProvider(vendor);
-  const h = hold(provider);
+  const h = tap(provider);
   await settle();
-  h.session.release();
+  h.session.stop();
   await settle();
   assert.equal(calls.start.length, 0);
   assert.equal(calls.stop, 0);
@@ -306,10 +356,10 @@ test('without on-device support nothing starts — no fallback path to a network
 });
 
 // ===========================================================================
-// Hold-to-talk semantics
+// Tap-to-talk semantics
 // ===========================================================================
 
-test('a hold released before permission resolves never starts recognition', async () => {
+test('a session stopped before permission resolves never starts recognition', async () => {
   let resolvePermission;
   const { vendor, calls } = fakeVendor({
     requestPermissionsAsync: () =>
@@ -318,37 +368,40 @@ test('a hold released before permission resolves never starts recognition', asyn
       }),
   });
   const provider = iosProvider(vendor);
-  const h = hold(provider);
+  const h = tap(provider);
   await settle();
-  // Finger already lifted while the iOS permission dialog was up.
-  h.session.release();
+  // Second tap landed while the iOS permission dialog was up.
+  h.session.stop();
   resolvePermission({ granted: true });
   await settle();
-  assert.equal(calls.start.length, 0, 'a released hold must never start listening');
+  assert.equal(calls.start.length, 0, 'a stopped session must never start listening');
   assert.equal(h.ended(), 1);
 });
 
-test('a final result before release commits once; release stops; end closes', async () => {
+test('a final result mid-session commits once; a second tap stops; end closes', async () => {
   const { vendor, calls, emit } = fakeVendor();
-  const provider = iosProvider(vendor);
-  const h = hold(provider);
+  const timers = fakeTimers();
+  const provider = iosProvider(vendor, timers);
+  const h = tap(provider);
   await settle();
-  // iOS non-continuous mode can finalize on its own silence timeout while
-  // the finger is still down.
+  // iOS non-continuous mode can finalize on its own while the session is
+  // still open (the iOS 18 speechDuration workaround in the installed
+  // source reports isFinal mid-stream).
   emit('result', { isFinal: false, results: [{ transcript: 'plu' }] });
   emit('result', { isFinal: true, results: [{ transcript: 'plumber' }] });
   emit('result', { isFinal: true, results: [{ transcript: 'plumber again' }] });
-  assert.deepEqual(h.transcripts, ['plumber'], 'exactly one commit per hold');
-  h.session.release();
+  assert.deepEqual(h.transcripts, ['plumber'], 'exactly one commit per session');
+  h.session.stop();
   assert.equal(calls.stop, 1);
   emit('end', null);
   assert.equal(h.ended(), 1);
+  assert.deepEqual(timers.delays(), [], 'no timer may outlive the session');
 });
 
 test('an empty final transcript commits nothing', async () => {
   const { vendor, emit } = fakeVendor();
   const provider = iosProvider(vendor);
-  const h = hold(provider);
+  const h = tap(provider);
   await settle();
   emit('result', { isFinal: true, results: [{ transcript: '' }] });
   emit('result', { isFinal: true, results: [] });
@@ -360,7 +413,7 @@ test('an empty final transcript commits nothing', async () => {
 test('cancel aborts, removes listeners, and a late result cannot commit', async () => {
   const { vendor, calls, emit, listenerCount } = fakeVendor();
   const provider = iosProvider(vendor);
-  const h = hold(provider);
+  const h = tap(provider);
   await settle();
   assert.equal(listenerCount('result'), 1);
   h.session.cancel();
@@ -376,6 +429,112 @@ test('cancel aborts, removes listeners, and a late result cannot commit', async 
 });
 
 // ===========================================================================
+// Silence ends the session — app-side, because the installed vendor exposes
+// no silence signal on iOS: its "speechend" event is registered but never
+// sent (no sendEvent("speechend") exists in ExpoSpeechRecognitionModule.swift,
+// and the speechStartHandler that would pair with it has no call site), and
+// its own non-continuous stop is a fixed, unobservable 3s no-result timer in
+// ExpoSpeechRecognizer.swift. So the boundary times result events itself.
+// ===========================================================================
+
+test('~2s of silence after speech has begun stops listening and commits the final phrase', async () => {
+  const { vendor, calls, emit } = fakeVendor();
+  const timers = fakeTimers();
+  const provider = iosProvider(vendor, timers);
+  const h = tap(provider);
+  await settle();
+
+  // Before any speech, no silence timer: only the ceiling is armed. The
+  // no-speech case belongs to the vendor's own timeout and the ceiling.
+  assert.deepEqual(timers.delays(), [VOICE_MAX_SESSION_MS]);
+
+  // Speech begins: the silence clock arms…
+  emit('result', { isFinal: false, results: [{ transcript: 'plu' }] });
+  assert.deepEqual(timers.delays(), [VOICE_MAX_SESSION_MS, VOICE_SILENCE_MS]);
+  // …and every further recognized phrase restarts it rather than stacking.
+  emit('result', { isFinal: false, results: [{ transcript: 'plumber ne' }] });
+  assert.deepEqual(timers.delays(), [VOICE_MAX_SESSION_MS, VOICE_SILENCE_MS]);
+
+  // ~2s pass with nothing recognized: the boundary stops listening, which
+  // makes the vendor deliver the final result and then end — the normal
+  // commit path, not a second one.
+  timers.fire(VOICE_SILENCE_MS);
+  assert.equal(calls.stop, 1);
+  emit('result', { isFinal: true, results: [{ transcript: 'plumber near me' }] });
+  emit('end', null);
+  assert.deepEqual(h.transcripts, ['plumber near me']);
+  assert.equal(h.ended(), 1);
+  assert.deepEqual(timers.delays(), [], 'no timer may outlive the session');
+  assert.equal(VOICE_SILENCE_MS, 2000);
+});
+
+test('an empty interim result does not count as speech', async () => {
+  const { vendor, emit } = fakeVendor();
+  const timers = fakeTimers();
+  const provider = iosProvider(vendor, timers);
+  tap(provider);
+  await settle();
+  emit('result', { isFinal: false, results: [{ transcript: '' }] });
+  emit('result', { isFinal: false, results: [] });
+  assert.deepEqual(timers.delays(), [VOICE_MAX_SESSION_MS], 'the silence clock must not arm');
+});
+
+// ===========================================================================
+// The 30-second ceiling — an independent timer, armed before the first
+// vendor call and keyed to NOTHING the recognizer reports. A microphone that
+// stays open because a callback never arrived is the failure it prevents.
+// ===========================================================================
+
+test('the ceiling is armed synchronously at tap, before any vendor event', () => {
+  const timers = fakeTimers();
+  const provider = iosProvider(fakeVendor().vendor, timers);
+  tap(provider);
+  // No settle(): the availability probe has not even resolved yet.
+  assert.deepEqual(timers.delays(), [VOICE_MAX_SESSION_MS]);
+  assert.equal(VOICE_MAX_SESSION_MS, 30000);
+});
+
+test('the ceiling fires while the recognizer reports nothing at all — the session still ends', async () => {
+  const { vendor, calls, emit, listenerCount } = fakeVendor();
+  const timers = fakeTimers();
+  const provider = iosProvider(vendor, timers);
+  const h = tap(provider);
+  await settle();
+  assert.equal(calls.start.length, 1, 'listening began');
+
+  // 30 seconds of nothing: no result, no error, no end — a silence callback
+  // that never arrives must not keep the microphone open.
+  timers.fire(VOICE_MAX_SESSION_MS);
+  assert.equal(calls.abort, 1, 'the vendor is asked to abort');
+  assert.equal(h.ended(), 1, 'the session ends without waiting for the vendor');
+  assert.equal(listenerCount('result'), 0);
+  assert.equal(listenerCount('error'), 0);
+  assert.equal(listenerCount('end'), 0);
+  assert.deepEqual(h.transcripts, []);
+  assert.deepEqual(timers.delays(), []);
+
+  // Even a vendor that wakes up late changes nothing.
+  emit('result', { isFinal: true, results: [{ transcript: 'stale' }] });
+  emit('end', null);
+  assert.deepEqual(h.transcripts, []);
+  assert.equal(h.ended(), 1, 'onEnd fires exactly once');
+});
+
+test('the ceiling ends even a session still waiting on permission', async () => {
+  const { vendor, calls } = fakeVendor({
+    // The permission round-trip never resolves at all.
+    requestPermissionsAsync: () => new Promise(() => {}),
+  });
+  const timers = fakeTimers();
+  const provider = iosProvider(vendor, timers);
+  const h = tap(provider);
+  await settle();
+  timers.fire(VOICE_MAX_SESSION_MS);
+  assert.equal(h.ended(), 1);
+  assert.equal(calls.start.length, 0, 'a ceilinged session must never start listening');
+});
+
+// ===========================================================================
 // No raw vendor error text can escape the boundary
 // ===========================================================================
 
@@ -384,7 +543,7 @@ test('a vendor error surfaces nothing — the session just ends', async () => {
   const provider = iosProvider(vendor);
   const seen = [];
   let ends = 0;
-  provider.beginHold({
+  provider.beginSession({
     onTranscript: (transcript) => seen.push(transcript),
     onEnd: (...args) => {
       ends += 1;
@@ -426,6 +585,14 @@ test('[static] the vendor import is lazy and guarded — import-safe without the
   );
 });
 
+test('[static] the real provider runs on real timers', () => {
+  // The injected pair must be setTimeout/clearTimeout and nothing cleverer:
+  // the ceiling's independence is a plain wall-clock guarantee.
+  const source = read('lib/voiceSearch/index.ts');
+  assert.match(source, /setTimer: \(callback, delayMs\) => setTimeout\(callback, delayMs\)/);
+  assert.match(source, /clearTimer: \(handle\) => clearTimeout\(/);
+});
+
 test('[static] nothing outside lib/voiceSearch/index.ts touches expo-speech-recognition', () => {
   const dirs = ['lib', 'screens', 'components', 'hooks', 'ui', 'navigation', 'modes', 'dev-tools'];
   const files = ['App.tsx', 'index.ts'];
@@ -460,15 +627,15 @@ test('[static] app.json registers the plugin with the two verbatim usage strings
   assert.ok(entry, 'the expo-speech-recognition config plugin must be registered');
   assert.deepEqual(entry[1], {
     microphonePermission:
-      'BRAZOS uses your microphone only while you hold the mic button to search by voice.',
+      'BRAZOS uses your microphone only while you are searching by voice, and stops listening when you finish speaking.',
     speechRecognitionPermission:
       'Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server.',
   });
 });
 
 // ===========================================================================
-// The SearchBar mic (commit 9) — hold-to-talk behind the onChangeText
-// contract, scanned as source facts (the component cannot render here).
+// The SearchBar mic — tap-to-talk behind the onChangeText contract, scanned
+// as source facts (the component cannot render here).
 // ===========================================================================
 
 const searchBar = read('ui/primitives/SearchBar.tsx');
@@ -478,9 +645,9 @@ test('[static] voice text arrives through onChangeText and no second write path 
   // The transcript handler IS the typed-text callback — not a wrapper that
   // could store, log, or fork the phrase.
   assert.match(searchBarCode, /onTranscript: onChangeText,/);
-  // One hold entry point, and the recognized phrase never drives submit:
+  // One session entry point, and the recognized phrase never drives submit:
   // typed text does not auto-submit, so neither may voice.
-  assert.equal(searchBarCode.match(/beginHold\(/g)?.length, 1);
+  assert.equal(searchBarCode.match(/beginSession\(/g)?.length, 1);
   assert.doesNotMatch(searchBarCode, /onSubmit\(\)/);
   assert.equal(
     (searchBarCode.match(/\bonSubmit\b/g) ?? []).length,
@@ -506,15 +673,22 @@ test('[static] the opt-out prop suppresses the mic and defaults to present', () 
   assert.match(searchBarCode, /if \(disableVoiceSearch \|\| isButton\) return;/);
 });
 
-test('[static] hold-to-talk is press-in/press-out — no tap-to-toggle, no continuous mode', () => {
-  assert.match(searchBarCode, /onPressIn=\{startVoiceHold\}/);
-  assert.match(searchBarCode, /onPressOut=\{endVoiceHold\}/);
-  // The hold handlers are bound nowhere else — especially not to onPress.
-  assert.doesNotMatch(searchBarCode, /onPress=\{startVoiceHold\}|onPress=\{endVoiceHold\}/);
-  assert.doesNotMatch(searchBarCode, /toggle/i);
-  // Release maps to release(), unmount to cancel() — never a re-start.
-  assert.match(searchBarCode, /sessionRef\.current\?\.release\(\);/);
+test('[static] tap-to-talk: one tap toggles, and every exit path ends the session', () => {
+  // The mic is a plain tap target now — the hold handlers are gone entirely.
+  assert.match(searchBarCode, /onPress=\{toggleVoiceSession\}/);
+  assert.doesNotMatch(searchBarCode, /onPressIn=|onPressOut=/);
+  // Second tap: stop-and-commit through the boundary, never a re-start.
+  assert.match(searchBarCode, /sessionRef\.current\.stop\(\);/);
+  // Unmount, screen blur, and app backgrounding all cancel without
+  // committing — the microphone cannot outlive what the user can see.
   assert.match(searchBarCode, /sessionRef\.current\?\.cancel\(\);/);
+  assert.match(searchBarCode, /navigation\.addListener\('blur'/);
+  assert.match(searchBarCode, /AppState\.addEventListener\('change'/);
+  assert.match(searchBarCode, /state !== 'active'/);
+  // The blur hook must not hard-require a navigator: the raw context read
+  // (undefined outside one) keeps the primitive mountable anywhere.
+  assert.match(searchBarCode, /useContext\(NavigationContext\)/);
+  assert.doesNotMatch(searchBarCode, /useNavigation\(/);
 });
 
 test('[static] the mic is palette-fed and holds the 44pt touch floor', () => {
@@ -576,7 +750,7 @@ test('[static] the mic is on for every converted surface — no opt-out, no side
     const code = stripCommentsForScan(read(path));
     assert.doesNotMatch(code, /disableVoiceSearch/, `${path} must not opt out of the mic`);
     // The screen reaches voice only through SearchBar's onChangeText contract.
-    assert.doesNotMatch(code, /voiceSearch|beginHold/, `${path} must not touch the boundary itself`);
+    assert.doesNotMatch(code, /voiceSearch|beginSession/, `${path} must not touch the boundary itself`);
   }
 });
 

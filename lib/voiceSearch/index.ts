@@ -32,13 +32,17 @@ function loadVendor(): VendorSpeechModule | null {
 export const voiceSearch = createVoiceSearchProvider({
   platformOS: Platform.OS,
   loadVendor,
+  // The session timers (silence, 30s ceiling) on the real clock; the tests
+  // inject a hand-driven pair instead.
+  setTimer: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimer: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 });
 
-export { VOICE_SEARCH_LOCALE } from './types';
+export { VOICE_MAX_SESSION_MS, VOICE_SEARCH_LOCALE, VOICE_SILENCE_MS } from './types';
 export type {
   VoiceAvailability,
-  VoiceHoldHandlers,
-  VoiceHoldSession,
   VoiceSearchProvider,
+  VoiceSession,
+  VoiceSessionHandlers,
   VoiceUnavailableReason,
 } from './types';

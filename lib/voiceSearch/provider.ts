@@ -1,18 +1,20 @@
 import {
+  VOICE_MAX_SESSION_MS,
   VOICE_SEARCH_LOCALE,
+  VOICE_SILENCE_MS,
   type VendorEventSubscription,
   type VendorSpeechModule,
   type VoiceAvailability,
-  type VoiceHoldHandlers,
-  type VoiceHoldSession,
+  type VoiceSession,
+  type VoiceSessionHandlers,
   type VoiceSearchProvider,
 } from './types';
 
 /**
  * The whole decision surface of the voice-search boundary, pure so the tests
- * execute it (the lib/phoneAuth/supabase.ts arrangement): the platform and
- * the vendor module arrive injected, no React Native import, no side effect
- * at module scope.
+ * execute it (the lib/phoneAuth/supabase.ts arrangement): the platform, the
+ * vendor module, and the timers arrive injected, no React Native import, no
+ * side effect at module scope.
  *
  * Invariants the tests hold this file to:
  *
@@ -23,8 +25,11 @@ import {
  *   the probe is the enforcement, not the flag.
  * - Every degraded state resolves to `unavailable` / a session that ends
  *   without starting. There is no network-fallback branch to take.
- * - Recognition runs only between press-in and release: a hold released
- *   before the permission round-trip finished never starts at all.
+ * - A session is bounded: it ends on ~2s of silence after speech has begun
+ *   (app-side — the installed vendor exposes no silence signal on iOS, see
+ *   VOICE_SILENCE_MS), on a second tap, and unconditionally at the 30s
+ *   ceiling, which is armed synchronously before the first vendor call and
+ *   fires even if the recognizer never reports anything at all.
  * - No vendor error payload escapes: the error listener ignores its event,
  *   and onEnd carries no message.
  */
@@ -35,6 +40,10 @@ export type VoiceSearchDeps = {
   /** Returns the vendor module, or null on a binary without it. May throw;
    *  a throw is treated as null (the import-safety contract). */
   loadVendor: () => VendorSpeechModule | null;
+  /** setTimeout, injected so the tests drive both timers by hand. */
+  setTimer: (callback: () => void, delayMs: number) => unknown;
+  /** clearTimeout for a handle setTimer returned. */
+  clearTimer: (handle: unknown) => void;
 };
 
 /** "en_US" and "en-US" name the same locale; compare them as one. */
@@ -86,7 +95,7 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
   }
 
   /** Requested on first use, per the boundary contract. A denial (or a
-   *  throw) is `false` — the hold ends quietly, no raw error surfaces. */
+   *  throw) is `false` — the session ends quietly, no raw error surfaces. */
   async function ensurePermission(mod: VendorSpeechModule): Promise<boolean> {
     if (permissionGranted) return true;
     try {
@@ -98,15 +107,29 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
     return permissionGranted;
   }
 
-  function beginHold(handlers: VoiceHoldHandlers): VoiceHoldSession {
+  function beginSession(handlers: VoiceSessionHandlers): VoiceSession {
     let phase: 'pending' | 'listening' | 'done' = 'pending';
-    let releasedWhilePending = false;
+    let stoppedWhilePending = false;
     let committed = false;
     let subscriptions: VendorEventSubscription[] = [];
+    let ceilingTimer: unknown = null;
+    let silenceTimer: unknown = null;
+
+    const clearSilenceTimer = () => {
+      if (silenceTimer != null) {
+        deps.clearTimer(silenceTimer);
+        silenceTimer = null;
+      }
+    };
 
     const finish = () => {
       if (phase === 'done') return;
       phase = 'done';
+      if (ceilingTimer != null) {
+        deps.clearTimer(ceilingTimer);
+        ceilingTimer = null;
+      }
+      clearSilenceTimer();
       for (const subscription of subscriptions) {
         try {
           subscription.remove();
@@ -117,6 +140,41 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
       subscriptions = [];
       handlers.onEnd();
     };
+
+    /** Polite stop: the vendor finishes the task, emits the final result
+     *  (committed below), then 'end' closes the session. */
+    const stopListening = () => {
+      try {
+        vendorModule()?.stop();
+      } catch {
+        finish();
+      }
+    };
+
+    /** Silence detection, app-side (see VOICE_SILENCE_MS): each recognized
+     *  phrase restarts the clock; ~2s after the last one, stop. Never armed
+     *  before speech has begun — the vendor's own no-speech timeout and the
+     *  ceiling cover a session in which nothing is ever said. */
+    const restartSilenceTimer = () => {
+      clearSilenceTimer();
+      silenceTimer = deps.setTimer(stopListening, VOICE_SILENCE_MS);
+    };
+
+    // The hard ceiling, armed before the first vendor call and dependent on
+    // nothing the recognizer reports. If it fires, the session is torn down
+    // unconditionally — abort is REQUESTED of the vendor, but finish() does
+    // not wait for its 'end' event, because a wedged recognizer that never
+    // delivers one is exactly the case this timer exists for.
+    ceilingTimer = deps.setTimer(() => {
+      if (phase === 'listening') {
+        try {
+          vendorModule()?.abort();
+        } catch {
+          // finish() below tears down regardless.
+        }
+      }
+      finish();
+    }, VOICE_MAX_SESSION_MS);
 
     void (async () => {
       const availability = await getAvailability();
@@ -135,9 +193,10 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
         finish();
         return;
       }
-      // The user may have let go during the permission round-trip; honoring
-      // that here is what keeps "only while you hold" literally true.
-      if (phase !== 'pending' || releasedWhilePending) {
+      // The user may have tapped stop (or the ceiling may have fired) during
+      // the permission round-trip; honoring that here keeps a stopped session
+      // from ever opening the microphone.
+      if (phase !== 'pending' || stoppedWhilePending) {
         finish();
         return;
       }
@@ -145,10 +204,16 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
       try {
         subscriptions = [
           mod.addListener('result', (event) => {
-            if (phase === 'done' || committed || !event.isFinal) return;
+            if (phase === 'done' || committed) return;
+            // Any recognized speech is the silence detector's input: interim
+            // results arrive for this (interimResults: true below), are never
+            // committed, and only restart the clock.
+            if (event.results[0]?.transcript) restartSilenceTimer();
+            if (!event.isFinal) return;
             const transcript = event.results[0]?.transcript ?? '';
             if (!transcript) return;
             committed = true;
+            clearSilenceTimer();
             handlers.onTranscript(transcript);
           }),
           // The vendor's error payload dies here, unread: 'end' follows every
@@ -160,7 +225,7 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
         phase = 'listening';
         mod.start({
           lang: VOICE_SEARCH_LOCALE,
-          interimResults: false,
+          interimResults: true,
           continuous: false,
           requiresOnDeviceRecognition: true,
         });
@@ -170,15 +235,12 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
     })();
 
     return {
-      release() {
+      stop() {
         if (phase === 'listening') {
-          try {
-            vendorModule()?.stop();
-          } catch {
-            finish();
-          }
+          clearSilenceTimer();
+          stopListening();
         } else if (phase === 'pending') {
-          releasedWhilePending = true;
+          stoppedWhilePending = true;
         }
       },
       cancel() {
@@ -194,5 +256,5 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
     };
   }
 
-  return { getAvailability, beginHold };
+  return { getAvailability, beginSession };
 }

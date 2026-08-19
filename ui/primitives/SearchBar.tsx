@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  AppState,
   Pressable,
   StyleSheet,
   Text,
@@ -9,6 +10,7 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from 'react-native';
+import { NavigationContext } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   controls,
@@ -19,7 +21,7 @@ import {
   type as typeScale,
 } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
-import { voiceSearch, type VoiceHoldSession } from '../../lib/voiceSearch';
+import { voiceSearch, type VoiceSession } from '../../lib/voiceSearch';
 
 /**
  * The shared search field (§I).
@@ -33,14 +35,16 @@ import { voiceSearch, type VoiceHoldSession } from '../../lib/voiceSearch';
  * the Home-screen case, where the field is an affordance that pushes a
  * dedicated search route rather than something you type into in place.
  *
- * Voice search (4D-4 Block 2): a press-and-hold mic, rendered ONLY when
- * lib/voiceSearch reports the on-device recognizer available — on any other
- * binary or platform it is simply absent (no error state, no disabled ghost).
- * The recognized phrase arrives through the SAME `onChangeText` contract as
- * typed text, so consumers need no change and there is no second write path.
- * Hold to listen, release to stop and commit — the shape the iOS permission
- * string promises ("only while you hold the mic button"), enforced by the
- * boundary's hold session. `disableVoiceSearch` opts a call site out.
+ * Voice search (4D-4 Block 2, tap-to-talk since 4D-4 device pass): a mic
+ * rendered ONLY when lib/voiceSearch reports the on-device recognizer
+ * available — on any other binary or platform it is simply absent (no error
+ * state, no disabled ghost). The recognized phrase arrives through the SAME
+ * `onChangeText` contract as typed text, so consumers need no change and
+ * there is no second write path. One tap starts a bounded session; it ends on
+ * silence, the boundary's 30s ceiling, a second tap, the screen blurring, the
+ * app backgrounding, or unmount — the shape the iOS permission string
+ * promises ("stops listening when you finish speaking"), enforced by the
+ * boundary's session. `disableVoiceSearch` opts a call site out.
  */
 
 type SearchBarProps = {
@@ -54,7 +58,7 @@ type SearchBarProps = {
   autoFocus?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
-  /** Opt out of the press-and-hold mic. Present by default when available. */
+  /** Opt out of the tap-to-talk mic. Present by default when available. */
   disableVoiceSearch?: boolean;
   /** Typing posture. The defaults are the terse keyword posture this field
    *  always had; sentence-style surfaces (worker search) pass 'sentences'
@@ -91,8 +95,11 @@ export function SearchBar({
   // every degraded case leaves the mic unrendered rather than disabled.
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
-  const sessionRef = useRef<VoiceHoldSession | null>(null);
+  const sessionRef = useRef<VoiceSession | null>(null);
   const isButton = onPress != null;
+  // Read via the raw context, not useNavigation(): a primitive must render
+  // outside a navigator too, where this is simply undefined.
+  const navigation = useContext(NavigationContext);
 
   useEffect(() => {
     if (disableVoiceSearch || isButton) return;
@@ -105,17 +112,39 @@ export function SearchBar({
     };
   }, [disableVoiceSearch, isButton]);
 
-  // An unmount mid-hold tears the session down without committing.
+  // An unmount mid-session tears it down without committing.
   useEffect(() => {
     return () => {
       sessionRef.current?.cancel();
     };
   }, []);
 
-  const startVoiceHold = () => {
-    if (sessionRef.current) return;
+  // The screen blurring behind a push (it stays mounted) ends the session the
+  // same way: the user walked away, so nothing commits behind their back.
+  useEffect(() => {
+    if (!navigation) return;
+    return navigation.addListener('blur', () => {
+      sessionRef.current?.cancel();
+    });
+  }, [navigation]);
+
+  // Backgrounding the app closes the microphone; inactive counts too (the
+  // app switcher, an incoming call sheet).
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') sessionRef.current?.cancel();
+    });
+    return () => subscription.remove();
+  }, []);
+
+  const toggleVoiceSession = () => {
+    if (sessionRef.current) {
+      // Second tap: stop listening and commit what was heard.
+      sessionRef.current.stop();
+      return;
+    }
     setListening(true);
-    sessionRef.current = voiceSearch.beginHold({
+    sessionRef.current = voiceSearch.beginSession({
       // The transcript's one egress: the exact path typed text takes.
       onTranscript: onChangeText,
       onEnd: () => {
@@ -123,10 +152,6 @@ export function SearchBar({
         setListening(false);
       },
     });
-  };
-
-  const endVoiceHold = () => {
-    sessionRef.current?.release();
   };
   if (onPress) {
     return (
@@ -180,15 +205,15 @@ export function SearchBar({
       ) : null}
       {voiceReady && !disableVoiceSearch ? (
         <Pressable
-          // Hold-to-talk, deliberately press-in/press-out and never onPress:
-          // a tap-to-toggle would let listening outlive the touch, which the
-          // permission string rules out.
-          onPressIn={startVoiceHold}
-          onPressOut={endVoiceHold}
+          // Tap-to-talk: one tap starts the bounded session, a second stops
+          // it. The session cannot outlive the boundary's silence detector or
+          // its 30s ceiling, which is what keeps the permission string true.
+          onPress={toggleVoiceSession}
           // 20pt glyph + 4pt padding + 8pt slop lands on the 44pt floor.
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Hold to search by voice"
+          accessibilityLabel={listening ? 'Stop listening' : 'Search by voice'}
+          accessibilityState={{ selected: listening }}
           style={[styles.mic, listening && styles.micListening]}
         >
           <Ionicons
