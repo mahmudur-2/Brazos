@@ -177,14 +177,21 @@ export function NotificationsScreen() {
                   >
                     {/* Master 26 rings every notification's glyph in gold,
                         read or unread; the green dot at the row's end is what
-                        marks it unread. */}
+                        marks it unread.
+
+                        emerald D10: the RING is gold and the GLYPH inside it
+                        is EMERALD — the app was drawing both gold, which
+                        flattened the ring and its contents into one shape.
+                        The glyph does not carry read state in dark for the
+                        same reason the ring does not: the dot does. Light is
+                        untouched and still dims a read glyph to textSubtle. */}
                     <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
                       <Ionicons
                         name={KIND_ICONS[n.type] ?? 'notifications-outline'}
                         size={18}
                         color={
                           isDark
-                            ? colors.gold
+                            ? colors.emerald
                             : !n.read_at
                               ? colors.emerald
                               : colors.textSubtle

@@ -348,3 +348,45 @@ test('[static] the creation sheet clears the home indicator', () => {
     /backgroundColor: palette\.background/
   );
 });
+
+// ===========================================================================
+// emerald D10 — the master-backed small deltas
+// ===========================================================================
+
+test('[static] master 26: an EMERALD glyph inside a GOLD ring, not both gold', () => {
+  const feed = stripComments(read('screens/NotificationsScreen.tsx'));
+  // The ring is gold and constant — read or unread. The dot at the row's end
+  // is what marks unread, which is why neither the ring nor the glyph carries
+  // read state in dark.
+  assert.match(feed, /rowGlyphDark: \{\s*borderWidth: 1,\s*borderColor: colors\.gold,/);
+  // The glyph inside it is emerald. Both being gold flattened the ring and its
+  // contents into one shape.
+  assert.match(
+    feed,
+    /isDark\s*\?\s*colors\.emerald\s*:\s*!n\.read_at\s*\?\s*colors\.emerald\s*:\s*colors\.textSubtle/,
+    'the dark glyph must be emerald; light keeps its read/unread dimming'
+  );
+});
+
+test('[static] master 22 and master 18 were already built', () => {
+  // Both D10 sub-items are CONDITIONAL — "only if the action already exists",
+  // "only if the screen genuinely lacks it". Neither condition holds: the work
+  // is already there, so the correct action was to confirm it rather than add
+  // a second copy. Pinned so a future run does not "restore" a duplicate.
+
+  // Master 22 — each saved-worker row carries its bookmark affordance, and it
+  // is wired to the unsave action that already existed in lib/savedWorkers.ts.
+  const saved = stripComments(read('screens/SavedWorkersScreen.tsx'));
+  assert.match(saved, /import \{ fetchSavedWorkers, unsaveWorker \}/);
+  assert.match(saved, /onPress=\{\(\) => removeSaved\(profile\.id\)\}/);
+  assert.match(saved, /<Ionicons name="bookmark"/);
+  assert.match(saved, /accessibilityLabel="Remove from saved"/);
+
+  // Master 18 — the worker profile draws "Send an offer" WITH its explanation,
+  // and it dispatches the existing offer flow (PostJob with hireWorkerId), not
+  // a new path.
+  const profile = stripComments(read('screens/WorkerProfileScreen.tsx'));
+  assert.match(profile, /title="Send an offer"/);
+  assert.match(profile, /styles\.hireText/, 'the explanation master 18 draws must stay');
+  assert.match(profile, /hireWorkerId: params\.workerId/);
+});
