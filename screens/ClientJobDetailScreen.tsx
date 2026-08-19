@@ -69,6 +69,7 @@ import {
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
   emeraldColorsFor,
+  fonts,
   radius,
   spacing,
   themedStyles,
@@ -79,7 +80,7 @@ import {
 import { formatTimeAgo } from '../lib/time';
 
 export function ClientJobDetailScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
@@ -395,7 +396,13 @@ export function ClientJobDetailScreen() {
             />
           }
         >
-        <View style={[styles.jobHero, !canAccept && styles.jobHeroActive]}>
+        <View
+          style={[
+            styles.jobHero,
+            isDark && styles.jobHeroDark,
+            !canAccept && styles.jobHeroActive,
+          ]}
+        >
           <View style={styles.heroTopRow}>
             <StatusBadge status={stage.statusKey} label={stage.label} />
             <Text style={[styles.postedAt, !canAccept && styles.heroTextLight]}>
@@ -408,11 +415,18 @@ export function ClientJobDetailScreen() {
           </Text>
 
           <View style={styles.jobMetaRow}>
-            <View style={[styles.iconCircle, { backgroundColor: accent.bg }]}>
+            {/* Master 8: a sage squircle behind a gold hairline, with the
+                category glyph in gold; light keeps the category accents. */}
+            <View
+              style={[
+                styles.iconCircle,
+                isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
+              ]}
+            >
               <Ionicons
                 name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                 size={18}
-                color={accent.icon}
+                color={isDark ? colors.gold : accent.icon}
               />
             </View>
             <Text
@@ -424,9 +438,15 @@ export function ClientJobDetailScreen() {
             </Text>
           </View>
 
-          <View style={styles.jobFooter}>
+          <View style={[styles.jobFooter, isDark && styles.dividerDark]}>
             <View>
-              <Text style={[styles.valueLabel, !canAccept && styles.heroEyebrowLight]}>
+              <Text
+                style={[
+                  styles.valueLabel,
+                  !canAccept && styles.heroEyebrowLight,
+                  isDark && styles.valueLabelDark,
+                ]}
+              >
                 {hasLifecycle ? 'AGREED PRICE' : 'BUDGET'}
               </Text>
               <Text style={[styles.budget, !canAccept && styles.heroTitleLight]}>
@@ -452,12 +472,12 @@ export function ClientJobDetailScreen() {
             jobId={job.id}
             posterId={job.client_id}
             status={job.status}
-            style={styles.ownerActions}
+            style={[styles.ownerActions, isDark && styles.dividerDark]}
           />
         </View>
 
-        <Card palette={emeraldColors} style={styles.scopeCard}>
-          <Text style={styles.eyebrow}>JOB SCOPE</Text>
+        <Card palette={emeraldColors} style={[styles.scopeCard, isDark && styles.hairlineDark]}>
+          <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>JOB SCOPE</Text>
           <Text style={styles.scopeDescription} selectable>
             {job.description}
           </Text>
@@ -474,8 +494,8 @@ export function ClientJobDetailScreen() {
         </Card>
 
         {arrivalWindowLabel(job) || privateAddress ? (
-          <Card palette={emeraldColors} style={styles.timingCard}>
-            <Text style={styles.eyebrow}>TIMING &amp; ADDRESS</Text>
+          <Card palette={emeraldColors} style={[styles.timingCard, isDark && styles.hairlineDark]}>
+            <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>TIMING &amp; ADDRESS</Text>
             {arrivalWindowLabel(job) ? (
               <View style={styles.timingRow}>
                 <Ionicons name="time-outline" size={18} color={colors.emerald} />
@@ -499,7 +519,7 @@ export function ClientJobDetailScreen() {
         ) : null}
 
         {canAccept && (job.photos.length > 0 || job.videos.length > 0) ? (
-          <Card palette={emeraldColors} style={styles.mediaCard}>
+          <Card palette={emeraldColors} style={[styles.mediaCard, isDark && styles.hairlineDark]}>
             <Text style={styles.sectionTitle}>Posting media</Text>
             <Text style={styles.sectionCaption}>What workers can review before bidding.</Text>
             {job.photos.length > 0 ? (
@@ -563,8 +583,8 @@ export function ClientJobDetailScreen() {
             </View>
           ) : error && bids.length === 0 ? (
             <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="cloud-offline-outline" size={32} color={colors.emerald} />
+              <View style={[styles.emptyIcon, isDark && styles.emptyIconDark]}>
+                <Ionicons name="cloud-offline-outline" size={32} color={isDark ? colors.gold : colors.emerald} />
               </View>
               <Text style={styles.emptyTitle}>Couldn’t load bids</Text>
               <Text style={styles.emptyText} selectable>
@@ -580,8 +600,8 @@ export function ClientJobDetailScreen() {
             </View>
           ) : pendingBids.length === 0 ? (
             <View style={styles.empty}>
-              <View style={styles.emptyIcon}>
-                <Ionicons name="people-outline" size={32} color={colors.emerald} />
+              <View style={[styles.emptyIcon, isDark && styles.emptyIconDark]}>
+                <Ionicons name="people-outline" size={32} color={isDark ? colors.gold : colors.emerald} />
               </View>
               <Text style={styles.emptyTitle}>
                 {bids.length > 0 ? 'No active bids' : 'No bids yet'}
@@ -596,7 +616,7 @@ export function ClientJobDetailScreen() {
             <>
               <View style={styles.bidSectionHeader}>
                 <View>
-                  <Text style={styles.eyebrow}>WORKER OFFERS</Text>
+                  <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>WORKER OFFERS</Text>
                   <Text style={styles.bidSectionTitle}>
                     {pendingBids.length}{' '}
                     {pendingBids.length === 1 ? 'bid' : 'bids'} to compare
@@ -672,7 +692,7 @@ export function ClientJobDetailScreen() {
         ) : (
           <>
             {job.status === 'cancelled' ? (
-              <Card palette={emeraldColors} style={styles.cancelledCard}>
+              <Card palette={emeraldColors} style={[styles.cancelledCard, isDark && styles.hairlineDark]}>
                 <View style={styles.cancelledIcon}>
                   <Ionicons name="close" size={22} color={colors.neutral} />
                 </View>
@@ -686,15 +706,15 @@ export function ClientJobDetailScreen() {
             ) : (
               <>
             {hasLifecycle ? (
-              <Card palette={emeraldColors} style={styles.progressCard}>
-                <Text style={styles.eyebrow}>JOB PROGRESS</Text>
+              <Card palette={emeraldColors} style={[styles.progressCard, isDark && styles.hairlineDark]}>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>JOB PROGRESS</Text>
                 <Text style={styles.sectionTitle}>Where things stand</Text>
                 <JobProgress status={job.status} palette={emeraldColors} />
               </Card>
             ) : null}
 
-            <Card palette={emeraldColors} style={styles.workerCard}>
-              <Text style={styles.eyebrow}>ASSIGNED WORKER</Text>
+            <Card palette={emeraldColors} style={[styles.workerCard, isDark && styles.hairlineDark]}>
+              <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>ASSIGNED WORKER</Text>
               <Text style={styles.sectionTitle}>
                 {assignedWorker?.full_name ?? 'Your worker'}
               </Text>
@@ -791,8 +811,8 @@ export function ClientJobDetailScreen() {
                 checkout. It never renders over a held/released/refunded or
                 otherwise unclassifiable row — that is the double-charge line. */}
             {canFundNow ? (
-              <Card palette={emeraldColors} style={styles.paymentCard}>
-                <Text style={styles.eyebrow}>PAYMENT NOT PROTECTED YET</Text>
+              <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT NOT PROTECTED YET</Text>
                 <Text style={styles.paymentNote}>
                   {workerName} is hired, but the payment isn’t in protection yet.
                   {payment?.status === 'authorized'
@@ -811,8 +831,8 @@ export function ClientJobDetailScreen() {
                 />
               </Card>
             ) : payment && isHeld(payment) && job.status === 'assigned' ? (
-              <Card palette={emeraldColors} style={styles.paymentCard}>
-                <Text style={styles.eyebrow}>PROTECTED PAYMENT · SANDBOX</Text>
+              <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PROTECTED PAYMENT · SANDBOX</Text>
                 <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
                 <Text style={styles.paymentNote}>
                   Funds stay held until you approve the finished work. Sandbox
@@ -820,8 +840,8 @@ export function ClientJobDetailScreen() {
                 </Text>
               </Card>
             ) : payment ? (
-              <Card palette={emeraldColors} style={styles.paymentCard}>
-                <Text style={styles.eyebrow}>PAYMENT · SANDBOX</Text>
+              <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT · SANDBOX</Text>
                 <MoneyText cents={payment.amount_cents} state={payment.status} />
               </Card>
             ) : null}
@@ -831,8 +851,8 @@ export function ClientJobDetailScreen() {
                 marks the job done, so the client reviews the finished work
                 here rather than having to ask for it. */}
             {(job.photos.length > 0 || job.videos.length > 0 || hasCompletionEvidence) && (
-              <Card palette={emeraldColors} style={styles.evidenceCard}>
-                <Text style={styles.eyebrow}>WORK EVIDENCE</Text>
+              <Card palette={emeraldColors} style={[styles.evidenceCard, isDark && styles.hairlineDark]}>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>WORK EVIDENCE</Text>
                 <Text style={styles.sectionTitle}>
                   {hasCompletionEvidence ? 'Before & after' : 'Your original media'}
                 </Text>
@@ -927,7 +947,7 @@ export function ClientJobDetailScreen() {
               // because the status reads completed (AUD-P1-02).
               payment ? (
                 lifecycle === 'disputed' && openDispute ? (
-                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                  <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     <Text style={styles.approvalTitle}>Issue reported</Text>
                     <Text style={styles.noticeText}>
                       {DISPUTE_REASON_LABELS[openDispute.reason]} — the payment
@@ -940,7 +960,7 @@ export function ClientJobDetailScreen() {
                     />
                   </Card>
                 ) : lifecycle === 'awaiting_approval' ? (
-                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                  <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     <Text style={styles.approvalTitle}>The work is done — your call</Text>
                     <Text style={styles.noticeText}>
                       Review what {workerName} submitted, then approve to release
@@ -954,7 +974,7 @@ export function ClientJobDetailScreen() {
                     />
                   </Card>
                 ) : isReleased(payment) ? (
-                  <Card palette={emeraldColors} style={styles.approvalCard}>
+                  <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     <Text style={styles.approvalTitle}>Payment released</Text>
                     <Text style={styles.noticeText}>
                       All settled with {workerName}. Leave a review — and a tip,
@@ -986,7 +1006,7 @@ export function ClientJobDetailScreen() {
                 />
               ) : null
             ) : (
-              <Card palette={emeraldColors} style={styles.noticeCard}>
+              <Card palette={emeraldColors} style={[styles.noticeCard, isDark && styles.hairlineDark]}>
                 <Ionicons name="time-outline" size={20} color={colors.textMuted} />
                 <Text style={styles.noticeText}>
                   Waiting for the worker to finish. You can leave a review once the
@@ -1062,6 +1082,17 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     borderWidth: 1,
     borderColor: colors.mint2,
   },
+  // Master 8 draws the hero as a hairlined SURFACE card, not a sage fill;
+  // light keeps the approved Heritage sage.
+  jobHeroDark: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+  },
+  // Every card and divider on masters 8, 16 and 17 is a GOLD hairline. In
+  // light the Emerald Trust sage hairline is the approved arrangement, so
+  // this is applied per-surface rather than by moving the token.
+  hairlineDark: { borderColor: colors.border },
+  dividerDark: { borderTopColor: colors.border },
   jobHeroActive: {
     // 4D-B recorded intent, carried out in the 4D-4 sweep: forest was a CARD
     // fill here, and under Prestige forest is the gold primary — a gold card
@@ -1099,6 +1130,11 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconCircleDark: {
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   jobMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1123,12 +1159,18 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     borderTopWidth: 1,
     borderTopColor: colors.mint2,
   },
+  // Eyebrow law: BUDGET / AGREED PRICE is a structural card label, so gold
+  // in dark; light keeps the Heritage emerald.
   valueLabel: {
     ...typography.caption,
     color: colors.emerald,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
+  valueLabelDark: { color: colors.gold, letterSpacing: 1.4 },
+  // Masters 8, 16 and 17 all set the OWNER's own figure in cream, not green —
+  // decision 6's emerald covers the marketplace-facing money (EST. PAY, feed
+  // prices, Open/live/unread), which is what those examples all are.
   budget: {
     ...typography.heading,
     color: colors.ink,
@@ -1136,6 +1178,8 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
   },
   bidCount: {
     ...typography.label,
+    fontFamily: fonts.display,
+    fontSize: 16,
     color: colors.emerald,
   },
   ownerActions: {
@@ -1172,12 +1216,14 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     color: colors.textMuted,
     lineHeight: 17,
   },
+  // Every card's section eyebrow on masters 8, 16 and 17 is gold small-caps.
   eyebrow: {
     ...typography.caption,
     color: colors.emerald,
     fontWeight: '800',
     letterSpacing: 0.9,
   },
+  eyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
   scopeDescription: {
     ...typography.body,
     color: colors.ink,
@@ -1373,6 +1419,8 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
   },
+  // Master 8's empty-bids glyph is a ring, not a filled disc: a gold hairline
+  // circle over the card's own surface. Light keeps the Heritage sage fill.
   emptyIcon: {
     width: 72,
     height: 72,
@@ -1381,6 +1429,11 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+  },
+  emptyIconDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   emptyTitle: {
     ...typography.heading,

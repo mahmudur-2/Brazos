@@ -1,5 +1,12 @@
 import { StyleSheet, Text, View } from 'react-native';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /** Colour pairs per status, computed from the resolved palette (4D-4) so the
  *  badge repaints on a theme change; themedStyles caches one map per palette. */
@@ -52,12 +59,23 @@ type StatusBadgeProps = {
 };
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const { byStatus, fallback } = statusStylesFor(colors);
   const style = byStatus[status] ?? fallback;
+  // The masters never draw a filled status pill on dark: masters 8, 16 and 17
+  // outline it, and 35/36 outline it in the status's own green. So under dark
+  // the pill becomes line-work in its status colour, with the serif label
+  // decision 9 gives a status value; light keeps the Heritage tinted fill.
   return (
-    <View style={[styles.badge, { backgroundColor: style.bg }]}>
-      <Text style={[styles.text, { color: style.text }]}>
+    <View
+      style={[
+        styles.badge,
+        isDark
+          ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: style.text }
+          : { backgroundColor: style.bg },
+      ]}
+    >
+      <Text style={[styles.text, isDark && styles.textSerif, { color: style.text }]}>
         {label ?? formatStatus(status)}
       </Text>
     </View>
@@ -74,5 +92,9 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  textSerif: {
+    fontFamily: fonts.display,
+    fontSize: 13,
   },
 });
