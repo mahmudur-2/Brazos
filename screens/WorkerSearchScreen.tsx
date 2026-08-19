@@ -80,7 +80,7 @@ type SearchState =
   | { kind: 'results'; matches: WorkerMatch[]; categories: string[]; mode: RankingMode };
 
 export function WorkerSearchScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const navigation = useNavigation<CustomerHomeStackNavigation>();
@@ -230,11 +230,14 @@ export function WorkerSearchScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* Master 1 sets "Find help" as the screen's own display headline —
+          the back control stays because this surface is pushed from Home as
+          well as mounted as a tab root. */}
       <ScreenHeader
         title="Find help"
         onBack={goBackOrHome}
         palette={EMERALD_PALETTE}
-        titleSize={25}
+        titleSize={32}
       />
 
       <KeyboardAvoidingView
@@ -244,9 +247,11 @@ export function WorkerSearchScreen() {
         <View style={styles.discoveryHeader}>
           {!keyboardVisible && windowHeight >= 650 ? (
             <View style={styles.intro}>
-              <Text style={styles.eyebrow}>REAL WORKER PROFILES</Text>
-              <Text style={styles.introTitle} maxFontSizeMultiplier={1.35}>
-                Find the right help.
+              {/* Master 1's own eyebrow and sub. The second display line the
+                  Heritage screen carried is gone: the header title IS the
+                  display headline there. */}
+              <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
+                FIND TRUSTED HELP, FAST
               </Text>
               <Text style={styles.introText}>
                 Describe the task in your own words, or start with a service below.
@@ -259,7 +264,7 @@ export function WorkerSearchScreen() {
               one did: onChangeText('') resets the run guard, the results and
               the pinned chip. */}
           <SearchBar
-            style={styles.searchRow}
+            style={[styles.searchRow, isDark && styles.searchRowDark]}
             value={query}
             onChangeText={(text) => {
               runRef.current += 1;
@@ -280,11 +285,23 @@ export function WorkerSearchScreen() {
             trailing={
               <Pressable
                 onPress={submit}
-                style={({ pressed }) => [styles.searchButton, pressed && styles.searchButtonPressed]}
+                style={({ pressed }) => [
+                  styles.searchButton,
+                  isDark && styles.searchButtonDark,
+                  pressed && (isDark ? styles.searchButtonPressedDark : styles.searchButtonPressed),
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel="Search workers"
               >
-                <Ionicons name="arrow-forward" size={20} color={colors.onForest} />
+                {/* Master 1 draws this submit as a gold OUTLINE disc, not the
+                    solid conversion fill master 43 gives its own search —
+                    gold is line-work (decision 3). Light keeps the Heritage
+                    filled control. */}
+                <Ionicons
+                  name="arrow-forward"
+                  size={20}
+                  color={isDark ? colors.gold : colors.onForest}
+                />
               </Pressable>
             }
           />
@@ -293,8 +310,13 @@ export function WorkerSearchScreen() {
             <View style={styles.serviceSection}>
               <View style={styles.serviceHeadingRow}>
                 <Text style={styles.serviceHeading}>Popular services</Text>
-                <Text style={styles.serviceHint}>Swipe or tap to search</Text>
+                <Text style={[styles.serviceHint, isDark && styles.serviceHintDark]}>
+                  Swipe to explore
+                </Text>
               </View>
+              {/* Master 1 draws these as TILES — glyph above a two-line
+                  label — not as pills. Same list, same chooseCategory tap;
+                  only the shape and the paint moved. */}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -305,16 +327,28 @@ export function WorkerSearchScreen() {
                 {SUGGESTED_CATEGORIES.map((category) => {
                   const selected = activeCategories.includes(category.key);
                   return (
-                    <Chip
+                    <Pressable
                       key={category.key}
-                      label={category.label}
-                      icon={category.icon}
-                      variant="filter"
-                      selected={selected}
                       onPress={() => chooseCategory(category.key)}
-                      style={styles.serviceChip}
+                      style={({ pressed }) => [
+                        styles.serviceTile,
+                        selected && styles.serviceTileSelected,
+                        pressed && styles.serviceTilePressed,
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      accessibilityLabel={category.label}
                       accessibilityHint={`Find workers for ${category.label.toLowerCase()}`}
-                    />
+                    >
+                      <Ionicons
+                        name={category.icon}
+                        size={24}
+                        color={isDark ? colors.gold : colors.forest}
+                      />
+                      <Text style={styles.serviceTileLabel} numberOfLines={2}>
+                        {category.label}
+                      </Text>
+                    </Pressable>
                   );
                 })}
               </ScrollView>
@@ -443,7 +477,9 @@ export function WorkerSearchScreen() {
               showsVerticalScrollIndicator={false}
               ListHeaderComponent={
                 <View style={styles.resultsHeader}>
-                  <Text style={styles.resultsEyebrow}>WORKERS TO CONSIDER</Text>
+                  <Text style={[styles.resultsEyebrow, isDark && styles.eyebrowDark]}>
+                    WORKERS TO CONSIDER
+                  </Text>
                   <Text style={styles.resultCount} accessibilityLiveRegion="polite">
                     {resultHeading(state.mode, state.matches.length)}
                   </Text>
@@ -507,12 +543,12 @@ function SearchStateCard({
   tone?: 'brand' | 'danger';
   children?: ReactNode;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const danger = tone === 'danger';
   return (
-    <Card palette={EMERALD_PALETTE} style={styles.stateCard}>
+    <Card palette={EMERALD_PALETTE} style={[styles.stateCard, isDark && styles.cardBorderDark]}>
       <View style={[styles.stateIcon, danger && styles.stateIconDanger]}>
         {busy ? (
           <ActivityIndicator size="small" color={colors.emerald} />
@@ -548,7 +584,7 @@ function WorkerResultCard({
   match: WorkerMatch;
   onPress: () => void;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const { profile, matchedCategories } = match;
@@ -564,7 +600,11 @@ function WorkerResultCard({
   ).slice(0, 3);
 
   return (
-    <Card onPress={onPress} palette={EMERALD_PALETTE} style={styles.resultCard}>
+    <Card
+      onPress={onPress}
+      palette={EMERALD_PALETTE}
+      style={[styles.resultCard, isDark && styles.cardBorderDark]}
+    >
       <View style={styles.resultTopRow}>
         <Avatar name={name} uri={profile.avatar_url} size={56} />
         <View style={styles.resultText}>
@@ -592,7 +632,7 @@ function WorkerResultCard({
       {reason ? (
         <View style={styles.experienceRow}>
           <Ionicons name="ribbon-outline" size={17} color={colors.emerald} />
-          <Text style={styles.experience} numberOfLines={2}>
+          <Text style={[styles.experience, isDark && styles.experienceDark]} numberOfLines={2}>
             {reason}
           </Text>
         </View>
@@ -612,10 +652,13 @@ function WorkerResultCard({
         </View>
       ) : null}
 
+      {/* Master 1's card foot: gold serif label, gold-outline circle-arrow. */}
       <View style={styles.resultActionRow}>
-        <Text style={styles.resultActionText}>View full profile</Text>
-        <View style={styles.resultActionIcon}>
-          <Ionicons name="arrow-forward" size={17} color={colors.forest} />
+        <Text style={[styles.resultActionText, isDark && styles.resultActionTextDark]}>
+          View full profile
+        </Text>
+        <View style={[styles.resultActionIcon, isDark && styles.resultActionIconDark]}>
+          <Ionicons name="arrow-forward" size={17} color={isDark ? colors.gold : colors.forest} />
         </View>
       </View>
     </Card>
@@ -639,19 +682,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   intro: {
     gap: spacing.xs,
   },
+  // Eyebrow law: a structural section label is gold in dark; light keeps the
+  // Heritage emerald.
   eyebrow: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.1,
     color: colors.emerald,
   },
-  introTitle: {
-    fontFamily: fonts.display,
-    fontSize: 31,
-    lineHeight: 37,
-    fontWeight: '700',
-    color: colors.ink,
-  },
+  eyebrowDark: { color: colors.gold },
   introText: {
     maxWidth: 420,
     fontSize: 14,
@@ -671,6 +710,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.surface,
     ...shadows.card,
   },
+  // Master 1 rings the whole field in gold; light keeps the Heritage sage
+  // hairline.
+  searchRowDark: { borderColor: colors.gold },
   searchButton: {
     width: 46,
     height: 46,
@@ -679,8 +721,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     backgroundColor: colors.forest,
   },
+  searchButtonDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   searchButtonPressed: {
     backgroundColor: colors.emerald,
+    transform: [{ scale: 0.97 }],
+  },
+  searchButtonPressedDark: {
+    backgroundColor: 'transparent',
+    opacity: 0.72,
     transform: [{ scale: 0.97 }],
   },
   controlPressed: {
@@ -697,7 +749,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   serviceHeading: {
     flexShrink: 1,
-    fontSize: 14,
+    fontFamily: fonts.display,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.ink,
   },
@@ -705,6 +758,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexShrink: 1,
     fontSize: 12,
     color: colors.textMuted,
+  },
+  serviceHintDark: {
+    fontFamily: fonts.display,
+    fontSize: 14,
+    color: colors.gold,
   },
   chipRow: {
     flexDirection: 'row',
@@ -714,9 +772,32 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   serviceScroll: {
     marginRight: -spacing.lg,
   },
-  serviceChip: {
-    minHeight: 44,
-    maxWidth: '100%',
+  // Master 1's service tile: glyph over a two-line label, well past the 44pt
+  // floor on both axes, selected marked by a heavier ring rather than a fill
+  // (gold is line-work).
+  serviceTile: {
+    width: 108,
+    minHeight: 96,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  serviceTileSelected: {
+    borderWidth: 2,
+    borderColor: colors.gold,
+  },
+  serviceTilePressed: {
+    opacity: 0.82,
+  },
+  serviceTileLabel: {
+    fontSize: 14,
+    lineHeight: 18,
+    fontWeight: '600',
+    color: colors.ink,
   },
   stateScrollContent: {
     flexGrow: 1,
@@ -856,6 +937,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.md,
     borderColor: colors.mint2,
   },
+  // Every dark master rings a card in gold hairline; light keeps the sage.
+  cardBorderDark: { borderColor: colors.border },
   resultTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -878,7 +961,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   name: {
     flexShrink: 1,
-    fontSize: 18,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '700',
     color: colors.ink,
   },
@@ -913,6 +997,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '600',
     color: colors.forest,
   },
+  // Forest on the sage wash is invisible under the v2 dark palette.
+  experienceDark: { color: colors.emerald },
   tagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -936,6 +1022,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.forest,
   },
+  resultActionTextDark: {
+    fontFamily: fonts.display,
+    fontSize: 17,
+    color: colors.gold,
+  },
   resultActionIcon: {
     width: 32,
     height: 32,
@@ -943,6 +1034,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.mint,
+  },
+  resultActionIconDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   }),
 );

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { fonts, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type ScreenHeaderProps = {
   title: string;
@@ -104,7 +104,10 @@ const styles = StyleSheet.create({
   titles: {
     flex: 1,
   },
+  // Decision 9: a screen title is display type. Every master draws the
+  // header title in the serif, both trees and both themes.
   title: {
+    fontFamily: fonts.display,
     fontSize: 24,
     fontWeight: '800',
   },
