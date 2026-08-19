@@ -95,7 +95,7 @@ type TimelineItem =
   | { kind: 'message'; key: string; message: Message };
 
 export function ChatScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // Chat is nested in more than one tab's stack, so its nav/route types are
   // declared standalone (ChatRouteParamList) rather than tied to one parent
@@ -940,11 +940,18 @@ export function ChatScreen() {
               accessibilityLabel={`Hire ${counterparty.full_name ?? 'this worker'} again`}
               style={({ pressed }) => [
                 styles.hireAgainButton,
+                isDark && styles.hireAgainButtonDark,
                 pressed && styles.hireAgainButtonPressed,
               ]}
             >
-              <Ionicons name="person-add" size={14} color={colors.onPrimary} />
-              <Text style={styles.hireAgainLabel}>Hire Again</Text>
+              <Ionicons
+                name="person-add"
+                size={14}
+                color={isDark ? colors.gold : colors.onPrimary}
+              />
+              <Text style={[styles.hireAgainLabel, isDark && styles.hireAgainLabelDark]}>
+                Hire Again
+              </Text>
             </Pressable>
           ) : undefined
         }
@@ -1446,6 +1453,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     backgroundColor: colors.primary,
   },
+  // Master 19 draws "Hire Again" as a gold-outline chip, not a filled pill;
+  // light keeps the Heritage fill.
+  hireAgainButtonDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   hireAgainButtonPressed: {
     opacity: 0.85,
   },
@@ -1454,6 +1468,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.onPrimary,
   },
+  hireAgainLabelDark: { color: colors.ink },
   error: {
     color: colors.danger,
     backgroundColor: colors.dangerBg,

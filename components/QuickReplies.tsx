@@ -29,7 +29,7 @@ type QuickRepliesProps = {
  * refusing to shrink) makes the row's size independent of that entirely.
  */
 export function QuickReplies({ onSelect, disabled = false }: QuickRepliesProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // Mode decides the set (Phase 7): the same chat thread offers "On my way"
   // to the worker side and "Any update?" to the customer side. Perspective
@@ -49,11 +49,11 @@ export function QuickReplies({ onSelect, disabled = false }: QuickRepliesProps) 
         {templates.map((template) => (
           <Pressable
             key={template}
-            style={styles.chip}
+            style={[styles.chip, isDark && styles.chipDark]}
             onPress={() => onSelect(template)}
             disabled={disabled}
           >
-            <Text style={styles.chipText}>{template}</Text>
+            <Text style={[styles.chipText, isDark && styles.chipTextDark]}>{template}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -121,11 +121,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
   },
+  // Master 19's quick replies are gold-outline pills with a cream label;
+  // light keeps the Heritage primary-on-primarySoft pair.
+  chipDark: {
+    borderColor: colors.gold,
+    backgroundColor: 'transparent',
+  },
   chipText: {
     fontSize: 13,
     lineHeight: CHIP_TEXT_LINE,
     fontWeight: '600',
     color: colors.primary,
   },
+  chipTextDark: { color: colors.ink },
   }),
 );

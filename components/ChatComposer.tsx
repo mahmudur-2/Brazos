@@ -70,6 +70,9 @@ export function ChatComposer({
   allowAttachments = true,
 }: ChatComposerProps) {
   const { palette: colors, isDark } = useThemeColors();
+  // Master 19 draws every composer glyph in gold and the send as a gold
+  // OUTLINE disc; light keeps the Heritage primary.
+  const glyph = isDark ? colors.gold : colors.primary;
   const styles = stylesFor(colors);
   const isArming = recorderPhase === 'pending';
   const isRecording = recorderPhase === 'recording';
@@ -108,7 +111,11 @@ export function ChatComposer({
           style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
           accessibilityLabel="Send voice message"
         >
-          <Ionicons name="arrow-up" size={SEND_GLYPH_SIZE} color={colors.onPrimary} />
+          <Ionicons
+          name="arrow-up"
+          size={SEND_GLYPH_SIZE}
+          color={isDark ? colors.gold : colors.onPrimary}
+        />
         </Pressable>
       </View>
     );
@@ -123,7 +130,7 @@ export function ChatComposer({
           hitSlop={6}
           disabled={isArming || isRecording}
         >
-          <Ionicons name="camera-outline" size={ICON_GLYPH_SIZE} color={colors.primary} />
+          <Ionicons name="camera-outline" size={ICON_GLYPH_SIZE} color={glyph} />
         </Pressable>
       )}
 
@@ -134,7 +141,7 @@ export function ChatComposer({
           hitSlop={6}
           disabled={isArming || isRecording}
         >
-          <Ionicons name="image-outline" size={ICON_GLYPH_SIZE} color={colors.primary} />
+          <Ionicons name="image-outline" size={ICON_GLYPH_SIZE} color={glyph} />
         </Pressable>
       )}
 
@@ -151,7 +158,7 @@ export function ChatComposer({
           <Ionicons
             name={isRecording ? 'stop' : 'mic-outline'}
             size={ICON_GLYPH_SIZE}
-            color={isArming || isRecording ? colors.onPrimary : colors.primary}
+            color={isArming || isRecording ? colors.onPrimary : glyph}
           />
         </Pressable>
       )}
@@ -179,9 +186,17 @@ export function ChatComposer({
       <Pressable
         onPress={onSend}
         disabled={sendDisabled}
-        style={[styles.sendBtn, sendDisabled && styles.sendBtnDisabled]}
+        style={[
+          styles.sendBtn,
+          isDark && styles.sendBtnDark,
+          sendDisabled && styles.sendBtnDisabled,
+        ]}
       >
-        <Ionicons name="arrow-up" size={SEND_GLYPH_SIZE} color={colors.onPrimary} />
+        <Ionicons
+          name="arrow-up"
+          size={SEND_GLYPH_SIZE}
+          color={isDark ? colors.gold : colors.onPrimary}
+        />
       </Pressable>
     </View>
   );
@@ -250,9 +265,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     minHeight: COMPOSER_CONTROL_SIZE,
     maxHeight: 100,
     borderWidth: 1,
+    // The palette's hairline is the gold one in dark — master 19 rings the
+    // message pill exactly that way.
     borderColor: colors.border,
-    borderRadius: radius.lg,
-    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing.lg,
     paddingTop: Platform.OS === 'ios' ? 10 : 8,
     paddingBottom: Platform.OS === 'ios' ? 10 : 8,
     fontSize: 15,
@@ -271,6 +288,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Master 19: gold is line-work here too — the send is an outlined disc, not
+  // a fill. Light keeps the Heritage filled control.
+  sendBtnDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
   },
   sendBtnDisabled: {
     opacity: 0.4,
