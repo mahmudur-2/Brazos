@@ -54,6 +54,7 @@ import {
 } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
+  fonts,
   radius,
   spacing,
   themedStyles,
@@ -81,7 +82,7 @@ function formatDuration(ms: number): string {
 }
 
 export function WorkerJobScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkerJob'>>();
@@ -349,11 +350,20 @@ export function WorkerJobScreen() {
         >
           <Card>
             <View style={styles.jobHeader}>
-              <View style={[styles.iconCircle, { backgroundColor: categoryAccent(job.category).bg }]}>
+              {/* Master 6: a sage squircle behind a gold hairline, glyph in
+                  gold; light keeps the per-category accent pair. */}
+              <View
+                style={[
+                  styles.iconCircle,
+                  isDark
+                    ? styles.iconCircleDark
+                    : { backgroundColor: categoryAccent(job.category).bg },
+                ]}
+              >
                 <Ionicons
                   name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                   size={22}
-                  color={categoryAccent(job.category).icon}
+                  color={isDark ? colors.gold : categoryAccent(job.category).icon}
                 />
               </View>
               <View style={styles.jobHeaderText}>
@@ -381,7 +391,15 @@ export function WorkerJobScreen() {
 
           {isWorker && payment ? (
             <Card style={styles.paymentCard}>
-              <Text style={styles.paymentEyebrow}>
+              {/* Masters 6 and 7 set a large outlined shield-check here. */}
+              <View style={styles.paymentShield} pointerEvents="none">
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={54}
+                  color={isDark ? colors.gold : colors.emerald}
+                />
+              </View>
+              <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark]}>
                 {isReleased(payment)
                   ? 'PAYMENT RELEASED · SANDBOX'
                   : isHeld(payment)
@@ -417,6 +435,8 @@ export function WorkerJobScreen() {
           {isWorker && (
             <Button
               title={`Message ${clientName}`}
+              icon="chatbubble-outline"
+              iconPosition="leading"
               variant="secondary"
               onPress={() => navigation.navigate('Chat', { jobId: job.id })}
             />
@@ -631,11 +651,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   paymentCard: {
     gap: spacing.sm,
   },
+  // Eyebrow law: a structural card label is gold small-caps.
   paymentEyebrow: {
     fontSize: 11,
     fontWeight: '800',
     color: colors.textMuted,
     letterSpacing: 0.8,
+  },
+  paymentEyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
+  // Masters 6 and 7 set a large outlined shield-check against the payment
+  // card's copy — decoration beside a claim the words already make.
+  paymentShield: {
+    position: 'absolute',
+    top: spacing.lg,
+    right: spacing.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   paymentNote: {
     fontSize: 13,
@@ -675,14 +706,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  iconCircleDark: {
+    backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
   jobHeaderText: {
     flex: 1,
     gap: 2,
   },
+  // Decision 9: card titles and prices are display type.
   jobTitle: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.ink,
   },
   jobMeta: {
     fontSize: 13,
@@ -698,18 +736,20 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderTopColor: colors.border,
   },
   amount: {
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 24,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.ink,
   },
   muted: {
     fontSize: 13,
     color: colors.textMuted,
   },
   actionTitle: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.ink,
   },
   actionText: {
     fontSize: 14,
