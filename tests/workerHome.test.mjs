@@ -50,13 +50,14 @@ test("the search field mirrors the locked 48's dispatch and sits above the toggl
     /navigation\.navigate\('WorkerResults', \{ mode: 'search', query: trimmed \}\)/
   );
   assert.match(screen, /placeholder="Search for jobs or areas"/);
-  // Placement: directly below the greeting/switch row, above the
-  // taking-new-work card.
+  // Placement (4D-4 device pass): greeting row, then the hero headline,
+  // then search, then the summary card that now carries the toggle.
   const greeting = screen.indexOf('styles.greetingRow');
+  const hero = screen.indexOf('styles.heroBlock');
   const search = screen.indexOf('styles.searchField');
-  const toggle = screen.indexOf('styles.availabilityCard');
-  assert.ok(greeting > 0 && search > greeting && toggle > search,
-    'the search field must sit between the greeting row and the availability card');
+  const card = screen.indexOf('styles.summaryCard');
+  assert.ok(greeting > 0 && hero > greeting && search > hero && card > search,
+    'the search field must sit between the hero block and the summary card');
 });
 
 test('the toggle is phase53 accepting_work through the existing profile path', () => {
@@ -86,6 +87,86 @@ test('mode changes only through switchMode(), and layout follows the tab rules',
   assert.doesNotMatch(code, /useModeTransition/);
   assert.match(code, /edges=\{\['top'\]\}/);
   assert.match(screen, /paddingBottom: 0/);
+});
+
+// ===========================================================================
+// 4D-4 device pass — the approved worker-home anatomy (mockup 43), with the
+// presence vocabulary still banned and the dark-palette defect resolved by
+// construction: the summary card sits on surface with a gold hairline, so
+// gold-family text can never land on a forest fill (gold in dark) here.
+// ===========================================================================
+
+test('the hero headline and subtitle render, second sentence on the GREEN accent', () => {
+  assert.match(screen, /Get hired\./);
+  assert.match(screen, /Get paid\./);
+  assert.match(screen, /Grow your reputation\./);
+  // The serif treatment is the customer Home headline's token usage,
+  // mirrored: display face, 39/45, -0.3 tracking, ink.
+  assert.match(code, /heroHeadline: \{\s*fontFamily: fonts\.display,\s*fontSize: 39,\s*lineHeight: 45,\s*fontWeight: '600',\s*letterSpacing: -0\.3,\s*color: colors\.ink,/);
+  // The accent is emerald — the palette's green in BOTH modes — never
+  // forest, which is the gold primary under Prestige.
+  assert.match(code, /heroHeadlineAccent: \{ color: colors\.emerald \}/);
+  // No illustration is invented, sourced, or referenced: the toolbox art
+  // beside the mockup's headline is an operator asset.
+  assert.doesNotMatch(code, /require\([^)]*\.(png|jpe?g|webp|gif)/);
+  assert.doesNotMatch(code, /<Image\b|ImageBackground/);
+});
+
+test('the summary card: surface fill, gold hairline, divided halves, chips inside', () => {
+  // Surface + gold border — the e195012 construction. Nothing on this
+  // screen may fill with forest at all.
+  assert.match(code, /summaryCard: \{[^}]*borderColor: colors\.gold/s);
+  assert.match(code, /summaryCard: \{[^}]*backgroundColor: colors\.surface/s);
+  assert.doesNotMatch(code, /backgroundColor: colors\.forest/);
+  // The money figure is the green accent, the section label gold — both on
+  // surface, both palette reads; money still formats only through
+  // formatBudget().
+  assert.match(code, /earningsAmount: \{[^}]*color: colors\.emerald/s);
+  assert.match(code, /earningsEyebrow: \{[^}]*color: colors\.gold/s);
+  assert.match(code, /formatBudget\(potential\.cents\)/);
+  // The divided row: two halves split by a vertical divider.
+  const order = ['styles.summaryRow', 'styles.availabilityHalf', 'styles.summaryDivider', 'styles.earningsHalf']
+    .map((marker) => screen.indexOf(marker));
+  assert.ok(order.every((index, i) => index > 0 && (i === 0 || index > order[i - 1])),
+    'the summary row must hold availability, the divider, then earnings');
+  // Both count chips sit INSIDE the summary card: walk the card's <View>
+  // extent by tag balance and require the pill row before it closes.
+  const open = screen.indexOf('<View style={styles.summaryCard}>');
+  assert.ok(open > 0, 'the summary card container must exist');
+  const tags = [...screen.slice(open).matchAll(/<View\b[^>]*\/>|<View\b|<\/View>/g)];
+  let depth = 0;
+  let end = -1;
+  for (const tag of tags) {
+    if (tag[0].endsWith('/>')) continue;
+    depth += tag[0] === '</View>' ? -1 : 1;
+    if (depth === 0) {
+      end = open + tag.index;
+      break;
+    }
+  }
+  assert.ok(end > open, 'the summary card container must close');
+  const pillRow = screen.indexOf('<View style={styles.pillRow}>');
+  assert.ok(pillRow > open && pillRow < end, 'the count chips must render inside the summary card');
+  assert.match(screen, /match your skills/);
+  assert.match(screen, /within \$\{NEARBY_RADIUS_MILES\} miles|within \$\{NEARBY_RADIUS_MILES\}/);
+});
+
+test('the section heading reads Available Jobs with its feed dot; labels stay constrained', () => {
+  assert.match(screen, /<Text style=\{styles\.sectionTitle\}>Available Jobs<\/Text>/);
+  // The dot marks the jobs FEED and reads from the palette — it is not a
+  // presence dot, and the availability half carries no dot at all.
+  assert.match(code, /feedDot: \{[^}]*backgroundColor: colors\.emerald/s);
+  const availabilityHalf = screen.slice(
+    screen.indexOf('styles.availabilityHalf'),
+    screen.indexOf('styles.summaryDivider')
+  );
+  assert.doesNotMatch(availabilityHalf, /[Dd]ot/);
+  // The constrained labels hold: the control is Taking new work with its
+  // exact explanatory line, and no visibility claim exists anywhere.
+  assert.match(screen, /Taking new work/);
+  assert.match(screen, /Shown on your public profile — it tells customers what to expect\./);
+  assert.doesNotMatch(code, /Available now/i);
+  assert.doesNotMatch(code, /visible to customers/i);
 });
 
 // ===========================================================================
