@@ -599,3 +599,66 @@ migration directory, and none of the frozen web/PWA surface (`public/`,
 
 ---
 
+## Audit 3 — functional breakage repair
+
+**No source file was modified. Nothing met all four conditions.**
+
+Every change in the range was traced for the four failure classes the brief
+names — a crash, an unhandled navigation, a dead route, a screen made
+unreachable, a null dereference:
+
+* **Unhandled navigation / dead route.** All 15 `MyJobs` tab dispatches and all
+  5 notification deep links enumerated above resolve. `Map` keeps its single
+  customer entry point (`HomeScreen`'s "View map" pill via
+  `getParent()?.navigate('Map')`, route still registered at
+  `CustomerRoot.tsx:182`). `Discover`'s pre-existing entry
+  (`SavedWorkersScreen.tsx:122`) still resolves. No route was unregistered.
+* **Null dereference.** `DiscoverStackNavigator` passes
+  `initialParams={{ autoFocus: false }}`; `WorkerSearchScreen.tsx:287` reads it
+  as `params?.autoFocus !== false`, optional-chained, and the param is optional
+  in all three declarations of the type.
+* **Crash from hook rules.** The three templates call
+  `useFloatingNavClearance()` unconditionally at component top; its
+  `useSafeAreaInsets()` has a provider at `App.tsx:215`.
+* **Store regression.** `useProfile`'s snapshot identity changes only on
+  `publish()` (a fresh object each time), which is what `useSyncExternalStore`
+  requires; the account-change branch clears the store rather than showing the
+  previous user's row.
+
+### Found, not fixed
+
+**1. Stale comment block — `lib/navigation.ts:449–455`.**
+It still reads: *"Since Prestige 0d (pre-made decision 4) the two BARS are the
+same five tabs — Home · Map · My Jobs · Messages · Profile — with the customer
+tree additionally registering Discover as a HIDDEN route."* All three claims are
+false at HEAD. emerald(1) rewrote the per-field JSDoc immediately below this
+block (`Map` and `MyJobs` now say "HIDDEN route since emerald D1", `Discover`
+says "VISIBLE customer tab since emerald D1") and did not update the block
+itself.
+*Reproduction:* open `lib/navigation.ts`, read lines 449–455, then read lines
+458–497 directly beneath them; they contradict each other.
+*Why not fixed:* condition (a) — documentation drift is not functional
+breakage. It is the highest-value one-line correction available to the operator,
+because a future run reading only the block comment would restore Map and
+My Jobs to the customer bar.
+
+**2. The D2 inversion is absent from the reversal list.** `PRESTIGE_RUN_REPORT.md`
+§(d) lists six reversals; "the ground behind the pill is now PAINTED, not
+transparent" is not among them, though it inverts the instruction's literal
+wording. *Why not fixed here:* audit(6) restates it in both documents, and
+audit(4) fences the ground itself — a test is a stronger guard than a bullet.
+
+**3. `tests/verificationBadgeRemoved.test.mjs`'s `LOCKED_SCREENS` is stale.**
+It still excludes the two sign-in screens emerald(5) converted and
+un-allowlisted elsewhere. Harmless today (neither file contains banned copy).
+*Why not fixed:* this run may not restructure an existing assertion.
+
+**4. Pre-existing guard-rule friction** (already logged by emerald(11) §(e) item
+9). Three read-only `git diff` commands in this audit were blocked by
+`GUARD-SECRET`, `GUARD-NESTED-CLAUDE` and `GUARD-DB` because their command TEXT
+merely *named* a dotenv file, an agent-config path and a database vendor. All
+fail safe, none was worked around; each was rephrased. Confirms the emerald
+report's finding from an independent run. Out of this run's permitted file set.
+
+---
+
