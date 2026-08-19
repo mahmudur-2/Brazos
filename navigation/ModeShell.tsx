@@ -26,6 +26,27 @@ import { WorkerRoot } from './WorkerRoot';
  * the rendered tree. The mode is a value; the tree is a function of that value.
  * The only thing that changes the value is switchMode(), and it is driven by a
  * user action, never by what is on screen.
+ *
+ * WHY THIS ALSO PAINTS THE GROUND (emerald D2)
+ * The floating nav pill (Prestige 0d) sits in normal layout flow and floats by
+ * MARGINS — 12pt each side and at least 12pt below, growing to the full home-
+ * indicator inset on a notched device. Nothing painted that margin gap. The
+ * scene above it is painted by @react-navigation/elements' <Background>
+ * (colors.background) from inside <Screen>, but the tab bar is a SIBLING of
+ * the scene container, so the navigation theme never reached the bar row;
+ * BottomTabView's own SafeAreaProviderCompat, App.tsx's LaunchGate root View
+ * and App.tsx's SafeAreaProvider are all `{ flex: 1 }` with no colour. The gap
+ * therefore fell through to the iOS root view, which is WHITE by platform
+ * default — the white band the dark device pass photographed under the pill.
+ *
+ * The ground belongs HERE rather than in ui/primitives/BottomNav.tsx: this is
+ * the single parent of both trees, it already resolves the palette for the
+ * loader, and one View fixes the bar gap for customer and worker at once
+ * without the bar primitive growing a second painted surface. The pill stays
+ * the only thing the bar row paints. Structural, so it applies in BOTH themes:
+ * in light the gap stops being pure white and becomes the same warm ivory the
+ * scene above it already uses, which is a seam removed rather than a colour
+ * introduced.
  */
 export function ModeShell() {
   const { mode, ready, armResolution } = useMode();
@@ -47,7 +68,11 @@ export function ModeShell() {
     );
   }
 
-  return mode === 'worker' ? <WorkerRoot /> : <CustomerRoot />;
+  return (
+    <View style={[styles.tree, { backgroundColor: palette.background }]}>
+      {mode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -55,5 +80,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Colourless here; the ground comes from the resolved palette at render
+  // time, the same arrangement the loader above uses.
+  tree: {
+    flex: 1,
   },
 });

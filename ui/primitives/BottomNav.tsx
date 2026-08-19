@@ -120,24 +120,35 @@ const TAB_BY_KEY = new Map(BOTTOM_NAV_TABS.map((tab) => [tab.key as string, tab]
 // None of those are exposed as constants to import, so they're reproduced here
 // from the installed source rather than guessed.
 //
-// Icon and label are deliberate design sizes, landed on after two rounds of
-// feedback (a 35%/35% scale-up read too big; these are the midpoint). The bar
-// height is NOT a taste value the same way — it's derived from what the content
-// actually measures, see the arithmetic below.
-const TAB_ICON_SIZE = 29;
-const TAB_LABEL_FONT_SIZE = 12;
+// Icon and label are deliberate design sizes. emerald D3 sets them EXPLICITLY
+// at 28pt and ~11pt, and those numbers are followed verbatim.
+//
+// RECORD THE DIRECTION, because the instruction and the effect disagree: D3 is
+// headed "NAV ICONS: LARGER", but the values here were already 29/12 — a
+// previous run had scaled them up from @react-navigation/bottom-tabs' own
+// defaults (25pt icon, 10pt label). So 28/11 is a 1pt REDUCTION from what
+// shipped, not an increase. It is applied anyway: an explicit number in the
+// dispatch outranks the adjective in its heading, and 1pt at glyph size is
+// imperceptible. What actually delivers D3's "larger and evenly spaced" is the
+// slot arithmetic, not the glyph: emerald D1 took the customer bar from six
+// drawn slots to five, so on the narrowest supported width (320pt) each slot
+// went from 49.3pt to 59.2pt — a real 20% more room per item.
+const TAB_ICON_SIZE = 28;
+const TAB_LABEL_FONT_SIZE = 11;
 
 // BottomTabItem.js's tabVerticalUiKit style wraps whatever tabBarIcon renders
 // in 5px of padding on every side — not overridable — so the usable slot is
 // always TAB_BAR_CONTENT_HEIGHT - 10. The stacked content below needs:
 //
-//   icon glyph box   32   (Ionicons renders in a Text box ~size + 3, NOT 29)
-//   label            16   (marginTop 2 + lineHeight 14)
+//   icon glyph box   31   (Ionicons renders in a Text box ~size + 3, NOT 28)
+//   label            15   (marginTop 2 + lineHeight 13)
 //   paddingBottom     3   (TAB_BOTTOM_GAP)
 //   ------------------------
-//   total            51
+//   total            49
 //
-// so the slot must be >= 51, i.e. the bar >= 61. 70 leaves deliberate slack:
+// so the slot must be >= 49, i.e. the bar >= 59. D3 says the pill grows in
+// height only as much as needed for the labels not to clip; at 28/11 nothing
+// is needed, so the height does NOT move. 70 leaves deliberate slack:
 // the bar was 55 (a 45px slot) for several iterations, which is where the
 // icons-crossing-the-hairline bug came from, and because tabItemContent packs
 // to flex-end any overflow goes out the TOP, through the hairline. The Emerald
@@ -172,6 +183,43 @@ export const TAB_BAR_FLOAT_MARGIN = 12;
 // active tint is `emerald` with a soft glow in dark, the inactive tint is the
 // §I `navInactive`, and the pill's hairline is the ordinary border — in dark
 // that token IS the dim-gold hairline.
+//
+// -------------------------------------------------------------------------
+// emerald D2 — THE WHITE BAND BEHIND THE PILL. What was actually painting it.
+// -------------------------------------------------------------------------
+// The operator photographed a white ground around the floating pill in dark
+// mode. Every layer between the pill and the screen was audited, in both
+// trees, against the INSTALLED @react-navigation sources:
+//
+//   tabBarStyle.backgroundColor      palette.surface  — this IS the pill. Kept:
+//                                    it is the one painted surface by design.
+//   options.tabBarBackground         NOT SET. BottomTabBar.tsx therefore falls
+//                                    back to `colors.card`, which tabBarStyle
+//                                    (merged last) already overrides. No
+//                                    second ground exists.
+//   BottomTabView's container        SafeAreaProviderCompat — `{ flex: 1 }`
+//                                    plus a flexDirection. PAINTS NOTHING.
+//   App.tsx LaunchGate root View     `{ flex: 1 }`. PAINTS NOTHING.
+//   App.tsx outer SafeAreaProvider   no style. PAINTS NOTHING.
+//   NavigationContainer theme        DOES reach the SCENES — @react-navigation/
+//                                    elements' <Background> paints
+//                                    colors.background inside <Screen> — but
+//                                    the bar is a SIBLING of the scene
+//                                    container, so the theme never reached the
+//                                    bar row at all.
+//
+// So the answer is that NOTHING OF OURS was painting it. The pill floats by
+// margins in normal layout flow, and every ancestor of that margin gap was
+// transparent, so what showed through was the iOS root view — white by
+// platform default. There was no layer to turn transparent; there was a
+// missing ground. It is invisible in light (white on cream reads as a seam,
+// not a band) and glaring in dark, which is exactly how it reached a dark
+// device pass having survived every light one.
+//
+// THE FIX LIVES IN navigation/ModeShell.tsx, not here: it is the single parent
+// of both trees, it already resolves the palette, and painting it covers the
+// bar gap, the status-bar area and every other unpainted seam in one place.
+// This file deliberately did NOT grow a second ground of its own.
 
 /** Total vertical space the floating pill occupies on a device reporting this
  *  bottom inset — the pill's height plus the margin that floats it. */
@@ -214,6 +262,13 @@ export function BottomNavItem({
       <Text
         style={[styles.tabItemLabel, { color, fontWeight: focused ? '700' : '500' }, activeGlow]}
         numberOfLines={1}
+        // D3: no label may clip or truncate. The slot is wide enough for
+        // "Messages" and "Discover" at 11pt down to a 320pt screen, but an
+        // accessibility text size can still overrun it, and numberOfLines={1}
+        // turns that into an ellipsis rather than a wrap. Capping the scale is
+        // the standard iOS tab-bar treatment and the only option here that
+        // keeps every label whole.
+        maxFontSizeMultiplier={1.2}
       >
         {label}
       </Text>
@@ -259,6 +314,12 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
       marginBottom: bottomMargin,
       borderRadius: radius.xl,
       borderWidth: 1,
+      // BottomTabBar.tsx sets `borderTopWidth: StyleSheet.hairlineWidth` on its
+      // own style, BEFORE tabBarStyle is merged. A specific edge width beats
+      // the borderWidth shorthand, so the pill's top edge was drawing at 0.5
+      // while its other three drew at 1 — a visibly lighter arc across the top
+      // of a rounded pill. Restated explicitly so the ring is one weight.
+      borderTopWidth: 1,
       // In dark this token IS the dim-gold hairline; light keeps its Heritage
       // hairline. borderTopColor rides along because the library's base style
       // sets it and a mismatched top edge would show on the rounded pill.

@@ -29,6 +29,112 @@ test('main tab screens do not reserve redundant gaps above the safe tab bar', as
   assert.match(bottomNav, /paddingBottom: 0/);
 });
 
+test('the bar row paints nothing but the pill (emerald D2)', async () => {
+  // The dark device pass photographed a white band around the floating pill.
+  // Nothing of ours was painting it: the pill floats by margins in normal
+  // layout flow and every ancestor of that gap was a colourless `flex: 1`, so
+  // the iOS root view (white by platform default) showed through. The ground
+  // now lives on ModeShell, the single parent of both trees.
+  const [shell, bottomNav, customerRoot, workerRoot] = await Promise.all([
+    read('navigation/ModeShell.tsx'),
+    read('ui/primitives/BottomNav.tsx'),
+    read('navigation/CustomerRoot.tsx'),
+    read('navigation/WorkerRoot.tsx'),
+  ]);
+
+  // One ground, resolved from the palette, wrapping BOTH trees — so a theme
+  // change repaints it and neither mode can be left transparent.
+  assert.match(shell, /<View style=\{\[styles\.tree, \{ backgroundColor: palette\.background \}\]\}>/);
+  assert.match(
+    shell,
+    /\{mode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
+    'the ground must wrap the tree swap, not replace it'
+  );
+
+  // The pill is the ONLY painted surface in the bar row. tabBarStyle carries
+  // exactly one backgroundColor and it is the pill's own.
+  const options = bottomNav.slice(
+    bottomNav.indexOf('export function bottomNavScreenOptions'),
+    bottomNav.indexOf('Registration options for a tab')
+  );
+  assert.equal(
+    (options.match(/backgroundColor:/g) ?? []).length,
+    1,
+    'the bar options must declare one background — the pill'
+  );
+  assert.match(options, /backgroundColor: palette\.surface/);
+  // No second ground may be introduced through the library's own hook for one.
+  // Comments are stripped first — the D2 audit above this line in BottomNav.tsx
+  // NAMES that hook while recording that it is deliberately not used.
+  const codeOnly = (source) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  for (const [path, source] of [
+    ['ui/primitives/BottomNav.tsx', bottomNav],
+    ['navigation/CustomerRoot.tsx', customerRoot],
+    ['navigation/WorkerRoot.tsx', workerRoot],
+  ]) {
+    assert.doesNotMatch(
+      codeOnly(source),
+      /tabBarBackground/,
+      `${path} must not add a tabBarBackground layer behind the pill`
+    );
+  }
+  // The pill's ring is one weight. BottomTabBar.tsx sets borderTopWidth to a
+  // hairline before tabBarStyle merges, and a specific edge beats the
+  // shorthand, so the top arc drew at 0.5 against 1 everywhere else.
+  assert.match(options, /borderTopWidth: 1,/);
+});
+
+test('the nav glyphs are D3 size and every slot still fits its label', async () => {
+  const bottomNav = await read('ui/primitives/BottomNav.tsx');
+
+  const number = (name) => {
+    const match = bottomNav.match(new RegExp(`${name} = (\\d+)`));
+    assert.ok(match, `${name} must be a plain number in ui/primitives/BottomNav.tsx`);
+    return Number(match[1]);
+  };
+
+  // emerald D3's explicit values. Recorded as a 1pt REDUCTION from the 29/12
+  // that shipped, not an increase — see the constant's comment.
+  assert.equal(number('const TAB_ICON_SIZE'), 28);
+  assert.equal(number('const TAB_LABEL_FONT_SIZE'), 11);
+
+  // The bar grows only as much as the content needs. Ionicons renders in a box
+  // of about size + 3; the label adds its lineHeight (size + 2) plus a 2pt
+  // margin; TAB_BOTTOM_GAP closes it. BottomTabItem's non-overridable 5pt
+  // padding costs 10 of the bar's height.
+  const barHeight = number('export const TAB_BAR_CONTENT_HEIGHT');
+  const stack =
+    number('const TAB_ICON_SIZE') +
+    3 +
+    (number('const TAB_LABEL_FONT_SIZE') + 2 + 2) +
+    number('const TAB_BOTTOM_GAP');
+  assert.ok(
+    stack <= barHeight - 10,
+    `the icon+label stack (${stack}) must fit the usable slot (${barHeight - 10}) ` +
+      'or a label clips through the top hairline'
+  );
+
+  // D3: a label may not clip or truncate. numberOfLines={1} turns an overrun
+  // into an ellipsis, so the scale is capped the way iOS tab bars cap it.
+  assert.match(bottomNav, /numberOfLines=\{1\}\s*\/\/[\s\S]{0,600}?maxFontSizeMultiplier=\{1\.2\}/);
+
+  // Even distribution, and a ≥44pt target on the narrowest supported width.
+  // Both bars draw five slots: the worker's five tabs, and the customer's four
+  // destinations plus the centre action.
+  const floatMargin = number('export const TAB_BAR_FLOAT_MARGIN');
+  const narrowestScreen = 320;
+  const slotWidth = (narrowestScreen - floatMargin * 2) / 5;
+  assert.ok(slotWidth >= 44, `slot width ${slotWidth} must clear the 44pt touch floor`);
+  assert.ok(
+    barHeight >= 44,
+    'the slot is the full bar height, which must also clear the touch floor'
+  );
+  // Equal flex is the library's own `styles.bottomItem` on every item; the
+  // centre action must match it rather than sizing itself.
+  assert.match(bottomNav, /createSlot: \{\s*flex: 1,/);
+});
+
 test('every screen inside the tab bar leaves the bottom safe-area inset to it', async () => {
   // The regression f3e75d0 was written to fix, confirmed still live on six
   // screens by the Phase 0 audit and re-applied by hand in Phase 2 (the patch
