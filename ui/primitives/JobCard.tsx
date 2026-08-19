@@ -14,6 +14,7 @@ import {
 } from '../../lib/jobs';
 import { formatTimeAgo } from '../../lib/time';
 import {
+  fonts,
   layout,
   radius,
   shadows,
@@ -87,7 +88,7 @@ export function JobCard({
   onBid,
   distanceMiles,
 }: JobCardProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // The whole mode split, in one line. Nothing above can override it.
   const perspective = useModePerspective();
@@ -167,8 +168,17 @@ export function JobCard({
 
           <View style={styles.footerRow}>
             <View style={styles.moneyBlock}>
-              <Text style={styles.moneyLabel}>{moneyLabel}</Text>
-              <Text style={styles.money} numberOfLines={1}>
+              {/* Eyebrow law (decision 6): the label is STRUCTURE — gold in
+                  dark — and the value is MONEY — emerald in dark. Light keeps
+                  the Heritage pairing. Resolves conflict B-4 (12/43 green vs
+                  13/10 gold values) toward the law. */}
+              <Text style={[styles.moneyLabel, isDark && { color: colors.gold }]}>
+                {moneyLabel}
+              </Text>
+              <Text
+                style={[styles.money, isDark && { color: colors.emerald }]}
+                numberOfLines={1}
+              >
                 {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open budget'}
               </Text>
             </View>
@@ -297,6 +307,8 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     color: colors.emerald,
   },
   money: {
+    // Decision 9: prices speak the serif in both themes.
+    fontFamily: fonts.display,
     fontSize: 16,
     fontWeight: '800',
     color: colors.ink,

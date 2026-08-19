@@ -4,7 +4,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -13,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { Toggle } from '../ui/primitives';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync } from '../lib/dialog';
@@ -226,11 +226,10 @@ export function NotificationSettingsScreen() {
                   {busyKey === item.key ? (
                     <ActivityIndicator color={colors.primary} />
                   ) : (
-                    <Switch
+                    <Toggle
                       value={value}
                       onValueChange={(next) => toggle(item.key, next)}
-                      trackColor={{ true: colors.primary, false: colors.border }}
-                      thumbColor={colors.surface}
+                      accessibilityLabel={item.label}
                     />
                   )}
                 </View>

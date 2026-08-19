@@ -242,7 +242,8 @@ export const type = {
   display: { fontSize: 28, lineHeight: 29, fontWeight: '800', fontFamily: fonts.display },
   h1: { fontSize: 26, fontWeight: '800', fontFamily: fonts.display },
   h2: { fontSize: 21, fontWeight: '700', fontFamily: fonts.display },
-  title: { fontSize: 15, fontWeight: '700' },
+  // Prestige decision 9: card titles join the serif voice, both themes.
+  title: { fontSize: 15, fontWeight: '700', fontFamily: fonts.display },
   body: { fontSize: 14, fontWeight: '400' },
   sub: { fontSize: 11, fontWeight: '500' },
   caption: { fontSize: 10, fontWeight: '500' },
@@ -272,6 +273,40 @@ export const shadows: Record<'card', ViewStyle> = {
     },
   }) as ViewStyle,
 };
+
+// ---------------------------------------------------------------------------
+// Glow (Prestige, pre-made decision 12)
+// ---------------------------------------------------------------------------
+
+/**
+ * The masters' soft halo — glowing gold/emerald text, the faint gold outer
+ * glow on cards, the active nav glyph's aura. Defined ONCE here as shapes;
+ * the colour arrives from the resolved palette at the call site, already
+ * pushed through withAlpha (the shapes pass it straight through — native
+ * shadowOpacity is 1 so the caller's alpha is the only dilution). Prestige
+ * glow is a dark-palette treatment: light keeps its Heritage arrangements,
+ * so callers gate on isDark.
+ */
+export const glow = {
+  /** Outer halo for views — cards, avatar rings, the active nav glyph wrap. */
+  halo: (color: string): ViewStyle =>
+    Platform.select({
+      web: { boxShadow: `0 0 14px ${color}` },
+      default: {
+        shadowColor: color,
+        shadowOpacity: 1,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 0 },
+        elevation: 5,
+      },
+    }) as ViewStyle,
+  /** Soft aura behind glowing text — money values, eyebrows, active labels. */
+  text: (color: string): TextStyle => ({
+    textShadowColor: color,
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  }),
+} as const;
 
 // ---------------------------------------------------------------------------
 // Controls
@@ -323,6 +358,7 @@ export const tokens = {
   type,
   fonts,
   shadows,
+  glow,
   controls,
   buttonVariants,
 } as const;

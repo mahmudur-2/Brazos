@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { fonts, radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -30,13 +30,21 @@ type ButtonProps = {
   loading?: boolean;
   disabled?: boolean;
   /**
-   * `destructive` is the secondary shape in the danger palette — red label,
-   * red glyph, red border over a faint red tint. For actions that end
-   * something (signing out, and nothing else today). Kept as a variant rather
-   * than a per-call `palette` override so every destructive control in the
-   * app is the same red without each caller re-deriving it.
+   * The Prestige button law (pre-made decision 3):
+   * - `primary` is the HERO — the one solid forest fill a screen is allowed
+   *   (Post a job, search-go, Choose best-fit). Everything else steps down.
+   * - `secondary` is the STANDARD — surface fill, hairline border (the dark
+   *   palette's `border` IS the dim-gold hairline), serif label: cream ink in
+   *   dark, Heritage forest in light.
+   * - `ghost` is bare serif text — gold in dark, Heritage forest in light.
+   * - `destructive` is the secondary shape in the danger palette — red label,
+   *   red glyph, red border over a faint red tint. For actions that end
+   *   something (signing out, and nothing else today). Kept as a variant
+   *   rather than a per-call `palette` override so every destructive control
+   *   in the app is the same red without each caller re-deriving it.
+   * Disabled (any variant) flattens: desaturated fill, muted text, no border.
    */
-  variant?: 'primary' | 'secondary' | 'destructive';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'destructive';
   /** Taller, larger-text variant for buttons that need more visual weight. */
   size?: ButtonSize;
   /** Overrides fill/text colors, e.g. for the Map tab's dark mode. */
@@ -66,29 +74,44 @@ export function Button({
   style,
   ...rest
 }: ButtonProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const isDisabled = disabled || loading;
   const isSecondary = variant === 'secondary';
+  const isGhost = variant === 'ghost';
   const isDestructive = variant === 'destructive';
   const sizeStyle = SIZES[size];
 
   // dangerBg is a pale tint of danger in the light palette and a dark one in
   // the dark palette, so `danger` text stays legible on it either way — the
   // same pairing the status badges already rely on.
-  const fillStyle = isDestructive
+  const fillStyle = isDisabled
+    ? // Decision 3: disabled is a flat desaturated fill, no border — in every
+      // variant, so a dead hero can never keep wearing the conversion green.
+      { backgroundColor: palette.neutralBg }
+    : isDestructive
     ? {
         backgroundColor: palette.dangerBg,
         borderWidth: 1,
         borderColor: palette.danger,
       }
+    : isGhost
+    ? { backgroundColor: 'transparent' }
     : isSecondary
     ? { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border }
     : { backgroundColor: palette.primary };
-  const textColor = isDestructive
+  const textColor = isDisabled
+    ? palette.textMuted
+    : isDestructive
     ? palette.danger
+    : isGhost
+    ? isDark
+      ? palette.gold
+      : palette.primary
     : isSecondary
-    ? palette.primary
+    ? isDark
+      ? palette.ink
+      : palette.primary
     : palette.onPrimary;
 
   return (
@@ -103,7 +126,6 @@ export function Button({
         },
         fillStyle,
         state.pressed && !isDisabled && styles.pressed,
-        isDisabled && styles.disabled,
         typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}
@@ -147,10 +169,9 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.85,
   },
-  disabled: {
-    opacity: 0.5,
-  },
   text: {
+    // Decision 9: button labels speak the display serif in both themes.
+    fontFamily: fonts.display,
     fontWeight: '700',
   },
   row: {

@@ -62,6 +62,12 @@ export { PhoneNumberInput } from '../../components/PhoneNumberInput';
 
 // --- Built in Phase 1 (no prior equivalent existed) ------------------------
 
+/** Prestige 0c — beyond §I's enumerated 26, justified on the record (the
+ *  PRESTIGE_RUN_REPORT): pre-made decision 7 specifies a rimmed toggle RN's
+ *  native Switch cannot draw, and three Switch call sites each carried their
+ *  own colours. One drawn control replaces all three. */
+export { Toggle } from './Toggle';
+
 export { StatusPill } from './StatusPill';
 export type { JobStatus, OfferStatus, PaymentStatus } from './StatusPill';
 export { MoneyText } from './MoneyText';

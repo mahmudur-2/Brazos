@@ -21,7 +21,7 @@ type StepHeaderProps = {
 };
 
 export function StepHeader({ step, steps }: StepHeaderProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const total = steps.length;
   // Guard rather than trust: an out-of-range index would otherwise render an
@@ -43,7 +43,9 @@ export function StepHeader({ step, steps }: StepHeaderProps) {
         ))}
       </View>
       <View style={styles.labels}>
-        <Text style={styles.counter}>
+        {/* Eyebrow law (decision 6): "Step N of M" is a structural label —
+            gold in dark; light keeps the Heritage emerald. */}
+        <Text style={[styles.counter, isDark && { color: colors.gold }]}>
           Step {index + 1} of {total}
         </Text>
         <Text style={styles.name} numberOfLines={1}>

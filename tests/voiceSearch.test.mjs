@@ -828,9 +828,11 @@ test('[static] each converted surface renders SearchBar and keeps no raw search 
   for (const path of CONVERTED_SURFACES) {
     const source = read(path);
     const code = stripCommentsForScan(source);
+    // Other shared primitives may ride the same barrel import (0c added
+    // Toggle); the contract is that SearchBar comes from the barrel.
     assert.match(
       source,
-      /import \{ SearchBar \} from '\.\.\/ui\/primitives';/,
+      /import \{[^}]*\bSearchBar\b[^}]*\} from '\.\.\/ui\/primitives';/,
       `${path} must import the shared SearchBar from the primitives barrel`
     );
     assert.match(code, /<SearchBar\b/, `${path} must mount the shared SearchBar`);

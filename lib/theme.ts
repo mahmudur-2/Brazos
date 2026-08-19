@@ -7,7 +7,7 @@ import { brand, dark as emeraldDark } from '../ui/tokens';
 // 20/22) under an explicit name, since this file's own older `radius` scale
 // (8/12/16/24) already claims the size names; the VALUES of both live in
 // exactly one place.
-export { withAlpha, layout, controls } from '../ui/tokens';
+export { withAlpha, layout, controls, glow } from '../ui/tokens';
 export { radius as emeraldRadius } from '../ui/tokens';
 // The ONE reactive palette read (4D-4): re-exported here so screens can take
 // it from their standard import surface. The implementation lives in
@@ -218,9 +218,12 @@ export const fonts = {
 } as const;
 
 export const typography = {
-  title: { fontSize: 28, fontWeight: '800', color: colors.text },
-  heading: { fontSize: 22, fontWeight: '700', color: colors.text },
-  subheading: { fontSize: 17, fontWeight: '600', color: colors.text },
+  // Prestige decision 9: the heading roles carry the display serif in BOTH
+  // themes (structure and type are theme-independent; only colours resolve
+  // per palette). Body/label/caption stay on the platform sans.
+  title: { fontSize: 28, fontWeight: '800', fontFamily: fonts.display, color: colors.text },
+  heading: { fontSize: 22, fontWeight: '700', fontFamily: fonts.display, color: colors.text },
+  subheading: { fontSize: 17, fontWeight: '600', fontFamily: fonts.display, color: colors.text },
   body: { fontSize: 15, fontWeight: '400', color: colors.text },
   label: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   caption: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },

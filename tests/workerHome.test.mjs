@@ -181,8 +181,10 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
     /summaryEyebrow: \{\s*fontSize: 11,\s*fontWeight: '700',\s*letterSpacing: 1\.2,\s*color: colors\.gold,\s*\}/
   );
   // Status word: serif, 30pt, primary ink — sharing one vertically centred
-  // row with the SAME Switch (handler, state source, disabled gate, track
-  // colours all preserved).
+  // row with the SAME control contract (handler, state source, disabled gate
+  // all preserved). Prestige 0c swapped the RN Switch for the shared Toggle
+  // (ui/primitives): pre-made decision 7 owns the toggle's colours at the
+  // component, so there are no per-site track colours left to pin.
   assert.match(
     code,
     /statusWord: \{[^}]*fontFamily: fonts\.display,\s*fontSize: 30,[^}]*color: colors\.ink,/s
@@ -190,7 +192,9 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
   assert.match(code, /statusRow: \{ flexDirection: 'row', alignItems: 'center', gap: spacing\.sm \}/);
   assert.match(code, /onValueChange=\{\(value\) => void saveAcceptingWork\(value\)\}/);
   assert.match(code, /disabled=\{savingAvailability \|\| !profile\}/);
-  assert.match(code, /trackColor=\{\{ true: colors\.emerald, false: colors\.border \}\}/);
+  assert.match(code, /import \{ SearchBar, Toggle \} from '\.\.\/ui\/primitives'/);
+  assert.match(code, /<Toggle\b/);
+  assert.doesNotMatch(code, /<Switch\b/);
   // The continue-path floor is built in: 30pt auto-fits no lower than
   // 0.87 × 30 ≈ 26pt before the row could ever clip.
   assert.match(code, /adjustsFontSizeToFit\s*minimumFontScale=\{0\.87\}/);

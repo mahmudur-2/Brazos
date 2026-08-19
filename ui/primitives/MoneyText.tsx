@@ -48,9 +48,13 @@ type MoneyTextProps = {
 };
 
 export function MoneyText({ cents, state, size = 'md', captionHidden = false }: MoneyTextProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  const amountColor = state && !SETTLED.includes(state) ? colors.muted : colors.ink;
+  // Prestige decision 6: money values are emerald in dark (EST. PAY, prices);
+  // light keeps Heritage ink. Unsettled payment states stay muted in both —
+  // the state machine's honesty outranks the accent.
+  const amountColor =
+    state && !SETTLED.includes(state) ? colors.muted : isDark ? colors.emerald : colors.ink;
   const caption = state ? CAPTIONS[state] : null;
 
   return (

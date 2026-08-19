@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { Toggle } from '../ui/primitives';
 import { FormScreen } from '../ui/templates/FormScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { useAuth } from '../hooks/useAuth';
@@ -192,11 +193,10 @@ export function ServicesPricingScreen() {
               — it just tells customers what to expect.
             </Text>
           </View>
-          <Switch
+          <Toggle
             value={accepting}
             onValueChange={(value) => void saveAvailability({ accepting_work: value })}
             disabled={savingAvailability}
-            trackColor={{ true: colors.emerald, false: colors.border }}
             accessibilityLabel="Taking new work"
           />
         </View>

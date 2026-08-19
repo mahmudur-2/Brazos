@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { fonts, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
 type Option<T extends string> = { label: string; value: T };
 
@@ -19,13 +19,15 @@ export function SegmentedControl<T extends string>({
   onChange,
   palette: paletteProp,
 }: SegmentedControlProps<T>) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
+  // Prestige decision 5 — separated cells instead of a filled well; the
+  // active cell wears the surface fill under a gold hairline (dark; light
+  // keeps its Heritage hairline) and speaks the serif; inactive cells stay
+  // bare muted sans. Structure is the same in both themes.
+  const activeBorder = isDark ? withAlpha(palette.gold, 0.55) : palette.border;
   return (
-    <View
-      style={[styles.container, { backgroundColor: palette.neutralBg }]}
-      accessibilityRole="tablist"
-    >
+    <View style={styles.container} accessibilityRole="tablist">
       {options.map((option) => {
         const selected = option.value === value;
         return (
@@ -36,7 +38,11 @@ export function SegmentedControl<T extends string>({
               styles.segment,
               selected && [
                 styles.segmentSelected,
-                { backgroundColor: palette.surface, shadowColor: palette.text },
+                {
+                  backgroundColor: palette.surface,
+                  borderColor: activeBorder,
+                  shadowColor: palette.text,
+                },
               ],
               pressed && styles.pressed,
             ]}
@@ -49,6 +55,7 @@ export function SegmentedControl<T extends string>({
                 { color: palette.textMuted },
                 selected && [styles.labelSelected, { color: palette.text }],
               ]}
+              numberOfLines={1}
             >
               {option.label}
             </Text>
@@ -62,15 +69,18 @@ export function SegmentedControl<T extends string>({
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    borderRadius: radius.md,
-    padding: 3,
-    gap: 3,
+    gap: 6,
   },
   segment: {
     flex: 1,
     minHeight: 44,
     paddingVertical: spacing.sm,
-    borderRadius: radius.sm,
+    paddingHorizontal: spacing.xs,
+    borderRadius: radius.md,
+    // Every cell carries the border WIDTH so selection never shifts layout;
+    // only the active cell colours it in.
+    borderWidth: 1,
+    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -85,6 +95,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   labelSelected: {
+    // Decision 9: segmented labels join the serif voice when active.
+    fontFamily: fonts.display,
+    fontSize: 14,
+    fontWeight: '700',
   },
   pressed: {
     opacity: 0.78,

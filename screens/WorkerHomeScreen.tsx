@@ -6,7 +6,6 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -41,7 +40,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { SearchBar } from '../ui/primitives';
+import { SearchBar, Toggle } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
 const PREVIEW_COUNT = 3;
@@ -313,11 +312,10 @@ export function WorkerHomeScreen() {
                   >
                     {accepting ? 'Online' : 'Offline'}
                   </Text>
-                  <Switch
+                  <Toggle
                     value={accepting}
                     onValueChange={(value) => void saveAcceptingWork(value)}
                     disabled={savingAvailability || !profile}
-                    trackColor={{ true: colors.emerald, false: colors.border }}
                     accessibilityLabel="Taking new work"
                   />
                 </View>
