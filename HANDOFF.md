@@ -2,120 +2,219 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-18 (Stage 4D-4 tail) - voice search made REACHABLE: COMPLETE
+## 2026-08-18 (4D-4 device-pass fixes) - tap-to-talk, worker home anatomy, gold-on-forest: COMPLETE
 
 **No SQL executed, no database contacted, no schema object touched, nothing
 pushed, no locked file edited, no `.env` read, no dependency added or
-mutated, no frozen web surface touched.** One commit this run. Base gate:
-`mainexpo`, a3c1279 an ancestor, baseline bare `npm run verify` green —
-730 pass / 0 fail / 0 skipped, exit code 0 read directly. After the change:
-**735 pass / 0 fail / 0 skipped, exit code 0**, again bare with the exit
-code read directly. One pre-existing untracked file (`repo_manifest.txt`, a
-generated UTF-16 file listing, unrelated to any task file) was preserved
-untouched and NOT staged.
+mutated, no frozen web surface touched.** Three commits this run. Base
+gate: `mainexpo`, 41975a3 at HEAD, clean tree, baseline bare
+`npm run verify` green — 735 pass / 0 fail / 0 skipped, exit code 0 read
+directly. Each commit's verify was run bare with the exit code read
+directly:
 
-### What shipped
-
-4D-4 Block 2 had left the press-and-hold mic mounted only in
-dev-tools/ComponentCatalog.tsx. This run converted every unlocked screen
-with a free-text search input to the shared `ui/primitives/SearchBar`, so
-the mic now rides the two live search surfaces:
-
-| surface | mode | conversion |
+| commit | subject | verify |
 | --- | --- | --- |
-| screens/WorkerSearchScreen.tsx | Customer (Discover tab root; also pushed from the locked Home's search affordance) | The "What do you need help with?" field. Submit stays dual-path (keyboard return + the retained forest arrow button, now in SearchBar's new `trailing` slot), typing still resets the run guard / results / pinned chip, the clear control performs the identical state reset through `onChangeText('')`, `autoFocus` keeps the tab-root-vs-pushed rule, placeholder and a11y label verbatim. |
-| screens/WorkerHomeScreen.tsx | Worker (worker tree's initial route) | The "Search for jobs or areas" field that mirrors the locked 48's. Divider + arrow-circle submit retained verbatim in `trailing`; `disableClear` keeps the mirror's no-clear-control design; dispatch to WorkerResults mode 'search' untouched. |
+| 2527726 | voice(tap): tap-to-talk with app-side silence timer and an unconditional 30s ceiling | 741 pass / 0 fail / 0 skipped, exit 0 |
+| 424c266 | worker-home(anatomy): the approved 43 anatomy - hero, divided summary card, feed heading | 744 pass / 0 fail / 0 skipped, exit 0 |
+| a75458e | theme(sweep): no gold on forest anywhere - HotspotMap pin fixed, the class pinned by scan | 746 pass / 0 fail / 0 skipped, exit 0 |
 
-Both screens pass their existing container style into SearchBar's `style`
-prop, so each field keeps its exact geometry (WorkerSearch's 64pt xl-radius
-shadowed row; WorkerHome's locked-48-mirror pill). What SearchBar
-standardizes — the only user-visible deltas beyond the mic: leading search
-icon (18pt emerald), input typography (tokens `type.body`, 14pt, was 16),
-placeholder color token, iOS `keyboardAppearance` following the resolved
-theme, and WorkerSearch's clear glyph becoming the standard `close-circle`.
-Every behavioural axis the dispatch enumerated is preserved: placeholder
-text, value/onChangeText wiring, no debounce anywhere (both fields are
-submit-driven, before and after), submit behaviour, clear affordance
-semantics, keyboard type / return key ("search"), autocorrect +
-autocapitalize posture ("sentences" + autocorrect on both).
+tests/themeResolution.test.mjs is byte-untouched this run — green with no
+new allowlist entry, trivially auditable.
 
-### SearchBar additive props (defaults keep existing consumers byte-identical)
+### Commit 1 — voice search is tap-to-talk now
 
-Four optional props, none renamed, no default changed:
+One tap starts listening; listening ends on ~2s of continuous silence after
+speech has begun, a hard 30-second ceiling, a second tap, the screen
+blurring, the app backgrounding, or unmount. The transcript still reaches
+consumers ONLY through `onChangeText`; no auto-submit, no second write
+path. On-device-only, the availability probes, first-class unavailable
+states, no-network-fallback, vendor importable only from lib/voiceSearch/,
+and error-payloads-die-unread all hold unchanged (same tests, updated to
+the new interaction).
 
-- `autoCapitalize` — default `'none'`, the previously hardcoded literal.
-- `autoCorrect` — default `false`, the previously hardcoded literal.
-- `disableClear` — default `false`; the clear conditional becomes
-  `value.length > 0 && !disableClear`, identical when false.
-- `trailing` (ReactNode) — rendered after the mic inside the field; absent
-  by default, rendering nothing.
+**How silence-ending actually works, from the installed vendor source
+(v3.1.3, the only authority per dispatch):** iOS exposes NO usable silence
+signal. `"speechend"` is registered in the module's Events list but never
+sent — no `sendEvent("speechend")` exists in
+ios/ExpoSpeechRecognitionModule.swift — and the `speechStartHandler` stored
+in ios/ExpoSpeechRecognizer.swift is dead code (its trigger
+`handleSpeechStart()` has no call site). The vendor's own non-continuous
+stop is an internal, unconfigurable, unobservable timer in
+ExpoSpeechRecognizer.swift: `Timer.scheduledTimer(withTimeInterval: 3,
+repeats: false)` whose callback comment reads "Stop the speech recognizer
+if the timer fires after not receiving a result for 3 seconds". So the ~2s
+silence detector is APP-SIDE in the boundary (the dispatch's continue-path
+for exactly this finding): `start()` now passes `interimResults: true`, and
+each result event carrying a transcript restarts a 2s timer
+(`VOICE_SILENCE_MS`); when it fires the boundary calls `stop()`, the vendor
+delivers the final result (committed once, the normal path) then `end`.
+Interim results are never committed. Before speech begins no silence timer
+exists — the vendor's own 3s no-speech timeout and the ceiling cover a
+session where nothing is said. `continuous: false` and
+`requiresOnDeviceRecognition: true` are unchanged.
 
-With nothing new passed (the catalog's usage), the rendered tree is
-identical to before — the defaults reproduce the exact prior JSX. Proven by
-the new static test "SearchBar's additive props default to the exact
-posture existing consumers had" plus the untouched pre-existing SearchBar
-suite. `disableVoiceSearch` is passed NOWHERE (statically asserted): the
-mic is on for every converted surface.
+**The 30s ceiling is independent by construction:** `VOICE_MAX_SESSION_MS`
+is armed synchronously inside `beginSession()` BEFORE the first vendor
+call, on injected `setTimeout` (real clock in lib/voiceSearch/index.ts,
+hand-driven fakes in tests). When it fires it requests `abort()` but calls
+`finish()` without waiting for any vendor event — teardown, listener
+removal, and `onEnd` happen even if the recognizer never reports anything.
+Executed tests prove: the ceiling armed at tap before availability
+resolves; the ceiling firing against a vendor that emits NOTHING (no
+result, no error, no end) still ends the session, removes all listeners,
+commits nothing, and ignores a late-waking vendor; the ceiling ends even a
+session stuck inside an unresolved permission prompt; and no timer ever
+outlives a session.
 
-### Deliberately skipped search-like surfaces (each with its reason)
+**The new microphone usage string (operator-authored, byte-exact in
+app.json, pinned by test):**
 
-- **screens/HomeScreen.tsx** ("Describe a service or problem") — LOCKED.
-  Future unlock item: convert on the operator's unlock session (item D).
-- **screens/BrowseJobsScreen.tsx** ("Search for jobs or areas") — LOCKED
-  and unmounted (atlas 48). Same future unlock item, if it ever remounts.
-- **components/CountryPicker.tsx** ("Country or code") — a list filter
-  over a fixed country set inside the auth sheet, not a search query
-  surface; also rendered by locked auth screens.
-- **components/CategoryAccordion.tsx** ("Other (type a category)") — a
-  custom-category entry field, not search.
-- Everything else with a TextInput is an amount, address, message,
-  checklist, review, or description field — not search.
+> BRAZOS uses your microphone only while you are searching by voice, and stops listening when you finish speaking.
 
-### Tests (5 new, all in tests/voiceSearch.test.mjs; no existing test edited)
+`speechRecognitionPermission` is unchanged. Both remain behavioural
+contracts the code keeps literally true.
 
-Converted surfaces render SearchBar from the primitives barrel with no raw
-TextInput left; no converted surface opts out of the mic or touches the
-voice boundary directly; WorkerSearch's behaviour pins (submit dual-path,
-run-guard reset, autoFocus rule, verbatim copy); WorkerHome's locked-48
-mirror pins (disableClear, divider + arrow, submitSearch dual-path); the
-SearchBar defaults proof. Existing suites that pin these screens
-(workerHome, customerCore, workerMatching, hardening, conversion, layout,
-themeResolution, themeTokens) all pass unmodified.
+UI: the SearchBar mic is a plain tap target (`onPress` toggle — press-in/
+press-out are gone). The listening state keeps the palette-read emerald
+wash + filled glyph (no raw literal, no allowlist change). New exit paths:
+a `blur` listener via `useContext(NavigationContext)` (raw context, not
+`useNavigation()`, so the primitive still mounts outside a navigator) and
+an `AppState` listener cancel the session — cancel, not stop: nothing
+commits behind the user's back. A11y label flips "Search by voice" /
+"Stop listening".
+
+### Commit 2 — worker home rebuilt to the approved anatomy (mockup 43)
+
+Top to bottom as shipped: greeting + Switch to Customer (untouched;
+switchMode() confirm intact) → serif hero **"Get hired. / Get paid."**
+with the whole second sentence in the palette's green accent
+(`colors.emerald` — green in BOTH palettes; never forest, the gold primary
+under Prestige) and subtitle **"Grow your reputation."**, mirroring the
+customer Home headline token-for-token (display serif, 39/45, -0.3
+tracking, ink; subtitle 16/500 homeSlate), full width, no illustration →
+search field (untouched) → **the summary card**: ONE surface-filled
+container with a gold hairline border, split by a vertical divider —
+left: the Taking new work control (title, switch, and its explanatory line
+byte-identical: "Shown on your public profile — it tells customers what to
+expect."; single writer `updateProfile(accepting_work)` unchanged);
+right: POTENTIAL EARNINGS gold section label, the money figure large in
+`colors.emerald` (formatBudget() only), the across-N caption; while the
+feed loads the figures are Skeleton pulses (the old card's loading gate,
+kept — never a fake $0) — and the two count chips as bordered pills INSIDE
+the card below the divided row → section heading relabeled **Available
+Jobs** with a feed status dot + View all → job cards and below unchanged.
+
+The dark defect is resolved by construction: the old earnings card filled
+with forest (gold under Prestige) putting its gold eyebrow gold-on-gold
+and its figure white-on-gold; surface + gold border is the e195012
+ClientJobDetail pattern, applied. Token values read for both palettes:
+light — gold #C8A15B border and label on #FFFFFF surface, emerald #0D6B52
+figure; dark — gold #D9B978 border/label on #132A22-family surface
+(#1B2620 in the app palette), emerald #4E9E82 figure. Both legible.
+
+**Deviations from the dispatch's framing, reported:**
+- "Section heading … with the existing status dot … relabel only": no
+  status dot existed in the shipped screen — the dispatch presumed one.
+  The mockup shows it, so the dot was ADDED (palette emerald, static, no
+  animation) rather than merely kept. It marks the jobs feed, not worker
+  presence; the availability half carries no dot, and a test pins both
+  facts.
+- The mockup's left half reads "AVAILABLE NOW / Offline / Not visible to
+  customers" — all forbidden by the dispatch's label constraints, which
+  override the mockup. Shipped labels are exactly the constrained ones;
+  tests/workerHome.test.mjs's presence-vocabulary ban still passes and was
+  extended (no "Available now", no "visible to customers").
+- The two halves stayed side-by-side (no stacking fallback needed): the
+  left half stacks title/switch/note vertically so nothing wraps against
+  the switch, and the money figure keeps numberOfLines={1} with capped
+  font scaling.
+- The old "Your work today" headline was replaced by the approved hero —
+  the target anatomy has one headline, and it is the new one.
+- The empty-state copy and the "View all open jobs" a11y label still say
+  "open jobs" — below-the-heading content the dispatch froze; only the
+  visible heading was relabeled.
+
+### Commit 3 — the same defect everywhere else
+
+Sweep of screens/, components/, ui/ for forest fills (or styles deriving
+from one — `emeraldColorsFor().primary` IS `palette.forest`) carrying
+gold-family paint. Full inventory, every instance:
+
+**Fixed (the one live instance):**
+- components/HotspotMap.native.tsx `pinBadge` + `pinTail` — forest fill
+  with a GOLD hairline (`borderColor: colors.gold`): invisible
+  gold-on-gold border in dark. The hairline is now per-theme via a ternary
+  (`isDark ? …Dark : …Light`): light keeps the reference gold
+  byte-identically (the Light override carries the same
+  `borderColor: colors.gold` the base style used to), dark uses
+  `colors.onForest` — the token that exists for content that must sit on a
+  forest fill; the pin count already used it.
+
+**Judged safe and deliberately left, with reasons:**
+- Forest fills already carrying `onForest` content (the e195012 sweep):
+  SuccessScreen primary button, FormScreen primary button, EmptyState
+  action, Chip `chipFilterSelected`, BottomNav create button (isDark →
+  onForest glyph), MyJobsHub headerMark + primaryCta, PostJob locationBtn
+  + successCircle, WorkerSearch searchButton. Correct by pattern.
+- StepHeader `segmentDone` — a bare 4px progress bar; nothing renders on
+  it.
+- ClientJobDetail `successCircle` — an UNUSED style (no JSX references
+  it); nothing renders on it. Left in place (no unrelated cleanup).
+- Chip `chipFilterSelected` `borderColor: colors.forest` on its forest
+  fill — the deliberate matching-border idiom (border intentionally
+  invisible in both palettes); the scan permits exactly this idiom.
+- `palette.primary` fills via palette-prop components (Button, JobProgress,
+  MapPinIcon) — content is `onPrimary`, not gold-family; out of the
+  defect class.
+- ModeTransitionOverlay gold shimmer — decorative glow over the baked
+  LIGHT transition PNGs, migrates with those assets (standing decision).
+- **screens/HomeScreen.tsx (LOCKED)** `heroCard` fills forest with
+  `heroEyebrow` gold — the exact defect class, BUT the file imports the
+  static light palette (frozen light in both themes), so it is not live
+  today. It becomes this defect the day the unlock session themes it —
+  fold the e195012/commit-2 pattern into unlock item D below.
+- **screens/BrowseJobsScreen.tsx (LOCKED, unmounted)** `banner` forest
+  fill with `bannerEyebrow` gold — same situation, and the screen is
+  unmounted besides.
+- WorkerHomeScreen — already fixed in commit 2; excluded per dispatch.
+
+**The guard:** tests/goldOnForest.test.mjs. The SAME-OBJECT form is a
+reliable static scan and is enforced repo-wide over screens/, components/,
+ui/: no style object may both fill with forest and set `color:` from
+{gold, goldSoft, forest} or a border color from {gold, goldSoft}
+(matching-border idiom permitted); the scan self-checks that it saw >100
+files and ≥10 real forest fills. The CROSS-OBJECT form (fill in one style,
+gold text in a sibling style on a child — how WorkerHome failed) cannot be
+expressed honestly by a text scan, so the repaired surfaces are pinned
+individually instead, as the dispatch allows: WorkerHome's card in
+tests/workerHome.test.mjs, the HotspotMap pin in goldOnForest itself.
 
 ### Voice-search facts an operator should know (carried forward, updated)
 
 - **The mic still renders on NO current binary** — the boundary correctly
-  reports unavailable until the EAS build (item A) ships the native module.
-  After that build, the mic appears on WorkerSearchScreen (Customer mode)
-  and WorkerHomeScreen (Worker mode) whenever on-device en-US recognition
-  is available — no longer only in the dev catalog.
-- The two iOS permission strings remain a behavioural contract the code
-  keeps literally true: hold-to-talk only, on-device only, transcript's
-  one egress is `onChangeText`.
-- en-US only, by pre-made decision. No locale selection exists.
-
-### Prior 4D-4 context (compressed; details in git history a3c1279 and earlier)
-
-Block 1 (dark theme, commits 1-6) and Block 2 (voice search, commits 7-9)
-both shipped 2026-08-18. Operator-confirmed facts from that session still
-standing: phase74/75 verified applied on staging (green
-`verify-schema.mjs`, zero missing/pending); the location-CHECK migration is
-DEFERRED by operator decision (zero offending rows live; rides the next
-migration); the bid-ordering device walk-through passed on a physical
-iPhone. Known cosmetic gap: a pinned-Dark user on a light-system phone can
-catch one frame of the light pre-resolution gate on cold start — recorded
-in lib/ThemeContext.tsx, invisible in practice behind the locked launch
-layer.
+  reports unavailable until the EAS build (item A) ships the native
+  module. After that build it appears on WorkerSearchScreen (Customer) and
+  WorkerHomeScreen (Worker) whenever on-device en-US recognition exists.
+- The interaction is now TAP-to-talk; the new microphone permission string
+  above describes it and the code enforces it (silence stop, 30s ceiling,
+  blur/background/unmount cancel).
+- en-US only, by pre-made decision. No locale selection, no transcript
+  stored, logged, or sent anywhere.
+- Customer Home's stale "Voice search is coming" dialog remains — a known
+  LOCKED-screen item awaiting the operator's unlock session (item D).
 
 ### Deliberately left light (follow-ups, not bugs — unchanged)
 
-- **LOCKED screens** (CLAUDE.md list) render light in dark mode until the
-  operator unlocks them; the unlock patch is mechanical (themedStyles +
-  useThemeColors + drop the tests/themeResolution.test.mjs allowlist line).
-- **lib/authTheme.ts + auth components** (AuthNotice, CountryPicker scrim)
-  — literals allowlisted with reasons; authTheme is never-modified.
-- **ModeTransitionOverlay** gold chrome + `'#FFF3D6'` shimmer — paired with
-  the baked LIGHT transition PNGs; migrates with the assets.
+- **LOCKED screens** (CLAUDE.md list) render frozen light in dark mode
+  until the operator unlocks them; the unlock patch is mechanical
+  (themedStyles + useThemeColors + drop the themeResolution allowlist
+  line) — plus, now inventoried above: Home's heroCard and BrowseJobs's
+  banner must take the surface-fill/gold-border pattern when themed, or
+  they become live gold-on-forest defects.
+- **lib/authTheme.ts + auth components** — literals allowlisted with
+  reasons; authTheme is never-modified.
+- **ModeTransitionOverlay** gold chrome + `'#FFF3D6'` shimmer — paired
+  with the baked LIGHT transition PNGs; migrates with the assets.
 - **lib/hotspots.ts tier glows** — theme-independent heat semantics.
 - **SegmentedControl thumb shadow** cosmetic nit — for the device pass.
 
@@ -124,7 +223,7 @@ layer.
 Unchanged by this run — repository-only. phase74/75 officially applied and
 verified green 2026-08-18; phases 67-73 applied and verified 2026-08-16. No
 unapplied migration exists in the repository; the location-CHECK is
-DEFERRED (operator decision above), so nothing awaits apply.
+DEFERRED (operator decision), so nothing awaits apply.
 
 **Production (`avkighsiufeefyycbebf`) still has none of the migrations.**
 Standing decision: rebuild from a staging dump once staging is beta-ready;
@@ -163,42 +262,45 @@ phase74 nor phase75 disturbs the finding.
 ## Needs the operator - outside any run
 
 **A. EAS BUILD (blocking everything Stage 4D-4 shipped).** Native config
-changed twice this stage: `userInterfaceStyle: "automatic"` (dark mode is
-INERT in the existing binary and in Expo Go pinned light) AND the
-expo-speech-recognition plugin with its native module + the two permission
-strings (the mic cannot appear on any existing binary — the boundary
-correctly reports unavailable there). One iOS build makes all of 4D-4 —
-including this run's reachable mic — real on device. Then `git push` —
-nothing was pushed autonomously.
+changed again this run: the NEW NSMicrophoneUsageDescription string rides
+the expo-speech-recognition plugin (plus the earlier
+`userInterfaceStyle: "automatic"` and the native module itself). One iOS
+build makes dark mode AND the tap-to-talk mic real on device. Then
+`git push` — nothing was pushed autonomously.
 
 **B. Both-themes device flip-through.** Walk every major surface in Light,
-Dark, and System (flip the OS setting live: the app must repaint without
-restart; a pinned choice must survive restart and steer the KEYBOARD,
-alerts, share sheet, and Apple Maps tiles). Known-light surfaces are listed
-above and are not findings. On the new build, exercise the mic ON THE REAL
-SURFACES now: Customer → Discover (WorkerSearch) and Worker → Home. First
-hold shows BOTH permission dialogs with the two authored strings;
-hold-speak-release lands the phrase in the field exactly as typing would
-(WorkerSearch: results/chip reset then submit by hand; WorkerHome: submit
-dispatches to WorkerResults); airplane mode must change nothing
-(on-device); denying either permission must leave the mic quietly inert.
-Also confirm the two converted fields kept their look: geometry unchanged,
-14pt input text, standard clear glyph on WorkerSearch, no clear control on
-WorkerHome.
+Dark, System (live OS flips must repaint without restart; a pinned choice
+must survive restart and steer keyboard, alerts, share sheet, Maps tiles).
+On the new build exercise the mic on the REAL surfaces with the NEW
+interaction: tap once (both permission dialogs show the authored strings on
+first use), speak, and confirm it stops ~2s after you stop; confirm a
+30-second monologue is cut off; confirm a second tap stops it; navigate
+away / background mid-listen and confirm the mic dies without writing to
+the field; airplane mode must change nothing (on-device); denial leaves the
+mic quietly inert. Also walk the rebuilt Worker Home in both palettes —
+hero accent, gold-hairline summary card, chips inside the card, feed dot —
+and the map pins in dark (near-black hairline on gold pins, unchanged in
+light).
 
-**C. Dark asset generation.** docs/audits/DARK_ASSET_INVENTORY.md is the
-brief — splash config first (white flash on every dark cold start), then
-the two transition PNGs (re-measure the gold-line geometry after), then the
-Home illustrations for the unlock session.
+**C. Dark asset generation — NOW ALSO THE WORKER HERO ILLUSTRATION.**
+docs/audits/DARK_ASSET_INVENTORY.md is the brief — splash config first,
+then the two transition PNGs, then the Home illustrations for the unlock
+session. NEW ITEM: the worker-home hero illustration (mockup 43's toolbox
+art, right of "Get hired. Get paid."). The screen ships full-width text
+with no artwork by design — no image was generated, sourced, or referenced
+in-run. When the asset exists, mount it beside the hero block (mirror the
+customer Home's `homeHeroArt` arrangement) and constrain the headline
+width to match.
 
-**D. The authTheme/locked-screen unlock session.** The exact patch shape is
-in "Deliberately left light" above. Home is the highest-value unlock: it is
-the first themed-app screen a dark-mode user sees rendering light — and it
-now also carries the two remaining un-converted search inputs (Home's
-"Describe a service or problem" and the unmounted atlas-48 field), which
-should adopt SearchBar on unlock so the mic is uniform.
+**D. The authTheme/locked-screen unlock session.** The mechanical patch
+shape is in "Deliberately left light". Home is the highest-value unlock;
+it also carries the two un-converted search inputs (adopt SearchBar for a
+uniform mic), the stale "Voice search is coming" dialog to remove, and —
+inventoried this run — the heroCard gold-on-forest pair that must take the
+surface-fill/gold-border pattern when themed (BrowseJobs's banner likewise,
+if it ever remounts).
 
-**E. TestFlight retry is now possible WITHOUT swapping keys.** The EAS gate
+**E. TestFlight retry is possible WITHOUT swapping keys.** The EAS gate
 derives the ref from SUPABASE_URL; the `preview` environment's existing
 `sb_pu…` publishable key passes the format check. The 4D-4 build (item A)
 doubles as this confirmation run.
@@ -212,21 +314,18 @@ payments on a release build set it to `sandbox` in `.env` and restart Metro
 (Expo inlines `EXPO_PUBLIC_*` at bundle time).
 
 **H. Locked patches A10-A12 (docs/LOCKED_FILE_PATCHES.md).** A12 (Welcome
-copy: "Verified workers" → "Real customer reviews", "Protected payment" →
-"Clear upfront pricing") should land before any external beta.
+copy) should land before any external beta.
 
-**I. PRIVACY_VERSION decision** (from the previous run): the corrected
-WORKING DRAFT privacy policy has not had its version bumped; decide at the
-counsel-reviewed pass whether users re-accept. Note the new
-NSMicrophoneUsageDescription / NSSpeechRecognitionUsageDescription strings
-ship with item A's build — fold voice search into that same
-counsel-reviewed pass (the strings promise on-device-only processing, which
-the code enforces; the policy should say the same).
+**I. PRIVACY_VERSION decision.** The corrected WORKING DRAFT privacy policy
+has not had its version bumped. Note the microphone usage string CHANGED
+this run (tap-to-talk wording) and ships with item A's build — fold voice
+search into the counsel-reviewed pass; the strings promise on-device-only
+processing that stops when you finish speaking, which the code enforces.
 
 **J. Device-test backlog (pre-4D-4 items).** Still open: the post-flow
 airplane-mode location behaviors, "Suggested starting range" copy, and the
-corrected Privacy §7 — fold them into the both-themes flip-through (item B).
+corrected Privacy §7 — fold into item B.
 
-**K. Stray file at repo root.** `repo_manifest.txt` (untracked, UTF-16 file
-listing, looks generated) predates this run and was left exactly as found.
-Delete or ignore it at your discretion; no run should stage it.
+**K. `repo_manifest.txt` is gone.** The stray untracked root file the
+previous handoff flagged no longer exists — the tree was clean at this
+run's base gate. Nothing to do.
