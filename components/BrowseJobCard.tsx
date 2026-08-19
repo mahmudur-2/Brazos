@@ -3,7 +3,14 @@ import { Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { useAuth } from '../hooks/useAuth';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import {
   categoryAccent,
   formatBidCount,
@@ -45,7 +52,7 @@ export function BrowseJobCard({
   bidCount?: number;
   onPress: () => void;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
   const isOwn = !!user && user.id === job.client_id;
@@ -91,15 +98,21 @@ export function BrowseJobCard({
               {job.location ? ` · ${job.location}` : ''}
             </Text>
             {isOwn && (
-              <View style={styles.ownBadge}>
-                <Ionicons name="person-outline" size={11} color={colors.info} />
-                <Text style={styles.ownBadgeText}>Your job</Text>
+              <View style={[styles.ownBadge, isDark && styles.ownBadgeDark]}>
+                <Ionicons
+                  name="person-outline"
+                  size={11}
+                  color={isDark ? colors.emerald : colors.info}
+                />
+                <Text style={[styles.ownBadgeText, isDark && styles.ownBadgeTextDark]}>
+                  Your job
+                </Text>
               </View>
             )}
           </View>
 
           <View style={styles.footerRow}>
-            <Text style={styles.budget} numberOfLines={1}>
+            <Text style={[styles.budget, isDark && styles.budgetDark]} numberOfLines={1}>
               {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open budget'}
             </Text>
             {/* Sits next to the pay, where a worker is already looking to
@@ -151,11 +164,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   bodyTop: {
     gap: 3,
   },
+  // Decision 9: a card title is display type. Master 10 draws it serif.
   title: {
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 18,
     fontWeight: '700',
-    color: colors.text,
-    lineHeight: 21,
+    color: colors.ink,
+    lineHeight: 23,
   },
   meta: {
     fontSize: 13,
@@ -172,23 +187,32 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     marginTop: 2,
   },
+  // Masters 10 and 12 draw "Your job" as the sage chip with green content,
+  // not the teal info pair; light keeps the Heritage info tones.
+  ownBadgeDark: { backgroundColor: colors.mint },
   ownBadgeText: {
     fontSize: 10,
     fontWeight: '700',
     color: colors.info,
   },
+  ownBadgeTextDark: { color: colors.emerald },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     justifyContent: 'space-between',
     gap: spacing.sm,
   },
+  // Eyebrow law: a money value is emerald, and the serif carries prices.
+  // Master 10 draws this one gold — the same B-4 split masters 12/13 carry —
+  // and decision 6 settles it green everywhere.
   budget: {
     flexShrink: 1,
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 18,
     fontWeight: '800',
     color: colors.text,
   },
+  budgetDark: { color: colors.emerald },
   bids: {
     flexShrink: 1,
     fontSize: 12,

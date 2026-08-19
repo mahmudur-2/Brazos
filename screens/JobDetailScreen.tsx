@@ -19,6 +19,7 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { BrazosMonogram } from '../components/BrazosMonogram';
 import { BrowseJobCard } from '../components/BrowseJobCard';
 import { Button } from '../components/Button';
 import { MarketJobPreview } from '../components/MarketJobPreview';
@@ -78,6 +79,7 @@ import { formatTimeAgo } from '../lib/time';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
 import {
+  fonts,
   radius,
   spacing,
   themedStyles,
@@ -106,7 +108,7 @@ function payoutEstimateLabel(job: OpenJob): string | null {
 }
 
 export function JobDetailScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // Registered in three different stacks (Home, MyJobs, Map) — like Chat, its
   // nav/route types are standalone rather than tied to one parent stack.
@@ -819,6 +821,9 @@ export function JobDetailScreen() {
                   checkout charges and Earnings sums. */}
               {payoutEstimateLabel(job) ? (
                 <Card style={[styles.payoutCard, styles.secondaryCard]}>
+                  {/* Master 10 sets the shield mark against this card's copy
+                      — decoration beside a claim the words already make. */}
+                  <BrazosMonogram variant="shield" size={64} style={styles.payoutMark} />
                   <Text style={styles.priceEyebrow}>
                     {PLATFORM_FEE_RATE > 0 ? 'Est. payout after fee' : 'Est. payout'}
                   </Text>
@@ -843,7 +848,11 @@ export function JobDetailScreen() {
                   <Text style={styles.priceEyebrow}>Take it at the listed price</Text>
                   <View style={styles.listedPriceInfo}>
                     <View style={styles.priceIcon}>
-                      <Ionicons name="cash-outline" size={22} color={colors.primary} />
+                      <Ionicons
+                        name="cash-outline"
+                        size={22}
+                        color={isDark ? colors.gold : colors.primary}
+                      />
                     </View>
                     <View style={styles.priceCopy}>
                       <Text style={styles.listedPriceTitle}>
@@ -854,8 +863,12 @@ export function JobDetailScreen() {
                       </Text>
                     </View>
                   </View>
+                  {/* Master 10 draws this as the STANDARD control, not a
+                      conversion fill: the screen's one solid fill would be a
+                      claim this card is not making. */}
                   <Button
                     title={`I’ll do it for ${formatBudget(job.budget_cents)}`}
+                    variant="secondary"
                     icon="sparkles"
                     onPress={handleTakeListedPrice}
                     loading={takingListedPrice}
@@ -875,8 +888,13 @@ export function JobDetailScreen() {
                   Set your own amount and tell the customer why you’re the right
                   pick. You can withdraw a pending bid at any time.
                 </Text>
+                {/* Master 10 gives this a GOLD serif label — decision 3's
+                    ghost. Its own hairline box in the master is the shape
+                    decision 3 reserves for the standard control, so the ghost
+                    ships bare inside the card that already frames it. */}
                 <Button
                   title="Write a bid"
+                  variant="ghost"
                   onPress={() =>
                     (navigation as unknown as {
                       navigate: (screen: 'SubmitBid', params: { job: OpenJob }) => void;
@@ -1113,10 +1131,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 14,
     color: colors.textMuted,
   },
+  // Decision 9: a card heading is display type.
   sectionTitle: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.ink,
   },
   listedPriceCard: {
     gap: spacing.md,
@@ -1145,21 +1165,32 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   payoutCard: {
     gap: spacing.sm,
   },
+  // Master 10 parks the shield mark in the card's top-right, clear of the
+  // copy column. Bounded to this card, never a screen-level coordinate.
+  payoutMark: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
+  },
+  // Master 10's figure: the serif, at display weight.
   payoutAmount: {
-    fontSize: 24,
+    fontFamily: fonts.display,
+    fontSize: 38,
+    lineHeight: 44,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.ink,
   },
   payoutNote: {
     fontSize: 12,
     lineHeight: 17,
     color: colors.textMuted,
   },
+  // Eyebrow law: a structural card label is gold small-caps.
   priceEyebrow: {
     fontSize: 13,
     fontWeight: '800',
-    color: colors.textMuted,
-    letterSpacing: 0.7,
+    color: colors.gold,
+    letterSpacing: 1.2,
     textTransform: 'uppercase',
   },
   listedPriceInfo: {
@@ -1172,12 +1203,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
     backgroundColor: colors.homeBackground,
   },
+  // Master 10's icon squircle: sage fill inside a gold hairline.
   priceIcon: {
     width: 44,
     height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.mint,
   },
   priceCopy: {
@@ -1185,19 +1219,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: 2,
   },
   listedPriceTitle: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.ink,
   },
   similarSection: {
     gap: spacing.md,
   },
+  // Master 10 sets SIMILAR OPEN JOBS as a gold small-caps section eyebrow.
   similarTitle: {
-    fontSize: 15,
+    fontSize: 12,
     fontWeight: '800',
-    color: colors.text,
+    color: colors.gold,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 1.4,
   },
   similarList: {
     gap: spacing.md,
