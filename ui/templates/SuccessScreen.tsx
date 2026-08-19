@@ -7,6 +7,7 @@ import {
   layout,
   radius,
   spacing,
+  withAlpha,
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
@@ -51,7 +52,7 @@ export function SuccessScreen({
   actions,
   insideTabs = true,
 }: SuccessScreenProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
@@ -62,8 +63,12 @@ export function SuccessScreen({
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.glyph}>
-          <Ionicons name={icon} size={44} color={colors.forest} />
+        {/* The check circle was a deep-green glyph on the deep-green mint
+            disc — two dark greens, so in dark the mark all but vanished. It
+            keeps the disc and gains the masters' gold ring, with the glyph in
+            the live-state emerald (the "green check circle" of 15/19/40). */}
+        <View style={[styles.glyph, isDark && styles.glyphDark]}>
+          <Ionicons name={icon} size={44} color={isDark ? colors.emerald : colors.forest} />
         </View>
 
         <View style={styles.copy}>
@@ -83,12 +88,24 @@ export function SuccessScreen({
                 style={({ pressed }) => [
                   styles.button,
                   secondary ? styles.secondary : styles.primary,
+                  // Decision 3's standard control: surface fill, gold
+                  // hairline, cream serif label. The Heritage pair it
+                  // replaces put a forest label on a mint fill, which under
+                  // dark is one deep green on another — "Keep browsing" was
+                  // legible only as a shape.
+                  secondary && isDark && styles.secondaryDark,
                   pressed && styles.pressed,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel={action.label}
               >
-                <Text style={[styles.buttonLabel, secondary && styles.secondaryLabel]}>
+                <Text
+                  style={[
+                    styles.buttonLabel,
+                    secondary && styles.secondaryLabel,
+                    secondary && isDark && styles.secondaryLabelDark,
+                  ]}
+                >
                   {action.label}
                 </Text>
               </Pressable>
@@ -120,6 +137,10 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.mint,
+  },
+  glyphDark: {
+    borderWidth: 1,
+    borderColor: withAlpha(colors.gold, 0.55),
   },
   copy: {
     gap: spacing.sm,
@@ -160,12 +181,19 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     borderWidth: 1,
     borderColor: colors.secondaryBorder,
   },
+  secondaryDark: {
+    backgroundColor: colors.surface,
+    borderColor: withAlpha(colors.gold, 0.55),
+  },
   buttonLabel: {
     ...typeScale.title,
     color: colors.onForest,
   },
   secondaryLabel: {
     color: colors.forest,
+  },
+  secondaryLabelDark: {
+    color: colors.ink,
   },
   pressed: {
     opacity: 0.85,

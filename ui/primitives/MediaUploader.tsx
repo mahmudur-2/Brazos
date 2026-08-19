@@ -79,8 +79,14 @@ export function MediaUploader({
   disabled,
   label,
 }: MediaUploaderProps) {
-  const { emerald: colors } = useThemeColors();
+  const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // `forest` is the Heritage brand green ON CREAM; under Prestige it is the
+  // one solid FILL, so every place this component used it as content — the
+  // counter, the add tile's dashed edge and glyph, the clip mark — resolved to
+  // a deep green on a deep-green ground. In dark those become the gold
+  // line-work the converted screens use.
+  const lineWork = isDark ? colors.gold : colors.forest;
   const [uploading, setUploading] = useState(false);
   // Only tiles added through this component instance are ever candidates for
   // delete-on-remove; a caller may seed `items` with media it already owns
@@ -134,7 +140,7 @@ export function MediaUploader({
 
   return (
     <View style={styles.wrap}>
-      <Text style={styles.label}>
+      <Text style={[styles.label, isDark && styles.labelDark]}>
         {label} · {items.length}/{maxItems}
       </Text>
       <View style={styles.row}>
@@ -151,8 +157,10 @@ export function MediaUploader({
                 <Image source={{ uri: url }} style={styles.thumb} resizeMode="cover" />
               ) : (
                 <View style={[styles.thumb, styles.videoThumb]}>
-                  <Ionicons name="play-circle" size={26} color={colors.forest} />
-                  <Text style={styles.videoLabel}>Clip {index + 1}</Text>
+                  <Ionicons name="play-circle" size={26} color={lineWork} />
+                  <Text style={[styles.videoLabel, isDark && styles.videoLabelDark]}>
+                    Clip {index + 1}
+                  </Text>
                 </View>
               )}
             </Pressable>
@@ -170,19 +178,19 @@ export function MediaUploader({
 
         {!atLimit && (
           <Pressable
-            style={[styles.tile, styles.addTile]}
+            style={[styles.tile, styles.addTile, isDark && styles.addTileDark]}
             onPress={handleAdd}
             disabled={uploading || disabled}
             accessibilityRole="button"
             accessibilityLabel={`Add a ${kind}`}
           >
             {uploading ? (
-              <ActivityIndicator size="small" color={colors.forest} />
+              <ActivityIndicator size="small" color={lineWork} />
             ) : (
               <Ionicons
                 name={kind === 'photo' ? 'add' : 'videocam-outline'}
                 size={24}
-                color={colors.forest}
+                color={lineWork}
               />
             )}
           </Pressable>
@@ -204,6 +212,9 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     fontWeight: '700',
     color: colors.forest,
   },
+  // The counter is the one thing on this control that has to be readable at a
+  // glance ("Photos · 3/10"); in dark it takes the cream ink.
+  labelDark: { color: colors.ink },
   row: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -230,6 +241,7 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     fontWeight: '700',
     color: colors.forest,
   },
+  videoLabelDark: { color: colors.ink },
   remove: {
     position: 'absolute',
     top: -6,
@@ -250,5 +262,8 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // The dashed add-affordance the manifest's chip vocabulary names (masters 35
+  // and 42 draw it in gold line-work).
+  addTileDark: { borderColor: colors.gold },
   }),
 );

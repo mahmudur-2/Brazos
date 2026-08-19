@@ -67,6 +67,7 @@ import type { PostJobRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import {
   emeraldColorsFor,
+  fonts,
   radius,
   shadows,
   spacing,
@@ -899,7 +900,9 @@ export function PostJobScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.stepIntro}>
-            <Text style={styles.stepEyebrow}>
+            {/* Eyebrow law (decision 6): "STEP 2 OF 4" labels STRUCTURE, so it
+                is gold in dark. Light keeps the Heritage emerald. */}
+            <Text style={[styles.stepEyebrow, isDark && styles.stepEyebrowDark]}>
               STEP {step + 1} OF {POST_STEPS.length}
             </Text>
             <Text style={styles.stepTitle}>{currentStepTitle}</Text>
@@ -918,10 +921,15 @@ export function PostJobScreen() {
                       index <= step && styles.progressSegmentActive,
                     ]}
                   />
+                  {/* D6 — the active step must be the BRIGHTEST label in the
+                      row. It was `forest`, which under Prestige is a fill
+                      colour, so the step you are on read dimmer than the ones
+                      you are not. */}
                   <Text
                     style={[
                       styles.progressLabel,
                       index === step && styles.progressLabelActive,
+                      index === step && isDark && styles.progressLabelActiveDark,
                     ]}
                     numberOfLines={1}
                   >
@@ -935,7 +943,7 @@ export function PostJobScreen() {
           {isHiring && (
             <View style={styles.hireBanner}>
               <Ionicons name="person-add-outline" size={18} color={colors.emerald} />
-              <Text style={styles.hireBannerText}>
+              <Text style={[styles.hireBannerText, isDark && styles.hireBannerTextDark]}>
                 {hireWorkerName} will get this as a request in your chat. They can accept, decline, or suggest a different price.
               </Text>
             </View>
@@ -980,11 +988,13 @@ export function PostJobScreen() {
 
           {step === 1 && (
             <View style={styles.stepFields}>
-              <View style={styles.infoCard}>
+              {/* The privacy notice read forest-on-mint: one deep green on
+                  another. Its body takes the cream ink in dark. */}
+              <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="shield-checkmark-outline" size={20} color={colors.emerald} />
                 </View>
-                <Text style={styles.infoText}>
+                <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
                   Media appears with your {isHiring ? 'request' : 'job'} so workers can
                   understand the task. Avoid faces, documents, or anything private.
                 </Text>
@@ -1198,7 +1208,9 @@ export function PostJobScreen() {
                       the table is static and cannot support one. */}
                   {showPriceGuidance && guidanceLines ? (
                     <View style={styles.guidanceCard}>
-                      <Text style={styles.guidanceRange}>{guidanceLines[0]}</Text>
+                      <Text style={[styles.guidanceRange, isDark && styles.guidanceRangeDark]}>
+                        {guidanceLines[0]}
+                      </Text>
                       <Text style={styles.guidanceNote}>{guidanceLines[1]}</Text>
                     </View>
                   ) : null}
@@ -1340,7 +1352,9 @@ export function PostJobScreen() {
         {showPhotoNudge ? (
           <View style={styles.nudgeRow}>
             <Ionicons name="image-outline" size={18} color={colors.emerald} />
-            <Text style={styles.nudgeText}>Jobs with a photo get more bids.</Text>
+            <Text style={[styles.nudgeText, isDark && styles.nudgeTextDark]}>
+              Jobs with a photo get more bids.
+            </Text>
             <Pressable
               onPress={() => setPhotoNudgeDismissed(true)}
               hitSlop={12}
@@ -1565,7 +1579,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     letterSpacing: 1,
     color: colors.emerald,
   },
+  stepEyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
+  // Decision 9: a display heading speaks the serif, in both themes — the same
+  // treatment every converted screen's hero title already carries.
   stepTitle: {
+    fontFamily: fonts.display,
     fontSize: 28,
     lineHeight: 34,
     fontWeight: '800',
@@ -1603,6 +1621,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.forest,
     fontWeight: '800',
   },
+  progressLabelActiveDark: { color: colors.ink },
   stepFields: {
     gap: spacing.lg,
   },
@@ -1616,6 +1635,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
     padding: spacing.lg,
   },
+  // Body copy on a sage card was `forest` — the Heritage brand green on cream.
+  // Under Prestige that is a FILL colour, so in dark each of these read as one
+  // deep green on another. Cream ink in dark; light untouched.
   hireBannerText: {
     flex: 1,
     fontSize: 13,
@@ -1623,6 +1645,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '600',
     lineHeight: 19,
   },
+  hireBannerTextDark: { color: colors.ink },
   multiline: {
     height: 110,
     paddingTop: spacing.md,
@@ -1661,6 +1684,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '800',
     color: colors.forest,
   },
+  guidanceRangeDark: { color: colors.ink },
   guidanceNote: {
     fontSize: 12,
     lineHeight: 17,
@@ -1685,6 +1709,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '600',
     color: colors.forest,
   },
+  nudgeTextDark: { color: colors.ink },
   budgetRow: {
     flexDirection: 'row',
     gap: spacing.md,
@@ -1731,6 +1756,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.mint2,
     backgroundColor: colors.mint,
   },
+  infoCardDark: { borderColor: colors.border },
   infoIcon: {
     width: 40,
     height: 40,
@@ -1745,6 +1771,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 19,
     color: colors.forest,
   },
+  infoTextDark: { color: colors.ink },
   reviewCard: {
     gap: spacing.md,
     padding: spacing.lg,
@@ -1866,6 +1893,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.emerald,
   },
   successTitle: {
+    fontFamily: fonts.display,
     fontSize: 28,
     lineHeight: 34,
     fontWeight: '800',

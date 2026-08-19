@@ -21,6 +21,7 @@ export function TextField({
   hint,
   palette: paletteProp,
   style,
+  multiline,
   ...rest
 }: TextFieldProps) {
   const { palette: colors, isDark } = useThemeColors();
@@ -46,8 +47,14 @@ export function TextField({
       </View>
       <TextInput
         keyboardAppearance={isDark ? 'dark' : 'light'}
+        multiline={multiline}
         style={[
           styles.input,
+          // D5: a pill is the shape of a ONE-LINE field. A textarea that
+          // inherits it bows its own corners away from the text block inside
+          // it, so multi-line takes the card radius instead. Shape, not
+          // colour — this lands in both themes.
+          multiline && styles.inputMultiline,
           {
             color: palette.text,
             backgroundColor: palette.surface,
@@ -90,10 +97,13 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 50,
     borderWidth: 1,
-    // Masters 3/4/23/24/30 draw every field as a full-round pill.
+    // Masters 3/4/23/24/30 draw every SINGLE-LINE field as a full-round pill.
     borderRadius: radius.pill,
     paddingHorizontal: spacing.md + 2,
     fontSize: 16,
+  },
+  inputMultiline: {
+    borderRadius: radius.lg,
   },
   error: {
     fontSize: 12,
