@@ -104,9 +104,23 @@ test('the avatar path stays failure-safe', async () => {
 });
 
 test('the new surfaces are reachable from the Profile tab', async () => {
-  const profile = await read('screens/ProfileScreen.tsx');
+  // The Profile surface is three pages since the golden-master split
+  // (decision 10). Two of these rows live on the hub and one on its account
+  // & safety page, which the hub's "Account" chip opens — so the guarantee
+  // is that the SURFACE reaches all three, not that one file does.
+  const [hub, accountSafety] = await Promise.all([
+    read('screens/ProfileScreen.tsx'),
+    read('screens/AccountSafetyScreen.tsx'),
+  ]);
+  assert.ok(hub.includes(`navigate('AccountSafety')`), 'the hub must open account & safety');
+  const surface = hub + accountSafety;
   for (const route of ['ServicesPricing', 'SavedWorkers', 'PaymentMethods']) {
-    assert.ok(profile.includes(`navigate('${route}')`), `ProfileScreen must link ${route}`);
+    // Either an explicit dispatch, or a row in the hub's settings table —
+    // master 45's five rows are data, so their route names appear as
+    // `route: 'X'` and are dispatched through one shared navigate call.
+    const linked =
+      surface.includes(`navigate('${route}')`) || surface.includes(`route: '${route}'`);
+    assert.ok(linked, `the Profile surface must link ${route}`);
   }
   const shared = await read('navigation/sharedStacks.tsx');
   for (const name of ['ServicesPricing', 'SavedWorkers', 'PaymentMethods', 'WorkerProfile', 'PostJob']) {

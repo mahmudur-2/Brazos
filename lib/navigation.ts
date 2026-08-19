@@ -383,7 +383,14 @@ export type MapStackNavigation = NativeStackNavigationProp<MapStackParamList>;
 
 // Profile tab — the admin moderation queue is nested here, gated on is_admin.
 export type ProfileStackParamList = {
-  ProfileMain: undefined;
+  /** Golden master 45 — the profile hub. `edit: true` opens it on the edit
+   *  surface, which is how masters 42's pencil and its "Edit profile" chip
+   *  both reach the form. */
+  ProfileMain: { edit?: boolean } | undefined;
+  /** Golden master 42 — the hub's read-only details page (decision 10). */
+  ProfileDetails: undefined;
+  /** Golden master 41 — the hub's account & safety page (decision 10). */
+  AccountSafety: undefined;
   AdminReports: undefined;
   NotificationSettings: undefined;
   /** Profile → Appearance (4D-4): the Light/Dark/System theme setting. */

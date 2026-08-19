@@ -8,11 +8,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { Avatar } from '../components/Avatar';
+import { BrazosMonogram } from '../components/BrazosMonogram';
 import { AvatarPressable } from '../components/AvatarPressable';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -41,9 +47,13 @@ import { updateProfile } from '../lib/profiles';
 import { useMode } from '../modes/ModeProvider';
 import { uploadAvatar } from '../lib/storage';
 import { isValidPhone } from '../lib/validation';
-import type { ProfileStackNavigation } from '../lib/navigation';
+import type {
+  ProfileStackNavigation,
+  ProfileStackParamList,
+} from '../lib/navigation';
 import {
   emeraldRadius,
+  fonts,
   radius,
   spacing,
   themedStyles,
@@ -62,15 +72,55 @@ const LANGUAGE_OPTIONS = [
 // full paragraph that dominates either layout.
 const MAX_BIO_LENGTH = 200;
 
+/** Master 45's five settings rows, in the order it draws them. */
+const HUB_SETTINGS: {
+  route: 'NotificationSettings' | 'Notifications' | 'Earnings' | 'ServicesPricing' | 'SavedWorkers';
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  sub: string;
+}[] = [
+  {
+    route: 'NotificationSettings',
+    icon: 'notifications-outline',
+    label: 'Notifications',
+    sub: 'Choose which events can alert you.',
+  },
+  {
+    route: 'Notifications',
+    icon: 'mail-unread-outline',
+    label: 'Notification feed',
+    sub: 'Job, offer and payment updates.',
+  },
+  {
+    route: 'Earnings',
+    icon: 'wallet-outline',
+    label: 'Earnings',
+    sub: 'Available, pending and transferred.',
+  },
+  {
+    route: 'ServicesPricing',
+    icon: 'pricetag-outline',
+    label: 'Services & availability',
+    sub: 'Pricing, categories and schedule.',
+  },
+  {
+    route: 'SavedWorkers',
+    icon: 'bookmark-outline',
+    label: 'Saved & past workers',
+    sub: 'Rehire people you trust.',
+  },
+];
+
 function languageLabel(value: string) {
   return LANGUAGE_OPTIONS.find((o) => o.value === value)?.label ?? value;
 }
 
 export function ProfileScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navigation = useNavigation<ProfileStackNavigation>();
-  const { user, logout } = useAuth();
+  const { params } = useRoute<RouteProp<ProfileStackParamList, 'ProfileMain'>>();
+  const { user } = useAuth();
   const { profile, loading, setProfile } = useProfile();
   const { mode } = useMode();
 
@@ -84,7 +134,6 @@ export function ProfileScreen() {
   const [pendingAsset, setPendingAsset] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [saving, setSaving] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   // Bumped after the picker adds an item, so PastWork refetches.
   const [portfolioVersion, setPortfolioVersion] = useState(0);
@@ -141,6 +190,15 @@ export function ProfileScreen() {
       loadDraftFromProfile();
     }
   }, [profile]);
+
+  // Master 42's pencil and its "Edit profile" chip both dispatch here with
+  // `edit: true` — decision 10's "Edit → the edit screens", expressed as a
+  // route param because the form and the hub share one avatar/portfolio
+  // state and splitting them would fork it.
+  const wantsEdit = params?.edit === true;
+  useEffect(() => {
+    if (wantsEdit) setIsEditing(true);
+  }, [wantsEdit]);
 
   useEffect(() => {
     if (!user) return;
@@ -368,26 +426,6 @@ export function ProfileScreen() {
     );
   }
 
-  async function handleLogout() {
-    // One confirmation, not two — logout isn't destructive or unrecoverable
-    // the way unsend/ban-user are (you just sign back in), so it doesn't
-    // need the same friction. The destructive choice still sits second and
-    // styled as destructive, so a stray tap lands on Cancel.
-    const ok = await confirmAsync({
-      title: 'Log out?',
-      message: 'You can sign back in any time.',
-      confirmText: 'Log out',
-      cancelText: 'Cancel',
-      destructive: true,
-    });
-    if (!ok) return;
-
-    setLoggingOut(true);
-    const { error } = await logout();
-    setLoggingOut(false);
-    if (error) await alertAsync('Logout failed', userMessage(error));
-  }
-
   const selectedCategoryLabels = categories.map((c) => ({
     key: c,
     label: skillCategoryLabel(c),
@@ -456,17 +494,21 @@ export function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* Master 45's header: the title centred with the pencil squircle at
+          its right, opening the details page (decision 10). */}
       <ScreenHeader
         title="Profile"
         right={
           !loading && !isEditing ? (
-            <Button
-              title="Edit"
-              variant="secondary"
-              size="sm"
-              icon="create-outline"
-              onPress={() => setIsEditing(true)}
-            />
+            <Pressable
+              onPress={() => navigation.navigate('ProfileDetails')}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Profile details"
+              style={[styles.squircle, isDark && styles.squircleDark]}
+            >
+              <Ionicons name="pencil" size={18} color={isDark ? colors.gold : colors.primary} />
+            </Pressable>
           ) : undefined
         }
       />
@@ -481,6 +523,31 @@ export function ProfileScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
+          {/* Master 45's hub card. Only in the hub state: while editing, the
+              screen IS the edit surface (masters 29/30) and the identity
+              block below is what is being edited. */}
+          {!isEditing ? (
+            <View style={[styles.hubCard, isDark && styles.hubCardDark]}>
+              {isDark ? <BrazosMonogram size={150} style={styles.hubMark} /> : null}
+              <View style={styles.hubTopRow}>
+                <Text style={styles.hubEyebrow}>YOUR WORK</Text>
+                <Pressable
+                  onPress={() => setIsEditing(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Edit your profile"
+                  style={({ pressed }) => [styles.hubChip, pressed && styles.hubChipPressed]}
+                >
+                  <Text style={styles.hubChipText}>Edit</Text>
+                </Pressable>
+              </View>
+              <Text style={styles.hubTitle}>Past work &amp; settings</Text>
+              <Text style={styles.hubBody}>
+                One profile supports both hiring help and finding work.
+              </Text>
+              <View style={styles.hubFlourish} />
+            </View>
+          ) : null}
+
           <View style={styles.avatarRow}>
             {isEditing ? (
               // onPress (the full library/camera/remove action sheet) and
@@ -686,155 +753,48 @@ export function ProfileScreen() {
             />
           )}
 
+          {/* Master 45's settings card: five rows and an "Account" chip into
+              the account & safety page (decision 10). Payment, the two legal
+              documents, Appearance, the moderator entry, the dev catalog,
+              Log out and Delete all moved there — every route still exists
+              and every one is still reachable in BOTH modes, because this
+              stack is the shared one both trees mount. */}
           <Card>
-            <Text style={styles.settingsTitle}>Settings</Text>
-            <Pressable
-              style={styles.settingsRow}
-              onPress={() => navigation.navigate('NotificationSettings')}
-            >
-              <Ionicons name="notifications-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Notifications</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            {/* Phase 12 — the in-app event feed. */}
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('Notifications')}
-            >
-              <Ionicons name="mail-unread-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Notification feed</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            {/* 4D-4 — the Light/Dark/System theme setting. */}
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('Appearance')}
-            >
-              <Ionicons name="contrast-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Appearance</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            {/* Phase 11 — the ledger-derived wallet. */}
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('Earnings')}
-            >
-              <Ionicons name="wallet-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Earnings</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            {/* Phase 9 — worker self-service + customer trust surfaces. */}
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('ServicesPricing')}
-            >
-              <Ionicons name="pricetag-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Services & availability</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('SavedWorkers')}
-            >
-              <Ionicons name="bookmark-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Saved & past workers</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('PaymentMethods')}
-            >
-              <Ionicons name="card-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Payment methods</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('LegalDocument', { document: 'terms' })}
-            >
-              <Ionicons name="document-text-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Terms of Service</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            <Pressable
-              style={[styles.settingsRow, styles.settingsRowDivider]}
-              onPress={() => navigation.navigate('LegalDocument', { document: 'privacy' })}
-            >
-              <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.settingsLabel}>Privacy Policy</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
-            </Pressable>
-
-            {/* Dev-only entry to the design-system catalog. The route itself is
-                only registered under __DEV__ in App.tsx, so this row and its
-                destination disappear together in a production build. */}
-            {__DEV__ && (
+            <View style={styles.settingsHead}>
+              <Text style={styles.settingsTitle}>Settings</Text>
               <Pressable
-                style={[styles.settingsRow, styles.settingsRowDivider]}
-                onPress={() => navigation.navigate('ComponentCatalog')}
+                onPress={() => navigation.navigate('AccountSafety')}
+                accessibilityRole="button"
+                accessibilityLabel="Account and safety"
+                style={({ pressed }) => [styles.hubChip, pressed && styles.hubChipPressed]}
               >
-                <Ionicons name="color-palette-outline" size={20} color={colors.textMuted} />
-                <Text style={styles.settingsLabel}>Component catalog (dev)</Text>
+                <Text style={styles.hubChipText}>Account</Text>
+              </Pressable>
+            </View>
+
+            {HUB_SETTINGS.map((row, index) => (
+              <Pressable
+                key={row.route}
+                style={[styles.settingsRow, index > 0 && styles.settingsRowDivider]}
+                onPress={() => navigation.navigate(row.route)}
+                accessibilityRole="button"
+                accessibilityLabel={row.label}
+              >
+                <View style={[styles.settingsGlyph, isDark && styles.settingsGlyphDark]}>
+                  <Ionicons
+                    name={row.icon}
+                    size={20}
+                    color={isDark ? colors.gold : colors.textMuted}
+                  />
+                </View>
+                <View style={styles.settingsCopy}>
+                  <Text style={styles.settingsLabel}>{row.label}</Text>
+                  <Text style={styles.settingsSub}>{row.sub}</Text>
+                </View>
                 <Ionicons name="chevron-forward" size={18} color={colors.textSubtle} />
               </Pressable>
-            )}
+            ))}
           </Card>
-
-          {/* Deliberately NOT a Button like Log out below — same pill shape
-              and secondary styling made a moderation action (bans other
-              users, cancels their jobs) look like a twin of "sign out of
-              your own account", with nothing to stop a mis-tap. Boxed off,
-              amber-tinted, and icon-led instead so it reads as a different
-              category of action, not a routine one. */}
-          {profile?.is_admin && (
-            <Pressable
-              style={styles.adminCard}
-              onPress={() => navigation.navigate('AdminReports')}
-            >
-              <Text style={styles.adminEyebrow}>Admin</Text>
-              <View style={styles.adminRow}>
-                <Ionicons name="shield-checkmark-outline" size={20} color={colors.warning} />
-                <Text style={styles.adminLabel}>Review reports</Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.warning} />
-              </View>
-            </Pressable>
-          )}
-
-          {/* Destructive styling only — handleLogout, its confirmation, and
-              where it lands are all unchanged. */}
-          <Button
-            title="Log out"
-            variant="destructive"
-            icon="log-out-outline"
-            onPress={handleLogout}
-            loading={loggingOut}
-          />
-
-          {/* App Store Guideline 5.1.1(v) — account deletion has to be
-              initiable from inside the app. Deliberately a plain row rather
-              than a second destructive Button: two red pills stacked make
-              "sign out" and "delete forever" read as the same weight of
-              decision, and the consequences are not remotely the same. The
-              screen it opens is where the warning and the confirmation
-              live. */}
-          <Pressable
-            style={({ pressed }) => [styles.deleteRow, pressed && styles.deleteRowPressed]}
-            onPress={() => navigation.navigate('DeleteAccount')}
-            accessibilityRole="button"
-            accessibilityLabel="Delete account"
-          >
-            <Ionicons name="trash-outline" size={18} color={colors.danger} />
-            <Text style={styles.deleteLabel}>Delete account</Text>
-            <Ionicons name="chevron-forward" size={16} color={colors.danger} />
-          </Pressable>
         </ScrollView>
       )}
 
@@ -1106,26 +1066,125 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '400',
     color: colors.textMuted,
   },
-  settingsTitle: {
-    fontSize: 17,
+  // Master 45's hub card and its chips.
+  hubCard: {
+    gap: spacing.sm,
+    padding: spacing.lg,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+  },
+  hubCardDark: { borderColor: colors.border },
+  hubMark: { position: 'absolute', right: -16, top: -20 },
+  hubTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  hubEyebrow: {
+    flexShrink: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    color: colors.gold,
+  },
+  hubTitle: {
+    fontFamily: fonts.display,
+    fontSize: 30,
+    lineHeight: 36,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  hubBody: {
+    fontSize: 15,
+    lineHeight: 21,
+    color: colors.textMuted,
+  },
+  // The short gold rule master 45 sets under the hub copy.
+  hubFlourish: {
+    width: 48,
+    height: 0,
+    marginTop: spacing.xs,
+    borderTopWidth: 2,
+    borderTopColor: colors.gold,
+  },
+  hubChip: {
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 34,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  hubChipPressed: { opacity: 0.82 },
+  hubChipText: {
+    fontSize: 13,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.gold,
+  },
+  squircle: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  squircleDark: {
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  settingsHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
     marginBottom: spacing.xs,
+  },
+  settingsTitle: {
+    fontFamily: fonts.display,
+    fontSize: 24,
+    fontWeight: '700',
+    color: colors.ink,
   },
   settingsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.md,
+    minHeight: 64,
+    paddingVertical: spacing.sm,
   },
   settingsRowDivider: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },
+  settingsGlyph: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.mint,
+  },
+  settingsGlyphDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
+  settingsCopy: { flex: 1, gap: 2 },
   settingsLabel: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.text,
+    fontFamily: fonts.display,
+    fontSize: 19,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  settingsSub: {
+    fontSize: 13,
+    color: colors.textMuted,
   },
   deleteRow: {
     flexDirection: 'row',

@@ -185,17 +185,21 @@ test('[static] no file under screens/ imports ui/tokens.ts directly', async () =
 // ---------------------------------------------------------------------------
 
 test('[static] Profile → Appearance is typed, registered, and applies through setPreference', async () => {
-  const [routes, stacks, profile, screen] = await Promise.all([
+  const [routes, stacks, hub, accountSafety, screen] = await Promise.all([
     read('lib/navigation.ts'),
     read('navigation/sharedStacks.tsx'),
     read('screens/ProfileScreen.tsx'),
+    read('screens/AccountSafetyScreen.tsx'),
     read('screens/AppearanceScreen.tsx'),
   ]);
 
   // Typed on the Profile stack, registered once, reachable from a Profile row.
+  // Since the golden-master split (decision 10) that row is on the account &
+  // safety page, which the hub's "Account" chip opens.
   assert.match(routes, /Appearance: undefined;/);
   assert.match(stacks, /<ProfileStack\.Screen name="Appearance" component=\{AppearanceScreen\} \/>/);
-  assert.match(profile, /navigation\.navigate\('Appearance'\)/);
+  assert.match(hub, /navigation\.navigate\('AccountSafety'\)/);
+  assert.match(accountSafety, /navigation\.navigate\('Appearance'\)/);
 
   // The screen offers exactly the three preferences by their labels and
   // indicates the current one; a tap goes through the provider's one

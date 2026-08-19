@@ -30,6 +30,8 @@ import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
+import { AccountSafetyScreen } from '../screens/AccountSafetyScreen';
+import { ProfileDetailsScreen } from '../screens/ProfileDetailsScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 import { ReviewAndTipScreen } from '../screens/ReviewAndTipScreen';
 import { SavedWorkersScreen } from '../screens/SavedWorkersScreen';
@@ -135,6 +137,11 @@ export function ProfileStackNavigator() {
   return (
     <ProfileStack.Navigator screenOptions={{ headerShown: false }}>
       <ProfileStack.Screen name="ProfileMain" component={ProfileScreen} />
+      {/* Decision 10 — the profile area is three pages, not one. Registered
+          on the SHARED profile stack, so both trees mount them identically
+          and cross-tree navigation stays a compile error. */}
+      <ProfileStack.Screen name="ProfileDetails" component={ProfileDetailsScreen} />
+      <ProfileStack.Screen name="AccountSafety" component={AccountSafetyScreen} />
       <ProfileStack.Screen name="AdminReports" component={AdminReportsScreen} />
       <ProfileStack.Screen
         name="NotificationSettings"

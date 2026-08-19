@@ -157,12 +157,19 @@ test('the deletion screen says what is kept, not only what is removed', async ()
 });
 
 test('the entry point is on the Profile surface and the route is registered once', async () => {
-  const [profile, stacks, navTypes] = await Promise.all([
+  const [hub, accountSafety, stacks, navTypes] = await Promise.all([
     read('screens/ProfileScreen.tsx'),
+    read('screens/AccountSafetyScreen.tsx'),
     read('navigation/sharedStacks.tsx'),
     read('lib/navigation.ts'),
   ]);
-  assert.match(profile, /navigation\.navigate\('DeleteAccount'\)/);
+  // The Profile SURFACE is three pages since the golden-master split
+  // (decision 10): the hub, its details page, and its account & safety page.
+  // Deletion lives on the last of those, which the hub's "Account" chip
+  // opens — so the guarantee is that the surface reaches it, not that one
+  // particular file spells the dispatch.
+  assert.match(hub, /navigation\.navigate\('AccountSafety'\)/);
+  assert.match(accountSafety, /navigation\.navigate\('DeleteAccount'\)/);
   assert.match(stacks, /name="DeleteAccount" component=\{DeleteAccountScreen\}/);
   assert.match(navTypes, /DeleteAccount: undefined;/);
   // One registration only — the screen belongs to the shared Profile stack,
