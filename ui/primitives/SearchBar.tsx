@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import {
   Pressable,
   StyleSheet,
@@ -8,8 +9,16 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { controls, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
+import {
+  controls,
+  radius,
+  spacing,
+  withAlpha,
+  type EmeraldPalette,
+  type as typeScale,
+} from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { voiceSearch, type VoiceHoldSession } from '../../lib/voiceSearch';
 
 /**
  * The shared search field (§I).
@@ -22,6 +31,15 @@ import { themedStyles, useThemeColors } from '../../lib/theme';
  * Passing `onPress` renders the same shape as a button instead of an input —
  * the Home-screen case, where the field is an affordance that pushes a
  * dedicated search route rather than something you type into in place.
+ *
+ * Voice search (4D-4 Block 2): a press-and-hold mic, rendered ONLY when
+ * lib/voiceSearch reports the on-device recognizer available — on any other
+ * binary or platform it is simply absent (no error state, no disabled ghost).
+ * The recognized phrase arrives through the SAME `onChangeText` contract as
+ * typed text, so consumers need no change and there is no second write path.
+ * Hold to listen, release to stop and commit — the shape the iOS permission
+ * string promises ("only while you hold the mic button"), enforced by the
+ * boundary's hold session. `disableVoiceSearch` opts a call site out.
  */
 
 type SearchBarProps = {
@@ -35,6 +53,8 @@ type SearchBarProps = {
   autoFocus?: boolean;
   style?: StyleProp<ViewStyle>;
   accessibilityLabel?: string;
+  /** Opt out of the press-and-hold mic. Present by default when available. */
+  disableVoiceSearch?: boolean;
 };
 
 export function SearchBar({
@@ -46,9 +66,52 @@ export function SearchBar({
   autoFocus = false,
   style,
   accessibilityLabel,
+  disableVoiceSearch = false,
 }: SearchBarProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+
+  // False until the boundary affirms on-device recognition on THIS binary;
+  // every degraded case leaves the mic unrendered rather than disabled.
+  const [voiceReady, setVoiceReady] = useState(false);
+  const [listening, setListening] = useState(false);
+  const sessionRef = useRef<VoiceHoldSession | null>(null);
+  const isButton = onPress != null;
+
+  useEffect(() => {
+    if (disableVoiceSearch || isButton) return;
+    let alive = true;
+    void voiceSearch.getAvailability().then((availability) => {
+      if (alive) setVoiceReady(availability.status === 'available');
+    });
+    return () => {
+      alive = false;
+    };
+  }, [disableVoiceSearch, isButton]);
+
+  // An unmount mid-hold tears the session down without committing.
+  useEffect(() => {
+    return () => {
+      sessionRef.current?.cancel();
+    };
+  }, []);
+
+  const startVoiceHold = () => {
+    if (sessionRef.current) return;
+    setListening(true);
+    sessionRef.current = voiceSearch.beginHold({
+      // The transcript's one egress: the exact path typed text takes.
+      onTranscript: onChangeText,
+      onEnd: () => {
+        sessionRef.current = null;
+        setListening(false);
+      },
+    });
+  };
+
+  const endVoiceHold = () => {
+    sessionRef.current?.release();
+  };
   if (onPress) {
     return (
       <Pressable
@@ -99,6 +162,26 @@ export function SearchBar({
           <Ionicons name="close-circle" size={18} color={colors.navInactive} />
         </Pressable>
       ) : null}
+      {voiceReady && !disableVoiceSearch ? (
+        <Pressable
+          // Hold-to-talk, deliberately press-in/press-out and never onPress:
+          // a tap-to-toggle would let listening outlive the touch, which the
+          // permission string rules out.
+          onPressIn={startVoiceHold}
+          onPressOut={endVoiceHold}
+          // 20pt glyph + 4pt padding + 8pt slop lands on the 44pt floor.
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Hold to search by voice"
+          style={[styles.mic, listening && styles.micListening]}
+        >
+          <Ionicons
+            name={listening ? 'mic' : 'mic-outline'}
+            size={20}
+            color={listening ? colors.emerald : colors.navInactive}
+          />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -134,6 +217,15 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   placeholder: {
     color: colors.muted,
+  },
+  mic: {
+    padding: spacing.xs,
+    borderRadius: radius.pill,
+  },
+  micListening: {
+    // A quiet emerald wash marks "listening now" in both palettes; the
+    // colour is a palette read, the alpha a per-surface opacity.
+    backgroundColor: withAlpha(colors.emerald, 0.15),
   },
   }),
 );

@@ -466,6 +466,68 @@ test('[static] app.json registers the plugin with the two verbatim usage strings
   });
 });
 
+// ===========================================================================
+// The SearchBar mic (commit 9) — hold-to-talk behind the onChangeText
+// contract, scanned as source facts (the component cannot render here).
+// ===========================================================================
+
+const searchBar = read('ui/primitives/SearchBar.tsx');
+const searchBarCode = stripCommentsForScan(searchBar);
+
+test('[static] voice text arrives through onChangeText and no second write path exists', () => {
+  // The transcript handler IS the typed-text callback — not a wrapper that
+  // could store, log, or fork the phrase.
+  assert.match(searchBarCode, /onTranscript: onChangeText,/);
+  // One hold entry point, and the recognized phrase never drives submit:
+  // typed text does not auto-submit, so neither may voice.
+  assert.equal(searchBarCode.match(/beginHold\(/g)?.length, 1);
+  assert.doesNotMatch(searchBarCode, /onSubmit\(\)/);
+  assert.equal(
+    (searchBarCode.match(/\bonSubmit\b/g) ?? []).length,
+    3,
+    'onSubmit appears as prop type, destructure, and onSubmitEditing only'
+  );
+  // Still fully controlled: no internal copy of the query text exists.
+  assert.doesNotMatch(searchBarCode, /useState<string>|useState\(''\)|useState\(value\)/);
+});
+
+test('[static] the mic renders only when the boundary reports available, absent otherwise', () => {
+  assert.match(searchBarCode, /const \[voiceReady, setVoiceReady\] = useState\(false\)/);
+  assert.match(searchBarCode, /availability\.status === 'available'/);
+  assert.match(searchBarCode, /\{voiceReady && !disableVoiceSearch \? \(/);
+  // Unavailable means ABSENT: no disabled state, no ghost, no banner.
+  assert.doesNotMatch(searchBarCode, /disabled=|ghost|unavailable/i);
+});
+
+test('[static] the opt-out prop suppresses the mic and defaults to present', () => {
+  assert.match(searchBar, /disableVoiceSearch\?: boolean;/);
+  assert.match(searchBarCode, /disableVoiceSearch = false,/);
+  // Opting out also skips the availability probe, not just the render.
+  assert.match(searchBarCode, /if \(disableVoiceSearch \|\| isButton\) return;/);
+});
+
+test('[static] hold-to-talk is press-in/press-out — no tap-to-toggle, no continuous mode', () => {
+  assert.match(searchBarCode, /onPressIn=\{startVoiceHold\}/);
+  assert.match(searchBarCode, /onPressOut=\{endVoiceHold\}/);
+  // The hold handlers are bound nowhere else — especially not to onPress.
+  assert.doesNotMatch(searchBarCode, /onPress=\{startVoiceHold\}|onPress=\{endVoiceHold\}/);
+  assert.doesNotMatch(searchBarCode, /toggle/i);
+  // Release maps to release(), unmount to cancel() — never a re-start.
+  assert.match(searchBarCode, /sessionRef\.current\?\.release\(\);/);
+  assert.match(searchBarCode, /sessionRef\.current\?\.cancel\(\);/);
+});
+
+test('[static] the mic is palette-fed and holds the 44pt touch floor', () => {
+  // Both mic states read the resolved palette (tests/themeResolution.test.mjs
+  // separately guarantees no raw literal anywhere in ui/).
+  assert.match(searchBarCode, /color=\{listening \? colors\.emerald : colors\.navInactive\}/);
+  assert.match(searchBarCode, /withAlpha\(colors\.emerald, 0\.15\)/);
+  // 20pt glyph + spacing.xs (4pt) padding + 8pt hitSlop = 44pt effective.
+  assert.match(searchBarCode, /hitSlop=\{8\}/);
+  assert.match(searchBarCode, /size=\{20\}/);
+  assert.match(searchBarCode, /padding: spacing\.xs,/);
+});
+
 test('[static] the installed plugin resolves those options into the two Info.plist keys', () => {
   // The installed package is the authority (dispatch): its root app.plugin.js
   // assigns each option onto config.ios.infoPlist, options winning over any
