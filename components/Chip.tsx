@@ -8,7 +8,14 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  selectedInDark,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -68,13 +75,19 @@ export function Chip({
   const styles = stylesFor(colors);
   const small = size === 'sm';
   const isFilter = variant === 'filter';
+  // emerald D6: ONE selected treatment in dark — gold outline, gold label, no
+  // fill. Light keeps each variant's Heritage selected state untouched.
+  const chosen = selectedInDark(colors);
+  const goldSelected = selected && isDark;
 
   // Resolved once, so the icon and the label can never disagree about which
   // variant is being rendered. Prestige (master 44 / cross-cutting chip
   // vocabulary): in dark, service chips are sage with a GREEN glyph and a
   // CREAM label (master 44 draws them that way), and gold-outline chips
   // carry a gold glyph + cream label; light keeps the Heritage forest.
-  const iconColor = selected
+  const iconColor = goldSelected
+    ? chosen.line
+    : selected
     ? (isFilter ? colors.onForest : colors.onPrimary)
     : variant === 'service'
       ? (isDark ? colors.emerald : colors.forest)
@@ -86,7 +99,9 @@ export function Chip({
             ? (accentColor ?? colors.ink)
             : (accentColor ?? colors.textMuted);
 
-  const labelColor = selected
+  const labelColor = goldSelected
+    ? chosen.line
+    : selected
     ? (isFilter ? colors.onForest : colors.onPrimary)
     : variant === 'service'
       ? (isDark ? colors.ink : colors.forest)
@@ -123,13 +138,14 @@ export function Chip({
     // Order matters: the filter variant's own selected fill has to win over
     // both its unselected sage and `default`'s primary fill.
     selected && (isFilter ? styles.chipFilterSelected : styles.chipSelected),
-    // Dark device pass: mint and forest are two dark greens, so a selected
-    // distance chip was invisible beside its unselected neighbours. The
-    // selected chip takes the gold outline masters 12 and 33 draw on exactly
-    // this control ("Within 5 miles"), which is the same selection strength
-    // the radius segment and the filter-sheet radios already carry. Fill is
-    // unchanged, so gold stays line-work; light keeps its Heritage pair.
-    selected && isFilter && isDark && styles.chipFilterSelectedDark,
+    // emerald D6 — the ONE selected treatment in dark, replacing three: the
+    // distance chip's gold outline (which masters 12 and 33 already drew), the
+    // default variant's `primary` fill and the filter variant's forest fill.
+    // Gold line, gold label, NO fill, so gold stays line-work and a chosen
+    // chip reads as a step up from its neighbours rather than as a different
+    // colour. Applied last so it wins over every variant's own selected fill;
+    // light keeps each variant's Heritage pair untouched.
+    goldSelected && { backgroundColor: chosen.fill, borderColor: chosen.line },
     style,
   ];
 
@@ -195,9 +211,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   chipFilterSelected: {
     backgroundColor: colors.forest,
     borderColor: colors.forest,
-  },
-  chipFilterSelectedDark: {
-    borderColor: colors.gold,
   },
   pressed: {
     opacity: 0.85,

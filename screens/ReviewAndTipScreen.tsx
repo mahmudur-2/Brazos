@@ -39,6 +39,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  selectedInDark,
 } from '../lib/theme';
 
 /** Round tip suggestions, in cents. Presets, not a fee schedule — the
@@ -266,7 +267,11 @@ export function ReviewAndTipScreen() {
                     {TIP_PRESETS_CENTS.map((cents) => (
                       <Pressable
                         key={cents}
-                        style={[styles.preset, tipChoice === cents && styles.presetActive]}
+                        style={[
+                          styles.preset,
+                          tipChoice === cents &&
+                            (isDark ? styles.presetActiveDark : styles.presetActive),
+                        ]}
                         onPress={() => setTipChoice(tipChoice === cents ? null : cents)}
                         accessibilityRole="button"
                         accessibilityState={{ selected: tipChoice === cents }}
@@ -274,7 +279,8 @@ export function ReviewAndTipScreen() {
                         <Text
                           style={[
                             styles.presetText,
-                            tipChoice === cents && styles.presetTextActive,
+                            tipChoice === cents &&
+                              (isDark ? styles.presetTextActiveDark : styles.presetTextActive),
                           ]}
                         >
                           {formatBudget(cents)}
@@ -282,7 +288,11 @@ export function ReviewAndTipScreen() {
                       </Pressable>
                     ))}
                     <Pressable
-                      style={[styles.preset, tipChoice === 'custom' && styles.presetActive]}
+                      style={[
+                        styles.preset,
+                        tipChoice === 'custom' &&
+                          (isDark ? styles.presetActiveDark : styles.presetActive),
+                      ]}
                       onPress={() => setTipChoice(tipChoice === 'custom' ? null : 'custom')}
                       accessibilityRole="button"
                       accessibilityState={{ selected: tipChoice === 'custom' }}
@@ -290,7 +300,8 @@ export function ReviewAndTipScreen() {
                       <Text
                         style={[
                           styles.presetText,
-                          tipChoice === 'custom' && styles.presetTextActive,
+                          tipChoice === 'custom' &&
+                            (isDark ? styles.presetTextActiveDark : styles.presetTextActive),
                         ]}
                       >
                         Other
@@ -411,6 +422,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.emerald,
     backgroundColor: colors.mint,
   },
+  // emerald D6: one selection treatment — gold line, gold label, no fill.
+  presetActiveDark: {
+    borderColor: selectedInDark(colors).line,
+    backgroundColor: selectedInDark(colors).fill,
+  },
   presetText: {
     fontSize: 15,
     fontWeight: '700',
@@ -418,6 +434,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   presetTextActive: {
     color: colors.emerald,
+  },
+  presetTextActiveDark: {
+    color: selectedInDark(colors).line,
   },
   customInput: {
     borderWidth: 1,

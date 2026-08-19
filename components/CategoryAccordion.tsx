@@ -2,7 +2,14 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SKILL_CATEGORIES } from '../lib/skillCategories';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  disabledControl,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 type CategoryAccordionProps = {
   selected: string[];
@@ -189,8 +196,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // emerald D7: decision 3's flat neutral fill, not an opacity dim over the
+  // conversion green — a dead control must not read as a paler live one.
   otherAddBtnDisabled: {
-    opacity: 0.4,
+    backgroundColor: disabledControl(colors).backgroundColor,
   },
   }),
 );

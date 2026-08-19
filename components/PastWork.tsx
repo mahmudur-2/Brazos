@@ -23,7 +23,14 @@ import {
   type PortfolioItem,
 } from '../lib/portfolio';
 import { confirmAsync } from '../lib/dialog';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  selectedInDark,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 type PastWorkProps = {
   workerId: string;
@@ -227,11 +234,18 @@ function FilterTab({
   active: boolean;
   onPress: () => void;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
-    <Pressable onPress={onPress} style={[styles.tab, active && styles.tabActive]}>
-      <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
+    <Pressable
+      onPress={onPress}
+      style={[styles.tab, active && (isDark ? styles.tabActiveDark : styles.tabActive)]}
+    >
+      <Text
+        style={[styles.tabText, active && (isDark ? styles.tabTextActiveDark : styles.tabTextActive)]}
+      >
+        {label}
+      </Text>
     </Pressable>
   );
 }
@@ -297,6 +311,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   tabActive: {
     backgroundColor: colors.primary,
   },
+  // emerald D6: in dark the chosen tab is a gold outline over the bare ground,
+  // not a filled pill — one selection treatment app-wide. Light keeps the
+  // Heritage filled pill.
+  tabActiveDark: {
+    backgroundColor: selectedInDark(colors).fill,
+    borderWidth: 1,
+    borderColor: selectedInDark(colors).line,
+  },
   tabText: {
     fontSize: 12,
     fontWeight: '700',
@@ -304,6 +326,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   tabTextActive: {
     color: colors.onPrimary,
+  },
+  tabTextActiveDark: {
+    color: selectedInDark(colors).line,
   },
   galleryScroll: {
     marginTop: spacing.md,

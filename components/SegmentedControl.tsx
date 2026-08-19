@@ -1,5 +1,13 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { fonts, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  selectedInDark,
+  spacing,
+  useThemeColors,
+  withAlpha,
+  type ColorPalette,
+} from '../lib/theme';
 
 type Option<T extends string> = { label: string; value: T };
 
@@ -26,6 +34,13 @@ export function SegmentedControl<T extends string>({
   // keeps its Heritage hairline) and speaks the serif; inactive cells stay
   // bare muted sans. Structure is the same in both themes.
   const activeBorder = isDark ? withAlpha(palette.gold, 0.55) : palette.border;
+  // emerald D6: the chosen segment's LABEL is gold too, not just its hairline.
+  // Master 23 draws the flat/ask pill — this exact control — that way, and it
+  // is the same treatment every other chosen chip, pill and radio now carries.
+  // The active cell keeps its surface fill: unlike a chip, a segment's fill is
+  // what separates it from the bare cells beside it, so removing it would
+  // erase the control rather than restyle it.
+  const activeLabel = isDark ? selectedInDark(palette).line : palette.text;
   return (
     <View style={styles.container} accessibilityRole="tablist">
       {options.map((option) => {
@@ -53,7 +68,7 @@ export function SegmentedControl<T extends string>({
               style={[
                 styles.label,
                 { color: palette.textMuted },
-                selected && [styles.labelSelected, { color: palette.text }],
+                selected && [styles.labelSelected, { color: activeLabel }],
               ]}
               numberOfLines={1}
             >

@@ -14,7 +14,14 @@ import {
   formatBudget,
   type JobCategory,
 } from '../lib/jobs';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  selectedInDark,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /** Preset budget floors — round numbers a worker actually thinks in. */
 const MIN_BUDGET_PRESETS_CENTS = [2500, 5000, 10000] as const;
@@ -77,12 +84,22 @@ export function JobFilterSheet({
             return (
               <Pressable
                 key={category}
-                style={[styles.chip, isDark && styles.chipDark, active && styles.chipActive]}
+                style={[
+                  styles.chip,
+                  isDark && styles.chipDark,
+                  active && (isDark ? styles.chipActiveDark : styles.chipActive),
+                ]}
                 onPress={() => toggleCategory(category)}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
               >
-                <Text style={[styles.chipText, isDark && styles.chipTextDark, active && styles.chipTextActive]}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    isDark && styles.chipTextDark,
+                    active && (isDark ? styles.chipTextActiveDark : styles.chipTextActive),
+                  ]}
+                >
                   {JOB_CATEGORY_LABELS[category]}
                 </Text>
               </Pressable>
@@ -100,7 +117,11 @@ export function JobFilterSheet({
             return (
               <Pressable
                 key={cents}
-                style={[styles.chip, isDark && styles.chipDark, active && styles.chipActive]}
+                style={[
+                  styles.chip,
+                  isDark && styles.chipDark,
+                  active && (isDark ? styles.chipActiveDark : styles.chipActive),
+                ]}
                 onPress={() =>
                   setDraft((prev) => ({
                     ...prev,
@@ -110,7 +131,13 @@ export function JobFilterSheet({
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
               >
-                <Text style={[styles.chipText, isDark && styles.chipTextDark, active && styles.chipTextActive]}>
+                <Text
+                  style={[
+                    styles.chipText,
+                    isDark && styles.chipTextDark,
+                    active && (isDark ? styles.chipTextActiveDark : styles.chipTextActive),
+                  ]}
+                >
                   {formatBudget(cents)}+
                 </Text>
               </Pressable>
@@ -135,12 +162,27 @@ export function JobFilterSheet({
               accessibilityRole="radio"
               accessibilityState={{ selected: active }}
             >
-              {/* Gold in both radio states under dark (master 11); light keeps
-                  the Heritage emerald-when-chosen. */}
-              <View style={[styles.radio, isDark ? styles.radioDark : active && styles.radioActive]}>
-                {active ? <View style={styles.radioDot} /> : null}
+              {/* Gold in both radio states under dark (master 11); the chosen
+                  one takes the full-strength line and a gold dot (emerald D6).
+                  Light keeps the Heritage emerald-when-chosen. */}
+              <View
+                style={[
+                  styles.radio,
+                  isDark ? styles.radioDark : null,
+                  active && (isDark ? styles.radioActiveDark : styles.radioActive),
+                ]}
+              >
+                {active ? (
+                  <View style={[styles.radioDot, isDark && styles.radioDotDark]} />
+                ) : null}
               </View>
-              <Text style={[styles.sortLabel, isDark && styles.sortLabelDark, active && styles.sortLabelActive]}>
+              <Text
+                style={[
+                  styles.sortLabel,
+                  isDark && styles.sortLabelDark,
+                  active && (isDark ? styles.sortLabelActiveDark : styles.sortLabelActive),
+                ]}
+              >
                 {option.label}
               </Text>
             </Pressable>
@@ -200,15 +242,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     minHeight: 36,
     justifyContent: 'center',
   },
-  // Unselected pills are gold line-work with a cream label (master 11);
-  // selected keeps the sage fill so the two states stay obviously different.
+  // emerald D6: the group sits on the hairline tier and the CHOSEN pill takes
+  // the full-strength gold line and label. Before this, every pill in the row
+  // carried the same full gold border and the chosen one was told apart by an
+  // emerald edge and a sage fill — two dark greens on a near-black ground.
   chipDark: {
-    borderColor: colors.gold,
+    borderColor: selectedInDark(colors).idleLine,
     backgroundColor: 'transparent',
   },
   chipActive: {
     borderColor: colors.emerald,
     backgroundColor: colors.mint,
+  },
+  chipActiveDark: {
+    borderColor: selectedInDark(colors).line,
+    backgroundColor: selectedInDark(colors).fill,
   },
   chipText: {
     fontSize: 13,
@@ -218,6 +266,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   chipTextDark: { color: colors.ink },
   chipTextActive: {
     color: colors.emerald,
+  },
+  chipTextActiveDark: {
+    color: selectedInDark(colors).line,
   },
   hint: {
     fontSize: 12,
@@ -242,18 +293,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Master 11's radio: a gold ring in EVERY state, gold-filled when chosen.
   // The ring is what makes the row read as a radio at all, so unlike the
-  // chips it does not go dim when unselected.
+  // chips it does not go dim when unselected — but emerald D6 still gives the
+  // chosen one the full-strength line and a gold dot, so the ring and the dot
+  // speak the same language as every other selection in the app.
   radioDark: {
-    borderColor: colors.gold,
+    borderColor: selectedInDark(colors).idleLine,
   },
   radioActive: {
     borderColor: colors.emerald,
+  },
+  radioActiveDark: {
+    borderColor: selectedInDark(colors).line,
   },
   radioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.emerald,
+  },
+  radioDotDark: {
+    backgroundColor: selectedInDark(colors).line,
   },
   sortLabel: {
     fontSize: 15,
@@ -263,6 +322,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   sortLabelDark: { color: colors.ink },
   sortLabelActive: {
     color: colors.ink,
+  },
+  sortLabelActiveDark: {
+    color: selectedInDark(colors).line,
   },
   actions: {
     flexDirection: 'row',

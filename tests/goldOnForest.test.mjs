@@ -153,3 +153,124 @@ test('[static] the HotspotMap pin is master 33: forest fill, ONE gold hairline, 
   // The count itself already sat on onForest — that stays.
   assert.match(source, /pinCount: \{\s*color: colors\.onForest/);
 });
+
+// ===========================================================================
+// emerald D6 / D7 — ONE selected treatment, ONE disabled treatment
+// ===========================================================================
+//
+// Masters 11, 23 and 24 draw selection the same way and the app drew it three:
+// a gold outline on the distance chips, EMERALD on the service-category chips,
+// the filter-sheet chips and radios, the tip presets, the portfolio chips, the
+// report reasons, the past-work tabs and the flat/ask pill — which master 23
+// draws gold — and a `primary` FILL on several of those. In dark, `mint` and
+// `emerald` sit close together on a near-black ground, so half of them barely
+// read as chosen at all.
+//
+// D6 collapses that to one: full-strength gold line, gold label, no fill. D7
+// does the same for the other end of the range — a disabled control is a flat
+// neutral fill with muted text and no border, never an opacity dim over the
+// conversion green.
+//
+// Light is deliberately untouched by both: every control keeps the Heritage
+// state it already had, which is why each call site reads
+// `active && (isDark ? …Dark : …)` rather than replacing the light branch.
+
+/** A top-level function's source, from its declaration to its closing brace. */
+function functionBody(source, declaration) {
+  const start = source.indexOf(declaration);
+  assert.ok(start >= 0, `expected ${declaration} in lib/theme.ts`);
+  const end = source.indexOf('\n}', start);
+  assert.ok(end > start, `${declaration} must be a top-level function`);
+  return source.slice(start, end + 2);
+}
+
+/** Every surface emerald D6 converted, with the style keys it converted. */
+const D6_SURFACES = [
+  ['components/Chip.tsx', ['chosen.line', 'chosen.fill']],
+  ['components/SegmentedControl.tsx', ['activeLabel']],
+  ['components/JobFilterSheet.tsx', ['chipActiveDark', 'radioActiveDark', 'sortLabelActiveDark']],
+  ['components/PortfolioPicker.tsx', ['categoryChipSelectedDark']],
+  ['components/PastWork.tsx', ['tabActiveDark', 'tabTextActiveDark']],
+  ['components/ReportDialog.tsx', ['reasonSelectedDark', 'reasonTextSelectedDark']],
+  ['screens/ServicesPricingScreen.tsx', ['categoryChipActiveDark']],
+  ['screens/ApproveOrDisputeScreen.tsx', ['reasonRowActiveDark', 'radioActiveDark']],
+  ['screens/ReviewAndTipScreen.tsx', ['presetActiveDark', 'presetTextActiveDark']],
+  ['screens/MyJobsHubScreen.tsx', ['tabLabelSelectedDark']],
+];
+
+test('[static] selection in dark resolves through ONE helper, everywhere', () => {
+  const theme = stripComments(read('lib/theme.ts'));
+
+  // The helper exists and says what D6 says: full gold for the chosen option,
+  // NO fill (gold is line-work), and the hairline tier for the rest of the
+  // group so "chosen" is a step up rather than a different colour.
+  assert.match(theme, /export function selectedInDark\(palette: ColorPalette\)/);
+  const helper = functionBody(theme, 'export function selectedInDark');
+  assert.match(helper, /line: palette\.gold,/);
+  assert.match(helper, /fill: 'transparent',/);
+  assert.match(helper, /idleLine: alpha\(palette\.gold, 0\.35\),/);
+  // Light is not expressed in it at all — no isDark, no second branch — which
+  // is what keeps every Heritage selected state byte-identical.
+  assert.doesNotMatch(helper, /isDark|\?/);
+
+  for (const [file, keys] of D6_SURFACES) {
+    const source = stripComments(read(file));
+    assert.match(
+      source,
+      /selectedInDark\(/,
+      `${file} must take its selected colour from the one helper`
+    );
+    for (const key of keys) {
+      assert.ok(
+        source.includes(key),
+        `${file} must still carry its ${key} selected treatment`
+      );
+    }
+    // The light branch survives beside it: a call site that replaced rather
+    // than added would have dropped the conditional.
+    if (file !== 'components/Chip.tsx' && file !== 'components/SegmentedControl.tsx') {
+      // Two shapes are in use and both are fine: the ternary that swaps the
+      // light style for the dark one, and the AND chain that layers the dark
+      // one on top of it. What matters is that a LIGHT branch still exists.
+      assert.match(
+        source,
+        /isDark\s*\?\s*styles\.\w+\s*:\s*styles\.\w+|&&\s*isDark\s*&&\s*styles\.\w*(?:Active|Selected)Dark/,
+        `${file} must branch on isDark rather than repaint light`
+      );
+    }
+  }
+});
+
+test('[static] disabled is a neutral fill, never an opacity dim on a live colour', () => {
+  const theme = stripComments(read('lib/theme.ts'));
+  assert.match(theme, /export function disabledControl\(palette: ColorPalette\)/);
+  const helper = functionBody(theme, 'export function disabledControl');
+  assert.match(helper, /backgroundColor: palette\.neutralBg,/);
+  assert.match(helper, /borderColor: 'transparent',/);
+  assert.match(helper, /color: palette\.textMuted,/);
+
+  // The two hand-rolled BUTTONS that never went through the primitive. Icon
+  // buttons (ChatComposer's mic/send) and whole-group dimmers (OfferComposer's
+  // chipGroups) are deliberately out of scope: neither is a filled control, so
+  // "flat neutral fill" has nothing to say about them.
+  for (const file of [
+    'screens/ServicesPricingScreen.tsx',
+    'components/CategoryAccordion.tsx',
+  ]) {
+    const source = stripComments(read(file));
+    assert.match(source, /disabledControl\(colors\)/, `${file} must use the one disabled rule`);
+    assert.doesNotMatch(
+      source,
+      /Disabled: \{\s*opacity:/,
+      `${file} must not dim a live fill instead of replacing it`
+    );
+  }
+  // The pale sage "Add service" fill is gone: the enabled state is the
+  // standard conversion fill now.
+  const services = stripComments(read('screens/ServicesPricingScreen.tsx'));
+  const start = services.indexOf('  addButton: {');
+  assert.ok(start >= 0, 'expected the Add service button style');
+  const addButton = services.slice(start, services.indexOf('\n  },', start));
+  assert.match(addButton, /backgroundColor: colors\.primary/);
+  assert.doesNotMatch(addButton, /colors\.emerald/);
+});

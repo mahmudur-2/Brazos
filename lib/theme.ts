@@ -341,6 +341,60 @@ export function starColors(palette: ColorPalette, isDark: boolean) {
 }
 
 /**
+ * THE one "this option is chosen" treatment in dark (emerald D6).
+ *
+ * Masters 11, 23 and 24 draw selection the same way and the app did not: a
+ * gold outline on the distance chips, but EMERALD on the service-category
+ * chips, the filter-sheet chips and radios, the tip presets, the report
+ * reasons and the flat/ask pill — which master 23 draws gold. Two vocabularies
+ * for one idea, and in dark the emerald one barely reads, because `mint` and
+ * `emerald` sit close together on a near-black ground.
+ *
+ * One treatment: a full-strength gold line and a gold label for the chosen
+ * option, no fill (gold is line-work — decision 3, enforced by
+ * tests/goldOnForest.test.mjs), and the rest of the group on the hairline tier
+ * so "chosen" reads as a step UP rather than as a different colour.
+ *
+ * LIGHT IS NOT EXPRESSED HERE AT ALL. Every control keeps the Heritage
+ * selected state it already had, so a caller applies this behind `isDark &&`
+ * and the light rendering stays byte-identical. Like `authSurface()`,
+ * `starColors()` and `emeraldColorsFor()`, this is a function of the resolved
+ * palette rather than a new token surface.
+ */
+export function selectedInDark(palette: ColorPalette) {
+  return {
+    /** The chosen option's outline, and its label and glyph. */
+    line: palette.gold,
+    /** Gold never fills a control, so a chosen option carries no fill. */
+    fill: 'transparent',
+    /** The other options in the same group — the manifest's measured hairline
+     *  tier, so a group of outlined chips still has a clear winner. */
+    idleLine: alpha(palette.gold, 0.35),
+  } as const;
+}
+
+/**
+ * THE one disabled treatment (emerald D7, restating decision 3).
+ *
+ * A flat neutral fill, muted text, NO border — in every variant, so a dead
+ * control can never keep wearing the conversion green, and so enabled and
+ * disabled are told apart by their FILL rather than by an opacity dim that
+ * fades a green button into a paler green button. `components/Button.tsx` has
+ * carried this inline since 0c; this is the same rule, exported, for the
+ * hand-rolled controls that never went through the primitive.
+ *
+ * The enabled side of the pair is not here: standard controls keep the gold
+ * hairline the dark pass gave them, which is what makes the two unmistakable.
+ */
+export function disabledControl(palette: ColorPalette) {
+  return {
+    backgroundColor: palette.neutralBg,
+    borderColor: 'transparent',
+    color: palette.textMuted,
+  } as const;
+}
+
+/**
  * `typography` above bakes the LIGHT text colors in at module scope (its
  * values predate theming). Swept screens that spread those styles take them
  * from here instead, colored by the resolved palette; the sizes and weights

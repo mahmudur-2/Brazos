@@ -44,6 +44,7 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  selectedInDark,
 } from '../lib/theme';
 
 const OTHER_KEY = '__other__';
@@ -410,7 +411,8 @@ export function PortfolioPicker({
                       onPress={() => setCategory(c)}
                       style={[
                         styles.categoryChip,
-                        category === c && styles.categoryChipSelected,
+                        category === c &&
+                          (isDark ? styles.categoryChipSelectedDark : styles.categoryChipSelected),
                       ]}
                     >
                       <Ionicons
@@ -430,7 +432,10 @@ export function PortfolioPicker({
                       <Text
                         style={[
                           styles.categoryChipText,
-                          category === c && styles.categoryChipTextSelected,
+                          category === c &&
+                            (isDark
+                              ? styles.categoryChipTextSelectedDark
+                              : styles.categoryChipTextSelected),
                         ]}
                       >
                         {JOB_CATEGORY_LABELS[c]}
@@ -441,7 +446,8 @@ export function PortfolioPicker({
                     onPress={() => setCategory(OTHER_KEY)}
                     style={[
                       styles.categoryChip,
-                      category === OTHER_KEY && styles.categoryChipSelected,
+                      category === OTHER_KEY &&
+                        (isDark ? styles.categoryChipSelectedDark : styles.categoryChipSelected),
                     ]}
                   >
                     <Ionicons
@@ -452,7 +458,10 @@ export function PortfolioPicker({
                     <Text
                       style={[
                         styles.categoryChipText,
-                        category === OTHER_KEY && styles.categoryChipTextSelected,
+                        category === OTHER_KEY &&
+                          (isDark
+                            ? styles.categoryChipTextSelectedDark
+                            : styles.categoryChipTextSelected),
                       ]}
                     >
                       Other
@@ -714,6 +723,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
+  // emerald D6: one selection treatment — gold line, gold label, no fill.
+  categoryChipSelectedDark: {
+    backgroundColor: selectedInDark(colors).fill,
+    borderColor: selectedInDark(colors).line,
+  },
   categoryChipText: {
     fontSize: 12,
     fontWeight: '600',
@@ -721,6 +735,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   categoryChipTextSelected: {
     color: colors.onPrimary,
+  },
+  categoryChipTextSelectedDark: {
+    color: selectedInDark(colors).line,
   },
   customCategoryInput: {
     borderWidth: 1,

@@ -22,6 +22,7 @@ import {
   useThemeColors,
   withAlpha,
   type ColorPalette,
+  selectedInDark,
 } from '../lib/theme';
 
 type ReportDialogProps = {
@@ -113,12 +114,16 @@ export function ReportDialog({
                     <Pressable
                       key={r.value}
                       onPress={() => setReason(r.value)}
-                      style={[styles.reason, selected && styles.reasonSelected]}
+                      style={[
+                        styles.reason,
+                        selected && (isDark ? styles.reasonSelectedDark : styles.reasonSelected),
+                      ]}
                     >
                       <Text
                         style={[
                           styles.reasonText,
-                          selected && styles.reasonTextSelected,
+                          selected &&
+                            (isDark ? styles.reasonTextSelectedDark : styles.reasonTextSelected),
                         ]}
                       >
                         {r.label}
@@ -220,6 +225,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.primary,
     backgroundColor: colors.primarySoft,
   },
+  // emerald D6: one selection treatment — gold line, gold label, no fill.
+  reasonSelectedDark: {
+    borderColor: selectedInDark(colors).line,
+    backgroundColor: selectedInDark(colors).fill,
+  },
   reasonText: {
     fontSize: 15,
     fontWeight: '600',
@@ -227,6 +237,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   reasonTextSelected: {
     color: colors.primary,
+  },
+  reasonTextSelectedDark: {
+    color: selectedInDark(colors).line,
   },
   multiline: {
     height: 84,

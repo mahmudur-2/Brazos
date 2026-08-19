@@ -33,7 +33,14 @@ import {
 } from '../lib/disputes';
 import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  selectedInDark,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * Screen 36 — Approve or report an issue (Phase 6, customer side).
@@ -308,13 +315,23 @@ export function ApproveOrDisputeScreen() {
             {DISPUTE_REASONS.map((r) => (
               <Pressable
                 key={r}
-                style={[styles.reasonRow, reason === r && styles.reasonRowActive]}
+                style={[
+                  styles.reasonRow,
+                  reason === r && (isDark ? styles.reasonRowActiveDark : styles.reasonRowActive),
+                ]}
                 onPress={() => setReason(r)}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: reason === r }}
               >
-                <View style={[styles.radio, reason === r && styles.radioActive]}>
-                  {reason === r ? <View style={styles.radioDot} /> : null}
+                <View
+                  style={[
+                    styles.radio,
+                    reason === r && (isDark ? styles.radioActiveDark : styles.radioActive),
+                  ]}
+                >
+                  {reason === r ? (
+                    <View style={[styles.radioDot, isDark && styles.radioDotDark]} />
+                  ) : null}
                 </View>
                 <Text style={styles.reasonLabel}>{DISPUTE_REASON_LABELS[r]}</Text>
               </Pressable>
@@ -494,6 +511,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.emerald,
     backgroundColor: colors.mint,
   },
+  // emerald D6: one selection treatment — gold line, gold dot, no fill.
+  reasonRowActiveDark: {
+    borderColor: selectedInDark(colors).line,
+    backgroundColor: selectedInDark(colors).fill,
+  },
   radio: {
     width: 22,
     height: 22,
@@ -506,11 +528,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   radioActive: {
     borderColor: colors.emerald,
   },
+  radioActiveDark: {
+    borderColor: selectedInDark(colors).line,
+  },
   radioDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.emerald,
+  },
+  radioDotDark: {
+    backgroundColor: selectedInDark(colors).line,
   },
   reasonLabel: {
     flex: 1,

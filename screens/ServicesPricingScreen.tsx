@@ -30,6 +30,8 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  disabledControl,
+  selectedInDark,
 } from '../lib/theme';
 
 /**
@@ -334,7 +336,8 @@ export function ServicesPricingScreen() {
               style={[
                 styles.categoryChip,
                 isDark && styles.categoryChipDark,
-                category === c && styles.categoryChipActive,
+                category === c &&
+                  (isDark ? styles.categoryChipActiveDark : styles.categoryChipActive),
               ]}
               onPress={() => setCategory(c)}
               accessibilityRole="button"
@@ -344,7 +347,8 @@ export function ServicesPricingScreen() {
                 style={[
                   styles.categoryChipText,
                   isDark && styles.categoryChipTextDark,
-                  category === c && styles.categoryChipTextActive,
+                  category === c &&
+                    (isDark ? styles.categoryChipTextActiveDark : styles.categoryChipTextActive),
                 ]}
               >
                 {JOB_CATEGORY_LABELS[c]}
@@ -359,7 +363,9 @@ export function ServicesPricingScreen() {
           accessibilityRole="button"
           accessibilityLabel="Add service"
         >
-          <Text style={styles.addButtonText}>{adding ? 'Adding…' : 'Add service'}</Text>
+          <Text style={[styles.addButtonText, !canAdd && styles.addButtonTextDisabled]}>
+            {adding ? 'Adding…' : 'Add service'}
+          </Text>
         </Pressable>
       </View>
     </FormScreen>
@@ -484,13 +490,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  // emerald D6: the group sits on the hairline tier and the CHOSEN chip takes
+  // the full-strength gold line and label. Every chip in the row used to carry
+  // the same full gold border, with the chosen one told apart by an emerald
+  // edge and a sage fill — two dark greens on a near-black ground.
   categoryChipDark: {
-    borderColor: colors.gold,
+    borderColor: selectedInDark(colors).idleLine,
     backgroundColor: 'transparent',
   },
   categoryChipActive: {
     borderColor: colors.emerald,
     backgroundColor: colors.mint,
+  },
+  categoryChipActiveDark: {
+    borderColor: selectedInDark(colors).line,
+    backgroundColor: selectedInDark(colors).fill,
   },
   categoryChipText: {
     fontSize: 12,
@@ -501,20 +515,34 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   categoryChipTextActive: {
     color: colors.emerald,
   },
+  categoryChipTextActiveDark: {
+    color: selectedInDark(colors).line,
+  },
+  // emerald D7. This carried `colors.emerald` — in the dark palette a pale
+  // sage (#5FAE81) that reads as a light-mode leftover beside every other
+  // conversion control, which is `primary` — and expressed DISABLED as
+  // `opacity: 0.5` over it, so a dead button was just a paler sage button.
+  // Now: the standard conversion fill when enabled, and decision 3's flat
+  // neutral fill with muted text and NO border when not.
   addButton: {
     minHeight: 48,
     borderRadius: radius.lg,
-    backgroundColor: colors.emerald,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
   addButtonDisabled: {
-    opacity: 0.5,
+    backgroundColor: disabledControl(colors).backgroundColor,
+    borderColor: disabledControl(colors).borderColor,
+    borderWidth: 0,
   },
   addButtonText: {
     fontSize: 15,
     fontWeight: '800',
     color: colors.onPrimary,
+  },
+  addButtonTextDisabled: {
+    color: disabledControl(colors).color,
   },
   }),
 );

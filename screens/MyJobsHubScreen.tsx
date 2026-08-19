@@ -39,6 +39,7 @@ import {
   themedStyles,
   useThemeColors,
   type ColorPalette,
+  selectedInDark,
 } from '../lib/theme';
 import { formatTimeAgo } from '../lib/time';
 
@@ -644,7 +645,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   tabLabelSelectedDark: {
     fontFamily: fonts.display,
     fontSize: 16,
-    color: colors.ink,
+    // emerald D6: the chosen segment's LABEL is gold, not just its hairline —
+    // the same treatment every chip, pill and radio now carries.
+    color: selectedInDark(colors).line,
   },
   center: {
     flex: 1,
