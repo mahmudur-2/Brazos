@@ -403,3 +403,591 @@ Tests that moved, and why each is still guarding something TRUE:
   profile split.
 
 Nothing was left red, and no assertion was weakened to pass.
+
+---
+
+# Dark device pass 2026-08-19
+
+A second campaign, on top of the completed golden-master run above. A DARK-mode
+pass on a physical iPhone found what a static comparison could not: controls
+whose two states resolve to the same dark smudge, scrims that lighten instead of
+dim, and screens with no master that never received the shared conversions.
+
+Prefixes are `fidelity(1)` … `fidelity(7)`. This section is the live record;
+it is committed once, at `fidelity(7)`.
+
+## Standing rules for this campaign
+
+- **Light is frozen (D10).** Every fix resolves under the dark palette only.
+  Shared components branch on `isDark` and the light value stays byte-identical.
+  Two stated exceptions: D3 (the customer centre [+], structural) and commit 5's
+  artwork gate. Anything that cannot be scoped to dark without restructuring is
+  skipped and handed to the light run.
+- **Authority unchanged:** PNG > manifest > this report > the dispatch's
+  pre-made decisions > CLAUDE.md. Where this campaign's decisions contradict the
+  golden-master run above, they are recorded here as deliberate operator
+  deviations, not as corrections.
+- **Money (D8) is settled and untouched.** Owner-facing cream, marketplace-facing
+  emerald, `MoneyText` as 0c shipped it.
+
+## Base gate — session 1
+
+branch `mainexpo`, HEAD 04410c2, `56f1ae0` ancestor OK, tree CLEAN. Baseline
+bare `npm run verify`: **755 pass / 0 fail / 0 skipped, exit 0**. No
+`fidelity(N)` prefix present, so the run starts at 1.
+
+Verify mechanics for the whole campaign: `npm run verify` with stdout REDIRECTED
+to a file (`> file 2>&1`), never piped. A redirect leaves `$?` as verify's own
+exit code; a pipe would have masked it. Exit codes below are read that way.
+
+## `fidelity(1)` — shared controls, dark branch only
+
+`npm run verify`: **755 pass / 0 fail / 0 skipped, exit 0**.
+
+- **D1, the toggle.** `ui/primitives/Toggle.tsx` — ON track is now
+  `palette.emerald` (the token Worker Home's potential-earnings figure carries)
+  and OFF is `palette.danger` (master 43's offline dot). Knob unchanged: cream in
+  dark, white in light. Light ON was already emerald and light OFF keeps
+  `border`, so the light rendering does not move at all. **Deliberate deviation
+  from decision 7 and from the set's "no master uses a red control" note** — the
+  operator's call, recorded: OFF is a fact a worker must be able to read at a
+  glance ("Not visible to customers"), and master 43 pairs that exact fact with
+  that exact red two rows below. The gold rim on the ON state is KEPT — D1 names
+  the two track colours and the knob, not the rim, and it is what ties the
+  control to the card hairlines around it.
+- **Enabled vs disabled buttons.** `components/Button.tsx` — the standard
+  (secondary) control's hairline was `palette.border`, which in dark is the FLAT
+  equivalent of dim gold (`#55482E`); against the disabled fill's edge it was
+  the same non-colour, so the two states read alike. It is now real gold at the
+  top of the manifest's own measured hairline tier, `withAlpha(gold, 0.55)` —
+  the identical expression `SegmentedControl`'s active cell already uses, so the
+  app has one gold-hairline strength rather than two. **Neither rule changed:**
+  enabled standard is still surface + gold hairline + cream serif (decision 3),
+  disabled is still flat `neutralBg` + `textMuted` + no border. Light keeps
+  `border`.
+- **D7, the scrims — applied as the RULE, not only to the two named surfaces.**
+  The dispatch names the All-services sheet and the Filter-jobs sheet.
+  `ui/primitives/Sheet.tsx` (which the filter sheet is built on) and
+  `components/ServicePickerSheet.tsx` (the all-services sheet) both scrimmed with
+  `withAlpha(ink|text, 0.4x)` — and `ink`/`text` IS THE CREAM in the dark
+  palette, so the one expression that dims in light lightens in dark. The same
+  literal expression was found in five more shared modals: `ActionSheet`,
+  `AmountPrompt`, `ConfirmDialog`, `ReactionPicker`, `ReportDialog`. All seven
+  now take `withAlpha(background, 0.7)` under `isDark`; light is byte-identical
+  in all seven. **Judgment call on the record:** D7 states a rule ("modal scrims
+  darken") and five more scrims were the identical defect in the same shared
+  layer — fixing only the two named would have left the rule false on the next
+  modal the operator opened. `components/PhotoViewer.tsx` is deliberately NOT
+  touched (a lightbox is black in both themes, by convention).
+  `components/CountryPicker.tsx` is deliberately NOT touched: it is the auth
+  surface, its scrim is a raw literal already allow-listed in
+  tests/themeResolution.test.mjs because its token home is the frozen
+  `lib/authTheme.ts` — handed to the light run.
+- **One star treatment.** A rating star was being drawn four different ways:
+  the `star` token (an orange-gold) on four screens, Prestige `gold` on two, the
+  neutral `border` for an empty star, and on Saved & past workers a bare `★`
+  INSIDE the meta sentence, inheriting its grey — which is the defect the device
+  pass saw. `lib/theme.ts` gains `starColors(palette, isDark)`, a function of the
+  resolved palette in the established `emeraldColorsFor()` / `authSurface()`
+  shape (not a new token surface). Dark: filled `gold`, empty `gold @ 45%` (an
+  outlined star, never an absent one — master 27 draws both states in one row).
+  Light: `star` and `border`, exactly as now. Repointed:
+  `components/StarRating.tsx`, `components/OfferCard.tsx`,
+  `screens/ProfileDetailsScreen.tsx`, `screens/ProfileReviewsScreen.tsx`,
+  `screens/WorkerProfileScreen.tsx`, `screens/WorkerSearchScreen.tsx`,
+  `screens/CompareBidsScreen.tsx`. The three bare-`★`-in-a-sentence sites
+  (`SavedWorkersScreen`, `BidDetailScreen`, `ProfileScreen`) got the glyph split
+  into its own span so it can carry the colour; under D10 those spans go gold in
+  dark and stay muted in light — logged for the light run.
+  - **Not repointed, deliberately:** `CompareBidsScreen`'s "Highest rated" badge
+    glyph (emerald — it is a badge label icon in the live-state green class, not
+    a rating) and `ProfileReviewsScreen`'s no-reviews empty-state
+    `star-outline` (an empty-state illustration, not a score).
+- **Distance chips.** `components/Chip.tsx`, `filter` variant: unselected is
+  `mint` and selected was `forest` — two dark greens, indistinguishable on
+  device. The selected chip now takes a full-strength GOLD OUTLINE in dark,
+  which is what masters 12 and 33 actually draw on this exact control ("Within
+  5 miles" gold-outline pill), and is the same selection strength as the radius
+  segment (gold border) and the filter-sheet radio (gold ring). The FILL is
+  unchanged, so gold stays line-work and tests/goldOnForest.test.mjs's
+  no-gold-fill scan is untouched. Light keeps its Heritage pair.
+- **Worker job detail meta rows.** `screens/JobDetailScreen.tsx` drew its
+  location / budget / arrival rows with `textMuted` line icons. They now take
+  the shared meta treatment prestige(3c) settled on the job cards — gold glyph,
+  cream text in dark; muted pair in light.
+- **Scoping call on the record:** "enabled standard controls" was read as the
+  shared `Button` component, which is what every screen's standard control
+  routes through. Hand-drawn standard-shaped controls inside individual screens
+  are per-screen paint and were left for their own commits — fidelity(4) is
+  explicitly a no-shared-changes commit with four named items.
+
+Landed **fdb379f**. Files: components/{ActionSheet, AmountPrompt, Button, Chip,
+ConfirmDialog, OfferCard, ReactionPicker, ReportDialog, ServicePickerSheet,
+StarRating}.tsx, lib/theme.ts, screens/{BidDetail, CompareBids, JobDetail,
+ProfileDetails, ProfileReviews, Profile, SavedWorkers, WorkerProfile,
+WorkerSearch}Screen.tsx, ui/primitives/{Sheet, Toggle}.tsx.
+
+## `fidelity(2)` — D2, the category tile
+
+`npm run verify`: **755 pass / 0 fail / 0 skipped, exit 0**.
+
+`lib/jobs.ts`'s `JOB_CATEGORY_COLORS` gives every category a saturated accent
+(blue / teal / orange / purple / amber / brown / slate / rose / indigo) that
+predates Prestige. Four surfaces had already been converted during the
+golden-master run — `WorkerJobCard`, `WorkerJobScreen`, `ClientJobDetailScreen`
+and `HomeScreen` all branch to `mint` + gold glyph under `isDark`. Five had not,
+so the same job showed a purple tile on one list and a deep-green one on the
+next. All five now carry the identical dark branch (`mint` fill, `border`
+hairline, `gold` glyph), and the photo path is untouched everywhere — a job with
+media still shows its real upload, never a tile:
+
+- `ui/primitives/JobCard.tsx`
+- `components/BrowseJobCard.tsx`
+- `components/HubCard.tsx` (the My Jobs hub cards, masters 35/36/37)
+- `components/MarketJobPreview.tsx`
+- `screens/JobDetailScreen.tsx` (the worker's job header tile)
+
+- **Judgment call — the two category PICKERS.** `PostJobScreen`'s step-1
+  category chips and `PortfolioPicker`'s category chips are not job tiles, but
+  they tint their GLYPH with the same retired accent, so under dark a purple or
+  orange glyph survived on a mint chip. D2 says the saturated set is retired;
+  leaving those two would have made that false. Both now read gold in dark,
+  Heritage accent in light. PostJob's one line is taken here rather than in
+  fidelity(3) so D2 is resolved in one commit rather than split across two.
+- **Not changed:** `lib/jobs.ts` itself. `JOB_CATEGORY_COLORS` is still the
+  LIGHT palette's category accent and every light branch still reads it — under
+  D10 that stays exactly as it is, and retiring the table outright is a light-run
+  decision, not this run's.
+- **`categoryAccent()` remains the single lookup** for the light branch; no
+  screen grew its own copy of the mapping.
+
+Landed **3653ba7**. Files: components/{BrowseJobCard, HubCard,
+MarketJobPreview, PortfolioPicker}.tsx, screens/{JobDetail, PostJob}Screen.tsx,
+ui/primitives/JobCard.tsx.
+
+## `fidelity(3)` — D4 / D5 / D6, the screens with no master
+
+`npm run verify`: **755 pass / 0 fail / 0 skipped, exit 0**.
+
+The root cause under all of it: `forest` was the Heritage brand green ON CREAM,
+and Prestige v2 made it the one solid FILL. Every place these screens used it as
+CONTENT — a label, a body line, a dashed edge, a glyph — resolved in dark to one
+deep green on another. That is why an unconverted screen does not merely look
+wrong in dark; parts of it disappear.
+
+**D6 — step progress was inverted.** `PostJobScreen`'s `progressLabelActive` was
+`forest` while the inactive labels were `textSubtle`, so the step you were ON
+rendered dimmer than the three you were not. Active now takes the cream `ink` in
+dark — literally the brightest label in the row, which is what D6 asks for.
+Light keeps its Heritage forest.
+
+**D5 — multi-line inputs are not pills.** `components/TextField.tsx` applied
+`radius.pill` to every field, so the description and bio textareas bowed their
+corners away from the text block inside them. `multiline` is now destructured
+and switches the field to the card radius (`radius.lg` = 16, inside D5's 16–20
+band). Shape, not colour, so this lands in BOTH themes as D5 states. It fixes
+five textareas at once: PostJob's Description, Profile's Bio, OfferComposer's
+message, ReportDialog's description and ReviewSection's comment.
+- Not touched: the three raw `TextInput` multi-lines. `ApproveOrDispute`
+  (`radius.lg`) and `PortfolioPicker` (`radius.md`) were never pills, and
+  `ChatComposer`'s message field is a pill BY THE MASTER — 19 draws it that way.
+
+**D4 — the conversions these screens never got.**
+- `screens/AppearanceScreen.tsx`: gold section eyebrow (`THEME`), the icon-tile
+  + serif-label row anatomy of masters 41/45, and a selection mark that is
+  visible — it was `primary`, which under Prestige is the deep forest fill, one
+  step off the card behind it, and is now the live-state emerald in dark.
+  Layout is unchanged: three rows in one card. No sub copy was invented — the
+  screen's own rule ("the screen is the setting") is respected.
+- `screens/PostJobScreen.tsx`: the step eyebrow is gold in dark (eyebrow law —
+  "STEP 2 OF 4" is structure, not state), and the step heading and the
+  edit/hire success heading take `fonts.display`, which decision 9 applies in
+  both themes.
+- Enabled/disabled buttons needed nothing here: every control on these screens
+  already routes through the shared `Button`, which fidelity(1) fixed.
+
+**Muted / secondary text that was unreadable.**
+- `ui/templates/SuccessScreen.tsx` — the check circle drew a `forest` glyph on
+  the `mint` disc, two dark greens, so the mark all but vanished; it keeps the
+  disc, gains the masters' gold ring, and the glyph becomes the live-state
+  emerald (the "green check circle" of masters 15/19/40). The secondary action
+  — the published-job screen's **"Keep browsing"** — was a `forest` label on a
+  `mint` fill and is now decision 3's standard control: surface fill, gold
+  hairline, cream serif. **Shared with `BidSentScreen` and
+  `JobConfirmedScreen`**, which are the same success template and had the same
+  defect; light is byte-identical in all three.
+- `ui/primitives/MediaUploader.tsx` — **the photo and video counters**. The
+  `Photos · 3/10` label, the clip label, the dashed add tile's edge, its glyph
+  and its spinner were all `forest`. Counters and clip labels take cream ink in
+  dark; the line-work (dashed edge, glyphs) takes gold, which is the dashed
+  add-affordance masters 35 and 42 draw.
+- `screens/PostJobScreen.tsx` — **the step-2 privacy notice** ("Media appears
+  with your job… avoid faces, documents, or anything private") was `forest` on
+  the sage card. Cream ink in dark, plus the card's hairline. Same fix for the
+  hire banner, the price-guidance range and the photo nudge, which are the same
+  forest-on-sage class on the same four steps.
+- Already correct, left alone: `fieldHint`, `floorHint`, `guidanceNote`,
+  `stepSubtitle` and `successBody` all use `textMuted`, which IS the dark
+  palette's muted token at the contrast every converted screen uses.
+- **D8 respected:** nothing in this commit recolours a money figure. The review
+  step's price rows and `MoneyText` are untouched.
+
+Landed **a5e6360**. Files: components/TextField.tsx,
+screens/{Appearance, PostJob}Screen.tsx, ui/primitives/MediaUploader.tsx,
+ui/templates/SuccessScreen.tsx.
+
+## `fidelity(4)` — per-screen paint and copy
+
+`npm run verify`: **755 pass / 0 fail / 0 skipped, exit 0**.
+
+Two golden masters were READ AS PIXELS for this commit rather than taken from
+the manifest — `12_job_withinradius_worker_dark.png` and (per the filename
+shuffle) `My_Jobs_Closed_Dark.png`, which actually holds master 35's Active tab.
+
+- **Payment methods, contained.** The first two sections built their own cards;
+  the last two were still riding `DetailScreen`'s `title` + bare-content shape,
+  which draws a heading straight onto the page ground — so on a dark device the
+  screen visibly stopped being a stack of cards halfway down. Both now take the
+  same card the two above use, carrying master 40's own eyebrows
+  (`FUNDING SOURCE`, `SANDBOX LEDGER`) and its serif headings. Master 40's
+  "No real charge" gold pill is still not implemented: prestige(7g) built this
+  screen to that master and this item is about containment, not contents —
+  re-opening the card's inventory would be re-litigating 7g.
+- **One past-work empty state.** The hub (`components/PastWork.tsx`) drew a
+  bare centred block; the details page drew masters 42/45's dashed block; and
+  the same sentence was written two ways ("jobs you've finished" vs "jobs you
+  have finished"), so the account holder met two empty states for one fact.
+  PastWork now draws the masters' dashed block — the same shape
+  `ProfileDetailsScreen`'s `dashed` style already had — and both pages render
+  the one string. The non-editable branch (a visitor on someone else's profile,
+  masters 5/18) takes the same block: it is one empty state, and splitting the
+  border by viewer would recreate the defect.
+- **The budget string — resolved, and NOT as one string. Read this before
+  "fixing" it.** The dispatch names three strings for one state and asks for
+  the masters' form. The masters were read, and they draw TWO forms, by SLOT,
+  consistently:
+  - master 12 (and 43, per the manifest) put **"Open"** in the VALUE slot under
+    the `EST. PAY` eyebrow — the eyebrow already says what the value is about;
+  - master 35 puts **"No budget set"** on a standalone meta line with no money
+    label above it, and leaves that card's price slot EMPTY.
+
+  So the string that has to go is **"Open budget"**, which no master draws
+  anywhere — and, once looked for, a fourth: PostJob's **"Open to bids"**.
+  Picking a single string was not available: "Open" everywhere contradicts
+  master 35 and would put a bare "Open" beside a cash glyph on a screen that
+  also shows an "Open" STATUS pill; "No budget set" everywhere contradicts
+  masters 12 and 43. The PNGs outrank this dispatch's decisions by the stated
+  authority order, so the masters' own rule ships:
+  - value slot under a money eyebrow → `Open` — `ui/primitives/JobCard.tsx`,
+    `components/BrowseJobCard.tsx` (HomeScreen and WorkerJobCard were already
+    correct);
+  - standalone sentence → `No budget set`, which is `formatBudget`'s own
+    string, not a new one — `screens/JobDetailScreen.tsx`,
+    `components/OfferComposer.tsx`, and both of PostJob's "Open to bids".
+
+  `lib/jobs.ts` is untouched; `tests/stage4dInvariants.test.mjs`'s pin on
+  `budgetRangeLabel(null) === 'No budget set'` still holds and was not moved.
+- **Curly quotes.** `How far is "nearby"?` → `How far is “nearby”?` on
+  `screens/NotificationSettingsScreen.tsx`, matching master 39 and the
+  typographic apostrophes the rest of the app's copy already uses.
+
+## `fidelity(5)` — the artwork gate
+
+`npm run verify`: **758 pass / 0 fail / 0 skipped, exit 0** (three new tests;
+755 was the floor, nothing was relaxed to get there).
+
+**The named defect does not exist in the code, and the sweep found no leak.**
+Read the evidence before re-opening this.
+
+`screens/HomeScreen.tsx` already resolves BOTH assets per palette, and has since
+prestige(1a): `source={isDark ? PRESTIGE_HERO_ART : HOME_HERO_ART}` and
+`source={isDark ? PRESTIGE_B_DRAPE : POST_MARK}`. It is a different SHAPE from
+Worker Home's gate — Worker Home renders no artwork at all in light
+(`{isDark ? <Image …/> : null}`), Customer Home swaps to the Heritage crop — but
+it satisfies the same rule, and Appendix C asks exactly that ("dark-only baked
+artwork renders only under the dark palette; light keeps current arrangements").
+
+Every raster the app mounts was inventoried and its background MEASURED, from
+the PNG's IHDR colour type and (for the RGBA ones) a corner-alpha decode:
+
+| Asset | Background | Mounted | Verdict |
+| --- | --- | --- | --- |
+| `prestige/hero_armchair_customer.png` | opaque DARK (RGB, no alpha) | HomeScreen | gated on `isDark` |
+| `prestige/brazos_b_drape.png` | opaque DARK (RGB, no alpha) | HomeScreen | gated on `isDark` |
+| `prestige/hero_toolbox_worker.png` | opaque DARK (RGB, no alpha) | WorkerHomeScreen | gated on `isDark` |
+| `brand/customer-home-chair.png` | opaque LIGHT — corners `#FAF5F1`, the Heritage ground exactly | HomeScreen | light branch only |
+| `brand/customer-home-post-mark-hd.png` | transparent (corner alpha 0) | HomeScreen | no gate owed |
+| `brand/brazos-b-leaf.png` | transparent | BrandLogo | no gate owed |
+| `brand/worker-home-toolbox.png` | transparent | BrowseJobsScreen (locked 48, unmounted) | no gate owed |
+| `brand/transition-{customer,worker}.png` | opaque BRAND deep green + gold mark | ModeTransitionOverlay, both themes | correct in both; see below |
+| `brand/app-icon-v2.png` | brand deep-green tile, transparent corners | LaunchScreen (locked) | an icon, not a palette ground |
+
+- **The transition sheets are deliberately ungated.** The allowlist comments in
+  tests/goldOnForest.test.mjs and tests/themeResolution.test.mjs call them
+  "baked LIGHT PNGs", which reads like a leak — they are not. The sheet is the
+  BRAND's deep green with a gold B and a gold label; it sits correctly over a
+  light app and a dark one. And the whole sheet (background, mark, label,
+  handle, gold line) IS the image, so there is nothing to fall back to without
+  rebuilding it programmatically — which the component deliberately does not do
+  and which "nothing else about light" forbids. Left as is, on the record.
+
+**So the commit ships the guard instead of a repaint,** which is the only
+honest thing left to do for this item: the rule was being kept by hand on two
+screens and by nothing at all tree-wide, so a fourth baked asset could be added
+tomorrow with no gate and nothing would say so. `tests/themeResolution.test.mjs`
+gains three tests:
+1. every raster the app `require`s must be on a roster carrying its measured
+   background — a new asset cannot be merged without a gate decision;
+2. every asset the roster calls opaque-and-baked really has no alpha channel,
+   re-derived from the PNG's IHDR colour type, so the roster cannot rot into a
+   stale comment;
+3. every gated asset is mounted with `isDark` inside the preceding 240
+   characters — comment-stripped, so a docblock that merely MENTIONS the
+   palette can never stand in for a real gate.
+
+The scan asserts it saw at least four real mounts, so it cannot pass vacuously.
+
+## `fidelity(6)` — D3, the centre [ + ] returns
+
+`npm run verify`: **758 pass / 0 fail / 0 skipped, exit 0**.
+
+The customer bar is `Home · Map · [ + ] · My Jobs · Messages · Profile`. The
+five destinations and their order are exactly decision 4's; the action is
+raised between Map and My Jobs, dead centre of the six drawn slots. The WORKER
+bar is untouched and the mode suite now ASSERTS that — `doesNotMatch(workerRoot,
+/CenterCreateButton|name="Create"|ActionSheet/)` — so D3 cannot leak into it.
+
+- **This is a deliberate deviation from the golden-master set, in BOTH themes.**
+  No master draws a centre [ + ]; 0d retired it for exactly that reason and
+  because all three of its actions had standing surfaces. The operator has
+  reversed that half of decision 4. Recorded here so no future run "restores"
+  the five-tab bar on master authority.
+- **The gold is LINE-WORK.** D3 says "the gold center [+]", and a gold FILL
+  would collide with tests/goldOnForest.test.mjs's tree-wide no-gold-fills
+  scan. Per the dispatch's own instruction, it is expressed as line-work
+  instead: the deep-green conversion fill under a gold ring with a gold glyph
+  — the same resolution prestige(4b) reached for the timeline connector, and
+  the shape the set already gives every circular gold control (master 1's inset
+  arrow, 19's send button, 46's back squircle). The scan was not allow-listed
+  and did not need to be. The pre-0d button's fill was `forest`, which under
+  palette v1 WAS the gold; under v2 the ring carries the metal instead.
+- **One rule in both themes.** Gold on forest is correct in both palettes under
+  v2 (goldOnForest's own docblock says so), so the button needs no `isDark`
+  branch — which is right for the one intentionally light-visible change. The
+  pre-0d light treatment (near-black `ink` glyph on light forest) is NOT
+  restored; it was two dark values on each other.
+- **Still an ACTION, not a destination.** `Create` is a route only because
+  React Navigation requires every rendered `Tab.Screen` to be in the param
+  list; its `tabBarButton` replaces the library's pressable outright, its
+  component returns `null`, and nothing navigates to it. The sheet is the
+  existing `ActionSheet` with exactly the three actions it carried before 0d,
+  each dispatched through `navigateAcrossTabs()`, the one guarded cross-tab
+  path.
+- **The sheet is a shortcut, never the only way.** Every standing surface 0d
+  gave those three actions remains, and the suite still pins all three.
+
+### Tests moved, and why each now guards something TRUE
+
+`tests/mode.test.mjs` held the ONLY assertions that encoded the retirement.
+Neither was weakened; both were repointed at what is now true, and both got
+STRONGER:
+- the tab contract asserted `doesNotMatch(customerRoot, /CenterCreateButton|
+  name="Create"|ActionSheet/)`. That pinned a decision the operator has
+  reversed. It now asserts the same thing about the WORKER tree (a real
+  boundary D3 creates and nothing else was guarding), plus the positive
+  contract that Create is an action: `tabBarButton` replaces the pressable and
+  `CreateActionScreen` returns null.
+- "the retired [ + ] actions each keep a standing surface" kept all three
+  surface assertions and gained three more: each sheet action dispatches
+  through `navigateAcrossTabs`, the sheet carries exactly three actions, and
+  nothing navigates to `Create`.
+
+### Master 12 draws one purple category tile — D2 overrules it, deliberately
+
+Worth recording because a future run will see it. `12_job_withinradius_worker_dark.png`
+shows THREE cards: a deep-green tile with a gold hammer, a real uploaded photo,
+and a **purple tile with a gold paw** — which is `JOB_CATEGORY_COLORS.dog_walking`
+(`#7B5CA6`) rendering straight through into the mockup. D2 names this exact case
+("the saturated per-category fills … are unconverted Heritage color, not a
+master's choice") and retires it, and names 12/13/8/16 as the majority form. So
+fidelity(2) deviates from a visible detail of master 12 **on the operator's
+explicit instruction**. Do not "restore" it.
+
+## `fidelity(7)` — the run report and HANDOFF
+
+Docs only. This section and `HANDOFF.md`'s current-state section, committed
+together as the campaign's last commit.
+
+## Dark device pass — verify log
+
+Bare `npm run verify` with stdout redirected to a file (never piped), exit code
+read from `$?`, which a redirect leaves as verify's own.
+
+| commit | result |
+| --- | --- |
+| base gate at 04410c2 | 755 pass / 0 fail / 0 skipped, exit 0 |
+| `fdb379f` fidelity(1) | 755 pass / 0 fail / 0 skipped, exit 0 |
+| `3653ba7` fidelity(2) | 755 pass / 0 fail / 0 skipped, exit 0 |
+| `a5e6360` fidelity(3) | 755 pass / 0 fail / 0 skipped, exit 0 |
+| `4d643ef` fidelity(4) | 755 pass / 0 fail / 0 skipped, exit 0 |
+| `01aa021` fidelity(5) | 758 pass / 0 fail / 0 skipped, exit 0 |
+| `46d765b` fidelity(6) | 758 pass / 0 fail / 0 skipped, exit 0 |
+
+The count rose by three at fidelity(5) — three NEW tests, the artwork-gate
+roster. Nothing was relaxed anywhere in this campaign; the two assertions that
+moved (both in `tests/mode.test.mjs`, at fidelity(6)) were repointed at what the
+operator's own reversal made true and both came back stronger. Details in that
+commit's section above.
+
+## (a) Items skipped, with reasons
+
+1. **fidelity(5)'s named defect — Customer Home's artwork gate.** Not
+   reproducible: `HomeScreen` has resolved both assets per palette since
+   prestige(1a), and the full baked-raster sweep found no asset leaking a
+   wrong-theme ground. The commit shipped the regression guard instead. Full
+   evidence table in the fidelity(5) section.
+2. **Master 40's "No real charge" gold pill** — still not implemented.
+   prestige(7g) built Payment methods to master 40; fidelity(4)'s item is about
+   CONTAINMENT, and re-opening that card's inventory would be re-litigating a
+   landed commit.
+3. **`components/CountryPicker.tsx`'s scrim** — the only modal backdrop left
+   un-darkened. It is the auth surface, its scrim is a raw `rgba()` literal
+   already allow-listed in `tests/themeResolution.test.mjs` because its token
+   home is the frozen `lib/authTheme.ts`, and this run may not modify that file.
+   Handed to the light run.
+4. **`components/PhotoViewer.tsx`'s scrim** — deliberately not touched. A
+   lightbox is black in both themes by convention, which is what it already is.
+5. **The two mode-transition sheets** — deliberately left ungated. Opaque, but
+   their bake is the BRAND deep green with a gold mark, not either palette's
+   ground; and the whole sheet IS the image, so there is nothing to fall back
+   to without rebuilding it programmatically, which "nothing else about light"
+   forbids.
+6. **`PortfolioPicker`'s description textarea (`radius.md` = 12)** — below D5's
+   16–20 band, but it was never a pill, so D5's defect does not apply. Left.
+7. **Hand-drawn standard-shaped controls inside individual screens** — the
+   gold-hairline fix was scoped to the shared `Button`. fidelity(4) is
+   explicitly a no-shared-changes commit with four named items, so per-screen
+   controls were not swept. Worth a pass of its own.
+8. **Nothing was skipped for a money reason (D8)**, for a dependency, for
+   `app.json`, for a locked screen, for `lib/authTheme.ts`, or for a hook or
+   deny rule. No item was skipped for inventing marketplace data.
+
+## (b) Deviations from a golden master introduced by this run
+
+1. **The toggle's OFF track is RED** (`fidelity(1)`, D1). The set's measured
+   palette records that no master uses a red control; master 43's offline dot is
+   the only UI red in all 43. The operator's call, taken because OFF is a fact
+   the worker must read at a glance and the same master pairs that fact with
+   that red two rows below. Dark only.
+2. **The toggle's ON track is EMERALD** (`fidelity(1)`, D1), superseding
+   decision 7's mint track. Dark only; light was already emerald.
+3. **The saturated per-category tile fills are retired in dark**
+   (`fidelity(2)`, D2) — including the purple `dog_walking` tile master 12
+   visibly draws. Operator instruction; see the section above.
+4. **The centre [ + ] exists** (`fidelity(6)`, D3). No master draws one. Both
+   themes, structural, and the single intentional light-visible change of this
+   run.
+5. **The [ + ] is gold LINE-WORK, not a gold fill** — a deviation from D3's own
+   wording, taken because decision 3 forbids gold fills and the dispatch's
+   acceptance gate names line-work as the remedy rather than an allowlist.
+6. **The budget string resolves to TWO forms, not one** (`fidelity(4)`) — a
+   deviation from that item's "use it everywhere", taken because a single
+   string cannot satisfy both master 12/43 and master 35, and the PNGs outrank
+   the dispatch. The masters' own by-slot rule ships; the un-mastered "Open
+   budget" and "Open to bids" are gone.
+7. **D7 applied to seven modals, not the two named** (`fidelity(1)`) — an
+   extension, not a contradiction: five more shared modals carried the identical
+   inverted-scrim expression.
+
+Everything else in this run moved code TOWARD a master or toward a rule the
+masters already establish.
+
+## (c) THE LIGHT AUDIT HANDOFF LIST — the next run's scope
+
+Every entry below is a place where the light palette's value is either
+deliberately frozen, or was changed in both themes by an earlier commit and has
+never been looked at on a device under light. This list is meant to be audited
+from directly, without rediscovery.
+
+### C1 — shared components this run touched that carry a light branch
+
+| Component | What light renders today | Why it needs looking at |
+| --- | --- | --- |
+| `ui/primitives/Toggle.tsx` | ON `emerald` track, OFF `border` track, `white` knob, NO gold rim | Dark now signals OFF in red. Light signals it only by a pale grey track — the weakest state read in the app. |
+| `components/Button.tsx` (secondary) | border `palette.border` (#DDD6C4) | Dark got a real gold hairline because enabled and disabled were indistinguishable. Check the same pair on ivory: `neutralBg` #EDE7DA vs `surface` #FFFFFF is a small step. |
+| `ui/primitives/Sheet.tsx` | scrim `withAlpha(ink, 0.45)` | Correct in light (ink is near-black). Listed so the pair is audited together. |
+| `components/ServicePickerSheet.tsx` | scrim `withAlpha(ink, 0.42)` | as above |
+| `components/{ActionSheet, AmountPrompt, ConfirmDialog, ReactionPicker, ReportDialog}.tsx` | scrim `withAlpha(text, 0.35–0.45)` | as above — five more, all correct in light, all now branched |
+| `components/CountryPicker.tsx` | raw `rgba(11,32,25,0.42)` scrim | **NOT branched.** Auth surface, allow-listed literal, frozen `authTheme` token home. The one modal still un-darkened in dark. |
+| `lib/theme.ts` `starColors()` | filled `star` #F59E0B, empty `border` | Dark went to the Prestige gold. Light keeps an orange-gold that belongs to no palette table — decide whether light should take `brand.gold` #C8A15B. |
+| `components/Chip.tsx` `filter` variant | selected = `forest` fill + `forest` border | Dark gained a gold outline because mint and forest were the same dark green. Light's mint is pale, so the pair reads — confirm on device. |
+| `screens/JobDetailScreen.tsx` meta rows | `textMuted` glyphs and text | Dark took the shared gold-glyph/cream-text treatment. Light keeps the muted pair. |
+| `ui/templates/SuccessScreen.tsx` | glyph `forest` on `mint` disc, no ring; secondary = `mint` fill + `secondaryBorder` + `forest` label | Both were unreadable in dark and are branched now. Light's pair is the Heritage one and untouched. |
+| `ui/primitives/MediaUploader.tsx` | counter, clip label, dashed edge, glyph and spinner all `forest` | Dark split these into cream content and gold line-work. Light keeps `forest` throughout. |
+| `screens/PostJobScreen.tsx` | eyebrow `emerald`; active step `forest`; hire banner / guidance range / photo nudge `forest` on sage | Every one of these was invisible in dark and is branched. Light keeps forest-on-sage — legible, but never audited. |
+| `screens/AppearanceScreen.tsx` | eyebrow `textMuted`, tile `mint` + `primary` glyph, check `primary` | New anatomy this run. Light's eyebrow is muted where dark's is gold. |
+| `components/{BrowseJobCard, HubCard, MarketJobPreview, PortfolioPicker}.tsx`, `ui/primitives/JobCard.tsx`, `screens/{JobDetail, PostJob}Screen.tsx` | `JOB_CATEGORY_COLORS` — the saturated per-category palette | See D10 item L1. |
+
+### C2 — items deferred under D10 (dark fixed, light deliberately left)
+
+- **L1. `lib/jobs.ts`'s `JOB_CATEGORY_COLORS` is now a LIGHT-ONLY table.** D2
+  retired the saturated fills in dark; every light branch still reads them, and
+  the table itself was not touched. Decide whether light keeps eleven category
+  colours or joins the one-tile rule. This is the single largest light decision
+  outstanding.
+- **L2. The three bare-`★` meta spans** — `SavedWorkersScreen`,
+  `BidDetailScreen`, `ProfileScreen`. Their glyph goes gold in dark and stays
+  the meta line's muted grey in light. That is the exact defect the dark pass
+  reported, still present in light by instruction.
+- **L3. `components/CountryPicker.tsx`'s scrim** (C1) — needs `lib/authTheme.ts`
+  to unfreeze before its literal can move into tokens.
+- **L4. `assets/brand/customer-home-chair.png` bakes `#FAF5F1`**, the current
+  `homeBackground`, as an OPAQUE background. It is invisible today because the
+  two match exactly. Any change to light's home ground turns it into a visible
+  rectangle. The new roster test in `tests/themeResolution.test.mjs` records the
+  measurement; it cannot catch a palette change.
+- **L5. The mode-transition sheets** are ungated by decision (skip 5 above).
+  If the light run ever wants a per-theme sheet, it is new artwork, not a gate.
+
+### C3 — changed in BOTH themes by prestige(0c)/(1c)/(0d)/(7a), never seen under light
+
+These predate this run. The prompt names them and they are the rest of the
+light run's scope.
+
+- **The shared `Toggle`** (0c) — three RN `Switch`es collapsed into one drawn
+  control. Light's ON-track went to emerald (the majority Heritage choice) and
+  the knob to `white`; the 44pt floor is met by `hitSlop` over a 32pt track.
+  Nothing about it has been seen on a device in light.
+- **The disabled-button treatment** (0c) — `neutralBg` + `textMuted` with no
+  border replaced the old 0.5-opacity dimming **in both themes**, as a stated
+  global control rule. Light's #EDE7DA fill under muted text is the half of
+  that change nobody has looked at.
+- **Serif screen headers** (1c) — `ScreenHeader` titles took `fonts.display` in
+  both trees and both themes; every later batch inherited it. Its back chevron
+  is `palette.text` in light and gold in dark.
+- **Segmented tabs** (0c, refined 7i) — separated cells instead of a filled
+  well, and the ACTIVE label speaks the serif in both themes. Only the active
+  border branches (`border` in light, gold @55% in dark).
+- **Both steppers** (4a, 4b) — the horizontal `JobProgress` and TrackWorker's
+  vertical timeline. Light keeps the Heritage filled dot in both, but the
+  STRUCTURE (node sizes, connector as a border, the pending ring) changed for
+  both themes.
+- **The floating nav pill, both trees** (0d) — floats by MARGINS in normal
+  layout flow, the home indicator lives in the bottom gap, and the active tint
+  is EMERALD in both themes (light's forest→emerald shift was called
+  near-invisible at glyph size — verify that claim on a device). The glow is
+  dark-only. Note the customer bar now has six slots, not five (D3) — check the
+  labels still fit under light's type at large accessibility sizes.
+- **The three profile pages** (7a) — `ProfileScreen` (hub, master 45),
+  `ProfileDetailsScreen` (42) and `AccountSafetyScreen` (41). New navigation
+  and new anatomy in both themes; light has never been walked through it.
+- **`components/Avatar.tsx`** (0c) — gold ring and gold initials in dark, the
+  Heritage fill in light. Included because every list on the profile and
+  messaging surfaces renders it.
+
+### C4 — theme-neutral changes this run made (no light debt, listed for completeness)
+
+`TextField`'s multi-line card radius (D5), `PastWork`'s dashed empty block,
+Payment methods' two new section cards, the budget-string unification, the curly
+quotes in the notification-radius heading, `AppearanceScreen`'s serif row label,
+`PostJobScreen`'s serif headings, and the centre [ + ] itself.
