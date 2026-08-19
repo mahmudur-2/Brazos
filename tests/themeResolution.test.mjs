@@ -234,7 +234,9 @@ const LITERAL_FILE_ALLOWLIST = {
   // LOCKED screens (CLAUDE.md "Locked — never modify"): stay light by operator
   // decision; their literals move when the operator unlocks them.
   'screens/LaunchScreen.tsx': 'LOCKED screen',
-  'screens/WelcomeScreen.tsx': 'LOCKED screen',
+  // Welcome, Create account and Email create account are golden masters 2, 3
+  // and 4: converted to useThemeColors, so they hold no literals and need no
+  // allowance. Every other auth screen has no master and stays as it is.
   'screens/SignInScreen.tsx': 'LOCKED screen',
   'screens/EmailSignInScreen.tsx': 'LOCKED screen',
   'screens/CreateAccountScreen.tsx': 'LOCKED screen',

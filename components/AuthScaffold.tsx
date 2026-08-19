@@ -11,6 +11,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authSurface, fonts, useThemeColors } from '../lib/theme';
 import { AuthBackdrop, type AuthBackdropVariant } from './AuthBackdrop';
 
 type AuthScaffoldProps = PropsWithChildren<{
@@ -29,6 +30,12 @@ type AuthScaffoldProps = PropsWithChildren<{
    * behind their inputs.
    */
   backdrop?: AuthBackdropVariant;
+  /**
+   * Opt in to the Prestige mapping (masters 2/3/4 only). Absent, the shell
+   * renders exactly the Heritage ivory it always has — which is what every
+   * other auth screen still gets.
+   */
+  themed?: boolean;
 }>;
 
 /**
@@ -48,16 +55,22 @@ export function AuthScaffold({
   titleVariant = 'default',
   onBack,
   backdrop,
+  themed = false,
   children,
 }: AuthScaffoldProps) {
   const showTopBar = Boolean(title || onBack);
+  const { palette, isDark } = useThemeColors();
+  const surface = authSurface(palette, isDark);
+  // Masters 3 and 4 draw the back chevron gold and the bar title in the serif;
+  // untouched screens keep the ink chevron and the sans title.
+  const chevronColor = themed ? surface.accent : authColors.ink;
 
   return (
     // The ivory fill and the artwork live outside the safe area, so the art
     // runs to the physical edges of the screen rather than stopping at the
     // status bar inset.
-    <View style={styles.root}>
-      {backdrop ? <AuthBackdrop variant={backdrop} /> : null}
+    <View style={[styles.root, themed && { backgroundColor: surface.bg }]}>
+      {backdrop ? <AuthBackdrop variant={backdrop} themed={themed} /> : null}
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
         <KeyboardAvoidingView
@@ -78,7 +91,7 @@ export function AuthScaffold({
                     accessibilityRole="button"
                     accessibilityLabel="Go back"
                   >
-                    <Ionicons name="chevron-back" size={22} color={authColors.ink} />
+                    <Ionicons name="chevron-back" size={22} color={chevronColor} />
                   </Pressable>
                 ) : (
                   <View style={styles.iconButton} />
@@ -87,6 +100,8 @@ export function AuthScaffold({
                   style={[
                     styles.topTitle,
                     titleVariant === 'large' && styles.topTitleLarge,
+                    themed && styles.topTitleSerif,
+                    themed && { color: surface.ink },
                   ]}
                   numberOfLines={1}
                 >
@@ -159,6 +174,11 @@ const styles = StyleSheet.create({
   },
   topTitleLarge: {
     ...authType.navTitleLarge,
+  },
+  topTitleSerif: {
+    fontFamily: fonts.display,
+    fontSize: 21,
+    fontWeight: '600',
   },
   contentContainer: {
     flexGrow: 1,

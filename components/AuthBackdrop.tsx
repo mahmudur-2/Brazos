@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { authColors } from '../lib/authTheme';
+import { useThemeColors, withAlpha } from '../lib/theme';
 
 /**
  * The decorative contour art behind the ivory auth screens.
@@ -36,23 +37,63 @@ type Ring = {
  * strongest stroke and the rest fade out, so a cluster reads as one shape
  * dissolving rather than as a stack of identical rings.
  */
-function contour(cx: number, cy: number, base: number, step: number, count: number): Ring[] {
+function contour(
+  cx: number,
+  cy: number,
+  base: number,
+  step: number,
+  count: number,
+  strokes: Strokes
+): Ring[] {
   return Array.from({ length: count }, (_, i) => ({
     size: base + step * i,
     cx,
     cy,
-    color: i < 2 ? authColors.artLine : authColors.artLineFaint,
+    color: i < 2 ? strokes.line : strokes.faint,
   }));
 }
 
 /** A circle sized so its top edge lands at `top` — i.e. a shallow wide sweep. */
-function sweep(cx: number, top: number, size: number): Ring {
-  return { size, cx, cy: top + size / 2, color: authColors.artLineGold };
+function sweep(cx: number, top: number, size: number, strokes: Strokes): Ring {
+  return { size, cx, cy: top + size / 2, color: strokes.gold };
 }
 
-export function AuthBackdrop({ variant = 'soft' }: { variant?: AuthBackdropVariant }) {
+type Strokes = { line: string; faint: string; gold: string; wash: string };
+
+/**
+ * Masters 2/3/4 draw these arcs as gold hairlines over near-black. `themed`
+ * is the same opt-in the rest of the auth surface takes: absent, or in light,
+ * the Heritage ivory contour is unchanged.
+ */
+export function AuthBackdrop({
+  variant = 'soft',
+  themed = false,
+}: {
+  variant?: AuthBackdropVariant;
+  themed?: boolean;
+}) {
   const { width, height } = useWindowDimensions();
+  const { palette, isDark } = useThemeColors();
   const full = variant === 'full';
+  // Memoised so the ring list below keeps a stable dependency — a fresh
+  // object every render would defeat its own useMemo.
+  const strokes = useMemo<Strokes>(
+    () =>
+      themed && isDark
+        ? {
+            line: withAlpha(palette.gold, 0.3),
+            faint: withAlpha(palette.gold, 0.14),
+            gold: withAlpha(palette.gold, 0.18),
+            wash: withAlpha(palette.forest, 0.34),
+          }
+        : {
+            line: authColors.artLine,
+            faint: authColors.artLineFaint,
+            gold: authColors.artLineGold,
+            wash: authColors.artWash,
+          },
+    [isDark, palette.forest, palette.gold, themed]
+  );
 
   // The corner cluster, anchored just past the top-right so only each circle's
   // lower-left quadrant is on screen. `soft` is pulled tighter and further out
@@ -63,18 +104,35 @@ export function AuthBackdrop({ variant = 'soft' }: { variant?: AuthBackdropVaria
     : { cx: width * 1.04, cy: -height * 0.05, base: width * 0.42, step: width * 0.16, count: 3, wash: width * 0.75 };
 
   const rings = useMemo<Ring[]>(() => {
-    const list = contour(anchor.cx, anchor.cy, anchor.base, anchor.step, anchor.count);
+    const list = contour(
+      anchor.cx,
+      anchor.cy,
+      anchor.base,
+      anchor.step,
+      anchor.count,
+      strokes
+    );
 
     if (full) {
       // Two long, shallow sweeps through Welcome's empty mid-band — the lower
       // counterweight to the corner cluster, and the only place a full-width
       // line can cross without passing under something the user has to read.
-      list.push(sweep(width * 0.5, height * 0.7, width * 2.6));
-      list.push(sweep(width * 0.32, height * 0.77, width * 2.9));
+      list.push(sweep(width * 0.5, height * 0.7, width * 2.6, strokes));
+      list.push(sweep(width * 0.32, height * 0.77, width * 2.9, strokes));
     }
 
     return list;
-  }, [anchor.base, anchor.count, anchor.cx, anchor.cy, anchor.step, full, height, width]);
+  }, [
+    anchor.base,
+    anchor.count,
+    anchor.cx,
+    anchor.cy,
+    anchor.step,
+    full,
+    height,
+    strokes,
+    width,
+  ]);
 
   return (
     <View style={styles.root}>
@@ -88,7 +146,7 @@ export function AuthBackdrop({ variant = 'soft' }: { variant?: AuthBackdropVaria
           width: anchor.wash,
           height: anchor.wash,
           borderRadius: anchor.wash / 2,
-          backgroundColor: authColors.artWash,
+          backgroundColor: strokes.wash,
         }}
       />
 

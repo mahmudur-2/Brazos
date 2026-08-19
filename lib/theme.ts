@@ -290,6 +290,33 @@ export function emeraldColorsFor(palette: ColorPalette): ColorPalette {
 }
 
 /**
+ * The auth surface's Prestige mapping (golden masters 2, 3 and 4).
+ *
+ * Only Welcome, Create account and Email create account convert — every other
+ * auth screen keeps the Heritage ivory that lib/authTheme.ts defines, so the
+ * shared auth components take an opt-in `themed` flag and resolve through
+ * this ONE mapping rather than each restating it. Not a token surface: like
+ * emeraldColorsFor() above, it is a function of the resolved palette.
+ *
+ * `accent` is the colour those masters give eyebrows, field labels and field
+ * glyphs — gold in dark, and in light the emerald the Heritage screens
+ * already use, so the light rendering does not move.
+ */
+export function authSurface(palette: ColorPalette, isDark: boolean) {
+  return {
+    bg: palette.background,
+    surface: palette.surface,
+    ink: palette.ink,
+    muted: palette.textMuted,
+    /** Field and card hairlines: gold line-work in dark. */
+    line: isDark ? palette.gold : palette.border,
+    accent: isDark ? palette.gold : palette.emerald,
+    danger: palette.danger,
+    placeholder: palette.textSubtle,
+  } as const;
+}
+
+/**
  * `typography` above bakes the LIGHT text colors in at module scope (its
  * values predate theming). Swept screens that spread those styles take them
  * from here instead, colored by the resolved palette; the sizes and weights

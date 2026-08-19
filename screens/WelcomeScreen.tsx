@@ -15,6 +15,13 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { authColors, authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
 import { useLaunchComplete } from '../lib/launchContext';
 import type { AuthStackNavigation } from '../lib/navigation';
+import {
+  authSurface,
+  fonts,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -44,13 +51,28 @@ const STAGGER = {
  * The welcome artwork ring: the reference's
  * `linear-gradient(145deg, --mint2, #F2E5CB)` rebuilt from four offset discs
  * clipped to a circle, since no gradient package is installed.
+ *
+ * Master 2 replaces that warm sand sweep with overlapping translucent deep
+ * greens, so the layers are now a function of the resolved palette. The light
+ * arrangement is the same four stops it always was, with the one raw literal
+ * it carried replaced by the pale-sage token that matched it.
  */
-const RING_LAYERS = [
-  { offset: 0, color: authColors.mint2, opacity: 1 },
-  { offset: 0.16, color: '#DEEAD9', opacity: 0.8 },
-  { offset: 0.32, color: authColors.sandMint, opacity: 0.8 },
-  { offset: 0.48, color: authColors.sand, opacity: 0.9 },
-] as const;
+function ringLayersFor(colors: ColorPalette, isDark: boolean) {
+  if (isDark) {
+    return [
+      { offset: 0, color: colors.forest, opacity: 0.9 },
+      { offset: 0.16, color: colors.mint, opacity: 0.85 },
+      { offset: 0.32, color: colors.mint2, opacity: 0.5 },
+      { offset: 0.48, color: colors.forest, opacity: 0.55 },
+    ];
+  }
+  return [
+    { offset: 0, color: colors.mint2, opacity: 1 },
+    { offset: 0.16, color: colors.primarySoft, opacity: 0.8 },
+    { offset: 0.32, color: authColors.sandMint, opacity: 0.8 },
+    { offset: 0.48, color: authColors.sand, opacity: 0.9 },
+  ];
+}
 
 type EntranceTransform =
   | { rotate: string }
@@ -62,6 +84,10 @@ export function WelcomeScreen() {
   const { height } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
   const launchComplete = useLaunchComplete();
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const surface = authSurface(colors, isDark);
+  const ringLayers = ringLayersFor(colors, isDark);
 
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -115,7 +141,7 @@ export function WelcomeScreen() {
   const ringSize = Math.min(220, artHeight * 0.74);
 
   return (
-    <AuthScaffold backdrop="full">
+    <AuthScaffold backdrop="full" themed>
       <View style={[styles.art, { height: artHeight }]}>
         <Animated.View
           style={[
@@ -129,7 +155,7 @@ export function WelcomeScreen() {
             step(STAGGER.art, { lift: 0, scaleFrom: 0.92 }),
           ]}
         >
-          {RING_LAYERS.map((layer) => (
+          {ringLayers.map((layer) => (
             <View
               key={layer.offset}
               style={{
@@ -149,41 +175,48 @@ export function WelcomeScreen() {
         <Animated.View
           style={[
             styles.badge,
+            { borderColor: surface.line },
             styles.badgeA,
             { top: artHeight * 0.23 },
             step(STAGGER.badgeA, { rotate: '-7deg' }),
           ]}
         >
-          <Ionicons name="shield-checkmark" size={BADGE_ICON} color={authColors.emerald} />
+          <Ionicons name="shield-checkmark" size={BADGE_ICON} color={surface.accent} />
           <Text style={styles.badgeText}>Verified workers</Text>
         </Animated.View>
 
         <Animated.View
           style={[
             styles.badge,
+            { borderColor: surface.line },
             styles.badgeB,
             { top: artHeight * 0.47 },
             step(STAGGER.badgeB, { rotate: '8deg' }),
           ]}
         >
-          <Ionicons name="lock-closed" size={BADGE_ICON} color={authColors.emerald} />
+          <Ionicons name="lock-closed" size={BADGE_ICON} color={surface.accent} />
           <Text style={styles.badgeText}>Protected payment</Text>
         </Animated.View>
 
         <Animated.View
           style={[
             styles.badge,
+            { borderColor: surface.line },
             styles.badgeC,
             { top: artHeight * 0.75 },
             step(STAGGER.badgeC),
           ]}
         >
-          <Ionicons name="location" size={BADGE_ICON} color={authColors.emerald} />
+          <Ionicons name="location" size={BADGE_ICON} color={surface.accent} />
           <Text style={styles.badgeText}>Local jobs</Text>
         </Animated.View>
       </View>
 
-      <Animated.Text style={[styles.eyebrow, step(STAGGER.eyebrow, { lift: 8 })]}>
+      {/* Eyebrow law: a structural section label is gold in dark, and the
+          Heritage emerald in light. */}
+      <Animated.Text
+        style={[styles.eyebrow, { color: surface.accent }, step(STAGGER.eyebrow, { lift: 8 })]}
+      >
         BRAZOS MARKETPLACE
       </Animated.Text>
       <Animated.Text
@@ -204,12 +237,14 @@ export function WelcomeScreen() {
       <Animated.View style={[styles.actions, step(STAGGER.actions)]}>
         <AuthButton
           title="Continue with phone"
+          themed
           onPress={() => navigation.navigate('CreateAccount')}
           accessibilityHint="Create a BRAZOS account"
         />
         <AuthButton
           title="I already have an account"
           variant="ghost"
+          themed
           onPress={() => navigation.navigate('SignIn')}
           accessibilityHint="Sign in to an existing account"
         />
@@ -218,7 +253,8 @@ export function WelcomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = themedStyles((colors: ColorPalette) =>
+  StyleSheet.create({
   art: {
     width: '100%',
     marginTop: authSpacing.xs,
@@ -237,9 +273,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
-    backgroundColor: authColors.surface,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: authColors.line,
     borderRadius: authRadius.chip,
     paddingLeft: 12,
     paddingRight: 14,
@@ -257,21 +292,22 @@ const styles = StyleSheet.create({
   },
   badgeText: {
     ...authType.badge,
-    color: authColors.ink,
+    color: colors.ink,
   },
   eyebrow: {
     ...authType.eyebrow,
-    color: authColors.emerald,
     marginTop: authSpacing.lg,
   },
+  // Master 2 carries the set's largest display, in the serif.
   headline: {
     ...authType.display,
-    color: authColors.ink,
+    fontFamily: fonts.display,
+    color: colors.ink,
     marginTop: authSpacing.sm,
   },
   body: {
     ...authType.body,
-    color: authColors.muted,
+    color: colors.textMuted,
     marginTop: authSpacing.md,
   },
   actions: {
@@ -280,4 +316,5 @@ const styles = StyleSheet.create({
     paddingBottom: authSpacing.lg,
     gap: authSpacing.md,
   },
-});
+  }),
+);

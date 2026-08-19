@@ -8,6 +8,7 @@ import {
   Text,
 } from 'react-native';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authSurface, fonts, useThemeColors } from '../lib/theme';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
@@ -31,6 +32,12 @@ type AuthButtonProps = {
   loading?: boolean;
   disabled?: boolean;
   accessibilityHint?: string;
+  /**
+   * Opt in to the Prestige mapping (masters 2/3/4 only). Absent — every other
+   * auth screen — the button renders byte-identically to the Heritage ivory
+   * control it has always been.
+   */
+  themed?: boolean;
 };
 
 /**
@@ -51,11 +58,33 @@ export function AuthButton({
   loading = false,
   disabled = false,
   accessibilityHint,
+  themed = false,
 }: AuthButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
+  const { palette, isDark } = useThemeColors();
   const isDisabled = disabled || loading;
   const isGhost = variant === 'ghost';
-  const tint = isGhost ? authColors.forest : authColors.onDark;
+
+  // Decision 3, resolved for this surface. Dark: `primary` is the STANDARD
+  // control (surface fill, gold hairline, cream serif label) because no auth
+  // master draws a solid conversion fill, and `ghost` is the gold serif text
+  // on the same hairline. Light keeps the Heritage forest fill and forest
+  // ghost label exactly.
+  const surface = authSurface(palette, isDark);
+  const prestige = themed && isDark;
+  const tint = prestige
+    ? isGhost
+      ? surface.accent
+      : surface.ink
+    : isGhost
+      ? authColors.forest
+      : authColors.onDark;
+  const themedShape = prestige
+    ? {
+        backgroundColor: isGhost ? 'transparent' : palette.surface,
+        borderColor: surface.line,
+      }
+    : null;
 
   const animate = (to: number, duration: number) =>
     Animated.timing(scale, {
@@ -78,6 +107,7 @@ export function AuthButton({
         style={[
           styles.base,
           isGhost ? styles.ghost : styles.primary,
+          themedShape,
           // Dimmed, but still clearly the same control — the reference's
           // hierarchy has to survive the disabled state.
           isDisabled && styles.disabled,
@@ -87,7 +117,14 @@ export function AuthButton({
           <ActivityIndicator color={tint} />
         ) : (
           <Text
-            style={[styles.label, weight === 'semibold' && styles.labelSemibold, { color: tint }]}
+            style={[
+              styles.label,
+              weight === 'semibold' && styles.labelSemibold,
+              // Decision 9's serif button label, applied only where the
+              // conversion reaches: the untouched auth screens keep the sans.
+              themed && styles.labelSerif,
+              { color: tint },
+            ]}
             numberOfLines={1}
           >
             {title}
@@ -123,5 +160,9 @@ const styles = StyleSheet.create({
   },
   labelSemibold: {
     fontWeight: '600',
+  },
+  labelSerif: {
+    fontFamily: fonts.display,
+    fontSize: 19,
   },
 });
