@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { fonts, radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { fonts, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -98,7 +98,19 @@ export function Button({
     : isGhost
     ? { backgroundColor: 'transparent' }
     : isSecondary
-    ? { backgroundColor: palette.surface, borderWidth: 1, borderColor: palette.border }
+    ? {
+        backgroundColor: palette.surface,
+        borderWidth: 1,
+        // Dark device pass: the standard control's hairline was `border` —
+        // the FLAT equivalent of dim gold — which on a phone was
+        // indistinguishable from the disabled fill's edge, so enabled and
+        // disabled read as the same dead control. Decision 3 says this
+        // hairline is GOLD, so in dark it is now real gold at the top of the
+        // manifest's measured hairline tier (gold @ 25–55%), the same
+        // expression the segmented control's active cell already uses.
+        // Neither rule moved: disabled is still flat neutralBg, no border.
+        borderColor: isDark ? withAlpha(palette.gold, 0.55) : palette.border,
+      }
     : { backgroundColor: palette.primary };
   const textColor = isDisabled
     ? palette.textMuted

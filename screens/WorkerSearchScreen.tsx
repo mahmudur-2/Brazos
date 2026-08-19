@@ -59,6 +59,7 @@ import {
   radius,
   shadows,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -616,7 +617,7 @@ function WorkerResultCard({
           </View>
 
           <View style={styles.proofRow}>
-            <Ionicons name="star" size={13} color={colors.star} />
+            <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
             <Text style={styles.proofStrong}>
               {ratingCount > 0 ? (profile.rating_avg ?? 0).toFixed(1) : 'New'}
             </Text>

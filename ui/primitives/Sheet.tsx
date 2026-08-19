@@ -57,7 +57,7 @@ export function Sheet({
     >
       <View style={styles.root}>
         <Pressable
-          style={styles.backdrop}
+          style={[styles.backdrop, isDark && styles.backdropDark]}
           onPress={dismissOnBackdropPress ? onClose : undefined}
           // The backdrop is a dismiss affordance, not content — it should not
           // be announced as a button when it does nothing.
@@ -105,10 +105,15 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     flex: 1,
     justifyContent: 'flex-end',
   },
+  // D7 — a modal scrim DIMS the parent (master 11 draws the filter sheet over
+  // a darkened header). `ink` is the CREAM in the dark palette, so the one
+  // expression that dims in light lightens in dark; dark therefore scrims
+  // with the page ground instead.
   backdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: withAlpha(colors.ink, 0.45),
   },
+  backdropDark: { backgroundColor: withAlpha(colors.bg, 0.7) },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xxl,

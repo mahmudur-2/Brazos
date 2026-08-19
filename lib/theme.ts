@@ -1,5 +1,5 @@
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
-import { brand, dark as emeraldDark } from '../ui/tokens';
+import { brand, dark as emeraldDark, withAlpha as alpha } from '../ui/tokens';
 
 // lib/theme.ts is the standard import surface for screens (CLAUDE.md): the
 // §I helpers below are re-exported here so no screen ever needs to import
@@ -313,6 +313,30 @@ export function authSurface(palette: ColorPalette, isDark: boolean) {
     accent: isDark ? palette.gold : palette.emerald,
     danger: palette.danger,
     placeholder: palette.textSubtle,
+  } as const;
+}
+
+/**
+ * THE one rating-star treatment (dark device pass).
+ *
+ * A rating star was drawn four different ways across the app — the `star`
+ * token (an orange-gold), the Prestige `gold`, the neutral `border` for an
+ * empty star, and on Saved & past workers a bare `★` inheriting the muted
+ * grey of the meta line it sat in. The masters draw ONE star: gold, filled
+ * or outlined (master 27 shows both in the same row, 22 and 46 the filled
+ * one). Like `emeraldColorsFor()` and `authSurface()` this is a function of
+ * the resolved palette, not a new token surface.
+ *
+ * Light is deliberately unmoved: it keeps the `star` token it has always
+ * rendered and the neutral empty-star border, so this resolves the dark
+ * inconsistency without repainting Heritage. The light pass owns that call.
+ */
+export function starColors(palette: ColorPalette, isDark: boolean) {
+  return {
+    /** A star that counts toward the score. */
+    filled: isDark ? palette.gold : palette.star,
+    /** A star that does not — outlined, never absent. */
+    empty: isDark ? alpha(palette.gold, 0.45) : palette.border,
   } as const;
 }
 

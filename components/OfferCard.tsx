@@ -5,7 +5,14 @@ import { Button } from './Button';
 import { Card } from './Card';
 import { OfferResponseActions } from './OfferResponseActions';
 import { StatusBadge } from './StatusBadge';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  radius,
+  spacing,
+  starColors,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 import {
   firstNameOf,
   offerExpiryLabel,
@@ -129,7 +136,7 @@ function OfferListCard({
   onLongPressAvatar,
   palette: paletteProp,
 }: ListProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
   const worker = offer.worker;
@@ -168,7 +175,7 @@ function OfferListCard({
               )}
             </View>
             <View style={styles.proofRow}>
-              <Ionicons name="star" size={14} color={colors.gold} />
+              <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />
               <Text style={styles.proofStrong}>
                 {ratingCount > 0 ? (worker?.rating_avg ?? 0).toFixed(1) : 'New'}
               </Text>

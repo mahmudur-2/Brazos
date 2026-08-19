@@ -26,11 +26,11 @@ export function ReactionPicker({
   onRemove,
   onClose,
 }: ReactionPickerProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={[styles.backdrop, isDark && styles.backdropDark]} onPress={onClose}>
         {/* Empty onPress absorbs taps so they don't bubble to the backdrop. */}
         <Pressable style={styles.sheet} onPress={() => {}}>
           <Text style={styles.title}>React</Text>
@@ -61,6 +61,9 @@ export function ReactionPicker({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // D7 — a modal scrim DIMS the parent. `text` is the CREAM in dark, so the
+  // one expression that dims in light lightens in dark; dark scrims with the
+  // page ground instead.
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
@@ -68,6 +71,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
   },
+  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
   sheet: {
     width: '100%',
     maxWidth: 320,

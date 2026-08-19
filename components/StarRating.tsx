@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useThemeColors } from '../lib/theme';
+import { starColors, useThemeColors } from '../lib/theme';
 
 type StarRatingProps = {
   value: number;
@@ -9,7 +9,8 @@ type StarRatingProps = {
 };
 
 export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
+  const starPaint = starColors(colors, isDark);
   const readOnly = !onChange;
 
   return (
@@ -20,7 +21,7 @@ export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
           <Ionicons
             name={filled ? 'star' : 'star-outline'}
             size={size}
-            color={filled ? colors.star : colors.border}
+            color={filled ? starPaint.filled : starPaint.empty}
           />
         );
         if (readOnly) {

@@ -49,7 +49,7 @@ export function ServicePickerSheet({
   onSelect,
   onClose,
 }: ServicePickerSheetProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
@@ -68,7 +68,11 @@ export function ServicePickerSheet({
       // Android hardware back closes the sheet via onRequestClose above.
       statusBarTranslucent
     >
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityRole="button">
+      <Pressable
+        style={[styles.backdrop, isDark && styles.backdropDark]}
+        onPress={onClose}
+        accessibilityRole="button"
+      >
         <Pressable
           style={[styles.sheet, { maxHeight, paddingBottom: insets.bottom + spacing.sm }]}
           // Absorbs taps so a press inside the sheet can't reach the backdrop.
@@ -128,11 +132,15 @@ export function ServicePickerSheet({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // D7 — the scrim dims the parent. `ink` is the CREAM in dark, so the one
+  // expression that dims in light lightens in dark; dark scrims with the page
+  // ground instead.
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.ink, 0.42),
     justifyContent: 'flex-end',
   },
+  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radius.xl,

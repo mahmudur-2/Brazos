@@ -19,6 +19,7 @@ import {
   fonts,
   radius,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -133,7 +134,7 @@ export function ProfileDetailsScreen() {
           <View style={styles.metaRow}>
             {ratingCount > 0 ? (
               <View style={styles.metaItem}>
-                <Ionicons name="star" size={15} color={colors.star} />
+                <Ionicons name="star" size={15} color={starColors(colors, isDark).filled} />
                 <Text style={styles.metaStrong}>
                   {(profile?.rating_avg ?? 0).toFixed(1)}
                 </Text>

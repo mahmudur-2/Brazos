@@ -63,7 +63,7 @@ export function AmountPrompt({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, isDark && styles.backdropDark]}>
         <View style={styles.sheet}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
@@ -104,6 +104,9 @@ export function AmountPrompt({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // D7 — a modal scrim DIMS the parent. `text` is the CREAM in dark, so the
+  // one expression that dims in light lightens in dark; dark scrims with the
+  // page ground instead.
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.45),
@@ -111,6 +114,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     padding: spacing.lg,
   },
+  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
   sheet: {
     width: '100%',
     maxWidth: 360,

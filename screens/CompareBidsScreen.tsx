@@ -26,6 +26,7 @@ import {
   fonts,
   radius,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -259,7 +260,7 @@ function CompareRow({
           </Text>
           {rating != null ? (
             <View style={styles.rowRating}>
-              <Ionicons name="star" size={13} color={colors.gold} />
+              <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
               <Text style={styles.rowRatingStrong}>{rating.toFixed(1)}</Text>
               <Text style={styles.rowRatingMuted}>({ratingCount})</Text>
             </View>

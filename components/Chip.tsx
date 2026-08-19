@@ -123,6 +123,13 @@ export function Chip({
     // Order matters: the filter variant's own selected fill has to win over
     // both its unselected sage and `default`'s primary fill.
     selected && (isFilter ? styles.chipFilterSelected : styles.chipSelected),
+    // Dark device pass: mint and forest are two dark greens, so a selected
+    // distance chip was invisible beside its unselected neighbours. The
+    // selected chip takes the gold outline masters 12 and 33 draw on exactly
+    // this control ("Within 5 miles"), which is the same selection strength
+    // the radius segment and the filter-sheet radios already carry. Fill is
+    // unchanged, so gold stays line-work; light keeps its Heritage pair.
+    selected && isFilter && isDark && styles.chipFilterSelectedDark,
     style,
   ];
 
@@ -188,6 +195,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   chipFilterSelected: {
     backgroundColor: colors.forest,
     borderColor: colors.forest,
+  },
+  chipFilterSelectedDark: {
+    borderColor: colors.gold,
   },
   pressed: {
     opacity: 0.85,

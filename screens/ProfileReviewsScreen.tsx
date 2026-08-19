@@ -34,6 +34,7 @@ import {
   fonts,
   radius,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -51,7 +52,7 @@ const STARS = [5, 4, 3, 2, 1] as const;
  * header can never claim "2 reviews" above three of them.
  */
 export function ProfileReviewsScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { params } =
     useRoute<RouteProp<ProfileReviewsRouteParamList, 'ProfileReviews'>>();
@@ -169,7 +170,11 @@ export function ProfileReviewsScreen() {
                     return (
                       <View key={star} style={styles.distRow}>
                         <Text style={styles.distStar}>{star}</Text>
-                        <Ionicons name="star" size={11} color={colors.star} />
+                        <Ionicons
+                          name="star"
+                          size={11}
+                          color={starColors(colors, isDark).filled}
+                        />
                         <View style={styles.distTrack}>
                           <View style={[styles.distFill, { width: `${pct}%` }]} />
                         </View>

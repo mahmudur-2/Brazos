@@ -434,8 +434,12 @@ export function ProfileScreen() {
       })
     : null;
   const summaryParts: string[] = [];
+  // The star leads the line when there is a rating, and is rendered as its own
+  // span below so it can carry the one gold star treatment instead of the
+  // meta line's grey.
+  const summaryLeadsWithStar = Boolean(profile?.rating_count);
   if (profile?.rating_count) {
-    summaryParts.push(`★ ${(profile.rating_avg ?? 0).toFixed(1)} (${profile.rating_count})`);
+    summaryParts.push(`${(profile.rating_avg ?? 0).toFixed(1)} (${profile.rating_count})`);
   }
   if (totalCompletedJobs > 0) {
     summaryParts.push(`${totalCompletedJobs} job${totalCompletedJobs === 1 ? '' : 's'} completed`);
@@ -570,7 +574,12 @@ export function ProfileScreen() {
               />
             )}
             <Text style={styles.email}>{user?.email}</Text>
-            <Text style={styles.roleNote}>{profileSummary}</Text>
+            <Text style={styles.roleNote}>
+              {summaryLeadsWithStar ? (
+                <Text style={isDark ? styles.roleNoteStarDark : undefined}>★ </Text>
+              ) : null}
+              {profileSummary}
+            </Text>
             {/* Same destination the rating row on someone else's profile
                 leads to, pointed at this account — so "what have people said
                 about me?" is answerable from your own profile too. */}
@@ -904,6 +913,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
   },
+  roleNoteStarDark: { color: colors.gold },
   reviewsLink: {
     flexDirection: 'row',
     alignItems: 'center',

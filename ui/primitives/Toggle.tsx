@@ -4,9 +4,19 @@ import { radius, useThemeColors, withAlpha } from '../../lib/theme';
 
 /**
  * The one toggle (Prestige, pre-made decision 7): a cream knob in BOTH
- * states; ON rides the mint track under a gold hairline rim, OFF a dark
- * neutral track. Light keeps its Heritage arrangement — emerald track,
- * white knob, no rim.
+ * states; ON rides the emerald track under a gold hairline rim, OFF the
+ * danger red. Light keeps its Heritage arrangement — emerald track, white
+ * knob, no rim.
+ *
+ * DARK STATE COLOUR IS AN OPERATOR CALL (dark device pass, D1). On a real
+ * phone the mint ON-track and the near-black OFF-track were the same dark
+ * green smudge — the control read as decoration, not as state. ON now takes
+ * the emerald the Worker Home potential-earnings figure uses and OFF takes
+ * the danger token, the same red master 43 gives its offline dot. This
+ * deliberately deviates from the set's "no master uses a red control" note:
+ * the toggle is the one control whose OFF state is a fact the user must be
+ * able to read at a glance (they are invisible to customers), and the same
+ * master pairs that fact with that red two rows below. Light is untouched.
  *
  * Drawn rather than RN's Switch because the masters' rim cannot exist there:
  * iOS ignores any attempt to border the native track, and per-platform
@@ -45,13 +55,9 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
     }).start();
   }, [position, value]);
 
-  const trackColor = value
-    ? isDark
-      ? palette.mint
-      : palette.emerald
-    : isDark
-    ? withAlpha(palette.black, 0.4)
-    : palette.border;
+  // ON is emerald in both palettes (light already was); OFF is the danger red
+  // in dark and keeps the Heritage neutral border in light.
+  const trackColor = value ? palette.emerald : isDark ? palette.danger : palette.border;
   const rimColor = value && isDark ? withAlpha(palette.gold, 0.6) : 'transparent';
   const knobColor = isDark ? palette.onPrimary : palette.white;
 

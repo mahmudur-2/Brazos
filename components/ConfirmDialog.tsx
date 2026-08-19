@@ -44,7 +44,7 @@ export function ConfirmDialog({
   onCancel,
   palette: paletteProp,
 }: ConfirmDialogProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
   return (
@@ -60,7 +60,7 @@ export function ConfirmDialog({
         if (!loading) onCancel();
       }}
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, isDark && styles.backdropDark]}>
         <View style={styles.centerWrap}>
           <View
             style={[
@@ -99,10 +99,14 @@ export function ConfirmDialog({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // D7 — a modal scrim DIMS the parent. `text` is the CREAM in dark, so the
+  // one expression that dims in light lightens in dark; dark scrims with the
+  // page ground instead.
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
   },
+  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
   centerWrap: {
     flex: 1,
     justifyContent: 'center',

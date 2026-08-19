@@ -40,7 +40,7 @@ import {
  * continuous motion, with the job assigned the moment accept_offer() commits.
  */
 export function BidDetailScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
@@ -194,11 +194,20 @@ export function BidDetailScreen() {
                           </Text>
                         </View>
                         <Text style={styles.workerMeta}>
-                          {(offer.worker?.rating_count ?? 0) > 0
-                            ? `★ ${(offer.worker?.rating_avg ?? 0).toFixed(1)} (${
+                          {(offer.worker?.rating_count ?? 0) > 0 ? (
+                            <>
+                              {/* One star treatment: gold in dark, wherever a
+                                  rating is drawn. Light keeps Heritage. */}
+                              <Text style={isDark ? styles.workerMetaStarDark : undefined}>
+                                ★
+                              </Text>
+                              {` ${(offer.worker?.rating_avg ?? 0).toFixed(1)} (${
                                 offer.worker?.rating_count
-                              } ${offer.worker?.rating_count === 1 ? 'review' : 'reviews'})`
-                            : 'No reviews yet'}
+                              } ${offer.worker?.rating_count === 1 ? 'review' : 'reviews'})`}
+                            </>
+                          ) : (
+                            'No reviews yet'
+                          )}
                           {completionPercent(offer.worker?.completion_rate) != null
                             ? ` · ${completionPercent(
                                 offer.worker?.completion_rate
@@ -410,6 +419,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
   },
+  workerMetaStarDark: { color: colors.gold },
   pitch: {
     fontSize: 15,
     color: colors.text,

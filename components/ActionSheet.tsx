@@ -38,11 +38,11 @@ export function ActionSheet({
   items,
   onClose,
 }: ActionSheetProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
+      <Pressable style={[styles.backdrop, isDark && styles.backdropDark]} onPress={onClose}>
         {/* Empty onPress absorbs taps so they don't dismiss the sheet. */}
         <Pressable style={styles.sheet} onPress={() => {}}>
           {(title || subtitle) && (
@@ -85,12 +85,16 @@ export function ActionSheet({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // D7 — a modal scrim DIMS the parent. `text` is the CREAM in dark, so the
+  // one expression that dims in light lightens in dark; dark scrims with the
+  // page ground instead.
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
     justifyContent: 'flex-end',
     padding: spacing.lg,
   },
+  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
   sheet: {
     backgroundColor: colors.surface,
     borderRadius: radius.xl,

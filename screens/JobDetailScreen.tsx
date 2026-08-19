@@ -110,6 +110,9 @@ function payoutEstimateLabel(job: OpenJob): string | null {
 export function JobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // The shared meta-glyph rule (prestige 3c, WorkerJobCard): gold in dark,
+  // Heritage muted in light.
+  const metaGlyph = isDark ? colors.gold : colors.textMuted;
   // Registered in three different stacks (Home, MyJobs, Map) — like Chat, its
   // nav/route types are standalone rather than tied to one parent stack.
   const navigation = useNavigation();
@@ -611,24 +614,31 @@ export function JobDetailScreen() {
                 logistics rows rather than after them. */}
             {job.description ? <Text style={styles.description}>{job.description}</Text> : null}
 
+            {/* The shared meta treatment prestige(3c) settled on the job
+                cards: gold glyph, cream text in dark; light keeps the muted
+                pair. These rows are the same class of fact. */}
             <View style={styles.detailRow}>
-              <Ionicons name="location-outline" size={20} color={colors.textMuted} />
+              <Ionicons name="location-outline" size={20} color={metaGlyph} />
               {/* Approximate area only. The exact address lives in
                   job_locations, readable by the poster and the assigned
                   worker — enforced by RLS, and this screen renders no field
                   it has no right to. */}
-              <Text style={styles.detailText}>{job.location ?? 'No location set'}</Text>
+              <Text style={[styles.detailText, isDark && styles.detailTextDark]}>
+                {job.location ?? 'No location set'}
+              </Text>
             </View>
             <View style={styles.detailRow}>
-              <Ionicons name="cash-outline" size={20} color={colors.textMuted} />
-              <Text style={styles.detailText}>
+              <Ionicons name="cash-outline" size={20} color={metaGlyph} />
+              <Text style={[styles.detailText, isDark && styles.detailTextDark]}>
                 {hasBudget(job) ? `${budgetRangeLabel(job)} budget` : 'Open budget'}
               </Text>
             </View>
             {arrivalWindowLabel(job) ? (
               <View style={styles.detailRow}>
-                <Ionicons name="time-outline" size={20} color={colors.textMuted} />
-                <Text style={styles.detailText}>Arrive {arrivalWindowLabel(job)}</Text>
+                <Ionicons name="time-outline" size={20} color={metaGlyph} />
+                <Text style={[styles.detailText, isDark && styles.detailTextDark]}>
+                  Arrive {arrivalWindowLabel(job)}
+                </Text>
               </View>
             ) : null}
 
@@ -1087,6 +1097,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 16,
     color: colors.textMuted,
   },
+  detailTextDark: { color: colors.ink },
   description: {
     fontSize: 16,
     color: colors.text,

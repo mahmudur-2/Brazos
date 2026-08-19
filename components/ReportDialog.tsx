@@ -43,7 +43,7 @@ export function ReportDialog({
   onClose,
   onSubmitted,
 }: ReportDialogProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [description, setDescription] = useState('');
@@ -90,7 +90,7 @@ export function ReportDialog({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, isDark && styles.backdropDark]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
           style={styles.centerWrap}
@@ -165,10 +165,14 @@ export function ReportDialog({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // D7 — a modal scrim DIMS the parent. `text` is the CREAM in dark, so the
+  // one expression that dims in light lightens in dark; dark scrims with the
+  // page ground instead.
   backdrop: {
     flex: 1,
     backgroundColor: withAlpha(colors.text, 0.35),
   },
+  backdropDark: { backgroundColor: withAlpha(colors.background, 0.7) },
   centerWrap: {
     flex: 1,
     justifyContent: 'center',

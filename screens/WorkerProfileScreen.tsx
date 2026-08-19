@@ -46,6 +46,7 @@ import {
   fonts,
   radius,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -278,7 +279,7 @@ export function WorkerProfileScreen() {
                     accessibilityLabel={`See all ${heroTrust.rating.count} reviews for ${name}`}
                     style={({ pressed }) => [styles.proofRow, pressed && styles.proofRowPressed]}
                   >
-                    <Ionicons name="star" size={14} color={colors.star} />
+                    <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />
                     <Text style={styles.proofStrong}>{heroTrust.rating.average.toFixed(1)}</Text>
                     <Text style={styles.proofMuted}>
                       {`(${heroTrust.rating.count} ${
