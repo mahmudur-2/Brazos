@@ -45,6 +45,14 @@ import { voiceSearch, type VoiceSession } from '../../lib/voiceSearch';
  * app backgrounding, or unmount — the shape the iOS permission string
  * promises ("stops listening when you finish speaking"), enforced by the
  * boundary's session. `disableVoiceSearch` opts a call site out.
+ *
+ * While a session is live the field DISPLAYS the boundary's interim
+ * transcript (4D-6) — presentation only, styled as provisional. Interims
+ * never cross `onChangeText`: committing them would fire the consumer's
+ * debounced query once per interim, so a three-second utterance would issue
+ * a burst of searches. The parent's value is untouched until the one final
+ * result commits, and a session that ends without one (cancel, ceiling)
+ * snaps the field straight back to whatever the parent holds.
  */
 
 type SearchBarProps = {
@@ -95,6 +103,10 @@ export function SearchBar({
   // every degraded case leaves the mic unrendered rather than disabled.
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
+  // The live session's provisional phrase — never query state. It paints the
+  // field while listening and is cleared the moment the session ends, so the
+  // field reverts to the parent-controlled value with nothing committed.
+  const [interimTranscript, setInterimTranscript] = useState<string | null>(null);
   const sessionRef = useRef<VoiceSession | null>(null);
   const isButton = onPress != null;
   // Read via the raw context, not useNavigation(): a primitive must render
@@ -147,12 +159,20 @@ export function SearchBar({
     sessionRef.current = voiceSearch.beginSession({
       // The transcript's one egress: the exact path typed text takes.
       onTranscript: onChangeText,
+      // Interims are display-only (see the docblock): they paint the field
+      // below and never reach onChangeText.
+      onInterimTranscript: setInterimTranscript,
       onEnd: () => {
         sessionRef.current = null;
         setListening(false);
+        setInterimTranscript(null);
       },
     });
   };
+  // Presentation only: while listening the field shows the provisional
+  // phrase; the parent's value is what every other consumer of `value` sees.
+  const showingInterim = listening && interimTranscript != null;
+  const displayValue = showingInterim ? interimTranscript : value;
   if (onPress) {
     return (
       <Pressable
@@ -180,8 +200,8 @@ export function SearchBar({
       <Ionicons name="search" size={18} color={colors.emerald} />
       <TextInput
         keyboardAppearance={isDark ? 'dark' : 'light'}
-        style={styles.input}
-        value={value}
+        style={[styles.input, showingInterim && styles.inputInterim]}
+        value={displayValue}
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
@@ -251,6 +271,10 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     // Height comes from the row. Letting the input size itself makes Android
     // add its own vertical padding and the pill grow.
     paddingVertical: 0,
+  },
+  inputInterim: {
+    // Provisional: the placeholder's treatment until the final commits.
+    color: colors.muted,
   },
   value: {
     flex: 1,

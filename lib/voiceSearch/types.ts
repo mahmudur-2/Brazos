@@ -11,7 +11,7 @@
  *
  *   - "…only while you are searching by voice, and stops listening when you
  *     finish speaking." → recognition runs only inside a bounded tap session:
- *     one tap starts it, and it ends on ~2s of silence after speech has
+ *     one tap starts it, and it ends on ~3s of silence after speech has
  *     begun, a hard 30s ceiling, a second tap, focus loss, backgrounding, or
  *     unmount — never an open-ended stream.
  *   - "Speech is recognized on your device … Nothing is sent to a server."
@@ -31,9 +31,11 @@ export const VOICE_SEARCH_LOCALE = 'en-US';
  * exists in ios/ExpoSpeechRecognitionModule.swift), and its own non-continuous
  * stop is a fixed 3s no-result timer buried in ios/ExpoSpeechRecognizer.swift
  * (`invalidateAndScheduleTimer`, `withTimeInterval: 3`), neither configurable
- * nor observable — so the boundary times result events itself.
+ * nor observable — so the boundary times result events itself. 3000ms matches
+ * that internal vendor timer; 2000ms proved short enough to cut the operator
+ * off mid-sentence in real use.
  */
-export const VOICE_SILENCE_MS = 2000;
+export const VOICE_SILENCE_MS = 3000;
 
 /**
  * Hard ceiling on any session, from the moment it begins. An independent
@@ -87,6 +89,14 @@ export type VoiceSessionHandlers = {
    * stored, logged, or sent anywhere by this module.
    */
   onTranscript: (transcript: string) => void;
+  /**
+   * A provisional phrase while recognition is still running — zero or more
+   * per session, each superseding the last. Display-only egress: a caller may
+   * paint it, but it is never committed (the final phrase arrives once,
+   * through onTranscript) and, like the final, is never stored, logged, or
+   * sent anywhere by this module. Optional; omitting it changes nothing.
+   */
+  onInterimTranscript?: (transcript: string) => void;
   /**
    * The session ended, whatever the cause (stopped, silence, ceiling, denied,
    * unavailable, recognizer error, cancelled). Fires exactly once. Carries no

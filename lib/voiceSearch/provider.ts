@@ -25,7 +25,7 @@ import {
  *   the probe is the enforcement, not the flag.
  * - Every degraded state resolves to `unavailable` / a session that ends
  *   without starting. There is no network-fallback branch to take.
- * - A session is bounded: it ends on ~2s of silence after speech has begun
+ * - A session is bounded: it ends on ~3s of silence after speech has begun
  *   (app-side — the installed vendor exposes no silence signal on iOS, see
  *   VOICE_SILENCE_MS), on a second tap, and unconditionally at the 30s
  *   ceiling, which is armed synchronously before the first vendor call and
@@ -152,7 +152,7 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
     };
 
     /** Silence detection, app-side (see VOICE_SILENCE_MS): each recognized
-     *  phrase restarts the clock; ~2s after the last one, stop. Never armed
+     *  phrase restarts the clock; ~3s after the last one, stop. Never armed
      *  before speech has begun — the vendor's own no-speech timeout and the
      *  ceiling cover a session in which nothing is ever said. */
     const restartSilenceTimer = () => {
@@ -207,9 +207,15 @@ export function createVoiceSearchProvider(deps: VoiceSearchDeps): VoiceSearchPro
             if (phase === 'done' || committed) return;
             // Any recognized speech is the silence detector's input: interim
             // results arrive for this (interimResults: true below), are never
-            // committed, and only restart the clock.
+            // committed, and restart the clock.
             if (event.results[0]?.transcript) restartSilenceTimer();
-            if (!event.isFinal) return;
+            if (!event.isFinal) {
+              // Display-only egress: the optional handler may paint the
+              // provisional phrase; committing stays exclusive to the final.
+              const interim = event.results[0]?.transcript ?? '';
+              if (interim) handlers.onInterimTranscript?.(interim);
+              return;
+            }
             const transcript = event.results[0]?.transcript ?? '';
             if (!transcript) return;
             committed = true;

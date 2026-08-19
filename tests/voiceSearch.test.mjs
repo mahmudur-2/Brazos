@@ -126,14 +126,16 @@ function iosProvider(vendor, timers = fakeTimers()) {
 /** A tap session with recording handlers, so assertions read declaratively. */
 function tap(provider) {
   const transcripts = [];
+  const interims = [];
   let ends = 0;
   const session = provider.beginSession({
     onTranscript: (transcript) => transcripts.push(transcript),
+    onInterimTranscript: (transcript) => interims.push(transcript),
     onEnd: () => {
       ends += 1;
     },
   });
-  return { session, transcripts, ended: () => ends };
+  return { session, transcripts, interims, ended: () => ends };
 }
 
 // ===========================================================================
@@ -410,6 +412,70 @@ test('an empty final transcript commits nothing', async () => {
   assert.equal(h.ended(), 1);
 });
 
+// ===========================================================================
+// Live interim text (4D-6) — provisional phrases reach the display-only
+// handler while the session runs; committing stays exclusive to the final
+// result, exactly once, through onTranscript.
+// ===========================================================================
+
+test('interim phrases reach the display handler only — the commit path stays final-only', async () => {
+  const { vendor, emit } = fakeVendor();
+  const provider = iosProvider(vendor);
+  const h = tap(provider);
+  await settle();
+  emit('result', { isFinal: false, results: [{ transcript: 'plu' }] });
+  emit('result', { isFinal: false, results: [{ transcript: 'plumber ne' }] });
+  assert.deepEqual(h.interims, ['plu', 'plumber ne'], 'each interim paints, in order');
+  assert.deepEqual(h.transcripts, [], 'no interim may commit');
+  emit('result', { isFinal: true, results: [{ transcript: 'plumber near me' }] });
+  emit('end', null);
+  assert.deepEqual(h.transcripts, ['plumber near me']);
+  assert.deepEqual(h.interims, ['plu', 'plumber ne'], 'the final is not an interim');
+  assert.equal(h.ended(), 1);
+});
+
+test('an empty interim paints nothing, and a session without the handler still works', async () => {
+  const empty = fakeVendor();
+  const h = tap(iosProvider(empty.vendor));
+  await settle();
+  empty.emit('result', { isFinal: false, results: [{ transcript: '' }] });
+  empty.emit('result', { isFinal: false, results: [] });
+  assert.deepEqual(h.interims, []);
+
+  // The handler is optional (the boundary contract): a caller that omits it
+  // gets exactly the pre-4D-6 behaviour, no crash on an interim.
+  const bare = fakeVendor();
+  const transcripts = [];
+  let ends = 0;
+  iosProvider(bare.vendor).beginSession({
+    onTranscript: (transcript) => transcripts.push(transcript),
+    onEnd: () => {
+      ends += 1;
+    },
+  });
+  await settle();
+  bare.emit('result', { isFinal: false, results: [{ transcript: 'plu' }] });
+  bare.emit('result', { isFinal: true, results: [{ transcript: 'plumber' }] });
+  bare.emit('end', null);
+  assert.deepEqual(transcripts, ['plumber']);
+  assert.equal(ends, 1);
+});
+
+test('a cancelled session that saw interims commits nothing and paints nothing more', async () => {
+  const { vendor, emit } = fakeVendor();
+  const provider = iosProvider(vendor);
+  const h = tap(provider);
+  await settle();
+  emit('result', { isFinal: false, results: [{ transcript: 'plumb' }] });
+  assert.deepEqual(h.interims, ['plumb']);
+  h.session.cancel();
+  emit('result', { isFinal: false, results: [{ transcript: 'stale interim' }] });
+  emit('result', { isFinal: true, results: [{ transcript: 'stale' }] });
+  assert.deepEqual(h.transcripts, [], 'a cancelled session commits nothing');
+  assert.deepEqual(h.interims, ['plumb'], 'a dead session paints nothing more');
+  assert.equal(h.ended(), 1);
+});
+
 test('cancel aborts, removes listeners, and a late result cannot commit', async () => {
   const { vendor, calls, emit, listenerCount } = fakeVendor();
   const provider = iosProvider(vendor);
@@ -437,7 +503,7 @@ test('cancel aborts, removes listeners, and a late result cannot commit', async 
 // ExpoSpeechRecognizer.swift. So the boundary times result events itself.
 // ===========================================================================
 
-test('~2s of silence after speech has begun stops listening and commits the final phrase', async () => {
+test('~3s of silence after speech has begun stops listening and commits the final phrase', async () => {
   const { vendor, calls, emit } = fakeVendor();
   const timers = fakeTimers();
   const provider = iosProvider(vendor, timers);
@@ -455,7 +521,7 @@ test('~2s of silence after speech has begun stops listening and commits the fina
   emit('result', { isFinal: false, results: [{ transcript: 'plumber ne' }] });
   assert.deepEqual(timers.delays(), [VOICE_MAX_SESSION_MS, VOICE_SILENCE_MS]);
 
-  // ~2s pass with nothing recognized: the boundary stops listening, which
+  // ~3s pass with nothing recognized: the boundary stops listening, which
   // makes the vendor deliver the final result and then end — the normal
   // commit path, not a second one.
   timers.fire(VOICE_SILENCE_MS);
@@ -465,7 +531,9 @@ test('~2s of silence after speech has begun stops listening and commits the fina
   assert.deepEqual(h.transcripts, ['plumber near me']);
   assert.equal(h.ended(), 1);
   assert.deepEqual(timers.delays(), [], 'no timer may outlive the session');
-  assert.equal(VOICE_SILENCE_MS, 2000);
+  // 3000ms matches the vendor's own internal no-result timer; 2000ms cut the
+  // operator off mid-sentence in real use (4D-6).
+  assert.equal(VOICE_SILENCE_MS, 3000);
 });
 
 test('an empty interim result does not count as speech', async () => {
@@ -656,6 +724,32 @@ test('[static] voice text arrives through onChangeText and no second write path 
   );
   // Still fully controlled: no internal copy of the query text exists.
   assert.doesNotMatch(searchBarCode, /useState<string>|useState\(''\)|useState\(value\)/);
+});
+
+test('[static] interim text is presentation-only: painted while live, never through onChangeText', () => {
+  // The provisional phrase lives in its own nullable state — not query state.
+  assert.match(
+    searchBarCode,
+    /const \[interimTranscript, setInterimTranscript\] = useState<string \| null>\(null\)/
+  );
+  // The boundary's display-only handler IS the state setter — no wrapper
+  // exists that could fork an interim into onChangeText (which would fire
+  // the consumer's debounced query once per interim).
+  assert.match(searchBarCode, /onInterimTranscript: setInterimTranscript,/);
+  assert.doesNotMatch(searchBarCode, /onChangeText\((interimTranscript|displayValue)/);
+  // The field shows the interim only while a session is live, the parent's
+  // value the rest of the time.
+  assert.match(searchBarCode, /const showingInterim = listening && interimTranscript != null;/);
+  assert.match(searchBarCode, /const displayValue = showingInterim \? interimTranscript : value;/);
+  assert.match(searchBarCode, /value=\{displayValue\}/);
+  // Session end (stop, cancel, ceiling alike) clears the interim inside the
+  // boundary's onEnd, snapping the field back to the parent-controlled value
+  // with nothing committed.
+  assert.match(searchBarCode, /setInterimTranscript\(null\);/);
+  // Provisional styling: the palette's muted (placeholder) treatment while
+  // interim, the normal input treatment for committed text.
+  assert.match(searchBarCode, /style=\{\[styles\.input, showingInterim && styles\.inputInterim\]\}/);
+  assert.match(searchBarCode, /inputInterim: \{\s*color: colors\.muted,\s*\}/);
 });
 
 test('[static] the mic renders only when the boundary reports available, absent otherwise', () => {
