@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
+
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripTypeScriptTypes } from 'node:module';
@@ -282,6 +283,124 @@ test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navi
     else if (fn) offenders.push(`${path}: ${fn[0]}`);
   }
   assert.deepEqual(offenders, [], `raw colour literals crept in:\n${offenders.join('\n')}`);
+});
+
+// ---------------------------------------------------------------------------
+// Manifest Appendix C — "Dark-only baked artwork renders only under the dark
+// palette; light keeps current arrangements."
+//
+// A raster with no alpha channel has its background BAKED IN: mount it under
+// the wrong palette and the user gets a rectangle of the other theme's ground.
+// The rule was being kept by hand on two screens and by nothing at all
+// tree-wide, so a fourth asset could be added tomorrow with no gate and
+// nothing would say so. The roster below is the whole inventory — every
+// raster the app `require`s — with what each one's background actually is.
+//
+// The `bake: 'opaque-dark'` and `'opaque-brand'` claims are RE-DERIVED here
+// from each PNG's IHDR colour type (2 = RGB, i.e. no alpha channel exists at
+// all), so the roster cannot rot into a stale comment. The 'transparent'
+// entries were measured by decoding corner alpha during the dark device pass;
+// that decode is not repeated here, and those assets need no gate either way.
+// ---------------------------------------------------------------------------
+
+const BAKED_ART = {
+  // Master 44's hero crop and its gold-B drape: a dark room and a dark drape.
+  'assets/prestige/hero_armchair_customer.png': { bake: 'opaque-dark', gate: true },
+  'assets/prestige/brazos_b_drape.png': { bake: 'opaque-dark', gate: true },
+  // Master 43's hero crop.
+  'assets/prestige/hero_toolbox_worker.png': { bake: 'opaque-dark', gate: true },
+  // The Heritage armchair. Opaque, and its bake is the LIGHT ground
+  // (#FAF5F1) — the exact inverse hazard, so it carries the same gate.
+  'assets/brand/customer-home-chair.png': { bake: 'opaque-light', gate: true },
+  // Transparent: no background to leak, so no gate is owed.
+  'assets/brand/customer-home-post-mark-hd.png': { bake: 'transparent', gate: false },
+  'assets/brand/brazos-b-leaf.png': { bake: 'transparent', gate: false },
+  'assets/brand/worker-home-toolbox.png': { bake: 'transparent', gate: false },
+  // The app icon: a brand deep-green tile with a gold mark and transparent
+  // corners. It is the BRAND's own square, not a palette ground — an icon does
+  // not change colour with the theme on any platform — and it is mounted on
+  // LaunchScreen, which is locked.
+  'assets/brand/app-icon-v2.png': { bake: 'brand-mark', gate: false },
+  // The mode-transition sheets are opaque, but their bake is the BRAND deep
+  // green with a gold mark — not either palette's ground. They read correctly
+  // over a light app and a dark one, and the whole sheet (mark, label, handle,
+  // gold line) is the image, so there is nothing to fall back to. Deliberately
+  // ungated; see components/ModeTransitionOverlay.tsx.
+  'assets/brand/transition-customer.png': { bake: 'opaque-brand', gate: false },
+  'assets/brand/transition-worker.png': { bake: 'opaque-brand', gate: false },
+};
+
+/** How far back from a mount the palette test may sit and still be its guard. */
+const GATE_WINDOW = 240;
+
+test('[static] every raster the app mounts is on the roster', async () => {
+  const roots = ['screens', 'components', 'ui'];
+  const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+  const found = new Map();
+  for (const root of roots) {
+    const entries = await readdir(join(repoRoot, root), { withFileTypes: true, recursive: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.(ts|tsx)$/.test(entry.name)) continue;
+      const path = relative(repoRoot, join(entry.parentPath, entry.name)).replace(/\\/g, '/');
+      const source = stripCommentsForScan(await read(path));
+      for (const hit of source.matchAll(/require\('([^']*\.(?:png|jpe?g|webp|gif))'\)/g)) {
+        found.set(hit[1].replace(/^(\.\.\/)+/, ''), path);
+      }
+    }
+  }
+  // A new baked asset must be reviewed for its gate, not merged silently.
+  assert.deepEqual(
+    [...found.keys()].sort(),
+    Object.keys(BAKED_ART).sort(),
+    'a raster was added or removed — put it on the BAKED_ART roster with its measured bake',
+  );
+});
+
+test('[static] an asset with no alpha channel really is baked, as the roster claims', async () => {
+  for (const [asset, { bake }] of Object.entries(BAKED_ART)) {
+    if (!bake.startsWith('opaque-')) continue;
+    if (asset === 'assets/brand/customer-home-chair.png') continue; // RGBA but fully opaque
+    const bytes = await readFile(new URL(`../${asset}`, import.meta.url));
+    // PNG: 8-byte signature, then IHDR — width(4) height(4) depth(1) type(1).
+    assert.equal(bytes.toString('ascii', 12, 16), 'IHDR', `${asset} is not a PNG`);
+    assert.equal(bytes[25], 2, `${asset} must be colour type 2 (RGB, no alpha) for this claim`);
+  }
+});
+
+test('[static] a baked asset is mounted only behind an isDark decision', async () => {
+  const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+  const gated = Object.entries(BAKED_ART).filter(([, meta]) => meta.gate);
+  assert.ok(gated.length >= 4, 'the gated set must not empty out');
+
+  const roots = ['screens', 'components', 'ui'];
+  const offenders = [];
+  let checked = 0;
+  for (const root of roots) {
+    const entries = await readdir(join(repoRoot, root), { withFileTypes: true, recursive: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.(ts|tsx)$/.test(entry.name)) continue;
+      const path = relative(repoRoot, join(entry.parentPath, entry.name)).replace(/\\/g, '/');
+      // Comment-stripped, so a docblock that MENTIONS the palette can never
+      // stand in for a real gate.
+      const source = stripCommentsForScan(await read(path));
+      for (const [asset] of gated) {
+        const decl = new RegExp(
+          `const (\\w+) = require\\('(?:\\.\\./)+${asset.replace(/[.\\/]/g, (c) => '\\' + c)}'\\)`,
+        ).exec(source);
+        if (!decl) continue;
+        const name = decl[1];
+        for (const use of source.matchAll(new RegExp(`\\b${name}\\b`, 'g'))) {
+          if (use.index <= decl.index + decl[0].length) continue; // the declaration itself
+          checked += 1;
+          const window = source.slice(Math.max(0, use.index - GATE_WINDOW), use.index);
+          if (!window.includes('isDark')) offenders.push(`${path}: ${name} mounted ungated`);
+        }
+      }
+    }
+  }
+  // The sweep must actually be looking at real mounts.
+  assert.ok(checked >= 4, `the gate scan must see the known mounts (saw ${checked})`);
+  assert.deepEqual(offenders, [], 'baked artwork must resolve per palette, never unconditionally');
 });
 
 // ---------------------------------------------------------------------------
