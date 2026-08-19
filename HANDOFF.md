@@ -2,6 +2,117 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
+## 2026-08-19 (4D-6) - live voice text, 3s silence window, summary card to spec: COMPLETE
+
+**No SQL executed, no database contacted, nothing pushed, no locked file
+edited, no `.env` read, no dependency added or mutated, no frozen web
+surface touched, app.json untouched.** Three commits this run (two code +
+this amendment). Base gate: `mainexpo`, c48c45e at HEAD, clean tree,
+baseline bare `npm run verify` green — 746 pass / 0 fail / 0 skipped, exit
+code 0 read directly. Each commit's verify was run bare the same way:
+
+| commit | subject | verify |
+| --- | --- | --- |
+| 222933a | voice(live): interim text paints the field display-only, silence window 3000ms | 750 pass / 0 fail / 0 skipped, exit 0 |
+| 1e16bd9 | worker-home(card): summary card rebuilt to the 4D-6 operator spec | 755 pass / 0 fail / 0 skipped, exit 0 |
+
+### Live interim text — display-only by design
+
+While a voice session is live, SearchBar shows the boundary's interim
+transcript as the TextInput's displayed value, styled provisional
+(`colors.muted`, the placeholder treatment); the final commit renders as
+normal input text. The design is one-way by decision and pinned by test:
+**interims never cross `onChangeText`** — committing them would fire the
+consumer's debounced query once per interim, so a three-second utterance
+would issue a burst of searches. The plumbing: `VoiceSessionHandlers`
+gained an OPTIONAL `onInterimTranscript` (display-only egress; like the
+final, never stored, logged, or sent anywhere); SearchBar wires it to a
+nullable `interimTranscript` state that feeds the TextInput's `value` only
+while `listening`. `onTranscript: onChangeText` remains the single commit
+path — exactly once per session, on the final result. The boundary's
+`onEnd` clears the interim state on every exit (stop, silence, ceiling,
+cancel via blur/background/unmount, error), so a session that ends with no
+final result snaps the field straight back to whatever the parent held
+before the mic was tapped; nothing commits.
+
+### The silence constant
+
+`VOICE_SILENCE_MS` = **3000** (was 2000), defined once in
+`lib/voiceSearch/types.ts` and re-exported by `lib/voiceSearch/index.ts`.
+Call sites: `lib/voiceSearch/provider.ts`'s `restartSilenceTimer()` — the
+only runtime consumer — and `tests/voiceSearch.test.mjs` (timer-order
+assertions plus the pinned value). 3000ms matches the vendor's own internal
+no-result timer (ios/ExpoSpeechRecognizer.swift, `withTimeInterval: 3`);
+2000ms cut the operator off mid-sentence in real use. The 30s ceiling
+(`VOICE_MAX_SESSION_MS`) is untouched and stays armed independently.
+
+### Both iOS permission strings, final (byte-exact, pinned in tests/voiceSearch.test.mjs)
+
+- `microphonePermission` — rewritten in 4D-5, UNCHANGED this run:
+  > BRAZOS uses your microphone only while you are searching by voice, and stops listening when you finish speaking.
+- `speechRecognitionPermission` — UNCHANGED this run; it never described
+  holding the mic button, so the dispatch's replacement branch did not
+  trigger:
+  > Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server.
+
+### The summary card as shipped (operator spec — pixel target for this ONE card)
+
+`screens/WorkerHomeScreen.tsx`, the availability/earnings card only;
+greeting, hero, search, feed heading, and feed cards untouched. The
+"Taking new work" heading and its explanatory paragraph are REMOVED (the
+Switch keeps `accessibilityLabel="Taking new work"` so it stays named for
+screen readers — the one place that string survives).
+
+Row 1 — left column | 1pt divider (`colors.border`, marginHorizontal 14,
+`alignSelf: 'stretch'` spans the taller column) | right column:
+
+- Left: eyebrow **AVAILABLE NOW** (11/700/1.2, gold) · 6pt · serif 30pt
+  status word in ink — **"Online" / "Offline"** — sharing one vertically
+  centred row with the SAME Switch · 6pt · `PulseDot` (emerald when
+  available, `colors.danger` red when not; PulseDot already took a colour
+  prop and honours reduced motion itself, so no extension was needed) +
+  caption **"Visible" / "Not Visible"** (13, textMuted).
+- Right: eyebrow **POTENTIAL EARNINGS** (the same shared style) · 6pt ·
+  serif 30pt amount in emerald through `formatBudget()` · 6pt · caption
+  **"across N jobs"** ("open" dropped; the singular is still handled).
+  While the feed loads the figures stay Skeleton pulses, never a fake $0.
+
+Row 2 — 14pt below: two pills, `flex: 1` each, 12pt gap; height 40,
+capsule radius, 1pt `mint2` border on the existing `surface` fill, 16pt
+icons (`sparkles-outline` / `location-outline`), 12pt horizontal padding,
+8pt icon-to-label gap; labels two-tone — the count in emerald, the rest in
+ink. Card: `layout.cardPadding` (= 14), `radius.lg`, 1pt gold hairline on
+surface (the e195012 construction — no forest fill anywhere).
+
+Every spec number hit; two mechanical notes, zero visual deviation:
+- Pill "radius 20" ships as `radius.pill` (999), which renders as exactly
+  radius 20 on a 40pt-tall control (capsule = half height).
+- 40pt visual pill height + 2pt top/bottom hitSlop keeps the 44pt touch
+  floor (CLAUDE.md) without changing the drawn height.
+- The 26pt continue-path for the status word is built in rather than
+  waiting for a report: `adjustsFontSizeToFit` + `minimumFontScale={0.87}`
+  (0.87 × 30 ≈ 26), so 30pt holds wherever it fits and degrades only where
+  it cannot; no stacking fallback was needed.
+
+Behaviour preserved exactly: toggle handler + optimistic save via
+`updateProfile(accepting_work)`, availability source, earnings math, the
+skill and nearby counts and their sources, the loading skeletons, and every
+navigation/press target. The old "no presence vocabulary" test pin was
+operator-superseded and updated: the WORDS are now Online/Offline/Visible,
+the FACT behind them is still phase53 `accepting_work`, and
+`useWorkerAvailability` still never appears on this screen. Light palette
+values the card reads are pinned byte-identical in
+tests/workerHome.test.mjs; tests/themeResolution.test.mjs and
+tests/goldOnForest.test.mjs are byte-untouched this run — green with no new
+allowlist entry.
+
+Dynamic values the target implied with no repo source: none for the happy
+path — but the nearby count has no source when location permission is
+absent or unresolved, and the skill count none when the worker has no
+skills; those states keep their existing honest single-tone labels
+("Enable location" / "Within 5 miles" / "Add skills to see matches"). No
+number was invented.
+
 ## 2026-08-18 (4D-4 device-pass fixes) - tap-to-talk, worker home anatomy, gold-on-forest: COMPLETE
 
 **No SQL executed, no database contacted, no schema object touched, nothing
@@ -273,14 +384,16 @@ Dark, System (live OS flips must repaint without restart; a pinned choice
 must survive restart and steer keyboard, alerts, share sheet, Maps tiles).
 On the new build exercise the mic on the REAL surfaces with the NEW
 interaction: tap once (both permission dialogs show the authored strings on
-first use), speak, and confirm it stops ~2s after you stop; confirm a
-30-second monologue is cut off; confirm a second tap stops it; navigate
-away / background mid-listen and confirm the mic dies without writing to
-the field; airplane mode must change nothing (on-device); denial leaves the
-mic quietly inert. Also walk the rebuilt Worker Home in both palettes —
-hero accent, gold-hairline summary card, chips inside the card, feed dot —
-and the map pins in dark (near-black hairline on gold pins, unchanged in
-light).
+first use), speak and watch your words appear live in the field as muted
+provisional text, and confirm it stops ~3s after you stop (4D-6 widened the
+window from 2s); confirm a 30-second monologue is cut off; confirm a second
+tap stops it; navigate away / background mid-listen and confirm the mic
+dies without writing to the field and the field snaps back to what it held;
+airplane mode must change nothing (on-device); denial leaves the mic
+quietly inert. Also walk the rebuilt Worker Home in both palettes — hero
+accent, the 4D-6 summary card (eyebrows, serif status word beside the
+toggle, pulse dot, two-tone pills), feed dot — and the map pins in dark
+(near-black hairline on gold pins, unchanged in light).
 
 **C. Dark asset generation — NOW ALSO THE WORKER HERO ILLUSTRATION.**
 docs/audits/DARK_ASSET_INVENTORY.md is the brief — splash config first,
