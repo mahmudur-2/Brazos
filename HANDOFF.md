@@ -2,18 +2,20 @@
 
 Operational context, rewritten every run. Machine state is Git's, not here.
 
-## 2026-08-18 (Stage 4D-4) - dark theme activation; voice search pending
+## 2026-08-18 (Stage 4D-4) - dark theme activation + voice search: COMPLETE
 
 **No SQL executed, no database contacted, no schema object touched, nothing
-pushed, no locked file edited, no `.env` read, no image asset generated.**
-This HANDOFF is commit 6 of the dispatch, written deliberately BEFORE Block 2
-(voice search) so a crash there still leaves a truthful document. Block 1
-(dark theme) is complete; Block 2's outcome lands as a short amendment below
-this line if it ran. Suite at the base gate: 696 pass / 0 fail. After Block 1:
-**706 pass / 0 fail / 0 skipped**, every commit on a green `npm run verify`
-(one exception honestly recorded in the table — 41d3b28 landed with one red
-assertion because a piped `tail` masked verify's exit code; 53229b9 repaired
-it minutes later and the pipe pattern was fixed for the rest of the run).
+pushed, no locked file edited, no `.env` read, no dependency-mutating command
+run, no image asset generated.** Stage 4D-4 shipped both blocks this date:
+Block 1 (dark theme, commits 1-6) in the first session, Block 2 (voice
+search, commits 7-9 below) in a second session dispatched after the operator
+installed the pre-approved dependency themselves (the agent-side install had
+been guard-denied, which skipped Block 2 in session one — that skip is now
+history, superseded by this shipment). Suite: 706 pass at Block 2's base
+gate → **730 pass / 0 fail / 0 skipped** after commit 9; every Block 2
+commit landed on a green bare `npm run verify` with the exit code read
+directly (the piped-`tail` failure mode from Block 1's 41d3b28 was not
+repeated).
 
 ### Corrected facts (operator-supplied, supersede older HANDOFFs)
 
@@ -40,6 +42,35 @@ it minutes later and the pipe pattern was fixed for the rest of the run).
 | 41d3b28 | Map surface. Provider VERIFIED, not assumed: no Google provider configured anywhere → react-native-maps 1.20.1 renders **Apple Maps (MapKit)** on iOS, where `customMapStyle` is Google-only and INERT — the inert `customMapStyle={[]}` was removed and no style JSON ships. Tiles follow the RESOLVED theme via the per-MapView iOS `userInterfaceStyle` prop this version exposes (better than trait-following: covers a pinned preference), on top of commit 1's setColorScheme. All overlays (permission fallback, loading pill, empty banner, cluster pins — count flips to onForest on the gold fill) and MapScreen chrome read the palette. HotspotMap.web.tsx untouched (frozen), no shared prop changed. |
 | 53229b9 | Repairs 41d3b28's red pin (the new test read raw source whose comment names customMapStyle; now comment-stripped like every other [static] scan). |
 | a27c730 | docs/audits/DARK_ASSET_INVENTORY.md — the operator's dark-asset generation brief. No component change was needed: after the sweep, every raster brand asset renders on a locked-light screen or inside the transition panel's own baked background. Leads with the native splash (no `splash` config exists at all — dark cold starts open on Expo's default white; config change deliberately deferred to the asset pass). |
+
+### Block 2 — voice search (commits 7-9), SHIPPED
+
+| commit | what it did |
+| --- | --- |
+| 031f2bc | Dependency + native config. Stages the operator-installed `expo-speech-recognition@3.1.3` (package.json/package-lock.json, exactly the one entry) and registers the package's own config plugin in app.json — identifier `"expo-speech-recognition"` (root app.plugin.js) — with the two operator-authored iOS strings as its `microphonePermission` / `speechRecognitionPermission` options, which the installed plugin source assigns to `NSMicrophoneUsageDescription` / `NSSpeechRecognitionUsageDescription` (options win over pre-existing values). No source file changed. |
+| 34705b3 | lib/voiceSearch/ — the ONE place allowed to import the vendor (statically enforced), on the lib/phoneAuth pattern: pure types.ts + provider.ts executed by tests against injected doubles, index.ts the only impure file. On-device is REQUIRED: `start()` always carries `requiresOnDeviceRecognition: true` and is unreachable unless `supportsOnDeviceRecognition()`, `isRecognitionAvailable()` and an installed en-US locale all passed — necessary because the installed vendor SILENTLY DROPS the flag when the recognizer lacks on-device support (ios/ExpoSpeechRecognizer.swift, prepareRequest), which would otherwise be a silent network fallback. Every degraded case (non-iOS, module missing — the operator's current binary, recognizer unavailable, no on-device support, locale absent, permission denied, probe threw) is first-class `unavailable`; the vendor require is lazy + caught so the app imports safely without the native module; the vendor error payload dies unread (no raw text can cross); the transcript's only egress is the caller's callback. 19 tests. |
+| b7e3e6d | Press-and-hold mic in ui/primitives/SearchBar.tsx, behind the existing onChangeText contract: the transcript handler IS `onChangeText`, no second write path, no auto-submit, consumers unchanged. Hold = onPressIn → beginHold; release = onPressOut → release(); unmount cancels; never a toggle. Mic renders ONLY when the boundary reports available — absent (not disabled) on the current binary and web/Android. `disableVoiceSearch` opts out; default present-when-available. Palette-fed colours (emerald active / navInactive idle / withAlpha wash), no raw literal, no themeResolution allowlist entry; 44pt effective touch target. 5 more tests. |
+
+Voice-search facts an operator should know:
+
+- **The two permission strings are a behavioural contract the code keeps
+  literally true**: recognition runs only between press-in and release
+  (a hold released during the permission round-trip never starts), and
+  there is no code path that can send audio off-device (iOS-only gate — web's
+  speech API streams to browser-vendor servers; on-device required and
+  probed, not just flagged; no network recognizer branch exists to fall
+  back to).
+- **On the current dev binary the mic simply does not render** (native
+  module absent → boundary unavailable). It first appears on the EAS build
+  in item A below.
+- **Only dev-tools/ComponentCatalog.tsx mounts SearchBar today** — no
+  production screen and no locked screen inherits the mic until a screen
+  adopts the shared SearchBar.
+- **en-US only, by pre-made decision.** No locale selection exists.
+- The `npx expo config --type introspect` proof was substituted (that CLI
+  reads `.env`, forbidden in-run) with static tests: app.json carries both
+  strings byte-exact AND the installed app.plugin.js provably maps the two
+  options onto the two Info.plist keys.
 
 ### Deliberately left light (each is a follow-up, not a bug)
 
@@ -112,17 +143,23 @@ phase74 nor phase75 disturbs the finding.
 
 ## Needs the operator - outside any run
 
-**A. EAS BUILD (new, blocking everything this run shipped).** Native config
-changed: `userInterfaceStyle: "automatic"` — dark mode is INERT in the
-existing binary and in Expo Go pinned light. One iOS build (plus Block 2's
-plugin if it shipped — see amendment) makes commits 1-5 real on device.
-Then `git push` — nothing was pushed autonomously.
+**A. EAS BUILD (blocking everything Stage 4D-4 shipped).** Native config
+changed twice this stage: `userInterfaceStyle: "automatic"` (dark mode is
+INERT in the existing binary and in Expo Go pinned light) AND the
+expo-speech-recognition plugin with its native module + the two permission
+strings (the mic cannot appear on any existing binary — the boundary
+correctly reports unavailable there). One iOS build makes commits 1-9 real
+on device. Then `git push` — nothing was pushed autonomously.
 
 **B. Both-themes device flip-through.** Walk every major surface in Light,
 Dark, and System (flip the OS setting live: the app must repaint without
 restart; a pinned choice must survive restart and steer the KEYBOARD,
 alerts, share sheet, and Apple Maps tiles). Known-light surfaces are listed
-above and are not findings.
+above and are not findings. On the new build, also exercise the mic in the
+dev-tools ComponentCatalog: first hold shows BOTH permission dialogs with
+the two authored strings; hold-speak-release lands the phrase in the field;
+airplane mode must change nothing (on-device); denying either permission
+must leave the mic quietly inert (session ends, nothing raw surfaces).
 
 **C. Dark asset generation.** docs/audits/DARK_ASSET_INVENTORY.md is the
 brief — splash config first (white flash on every dark cold start), then
@@ -152,47 +189,14 @@ copy: "Verified workers" → "Real customer reviews", "Protected payment" →
 
 **I. PRIVACY_VERSION decision** (from the previous run): the corrected
 WORKING DRAFT privacy policy has not had its version bumped; decide at the
-counsel-reviewed pass whether users re-accept.
+counsel-reviewed pass whether users re-accept. Note the new
+NSMicrophoneUsageDescription / NSSpeechRecognitionUsageDescription strings
+ship with item A's build — fold voice search into that same
+counsel-reviewed pass (the strings promise on-device-only processing, which
+the code enforces; the policy should say the same).
 
 **J. Device-test backlog (pre-4D-4 items).** The bid-ordering surface
 passed on device (corrected fact). Still open from the previous list: the
 post-flow airplane-mode location behaviors, "Suggested starting range"
 copy, and the corrected Privacy §7 — fold them into the both-themes
 flip-through (item B).
-
-## AMENDMENT (same run, after commit 6) — Block 2: SKIPPED as a unit
-
-**Voice search (dispatch commits 7-9) did not ship. Zero of its code was
-written.** The pre-approved dependency could not be installed: the exact
-call `npm install expo-speech-recognition@sdk-54 --save-exact` was
-mechanically denied by the repository guard —
-`PreToolUse guard.ps1: BLOCK GUARD-DEPS dependency-mutation`. The deny
-matrix is a protected control this run may not bypass (CLAUDE.md), and the
-dispatch's own pre-decided branch for both "a deny rule blocks an action"
-and "the dependency cannot be installed cleanly" is: skip all of Block 2,
-record exactly why, finish the run with Block 1 intact — which this is.
-
-The install itself is sound when run by the operator: the `sdk-54`
-dist-tag exists on npm and resolves to `expo-speech-recognition@3.1.3`
-(verified via `npm view` this run; sdk-53→2.1.5, sdk-55→3.1.3 for
-reference). Nothing in package.json changed.
-
-**To revive Block 2:** (1) operator runs the install above (and registers
-the library's Expo config plugin in app.json plugins if the package ships
-one — it does, per its docs — Block 2's only allowed plugin change);
-(2) re-dispatch commits 7-9 exactly as written in the 4D-4 prompt: the
-lib/ provider boundary with explicit ON-DEVICE recognition (report
-unavailable rather than fall back to network), the press-and-hold mic in
-ui/primitives/SearchBar.tsx behind the existing onChangeText contract with
-an opt-out prop, and the two verbatim iOS strings, proven via the resolved
-config:
-
-> NSMicrophoneUsageDescription: "BRAZOS uses your microphone only while
-> you hold the mic button to search by voice."
-> NSSpeechRecognitionUsageDescription: "Speech is recognized on your
-> device to turn what you say into a search. Nothing is sent to a server."
-
-These sentences are the contract the implementation must keep literally
-true (hold-to-talk; on-device only). Until then the app has no speech
-recognition and no new permission strings — the EAS build in item A ships
-dark mode alone.
