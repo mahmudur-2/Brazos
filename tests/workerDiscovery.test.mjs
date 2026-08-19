@@ -119,7 +119,12 @@ test('[static] B1 · the native map renders pins when provided and suppresses th
   assert.match(map, /: cells\.flatMap/);
   assert.match(map, /Marker/);
   assert.match(map, /onSelectPin\?\.\(pin\)/);
-  assert.match(map, /onRegionChangeComplete={onRegionChangeComplete}/);
+  // emerald D9 wrapped this so the last region survives the theme-keyed
+  // remount, but the caller's handler must still be called with the region it
+  // always was — asserted here rather than just "the prop is present".
+  assert.match(map, /onRegionChangeComplete=\{\(region\) => \{/);
+  assert.match(map, /regionRef\.current = region;/);
+  assert.match(map, /onRegionChangeComplete\?\.\(region\);/);
   // Pin badges are Text counts, not icon glyphs — safe with
   // tracksViewChanges={false} (no icon-font capture race).
   assert.match(map, /tracksViewChanges={false}/);

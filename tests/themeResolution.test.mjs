@@ -499,4 +499,33 @@ test('[static] MapKit tiles follow the resolved theme; no Google-only style ship
   // from the OS trait), and the overlays read the same palette.
   assert.match(nativeMap, /userInterfaceStyle=\{isDark \? 'dark' : 'light'\}/);
   assert.match(nativeMap, /useThemeColors/);
+
+  // emerald D9. The prop above was already correct and the device still showed
+  // light tiles: `overrideUserInterfaceStyle` (what react-native-maps 1.20.1
+  // assigns natively) changes the view's TRAIT COLLECTION, and MKMapView
+  // repaints its basemap on a trait CHANGE — a map that already rasterised
+  // under one appearance does not reliably re-rasterise for an override
+  // applied afterwards. Keying the view on the resolved theme constructs a new
+  // one under the right trait collection instead.
+  assert.match(nativeMap, /key=\{isDark \? 'dark' : 'light'\}/);
+  // ...and the remount must not cost the user their position.
+  assert.match(nativeMap, /const regionRef = useRef\(DEFAULT_REGION\);/);
+  assert.match(nativeMap, /initialRegion=\{regionRef\.current\}/);
+  assert.match(nativeMap, /regionRef\.current = region;/);
+
+  // There is exactly ONE MapView in the tree, so there is no second surface
+  // where the theme could fail to reach the tiles.
+  const mapFiles = [];
+  for (const path of ['components', 'screens']) {
+    const entries = await readdir(new URL(`../${path}/`, import.meta.url), {
+      withFileTypes: true,
+      recursive: true,
+    });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.tsx$/.test(entry.name)) continue;
+      const source = await read(`${path}/${entry.name}`);
+      if (/from 'react-native-maps'/.test(source)) mapFiles.push(`${path}/${entry.name}`);
+    }
+  }
+  assert.deepEqual(mapFiles.sort(), ['components/HotspotMap.native.tsx']);
 });

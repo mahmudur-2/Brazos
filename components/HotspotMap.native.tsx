@@ -37,6 +37,9 @@ export function HotspotMap({
   const styles = stylesFor(colors);
   const [perm, setPerm] = useState<PermState>('loading');
   const mapRef = useRef<MapView>(null);
+  // Where the user last left the map. Survives the theme-keyed remount below
+  // so a Light/Dark switch does not snap them back to the default region.
+  const regionRef = useRef(DEFAULT_REGION);
   // Kept in a ref so obtaining a GPS fix (an effect below) always reports to
   // the CURRENT caller without re-running the location effect per render.
   const onUserLocationRef = useRef(onUserLocation);
@@ -146,8 +149,34 @@ export function HotspotMap({
     <View style={styles.flex}>
       <MapView
         ref={mapRef}
+        // emerald D9 — WHY THIS IS KEYED ON THE THEME.
+        //
+        // The device pass found light MapKit tiles inside a dark app, and the
+        // JS-to-native path was already complete: this is the only MapView in
+        // the tree, MapScreen its only consumer, and react-native-maps 1.20.1
+        // declares (lib/MapView.d.ts), exports (ios/AirMaps/AIRMapManager.m)
+        // and implements (ios/AirMaps/AIRMap.m) `userInterfaceStyle` by
+        // assigning `overrideUserInterfaceStyle` on its MKMapView subclass.
+        // Nothing resets it. So it was not the wrong component, not an
+        // unthreaded prop, not a stale value, and not a Google-style mistake.
+        //
+        // What is left is the native condition: `overrideUserInterfaceStyle`
+        // changes the view's TRAIT COLLECTION, and MKMapView repaints its
+        // basemap on a trait CHANGE. A map that has already rasterised its
+        // tiles under one appearance does not reliably re-rasterise when the
+        // override is applied to it afterwards — the light tiles it first drew
+        // stay. Keying the view on the resolved theme sidesteps that entirely:
+        // a theme flip CONSTRUCTS a new map view under the right trait
+        // collection instead of asking an existing one to repaint.
+        //
+        // The remount would otherwise throw away wherever the user had panned
+        // to, so the last completed region is kept in a ref and fed back as
+        // the initial region. A ref rather than state: this fires on every
+        // pan, and re-rendering the map on each frame would cost more than the
+        // problem it solves.
+        key={isDark ? 'dark' : 'light'}
         style={StyleSheet.absoluteFill}
-        initialRegion={DEFAULT_REGION}
+        initialRegion={regionRef.current}
         showsUserLocation={perm === 'granted'}
         showsMyLocationButton={perm === 'granted'}
         toolbarEnabled={false}
@@ -157,7 +186,10 @@ export function HotspotMap({
         // (react-native-maps 1.20.1), which also covers a pinned Light/Dark
         // preference that differs from the OS trait.
         userInterfaceStyle={isDark ? 'dark' : 'light'}
-        onRegionChangeComplete={onRegionChangeComplete}
+        onRegionChangeComplete={(region) => {
+          regionRef.current = region;
+          onRegionChangeComplete?.(region);
+        }}
       >
         {pins !== undefined
           ? pins.map((pin) => (
