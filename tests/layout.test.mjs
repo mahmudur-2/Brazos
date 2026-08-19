@@ -21,8 +21,12 @@ test('main tab screens do not reserve redundant gaps above the safe tab bar', as
   for (const screen of [homeScreen, myJobs, messages, profile]) {
     assert.match(screen, /paddingBottom: 0/);
   }
-  assert.match(bottomNav, /const tabBarHeight = TAB_BAR_CONTENT_HEIGHT \+ bottomInset/);
-  assert.match(bottomNav, /paddingBottom: bottomInset/);
+  // Prestige 0d: the pill floats by MARGIN (in normal layout flow, so the
+  // margins reserve real space); its height is the content height verbatim
+  // and the library's own insets.bottom padding is zeroed out.
+  assert.match(bottomNav, /const bottomMargin = Math\.max\(insetBottom, TAB_BAR_FLOAT_MARGIN\)/);
+  assert.match(bottomNav, /height: TAB_BAR_CONTENT_HEIGHT,\s*marginHorizontal: TAB_BAR_FLOAT_MARGIN,\s*marginBottom: bottomMargin,/);
+  assert.match(bottomNav, /paddingBottom: 0/);
 });
 
 test('every screen inside the tab bar leaves the bottom safe-area inset to it', async () => {

@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import { radius, themedStyles, useThemeColors, type ColorPalette } from '../../lib/theme';
+import { glow, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
 
 /**
  * §I's `BottomNav` primitive — deferred from Phase 1, built here because Phase 2
@@ -24,17 +24,18 @@ import { radius, themedStyles, useThemeColors, type ColorPalette } from '../../l
  * there, which is the point of the catalog.
  *
  * MODE AWARENESS lives in the two trees (navigation/CustomerRoot.tsx,
- * navigation/WorkerRoot.tsx). Since Stage 4D the two bars differ by design
- * (operator decision, docs/audits/STAGE4D_PLAN.md "Navigation — FINAL"):
- * the worker bar keeps the five classic tabs (WORKER_BAR_TABS), while the
- * customer bar shows four (CUSTOMER_BAR_TABS) with the raised [ + ] creation
- * button in the center slot. The customer tree still REGISTERS Map and MyJobs
- * as routes — their bar items are hidden via HIDDEN_TAB_ITEM_OPTIONS — because
- * the LOCKED Customer Home dispatches `getParent()?.navigate('Map')` and
- * notification routing dispatches into the MyJobs tab in both modes; both must
- * keep resolving on the tab navigator itself (React Navigation 7 does not
- * search child navigators for an untargeted NAVIGATE, so a route moved into a
- * child stack would silently stop resolving for those callers).
+ * navigation/WorkerRoot.tsx). Since Prestige 0d (pre-made decision 4) the two
+ * bars are the SAME five tabs in the same order — Home / Map / My Jobs /
+ * Messages / Profile, Map never Discover (manifest Appendix B-2) — drawn as a
+ * floating pill with an emerald active item under a soft glow. The 4D-era
+ * customer [ + ] creation slot retired with the golden masters: none of the
+ * 43 draws it, and each of its three sheet actions has a standing surface
+ * (PostJob from Home and the My Jobs hub, SavedWorkers on the Profile stack,
+ * My Jobs as a visible tab). The customer tree still REGISTERS Discover as a
+ * route — its bar item hidden via HIDDEN_TAB_ITEM_OPTIONS — because
+ * SavedWorkers dispatches into it; React Navigation 7 does not search child
+ * navigators for an untargeted NAVIGATE, so the route must stay on the tab
+ * navigator itself.
  */
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -62,13 +63,13 @@ export const BOTTOM_NAV_TABS: {
   { key: 'Profile', label: 'Profile', icons: ['person', 'person-outline'] },
 ];
 
-/** The worker bar — the five classic tabs, unchanged (LOCKED screen 48 sits
- *  above this exact bar). */
+/** The worker bar — the five classic tabs, unchanged. */
 export const WORKER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Messages', 'Profile'];
 
-/** The customer bar's four VISIBLE tabs. The center [ + ] slot sits between
- *  Discover and Messages and is an action, not a tab — see CenterCreateButton. */
-export const CUSTOMER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Discover', 'Messages', 'Profile'];
+/** The customer bar — decision 4: the SAME five as the worker bar. Kept as
+ *  its own export (not an alias) so the trees keep naming their own contract
+ *  and a future divergence is a one-line diff, not an API change. */
+export const CUSTOMER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Messages', 'Profile'];
 
 const TAB_BY_KEY = new Map(BOTTOM_NAV_TABS.map((tab) => [tab.key as string, tab]));
 
@@ -114,14 +115,13 @@ export const TAB_BAR_CONTENT_HEIGHT = 70;
 const TAB_ICON_WRAPPER_HEIGHT = TAB_BAR_CONTENT_HEIGHT - 10;
 const TAB_BOTTOM_GAP = 3;
 
-// How much room to leave below the labels for the home indicator. iOS reports
-// insets.bottom = 34 on notched devices, and reserving all of it was what left
-// the visible band of empty white under the labels: the content area stops at
-// 70px and the remaining 34 is pure padding. The indicator itself only occupies
-// roughly the bottom 13px, so 16 clears it with margin while cutting that dead
-// space by more than half. Devices reporting a smaller inset keep their own
-// (the Math.min below), since they need less, not more.
-export const TAB_BAR_SAFE_BOTTOM = 16;
+// The pill's float gap (Prestige 0d, decision 4). Horizontally it is the
+// pill's inset from the screen edges; vertically it is the MINIMUM gap under
+// the pill. On a notched device the bottom margin grows to the full reported
+// inset (34) so the pill floats clear of the home indicator — the indicator
+// lives in the background gap now, never inside the bar, which retires the
+// docked era's fold-the-inset-into-the-height arithmetic.
+export const TAB_BAR_FLOAT_MARGIN = 12;
 
 // Bar colours come from the RESOLVED palette (4D-4): bottomNavScreenOptions
 // takes it as a parameter so it stays a plain function the catalog can call,
@@ -129,14 +129,15 @@ export const TAB_BAR_SAFE_BOTTOM = 16;
 // a theme change. Both palettes keep the background OPAQUE (surface), which is
 // what keeps the well-known Android transparent-background + elevation
 // black-rectangle bug structurally impossible — the elevation:0 override below
-// still accompanies it, exactly as before. Emerald reskin note (unchanged):
-// the active tint is `forest` (gold under Prestige) rather than `primary`, and
-// the hairline is the ordinary border — the accent rides the active item, not
-// the edge.
+// still accompanies it, exactly as before. Prestige 0d (decision 4): the
+// active tint is `emerald` with a soft glow in dark, the inactive tint is the
+// §I `navInactive`, and the pill's hairline is the ordinary border — in dark
+// that token IS the dim-gold hairline.
 
-/** How tall the whole bar is on a device reporting this bottom inset. */
+/** Total vertical space the floating pill occupies on a device reporting this
+ *  bottom inset — the pill's height plus the margin that floats it. */
 export function bottomNavHeight(insetBottom: number): number {
-  return TAB_BAR_CONTENT_HEIGHT + Math.min(insetBottom, TAB_BAR_SAFE_BOTTOM);
+  return TAB_BAR_CONTENT_HEIGHT + Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
 }
 
 /**
@@ -153,17 +154,26 @@ export function BottomNavItem({
   focused: boolean;
   color: string;
 }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const tab = TAB_BY_KEY.get(routeName);
   const [active, inactive] = tab?.icons ?? (['ellipse', 'ellipse-outline'] as const);
   const label = tab?.label ?? routeName;
+  // Decision 4: the active glyph and label glow softly. A dark-Prestige
+  // treatment — light keeps its flat Heritage bar; the shape lives at token
+  // level (glow.text), only the colour is resolved here.
+  const activeGlow = focused && isDark ? glow.text(withAlpha(colors.emerald, 0.55)) : null;
 
   return (
     <View style={styles.tabItemContent}>
-      <Ionicons name={focused ? active : inactive} size={TAB_ICON_SIZE} color={color} />
+      <Ionicons
+        name={focused ? active : inactive}
+        size={TAB_ICON_SIZE}
+        color={color}
+        style={activeGlow}
+      />
       <Text
-        style={[styles.tabItemLabel, { color, fontWeight: focused ? '700' : '500' }]}
+        style={[styles.tabItemLabel, { color, fontWeight: focused ? '700' : '500' }, activeGlow]}
         numberOfLines={1}
       >
         {label}
@@ -173,27 +183,26 @@ export function BottomNavItem({
 }
 
 /**
- * The Tab.Navigator `screenOptions` both trees use. Identical configuration in
- * customer and worker mode, which is what keeps the chrome under LOCKED screens
- * 07 and 48 pixel-for-pixel unchanged.
+ * The Tab.Navigator `screenOptions` both trees use — identical configuration
+ * in customer and worker mode, so the chrome cannot drift between modes.
  *
  * `insetBottom` is passed in rather than read from a hook here so this stays a
  * plain function the catalog can also call.
  */
 export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalette) {
-  // getTabBarHeight() (bottom-tabs internals) uses a custom tabBarStyle.height
-  // VERBATIM when one is set, rather than adding the safe-area inset on top of
-  // it the way the default 49px computation does — so the inset has to be
-  // folded in by hand. Without this, TAB_BAR_CONTENT_HEIGHT would be the whole
-  // bar on a notched device and the home indicator would eat into the content
-  // slot, re-creating the overflow that height is sized to avoid.
-  const bottomInset = Math.min(insetBottom, TAB_BAR_SAFE_BOTTOM);
-  const tabBarHeight = TAB_BAR_CONTENT_HEIGHT + bottomInset;
+  // The floating pill (Prestige 0d). The bar stays in normal layout flow —
+  // BottomTabView lays scenes and bar in one column — so these MARGINS reserve
+  // real space and no screen content can slide beneath the pill; nothing here
+  // is absolutely positioned. The home indicator lives in the bottom gap: the
+  // margin grows to the full reported inset on a notched device.
+  const bottomMargin = Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
 
   return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
     headerShown: false,
-    tabBarActiveTintColor: palette.forest,
-    tabBarInactiveTintColor: palette.textMuted,
+    // Decision 4 — the ONE active rule that replaced the masters' five
+    // competing treatments (manifest B-1): emerald active, navInactive rest.
+    tabBarActiveTintColor: palette.emerald,
+    tabBarInactiveTintColor: palette.navInactive,
     tabBarShowLabel: false,
     tabBarIcon: ({ focused, color }) => (
       <BottomNavItem routeName={route.name} focused={focused} color={color} />
@@ -203,16 +212,23 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
     // to lay out in, instead of the library's default 31px-wide icon-only box.
     tabBarIconStyle: { width: '100%', height: TAB_ICON_WRAPPER_HEIGHT },
     tabBarStyle: {
-      height: tabBarHeight,
-      // MUST accompany the height above. BottomTabBar.js applies
-      // `paddingBottom: insets.bottom` (the full 34 on a notched device) to the
-      // bar; tabBarStyle is merged last so this overrides it. Without it the
-      // bar would be 86 tall with 34 of padding, leaving the content only 52 of
-      // the 70 it needs — re-creating the overflow the height was sized to
-      // avoid.
-      paddingBottom: bottomInset,
-      backgroundColor: palette.surface,
+      // getTabBarHeight() (bottom-tabs internals) uses a custom height
+      // VERBATIM; the safe-area inset now lives in the float margin, not the
+      // height, so the content slot arithmetic above stays exact.
+      height: TAB_BAR_CONTENT_HEIGHT,
+      marginHorizontal: TAB_BAR_FLOAT_MARGIN,
+      marginBottom: bottomMargin,
+      borderRadius: radius.xl,
+      borderWidth: 1,
+      // In dark this token IS the dim-gold hairline; light keeps its Heritage
+      // hairline. borderTopColor rides along because the library's base style
+      // sets it and a mismatched top edge would show on the rounded pill.
+      borderColor: palette.border,
       borderTopColor: palette.border,
+      backgroundColor: palette.surface,
+      // Kills BottomTabBar.js's own `paddingBottom: insets.bottom` (tabBarStyle
+      // is merged last) — the float margin owns the home-indicator clearance.
+      paddingBottom: 0,
       elevation: 0,
     },
   });
@@ -225,51 +241,16 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
  * installed @react-navigation/bottom-tabs 7.18.3 BottomTabBar.js, which merges
  * `tabBarItemStyle` onto each item's container).
  *
- * The customer tree uses this for Map and MyJobs: the LOCKED Customer Home's
- * "View map" pill dispatches `getParent()?.navigate('Map')` — an untargeted
- * NAVIGATE handled by the tab navigator itself, which React Navigation 7 never
- * forwards down into child navigators — and every notification / cross-tab
- * jump targets the MyJobs TAB in both modes (lib/navigationRef.ts). Keeping
- * both as hidden tab routes keeps every one of those dispatches resolving
- * while the bar shows only the four customer tabs plus the center action.
+ * The customer tree uses this for Discover: SavedWorkersScreen dispatches
+ * `navigateAcrossTabs('Discover', 'WorkerSearch', …)` — an untargeted
+ * NAVIGATE handled by the tab navigator itself, which React Navigation 7
+ * never forwards down into child navigators — so the browse surface must
+ * stay registered on the navigator even though decision 4's five-tab bar
+ * (Map, never Discover) gives it no bar item.
  */
 export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
   tabBarItemStyle: { display: 'none' },
 };
-
-/**
- * The customer bar's center [ + ] — a rounded square in `colors.forest` with a
- * dark plus glyph, visually raised above the bar (4D-1a pre-made decision).
- * It is an ACTION, not a navigation destination: it opens the creation sheet
- * and never dispatches navigation, so it can never render an active state.
- *
- * Rendered through the dummy Create route's `tabBarButton`, which replaces the
- * library's pressable inside an `overflow: visible` item wrapper — so the
- * raised square can poke above the hairline without touching the bar's own
- * style object. The BUTTON is opaque forest (gold under Prestige) with its own
- * shadow; the bar keeps its opaque background and `elevation: 0` (see the
- * comment above bottomNavScreenOptions — nothing reintroduces transparency).
- */
-export function CenterCreateButton({ onPress }: { onPress: () => void }) {
-  const { palette: colors, emerald, isDark } = useThemeColors();
-  const styles = stylesFor(colors);
-  return (
-    <View style={styles.createSlot}>
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [styles.createButton, pressed && styles.createButtonPressed]}
-        accessibilityRole="button"
-        accessibilityLabel="Create"
-        accessibilityHint="Post a job, hire someone again, or open your jobs"
-      >
-        {/* Light keeps the 4D-1a dark-ink glyph on forest; dark needs the
-            §I onForest (near-black) so the glyph reads on the gold fill —
-            ColorPalette has no onForest, hence the emerald read. */}
-        <Ionicons name="add" size={34} color={isDark ? emerald.onForest : colors.ink} />
-      </Pressable>
-    </View>
-  );
-}
 
 /**
  * A static, non-navigating rendering of the bar, for the dev catalog. Uses the
@@ -280,51 +261,31 @@ export function BottomNavPreview({
   activeKey,
   insetBottom = 0,
   tabs = WORKER_BAR_TABS,
-  showCreateAction = false,
 }: {
   activeKey: BottomNavTabKey;
   /** Simulate a notched device's home-indicator inset. */
   insetBottom?: number;
   /** Which bar layout to draw — worker five by default. */
   tabs?: BottomNavTabKey[];
-  /** Insert the static customer [ + ] between Discover and Messages. */
-  showCreateAction?: boolean;
 }) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
-  const bottomInset = Math.min(insetBottom, TAB_BAR_SAFE_BOTTOM);
-
-  // The customer layout raises the action between its 2nd and 3rd tabs; a
-  // flat item list keeps every slot an equal flex column, like the real bar.
-  const items: Array<{ kind: 'tab'; key: BottomNavTabKey } | { kind: 'create' }> = [];
-  tabs.forEach((key, index) => {
-    if (showCreateAction && index === 2) items.push({ kind: 'create' });
-    items.push({ kind: 'tab', key });
-  });
+  const bottomMargin = Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
 
   return (
     <View
-      style={[
-        styles.previewBar,
-        { height: TAB_BAR_CONTENT_HEIGHT + bottomInset, paddingBottom: bottomInset },
-      ]}
+      style={[styles.previewBar, { height: TAB_BAR_CONTENT_HEIGHT, marginBottom: bottomMargin }]}
       accessibilityRole="tablist"
     >
-      {items.map((item) =>
-        item.kind === 'create' ? (
-          <View key="create" style={styles.previewItem}>
-            <CenterCreateButton onPress={() => {}} />
-          </View>
-        ) : (
-          <View key={item.key} style={styles.previewItem}>
-            <BottomNavItem
-              routeName={item.key}
-              focused={item.key === activeKey}
-              color={item.key === activeKey ? colors.forest : colors.textMuted}
-            />
-          </View>
-        )
-      )}
+      {tabs.map((key) => (
+        <View key={key} style={styles.previewItem}>
+          <BottomNavItem
+            routeName={key}
+            focused={key === activeKey}
+            color={key === activeKey ? colors.emerald : colors.navInactive}
+          />
+        </View>
+      ))}
     </View>
   );
 }
@@ -346,42 +307,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: TAB_LABEL_FONT_SIZE + 2,
     marginTop: 2,
   },
-  // Fills the Create route's item slot; the square inside is lifted so it
-  // pokes above the hairline. Bottom-aligned like tabItemContent so the
-  // raised amount is the translate, not layout guesswork.
-  createSlot: {
-    flex: 1,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    paddingBottom: TAB_BOTTOM_GAP,
-  },
-  createButton: {
-    width: 54,
-    height: 54,
-    borderRadius: radius.lg,
-    backgroundColor: colors.forest,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Raised above the bar. iOS is the target (CLAUDE.md: Android deferred);
-    // the slice above the bar's bounds still draws because the library's item
-    // wrapper keeps overflow visible for the uikit variant.
-    transform: [{ translateY: -14 }],
-    // The button's own depth. It is OPAQUE forest, so this elevation cannot
-    // trigger the transparent-background Android rendering bug the bar's own
-    // elevation:0 exists to avoid — and the bar's style is untouched.
-    shadowColor: colors.ink,
-    shadowOpacity: 0.22,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
-  },
-  createButtonPressed: { opacity: 0.88, transform: [{ translateY: -14 }, { scale: 0.96 }] },
   previewBar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
+    marginHorizontal: TAB_BAR_FLOAT_MARGIN,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   previewItem: {
     flex: 1,

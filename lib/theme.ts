@@ -75,6 +75,11 @@ export const colors = {
   surface: '#FFFFFF',
   border: '#DDD6C4',
 
+  /** Inactive bottom-nav items (§I "inactive nav"; decision 4 names the
+   *  role). Distinct from textSubtle so the bar can be tuned without moving
+   *  every tertiary caption with it. */
+  navInactive: '#839087',
+
   // Status palette (text + background pairs), warmed to sit naturally in the
   // forest/earth palette. Kept clearly distinct from `primary` (which is a
   // deep blue-green) so status badges still read at a glance — success leans
@@ -163,6 +168,7 @@ export const darkColors: ColorPalette = {
   // is the flat equivalent of gold at hairline alpha, not a neutral grey.
   surface: '#0E1D17',
   border: '#55482E',
+  navInactive: emeraldDark.navInactive,
 
   // Live-state/status greens ride the v2 emerald; warning rides the masters'
   // hot amber on the goldSoft wash. Danger SURFACES keep pre-v2 values.

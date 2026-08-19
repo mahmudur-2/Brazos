@@ -275,7 +275,6 @@ test('§4 · SavedWorkersScreen: sections, suppressed Hire, no writes, no verifi
 
 test('§4.4 · the rebook strip tops the search surface and "Hire someone again" resolves to SavedWorkers [static]', async () => {
   const search = await read('screens/WorkerSearchScreen.tsx');
-  const root = await read('navigation/CustomerRoot.tsx');
 
   assert.match(search, /rebookStripItems\(/);
   assert.match(search, /Hire someone again/);
@@ -285,10 +284,10 @@ test('§4.4 · the rebook strip tops the search surface and "Hire someone again"
   // An empty strip renders nothing — the block is gated on having items.
   assert.match(search, /rebook\.length > 0 \? \(/);
 
-  // §1.6 — the centre [+] sheet's row already lands on this screen; pin it so
-  // a future re-route is a deliberate act.
-  const sheetRow = root.slice(root.indexOf("key: 'hire-again'"));
-  assert.ok(sheetRow.includes("navigateAcrossTabs('Profile', 'SavedWorkers')"));
+  // (The 4D-era centre [+] sheet's hire-again row used to be pinned here;
+  // Prestige 0d retired the sheet with the masters' five-tab bar — see
+  // tests/mode.test.mjs "the retired [ + ] actions each keep a standing
+  // surface", which now owns that reachability contract.)
 });
 
 // ---------------------------------------------------------------------------

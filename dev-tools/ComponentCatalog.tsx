@@ -359,9 +359,9 @@ export function ComponentCatalog() {
         <Section title="BottomNav — tab states">
           <Text style={styles.note}>
             The real bar is drawn by React Navigation from bottomNavScreenOptions(); this preview
-            uses the same item renderer and constants, so a change to one shows here. Since Stage
-            4D the two bars differ: worker keeps the five classic tabs, customer shows four plus
-            the center [ + ] action (Map and MyJobs stay registered as hidden routes).
+            uses the same item renderer and constants, so a change to one shows here. Prestige 0d
+            (decision 4): one floating pill, the same five tabs in both modes, emerald active
+            with a soft glow in dark (the customer tree keeps Discover as a hidden route).
           </Text>
           {WORKER_BAR_TABS.map((key) => {
             const tab = BOTTOM_NAV_TABS.find((t) => t.key === key);
@@ -373,8 +373,8 @@ export function ComponentCatalog() {
             );
           })}
           <View style={styles.navBox}>
-            <Text style={styles.navCaption}>customer bar — Home · Discover · [ + ] · Messages · Profile</Text>
-            <BottomNavPreview activeKey="Home" tabs={CUSTOMER_BAR_TABS} showCreateAction />
+            <Text style={styles.navCaption}>customer bar — the same five (decision 4)</Text>
+            <BottomNavPreview activeKey="Home" tabs={CUSTOMER_BAR_TABS} />
           </View>
           <View style={styles.navBox}>
             <Text style={styles.navCaption}>with a notched device’s bottom inset (34pt reported)</Text>

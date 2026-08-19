@@ -102,11 +102,10 @@ export {
   BottomNavPreview,
   bottomNavHeight,
   bottomNavScreenOptions,
-  CenterCreateButton,
   CUSTOMER_BAR_TABS,
   HIDDEN_TAB_ITEM_OPTIONS,
   TAB_BAR_CONTENT_HEIGHT,
-  TAB_BAR_SAFE_BOTTOM,
+  TAB_BAR_FLOAT_MARGIN,
   WORKER_BAR_TABS,
   type BottomNavTabKey,
 } from './BottomNav';

@@ -441,37 +441,28 @@ export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParam
 //
 // Exactly one of these is mounted at a time (navigation/ModeShell.tsx), which
 // is §F's enforcement mechanism 2: a screen from the other tree cannot render
-// because it is not there. Since Stage 4D the two BARS differ (operator
-// decision): the worker tree keeps the five classic tabs; the customer tree
-// shows Home · Discover · [ + ] · Messages · Profile, with Map and MyJobs
-// registered as HIDDEN routes (see CustomerRoot.tsx for the mechanism and
-// why). The trees stay separately typed, so cross-tree navigation is still a
-// compile error.
+// because it is not there. Since Prestige 0d (pre-made decision 4) the two
+// BARS are the same five tabs — Home · Map · My Jobs · Messages · Profile —
+// with the customer tree additionally registering Discover as a HIDDEN route
+// (see CustomerRoot.tsx for the mechanism and why). The trees stay separately
+// typed, so cross-tree navigation is still a compile error.
 
 /** The customer tree. §F's `CustomerParamList`. */
 export type CustomerParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
-  /** The customer browse surface — workers and services, never job postings. */
-  Discover: NavigatorScreenParams<DiscoverStackParamList> | undefined;
-  /**
-   * The center [ + ] slot. NOT a navigation destination: its tabBarButton
-   * opens the creation sheet and never dispatches, so this route can only be
-   * reached by a deliberate programmatic navigate — which nothing does. It is
-   * typed so the registration typechecks, same rationale as ComponentCatalog.
-   */
-  Create: undefined;
+  Map: NavigatorScreenParams<MapStackParamList> | undefined;
+  /** Hosts the whole customer hire + active-work loop and every notification
+   *  / cross-tab jump that targets the MyJobs tab. */
+  MyJobs: NavigatorScreenParams<MyJobsStackParamList> | undefined;
   Messages: NavigatorScreenParams<MessagesStackParamList> | undefined;
   Profile: NavigatorScreenParams<ProfileStackParamList> | undefined;
   /**
-   * HIDDEN routes — registered, dispatchable, absent from the bar
-   * (HIDDEN_TAB_ITEM_OPTIONS in ui/primitives/BottomNav.tsx):
-   * MyJobs hosts the whole customer hire + active-work loop and every
-   * notification / cross-tab jump that targets the MyJobs tab; Map keeps the
-   * LOCKED Customer Home's `getParent()?.navigate('Map')` pill resolving
-   * until the operator's unlock session removes that chip.
+   * HIDDEN route — registered, dispatchable, absent from the bar
+   * (HIDDEN_TAB_ITEM_OPTIONS in ui/primitives/BottomNav.tsx): the customer
+   * browse surface (workers and services, never job postings). SavedWorkers
+   * dispatches into it, so it must stay on the tab navigator.
    */
-  MyJobs: NavigatorScreenParams<MyJobsStackParamList> | undefined;
-  Map: NavigatorScreenParams<MapStackParamList> | undefined;
+  Discover: NavigatorScreenParams<DiscoverStackParamList> | undefined;
 };
 
 /** The worker tree. §F's `WorkerParamList`. */
