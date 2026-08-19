@@ -42,7 +42,14 @@ import type {
   ProfileReviewsRouteParamList,
   WorkerProfileRouteParamList,
 } from '../lib/navigation';
-import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  radius,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * Read-only view of another user's profile — the public face of a worker's
@@ -55,7 +62,7 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from
  * completed-job stats come from the worker_job_stats() RPC (phase17).
  */
 export function WorkerProfileScreen() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // PostJob is registered alongside WorkerProfile in every stack that can
   // reach this screen, so the offer button below can push it from any of them.
@@ -314,8 +321,8 @@ export function WorkerProfileScreen() {
             {profile?.categories && profile.categories.length > 0 && (
               <View style={styles.chips}>
                 {profile.categories.map((c) => (
-                  <View key={c} style={styles.chip}>
-                    <Text style={styles.chipText}>
+                  <View key={c} style={[styles.chip, isDark && styles.chipDark]}>
+                    <Text style={[styles.chipText, isDark && styles.chipTextDark]}>
                       {JOB_CATEGORY_LABELS[c as keyof typeof JOB_CATEGORY_LABELS] ?? c}
                     </Text>
                   </View>
@@ -343,14 +350,31 @@ export function WorkerProfileScreen() {
 
           {/* Saving a tombstoned account would be a dead-end bookmark — the
               same §4.3 reasoning that suppresses Hire suppresses Save. */}
+          {/* Masters 5 and 18 draw the saved state as a full-width card, and
+              they disagree on its colour (5: green text + green bookmark;
+              18: cream serif + gold bookmark). Decision 8 settles it — a
+              saved-state control is emerald text and an emerald bookmark —
+              so B-7 resolves to master 5's form. */}
           {!isSelf && user && hireable ? (
-            <Button
-              title={savedByMe ? 'Saved — tap to remove' : `Save ${firstName} for later`}
-              variant="secondary"
-              icon={savedByMe ? 'bookmark' : 'bookmark-outline'}
+            <Pressable
               onPress={() => void toggleSaved()}
-              loading={savingBookmark}
-            />
+              disabled={savingBookmark}
+              accessibilityRole="button"
+              accessibilityState={{ selected: savedByMe, disabled: savingBookmark }}
+              style={({ pressed }) => [
+                styles.savedCard,
+                pressed && styles.savedCardPressed,
+              ]}
+            >
+              <Text style={[styles.savedLabel, savedByMe && styles.savedLabelActive]}>
+                {savedByMe ? 'Saved — tap to remove' : `Save ${firstName} for later`}
+              </Text>
+              <Ionicons
+                name={savedByMe ? 'bookmark' : 'bookmark-outline'}
+                size={20}
+                color={savedByMe ? colors.emerald : colors.textMuted}
+              />
+            </Pressable>
           ) : null}
 
           {services.length > 0 ? (
@@ -456,7 +480,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
   },
   servicesTitle: {
-    fontSize: 16,
+    fontFamily: fonts.display,
+    fontSize: 20,
     fontWeight: '800',
     color: colors.ink,
   },
@@ -548,9 +573,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: spacing.sm,
   },
+  // Decision 9: identity and card headings are display type.
   name: {
     flexShrink: 1,
-    fontSize: 20,
+    fontFamily: fonts.display,
+    fontSize: 24,
     fontWeight: '800',
     color: colors.text,
   },
@@ -590,18 +617,49 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
   },
+  // Master 18 draws the identity card's category chips as gold OUTLINES with
+  // cream labels; light keeps the Heritage sage-filled pair.
+  chipDark: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: colors.gold,
+  },
   chipText: {
     fontSize: 12,
     fontWeight: '700',
     color: colors.primary,
   },
+  chipTextDark: { fontSize: 14, color: colors.ink },
+  // Masters 5/18's saved control: one full-width hairlined card, its label
+  // centred, with the bookmark at the trailing edge.
+  savedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.md,
+    minHeight: 56,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  savedCardPressed: { opacity: 0.82 },
+  savedLabel: {
+    fontFamily: fonts.display,
+    fontSize: 19,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  savedLabelActive: { color: colors.emerald },
   hireCard: {
     gap: spacing.xs,
   },
   hireTitle: {
-    fontSize: 17,
+    fontFamily: fonts.display,
+    fontSize: 22,
     fontWeight: '700',
-    color: colors.text,
+    color: colors.ink,
   },
   hireText: {
     fontSize: 14,
