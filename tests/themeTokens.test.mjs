@@ -108,11 +108,13 @@ test('ui/tokens light and dark carry identical key sets, light === colors', asyn
     );
   }
 
-  // The five Prestige anchors that make dark "Emerald Prestige" and not just
-  // an inversion: gold primary (forest === gold), dark content on that gold
-  // fill, and surfaces darker than their content.
-  assert.equal(dark.forest, dark.gold, 'Prestige primary is gold');
-  assert.notEqual(dark.onForest, light.onForest, 'onForest must flip dark for the gold fill');
+  // The Prestige v2 anchors (pixel-derived from the 43 golden masters):
+  // forest is the deep-green conversion fill and gold is metal line-work —
+  // v1 merged them (the gold-primary experiment) and v2 must never re-merge
+  // them; content on a forest fill is the cream ink in dark; and surfaces
+  // stay darker than their content.
+  assert.notEqual(dark.forest, dark.gold, 'v2: forest is green, gold is metal — never re-merged');
+  assert.equal(dark.onForest, dark.ink, 'cream ink reads on the deep-green fill');
   assert.notEqual(dark.bg, light.bg);
   assert.notEqual(dark.surface, light.surface);
 });

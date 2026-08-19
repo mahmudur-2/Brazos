@@ -80,6 +80,11 @@ export const colors = {
   /** --danger — destructive text and icons. */
   danger: '#9C3F35',
 
+  /** Hot-amber warning accent — delete-account gates, warning headings
+   *  (Prestige masters 31/32/41). A warning is amber in BOTH palettes and is
+   *  never the danger red; the masters draw no red control at all. */
+  warn: '#9A6B1F',
+
   /** §I: "danger surfaces #F5E7E4 / border #E9CAC5". */
   dangerSurface: '#F5E7E4',
   dangerBorder: '#E9CAC5',
@@ -114,49 +119,41 @@ export type EmeraldPalette = Record<ColorToken, string>;
 export const light = colors;
 
 /**
- * Emerald Prestige — the dark palette, authored to STAGE4D_PLAN.md's spec:
- * near-black emerald background, dark-green cards, gold hairline borders,
- * gold primary. ("Sage success" lives in lib/theme.ts's status pairs — this
- * §I palette has never carried a success key in either mode.)
+ * Emerald Prestige v2 — the dark palette, pixel-derived from the 43 golden
+ * masters in docs/mockups/ (canonical values in BRAZOS_MOCKUP_MANIFEST.md's
+ * measured-palette table; batch log in docs/mockups/PRESTIGE_RUN_REPORT.md).
  *
- * NOTHING RESOLVES TO THIS PALETTE YET. 4D-3.5 ships the resolver pinned to
- * `light` (lib/ThemeContext.tsx); these values first render when 4D-4 adds
- * the Light/Dark/System setting, flips app.json `userInterfaceStyle` to
- * "automatic" (T1), and does the full-screen sweep in both themes. Until that
- * sweep, per-key intent is recorded here so 4D-4 tunes values on a device
- * instead of re-deriving intent:
- *
- * - `forest` is the PRIMARY role (its docblock above: CTAs, display titles,
- *   active nav) — in Prestige that role is GOLD, with `onForest` flipped to a
- *   near-black so the gold fill keeps its contrast. Screens that use forest
- *   as a large CARD fill rather than as the primary accent read wrong under
- *   this mapping by design — restyling those cards onto `surface` is exactly
- *   the 4D-4 sweep's job, not a reason to un-gold the primary.
- * - `line` doubles as the "gold hairline border" anchor: a dimmed gold, not a
- *   neutral grey, is what makes Prestige read as Prestige.
- * - `emerald`/`gold`/`goldSoft`/`mint`/`mint2`/`ink` follow the established
- *   dark-surface liftings lib/theme.ts's darkColors pioneered; that file now
- *   reads its dark brand hues from HERE (one definition, per CLAUDE.md).
+ * v2 INVERTS v1's gold-primary premise: `forest` is a DEEP GREEN again — the
+ * one solid conversion fill of the whole master set — and `gold` is metal
+ * line-work (eyebrows, hairlines, icons, rings), never a fill. Cream/gold
+ * content on a forest fill is therefore correct in dark, exactly as in
+ * light; `onForest` is the cream ink. Emphasized borders are gold through
+ * withAlpha, never a new hex. `line` stays the flat equivalent of a dim gold
+ * hairline — a warm metal, not a neutral grey: that is what makes Prestige
+ * read as Prestige. `emerald` is the live-state color (money, Open, unread,
+ * active nav); `warn` is the hot amber of the delete gates.
  */
 export const dark = {
-  forest: '#D9B978',
-  emerald: '#4E9E82',
-  gold: '#D9B978',
-  goldSoft: '#2C2617',
-  mint: '#1C2E27',
-  mint2: '#2A4237',
+  forest: '#1E3A2C',
+  emerald: '#5FAE81',
+  gold: '#DCAB60',
+  goldSoft: '#251E10',
+  mint: '#11241C',
+  mint2: '#2A4C3D',
   ink: '#F1EDE1',
 
-  bg: '#0A1613',
-  surface: '#132A22',
-  muted: '#9FAFA5',
-  line: '#4A3D24',
-  danger: '#D97561',
+  bg: '#08110E',
+  surface: '#0E1D17',
+  muted: '#93A096',
+  line: '#55482E',
+  danger: '#D8604B',
+  // Danger SURFACES keep their pre-v2 values by decision.
   dangerSurface: '#33201B',
   dangerBorder: '#4C2E26',
-  secondaryBorder: '#2E4A3E',
-  navInactive: '#77857B',
-  onForest: '#20180A',
+  secondaryBorder: '#2F5140',
+  navInactive: '#7C8A80',
+  onForest: '#F1EDE1',
+  warn: '#F2B04F',
 } as const satisfies Record<ColorToken, string>;
 
 export { withAlpha } from './colorAlpha';

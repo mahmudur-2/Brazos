@@ -49,10 +49,9 @@ export const colors = {
   // Cream content (text/icons) shown on a solid primary-filled surface —
   // buttons, selected chips, own chat bubbles, progress dots, etc.
   onPrimary: '#F4F1E8',
-  /** Content on a `forest` fill. Light keeps the exact cream already used on
-   *  those fills (byte-identical rendering); dark flips to the §I onForest
-   *  near-black, because `forest` is the GOLD primary role under Prestige and
-   *  cream cannot read on gold. */
+  /** Content on a `forest` fill. Forest is a deep green solid in BOTH
+   *  palettes (Prestige v2 restored the green after v1's gold-primary
+   *  experiment), so the content on it is cream in both. */
   onForest: '#F4F1E8',
   // Rating-star gold. Kept as an explicit token (not tied to status/primary)
   // since gold stars are a near-universal convention independent of theme.
@@ -129,20 +128,22 @@ export const emeraldColors: ColorPalette = {
  * low-alpha-style "Bg" tints instead of the light palette's pale tints.
  */
 export const darkColors: ColorPalette = {
-  primary: '#3E8863',
-  primaryDark: '#2E6B4C',
-  primarySoft: '#1E3328',
-  onPrimary: '#F4F1E8',
+  // Prestige v2: the masters' ONE solid conversion fill is the deep forest,
+  // so the primary role IS emeraldDark.forest; pressed/soft steps stay in
+  // the same family. Content on it is the cream ink, both palettes.
+  primary: '#1E3A2C',
+  primaryDark: '#162B21',
+  primarySoft: '#11241C',
+  onPrimary: '#F1EDE1',
   onForest: emeraldDark.onForest,
   star: '#F59E0B',
 
   // Brand hues in dark come from the ONE authoritative dark palette
-  // (ui/tokens.ts `dark`, the Emerald Prestige set) rather than being
-  // restated here — the same de-duplication Phase 1 did for the light brand.
-  // This supersedes the earlier inline dark set this block used to carry
-  // (which kept forest a deep fill): under Prestige, `forest` is the gold
-  // PRIMARY role — see the intent notes on `dark` in ui/tokens.ts. Nothing
-  // resolves to this palette until 4D-4, so the change renders nowhere yet.
+  // (ui/tokens.ts `dark`, the Emerald Prestige v2 set — pixel-derived from
+  // the 43 golden masters) rather than being restated here — the same
+  // de-duplication Phase 1 did for the light brand. v2 restored `forest` to
+  // a deep green and reserved gold for line-work; see the notes on `dark`
+  // in ui/tokens.ts.
   forest: emeraldDark.forest,
   emerald: emeraldDark.emerald,
   gold: emeraldDark.gold,
@@ -150,22 +151,26 @@ export const darkColors: ColorPalette = {
   mint: emeraldDark.mint,
   mint2: emeraldDark.mint2,
   ink: emeraldDark.ink,
-  homeBackground: '#10170F',
-  homeSlate: '#9CB09E',
+  homeBackground: '#08110E',
+  homeSlate: '#93A096',
 
   text: '#F1EDE1',
-  textMuted: '#9CB09E',
-  textSubtle: '#6E8272',
+  textMuted: '#93A096',
+  textSubtle: '#7C8A80',
 
-  background: '#10170F',
-  surface: '#1B2620',
-  border: '#2E3B33',
+  background: '#08110E',
+  // The dim-gold hairline is what makes Prestige read as Prestige: `border`
+  // is the flat equivalent of gold at hairline alpha, not a neutral grey.
+  surface: '#0E1D17',
+  border: '#55482E',
 
-  success: '#6FAE59',
-  successBg: '#1C2B18',
-  warning: '#D08A3E',
-  warningBg: '#2E2115',
-  danger: '#D97561',
+  // Live-state/status greens ride the v2 emerald; warning rides the masters'
+  // hot amber on the goldSoft wash. Danger SURFACES keep pre-v2 values.
+  success: '#5FAE81',
+  successBg: '#11241C',
+  warning: '#F2B04F',
+  warningBg: '#251E10',
+  danger: '#D8604B',
   dangerBg: '#301E19',
   info: '#5FA3A3',
   infoBg: '#1B2B2A',
@@ -250,7 +255,7 @@ export const shadows: Record<'card' | 'raised', ViewStyle> = {
  * `emeraldColors` above is exactly this mapping applied to the light palette;
  * it stays exported for legacy/locked callers. Swept screens call this with
  * the palette from useThemeColors so the mapping follows the theme — under
- * Prestige, `forest` is the gold primary role (see ui/tokens.ts `dark`).
+ * Prestige v2, `forest` is a deep green in both palettes (ui/tokens.ts `dark`).
  */
 export function emeraldColorsFor(palette: ColorPalette): ColorPalette {
   return {

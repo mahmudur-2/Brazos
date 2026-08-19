@@ -10,27 +10,26 @@ const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
 // ===========================================================================
-// 4D-4 device pass, commit 3 — no gold on forest.
+// Prestige v2 (0b) — REWRITTEN, superseding the 4D-4 "no gold on forest" scan.
 //
-// Under Emerald Prestige, `forest` resolves to the GOLD primary
-// (ui/tokens.ts `dark`: forest and gold are both #D9B978), so any style that
-// fills with forest and puts a gold-family token on top of that fill renders
-// invisible in dark. WorkerHome shipped exactly this (its earnings card), and
-// e195012 repaired the same defect on ClientJobDetail's hero.
+// The old scan guarded a premise the v2 palette inverted: under v1's dark
+// palette `forest` and `gold` were the same hex (#D9B978, the gold-primary
+// experiment), so forest-fill + gold-content was invisible paint. Under v2
+// — pixel-derived from the 43 golden masters — `forest` is a deep green
+// solid again and gold/cream content ON a forest fill is CORRECT (master 44's
+// hero card is exactly that). The old assertion would now reject designs the
+// masters demand, so it is replaced, not weakened, by the two truths below:
 //
-// WHAT A SCAN CAN AND CANNOT EXPRESS RELIABLY: the SAME-OBJECT form — one
-// style object that both fills with forest and colors its text or border
-// from the gold family — is mechanically checkable, and is checked below
-// across all of screens/, components/ and ui/. The CROSS-OBJECT form (fill
-// in one style, gold text in a sibling style applied to a child, which is
-// how WorkerHome's card failed) needs JSX-tree analysis a text scan cannot
-// do honestly, so the surfaces repaired in this stage are pinned
-// individually instead: WorkerHome's card in tests/workerHome.test.mjs, the
-// HotspotMap pin here.
+//   1. GOLD IS LINE-WORK, NEVER A FILL. Across every master, gold draws
+//      eyebrows, hairlines, icons, rings and borders; no control fills with
+//      it (pre-made decision 3: "No gold fills anywhere"). goldSoft is a
+//      wash token and legitimately fills warning cards.
+//   2. THE PALETTE KEEPS THE INVERSION. dark.forest is the deep green and
+//      dark.gold the metal, and they can never silently re-merge.
 //
-// The matching-border idiom (`borderColor` set to the SAME token as the
-// fill, e.g. Chip's chipFilterSelected) is deliberately permitted: an
-// invisible border there is the point, in both palettes.
+// The HotspotMap per-theme pin assertion is carried over unchanged from the
+// 4D-4 suite — it still pins the code as it stands; the 3a map restyle will
+// update it when the pin adopts master 33's gold ring.
 // ===========================================================================
 
 const SOURCE_DIRS = ['screens', 'components', 'ui'];
@@ -39,6 +38,45 @@ const sourceFiles = SOURCE_DIRS.flatMap((dir) =>
     .filter((entry) => entry.isFile() && /\.(ts|tsx)$/.test(entry.name))
     .map((entry) => relative(root, join(entry.parentPath, entry.name)).replace(/\\/g, '/'))
 );
+
+// Decorative shimmer bars over the baked LIGHT transition PNGs — translucent
+// glow, not a control fill; migrates with those assets (standing decision,
+// HANDOFF "Deliberately left light").
+const GOLD_FILL_ALLOWLIST = new Set(['components/ModeTransitionOverlay.tsx']);
+
+test('[static] gold is line-work, never a fill', () => {
+  const offenders = [];
+  let goldLinework = 0;
+  for (const file of sourceFiles) {
+    const source = stripComments(read(file));
+    goldLinework += (
+      source.match(/(?:[{,]\s*color|border(?:Top|Bottom|Left|Right|Start|End)?Color):\s*\w+\.gold\b/g) ?? []
+    ).length;
+    for (const fill of source.matchAll(/backgroundColor:\s*\w+\.gold\b/g)) {
+      if (GOLD_FILL_ALLOWLIST.has(file)) continue;
+      offenders.push(`${file}: ${fill[0].trim()}`);
+    }
+  }
+  // The sweep must actually be looking at something: the tree is large and
+  // gold line-work is everywhere by design.
+  assert.ok(sourceFiles.length > 100, `the sweep must enumerate the tree (saw ${sourceFiles.length})`);
+  assert.ok(goldLinework >= 10, `the sweep must see the known gold line-work (saw ${goldLinework})`);
+  assert.deepEqual(offenders, [], 'gold may draw lines, text and icons — never fill a control');
+});
+
+test('[static] the v2 dark palette keeps forest green and gold metal, distinct', () => {
+  const tokens = read('ui/tokens.ts');
+  const darkBlock = tokens.slice(tokens.indexOf('export const dark = {'));
+  const value = (key) => {
+    const hit = darkBlock.match(new RegExp(`${key}: '(#[0-9A-Fa-f]{6})'`));
+    assert.ok(hit, `ui/tokens.ts dark is missing ${key}`);
+    return hit[1];
+  };
+  assert.equal(value('forest'), '#1E3A2C');
+  assert.equal(value('gold'), '#DCAB60');
+  assert.equal(value('bg'), '#08110E');
+  assert.notEqual(value('forest'), value('gold'), 'v1 merged these; v2 must never re-merge them');
+});
 
 /** The innermost balanced `{…}` around `index` — for a style property match,
  *  that is the style object it lives in. */
@@ -69,43 +107,10 @@ function enclosingObject(source, index) {
   return null;
 }
 
-test('[static] no style object both fills with forest and colors from the gold family', () => {
-  const offenders = [];
-  let forestFills = 0;
-  for (const file of sourceFiles) {
-    const source = stripComments(read(file));
-    for (const fill of source.matchAll(/backgroundColor:\s*\w+\.forest\b/g)) {
-      forestFills += 1;
-      const object = enclosingObject(source, fill.index);
-      assert.ok(object, `${file}: a forest fill must sit inside a balanced style object`);
-      // Text on the fill: gold, goldSoft AND forest are all invisible on a
-      // forest fill (forest-on-forest is the same color by definition).
-      const textHits = object.match(/[{,]\s*color:\s*\w+\.(?:gold|goldSoft|forest)\b/g) ?? [];
-      // Borders on the fill: gold-family vanishes in dark. A border in the
-      // fill's own token is the deliberate matching-border idiom and passes.
-      const borderHits =
-        object.match(
-          /border(?:Top|Bottom|Left|Right|Start|End)?Color:\s*\w+\.(?:gold|goldSoft)\b/g
-        ) ?? [];
-      for (const hit of [...textHits, ...borderHits]) {
-        offenders.push(`${file}: ${hit.trim()} on a forest fill`);
-      }
-    }
-  }
-  // The sweep must actually be looking at something: forest fills legitimately
-  // exist all over (CTAs with onForest content, the locked screens' frozen
-  // light cards) — what may not exist is gold-family paint on one.
-  assert.ok(sourceFiles.length > 100, `the sweep must enumerate the tree (saw ${sourceFiles.length})`);
-  assert.ok(forestFills >= 10, `the sweep must see the known forest fills (saw ${forestFills})`);
-  assert.deepEqual(offenders, []);
-});
-
 test('[static] the HotspotMap pin hairline is per-theme: gold in light, onForest in dark', () => {
   const source = stripComments(read('components/HotspotMap.native.tsx'));
   // The base badge and tail carry the forest fill and border WIDTH only; the
-  // border COLOR arrives from exactly one of the two per-theme overrides, so
-  // light renders byte-identically to the pre-fix gold and dark can never
-  // draw gold-on-gold.
+  // border COLOR arrives from exactly one of the two per-theme overrides.
   const badge = enclosingObject(source, source.indexOf('minWidth: 40'));
   assert.match(badge, /backgroundColor: colors\.forest/);
   assert.doesNotMatch(badge, /borderColor/);
