@@ -9,11 +9,12 @@ import test from 'node:test';
  * What must stay true:
  *   1. The worker Home stack roots at WorkerHome — explicitly, via
  *      initialRouteName — and every job-list intent lands on WorkerResults.
- *   2. The taking-new-work toggle is the phase53 profiles.accepting_work
- *      field through the existing updateProfile() path — AVAILABILITY, not
- *      presence. The words "online"/"offline"/"live" never appear: that is
- *      the device-local useWorkerAvailability vocabulary, which this screen
- *      deliberately does not use.
+ *   2. The availability toggle is the phase53 profiles.accepting_work field
+ *      through the existing updateProfile() path — AVAILABILITY, not
+ *      presence. The 4D-6 card renders it as operator-authored status copy
+ *      ("Online"/"Offline", "Visible"/"Not Visible"); the words changed by
+ *      operator decision, but the fact behind them is still accepting_work,
+ *      and the device-local useWorkerAvailability hook never appears here.
  *   3. Every figure comes from an existing source: openJobsPotential() from
  *      lib/earningsMath.ts, jobMatchesSkills() for the skill count, phase41's
  *      jobs_within_radius (via lib/hotspots) for the nearby count — the same
@@ -63,11 +64,13 @@ test("the search field mirrors the locked 48's dispatch and sits above the toggl
 test('the toggle is phase53 accepting_work through the existing profile path', () => {
   assert.match(code, /profile\?\.accepting_work \?\? true/);
   assert.match(code, /updateProfile\(user\.id, \{ accepting_work: next \}\)/);
-  // Availability, never presence: the device-local online/offline hook and its
-  // vocabulary must not appear here.
+  // The status words are operator-authored 4D-6 copy rendered from the SAME
+  // availability fact; the device-local presence hook still must not appear.
   assert.doesNotMatch(code, /useWorkerAvailability/);
-  assert.doesNotMatch(code, /\b[Oo]nline\b|\b[Oo]ffline\b|\b[Ll]ive\b/);
-  assert.match(screen, /Taking new work/);
+  assert.match(code, /\{accepting \? 'Online' : 'Offline'\}/);
+  assert.match(code, /\{accepting \? 'Visible' : 'Not Visible'\}/);
+  // The toggle keeps its accessible name — the heading it echoed is gone.
+  assert.match(screen, /accessibilityLabel="Taking new work"/);
 });
 
 test('every figure derives from an existing source, none is invented', () => {
@@ -122,7 +125,7 @@ test('the summary card: surface fill, gold hairline, divided halves, chips insid
   // surface, both palette reads; money still formats only through
   // formatBudget().
   assert.match(code, /earningsAmount: \{[^}]*color: colors\.emerald/s);
-  assert.match(code, /earningsEyebrow: \{[^}]*color: colors\.gold/s);
+  assert.match(code, /summaryEyebrow: \{[^}]*color: colors\.gold/s);
   assert.match(code, /formatBudget\(potential\.cents\)/);
   // The divided row: two halves split by a vertical divider.
   const order = ['styles.summaryRow', 'styles.availabilityHalf', 'styles.summaryDivider', 'styles.earningsHalf']
@@ -151,22 +154,120 @@ test('the summary card: surface fill, gold hairline, divided halves, chips insid
   assert.match(screen, /within \$\{NEARBY_RADIUS_MILES\} miles|within \$\{NEARBY_RADIUS_MILES\}/);
 });
 
-test('the section heading reads Available Jobs with its feed dot; labels stay constrained', () => {
+test('the section heading reads Available Jobs with its feed dot; retired copy stays gone', () => {
   assert.match(screen, /<Text style=\{styles\.sectionTitle\}>Available Jobs<\/Text>/);
-  // The dot marks the jobs FEED and reads from the palette — it is not a
-  // presence dot, and the availability half carries no dot at all.
+  // The dot marks the jobs FEED and reads from the palette.
   assert.match(code, /feedDot: \{[^}]*backgroundColor: colors\.emerald/s);
-  const availabilityHalf = screen.slice(
-    screen.indexOf('styles.availabilityHalf'),
-    screen.indexOf('styles.summaryDivider')
-  );
-  assert.doesNotMatch(availabilityHalf, /[Dd]ot/);
-  // The constrained labels hold: the control is Taking new work with its
-  // exact explanatory line, and no visibility claim exists anywhere.
-  assert.match(screen, /Taking new work/);
-  assert.match(screen, /Shown on your public profile — it tells customers what to expect\./);
-  assert.doesNotMatch(code, /Available now/i);
+  // 4D-6 removed the "Taking new work" heading and its explanatory
+  // paragraph; the retired visibility phrasing must never come back.
+  assert.doesNotMatch(code, /Taking new work<\/Text>/);
+  assert.doesNotMatch(code, /Shown on your public profile/);
   assert.doesNotMatch(code, /visible to customers/i);
+});
+
+// ===========================================================================
+// 4D-6 — the summary card rebuilt to the operator's spec. The mockup is a
+// pixel target for THIS ONE CARD only (operator override of the
+// references-are-direction rule); the numbers below are the acceptance
+// criteria, pinned as source facts because nothing here can render.
+// ===========================================================================
+
+test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pulse dot row', async () => {
+  // One eyebrow style for both columns: 11/700/1.2, gold.
+  assert.match(screen, />AVAILABLE NOW<\/Text>/);
+  assert.match(screen, />POTENTIAL EARNINGS<\/Text>/);
+  assert.match(
+    code,
+    /summaryEyebrow: \{\s*fontSize: 11,\s*fontWeight: '700',\s*letterSpacing: 1\.2,\s*color: colors\.gold,\s*\}/
+  );
+  // Status word: serif, 30pt, primary ink — sharing one vertically centred
+  // row with the SAME Switch (handler, state source, disabled gate, track
+  // colours all preserved).
+  assert.match(
+    code,
+    /statusWord: \{[^}]*fontFamily: fonts\.display,\s*fontSize: 30,[^}]*color: colors\.ink,/s
+  );
+  assert.match(code, /statusRow: \{ flexDirection: 'row', alignItems: 'center', gap: spacing\.sm \}/);
+  assert.match(code, /onValueChange=\{\(value\) => void saveAcceptingWork\(value\)\}/);
+  assert.match(code, /disabled=\{savingAvailability \|\| !profile\}/);
+  assert.match(code, /trackColor=\{\{ true: colors\.emerald, false: colors\.border \}\}/);
+  // The continue-path floor is built in: 30pt auto-fits no lower than
+  // 0.87 × 30 ≈ 26pt before the row could ever clip.
+  assert.match(code, /adjustsFontSizeToFit\s*minimumFontScale=\{0\.87\}/);
+  // The dot row: the shared PulseDot, green when available, red when not —
+  // both palette reads — and PulseDot itself honours reduced motion.
+  assert.match(code, /<PulseDot color=\{accepting \? colors\.emerald : colors\.danger\} \/>/);
+  const pulseDot = stripComments(await read('components/PulseDot.tsx'));
+  assert.match(pulseDot, /useReducedMotion\(\)/);
+  assert.match(pulseDot, /if \(reducedMotion\) \{\s*pulse\.setValue\(0\);\s*return;/);
+  assert.match(code, /statusCaption: \{ fontSize: 13, color: colors\.textMuted \}/);
+});
+
+test('4D-6 right column: serif emerald amount via formatBudget, "across N jobs"', () => {
+  assert.match(
+    code,
+    /earningsAmount: \{\s*fontFamily: fonts\.display,\s*fontSize: 30,\s*fontWeight: '700',\s*color: colors\.emerald,\s*\}/
+  );
+  assert.match(code, /formatBudget\(potential\.cents\)/);
+  // "open" dropped from the caption; the count stays dynamic and singular
+  // stays handled.
+  assert.match(code, /`across \$\{potential\.count\} \$\{potential\.count === 1 \? 'job' : 'jobs'\}`/);
+  assert.doesNotMatch(code, /open \$\{potential\.count/);
+  // The loading gate still pulses instead of faking $0.
+  assert.match(code, /<Skeleton style=\{styles\.earningsAmountLoading\} \/>/);
+  assert.match(code, /<Skeleton style=\{styles\.earningsCaptionLoading\} \/>/);
+});
+
+test('4D-6 card geometry: padding 14, 14pt row gap, 1pt divider at 14pt margins, 6pt columns', () => {
+  assert.match(
+    code,
+    /summaryCard: \{\s*padding: layout\.cardPadding,\s*gap: 14,\s*borderRadius: radius\.lg,\s*borderWidth: 1,\s*borderColor: colors\.gold,\s*backgroundColor: colors\.surface,/
+  );
+  assert.match(
+    code,
+    /summaryDivider: \{\s*width: 1,\s*alignSelf: 'stretch',\s*marginHorizontal: 14,\s*backgroundColor: colors\.border,\s*\}/
+  );
+  assert.match(code, /summaryRow: \{ flexDirection: 'row' \}/);
+  assert.match(code, /availabilityHalf: \{ flex: 1, gap: 6 \}/);
+  assert.match(code, /earningsHalf: \{ flex: 1, gap: 6 \}/);
+});
+
+test('4D-6 pills: 40pt capsules, 12pt gap, two-tone counts, 44pt touch kept by slop', () => {
+  assert.match(
+    code,
+    /pill: \{\s*flex: 1,\s*flexDirection: 'row',\s*alignItems: 'center',\s*justifyContent: 'center',\s*gap: spacing\.sm,\s*height: 40,\s*paddingHorizontal: spacing\.md,\s*borderRadius: radius\.pill,\s*borderWidth: 1,\s*borderColor: colors\.mint2,\s*backgroundColor: colors\.surface,\s*\}/
+  );
+  assert.match(code, /pillRow: \{ flexDirection: 'row', gap: spacing\.md \}/);
+  // Two-tone: the count emerald, the rest of the label primary ink.
+  assert.match(code, /pillText: \{ flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors\.ink \}/);
+  assert.match(code, /pillCount: \{ color: colors\.emerald \}/);
+  assert.match(code, /<Text style=\{styles\.pillCount\}>\{skillMatchCount\}<\/Text>/);
+  assert.match(code, /<Text style=\{styles\.pillCount\}>\{nearbyCount\}<\/Text>/);
+  // Sparkle + location pin, both 16pt.
+  assert.match(code, /name="sparkles-outline" size=\{16\}/);
+  assert.match(code, /name="location-outline" size=\{16\}/);
+  // 40pt visual height + 2pt slop each side = the 44pt floor (CLAUDE.md).
+  assert.match(code, /hitSlop=\{\{ top: 2, bottom: 2 \}\}/);
+  // The honest degraded labels survive; no count is ever invented.
+  assert.match(screen, /Add skills to see matches/);
+  assert.match(screen, /Enable location/);
+});
+
+test('4D-6 light palette: every value the card reads is byte-identical', async () => {
+  // The card touches only these tokens; their LIGHT values must not move.
+  // Brand hues live once, in ui/tokens.ts `brand` (spread into lib/theme).
+  const tokens = await read('ui/tokens.ts');
+  assert.match(tokens, /forest: '#064C3B'/);
+  assert.match(tokens, /emerald: '#0D6B52'/);
+  assert.match(tokens, /gold: '#C8A15B'/);
+  assert.match(tokens, /mint2: '#D3E8DF'/);
+  assert.match(tokens, /ink: '#13201B'/);
+  // The light-only keys the card reads come from lib/theme's `colors`.
+  const theme = await read('lib/theme.ts');
+  assert.match(theme, /textMuted: '#6B7566'/);
+  assert.match(theme, /border: '#DDD6C4'/);
+  assert.match(theme, /danger: '#A8432B'/);
+  assert.match(theme, /surface: '#FFFFFF'/);
 });
 
 // ===========================================================================

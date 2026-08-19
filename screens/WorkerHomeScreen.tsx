@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { PulseDot } from '../components/PulseDot';
 import { Skeleton } from '../components/Skeleton';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useAuth } from '../hooks/useAuth';
@@ -32,6 +33,7 @@ import { greetingFor } from '../lib/time';
 import { useMode } from '../modes';
 import {
   fonts,
+  layout,
   radius,
   shadows,
   spacing,
@@ -56,11 +58,13 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
  *
  * Everything here is derived from data sources that already exist:
  *   - greeting + the mandatory-confirm mode switch: useProfile / switchMode()
- *   - "Taking new work": the phase53 profiles.accepting_work field, read from
- *     the profile row and written through updateProfile() — the same path
- *     ServicesPricingScreen's toggle uses. This is AVAILABILITY, a public
- *     display fact on the worker's profile; it is deliberately NOT presence,
- *     so nothing here says "online" or "live".
+ *   - availability: the phase53 profiles.accepting_work field, read from the
+ *     profile row and written through updateProfile() — the same path
+ *     ServicesPricingScreen's toggle uses. The 4D-6 card renders it as the
+ *     operator's status copy ("Online"/"Offline", a pulse dot with
+ *     "Visible"/"Not Visible") — the WORDS are operator-authored; the FACT
+ *     behind them is still the public availability field, never device
+ *     presence: nothing here reads or writes useWorkerAvailability.
  *   - potential earnings: lib/earningsMath.ts's openJobsPotential() over the
  *     same open-jobs feed the browse screen renders.
  *   - the two counts: jobMatchesSkills() over the feed for skill matches, and
@@ -282,33 +286,51 @@ export function WorkerHomeScreen() {
             }
           />
 
-          {/* --- The summary card (mockup 43): ONE surface container with a
-              gold hairline border, split by a vertical divider — the
-              taking-new-work control left (phase53 availability, never
-              presence), potential earnings right, the two count chips
-              beneath. Surface + gold border rather than a forest fill is the
-              e195012 ClientJobDetail construction: under Prestige, forest IS
-              the gold primary, so gold-family text on a forest fill goes
-              invisible in dark — this shape cannot reproduce that. --------- */}
+          {/* --- The summary card (4D-6, operator spec — the ONE card where
+              the mockup is a pixel target): a surface container with a gold
+              hairline border, never a forest fill (the e195012 ClientJobDetail
+              construction: under Prestige forest IS the gold primary, so
+              gold-family text on a forest fill goes invisible in dark). Two
+              rows: eyebrowed availability | earnings columns split by a
+              divider, then the two count pills. The status copy ("Online"/
+              "Offline", "Visible"/"Not Visible") is operator-authored — it
+              renders the same phase53 accepting_work fact through the same
+              toggle; nothing here is device presence. -------------------- */}
           <View style={styles.summaryCard}>
             <View style={styles.summaryRow}>
               <View style={styles.availabilityHalf}>
-                <Text style={styles.cardTitle}>Taking new work</Text>
-                <Switch
-                  style={styles.availabilitySwitch}
-                  value={accepting}
-                  onValueChange={(value) => void saveAcceptingWork(value)}
-                  disabled={savingAvailability || !profile}
-                  trackColor={{ true: colors.emerald, false: colors.border }}
-                  accessibilityLabel="Taking new work"
-                />
-                <Text style={styles.cardNote}>
-                  Shown on your public profile — it tells customers what to expect.
-                </Text>
+                <Text style={styles.summaryEyebrow}>AVAILABLE NOW</Text>
+                <View style={styles.statusRow}>
+                  {/* 30pt is the spec; auto-fit lets the word fall as far as
+                      the 26pt continue-path floor (0.87 × 30) before anything
+                      could clip on the narrowest supported width. */}
+                  <Text
+                    style={styles.statusWord}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.87}
+                    maxFontSizeMultiplier={1.2}
+                  >
+                    {accepting ? 'Online' : 'Offline'}
+                  </Text>
+                  <Switch
+                    value={accepting}
+                    onValueChange={(value) => void saveAcceptingWork(value)}
+                    disabled={savingAvailability || !profile}
+                    trackColor={{ true: colors.emerald, false: colors.border }}
+                    accessibilityLabel="Taking new work"
+                  />
+                </View>
+                <View style={styles.statusDotRow}>
+                  <PulseDot color={accepting ? colors.emerald : colors.danger} />
+                  <Text style={styles.statusCaption}>
+                    {accepting ? 'Visible' : 'Not Visible'}
+                  </Text>
+                </View>
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.earningsHalf}>
-                <Text style={styles.earningsEyebrow}>POTENTIAL EARNINGS</Text>
+                <Text style={styles.summaryEyebrow}>POTENTIAL EARNINGS</Text>
                 {loading ? (
                   <>
                     {/* The figures wait for the feed, exactly as the old
@@ -321,12 +343,14 @@ export function WorkerHomeScreen() {
                     <Text
                       style={styles.earningsAmount}
                       numberOfLines={1}
+                      adjustsFontSizeToFit
+                      minimumFontScale={0.87}
                       maxFontSizeMultiplier={1.2}
                     >
                       {potential.count === 0 ? '$0' : formatBudget(potential.cents)}
                     </Text>
                     <Text style={styles.earningsCaption}>
-                      {`across ${potential.count} open ${potential.count === 1 ? 'job' : 'jobs'}`}
+                      {`across ${potential.count} ${potential.count === 1 ? 'job' : 'jobs'}`}
                     </Text>
                   </>
                 )}
@@ -336,13 +360,23 @@ export function WorkerHomeScreen() {
             <View style={styles.pillRow}>
               <Pressable
                 onPress={() => navigation.navigate('WorkerResults', { mode: 'skills' })}
+                // 40pt visual height is the spec; the slop keeps the 44pt
+                // touch floor.
+                hitSlop={{ top: 2, bottom: 2 }}
                 style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
                 accessibilityRole="button"
                 accessibilityLabel={matchLabel}
               >
-                <Ionicons name="ribbon-outline" size={17} color={colors.forest} />
+                <Ionicons name="sparkles-outline" size={16} color={colors.forest} />
                 <Text style={styles.pillText} numberOfLines={1}>
-                  {matchLabel}
+                  {hasSkills ? (
+                    <>
+                      <Text style={styles.pillCount}>{skillMatchCount}</Text>
+                      {' match your skills'}
+                    </>
+                  ) : (
+                    matchLabel
+                  )}
                 </Text>
               </Pressable>
               <Pressable
@@ -354,13 +388,21 @@ export function WorkerHomeScreen() {
                     label: nearbyCoords?.label,
                   })
                 }
+                hitSlop={{ top: 2, bottom: 2 }}
                 style={({ pressed }) => [styles.pill, pressed && styles.pillPressed]}
                 accessibilityRole="button"
                 accessibilityLabel={nearbyLabel}
               >
-                <Ionicons name="location-outline" size={17} color={colors.forest} />
+                <Ionicons name="location-outline" size={16} color={colors.forest} />
                 <Text style={styles.pillText} numberOfLines={1}>
-                  {nearbyLabel}
+                  {nearbyState === 'ready' ? (
+                    <>
+                      <Text style={styles.pillCount}>{nearbyCount}</Text>
+                      {` within ${NEARBY_RADIUS_MILES} miles`}
+                    </>
+                  ) : (
+                    nearbyLabel
+                  )}
                 </Text>
               </Pressable>
             </View>
@@ -488,51 +530,72 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // ONE container, surface-filled with a GOLD hairline — never a forest
   // fill: under Prestige forest is the gold primary, and gold-family text on
   // it disappears (the defect e195012 repaired on ClientJobDetail's hero).
+  // Geometry is the 4D-6 operator spec: §I card padding 14 (layout token),
+  // row 2 sits 14pt below row 1, both columns share one 6pt vertical rhythm.
   summaryCard: {
-    padding: spacing.md,
-    gap: spacing.md,
+    padding: layout.cardPadding,
+    gap: 14,
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.gold,
     backgroundColor: colors.surface,
     ...shadows.card,
   },
-  summaryRow: { flexDirection: 'row', gap: spacing.md },
-  availabilityHalf: { flex: 1, gap: spacing.sm },
-  availabilitySwitch: { alignSelf: 'flex-start' },
-  summaryDivider: { width: 1, alignSelf: 'stretch', backgroundColor: colors.border },
-  earningsHalf: { flex: 1, gap: spacing.xs },
-  cardTitle: { fontSize: 16, fontWeight: '800', color: colors.ink },
-  cardNote: { fontSize: 12, lineHeight: 17, color: colors.textMuted },
-  earningsEyebrow: {
+  summaryRow: { flexDirection: 'row' },
+  availabilityHalf: { flex: 1, gap: 6 },
+  summaryDivider: {
+    width: 1,
+    alignSelf: 'stretch',
+    marginHorizontal: 14,
+    backgroundColor: colors.border,
+  },
+  earningsHalf: { flex: 1, gap: 6 },
+  // One eyebrow style for both columns — the shared rhythm is the point.
+  summaryEyebrow: {
     fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.1,
+    fontWeight: '700',
+    letterSpacing: 1.2,
     color: colors.gold,
   },
+  statusRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  statusWord: {
+    flexShrink: 1,
+    fontFamily: fonts.display,
+    fontSize: 30,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  statusDotRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  statusCaption: { fontSize: 13, color: colors.textMuted },
   // The figure reads in the GREEN accent on surface in both palettes —
   // emerald, not forest (gold in dark) and not white (white-on-gold was the
   // live dark defect this card shipped with).
-  earningsAmount: { fontSize: 32, fontWeight: '800', color: colors.emerald },
+  earningsAmount: {
+    fontFamily: fonts.display,
+    fontSize: 30,
+    fontWeight: '700',
+    color: colors.emerald,
+  },
   earningsCaption: { fontSize: 13, color: colors.textMuted },
   earningsAmountLoading: { height: 34, width: 96, borderRadius: radius.sm },
   earningsCaptionLoading: { height: 14, width: 80, borderRadius: radius.sm },
-  pillRow: { flexDirection: 'row', gap: spacing.sm },
+  pillRow: { flexDirection: 'row', gap: spacing.md },
   pill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    minHeight: 44,
-    paddingHorizontal: spacing.sm,
+    gap: spacing.sm,
+    height: 40,
+    paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
   },
   pillPressed: { opacity: 0.82 },
-  pillText: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.forest },
+  pillText: { flexShrink: 1, fontSize: 13, fontWeight: '700', color: colors.ink },
+  pillCount: { color: colors.emerald },
   feedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -541,8 +604,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   feedTitleRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   // The section heading's status dot (mockup 43) marks the live jobs FEED —
-  // it is not a presence claim about the worker, whose availability control
-  // above deliberately carries no dot at all.
+  // distinct from the summary card's availability dot above, which tracks
+  // the worker's own accepting_work state.
   feedDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: colors.emerald },
   sectionTitle: { fontSize: 20, fontWeight: '800', color: colors.ink },
   viewAll: {
