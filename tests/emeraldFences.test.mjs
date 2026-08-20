@@ -740,6 +740,58 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 });
 
 // ---------------------------------------------------------------------------
+// H19 — LIGHT IS FROZEN, and this is the whole of what the master-44 run could
+// have moved in it.
+//
+// CATCHES: any future dark-master correction landing on an ungated value.
+// That is not hypothetical — home(16) did exactly this with three of its four
+// numbers, and it took a screenshot to notice, because a dark-only intent
+// applied to a shared style is invisible in every dark review.
+//
+// WHY NOT VACUOUS: every value here is one this run actually touched on the
+// dark side, so each pair is a real fork that could collapse. The dark half of
+// each pair is asserted in its own fence above; this one asserts that light
+// still has its own.
+//
+// Screenshot-checked at the same time: the pre-run tree rendered through the
+// same harness gives 0 differing pixels on light Customer Home and 0 on light
+// Worker Home. This fence is what keeps that true without a browser.
+// ---------------------------------------------------------------------------
+test('home(19) fence: nothing the master-44 run changed reached the light theme', () => {
+  const home = flatten(read('screens/HomeScreen.tsx'));
+  const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
+
+  // TYPE — home(16)/home(16b).
+  assert.match(home, /headline: \{ maxWidth: '73%', fontFamily: fonts\.display, fontSize: 39, lineHeight: 45,/);
+  assert.match(home, /sectionTitle: \{ fontFamily: fonts\.display, fontSize: 22,/);
+  assert.match(home, /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25, lineHeight: 29,/);
+  assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.forest \}/);
+
+  // ARTWORK — home(14)/home(15). Light keeps the Heritage boxes and `contain`.
+  assert.match(home, /homeHeroArt: \{ position: 'absolute', zIndex: 0, width: 112, height: 124, right: -6, top: 47 \}/);
+  assert.match(home, /heroMark: \{ position: 'absolute', top: 12, right: 10, width: 79, height: 101 \}/);
+  assert.match(home, /resizeMode=\{isDark \? 'cover' : 'contain'\}/);
+
+  // GROUND — home(12). Light's content container still paints its own.
+  assert.match(home, /content: \{ flexGrow: 1, backgroundColor: colors\.homeBackground,/);
+
+  // THE MODE SWITCH — home(17).
+  assert.match(/modeSwitch: \{([^}]*)\}/.exec(home)[1], /borderWidth: 1\.25, borderColor: colors\.gold/);
+
+  // THE [ + ] — home(18).
+  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_SIZE'), 52);
+  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_RAISE'), 14);
+  assert.match(
+    flatten(read('ui/primitives/BottomNav.tsx')),
+    /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/,
+    "light's control keeps the forest fill and the gold ring decision 3 gave it"
+  );
+
+  // THE ATMOSPHERE — home(13). Light renders none of it.
+  assert.match(stripComments(read('components/HomeAtmosphere.tsx')), /if \(!isDark\) return null;/);
+});
+
+// ---------------------------------------------------------------------------
 // H17 — "Switch to Worker" is ringed in the hairline token in dark, and LIGHT
 // keeps the gold it has always had.
 //

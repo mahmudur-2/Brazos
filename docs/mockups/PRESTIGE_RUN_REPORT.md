@@ -2046,3 +2046,367 @@ below is code-correct and device-unverified:
     before (see home(1)); and light's `[ + ]`, which must be visibly unchanged.
 11. **That the app builds and launches at all** — home(1) repaired a `require`
     of a deleted asset that would have failed the Metro bundle.
+
+# Customer Home to master 44 — 2026-08-20 (`shot(0)`, `home(11)` … `home(19)`)
+
+Ten commits on `mainexpo`, based on `64bb408`. Every delta in this section was
+measured off `docs/mockups/44_customer_home_dark.png` (941x1672) by decoding the
+PNG, not read off a screenshot by eye. Where the master and a document
+disagreed, the master won and the stale source is named.
+
+**The suite: 790 pass / 0 fail at baseline → 795 pass / 0 fail / 0 skipped,
+exit 0.** Bare `npm run verify` after every commit, stdout redirected, exit read
+from `$?`. No assertion was relaxed, deleted, skipped or allowlisted. Two
+recorded FACTS were updated to new facts and both are named below.
+
+## The measurement that explains most of this run
+
+`44_customer_home_dark.png` is **941x1672 — a 9:16 render**, and the device is
+393x852 (0.4613). Height fractions taken off the master therefore do NOT
+transfer; width fractions do. The conversion used throughout is **393/941 =
+0.41764**, and it is calibrated against a value neither side could fudge: the
+master's nav pill is 172px tall, which converts to 71.8pt against
+`layout.floatingNavHeight`'s 70.
+
+Two consequences worth carrying forward:
+
+- The master's promo card is 856px wide = **357.5pt**, against the app's 353pt.
+  The conversion is right to about half a percent.
+- The master's **search field is 119px = 49.7pt** where the app draws 70, and
+  its **"Post a job" cap converts to 15pt** where the app draws 24. Both are
+  FROZEN by operator instruction and neither moved. The app runs a deliberately
+  larger type and control scale than the master in those places.
+
+## D3 answered, in one sentence
+
+**The fence measured the container and the container is not the art:**
+`hero_armchair_customer.png`'s visible pixels covered 69.3% of its own canvas
+(184px of transparent margin on each side of 1200) and `brazos_b_drape.png`'s
+cover 60.7%, so with `contain` and a box of the canvas's aspect the CANVAS
+filled the box while the INK filled two-thirds of it — a 150pt hero slot drew
+104pt of art, and an 18.3%-of-screen drape box drew a mark 11.1% of the screen
+wide.
+
+**Every fence carrying the same flaw, and what happened to each:**
+
+| Fence | Quantity it named | What it measured | Now |
+|-|-|-|-|
+| `B_DRAPE_WIDTH_RATIO` pin, `emeraldFences` H2 | "18.3% of screen width" | the box | the ink, as a share of the card, against 44's 18.7% |
+| `homeHeroArtDark` 150x132 | the hero's size | the box | the box IS the art — the asset is room-baked and fills it |
+| `CREATE_BUTTON_WIDTH_RATIO` pin, H8 | "14.9% of screen width" | a share of the wrong thing entirely — see home(18) | a share of the pill, plus containment arithmetic |
+
+`tests/pngGeometry.mjs` is the measurement those fences were missing: the
+visible-pixel bounding box of a PNG as fractions of its own canvas, plus a
+luminance patch reader. An image with no alpha channel reports a full canvas,
+which is the correct answer for a room-baked scene.
+
+## D2 answered, in one sentence
+
+**Two different pictures, not one picture mis-sized.** Walking every revision of
+`assets/prestige/hero_armchair_customer.png` and reading each blob's IHDR: the
+newest with no alpha channel is **`715ddf8` (prestige(0a)), 400x351, colour type
+2** — plant on long visible stems in a wide round pot, wall panelling, floor,
+vignette, chair running off the right of frame, which is master 44's composition
+exactly. HEAD carried `e9d0706`'s **1200x1053 RGBA cut-out**: a stem-less leaf
+rosette in a narrow-footed urn, a whole four-legged chair, no room at all.
+Restored by redirect; no bytes altered.
+
+## D1 answered, in one sentence
+
+**`screens/HomeScreen.tsx`'s `content` style — the ScrollView's CONTENT
+CONTAINER — painted an opaque `colors.homeBackground` over the atmosphere from
+the safe-area inset downwards**, leaving the raster visible only in the
+status-bar strip above the inset where no content box reaches, and the raster is
+darker there than the flat token. It was never two ground colours:
+`homeBackground` and `background` in `lib/theme.ts` and `bg` in `ui/tokens.ts`
+are all `#03110E` at HEAD, all three agree, and no hex moved.
+
+## D4, D5, D6, D7, D8, D9, D10 — the numbers
+
+| # | Item | Master 44 | Before | After |
+|-|-|-|-|-|
+| D1 | page ground, left gutter | luminance 0.0–6.4, mean 1.6 | flat 13.8, range 0.0 | 0.9–27.0, mean 8.9 |
+| D2 | hero artwork | room-baked scene, 400x351 opaque | 1200x1053 RGBA cut-out | the room-baked scene, restored |
+| D3 | hero drawn width | 361px = 150.8pt, to the screen edge | 104pt of ink in a 150pt box | 151pt, ink = box, `right: 0` |
+| D3 | hero drawn height | 324px = 135.3pt | 132pt | 135pt |
+| D4 | atmosphere vignette | the ground is not one value | invisible (covered) | corners 3.7 vs middle 20.1, a 5.5x lift |
+| D5 | hero headline lines | 2 | 3 | 2 |
+| D5 | greeting to headline gap | 74px = 30.9pt | about 18pt | 34pt |
+| D6 | promo heading lines | **3** — D6 says 2 and the master disagrees | 3 | 3, unchanged |
+| D6 | promo leading ratio | 60px on a 37px cap = 1.09 | 29/25 = 1.16 | 27/25 = 1.08 |
+| D7 | B mark, share of card width | 160px of 856 = 18.7% | 12.4% | 18.7% |
+| D7 | B mark box | — | 72pt box, `right: 8`, `top: 16` | 109pt box, `right: 0`, `top: 25` |
+| D8 | switch ring colour | peak #A9814B | `colors.gold` #DCAB60 | `colors.border` #55482E |
+| D8 | switch ring weight | 1.66px = 0.69pt | 1.25pt | 1pt |
+| D8 | switch height | 79px = 33pt | 44pt | **44pt — the touch floor wins** |
+| D9 | [ + ] height | the master draws no [ + ] | 59pt = 84.3% of the pill | 60pt = 85.7% |
+| D9 | [ + ] overhang | — | 6pt above the pill's hairline | 0 — 5pt clear top and bottom |
+| D9 | [ + ] ring | — | `colors.gold` on a gold fill | `colors.forest` |
+| D10 | "Live Nearby" | 26px cap = 15.7pt of Georgia | 22pt | 16pt |
+
+## THE HERO EXPORT SPEC — the operator's next action
+
+The slot is built and the artwork in it is the master's composition at 400x351,
+which upscales about 1.3x at @3x and reads a little soft. To replace it, export
+the same scene to **`assets/prestige/hero_armchair_customer.png`** as:
+
+- **Pixel size: 906 x 810** — that is 2x the @3x requirement of 453 x 405, so
+  the file has headroom. Nothing smaller than **453 x 405** will be sharp on a
+  current iPhone.
+- **Aspect ratio: 1.119 : 1** (151 x 135pt). Within about 2% of that nothing is
+  cropped; outside it, `cover` scales until both dimensions are covered and
+  crops the excess **equally at both ends**, because React Native centres it.
+- **Opaque RGB, 8-bit, non-interlaced. No alpha channel.** A cut-out cannot do
+  this job: its edges are empty by definition, so it can never bleed off a
+  screen edge however it is sized. The roster in
+  `tests/themeResolution.test.mjs` records this file as `opaque-dark` and the
+  suite checks the file against that record in both directions.
+- **The RIGHT edge bleeds.** The slot's right edge is the screen's right edge.
+  Compose so the scene continues past the frame there rather than ending in it.
+- **Safe clipping margin: keep nothing essential within 2pt (6px at @3x) of the
+  left or right edge**, so an aspect that is slightly off does not eat anything.
+  Master 44 sets the chair's right side about **16pt (48px at @3x) in from the
+  right edge**, which is what makes it read as running off frame rather than as
+  cut off — the current file happens to sit at 19pt, which is right.
+- **The LEFT and BOTTOM edges must fall off to the page's own darkness.** This
+  is the one thing the restored file does not do: measured in the render, its
+  left edge steps by 0 luminance into the page and its right by about 1, but its
+  bottom edge steps by **5–7 of 255**, and a 5-unit step along a straight line
+  reads as a rectangle. The page ground behind those edges is 4–7/255. Vignette
+  the scene's left and bottom to that and the seam goes.
+- Nothing about the slot has to change to accept it. Drop the file in.
+
+## Artwork still owed, recorded as artwork and not faked
+
+- **The promo card's fabric.** Master 44 shows the gold B on a dark green drape
+  that fades into the card, and that is what reads as its "soft warm glow" —
+  measured, there is no halo around the glyph itself (12.1/255 beside the B
+  against 12.7 far from it; the lift is the fabric, uniformly). No asset in the
+  tree or in history has it: `assets/prestige/brazos_b_drape.png` is a bare
+  transparent B (its name is a leftover), and the 306x251 opaque version at
+  `715ddf8` has fabric but inside a hard rounded rectangle the master does not
+  show. **No shadow or glow style was faked in its place.**
+- **The B's proportions.** The master's ink is 160x180 (aspect 0.889); this
+  file's is 557x734 (0.759). Matching the WIDTH — D7's stated quantity — leaves
+  the mark about 15% taller than the master's relative to it. That is the
+  drawing, not the layout, and the height stays derived from the artwork's own
+  aspect.
+
+## The typeface gap, quantified
+
+`fonts.display` resolves to **Georgia**; master 44 is set in a high-contrast
+Didone, and no font file is bundled anywhere in this app by standing decision.
+**Georgia is the closest bundled face and it is materially wider:** "Take a task
+off" sets **288.6pt at 39pt** in a real 393pt viewport against the master's
+**203pt of ink**. That single fact is why the hero's size ended up governed by
+the column the artwork leaves (222pt) rather than by its cap height (which says
+33pt), and why 30 is what shipped. Recorded, not closed — closing it means
+adding a font.
+
+## Where the master contradicted the dispatch, and the master won
+
+- **D6 says the master's promo heading sets on two lines. It sets on three** —
+  y 1010..1059, 1070..1108, 1133..1165 — exactly as the app already did. No line
+  count changed there; the leading did.
+- **D9 describes the [ + ] against "the master's dark ring". Master 44 draws no
+  [ + ] at all** — its bar is Home, Map, My Jobs, Messages, Profile: five
+  classic tabs. O1/O2 and the dispatch's 85–88% band govern instead, and the
+  ring is the dark content colour the glyph already uses, so no colour is
+  introduced.
+- **D7 calls the master's mark "transparent-backed", which the current file
+  already is.** What differs is the fabric behind it, above.
+- **D2's "chair cropped by the right screen edge" is approximately right:** the
+  master's dense art stops 39px = 16pt short of the edge and its ambient
+  vignette reaches it.
+
+## Where a freeze contradicted the master, and the freeze won
+
+- **The switch pill's height.** Master 44 draws it 33pt; CLAUDE.md's touch floor
+  is 44 and calls it non-negotiable. 44 stays, and no `hitSlop` trick was used
+  to fake a smaller control around a legal target.
+- **The page ground's darkness.** The master's gutters mean luminance 1.6; the
+  app's `#03110E` is 13.8 and the palette is frozen. D1 licensed a colour change
+  only if two ground declarations disagreed — they agree — so the ground is
+  uncovered rather than repainted, which is what closes the seam.
+- **The atmosphere's strength.** This layer is STRONGER than the master's, not
+  fainter: its gutters average 9.8 against the master's 3.4. The two ways to
+  close that are editing the raster's bytes or lowering the layer's opacity, and
+  opacity blends towards `#03110E` (13.8) so it reads BRIGHTER, not darker.
+- **"Post a job", the search field and the category pills.** All frozen by
+  operator instruction, all measurably off the master's scale, none moved.
+
+## Two recorded facts updated, and which
+
+1. `tests/themeResolution.test.mjs`'s roster: the hero raster moves from
+   `transparent` to `opaque-dark`, because the file did. `home(11)` had already
+   turned that entry from a pin into a record checked both ways, so the file and
+   its record cannot disagree in either direction.
+2. `tests/homeDesignStudio.test.mjs`'s `heroFontSize: 39` becomes 30. It is the
+   studio's DEFAULT, not a frozen value — the slider still runs 28..56.
+
+## The one self-repair
+
+`home(16)` changed three type values that were **not theme-scoped**, so a ladder
+measured off a DARK master retyped the frozen Heritage composition as well.
+Caught by screenshot, not by reasoning — a dark-only intent applied to a shared
+style is invisible in every dark review. `home(16b)` moved all three behind the
+`isDark` gate the rest of the screen already uses.
+
+**Light is proven unchanged, twice.** The pre-run tree was rebuilt from
+`64bb408` into a temporary swap and rendered through the same harness:
+**0 differing pixels on light Customer Home, 0 on light Worker Home** (delta
+above 2 of 255). And `home(19)`'s fence pins every light value this run could
+have moved, so it stays true without a browser.
+
+## shot(0) — the screenshot harness
+
+`node scripts/home-shots.mjs` writes Customer Home and Worker Home, dark and
+light, at 393x852 CSS px into `.shots/` (gitignored). `--build` forces a fresh
+`expo export` first.
+
+- **`HomeDesignStudio` could not be used**, and this is worth knowing before the
+  next attempt: `App.tsx` gates it on `__DEV__`, `Platform.OS === 'web'` and
+  `?studio=home`, and `expo export` is a production bundle, so `__DEV__` is
+  false and the studio never mounts. The browser viewport is set to the same
+  393x852 its phone shell reserves, which touches nothing under `screens/`,
+  `dev-tools/` or `lib/`. It drives the real navigation tree; no second preview
+  surface exists.
+- **No credentials are involved.** `lib/supabase.web.ts` takes its URL and key
+  from `globalThis.__BRAZOS_CONFIG__`, which `public/config.js` leaves empty for
+  hosting to fill in. The harness fills it in with a project that does not
+  exist, and intercepts every request that is not to its own static server, so
+  no real ref is spelled anywhere and nothing leaves the machine. Both halves
+  are asserted at the end of each run.
+- **The three gates** between launch and Home all read AsyncStorage, which on
+  web IS `localStorage`, so setup completion, the mode cache and the session are
+  seeded there. The legal check is answered with a 503 on purpose:
+  `fetchLegalStatus()` reports `unknown` when the read fails and
+  `useLegalGate()` lets `unknown` through, which is the app's own documented
+  fail-open path and does not need `TERMS_VERSION` restated in the harness.
+- **The only fixture carrying a value is the profile name**, so the greeting
+  sets on two lines as master 44 does. Jobs come back EMPTY — no marketplace
+  data is invented to fill a screenshot, and Home draws its honest empty state.
+- **Stability, measured:** two consecutive runs differ by 13 and 29 pixels of
+  334,836 on two of the four images, maximum channel delta 3/255 — text
+  antialiasing, not layout. The other two are byte-identical.
+
+## Commits
+
+| Commit | Subject | Verify | Verified by |
+|-|-|-|-|
+| `60675ea` | shot(0): the agent gets eyes | 790 to 790 | n/a — this is the eyes |
+| `1689350` | home(11): a fence that measures the box is not measuring the art | 790 to 790 | source |
+| `ca24a6d` | home(12): one ground, and the second surface that was painting over it | 790 to 790 | screenshot |
+| `a6c899b` | home(13): the atmosphere already earned its name; this proves it | 790 to 791 | screenshot |
+| `fb97d87` | home(14): the hero is a slot, and the artwork in it is the one 44 was drawn from | 791 to 792 | screenshot |
+| `53cf34d` | home(15): the monogram was the right file at the wrong size | 792 to 792 | screenshot |
+| `68333f2` | home(16): one serif ladder, and the hero's size is governed by its column | 792 to 793 | screenshot |
+| `07aa80c` | home(17): the switch control's ring is a hairline | 793 to 794 | screenshot |
+| `cbae3f2` | home(18): the [ + ] sits inside the bar | 794 to 794 | screenshot |
+| `1cc4d60` | home(16b): the serif ladder was reaching light, which is frozen | 794 to 794 | screenshot |
+| this one | home(19): the record | 794 to 795 | n/a |
+
+## Fences, and the mutation that proved each red
+
+Every rewritten or added fence was mutated and observed red before being kept.
+
+| Fence | Mutation | Message |
+|-|-|-|
+| H2 ink | drape box to 90% of screen | "the drawn mark is 54.6% of the screen" |
+| H2 ink | back to the 0.183 box ratio | "12.4% of the card's width; master 44 measures 18.7%" |
+| H2 ink | mark overgrown to 0.36 | "24.3% of the card's width" |
+| H2 reserve | overlap back to 4 | "reserves 105pt but the mark's ink only starts 88.1pt in" |
+| H2 inset | style `right` desynced | "must stay the same number" |
+| H4 ground | dark override removed from the call site | "styles.content paints colors.homeBackground" |
+| H4 ground | override painting a colour | "must be the transparent ground" |
+| H4 ground | Worker Home grown an opaque ground | "styles.content paints colors.background" |
+| H13 tone | `cover` to `contain` | "contain would letterbox the ground" |
+| H13 tone | aimed at a known-bright image | "middle reads 71.5/255" |
+| H14 slot | box pushed off-screen again | "the drawn art stops -10.0pt from the screen's right edge" |
+| H14 slot | dark back on `contain` | "dark fills and crops" |
+| H14 slot | slot shrunk to 110pt | "master 44's scene is 150.8pt wide" |
+| bake roster | cut-out restored while the record says baked | "carries alpha down to 0" |
+| H16 ladder | hero grown back to 39 | "sets 281.6pt into 222pt of column" |
+| H16 ladder | Live Nearby restated as a literal | "must be COMPUTED from the ladder" |
+| H16 ladder | a cap measurement changed | "measures 16pt of Georgia" |
+| H16 ladder | studio default desynced | regex miss on `heroFontSize: 30` |
+| H17 ring | dark ring back to gold | "the dark ring is the hairline token" |
+| H17 ring | dark ring back to 1.25 | "must draw it lighter than light's 1.25" |
+| H17 ring | override never reaching the control | "has to reach the control, in that order" |
+| H17 ring | light's base ring repainted | "LIGHT is frozen on the gold ring" |
+| H8 plus | control to 95% of the pill | "95.7% of the pill's height" |
+| H8 plus | ring back to gold-on-gold | "a gold ring on a gold fill is not a ring" |
+| H8 plus | derived lift replaced by -14 | "must be DERIVED from the slack the pill leaves" |
+| H8 plus | pressed lift desynced | "the same lift with a scale added, not two literals" |
+| H8 plus | light's frozen lift moved | strict-equal failure on 14 |
+| H19 light | each of five dark values leaked into light | five separate misses |
+
+## Found, not fixed
+
+- **The promo card's fabric and the B's proportions** — artwork, above.
+- **The hero's bottom edge steps 5–7/255 into the page.** Closed by the export
+  spec, not by layout.
+- **The hero is 400x351 where the slot wants 906x810.** Same.
+- **`heroHeadline` is 25pt where the master's cap says 22.** The H2 fence pins
+  25 on the grounds that shrinking type was never the fix for that card's wrap,
+  which is still true. The 3pt is recorded in `MASTER_SERIF_CAPS` and owed.
+- **"Post a job" is 24pt where the master's cap says 15.** Frozen.
+- **The search field is 70pt where the master is 49.7.** Frozen.
+- **`tests/pngGeometry.mjs` and `alphaProfile` in
+  `tests/themeResolution.test.mjs` are two PNG decoders.** The second is
+  pre-existing and untouched; merging them is a refactor of an unrelated test
+  and was left alone.
+
+## Every taste number now free to live-tune
+
+| File | What | Now | The range the fences allow |
+|-|-|-|-|
+| `lib/homeDesignStudio.tsx` | `heroFontSize` (dark only) | 30 | bounded by the column: 39 x 222 / 281.6, so **30 is the ceiling**; below it, free |
+| `screens/HomeScreen.tsx` | `MASTER_SERIF_CAPS.sectionTitle` | 26 | must resolve to 16 through `serifSize` — change the cap only if the master is re-measured |
+| `screens/HomeScreen.tsx` | `headlineDark.marginTop` | 15 | unfenced |
+| `screens/HomeScreen.tsx` | `headlineDark.maxWidth` | `'74%'` (the operator's) | unfenced; 216.6pt of ink needs at least 62% |
+| `screens/HomeScreen.tsx` | `heroHeadlineDark.lineHeight` | 27 | unfenced |
+| `screens/HomeScreen.tsx` | `B_DRAPE_WIDTH_RATIO` | 0.277 | the drawn ink must stay **16.7%–20.7% of the card**, i.e. about 0.247–0.307 |
+| `screens/HomeScreen.tsx` | `B_DRAPE_COPY_OVERLAP` | 38 | the reserve must not exceed the ink's own left offset — at 0.277 that means **at least 21** |
+| `screens/HomeScreen.tsx` | `heroMarkDark.top` | 25 | unfenced |
+| `screens/HomeScreen.tsx` | `homeHeroArtDark.width` | 151 | **147–155** |
+| `screens/HomeScreen.tsx` | `homeHeroArtDark.height` | 135 | **131–139** |
+| `screens/HomeScreen.tsx` | `homeHeroArtDark.top` | 54 | unfenced |
+| `screens/HomeScreen.tsx` | `homeHeroArtDark.right` | 0 | the drawn art must land within **4pt of the screen edge** — with this asset that means 0 |
+| `screens/HomeScreen.tsx` | `modeSwitchDark.borderWidth` | 1 | anything **below light's 1.25** |
+| `ui/primitives/BottomNav.tsx` | `CREATE_BUTTON_PILL_RATIO` | 0.857 | **0.85–0.88**, and the control must stay centred in the pill |
+| `ui/primitives/BottomNav.tsx` | `CREATE_GLYPH_RATIO` | 0.615 | unfenced |
+
+Frozen, and fenced as frozen: light's 39/45 hero, 22 section title, 25/29 promo
+heading, 24 CTA label, 112x124 and 79x101 art boxes, gold 1.25 mode-switch ring,
+52pt/14pt creation control; and dark's promo heading at 25 and
+`TAB_BAR_CONTENT_HEIGHT`.
+
+## The device checks, in tap order
+
+1. Open Customer Home in DARK. Look at the top 60pt: **there must be no
+   horizontal seam** where the safe-area strip meets the page. This is the one
+   thing web cannot show, because web reports a zero top inset.
+2. Same screen: the ground should be **darker at the corners and lifted through
+   the middle**, not one flat colour. Scroll the page — the atmosphere must NOT
+   travel with it.
+3. The hero: the scene should reach the **right screen edge** with no margin.
+   Judge its **bottom edge** against the page — that is the seam the export spec
+   exists to close.
+4. The headline: **two lines**, "Take a task / off your plate.", clear of the
+   chair by about 5pt. On a 320pt phone confirm it has not touched the artwork.
+5. The promo card: heading on **three lines**, the B about a fifth of the card's
+   width with its right edge near the card's inner edge.
+6. "Switch to Worker": the ring should read as a **hairline**, not as the
+   brightest line on the screen. It is still 44pt tall — confirm it is
+   comfortable to hit.
+7. "Live Nearby" — noticeably smaller than it was. Confirm it still reads as a
+   section heading beside the feed cards below it.
+8. The bottom bar: the **creation control must sit fully inside the pill**,
+   about 5pt clear of the top and bottom hairlines, gold-filled with a dark
+   ring. Press it — it must not drop or jump; the lift is the same pressed and
+   resting.
+9. Switch the phone to LIGHT and walk 1–8 again. **Nothing should have changed
+   at all.**
+10. Switch to Worker Mode and check the ground and atmosphere there too — D1 and
+    D4 apply to both homes.
