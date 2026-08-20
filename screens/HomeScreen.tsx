@@ -565,11 +565,11 @@ export function HomeScreen() {
               (decision 3); light keeps the Heritage forest card with its white
               button and brand mark. */}
           <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
-            <View style={styles.heroBody}>
+            <View style={[styles.heroBody, isDark && styles.heroBodyDark]}>
               <View
                 style={[
                   styles.heroCopy,
-                  isDark && { paddingRight: bDrape.copyPaddingRight },
+                  isDark && { paddingRight: bDrape.copyPaddingRight, gap: 8 },
                 ]}
               >
                 <Text style={styles.heroEyebrow}>FASTEST WAY TO START</Text>
@@ -1053,6 +1053,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
   },
   heroBody: { padding: 16, gap: 12 },
+  // home(25), DARK ONLY. Master 44 leaves 40.9pt between the heading's second
+  // cap top and the "Post a job" pill's top edge; 12 leaves 34.6. The 8pt goes
+  // here rather than into the heading's leading, because the leading is the
+  // master's own measured line pitch and this gap is not.
+  heroBodyDark: { gap: 20 },
   // Light keeps its fixed reserve for the fixed Heritage mark; dark's is
   // computed from the drape's own width (home(2)) and applied at the call
   // site, so the two numbers cannot drift apart.
@@ -1066,19 +1071,47 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.white,
   },
-  // home(16), DARK ONLY: leading 29 -> 27. Master 44 runs 60px of line pitch on
-  // a 37px cap (1.09) where this ran 1.16, and three lines of that is most of
-  // why the card stood ~19% taller. Light keeps 29 (home(16b)).
-  heroHeadlineDark: { color: colors.ink, lineHeight: 27 },
+  // home(25), DARK ONLY — 25/27 -> 18/28, and 18 is what puts it on TWO lines.
+  //
+  // The replaced master sets this heading on TWO lines, not the three the old
+  // file drew and this app copied: "Describe the job." / "BRAZOS handles the
+  // rest.", the second measuring 232.7pt of ink and ending 251.1pt from the
+  // card's left edge, 18pt clear of the B mark's own ink.
+  //
+  // THE COLUMN WAS TRIED FIRST, as instructed, and it cannot do it. The copy
+  // column is 248pt — 319pt of card content less the 71pt reserved from the B
+  // drape's own width (home(2)) — and the mark's ink starts 2pt past its right
+  // edge, so there is nothing to widen into.
+  //
+  // WHICH SIZE, then. Georgia sets "BRAZOS handles the rest." at 12.92pt of ink
+  // per point of size (323pt at 25, measured in a real 393pt viewport). 19 is
+  // the largest that FITS — 245.5pt of 248 — but it ends 4.5pt from the mark,
+  // and master 44 leaves 18. 18pt sets 232.6pt against the master's own 232.7:
+  // the same line, the same length, ending within 1.5pt of where the master
+  // ends it. The line, not the leftover space, is the thing being matched.
+  //
+  // AND THE MASTER'S CAP AGREES ON THE DIRECTION: its 33px stem is 15.25pt,
+  // which is 22pt of Georgia — three points BELOW the 25 this shipped. 18 is
+  // four points below that again, and those 4pt are the face: RECORDED, not
+  // met, at 2.8pt of cap height. Light keeps 25/29 and is fenced.
+  //
+  // The leading is the master's own: 60px of line pitch = 27.7pt, so 28.
+  heroHeadlineDark: { color: colors.ink, fontSize: 18, lineHeight: 28 },
   heroMark: { position: 'absolute', top: 12, right: 10, width: 79, height: 101 },
   // No width/height here on purpose: dark's box is B_DRAPE_WIDTH_RATIO of the
   // screen, measured at render (home(2)). `right` must stay in step with
   // B_DRAPE_RIGHT_INSET, which is what the headline column is reserved from.
   //
-  // home(15): `top` is master 44's — the B's ink starts 60px = 25pt below the
-  // card's inner top edge, and the asset has no empty margin above its ink, so
-  // the box's top and the ink's top are the same line.
-  heroMarkDark: { top: 25, right: 0 },
+  // home(25): 25 -> 21, re-measured on the replaced master. The B's ink starts
+  // 48px = 22.2pt below the card's OUTER top edge; `top` is measured from the
+  // padding box, inside the 1pt border, and the asset has no empty margin above
+  // its ink, so 21 puts the ink at 22.
+  //
+  // RECORDED, not moved: B_DRAPE_WIDTH_RATIO stays 0.277. The new master's mark
+  // measures 61.7pt of ink against the 63 this draws — 0.272 by the same
+  // arithmetic home(15) used — and the difference is smaller than the
+  // measurement's own threshold sensitivity on a downscaled screenshot.
+  heroMarkDark: { top: 21, right: 0 },
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,

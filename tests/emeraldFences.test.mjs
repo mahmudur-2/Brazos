@@ -540,7 +540,10 @@ test('home(2) fence: the B drape is a fraction of the screen, and the copy colum
     'the headline column must be reserved FROM the drape width, not from a literal'
   );
   assert.match(flat, /style=\{\[styles\.heroMark, isDark && styles\.heroMarkDark, isDark && bDrape\.art\]\}/);
-  assert.match(flat, /isDark && \{ paddingRight: bDrape\.copyPaddingRight \}/);
+  // home(25) added the dark copy block's own row gap alongside the reserve —
+  // master 44 leaves 25.9pt between the eyebrow's cap and the heading's, where
+  // 4 leaves 20. It is a gap, not a second fixed reserve.
+  assert.match(flat, /isDark && \{ paddingRight: bDrape\.copyPaddingRight, gap: \d+ \}/);
 
   // The fixed pair must not return, in either place.
   assert.doesNotMatch(
@@ -564,12 +567,39 @@ test('home(2) fence: the B drape is a fraction of the screen, and the copy colum
     'heroMarkDark.right and B_DRAPE_RIGHT_INSET must stay the same number'
   );
 
-  // PRE-DECIDED, and fenced because it is the tempting wrong fix: the promo
-  // heading's size is correct and the wrap was never a font problem.
+  // LIGHT's promo heading stays at 25pt: shrinking type was not the fix for
+  // the wrap the Heritage composition was signed off with, and it is frozen.
   assert.match(
     flat,
     /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25,/,
-    'the promo heading stays at 25pt — shrinking type is not the fix for the wrap'
+    'the LIGHT promo heading stays at 25pt — the Heritage composition is frozen'
+  );
+
+  // DARK's is a different question, and the replaced master answered it: it
+  // sets that heading on TWO lines where the old file set three. The size is
+  // the largest that fits two inside the column the drape leaves, and the
+  // arithmetic is here rather than in a screenshot.
+  const darkSize = Number(/heroHeadlineDark: \{ color: colors\.ink, fontSize: (\d+),/.exec(flat)?.[1]);
+  assert.ok(darkSize > 0, 'the dark promo heading must keep a plain size');
+  const cardInner = 393 - 2 * Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]) - 2;
+  const copyColumn = cardInner - 2 * 16 - (Math.round(393 * ratio) + inset - overlap);
+  // "BRAZOS handles the rest." measured at 25pt of Georgia in a real 393pt
+  // viewport: 323pt of ink, so 12.92 per point of size.
+  const secondLine = 12.92 * darkSize;
+  assert.ok(
+    secondLine <= copyColumn,
+    `at ${darkSize}pt the promo heading's second line sets ${secondLine.toFixed(1)}pt into ` +
+      `${copyColumn}pt of column and wraps to a third. Master 44 draws two`
+  );
+  // AND IT ENDS WHERE THE MASTER'S ENDS. Fitting is not the same as matching:
+  // 19pt fits the column and then stops 4.5pt from the gold mark, where master
+  // 44 leaves 18. The master's own second line runs to 251.1pt from the card's
+  // left edge, and this is that line's right edge at the size shipped.
+  const lineEnd = 1 + 16 + secondLine;
+  assert.ok(
+    Math.abs(lineEnd - 251.1) <= 6,
+    `the promo heading's long line ends ${lineEnd.toFixed(1)}pt from the card's left edge; master ` +
+      '44 ends it at 251.1, 18pt clear of the B mark'
   );
 });
 
@@ -814,6 +844,58 @@ test('home(24) fence: master 44’s five service chips fit on master 44’s two 
   );
 });
 
+// ---------------------------------------------------------------------------
+// H25 — THE PROMO CARD IS AS TALL AS MASTER 44'S, AND IT IS A SUM.
+//
+// The card has no declared height: it is two borders, two paddings, four gaps
+// and a button, and every one of those is somewhere else in the file. That is
+// why it stood 14pt too tall for three commits without anyone being able to
+// point at the number — there wasn't one.
+//
+// CATCHES: the heading's leading being "tidied" back to something rounder (two
+// lines of it are 56 of the card's 181); either gap being reverted; the CTA
+// height being changed in the studio without the card being re-checked; and
+// the gold B sliding back down to where the old master had it.
+//
+// WHY NOT VACUOUS: every term is read out of the source and the total is
+// compared against a MEASURED master, so any one of them moving alone goes red.
+// ---------------------------------------------------------------------------
+test('home(25) fence: the promo card’s height is master 44’s, term by term', () => {
+  const flat = flatten(read('screens/HomeScreen.tsx'));
+
+  const copyGap = Number(/isDark && \{ paddingRight: bDrape\.copyPaddingRight, gap: (\d+) \}/.exec(flat)?.[1]);
+  const bodyGap = Number(/heroBodyDark: \{ gap: (\d+) \}/.exec(flat)?.[1]);
+  const leading = Number(/heroHeadlineDark: \{ color: colors\.ink, fontSize: \d+, lineHeight: (\d+) \}/.exec(flat)?.[1]);
+  const cta = Number(/ctaHeight: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))?.[1]);
+  assert.ok(copyGap && bodyGap && leading && cta, 'every term of the card’s height must stay a plain number');
+
+  // The eyebrow declares no lineHeight, so the platform gives it one: 14pt at
+  // its 12pt size, measured in .shots/customer-home-dark.png. It is the only
+  // term here that is not written down in the source.
+  const EYEBROW_LINE_BOX = 14;
+  const height = 2 + 2 * 16 + EYEBROW_LINE_BOX + copyGap + 2 * leading + bodyGap + cta + 2;
+  assert.ok(
+    Math.abs(height - 180.7) <= 2.5,
+    `the promo card stacks to ${height}pt; master 44 measures 180.7 (its top edge at 449.1 and its ` +
+      'bottom at 629.8 below the content box)'
+  );
+
+  // Master 44's line pitch on that heading is 60px = 27.7pt.
+  assert.ok(
+    Math.abs(leading - 27.7) <= 1.5,
+    `the heading's leading is ${leading}; master 44 runs 27.7pt of line pitch`
+  );
+
+  // THE GOLD B'S TOP. Its ink starts 22.2pt below the card's outer top edge on
+  // the master; `top` is measured from the padding box, inside the 1pt border,
+  // and the asset carries no empty margin above its ink.
+  const markTop = Number(/heroMarkDark: \{ top: (\d+), right: \d+ \}/.exec(flat)?.[1]);
+  assert.ok(
+    Math.abs(markTop + 1 - 22.2) <= 2,
+    `the B mark's ink starts ${markTop + 1}pt below the card's top edge; master 44 puts it at 22.2`
+  );
+});
+
 test('home(19) fence: nothing the master-44 run changed reached the light theme', () => {
   const home = flatten(read('screens/HomeScreen.tsx'));
   const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
@@ -976,10 +1058,12 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     /headline: \{ maxWidth: '73%', fontFamily: fonts\.display, fontSize: 39, lineHeight: 45,/,
     'light keeps its 39/45 hero'
   );
+  // home(25): 27 -> 28, and the size joins it. The replaced master runs 60px of
+  // line pitch on this heading = 27.7pt, and sets it on TWO lines.
   assert.match(
     flat,
-    /heroHeadlineDark: \{ color: colors\.ink, lineHeight: 27 \}/,
-    'the tightened promo leading is dark-only'
+    /heroHeadlineDark: \{ color: colors\.ink, fontSize: 18, lineHeight: 28 \}/,
+    'the promo heading’s dark size and leading are both master 44’s, and dark-only'
   );
   assert.match(
     flat,
