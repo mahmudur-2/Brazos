@@ -740,6 +740,91 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 });
 
 // ---------------------------------------------------------------------------
+// H16 — the display serif is ONE ladder derived from master 44's cap heights,
+// not three sizes chosen one at a time.
+//
+// CATCHES: a rung being nudged back to a round number; the conversion being
+// deleted and the sizes reverting to literals; and — the one that matters most
+// — the hero growing back past the width the artwork leaves it, which is what
+// puts its second line under the chair or onto a third line.
+//
+// WHY NOT VACUOUS: the sizes are recomputed here from the caps the screen
+// declares, and each is checked against the value actually shipped. Deleting
+// MASTER_SERIF_CAPS makes the parse fail rather than the assertion pass. The
+// two rungs that deliberately DIVERGE from the ladder are asserted as
+// divergences with their reasons, so neither can drift quietly.
+// ---------------------------------------------------------------------------
+test('home(16) fence: one serif ladder, measured off master 44', () => {
+  const home = stripComments(read('screens/HomeScreen.tsx'));
+  const flat = flatten(read('screens/HomeScreen.tsx'));
+
+  const caps = /const MASTER_SERIF_CAPS = \{([\s\S]*?)\} as const;/.exec(home);
+  assert.ok(caps, 'MASTER_SERIF_CAPS must stay a plain object literal');
+  const cap = (name) => {
+    const hit = new RegExp(`${name}: (\\d+)`).exec(caps[1]);
+    assert.ok(hit, `MASTER_SERIF_CAPS must keep a measured cap for ${name}`);
+    return Number(hit[1]);
+  };
+  const toDevice = constantOf(home, 'MASTER_TO_DEVICE');
+  const capRatio = constantOf(home, 'GEORGIA_CAP_RATIO');
+  const ladder = (name) => Math.round((cap(name) * toDevice) / capRatio);
+
+  assert.ok(
+    Math.abs(toDevice - 393 / 941) < 0.0001,
+    'the conversion is master 44’s own width against the reference device'
+  );
+
+  // "Live Nearby" is the rung that was out by more than a rounding, and it is
+  // the one the screen computes rather than states.
+  assert.match(
+    flat,
+    /fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\)/,
+    'the section title must be COMPUTED from the ladder, not restated as a number'
+  );
+  assert.equal(ladder('sectionTitle'), 16, 'master 44’s "Live Nearby" measures 16pt of Georgia');
+
+  // THE HERO IS GOVERNED BY ITS COLUMN, not by its cap. The artwork takes
+  // `homeHeroArtDark.width` out of the padded column, and master 44 leaves a
+  // gap beside it; whatever is left is what the headline may use. 39pt was
+  // 281.6pt of Georgia for "off your plate." — measured in a real 393pt
+  // viewport by scripts/home-shots.mjs — against ~222pt of room.
+  const hero = Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))?.[1]);
+  assert.ok(hero > 0, 'the hero size must stay a plain number in the design settings');
+  const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const art = Number(/homeHeroArtDark: \{ width: (\d+)/.exec(flat)[1]);
+  // One padding, not two: the slot's right edge IS the screen's right edge
+  // (home(14)), so the artwork occupies the right gutter as well. The copy runs
+  // from the left padding to the artwork's left edge.
+  const room = 393 - padding - art;
+  const LONGEST_LINE_AT_39 = 281.6;
+  const longest = (LONGEST_LINE_AT_39 * hero) / 39;
+  assert.ok(
+    longest <= room,
+    `at ${hero}pt the headline's long line sets ${longest.toFixed(1)}pt into ${room}pt of column. ` +
+      'Master 44 never runs that type over the artwork, and a wider column cannot help — the ' +
+      'artwork is what the column ends at'
+  );
+  assert.ok(
+    hero <= ladder('heroHeadline'),
+    `the cap height says ${ladder('heroHeadline')}pt; the column says less. The smaller wins`
+  );
+
+  // THE TWO DELIBERATE DIVERGENCES, asserted as divergences.
+  assert.match(
+    flat,
+    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25,/,
+    'the promo heading is pinned at 25 — see the H2 fence; the ladder says 22 and that 3pt is owed'
+  );
+  assert.equal(ladder('promoHeading'), 22, 'the recorded gap for the promo heading is 3pt');
+  assert.match(
+    flat,
+    /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24,/,
+    'the CTA label is frozen at 24 by operator instruction'
+  );
+  assert.equal(ladder('ctaLabel'), 15, 'the CTA label is the furthest rung off the ladder');
+});
+
+// ---------------------------------------------------------------------------
 // H14 — the dark hero is a SLOT: the art reaches the screen's right edge, and
 // the number that says how big it is describes the ART rather than a box.
 //

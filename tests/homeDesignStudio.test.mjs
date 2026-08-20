@@ -21,7 +21,12 @@ test('Home Design Studio defaults preserve the current Home geometry and control
   ]);
 
   for (const value of [
-    'heroFontSize: 39',
+    // home(16) UPDATED THIS RECORDED FACT from 39 to 30. It is not a relaxation:
+    // master 44's hero cap height converts to 33pt of Georgia, and the column
+    // the hero artwork leaves caps it at 30 — "off your plate." sets 281.6pt at
+    // 39 against ~222pt of room, which is what put it on a third line. The
+    // studio's slider still runs 28..56; this is where it starts.
+    'heroFontSize: 30',
     'screenPadding: 20',
     'sectionGap: 20',
     'searchHeight: 70',

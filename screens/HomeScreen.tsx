@@ -139,6 +139,73 @@ const B_DRAPE_COPY_OVERLAP = 38;
  */
 const B_DRAPE_RIGHT_INSET = 0;
 
+// ---------------------------------------------------------------------------
+// home(16) — THE SERIF LADDER, MEASURED OFF MASTER 44 RATHER THAN CHOSEN.
+//
+// Three sizes were each wrong by a different amount, so this is one conversion
+// applied three times instead of three opinions. What is measured is CAP
+// HEIGHT, in the master's own pixels, because cap height is what the eye reads
+// as "how big is that" and it is the only quantity that survives comparing two
+// different typefaces.
+//
+// AND THEY ARE TWO DIFFERENT TYPEFACES. Master 44 is set in a high-contrast
+// Didone; `fonts.display` resolves to Georgia on iOS, a low-contrast
+// transitional serif, and no font file is bundled anywhere in this app by
+// standing decision (see the docblock on `fonts` in lib/theme.ts). Georgia is
+// the closest bundled face and it is materially WIDER: "Take a task off" sets
+// 288.6pt at 39pt here against the master's 203pt of ink. That gap is why the
+// hero's size is governed by its column rather than by its cap height — see
+// below — and it is recorded rather than closed, because closing it means
+// adding a font.
+//
+// Measured on docs/mockups/44_customer_home_dark.png (941x1672), stem tops to
+// baselines, then converted at 393/941 and divided by Georgia's cap ratio:
+const MASTER_TO_DEVICE = 393 / 941;
+/** Georgia's cap height as a fraction of its em. */
+const GEORGIA_CAP_RATIO = 0.692;
+const MASTER_SERIF_CAPS = {
+  /** "Take a task off", the T's stem: 55px. */
+  heroHeadline: 55,
+  /** "Describe the job.", the D's stem: 37px. */
+  promoHeading: 37,
+  /** "Live Nearby", the L's stem: 26px. */
+  sectionTitle: 26,
+  /** "Post a job", the P's stem: 25px. Frozen at 24 here — see below. */
+  ctaLabel: 25,
+} as const;
+const serifSize = (capPx: number) =>
+  Math.round((capPx * MASTER_TO_DEVICE) / GEORGIA_CAP_RATIO);
+
+// WHERE EACH RUNG LANDS, and which of them moved:
+//
+//   hero headline   33 by cap  ->  30 SHIPPED, capped by the column.
+//     The art takes 151pt of a 353pt column and master 44 leaves a 17pt gap
+//     beside it, so the copy has ~222pt. "off your plate." — the operator's
+//     own line break — measures 281.6pt at 39 in Georgia, which is why it was
+//     wrapping to a third line inside a 261pt column and why widening the
+//     column cannot be the whole fix: at any size that still needs more than
+//     222pt, the headline runs UNDER the hero, and master 44 never puts type
+//     over that artwork. 39 * 222/281.6 = 30.7, so 30. At 30 the line sets
+//     216.6pt wide and stops 5pt clear of the art. The operator's `maxWidth`
+//     of 74% and the break itself are both untouched.
+//
+//   promo heading   22 by cap  ->  25 UNCHANGED. tests/emeraldFences.test.mjs
+//     pins it, on the grounds that shrinking type was never the fix for that
+//     card's wrap — which is still true, and D6's premise is not: master 44
+//     sets that heading on THREE lines, exactly as this app does. What was
+//     making the card ~19% taller than the master's is the LEADING, not the
+//     size, so that is what moves (29 -> 27; the master's is 60px on a 37px
+//     cap, a ratio of 1.09 against this file's 1.16). The 3pt the cap says is
+//     still owed is recorded here, not taken.
+//
+//   section title   16 by cap  ->  16 SHIPPED. This is D10's "Live Nearby",
+//     the one rung that was out by more than a rounding: 22 against a master
+//     that measures 15.7.
+//
+//   CTA label       15 by cap  ->  24 UNCHANGED and FROZEN by operator
+//     instruction. It is the furthest off the ladder of anything on the
+//     screen and it is not this run's to move.
+
 function similarPostedToday(jobs: OpenJob[], job: OpenJob): number {
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
@@ -758,7 +825,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // The wider Prestige crop takes more of the band, so the headline holds a
   // narrower column in dark — master 44 breaks it after 'off'.
-  headlineDark: { maxWidth: '74%' },
+  // home(16): the operator's 74% and the explicit break are both kept. What is
+  // added is the gap master 44 leaves under the greeting — its name line ends
+  // at y=197 and the headline's cap top starts at y=271, which is 74px = 30.9pt.
+  // The line box supplies about 16pt of that at this size; the rest is here.
+  headlineDark: { maxWidth: '74%', marginTop: 15 },
   heroSubtitle: {
     maxWidth: '73%',
     marginTop: spacing.sm,
@@ -832,7 +903,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   heroHeadline: {
     fontFamily: fonts.display,
     fontSize: 25,
-    lineHeight: 29,
+    // home(16): 29 -> 27. Master 44's promo heading runs 60px of line pitch on a
+    // 37px cap — 1.09 — where this ran 1.16, and three lines of that is most of
+    // why the card stood ~19% taller than the master's. The SIZE is pinned; see
+    // MASTER_SERIF_CAPS.
+    lineHeight: 27,
     letterSpacing: -0.25,
     fontWeight: '700',
     color: colors.white,
@@ -862,7 +937,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   section: { gap: 12 },
   liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   liveNearbyTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
-  sectionTitle: { fontFamily: fonts.display, fontSize: 22, fontWeight: '700', color: colors.ink },
+  // home(16), D10: 22 -> serifSize(26) = 16. Master 44's "Live Nearby" measures
+  // a 26px cap, which is 15.7pt of Georgia; 22 was the one rung out by more
+  // than a rounding.
+  sectionTitle: {
+    fontFamily: fonts.display,
+    fontSize: serifSize(MASTER_SERIF_CAPS.sectionTitle),
+    fontWeight: '700',
+    color: colors.ink,
+  },
   liveIndicator: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
   liveDotHalo: {
     position: 'absolute',
