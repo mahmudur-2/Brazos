@@ -186,6 +186,24 @@ const MASTER_SERIF_CAPS = {
 const serifSize = (capPx: number) =>
   Math.round((capPx * MASTER_TO_DEVICE) / GEORGIA_CAP_RATIO);
 
+// home(26) — THE SAME LADDER, FOR THE TWO LABELS THAT ARE NOT SERIF.
+//
+// "View all" and "Switch to Worker" are drawn SANS on master 44 — checked at
+// 1:1, they carry no serifs and no stroke contrast — so putting their caps
+// through the serif conversion would size them against the wrong face. Same
+// measurement, same arithmetic, one different divisor. What they must NOT be
+// is two literals chosen by eye, which is what they were.
+/** The platform sans's cap height as a fraction of its em. */
+const SYSTEM_CAP_RATIO = 0.6875;
+const MASTER_SANS_CAPS = {
+  /** "View all", the V's stem: y 1577..1597 = 21px. */
+  viewAll: 21,
+  /** "Switch to Worker", the S: y 181..200 = 20px. */
+  switchLabel: 20,
+} as const;
+const sansSize = (capPx: number) =>
+  Math.round((capPx * MASTER_TO_DEVICE) / SYSTEM_CAP_RATIO);
+
 // WHERE EACH RUNG LANDS, and which of them moved:
 //
 //   hero headline   35 by cap  ->  31 SHIPPED, capped by the column.
@@ -607,7 +625,7 @@ export function HomeScreen() {
             />
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, isDark && styles.sectionDark]}>
             <View style={styles.liveNearbyHeader}>
               <View style={styles.liveNearbyTitle}>
                 <View style={styles.liveIndicator} accessibilityLabel="Live nearby jobs">
@@ -896,12 +914,36 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // CLAUDE.md's touch floor is 44 — the master is under the floor, so the floor
   // wins and `minHeight: 44` stays. That is the whole of the "~21% taller"
   // difference; nothing about it is a styling choice.
-  modeSwitchDark: { borderWidth: 1, borderColor: colors.border },
+  //
+  // home(26) — A REVERSAL OF THE COLOUR HALF, AND ONLY THE COLOUR HALF.
+  //
+  // The WEIGHT above survives: the replaced master rings this control at 2px of
+  // its 1844 = 0.92pt, so 1 is still the nearest real weight and 1.25 is still
+  // too heavy. What does not survive is `border`. That choice was made against
+  // a ring the old file "peaks at #A9814B" — a warm olive. The replaced
+  // master's ring peaks at #AFACA4 and integrates to #A4A29B..#989790 across
+  // the plausible line widths: a near-neutral light grey at luminance 151..168,
+  // against `border`'s 73. It is not a dim gold hairline at all.
+  //
+  // `homeSlate` (#93A096) is the closest token in the dark palette by a wide
+  // margin — 9/255 on its worst channel against the mid estimate, where the
+  // next nearest (`neutral`) is 11 and `border` is 62. The prompt's tolerance
+  // is 8, and 9 is one over it; a new token would be inventing precision the
+  // measurement does not have, because the estimate's own spread — 151 to 168
+  // depending on whether the ring is 0.92pt or 1.00pt — is twice that gap.
+  // RECORDED: the difference, and the fact that no token is inside 8.
+  modeSwitchDark: { borderWidth: 1, borderColor: colors.homeSlate },
   // Phase 1's tactile answer to the tap — the press state itself, so the
   // feedback lands on touch-down rather than after an animation starts.
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
   modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
-  modeSwitchTextDark: { color: colors.emerald },
+  // home(26), DARK ONLY: 15 -> 13, off the sans ladder. That 2pt is the whole
+  // of the pill's width problem — the label is the only elastic term in it, and
+  // it took the box from 171pt to 155.5 against the master's measured 156.2.
+  modeSwitchTextDark: {
+    color: colors.emerald,
+    fontSize: sansSize(MASTER_SANS_CAPS.switchLabel),
+  },
   headline: {
     maxWidth: '73%',
     fontFamily: fonts.display,
@@ -1125,6 +1167,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   heroButtonText: { fontFamily: fonts.display, fontSize: 24, fontWeight: '700', color: colors.forest },
   heroButtonTextDark: { color: colors.onForest },
   section: { gap: 12 },
+  // home(26), DARK ONLY — a NEGATIVE margin, and it is honest.
+  //
+  // Master 44 leaves 28.4pt between the promo card's bottom edge and the "L" of
+  // Live Nearby. This app leaves 34: `sectionGap` gives 20, and the header row
+  // adds 14 more before the cap, because `viewAll` holds it 44pt tall for the
+  // touch floor and the title is centred in that. The gap the eye reads is the
+  // one to the INK, so the layout gap has to be 14.2 for the ink gap to be
+  // 28.4. -6 is that difference; there is no smaller lever, because the 44 is
+  // CLAUDE.md's and the 20 is the studio's one global number.
+  sectionDark: { marginTop: -6 },
   liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   liveNearbyTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   sectionTitle: { fontFamily: fonts.display, fontSize: 22, fontWeight: '700', color: colors.ink },
@@ -1147,7 +1199,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   viewAll: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44 },
   viewAllPressed: { opacity: 0.78 },
   viewAllText: { fontSize: 15, fontWeight: '600', color: colors.forest },
-  viewAllTextDark: { color: colors.emerald },
+  // home(26), DARK ONLY: 15 -> 14, off the same sans ladder as the mode switch.
+  // Master 44's V measures a 21px stem = 9.70pt of cap; 15pt draws 11.
+  viewAllTextDark: {
+    color: colors.emerald,
+    fontSize: sansSize(MASTER_SANS_CAPS.viewAll),
+  },
   cardList: { gap: spacing.md },
   jobCard: { borderRadius: 20, backgroundColor: colors.surface, overflow: 'hidden', ...shadows.card },
   jobCardDark: { borderWidth: 1, borderColor: colors.border },

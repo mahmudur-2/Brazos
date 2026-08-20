@@ -896,6 +896,46 @@ test('home(25) fence: the promo card’s height is master 44’s, term by term',
   );
 });
 
+// ---------------------------------------------------------------------------
+// H26 — "LIVE NEARBY" SITS WHERE MASTER 44 PUTS IT, and the gap that does it
+// is negative on purpose.
+//
+// The gap a reader sees is the one to the INK. This app's is 14pt larger than
+// its layout gap, because `viewAll` holds the header row at the 44pt touch
+// floor and the 20pt title is centred inside it. Master 44 leaves 28.4pt from
+// the promo card's bottom edge to the L; 20 + 14 is 34.
+//
+// CATCHES: the negative margin being "cleaned up" to zero, which puts the row
+// 6pt low again; and the header row's height changing without the margin being
+// re-derived from it.
+//
+// WHY NOT VACUOUS: the 14 is measured off a real render, the 28.4 off the
+// master, and the margin is read out of the source. Any of the three moving
+// alone goes red.
+// ---------------------------------------------------------------------------
+test('home(26) fence: Live Nearby lands on master 44’s own gap below the card', () => {
+  const flat = flatten(read('screens/HomeScreen.tsx'));
+  const sectionGap = Number(/sectionGap: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const margin = Number(/sectionDark: \{ marginTop: (-?\d+) \}/.exec(flat)?.[1]);
+  assert.ok(Number.isFinite(margin), 'the Live Nearby section keeps its own dark margin');
+
+  // The distance from the section's top to the title's cap, measured in
+  // .shots/customer-home-dark.png: the header row is 44pt for the touch floor
+  // and the 20pt serif title is centred in it.
+  const HEADER_LEAD_TO_CAP = 14;
+  const inkGap = sectionGap + margin + HEADER_LEAD_TO_CAP;
+  assert.ok(
+    Math.abs(inkGap - 28.4) <= 2,
+    `the card's bottom edge to the L of Live Nearby is ${inkGap}pt; master 44 measures 28.4`
+  );
+  assert.match(
+    flat,
+    /styles\.section, isDark && styles\.sectionDark/,
+    'the override has to reach the section, and light keeps its own rhythm'
+  );
+  assert.match(flat, /section: \{ gap: 12 \}/, "light's Live Nearby block is frozen");
+});
+
 test('home(19) fence: nothing the master-44 run changed reached the light theme', () => {
   const home = flatten(read('screens/HomeScreen.tsx'));
   const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
@@ -955,17 +995,23 @@ test('home(17) fence: the mode switch wears the hairline in dark, gold in light'
 
   const dark = /modeSwitchDark: \{([^}]*)\}/.exec(flat);
   assert.ok(dark, 'dark must override the ring rather than repainting it for both themes');
+  // home(26) REVERSED THE COLOUR HALF of home(17). `border` was chosen against
+  // a ring the OLD master peaked at #A9814B — a warm olive. The replaced
+  // master's ring peaks at #AFACA4, a near-neutral light grey at luminance
+  // 151..168 against `border`'s 73. It is not a dim gold hairline at all.
   assert.match(
     dark[1],
-    /borderColor: colors\.border/,
-    'the dark ring is the hairline token — lib/theme.ts calls it gold at hairline alpha'
+    /borderColor: colors\.homeSlate/,
+    'the dark ring is the neutral the replaced master measures, not the gold hairline'
   );
+  // THE WEIGHT HALF SURVIVED: 2px of 1844 = 0.92pt, so 1 is still the nearest
+  // real weight below light's 1.25.
   const weight = /borderWidth: ([\d.]+)/.exec(dark[1]);
   assert.ok(weight, 'the dark ring must state its own weight');
   const baseWeight = Number(/borderWidth: ([\d.]+)/.exec(base[1])[1]);
   assert.ok(
     Number(weight[1]) < baseWeight,
-    `master 44 rings this at 0.69pt; dark must draw it lighter than light's ${baseWeight}`
+    `master 44 rings this at 0.92pt; dark must draw it lighter than light's ${baseWeight}`
   );
 
   assert.match(
@@ -973,7 +1019,38 @@ test('home(17) fence: the mode switch wears the hairline in dark, gold in light'
     /styles\.modeSwitch, isDark && styles\.modeSwitchDark,/,
     'the override has to reach the control, in that order'
   );
+
+  // home(26) — THE PILL'S OUTER WIDTH, which the label is the only elastic term
+  // of. Master 44 draws it 156.2pt wide; at 15pt this rendered 171. The two
+  // paddings, the gap and the glyph are fixed, so the box is
+  // `fixed + label`, and the label scales with its size.
+  const labelSize = /modeSwitchTextDark: \{ color: colors\.emerald, fontSize: sansSize\(MASTER_SANS_CAPS\.switchLabel\),? \}/.test(flat)
+    ? sansLadder(read('screens/HomeScreen.tsx'), 'switchLabel')
+    : 0;
+  assert.ok(labelSize > 0, 'the dark label size must come off the sans ladder, not a literal');
+  // "Switch to Worker" measured 116pt of ink at 15pt in a real 393pt viewport,
+  // inside a 171pt box.
+  const pillWidth = 171 - 116 + (116 * labelSize) / 15;
+  assert.ok(
+    Math.abs(pillWidth - 156.2) <= 5,
+    `the pill resolves to ${pillWidth.toFixed(1)}pt wide; master 44 draws it 156.2`
+  );
+  // RECORDED, NOT MET: its height. Master 44 draws 40.2pt and CLAUDE.md's touch
+  // floor is 44, so the floor wins and the 3.8pt stays a difference.
+  assert.match(base[1], /minHeight: 44/);
 });
+
+/** A rung off `MASTER_SANS_CAPS`, recomputed here rather than trusted. */
+function sansLadder(source, name) {
+  const home = stripComments(source);
+  const caps = /const MASTER_SANS_CAPS = \{([\s\S]*?)\} as const;/.exec(home);
+  assert.ok(caps, 'MASTER_SANS_CAPS must stay a plain object literal');
+  const hit = new RegExp(`${name}: (\\d+)`).exec(caps[1]);
+  assert.ok(hit, `MASTER_SANS_CAPS must keep a measured cap for ${name}`);
+  return Math.round(
+    (Number(hit[1]) * constantOf(home, 'MASTER_TO_DEVICE')) / constantOf(home, 'SYSTEM_CAP_RATIO')
+  );
+}
 
 // ---------------------------------------------------------------------------
 // H16 — the display serif is ONE ladder derived from master 44's cap heights,
@@ -1022,9 +1099,25 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     /sectionTitleDark: \{ fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\) \}/,
     'the section title must be COMPUTED from the ladder, not restated as a number'
   );
-  // home(20): 16 -> 20. The replaced master's L measures a 30px cap (13.86pt),
-  // where the old file's measured 26px (10.86pt). This REVERSES home(16)'s shrink.
+  // home(20/26): 16 -> 20. The replaced master's L measures a 30px cap
+  // (13.86pt) where the old file's measured 26px (10.86pt). This REVERSES
+  // home(16)'s shrink, which took the same control from 22 down to 16.
   assert.equal(ladder('sectionTitle'), 20, 'master 44’s "Live Nearby" measures 20pt of Georgia');
+
+  // home(26): "View all" sits beside it and is SANS on the master — checked at
+  // 1:1, no serifs and no stroke contrast — so it takes the same measurement
+  // through the sans divisor rather than a literal.
+  assert.match(
+    flat,
+    /viewAllTextDark: \{ color: colors\.emerald, fontSize: sansSize\(MASTER_SANS_CAPS\.viewAll\),? \}/,
+    '"View all" must be COMPUTED from the sans ladder, not restated as a number'
+  );
+  assert.equal(
+    sansLadder(read('screens/HomeScreen.tsx'), 'viewAll'),
+    14,
+    'master 44’s "View all" measures 14pt of the platform sans'
+  );
+  assert.match(flat, /viewAllText: \{ fontSize: 15,/, 'light keeps its 15pt "View all"');
 
   // home(16b) — EVERY RUNG IS DARK-SCOPED. Master 44 is a DARK master; light is
   // the frozen Heritage composition and none of these numbers is its. The
