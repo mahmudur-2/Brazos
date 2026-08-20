@@ -1113,9 +1113,21 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // containment is a relationship between the two boxes — so that is what is
   // asserted, arithmetically, from whatever the source declares. home(18) sets
   // the master's share; this catches the control leaving the pill at any value.
+  const pillHeight = constantOf(stripComments(read('ui/tokens.ts')), 'FLOATING_NAV_HEIGHT');
   const size = createButtonDarkSize(bar, flat);
   assert.ok(size > 0, 'the dark control must resolve to a positive size');
   assert.match(flat, /\{ width: size, height: size \}/);
+
+  // home(18) — THE MASTER'S SHARE, and a share of the PILL because that is what
+  // the control has to fit inside. Master 44 draws no [ + ] at all (its bar is
+  // the five classic tabs), so 85-88% is the dispatch's bound rather than a
+  // measurement, and it is recorded as such.
+  const shareOfPill = size / pillHeight;
+  assert.ok(
+    shareOfPill >= 0.85 && shareOfPill <= 0.88,
+    `the [ + ] is ${(shareOfPill * 100).toFixed(1)}% of the pill's height; it belongs between ` +
+      '85% and 88%'
+  );
 
   // LIGHT IS FROZEN and is measured on exactly the same arithmetic, so a change
   // aimed at dark cannot quietly move it.
@@ -1134,6 +1146,12 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
     darkRing,
     'the dark control must still declare a ring, and it must come from the palette — a raw hex ' +
       'here would be a new colour, which the Prestige pass does not introduce'
+  );
+  // home(18) ADDS THE HALF home(11) COULD NOT, because it was red until now.
+  assert.notEqual(
+    darkRing[1],
+    'gold',
+    'a gold ring on a gold fill is not a ring; it must be a dark token'
   );
   assert.match(
     flat,
@@ -1165,40 +1183,51 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // is WHY the footprint is unmoved, so it must stay a transform, and the
   // pressed state must raise it by the same amount or the control drops on
   // touch-down.
-  const raise = createButtonRaise(flat);
+  // ONE LIFT, built once at render, so the pressed state cannot drop the
+  // control on touch-down by forgetting it.
   assert.match(
-    flatten(read('ui/primitives/BottomNav.tsx')),
-    new RegExp(`createButtonPressed: \\{ opacity: [\\d.]+, transform: \\[\\{ translateY: ${raise.pressedToken} \\}`),
-    'the pressed state must use the same raise as the resting state'
+    flat,
+    /transform: pressed \? \[\{ translateY: -raise \}, \{ scale: 0\.96 \}\] : \[\{ translateY: -raise \}\]/,
+    'resting and pressed must be the same lift with a scale added, not two literals'
+  );
+  assert.doesNotMatch(
+    flat,
+    /createButtonPressed: \{[^}]*transform/,
+    'the pressed transform must not be restated in the stylesheet where it can drift'
   );
 
-  // CONTAINMENT (home(11)). The control's laid-out box sits inside a slot of
-  // the pill's own height, packed to `justifyContent` with TAB_BOTTOM_GAP under
-  // it, then lifted by the transform. Both edges are computed here from the
-  // source's own numbers rather than eyeballed, so any future size or lift that
-  // pushes the control through the pill's hairline fails.
-  const pill = constantOf(stripComments(read('ui/tokens.ts')), 'FLOATING_NAV_HEIGHT');
+  // CONTAINMENT. The control's laid-out box sits inside a slot of the pill's
+  // own height, packed to flex-end with TAB_BOTTOM_GAP under it, then lifted.
+  // Both edges are computed here from the source's own numbers rather than
+  // eyeballed, so any future size or lift that pushes the control through the
+  // pill's hairline fails. home(18) took the ceiling home(11) recorded — a 6pt
+  // overhang — to zero.
   const gap = constantOf(bar, 'TAB_BOTTOM_GAP');
-  const bottomEdge = pill - gap - raise.pt;      // distance from the pill's top
+  assert.match(
+    flat,
+    /const raise = isDark \? Math\.round\(\(TAB_BAR_CONTENT_HEIGHT - size\) \/ 2\) - TAB_BOTTOM_GAP : CREATE_BUTTON_LIGHT_RAISE;/,
+    'the dark lift must be DERIVED from the slack the pill leaves, never chosen'
+  );
+  const raise = Math.round((pillHeight - size) / 2) - gap;
+  const bottomEdge = pillHeight - gap - raise;   // distance from the pill's top
   const topEdge = bottomEdge - size;
-  // A RECORDED FACT, not an endorsement. At the commit that installed this
-  // arithmetic the control cleared the pill's top hairline by 6pt and that is
-  // what home(18) exists to take to zero; until it does, the ceiling stops the
-  // overhang GROWING, which is the regression this can catch today.
-  const OVERHANG_CEILING_PT = 6;
   assert.ok(
-    topEdge >= -OVERHANG_CEILING_PT,
-    `the [ + ] starts ${(-topEdge).toFixed(1)}pt above the pill's top edge, past the ` +
-      `${OVERHANG_CEILING_PT}pt this records — it belongs INSIDE the bar`
+    topEdge >= 0,
+    `the [ + ] starts ${(-topEdge).toFixed(1)}pt above the pill's top edge — it belongs INSIDE`
   );
   assert.ok(
-    bottomEdge <= pill,
-    `the [ + ] ends ${(bottomEdge - pill).toFixed(1)}pt below the pill's bottom edge`
+    bottomEdge <= pillHeight,
+    `the [ + ] ends ${(bottomEdge - pillHeight).toFixed(1)}pt below the pill's bottom edge`
   );
   assert.ok(
-    size <= pill,
-    `the [ + ] is ${size}pt in a ${pill}pt pill — it cannot be contained at all`
+    Math.abs(topEdge - (pillHeight - bottomEdge)) <= 1,
+    `the [ + ] sits ${topEdge}pt from the top and ${pillHeight - bottomEdge}pt from the bottom; ` +
+      'centring it in the pill is what "inside" means here'
   );
+
+  // LIGHT IS FROZEN on both of its numbers, and the fence reads them the same
+  // way it reads dark's, so a change aimed at dark cannot move either.
+  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_RAISE'), 14);
 });
 
 /**
@@ -1217,15 +1246,6 @@ function createButtonDarkSize(bar, flat) {
   assert.fail('the dark control must derive its size from a declared ratio, never a pt literal');
 }
 
-/** How far the resting control is lifted, and the token the pressed state must repeat. */
-function createButtonRaise(flat) {
-  const literal = /transform: \[\{ translateY: (-?\d+) \}\]/.exec(flat);
-  if (literal) return { pt: -Number(literal[1]), pressedToken: literal[1] };
-  const derived = /transform: \[\{ translateY: -(\w+) \}\]/.exec(flat);
-  assert.ok(derived, 'the control must be raised by a transform, which Yoga does not lay out');
-  const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
-  return { pt: constantOf(bar, derived[1]), pressedToken: `-${derived[1]}` };
-}
 
 // ---------------------------------------------------------------------------
 // H9 — NO customer-Home surface links to Map, and the route survived anyway.

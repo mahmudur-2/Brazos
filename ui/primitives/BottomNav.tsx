@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
@@ -447,24 +447,58 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
  * by this change, and no clearance needed re-deriving — see the fence in
  * tests/layout.test.mjs.
  */
-/** home(8): the control's width as a share of the screen. */
-const CREATE_BUTTON_WIDTH_RATIO = 0.149;
-/** The frozen LIGHT square. Also what the ratio resolves to on a ~350pt phone. */
+/**
+ * home(18) — THE CONTROL IS A SHARE OF THE PILL, AND home(8) WAS THE WRONG
+ * DENOMINATOR. This deliberately REVERSES home(8)'s overhang, on operator
+ * instruction, and the reason is arithmetic rather than taste: the pill's
+ * height is `layout.floatingNavHeight`, a CONSTANT. A control sized off the
+ * SCREEN therefore changes its relationship to the pill on every device — on a
+ * 320pt phone 0.149 gave 48 in a 70pt pill and on a 440pt one it gave 66 — and
+ * a control that has to sit INSIDE something must be measured against that
+ * something. At 393pt it resolved to 59, and the -14 lift then carried its top
+ * edge 6pt out through the pill's own hairline.
+ *
+ * 0.857 is 60 in a 70pt pill: 85.7% of its height, inside the 85-88% the
+ * dispatch specifies, with 5pt of clearance top and bottom. Master 44 draws no
+ * [ + ] at all — its bar is the five classic tabs — so the bound is the
+ * authority here and is recorded as such.
+ *
+ * THE FOOTPRINT STILL DOES NOT MOVE, and now by construction rather than by
+ * argument: 60 fits inside the slot's own 67pt of usable height, so Yoga lays
+ * it out without overflow and the transform only positions it.
+ */
+/** home(18): the control's height as a share of the PILL's. */
+const CREATE_BUTTON_PILL_RATIO = 0.857;
+/** The frozen LIGHT square. */
 const CREATE_BUTTON_LIGHT_SIZE = 52;
+/** How far LIGHT lifts its square above the slot. Frozen with the square. */
+const CREATE_BUTTON_LIGHT_RAISE = 14;
 /** The glyph inside it, as a share of the control — 32 on 52, as it shipped. */
 const CREATE_GLYPH_RATIO = 0.615;
 
 export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  const { width: screenWidth } = useWindowDimensions();
 
   const size = isDark
-    ? Math.round(screenWidth * CREATE_BUTTON_WIDTH_RATIO)
+    ? Math.round(TAB_BAR_CONTENT_HEIGHT * CREATE_BUTTON_PILL_RATIO)
     : CREATE_BUTTON_LIGHT_SIZE;
+  // Dark CENTRES the control in the pill. The slot packs to flex-end with
+  // TAB_BOTTOM_GAP beneath it, so lifting by half the slack minus that gap
+  // leaves the same clearance above and below. Light is frozen on its 14.
+  const raise = isDark
+    ? Math.round((TAB_BAR_CONTENT_HEIGHT - size) / 2) - TAB_BOTTOM_GAP
+    : CREATE_BUTTON_LIGHT_RAISE;
   // Derived rather than fixed so the plus keeps its proportion inside the
   // control at any size — a fixed 32 would read hollow in the larger box.
   const glyph = Math.round(size * CREATE_GLYPH_RATIO);
+  // One transform, built once, so the pressed state cannot drop the control on
+  // touch-down by forgetting the lift.
+  const lift = (pressed: boolean) => ({
+    transform: pressed
+      ? [{ translateY: -raise }, { scale: 0.96 }]
+      : [{ translateY: -raise }],
+  });
 
   return (
     <View style={styles.createSlot}>
@@ -475,6 +509,7 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
           isDark && styles.createButtonDark,
           { width: size, height: size },
           pressed && styles.createButtonPressed,
+          lift(pressed),
         ]}
         accessibilityRole="button"
         accessibilityLabel="Create"
@@ -578,10 +613,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.gold,
     alignItems: 'center',
     justifyContent: 'center',
-    // Raised above the pill. iOS is the target (CLAUDE.md: Android deferred);
-    // the slice above the bar's bounds still draws because the library's item
-    // wrapper keeps overflow visible for the uikit variant.
-    transform: [{ translateY: -14 }],
+    // home(18): the lift is supplied at render, per theme — see CenterCreateButton.
     // The button's own depth. It is an OPAQUE fill, so this elevation cannot
     // trigger the transparent-background Android rendering bug the bar's own
     // elevation:0 exists to avoid — and the bar's style is untouched.
@@ -591,14 +623,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
-  // home(8), DARK ONLY: filled palette gold with dark content. The ring stays
-  // declared and becomes gold-on-gold — the control reads as one solid shape
-  // and the box model is unchanged (RN borders are inside the width).
+  // home(8), DARK ONLY: filled palette gold with dark content. The box model is
+  // unchanged either way — RN borders are inside the width.
+  // home(18): the ring becomes the DARK content colour the glyph already uses.
+  // Gold on gold is not a ring; this is the one master 44 would show if it drew
+  // this control at all, and it introduces no colour the screen does not have.
   createButtonDark: {
     backgroundColor: colors.gold,
-    borderColor: colors.gold,
+    borderColor: colors.forest,
   },
-  createButtonPressed: { opacity: 0.88, transform: [{ translateY: -14 }, { scale: 0.96 }] },
+  // home(18): the transform moved to the call site with the lift, so the pressed
+  // state cannot fall out of step with the resting one.
+  createButtonPressed: { opacity: 0.88 },
   previewBar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
