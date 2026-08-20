@@ -75,7 +75,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { MediaUploader, useFloatingNavClearance } from '../ui/primitives';
+import { MediaUploader, PINNED_FOOTER_BOTTOM_PADDING } from '../ui/primitives';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 
 const USE_NATIVE_DRIVER = Platform.OS !== 'web';
@@ -164,10 +164,13 @@ const POST_STEPS = [
 export function PostJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  // emerald(3): the Back/Continue footer is the last element above the pill,
-  // so it carries the clearance and the scroller above it clears both. Step 1's
-  // category chips and step 4's Timing row were the two the device pass named.
-  const navClearance = useFloatingNavClearance();
+  // home(7): the Back/Continue footer is PINNED above the pill, not scrolled
+  // under it, so it no longer takes useFloatingNavClearance() — that reserved
+  // the bar's ~104pt footprint a second time and left a hand's width of empty
+  // chrome under the buttons. Its bottom padding is
+  // PINNED_FOOTER_BOTTOM_PADDING, shared with the two templates. Nothing on
+  // this screen scrolls under the pill (the footer is always rendered), so the
+  // hook has no remaining call site here.
   const emeraldColors = emeraldColorsFor(colors);
   // Registered in four stacks (Home, MyJobs, Messages, Map) for posting, edit,
   // and Hire Again entry points, so its types are standalone rather than tied
@@ -1372,7 +1375,7 @@ export function PostJobScreen() {
           </View>
         ) : null}
 
-        <View style={[styles.footer, { paddingBottom: spacing.md + navClearance }]}>
+        <View style={styles.footer}>
           {step > 0 && (
             <Button
               title="Back"
@@ -1870,7 +1873,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.md,
     paddingHorizontal: spacing.xl,
     paddingTop: spacing.md,
-    paddingBottom: spacing.md,
+    // home(7): the pinned footer's own breathing room, shared with
+    // FormScreen's footer and DetailScreen's action bar — not the scroll
+    // clearance, which this footer does not travel under.
+    paddingBottom: PINNED_FOOTER_BOTTOM_PADDING,
     borderTopWidth: 1,
     borderTopColor: colors.mint2,
     backgroundColor: colors.surface,

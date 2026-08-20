@@ -739,7 +739,11 @@ test('home(6) fence: the strip above the Post a Job footer matches the footer', 
   // something else is introduced there, this fence has to be revisited rather
   // than silently continuing to guard the wrong element.
   const flat = flatten(read('screens/PostJobScreen.tsx'));
-  const footerAt = flat.indexOf('<View style={[styles.footer');
+  // home(7) took the inline clearance override off this footer, so it is a
+  // bare `style={styles.footer}` now. If an inline array comes back, this
+  // returns -1 and the assertion below says so rather than silently scanning
+  // the wrong region.
+  const footerAt = flat.indexOf('<View style={styles.footer');
   assert.ok(footerAt > 0, 'the pinned footer must still follow the scroller');
   // The LAST scroller to close before the footer — the screen nests horizontal
   // scrollers inside its step content, so the first `</ScrollView>` is not the

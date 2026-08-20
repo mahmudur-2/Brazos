@@ -2,7 +2,7 @@ import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { useFloatingNavClearance } from '../primitives';
+import { PINNED_FOOTER_BOTTOM_PADDING, useFloatingNavClearance } from '../primitives';
 import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
@@ -97,10 +97,12 @@ export function DetailScreen({
             <View
               style={[
                 styles.actionBar,
-                // emerald(3): same rule as FormScreen's footer — an action bar
-                // inside the tab navigator is the last element above the pill,
-                // so it carries the clearance rather than the scroller.
-                insideTabs && { paddingBottom: layout.screenGutter + navClearance },
+                // home(7): same rule as FormScreen's footer, and the same
+                // correction. A PINNED action bar does not travel under the
+                // pill, so it does not reserve the pill's footprint a second
+                // time; it takes its own breathing room. The scroller above
+                // still clears the pill when there is no action bar at all.
+                { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING },
               ]}
             >
               {actionBar}

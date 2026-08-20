@@ -212,16 +212,25 @@ test('the floating-nav clearance is derived from the bar, in one place', async (
 test('every tab-contained scroll surface clears the floating pill', async () => {
   // emerald(3): the named device-pass surfaces plus the peers found with them.
   // A screen qualifies by having the clearance reach whichever element is LAST
-  // above the pill — the scroller when there is no footer, the footer or
-  // composer when there is one.
+  // above the pill — the scroller when there is no footer, the composer when
+  // there is one.
+  //
+  // home(7) SPLIT THIS ROSTER. It used to also accept a PINNED footer carrying
+  // the clearance, which is how the double count survived: a pinned action bar
+  // is laid out above the bar, permanently, so giving it the pill's whole
+  // footprint reserved that space twice. Pinned footers are now checked by the
+  // test below instead — with the opposite assertion — and this list is
+  // scrolling surfaces and the chat composer only. screens/PostJobScreen.tsx
+  // left it entirely: everything on that screen sits above a footer that is
+  // always rendered, so nothing there travels under the pill.
   const surfaces = [
     // Templates — these carry 17 screens between them, including the device
     // pass's Notifications feed, Services & availability and Delete account.
+    // FormScreen and DetailScreen are here for their NO-footer branch.
     'ui/templates/FormScreen.tsx',
     'ui/templates/DetailScreen.tsx',
     'ui/templates/SuccessScreen.tsx',
     // Hand-rolled surfaces.
-    'screens/PostJobScreen.tsx',
     'screens/ProfileDetailsScreen.tsx',
     'screens/ClientJobDetailScreen.tsx',
     'screens/ChatScreen.tsx',
@@ -250,10 +259,90 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
     );
     assert.match(
       source,
-      /paddingBottom: (spacing\.\w+ \+ )?(layout\.screenGutter \+ )?navClearance/,
+      /paddingBottom: navClearance/,
       `${path} must apply the clearance to whatever sits last above the pill`
     );
+    // The double count cannot come back HERE either: a clearance that has
+    // something added to it is a footer's arithmetic, not a scroller's.
+    assert.doesNotMatch(
+      source,
+      /paddingBottom: [\w.]+ \+ navClearance/,
+      `${path} adds to the clearance — that is the pinned-footer double count (home(7))`
+    );
   }
+});
+
+test('a PINNED footer takes its own padding, never the scroll clearance', async () => {
+  // home(7) — the distinguishing assertion. Two kinds of bottom element, two
+  // different quantities, and they must not be confused again:
+  //
+  //   SCROLLING content passes UNDER the pill, so it reserves the pill's whole
+  //   footprint — height plus the margin that floats it, read from the device.
+  //   That is useFloatingNavClearance(), and the test above still requires it.
+  //
+  //   A PINNED footer never travels. The bar is laid out in normal flow
+  //   beneath the scene, so its space is already reserved; a footer that also
+  //   reserved it put ~104pt of empty chrome under every action button.
+  const pinned = [
+    ['ui/templates/FormScreen.tsx', 'footer'],
+    ['ui/templates/DetailScreen.tsx', 'actionBar'],
+    ['screens/PostJobScreen.tsx', 'footer'],
+  ];
+
+  // The shared value, and that it is DERIVED from the bar's own geometry
+  // rather than being a fresh literal — the same rule the clearance follows.
+  const bottomNav = await read('ui/primitives/BottomNav.tsx');
+  assert.match(
+    bottomNav,
+    /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/,
+    'the pinned footer padding must derive from the pill geometry, not be hardcoded'
+  );
+  assert.match(await read('ui/primitives/index.ts'), /PINNED_FOOTER_BOTTOM_PADDING,/);
+
+  for (const [path, styleName] of pinned) {
+    const flat = (await read(path)).replace(/\s+/g, ' ');
+
+    // The footer's style is whatever the STYLESHEET declares plus whatever the
+    // JSX layers on top. Importing the constant is not applying it, so both
+    // halves are gathered and the assertion is made against them — not against
+    // the file at large.
+    const declAt = flat.indexOf(` ${styleName}: { `);
+    assert.notEqual(declAt, -1, `${path} must still declare a ${styleName} style`);
+    const declEnd = flat.indexOf(' }, ', declAt);
+    assert.notEqual(declEnd, -1, `${path}: ${styleName} must stay a flat style object`);
+    const declared = flat.slice(declAt, declEnd);
+
+    // Only the templates layer an inline override; PostJobScreen puts the
+    // padding in the stylesheet and passes `style={styles.footer}` bare.
+    const useAt = flat.indexOf(`styles.${styleName},`);
+    let applied = '';
+    if (useAt !== -1) {
+      const useEnd = flat.indexOf(']}', useAt);
+      assert.notEqual(useEnd, -1, `${path}: the ${styleName} style array must close`);
+      applied = flat.slice(useAt, useEnd);
+    }
+    const footerStyle = `${declared} ${applied}`;
+
+    assert.match(
+      footerStyle,
+      /paddingBottom: PINNED_FOOTER_BOTTOM_PADDING/,
+      `${path}'s pinned ${styleName} must APPLY the shared pinned-footer padding, not just import it`
+    );
+    assert.doesNotMatch(
+      footerStyle,
+      /navClearance/,
+      `${path}: the pinned ${styleName} must not reserve the pill's footprint a second time`
+    );
+  }
+
+  // The hook itself is untouched — scrolling surfaces still need it, and
+  // home(7) explicitly does not retire it or reintroduce a static token.
+  assert.match(bottomNav, /export function useFloatingNavClearance\(\): number \{/);
+  assert.doesNotMatch(
+    await read('ui/tokens.ts'),
+    /floatingNavClearance/,
+    'the static clearance token must not return as a side effect of home(7)'
+  );
 });
 
 test('no screen skips the top inset the status bar needs', async () => {

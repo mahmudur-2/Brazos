@@ -259,6 +259,31 @@ export function useFloatingNavClearance(): number {
 }
 
 /**
+ * What a PINNED footer takes instead of the clearance above (home(7)).
+ *
+ * THE DOUBLE COUNT. `useFloatingNavClearance()` exists so SCROLLING content can
+ * pass under the pill and still be readable at the end of its travel. A pinned
+ * action footer does not travel: it is laid out above the bar, permanently. It
+ * was being given the pill's whole footprint anyway — 70pt of bar plus the
+ * home-indicator inset, ~104pt on a notched iPhone — as padding UNDER its own
+ * button. That reserved the pill's space twice: once by the bar's real layout
+ * box, and again inside the footer, which is what put a hand's width of empty
+ * chrome under every Continue, Publish job and Cash out button.
+ *
+ * WHAT REPLACES IT is not a smaller guess at the same thing; it is a different
+ * quantity — the footer's own breathing room. `floatingNavGap` is already
+ * defined as exactly this distance (see its docblock in ui/tokens.ts: "a
+ * bottom action footer or composer uses it as extra bottom padding so its
+ * controls keep the same distance from the pill that the pill keeps from the
+ * screen edge"), so the button ends up as far from the pill's top edge as the
+ * pill sits from the screen's. Derived, like everything else here — nothing
+ * about the bar is restated as a literal.
+ *
+ * The clearance hook is untouched and every scrolling surface still uses it.
+ */
+export const PINNED_FOOTER_BOTTOM_PADDING = layout.floatingNavGap;
+
+/**
  * One tab's icon + label. Rendered inside the library's own item wrapper for
  * the real bar, and directly by BottomNavPreview for the catalog, so both show
  * the same thing.

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { StepHeader, useFloatingNavClearance } from '../primitives';
+import { PINNED_FOOTER_BOTTOM_PADDING, StepHeader, useFloatingNavClearance } from '../primitives';
 import {
   controls,
   layout,
@@ -126,12 +126,16 @@ export function FormScreen({
             <View
               style={[
                 styles.footer,
-                // emerald(3): a footer inside the tab navigator is the last
-                // thing above the pill, so IT carries the clearance — Back /
-                // Continue, Publish job, Cash out and Delete my account were
-                // all sitting under it. Its own gutter stays underneath as the
-                // button's breathing room.
-                insideTabs && { paddingBottom: layout.screenGutter + navClearance },
+                // home(7): this footer is PINNED, not scrolled. emerald(3)
+                // gave it the pill's whole footprint on the reasoning that it
+                // is the last thing above the pill — but the bar is laid out
+                // in normal flow beneath this scene, so that space was already
+                // reserved once and the footer reserved it again. ~104pt of
+                // empty chrome under Back / Continue, Publish job, Cash out
+                // and Delete my account. It takes its own breathing room now;
+                // the clearance stays exactly where it is still needed, on the
+                // scroller above when there is no footer at all.
+                { paddingBottom: PINNED_FOOTER_BOTTOM_PADDING },
               ]}
             >
               {footerNote ? <View style={styles.footerNote}>{footerNote}</View> : null}
