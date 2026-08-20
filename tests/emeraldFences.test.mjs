@@ -820,10 +820,44 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   // the one the screen computes rather than states.
   assert.match(
     flat,
-    /fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\)/,
+    /sectionTitleDark: \{ fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\) \}/,
     'the section title must be COMPUTED from the ladder, not restated as a number'
   );
   assert.equal(ladder('sectionTitle'), 16, 'master 44’s "Live Nearby" measures 16pt of Georgia');
+
+  // home(16b) — EVERY RUNG IS DARK-SCOPED. Master 44 is a DARK master; light is
+  // the frozen Heritage composition and none of these numbers is its. The
+  // ladder reached both themes when it landed, and this is what stops it.
+  assert.match(
+    flat,
+    /sectionTitle: \{ fontFamily: fonts\.display, fontSize: 22,/,
+    'light keeps its 22pt section title'
+  );
+  assert.match(
+    flat,
+    /styles\.sectionTitle, isDark && styles\.sectionTitleDark/,
+    'the dark rung has to reach the control'
+  );
+  assert.match(
+    flat,
+    /isDark && \{ fontSize: design\.heroFontSize, lineHeight: Math\.round\(design\.heroFontSize \* \(45 \/ 39\)\),? \}/,
+    "the studio's live hero size is a DARK instrument; light keeps styles.headline's own 39/45"
+  );
+  assert.match(
+    flat,
+    /headline: \{ maxWidth: '73%', fontFamily: fonts\.display, fontSize: 39, lineHeight: 45,/,
+    'light keeps its 39/45 hero'
+  );
+  assert.match(
+    flat,
+    /heroHeadlineDark: \{ color: colors\.ink, lineHeight: 27 \}/,
+    'the tightened promo leading is dark-only'
+  );
+  assert.match(
+    flat,
+    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25, lineHeight: 29,/,
+    'light keeps its 29pt promo leading'
+  );
 
   // THE HERO IS GOVERNED BY ITS COLUMN, not by its cap. The artwork takes
   // `homeHeroArtDark.width` out of the padded column, and master 44 leaves a

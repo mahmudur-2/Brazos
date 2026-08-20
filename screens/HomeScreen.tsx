@@ -416,7 +416,12 @@ export function HomeScreen() {
                 style={[
                   styles.headline,
                   isDark && styles.headlineDark,
-                  {
+                  // home(16b): the studio's live size is a DARK instrument. It
+                  // used to apply to both themes, which meant home(16)'s ladder
+                  // — measured off a dark master — silently retyped the frozen
+                  // Heritage composition as well. `styles.headline` keeps
+                  // light's 39/45.
+                  isDark && {
                     fontSize: design.heroFontSize,
                     lineHeight: Math.round(design.heroFontSize * (45 / 39)),
                   },
@@ -552,7 +557,9 @@ export function HomeScreen() {
                   <Animated.View style={[styles.liveDotHalo, livePulseStyle]} />
                   <View style={styles.liveDot} />
                 </View>
-                <Text style={styles.sectionTitle}>Live Nearby</Text>
+                <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
+                  Live Nearby
+                </Text>
               </View>
               <Pressable
                 onPress={browseOpenJobs}
@@ -927,16 +934,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   heroHeadline: {
     fontFamily: fonts.display,
     fontSize: 25,
-    // home(16): 29 -> 27. Master 44's promo heading runs 60px of line pitch on a
-    // 37px cap — 1.09 — where this ran 1.16, and three lines of that is most of
-    // why the card stood ~19% taller than the master's. The SIZE is pinned; see
-    // MASTER_SERIF_CAPS.
-    lineHeight: 27,
+    lineHeight: 29,
     letterSpacing: -0.25,
     fontWeight: '700',
     color: colors.white,
   },
-  heroHeadlineDark: { color: colors.ink },
+  // home(16), DARK ONLY: leading 29 -> 27. Master 44 runs 60px of line pitch on
+  // a 37px cap (1.09) where this ran 1.16, and three lines of that is most of
+  // why the card stood ~19% taller. Light keeps 29 (home(16b)).
+  heroHeadlineDark: { color: colors.ink, lineHeight: 27 },
   heroMark: { position: 'absolute', top: 12, right: 10, width: 79, height: 101 },
   // No width/height here on purpose: dark's box is B_DRAPE_WIDTH_RATIO of the
   // screen, measured at render (home(2)). `right` must stay in step with
@@ -961,15 +967,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   section: { gap: 12 },
   liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   liveNearbyTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
-  // home(16), D10: 22 -> serifSize(26) = 16. Master 44's "Live Nearby" measures
-  // a 26px cap, which is 15.7pt of Georgia; 22 was the one rung out by more
-  // than a rounding.
-  sectionTitle: {
-    fontFamily: fonts.display,
-    fontSize: serifSize(MASTER_SERIF_CAPS.sectionTitle),
-    fontWeight: '700',
-    color: colors.ink,
-  },
+  sectionTitle: { fontFamily: fonts.display, fontSize: 22, fontWeight: '700', color: colors.ink },
+  // home(16), D10, DARK ONLY: 22 -> serifSize(26) = 16. Master 44's "Live
+  // Nearby" measures a 26px cap, which is 15.7pt of Georgia; 22 was the one
+  // rung out by more than a rounding. Light keeps 22 — 44 is a DARK master and
+  // the Heritage composition is frozen (home(16b)).
+  sectionTitleDark: { fontSize: serifSize(MASTER_SERIF_CAPS.sectionTitle) },
   liveIndicator: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
   liveDotHalo: {
     position: 'absolute',
