@@ -401,7 +401,16 @@ const BAKED_ART = {
   // replacements are RGBA cut-outs (measured: 72.66% / 69.39% / 38.51% of
   // samples fully transparent, every corner at alpha 0). The GATE STAYS —
   // these are the dark-only Prestige crops, and light mounts the Heritage set.
-  'assets/prestige/hero_armchair_customer.png': { bake: 'transparent', gate: true },
+  // home(14) FLIPPED THIS ONE BACK, and the record moves with the file. The
+  // cut-out and the baked scene are two different pictures — different plant,
+  // different pot, a whole chair versus one cropped by the frame, no room at
+  // all versus panelling, floor and vignette — and master 44 is drawn from the
+  // baked one. It is also the only one of the two that can bleed off the screen
+  // edge, because a cut-out's edges are empty by definition. Restored from
+  // prestige(0a) (715ddf8) by redirect; no bytes were altered. Still gated:
+  // assets/prestige is dark-only, and being baked makes that stronger, not
+  // weaker — this one really would drop a dark room onto the ivory ground.
+  'assets/prestige/hero_armchair_customer.png': { bake: 'opaque-dark', gate: true },
   'assets/prestige/brazos_b_drape.png': { bake: 'transparent', gate: true },
   'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it

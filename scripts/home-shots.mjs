@@ -176,7 +176,12 @@ function stubResponse(pathname, headers) {
   // The greeting sets on two lines in master 44 only when a name resolves, so
   // the profile is the one fixture that carries a value. It is the operator's
   // own name, it lives only in this file, and nothing writes it anywhere.
-  if (pathname.includes('/rest/v1/profiles')) {
+  // fetchMyProfile() tries the get_my_profile RPC before the table, so both
+  // shapes have to answer or the name never arrives.
+  if (
+    pathname.includes('/rest/v1/profiles') ||
+    pathname.endsWith('/rest/v1/rpc/get_my_profile')
+  ) {
     const profile = {
       id: USER_ID,
       full_name: 'Mahmudur Rahman',

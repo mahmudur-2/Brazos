@@ -713,6 +713,55 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 });
 
 // ---------------------------------------------------------------------------
+// H14 — the dark hero is a SLOT: the art reaches the screen's right edge, and
+// the number that says how big it is describes the ART rather than a box.
+//
+// CATCHES: the box being pushed off-screen with a negative `right` again to
+// make a cut-out's ink look less inset (it never worked — the ink stopped
+// short by the cut-out's own margin); the mode going back to `contain`, which
+// letterboxes a mismatched scene inside the slot and re-opens the gap between
+// the declared size and the drawn one; and the slot being given a size that no
+// longer matches what master 44 measures.
+//
+// WHY NOT VACUOUS: the art's share of its own canvas is read out of the PNG at
+// run time, so the assertion is about drawn pixels. Swap the asset and the
+// number moves; the fence does not have to be told.
+// ---------------------------------------------------------------------------
+test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge', () => {
+  const flat = flatten(read('screens/HomeScreen.tsx'));
+
+  const box = /homeHeroArtDark: \{ width: (\d+), height: (\d+), right: (-?\d+), top: (\d+) \}/.exec(flat);
+  assert.ok(box, 'the dark hero must keep a plain, readable box');
+  const [width, height, right] = [Number(box[1]), Number(box[2]), Number(box[3])];
+
+  // Master 44: 361px of 941 wide and 324px of 1672 tall, converted at 393/941.
+  // A band rather than a pin — a point either way is not a design change.
+  assert.ok(
+    Math.abs(width - 151) <= 4,
+    `master 44's scene is 150.8pt wide at 393pt; this slot is ${width}pt`
+  );
+  assert.ok(
+    Math.abs(height - 135) <= 4,
+    `master 44's scene is 135.3pt tall at 393pt; this slot is ${height}pt`
+  );
+
+  const ink = inkBounds(join(root, 'assets/prestige/hero_armchair_customer.png'));
+  const drawnRightGap = right + width * ink.right;
+  assert.ok(
+    Math.abs(drawnRightGap) < 4,
+    `the drawn art stops ${drawnRightGap.toFixed(1)}pt from the screen's right edge. A slot ` +
+      'bleeds; whatever is in it has to reach the edge, and pushing the BOX past the edge does ' +
+      "not move ink that is inset inside the box by the asset's own empty margin"
+  );
+
+  assert.match(
+    flat,
+    /resizeMode=\{isDark \? 'cover' : 'contain'\}/,
+    "dark fills and crops; light's Heritage crop is frozen on contain"
+  );
+});
+
+// ---------------------------------------------------------------------------
 // H4b — the atmosphere is a VIGNETTE, and the layer crops rather than fits.
 //
 // CATCHES: the raster being swapped for a flat plate (which is what

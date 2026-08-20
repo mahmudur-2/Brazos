@@ -60,6 +60,21 @@ import { SearchBar } from '../ui/primitives';
 // assets/brand so light never mounts an assets/prestige file).
 const POST_MARK = require('../assets/brand/brazos_b_drape.png');
 const HOME_HERO_ART = require('../assets/brand/customer-home-chair.png');
+// home(14): the ROOM-BAKED hero, restored from prestige(0a) (715ddf8) by
+// redirect — its bytes are untouched. It and the cut-out that had replaced it
+// are two different pictures, not one picture at two sizes: the baked scene has
+// a plant on long visible stems in a wide round pot, wall panelling, a floor
+// and a vignette, and the chair runs off the right edge, which is master 44's
+// composition exactly. The cut-out is a stem-less leaf rosette in a
+// narrow-footed urn with a whole four-legged chair on nothing. A cut-out also
+// cannot do what this slot needs: its edges are empty by definition, so it can
+// never bleed off a screen edge however it is sized.
+//
+// COST, recorded rather than hidden: the baked file is 400x351 where the
+// cut-out was 1200x1053, so at 151pt wide it upscales about 1.3x at @3x and
+// reads a little soft. The composition is the thing master 44 is drawn from;
+// the resolution is fixed by exporting the scene again at the size in the
+// run report, into this same path.
 const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png');
 const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 const PREVIEW_COUNT = 4;
@@ -258,7 +273,12 @@ export function HomeScreen() {
             <Image
               source={isDark ? PRESTIGE_HERO_ART : HOME_HERO_ART}
               style={[styles.homeHeroArt, isDark && styles.homeHeroArtDark]}
-              resizeMode="contain"
+              // home(14): dark's hero is a SLOT, and a slot fills. `cover`
+              // scales whatever is dropped in until both dimensions are
+              // covered and crops the remainder, so a room-baked scene reaches
+              // the screen edge instead of sitting inside its own margins.
+              // Light keeps `contain` and the Heritage crop, untouched.
+              resizeMode={isDark ? 'cover' : 'contain'}
               accessibilityIgnoresInvertColors
             />
             <View style={styles.introCopy}>
@@ -721,10 +741,28 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.homeSlate,
   },
   homeHeroArt: { position: 'absolute', zIndex: 0, width: 112, height: 124, right: -6, top: 47 },
-  // Master 44 gives the Prestige crop more of the headline band than the
-  // Heritage brand mark takes; same absolute box the approved composition
-  // already uses, dark-specific dimensions.
-  homeHeroArtDark: { width: 150, height: 132, right: -10, top: 34 },
+  // home(14) — THE HERO IS A SLOT, AND THESE ARE MASTER 44's OWN NUMBERS.
+  //
+  // Measured off docs/mockups/44_customer_home_dark.png at 941x1672 and
+  // converted at 393/941: the scene spans x 580..940 (361px = 150.8pt wide,
+  // running to the screen's right edge) and y 222..545 (324px = 135.3pt tall).
+  //
+  // `top` is measured from `intro`, whose first row is the greeting/"Switch to
+  // Worker" line, and it is taken from the master's GAP below that pill (24px =
+  // 10pt) rather than from its offset below the pill's top (43pt). The two are
+  // the same statement on the master and different here: master 44 draws that
+  // pill 33pt tall and this app draws it 44, because 44 is CLAUDE.md's touch
+  // floor and the master is under it. Copying the offset would butt the scene
+  // against the pill; copying the gap keeps the composition.
+  //
+  // `right: 0` and not a negative overhang. The old -10 existed to push a
+  // CUT-OUT far enough right that its ink stopped looking inset; the ink still
+  // stopped ~13pt short, because the cut-out's own transparent margin is 15.4%
+  // of its canvas on that side. A room-baked scene has no margin — its box IS
+  // its art — so the box's right edge IS the screen's right edge and the art
+  // bleeds off it. See the require at the top of this file for which asset that
+  // is and why.
+  homeHeroArtDark: { width: 151, height: 135, right: 0, top: 54 },
   // Laid over the shared SearchBar so the reference geometry wins; the input,
   // clear control and (when available) the voice mic ride SearchBar itself.
   searchField: {
