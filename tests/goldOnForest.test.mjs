@@ -45,6 +45,23 @@ const sourceFiles = SOURCE_DIRS.flatMap((dir) =>
 const GOLD_FILL_ALLOWLIST = new Set(['components/ModeTransitionOverlay.tsx']);
 
 /**
+ * home(8) — the ONE control decision 3 was reversed for, on operator
+ * instruction: the customer bar's centre [ + ]. It was a gold glyph and gold
+ * ring on the deep-green conversion fill; in DARK it is now palette gold,
+ * filled, with dark content. The masters draw it as a gradient, no gradient
+ * library exists here and none is being added, so flat gold is the accepted
+ * approximation.
+ *
+ * Recorded as file-AND-style-key, deliberately NOT as a file entry in
+ * GOLD_FILL_ALLOWLIST above: a second gold fill introduced in
+ * ui/primitives/BottomNav.tsx is still an offender, and `createButtonDark` is
+ * still an offender if it moves to another file. Light is untouched and still
+ * paints `forest` with a gold ring, so the rule is unreversed everywhere else
+ * and in the other theme.
+ */
+const GOLD_FILL_EXCEPTIONS = new Set(['ui/primitives/BottomNav.tsx::createButtonDark']);
+
+/**
  * The one shape decision 3's "no gold fills" was never about: the filled part
  * of a MEASUREMENT BAR. Masters 27 (the per-star rating distribution) and 37
  * (the job progress bar) both run a gold fill along a deep track, and a bar's
@@ -68,6 +85,7 @@ test('[static] gold is line-work, never a fill', () => {
   const offenders = [];
   let goldLinework = 0;
   let barFills = 0;
+  const exceptionsSeen = new Set();
   for (const file of sourceFiles) {
     const source = stripComments(read(file));
     goldLinework += (
@@ -76,6 +94,10 @@ test('[static] gold is line-work, never a fill', () => {
     for (const fill of source.matchAll(/backgroundColor:\s*\w+\.gold\b/g)) {
       if (GOLD_FILL_ALLOWLIST.has(file)) continue;
       const key = enclosingStyleKey(source, fill.index);
+      if (key && GOLD_FILL_EXCEPTIONS.has(`${file}::${key}`)) {
+        exceptionsSeen.add(`${file}::${key}`);
+        continue;
+      }
       if (key && /Fill$/.test(key)) {
         barFills += 1;
         continue;
@@ -83,6 +105,13 @@ test('[static] gold is line-work, never a fill', () => {
       offenders.push(`${file}: ${fill[0].trim()}`);
     }
   }
+  // Every recorded exception must still be a real, live gold fill. A stale
+  // entry is a hole standing open for a fill that no longer exists.
+  assert.deepEqual(
+    [...exceptionsSeen].sort(),
+    [...GOLD_FILL_EXCEPTIONS].sort(),
+    'a recorded gold-fill exception no longer matches anything — delete it rather than leave the hole'
+  );
   // The bar exception must stay an exception: if it ever stops matching
   // anything, it is dead and should be deleted rather than left as a hole.
   assert.ok(barFills >= 1, 'the measurement-bar exception must still match a real bar fill');

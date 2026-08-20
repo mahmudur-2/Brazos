@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
@@ -411,30 +411,66 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
 };
 
 /**
- * The customer creation slot (D3, kept by emerald D4): a raised disc between
- * Discover and Messages that OPENS A SHEET rather than navigating.
+ * home(8) — THE CENTRE [ + ] IS A FILLED GOLD CONTROL IN DARK.
  *
- * The gold is LINE-WORK — a gold ring and a gold glyph on the deep-green
- * conversion fill — not a gold fill. Decision 3 forbids gold fills and
- * tests/goldOnForest.test.mjs enforces it tree-wide; the same resolution
- * prestige(4b) reached for the timeline connector, and the shape the set
- * already uses for a circular gold control (master 1's inset arrow, 19's send
- * button, 46's back squircle). One rule in both themes: gold on forest is
- * correct in both under palette v2.
+ * This REVERSES decision 3's "no gold fills anywhere" for exactly this one
+ * control, on operator instruction. It was a gold glyph and a gold ring on the
+ * deep-green conversion fill; it is now palette gold, filled, with dark
+ * content. The masters draw this control with a gradient; no gradient library
+ * exists here and none is being added, so flat palette gold is the accepted
+ * approximation and is recorded as such.
+ *
+ * tests/goldOnForest.test.mjs still forbids gold fills tree-wide. The
+ * exception is recorded there as one file-and-style-key pair, not as a
+ * file-wide allowlist, so a second gold fill in this same file is still an
+ * offender.
+ *
+ * SIZE IS A SHARE OF THE SCREEN, not a pt value. A fixed number cannot be a
+ * fixed percentage: across 320pt to 440pt any single value swings by a third.
+ * Light is frozen — it keeps the 52pt square, the forest fill and the gold
+ * ring, and only the size arithmetic (which resolves to the same 52) is shared.
+ *
+ * THE BAR'S FOOTPRINT DOES NOT MOVE. The pill's height is
+ * TAB_BAR_CONTENT_HEIGHT, a constant; this control lives inside a flex item of
+ * fixed height and is raised by a TRANSFORM, which Yoga does not lay out. So
+ * bottomNavHeight() and useFloatingNavClearance() are arithmetically untouched
+ * by this change, and no clearance needed re-deriving — see the fence in
+ * tests/layout.test.mjs.
  */
+/** home(8): the control's width as a share of the screen. */
+const CREATE_BUTTON_WIDTH_RATIO = 0.149;
+/** The frozen LIGHT square. Also what the ratio resolves to on a ~350pt phone. */
+const CREATE_BUTTON_LIGHT_SIZE = 52;
+/** The glyph inside it, as a share of the control — 32 on 52, as it shipped. */
+const CREATE_GLYPH_RATIO = 0.615;
+
 export function CenterCreateButton({ onPress }: { onPress: () => void }) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const { width: screenWidth } = useWindowDimensions();
+
+  const size = isDark
+    ? Math.round(screenWidth * CREATE_BUTTON_WIDTH_RATIO)
+    : CREATE_BUTTON_LIGHT_SIZE;
+  // Derived rather than fixed so the plus keeps its proportion inside the
+  // control at any size — a fixed 32 would read hollow in the larger box.
+  const glyph = Math.round(size * CREATE_GLYPH_RATIO);
+
   return (
     <View style={styles.createSlot}>
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [styles.createButton, pressed && styles.createButtonPressed]}
+        style={({ pressed }) => [
+          styles.createButton,
+          isDark && styles.createButtonDark,
+          { width: size, height: size },
+          pressed && styles.createButtonPressed,
+        ]}
         accessibilityRole="button"
         accessibilityLabel="Create"
         accessibilityHint="Post a job, hire someone again, or open your jobs"
       >
-        <Ionicons name="add" size={32} color={colors.gold} />
+        <Ionicons name="add" size={glyph} color={isDark ? colors.forest : colors.gold} />
       </Pressable>
     </View>
   );
@@ -520,11 +556,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: TAB_BOTTOM_GAP,
   },
   createButton: {
-    width: 52,
-    height: 52,
+    // Width/height are supplied at render (home(8)) — this pair is the LIGHT
+    // value and the fallback shape.
+    width: CREATE_BUTTON_LIGHT_SIZE,
+    height: CREATE_BUTTON_LIGHT_SIZE,
     borderRadius: radius.lg,
-    // The one solid conversion fill, ringed in gold — gold is line-work here,
-    // never the fill (decision 3, enforced by tests/goldOnForest.test.mjs).
+    // LIGHT keeps decision 3's treatment exactly: the one solid conversion
+    // fill, ringed in gold, gold as line-work and never the fill.
     backgroundColor: colors.forest,
     borderWidth: 1,
     borderColor: colors.gold,
@@ -542,6 +580,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
+  },
+  // home(8), DARK ONLY: filled palette gold with dark content. The ring stays
+  // declared and becomes gold-on-gold — the control reads as one solid shape
+  // and the box model is unchanged (RN borders are inside the width).
+  createButtonDark: {
+    backgroundColor: colors.gold,
+    borderColor: colors.gold,
   },
   createButtonPressed: { opacity: 0.88, transform: [{ translateY: -14 }, { scale: 0.96 }] },
   previewBar: {

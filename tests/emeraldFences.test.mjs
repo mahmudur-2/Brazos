@@ -758,3 +758,68 @@ test('home(6) fence: the strip above the Post a Job footer matches the footer', 
     'a NEW element between the scroller and the footer must be given its own seam decision'
   );
 });
+
+// ---------------------------------------------------------------------------
+// H8 — the centre [ + ] is a filled gold control at 14.9% of screen width, in
+// DARK only, and enlarging it did not move the bar's footprint.
+//
+// CATCHES: the fill reverting to the deep-green conversion fill (decision 3's
+// rule, which home(8) reverses for this one control on operator instruction);
+// the size going back to a fixed pt value, which cannot be a share of the
+// screen; the reversal leaking into LIGHT, which is frozen on decision 3; the
+// glyph staying gold-on-gold, i.e. invisible; and — the constraint that
+// matters most — the pill's height or the clearance being re-derived from the
+// button, or the static clearance token returning as a side effect.
+// ---------------------------------------------------------------------------
+test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is unmoved', () => {
+  const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
+  const flat = flatten(read('ui/primitives/BottomNav.tsx'));
+
+  const ratio = constantOf(bar, 'CREATE_BUTTON_WIDTH_RATIO');
+  assert.ok(
+    Math.abs(ratio - 0.149) <= 0.005,
+    `the control must be 14.9% of screen width (+/- 0.5%), found ${(ratio * 100).toFixed(1)}%`
+  );
+  assert.match(
+    flat,
+    /const size = isDark \? Math\.round\(screenWidth \* CREATE_BUTTON_WIDTH_RATIO\) : CREATE_BUTTON_LIGHT_SIZE;/,
+    'the size must be measured off the live screen width in dark, and frozen in light'
+  );
+  assert.match(flat, /\{ width: size, height: size \}/);
+
+  // FILLED GOLD WITH DARK CONTENT, dark only.
+  assert.match(
+    flat,
+    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: colors\.gold, \}/,
+    'the dark control must be FILLED with palette gold'
+  );
+  assert.match(
+    flat,
+    /color=\{isDark \? colors\.forest : colors\.gold\}/,
+    'the glyph must be dark content on the gold fill — gold on gold is invisible'
+  );
+  // LIGHT IS FROZEN on decision 3: forest fill, gold ring, gold glyph, 52pt.
+  assert.match(flat, /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/);
+  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_SIZE'), 52);
+
+  // THE CONSTRAINT. The pill's height and the clearance are functions of the
+  // two declared geometry tokens and nothing else — the control's ratio must
+  // not appear in either, and the retired static token must not return.
+  assert.match(flat, /export const TAB_BAR_CONTENT_HEIGHT = layout\.floatingNavHeight;/);
+  assert.match(flat, /export const TAB_BAR_FLOAT_MARGIN = layout\.floatingNavGap;/);
+  const heightFn = /export function bottomNavHeight\(insetBottom: number\): number \{([^}]*)\}/.exec(flat);
+  assert.ok(heightFn, 'bottomNavHeight must stay a plain function');
+  assert.doesNotMatch(
+    heightFn[1],
+    /CREATE_/,
+    'the bar footprint must not be re-derived from the creation control'
+  );
+  assert.doesNotMatch(
+    flatten(read('ui/tokens.ts')),
+    /floatingNavClearance/,
+    'the static clearance token must not return as a side effect of home(8)'
+  );
+  // The control is raised by a TRANSFORM, which Yoga does not lay out — that
+  // is WHY the footprint is unmoved, so it must stay a transform.
+  assert.match(flat, /transform: \[\{ translateY: -14 \}\]/);
+});
