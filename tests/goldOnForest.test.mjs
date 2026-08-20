@@ -103,7 +103,7 @@ test('[static] the v2 dark palette keeps forest green and gold metal, distinct',
   };
   assert.equal(value('forest'), '#1E3A2C');
   assert.equal(value('gold'), '#DCAB60');
-  assert.equal(value('bg'), '#08110E');
+  assert.equal(value('bg'), '#03110E');
   assert.notEqual(value('forest'), value('gold'), 'v1 merged these; v2 must never re-merge them');
 });
 

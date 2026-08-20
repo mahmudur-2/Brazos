@@ -648,3 +648,56 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
     'Worker Home’s scroller must stay unpainted, or it would cover the layer'
   );
 });
+
+// ---------------------------------------------------------------------------
+// H5 — the dark base ground is ONE value, declared in three places, and the
+// light ground did not move with it.
+//
+// CATCHES: the ground being changed in one surface and not the others (dark
+// screens read `bg` from ui/tokens.ts, `background` and `homeBackground` from
+// lib/theme.ts, so a partial change shows as a seam between the two homes and
+// everything else); and the same edit being applied to the LIGHT palette,
+// which is frozen.
+// ---------------------------------------------------------------------------
+test('home(5) fence: one dark ground in three places, light untouched', () => {
+  const DARK_GROUND = '#03110E';
+
+  /** The slice of `source` between one `export const NAME = ` and the next. */
+  const paletteBlock = (source, name, next) => {
+    const start = source.indexOf(`export const ${name}`);
+    assert.notEqual(start, -1, `${name} must stay a named export`);
+    const end = source.indexOf(`export const ${next}`, start);
+    assert.notEqual(end, -1, `${next} must stay a named export after ${name}`);
+    return source.slice(start, end);
+  };
+
+  const tokens = read('ui/tokens.ts');
+  const theme = read('lib/theme.ts');
+
+  const darkTokens = paletteBlock(tokens, 'dark = {', 'spacing');
+  const darkTheme = paletteBlock(theme, 'darkColors', 'spacing');
+  const lightTokens = paletteBlock(tokens, 'colors = {', 'dark = {');
+  const lightTheme = paletteBlock(theme, 'colors = {', 'emeraldColors');
+
+  const value = (block, key, where) => {
+    const hit = new RegExp(`\n  ${key}: '(#[0-9A-Fa-f]{3,8})'`).exec(block);
+    assert.ok(hit, `${where} must declare ${key} as a plain hex`);
+    return hit[1];
+  };
+
+  // The three declarations of the dark ground, and they must agree.
+  assert.equal(value(darkTokens, 'bg', 'ui/tokens dark'), DARK_GROUND);
+  assert.equal(value(darkTheme, 'background', 'lib/theme darkColors'), DARK_GROUND);
+  assert.equal(value(darkTheme, 'homeBackground', 'lib/theme darkColors'), DARK_GROUND);
+
+  // LIGHT IS FROZEN. Not "different from dark" — these exact values.
+  assert.equal(value(lightTokens, 'bg', 'ui/tokens light'), '#F6F3EA');
+  assert.equal(value(lightTheme, 'background', 'lib/theme light'), '#F4F1E8');
+  assert.equal(value(lightTheme, 'homeBackground', 'lib/theme light'), '#FAF5F1');
+
+  // And the retired value is gone from both surfaces entirely, so a half-done
+  // revert cannot leave one screen on the old ground.
+  for (const [path, source] of [['ui/tokens.ts', tokens], ['lib/theme.ts', theme]]) {
+    assert.doesNotMatch(source, /#08110E/i, `${path} still carries the retired dark ground`);
+  }
+});

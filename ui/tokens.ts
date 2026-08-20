@@ -142,7 +142,7 @@ export const dark = {
   mint2: '#2A4C3D',
   ink: '#F1EDE1',
 
-  bg: '#08110E',
+  bg: '#03110E',
   surface: '#0E1D17',
   muted: '#93A096',
   line: '#55482E',

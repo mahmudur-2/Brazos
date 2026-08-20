@@ -20,7 +20,7 @@ Per-screen AI drift is ±10 units; canonical values below. Text golds/greens ren
 
 | Role | Canonical | Observed range | Notes |
 |---|---|---|---|
-| bg | `#08110E` | #000405–#031110 | masters vignette darker at edges |
+| bg | `#03110E` | #000405–#031110 | masters vignette darker at edges; home(5) moved it into that range |
 | surface (cards) | `#0E1D17` | #021313–#1B2B20 | many cards are bg + hairline only; elevated cards lift |
 | ink / cream | `#F1EDE1` | #E1DBD4–#F5F5F4 | display + body-on-dark |
 | muted | `#93A096` | — | secondary text, sage-grey |

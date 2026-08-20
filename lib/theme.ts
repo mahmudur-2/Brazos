@@ -164,7 +164,7 @@ export const darkColors: ColorPalette = {
   mint: emeraldDark.mint,
   mint2: emeraldDark.mint2,
   ink: emeraldDark.ink,
-  homeBackground: '#08110E',
+  homeBackground: '#03110E',
   homeSlate: '#93A096',
   homeHairline: '#55482E',
   homeLive: emeraldDark.emerald,
@@ -174,7 +174,7 @@ export const darkColors: ColorPalette = {
   textMuted: '#93A096',
   textSubtle: '#7C8A80',
 
-  background: '#08110E',
+  background: '#03110E',
   // The dim-gold hairline is what makes Prestige read as Prestige: `border`
   // is the flat equivalent of gold at hairline alpha, not a neutral grey.
   surface: '#0E1D17',
