@@ -1696,6 +1696,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 17,
     color: colors.textMuted,
   },
+  // home(6) — THE SEAM ABOVE THE PINNED FOOTER.
+  //
+  // This is the only element that sits between the scroller and the pinned
+  // footer (step 2, a fresh post with no photos yet), so it is the strip the
+  // footer shares its top edge with. It was `mint` — #11241C in dark, six
+  // levels off the footer's `surface` #0E1D17, and neither the page's `bg` nor
+  // any surface token the rest of that stack uses. The origin was a STRAY
+  // TOKEN, not a raw literal and not an alpha composite: every dark value and
+  // every alpha step over bg and surface was searched, and `mint` is the only
+  // one that lands there.
+  //
+  // Resolved to `surface`, the token the footer directly below it already
+  // uses, so the two agree. The mint2 hairline stays and now matches the
+  // footer's own borderTopColor. The mint family it left is the family of
+  // cards INSIDE the scroller (infoCard, guidanceCard, hireBanner) — none of
+  // those ever shares an edge with the footer.
   nudgeRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1707,7 +1723,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.mint2,
-    backgroundColor: colors.mint,
+    backgroundColor: colors.surface,
   },
   nudgeText: {
     flex: 1,

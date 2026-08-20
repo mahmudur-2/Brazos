@@ -701,3 +701,56 @@ test('home(5) fence: one dark ground in three places, light untouched', () => {
     assert.doesNotMatch(source, /#08110E/i, `${path} still carries the retired dark ground`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// H6 — the Post a Job seam: the strip above the pinned footer and the footer
+// itself resolve to the SAME token.
+//
+// CATCHES: the photo nudge drifting back onto `mint` (or onto any other
+// token), which put a six-level tonal step directly above the footer it shares
+// an edge with; and either surface being given a raw hex instead of a token.
+//
+// WHY NOT VACUOUS: both tokens are PARSED out of the screen and compared to
+// each other, so renaming or deleting either style fails the parse rather than
+// passing the comparison.
+// ---------------------------------------------------------------------------
+test('home(6) fence: the strip above the Post a Job footer matches the footer', () => {
+  const post = stripComments(read('screens/PostJobScreen.tsx'));
+
+  const backgroundOf = (style) => {
+    const block = new RegExp(`\n  ${style}: \{([^}]*)\}`).exec(post);
+    assert.ok(block, `PostJobScreen must keep a ${style} style object`);
+    const bg = /backgroundColor: colors\.(\w+),/.exec(block[1]);
+    assert.ok(bg, `${style} must paint its ground from a palette token`);
+    return bg[1];
+  };
+
+  const strip = backgroundOf('nudgeRow');
+  const footer = backgroundOf('footer');
+  assert.equal(
+    strip,
+    footer,
+    `the strip above the pinned footer paints colors.${strip} while the footer paints ` +
+      `colors.${footer} — they share an edge and must resolve to one token`
+  );
+  assert.equal(footer, 'surface', 'that shared token is `surface`, the pinned-chrome ground');
+
+  // It really is the only thing between the scroller and the footer — if
+  // something else is introduced there, this fence has to be revisited rather
+  // than silently continuing to guard the wrong element.
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+  const footerAt = flat.indexOf('<View style={[styles.footer');
+  assert.ok(footerAt > 0, 'the pinned footer must still follow the scroller');
+  // The LAST scroller to close before the footer — the screen nests horizontal
+  // scrollers inside its step content, so the first `</ScrollView>` is not the
+  // main one.
+  const scrollEnd = flat.lastIndexOf('</ScrollView>', footerAt);
+  assert.notEqual(scrollEnd, -1, 'the footer must still sit below a scroller');
+  const between = flat.slice(scrollEnd, footerAt);
+  assert.match(between, /styles\.nudgeRow/, 'the nudge is the strip this fence is about');
+  assert.deepEqual(
+    [...between.matchAll(/style=\{styles\.(\w+)\}/g)].map((m) => m[1]),
+    ['nudgeRow'],
+    'a NEW element between the scroller and the footer must be given its own seam decision'
+  );
+});
