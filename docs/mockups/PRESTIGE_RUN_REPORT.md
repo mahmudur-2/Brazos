@@ -2410,3 +2410,347 @@ heading, 24 CTA label, 112x124 and 79x101 art boxes, gold 1.25 mode-switch ring,
    at all.**
 10. Switch to Worker Mode and check the ground and atmosphere there too — D1 and
     D4 apply to both homes.
+
+---
+
+# Customer Home to the REPLACED master 44 — 2026-08-20 (`home(20)`–`home(28)`)
+
+## THE MASTER FILE ON DISK IS A DIFFERENT PICTURE
+
+`docs/mockups/44_customer_home_dark.png` was replaced by the operator before
+this run. It is **853 x 1844** where the file every earlier run measured was
+**941 x 1672**, and it draws two things that one did not: a centre **[ + ]** in
+the bottom bar, and a promo heading that sets on **TWO** lines rather than
+three. Both were confirmed by measurement before anything moved.
+
+**Every number in the sections above that is phrased as "master 44 measures",
+"master 44 draws" or "the master's share of" is VOID unless it is restated
+below.** The list of what that voided, and what replaced it, is the "Stale
+numbers" table.
+
+### What the new aspect changes
+
+| | old master | new master | device |
+|-|-|-|-|
+| pixels | 941 x 1672 | 853 x 1844 | 393 x 852 pt |
+| aspect | 0.5628 | 0.46258 | 0.46127 |
+| against the device | **22% off** — only width transferred | **0.28% off** | — |
+
+Height fractions now transfer. Vertical positions are measured directly from
+the file, and the "heights do not transfer, use the width ratio for everything"
+workaround that `MASTER_TO_DEVICE` encoded is retired: the conversion for a
+vertical measure is now `852/1844`, and `393/853` for a horizontal one.
+
+### The calibration, on a quantity neither side can fudge
+
+The iOS **home indicator** is a fixed 134 x 5 pt pill that iOS centres and no
+app can move. In the master it measures **293px wide at its half-intensity edge
+= 134.99pt (0.74% error)**, and its centre lands at **196.50pt**, which is
+393/2 exactly. That is the proof the two scale factors are right.
+
+## The instrument
+
+`scripts/home-diff.mjs` (new, `home(20)`) reads a harness render and the
+master, normalises the render onto the master's pixel width, and prints every
+outlined control's box and every band of ink in POINTS, plus the deltas and an
+absolute-difference summary. Two things in it are worth knowing:
+
+- **Y is content-relative, from two declared insets.** The master carries a
+  59pt iOS safe area; the web harness has none. Raw Y would report a 59pt error
+  on every element on the screen — a fact about the harness, not the layout.
+  The 59 is derived, not assumed: master 44's "Switch to Worker" pill is the
+  tallest thing in the first row, so its top IS the content top, and it
+  measures 67.2pt from the screen top against the screen's own 8pt of padding.
+- **A box's side edges come from the straight top edge's CENTRE plus the more
+  outboard of the two side borders found.** A rounded rectangle's straight top
+  edge is symmetric about its own centre, and ink inside a control — the gold B
+  beside the promo copy, a chip's glyph — can only pull a measured side inward.
+
+`tests/pngGeometry.mjs` exports its decoder and luminance so that tool carries
+no second copy of the PNG filter loop. The decoding itself did not change.
+
+## home(21) DID NOT RUN
+
+`assets/fonts/` **does not exist**, and no PlayfairDisplay face — Regular,
+Medium, SemiBold or Bold — is anywhere in the tree. The only `.ttf` files
+present are `@expo/vector-icons`' own, inside build output. Nothing was
+downloaded and no font file was created.
+
+So every size in `home(23)`, `home(25)` and `home(26)` is derived against the
+**currently resolved Georgia** (iOS) / platform sans, with master 44's **LINE
+COUNT** as the hard constraint, and the residual cap-height gap is recorded
+rather than met:
+
+| element | master cap | shipped | shipped cap | owed |
+|-|-|-|-|-|
+| hero headline | 24.03pt (52px) | 31pt | 21.4pt | **2.6pt** |
+| promo heading | 15.25pt (33px) | 18pt | 12.5pt | **2.8pt** |
+| "Live Nearby" | 13.86pt (30px) | 20pt | 13.8pt | 0.0pt |
+| CTA label | 13.40pt (29px) | 24pt (frozen) | 16.6pt | 3.2pt OVER |
+| eyebrow | 7.39pt (16px) | 12pt | 8.3pt | 0.9pt OVER |
+| subtitle | 9.70pt (21px) | 14pt | 9.6pt | 0.1pt |
+| "View all" | 9.70pt (21px) | 14pt | 9.6pt | 0.1pt |
+| switch label | 9.24pt (20px) | 13pt | 8.9pt | 0.3pt |
+
+Georgia is materially WIDER than the master's Didone — 22% more ink per point
+of size on "off your plate.", 22% on "BRAZOS handles the rest." — which is why
+the two display sizes are capped by their columns rather than by their caps.
+**Bundling the face is what closes both, and nothing else does.**
+
+## Stale numbers the master replacement voided
+
+| where | what | old | new |
+|-|-|-|-|
+| `screens/HomeScreen.tsx` | `MASTER_TO_DEVICE` | `393 / 941` | `852 / 1844` |
+| | `MASTER_SERIF_CAPS.heroHeadline` | 55px | **52px** |
+| | `MASTER_SERIF_CAPS.promoHeading` | 37px | **33px** |
+| | `MASTER_SERIF_CAPS.sectionTitle` | 26px | **30px** |
+| | `MASTER_SERIF_CAPS.ctaLabel` | 25px | **29px** |
+| | ladder: hero / promo / section / CTA | 33 / 22 / 16 / 15 | **35 / 22 / 20 / 19** |
+| | `homeHeroArtDark` | 151 x 135 at right 0, top 54 | **184 x 162 at right -28, top 35** |
+| | `headlineDark.maxWidth` | 74% | computed from the artwork (`headlineColumn`) |
+| | `headlineDark.marginTop` | 15 | **30** |
+| | dark headline leading | size x (45/39) | size x `HEADLINE_LEADING` (37.9pt pitch) |
+| | `heroHeadlineDark` | lineHeight 27 | **fontSize 18, lineHeight 28** |
+| | `heroMarkDark.top` | 25 | **21** |
+| | `modeSwitchDark.borderColor` | `colors.border` | **`colors.homeSlate`** |
+| | promo heading line count | "master 44 sets it on THREE lines" | **TWO** |
+| `lib/homeDesignStudio.tsx` | `heroFontSize` | 30 | **31** |
+| `tests/emeraldFences.test.mjs` | H16 conversion assertion | 393/941 | **852/1844** |
+| | H16 `ladder('sectionTitle')` | 16 | **20** |
+| | H16 `ladder('ctaLabel')` | 15 | **19** |
+| | H16 `LONGEST_LINE_AT_39 = 281.6` | measured "Take a task off" | **void** — replaced by `LONGEST_LINE_AT_30 = 210.0` for "off your plate.", which is the string that sets the widest line |
+| | H16 column model | `393 - padding - artWidth` | the copy must clear the art's **INK**, `HERO_ART_INK_LEFT` |
+| | H14 slot size | 151 +/- 4 and 135 +/- 4 | **184 +/- 4 and 162 +/- 4**, plus a measured 7.8pt overhang |
+| | H14 drawn-right-gap within 4pt of the edge | — | replaced: the box now runs 7.8pt PAST the edge on purpose |
+| | H17 "master 44 rings this at 0.69pt" | 0.69pt | **0.92pt** |
+| | H17 dark ring colour | `colors.border` | **`colors.homeSlate`** |
+| `tests/homeDesignStudio.test.mjs` | recorded `heroFontSize` | 30 | **31** |
+| the B's ink share of the card | 18.7% | **17.4%** — 0.272 by home(15)'s arithmetic against the 0.277 shipped, which is smaller than the measurement's own threshold sensitivity, so `B_DRAPE_WIDTH_RATIO` did NOT move |
+| the mode-switch pill | 33pt tall, ring peaking #A9814B | **40.2pt tall, ring peaking #AFACA4** |
+
+## The acceptance table
+
+Content-relative points. ORIGIN tolerance +/- 2pt, SIZE +/- 3%. Locked items
+are exempt and reported as a measured difference. Masked: the status bar, the
+home indicator, the greeting string, job data.
+
+| element | master (x, y, w, h) | before | after | verdict |
+|-|-|-|-|-|
+| greeting block | 21.2, 8.6, 89.8, 29.6 | 21, 5, 122, 40 | 21, 5, 133, 40 | origin **PASS**; size is the masked greeting string |
+| Switch pill | 215.2, 0.9, 156.2, 40.2 | 199, 3, 173, 44 | **215, 3, 157, 44** | x/w **PASS** (+0.5%); y +2.1 and h +9.5% **RECORDED** — the 44pt touch floor |
+| headline block | 21.2, 93.6, —, 69.3 | 20, 70, —, 72 | **20, 94, —, 68** | **PASS** (y +0.4, h -1.9%) |
+| — its long line's ink | 198.6 | 210 | 217 | +9.3% **RECORDED** — the face |
+| subtitle | 21.7, 185.5, 208.2, 14.4 | 21, 152, 326, 45 (2 lines) | **21, 187, 232, 13** | origin **PASS**; width +11.4% **RECORDED**; **1 line** |
+| hero art (box) | 216.5, 34.9, 184.3, 162.2 | 222, 54, 151, 135 | **217, 35, 184, 162** | **PASS** (all four) |
+| search field | 19.8, 237.0, 354.3, 67.0 | 21, 229, 351, 70 | **21, 237, 351, 70** | origin/width **PASS**; h +4.5% **BLOCKED** — `design.searchHeight` is shared with the frozen light theme |
+| chip row 1 | 19.4, 328.0, 166.3 + 124.9 | 21, 319, 172 + 133 | **21, 327, 168 + 129** | origin **PASS**; c1 +1.0% **PASS**, c2 +3.3% marginal |
+| chip row 2 | 19.8, 382.6, 135.5 + 119.8 + 82.9 | 21, 371, 142 + 126, and a THIRD row | **20, 381, 140 + 124 + 75** | origin **PASS**; +3.3% / +3.5% / -9.5%; **2 rows** |
+| promo card | 19.4, 449.1, 353.8, 180.7 | 20, 487, 353, 195 | **20, 448, 353, 182** | **PASS** (all four) |
+| eyebrow | 37.8, 469.3, 132.2, 7.4 | 38, 508, 194, 20 | **38, 469, 156, 9** | origin **PASS**; width +18% **RECORDED** — the face |
+| promo heading | 37.8, 495.1, 232.7, 2 lines | 36, 520, 265, **3 lines** | **37, 496, 232, 2 lines** | **PASS** (long line -0.3%); **2 lines** |
+| B mark (ink) | 288.5, 471.3, 61.7, 73.0 | —, 487, —, — | **287, 470, 63, 78** | origin **PASS**; w +2.1% **PASS**, h +6.8% marginal |
+| promo CTA | 35.9, 564.1, 321.1, 49.4 | 37, 617, 319, 48 | **37, 565, 319, 48** | **PASS** (all four) |
+| "Live Nearby" | 53.4, 658.2, 91.2, 18.0 | 42, 711, 124, 19 | **42, 658, 124, 19** | y **PASS**; x -11.4 **BLOCKED**, see below; width +36% **RECORDED** |
+| "View all" | 301.3, 661.4, 43.3, 9.7 | 297, 711, 52, 11 | **301, 662, 48, 10** | origin **PASS**; width +10.9% **RECORDED** |
+| bottom dock | 11.1, 693.5, 368.6, 68.4 | 12, 762, 369, 70 | 12, 762, 369, 70 | x/w/h **PASS**; Y is bottom-anchored — see the device checks |
+
+**Line and row counts, which were the hard constraints:** headline exactly 2
+lines · promo heading exactly 2 lines · chips exactly 2 rows · subtitle 1 line,
+which is the master's. All four met.
+
+**"Live Nearby"'s x is blocked by the live indicator, not by its own type.**
+The master draws the pulse dot 24.4pt wide at 22.1; `liveIndicator` is 14pt
+wide, so the title starts 11.4pt further left. The dot's size is its pulse
+animation's resting extent — a treatment, not a position — and moving it is not
+this run's.
+
+## Reversals, each with the measurement that justified it
+
+1. **"Live Nearby" 16 -> 20pt.** `home(16)` shrank it from 22 to 16 against the
+   old file's 26px stem (10.86pt of cap). The replaced file measures **30px =
+   13.86pt**, which is 20pt of Georgia. The rung is computed from the ladder,
+   so re-measuring the caps carried it.
+2. **The mode-switch ring, `border` -> `homeSlate`.** `home(17)` chose the gold
+   hairline because the old master's ring "peaks at #A9814B" — a warm olive.
+   The replaced master's ring peaks at **#AFACA4** and integrates to
+   **#A4A29B** (0.92pt line) or **#989790** (1.00pt): a near-neutral light grey
+   at luminance **151..168**, against `border`'s **73**. The WEIGHT half of
+   `home(17)` survives — the ring is 2px of 1844 = 0.92pt, so 1 is still the
+   nearest real weight below light's 1.25.
+3. **The hero art's box, right 0 -> right -28.** `home(14)` stopped the box at
+   the padded column's edge. The replaced master runs it **7.8pt past the
+   screen's right edge**, because the asset's rightmost eighth is flat vignette
+   and stopping the box at the edge stops the visible scene 23pt short of it.
+4. **The promo heading's line count, three -> two.** `home(16)` recorded "master
+   44 sets that heading on THREE lines, exactly as this app does" and pinned the
+   size on it. That sentence is now false.
+
+## No new token was added
+
+The mode-switch ring's measured colour has **no existing token inside 8/255**:
+
+| token | hex | worst channel vs the mid estimate |
+|-|-|-|
+| `homeSlate` | `#93A096` | **9** |
+| `neutral` | `#A79D8B` | 11 |
+| `navInactive` | `#7C8A80` | 32 |
+| `border` | `#55482E` | 62 |
+
+`homeSlate` is one count over the tolerance, and the estimate's own spread —
+151 to 168 in luminance, depending on whether the ring is 0.92pt or 1.00pt
+wide — is **twice that gap**. A token defined to 9 counts would be inventing
+precision the measurement does not have, so the difference is recorded instead.
+
+## The two device defects
+
+**`home(22)` — the red code frame. NOT FIXED, and not reproducible from this
+tree.** The reported frame quotes `screens/HomeScreen.tsx` lines 49-50, which
+are those two comment lines *as they stood at `prestige(1a)`..`home(1)`* — they
+now sit at 51-52, twenty commits later. What was ruled out, mechanically:
+
+- no app code renders source text: **no monospace font anywhere** in
+  `screens/`, `components/`, `ui/` or `lib/`; the only markdown renderer is on
+  the legal screens; nothing renders an error's message or stack;
+- the job card's every dynamic string is a plain `Text` — title, budget,
+  neighbourhood, category label, interest — and every category lookup is
+  `??`-guarded, so `categoryAccent` cannot throw;
+- `AppErrorBoundary` is the app's ONE boundary, it wraps `RootNavigator`, and
+  its fallback is a fixed sentence — it cannot render a card-sized red box;
+- the frame's text exists in **exactly one place in the whole repository**: as
+  a source comment. Not a fixture, not a document, not data;
+- it is **absent from a production bundle** (comments are stripped), so it can
+  only reach a screen through a DEV symbolicated code frame;
+- **every asset `require()` in the tree resolves to a real file**, and a test
+  already asserts every rostered raster is on disk — the one failure mode that
+  produces a Metro code frame at that exact line range.
+
+Consistent with a device running a stale JS bundle. **A rebuild is the check.**
+
+**`home(27)` — NAVIGATE WorkerResults. NOT REPRODUCIBLE either, and now
+gated.** `screens/HomeScreen.tsx` has never contained the string
+"WorkerResults" in its entire history; Customer Home's "View all" calls
+`switchMode()`, which navigates nothing. Of the six dispatchers of that
+payload, the only live one is Worker Home, inside the stack that registers it;
+`BrowseJobsScreen` is unmounted; Map's two are cross-tab, guarded, and produce
+a different payload shape. What WAS missing: Map is mounted by both trees and
+offers the worker list twice, and only one of its two worker-mode gates was
+fenced. The new test walks every screen the customer tree mounts and asserts
+every literal cross-tab target either resolves in that tab's customer stack or
+sits behind a worker-mode gate.
+
+## Artwork still owed — recorded, not faked
+
+1. **The dark green fabric behind the B** on master 44 exists in no asset here.
+   `assets/prestige/brazos_b_drape.png` is the gold B and its leaf on
+   transparency, and nothing else. Export spec: the fabric as its own
+   transparent-backed PNG, **918 x 753** to match the mark it sits behind, so
+   the two compose without a second scale factor.
+2. **The glow around the B** on the master is baked pixels, not a style. Not
+   imitated, and no glow was added in its place.
+3. **The hero scene at resolution.** `assets/prestige/hero_armchair_customer.png`
+   is **400 x 351**, and this run draws it at **184 x 162 pt** — about **3.0x
+   at @3x**, where it was 1.3x before. It reads soft. Export spec: the same
+   scene, same composition, same vignette, at **1104 x 969** (184 x 162 at @3x
+   with 6% of headroom), into that same path. Nothing else has to change if it
+   lands: the box is declared in points and `HERO_ART_INK_LEFT` is re-derived
+   from the file by the fence.
+
+## Light is frozen, and proven so
+
+Every change this run is `isDark &&` gated or lives in a `*Dark` style. The
+diff was read line by line for it. `home(21)` did not run, so light typography
+did not change either — the one thing the dispatch allowed to move in light.
+The light render is the Heritage composition unchanged: three-line headline,
+two-line subtitle, three chip rows, three-line promo heading.
+
+The H19 fence gains the light subtitle (16 / `spacing.sm`), which `home(23)`
+forked.
+
+## Every taste number now free to live-tune
+
+| file | name | value | the range the fences allow |
+|-|-|-|-|
+| `lib/homeDesignStudio.tsx` | `heroFontSize` | **31** | at most 35 (the cap ladder) AND `210 x size/30` must fit `headlineColumn` — 31 is the ceiling today |
+| | `screenPadding` | 20 | unfenced, but every column and the artwork's overhang derive from it |
+| | `sectionGap` | 20 | the per-section dark margins are differences from it; H24 and H26 re-derive |
+| | `searchHeight` | 70 | unfenced. Master 67.0 — shared with light |
+| | `ctaHeight` | 48 | the card's height fence allows +/- 2.5pt on the total |
+| `screens/HomeScreen.tsx` | `HEADLINE_LEADING` | 38 / 31 | must resolve to **37.9 +/- 1.2pt** at the shipped size |
+| | `headlineDark.marginTop` | **30** | unfenced |
+| | `heroSubtitleDark` | 14 / 10 | unfenced |
+| | `HERO_ART_DARK.width` | **184** | **180–188** |
+| | `HERO_ART_DARK.height` | **162** | **158–166** |
+| | `HERO_ART_DARK.top` | **35** | **32–38** |
+| | `HERO_ART_DARK.right` | **-28** | overhang **4.8–10.8pt** past the screen edge |
+| | `HERO_ART_INK_LEFT` | **0.153** | within **0.03** of the asset's own measured structure |
+| | `searchFieldDark.marginTop` | **8** | unfenced |
+| | `serviceRowsDark.gap` | **10** | unfenced |
+| | `serviceRowDark.gap` | **6** | row 2 must still fit: 3 x (content + 2 x pad) + 2 x gap <= 353 |
+| | `serviceChipDark.paddingHorizontal` | **12** | unfenced |
+| | `compactChipDark.paddingHorizontal` | **8** | the same row-2 budget |
+| | `heroCardDark.marginTop` | **3** | unfenced |
+| | `heroCopy` dark gap | **8** | the card's height must stay **180.7 +/- 2.5** |
+| | `heroBodyDark.gap` | **20** | the same |
+| | `heroHeadlineDark.fontSize` | **18** | its long line must end **251.1 +/- 6pt** from the card's left, and its FIRST line must fit the column |
+| | `heroHeadlineDark.lineHeight` | **28** | **27.7 +/- 1.5** |
+| | `heroMarkDark.top` | **21** | ink at **22.2 +/- 2pt** below the card's edge |
+| | `B_DRAPE_WIDTH_RATIO` | 0.277 | **0.26–0.30** (unchanged fence) |
+| | `sectionDark.marginTop` | **-6** | card-bottom-to-ink **28.4 +/- 2pt** |
+| | `MASTER_SANS_CAPS.viewAll` | **21px** | must resolve to **14pt** |
+| | `MASTER_SANS_CAPS.switchLabel` | **20px** | the pill must resolve to **156.2 +/- 5pt** wide |
+
+## Found, not fixed
+
+1. **The hero scene's bottom edge is a visible horizontal seam** where the
+   asset's floor ends. The master has the same edge in the same place; at the
+   new size it is more legible. The export spec above is what closes it.
+2. **The live-pulse dot is 14pt where the master draws 24.4.** That is what
+   holds "Live Nearby" 11.4pt left of the master's x.
+3. **The eyebrow is 18% wider than the master's** and its cap 22% larger. 11pt
+   would still be 8% wide, because the gap is the face — so it stays at 12 and
+   the difference is recorded rather than half-closed.
+4. **`canNavigateTo()` returns `true` for an unvisited tab.** A cross-tab jump
+   to a mode-specific route escapes the guard until the target tab has
+   rendered. No live caller can reach it — both are worker-gated — and the new
+   home(27) fence closes the gate that matters, but the hole is in the helper.
+5. **The empty-jobs state renders behind the dock on a device.** Under the
+   final geometry "No open jobs right now…" sets at 775–800 content = 842–867pt
+   absolute on a 59pt-inset phone, and the floating dock's top is at ~748.
+   Nothing about it is new — the section simply sits lower now.
+
+## The device checks, in tap order
+
+The first two are the ones the harness **cannot** cover.
+
+1. **The safe-area seam.** Open Customer Home in DARK and look at the top 60pt:
+   there must be no horizontal seam where the safe-area strip meets the page.
+   Web reports a zero top inset, so this is invisible to the harness.
+2. **Does the first Live Nearby card peek above the dock?** Computed under the
+   final geometry: the section's top is at 644pt content, its header is 44 tall
+   and its gap 12, so the **first card's top lands at 700pt content = 767.2pt
+   absolute** on a 393x852 phone with a 59pt top inset. The floating dock's top
+   on a 34pt-bottom-inset phone is at **748**. The card's top is therefore
+   **19.2pt BELOW the dock's top edge** and nothing peeks — which is what
+   master 44 draws. Confirm with real jobs loaded.
+3. The hero: the scene should reach the right screen edge and run off it. Judge
+   its **bottom edge** — that is the seam the export spec exists to close.
+4. The headline: **two lines**, "Take a task / off your plate.", ending about
+   7pt clear of the plant. On a 320pt phone confirm it has not touched the art.
+5. The subtitle: **one line**, "Describe it. Hire help. Get it handled."
+6. The chips: **two rows**, with "Other" on the second beside TV Mounting —
+   never a third row.
+7. The promo card: heading on **two lines**, "Describe the job." / "BRAZOS
+   handles the rest.", the second ending clear of the gold B.
+8. "Switch to Worker": the ring should read as a **neutral hairline**, not gold
+   and not the brightest line on the screen. Still 44pt tall — confirm it is
+   comfortable to hit.
+9. "Live Nearby" — noticeably **larger** than it was. Confirm it still reads as
+   a section heading.
+10. Tap "View all": it must raise the **Switch to Worker Mode** confirmation,
+    not a navigation error. Confirm, then tap Worker Home's own "View all" —
+    that one must open the job list.
+11. **Rebuild the JS bundle before judging the red code frame or the
+    WorkerResults crash.** Neither is reproducible from this tree.
+12. Switch the phone to LIGHT and walk 3–10 again. **Nothing should have
+    changed at all.**
