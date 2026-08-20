@@ -272,12 +272,23 @@ export const fonts = {
  * The small end (`sub` 11, `caption` 10) is §I's own value and is kept: these
  * are secondary/caption roles, not body copy, and unlike touch targets there
  * is no CLAUDE.md rule they violate.
+ *
+ * home(3) — LETTER SPACING ON THE DISPLAY SERIF. The three heading roles carry
+ * `letterSpacing: -1`. A display serif set at 21pt and up tracks loose by
+ * default; pulling it in a point is what makes a heading read as one word
+ * shape rather than a row of letters. It is deliberately NOT applied to
+ * `title`, `body`, `sub`, `caption` or `eyebrow`: negative tracking closes up
+ * small type until it smudges, and `eyebrow` wants the opposite (its +1.2 is
+ * what makes 9pt uppercase legible). The same three-role decision is mirrored
+ * in lib/theme.ts's `typography`, and tests/emeraldFences.test.mjs holds the
+ * two surfaces to it.
  */
 export const type = {
-  display: { fontSize: 28, lineHeight: 29, fontWeight: '800', fontFamily: fonts.display },
-  h1: { fontSize: 26, fontWeight: '800', fontFamily: fonts.display },
-  h2: { fontSize: 21, fontWeight: '700', fontFamily: fonts.display },
-  // Prestige decision 9: card titles join the serif voice, both themes.
+  display: { fontSize: 28, lineHeight: 29, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
+  h1: { fontSize: 26, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
+  h2: { fontSize: 21, fontWeight: '700', fontFamily: fonts.display, letterSpacing: -1 },
+  // Prestige decision 9: card titles join the serif voice, both themes. At
+  // 15pt it stays on default tracking — see the docblock above.
   title: { fontSize: 15, fontWeight: '700', fontFamily: fonts.display },
   body: { fontSize: 14, fontWeight: '400' },
   sub: { fontSize: 11, fontWeight: '500' },

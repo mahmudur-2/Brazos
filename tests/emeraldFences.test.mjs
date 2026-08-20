@@ -520,3 +520,72 @@ test('home(2) fence: the B drape is 18.3% of screen width, and the copy column f
     'the promo heading stays at 25pt — shrinking type is not the fix for the wrap'
   );
 });
+
+// ---------------------------------------------------------------------------
+// H3 — the display serif tracks at -1, in BOTH token surfaces, and NOWHERE
+// else on the scale.
+//
+// CATCHES: the tracking landing in one surface and not the other (ui/tokens.ts
+// and lib/theme.ts are two independent scales that screens reach through
+// different doors, so a one-sided change is invisible until a device pass);
+// and it leaking down onto body/label/caption/sub/eyebrow, where negative
+// tracking closes small type up until it smudges and where `eyebrow` needs the
+// opposite sign entirely.
+// ---------------------------------------------------------------------------
+test('home(3) fence: -1 tracking on the serif headings, and only there', () => {
+  const surfaces = [
+    { path: 'ui/tokens.ts', scale: 'type', spaced: ['display', 'h1', 'h2'], plain: ['title', 'body', 'sub', 'caption', 'eyebrow'] },
+    { path: 'lib/theme.ts', scale: 'typography', spaced: ['title', 'heading', 'subheading'], plain: ['body', 'label', 'caption'] },
+  ];
+
+  for (const { path, scale, spaced, plain } of surfaces) {
+    const source = stripComments(read(path));
+    // Sliced rather than regexed: both needles must be FOUND, and -1 from
+    // indexOf would otherwise slice from the end of the file and match nothing
+    // while looking like a pass.
+    const start = source.indexOf(`export const ${scale} = {`);
+    assert.notEqual(start, -1, `${path} must keep ${scale} as a plain object literal`);
+    const end = source.indexOf('\n} as const', start);
+    assert.notEqual(end, -1, `${path}: ${scale} must stay an \`as const\` literal`);
+    const block = source.slice(start, end);
+    const roles = Object.fromEntries(
+      [...block.matchAll(/^\s{2}(\w+): \{([^}]*)\},?$/gm)].map((m) => [m[1], m[2]])
+    );
+
+    for (const role of [...spaced, ...plain]) {
+      assert.ok(roles[role], `${path}: ${scale}.${role} is no longer a one-line role`);
+    }
+
+    for (const role of spaced) {
+      assert.match(
+        roles[role],
+        /fontFamily: fonts\.display/,
+        `${path}: ${scale}.${role} must stay a display-serif role`
+      );
+      assert.match(
+        roles[role],
+        /letterSpacing: -1(,|\s|$)/,
+        `${path}: ${scale}.${role} must carry letterSpacing: -1`
+      );
+    }
+
+    for (const role of plain) {
+      assert.doesNotMatch(
+        roles[role],
+        /letterSpacing: -/,
+        `${path}: ${scale}.${role} must not take negative tracking — it is body/small/eyebrow type`
+      );
+    }
+
+    // Nothing under 15pt may take it, whatever the role is called.
+    for (const [role, decl] of Object.entries(roles)) {
+      const size = /fontSize: (\d+)/.exec(decl);
+      if (!size || Number(size[1]) >= 15) continue;
+      assert.doesNotMatch(
+        decl,
+        /letterSpacing: -/,
+        `${path}: ${scale}.${role} is ${size[1]}pt — negative tracking stops at 15`
+      );
+    }
+  }
+});

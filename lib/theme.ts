@@ -238,9 +238,14 @@ export const typography = {
   // Prestige decision 9: the heading roles carry the display serif in BOTH
   // themes (structure and type are theme-independent; only colours resolve
   // per palette). Body/label/caption stay on the platform sans.
-  title: { fontSize: 28, fontWeight: '800', fontFamily: fonts.display, color: colors.text },
-  heading: { fontSize: 22, fontWeight: '700', fontFamily: fonts.display, color: colors.text },
-  subheading: { fontSize: 17, fontWeight: '600', fontFamily: fonts.display, color: colors.text },
+  //
+  // home(3): those three serif heading roles — and only those three — take
+  // `letterSpacing: -1`, mirroring `display`/`h1`/`h2` in ui/tokens.ts. Body,
+  // label and caption are sans and small, and negative tracking closes small
+  // type up until it smudges.
+  title: { fontSize: 28, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
+  heading: { fontSize: 22, fontWeight: '700', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
+  subheading: { fontSize: 17, fontWeight: '600', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
   body: { fontSize: 15, fontWeight: '400', color: colors.text },
   label: { fontSize: 13, fontWeight: '600', color: colors.textMuted },
   caption: { fontSize: 12, fontWeight: '500', color: colors.textSubtle },
