@@ -92,11 +92,17 @@ const MIME = {
 
 function buildExport() {
   console.log('[shots] exporting the web bundle (this takes a couple of minutes)…');
+  // The local CLI entry point, run on this Node — not `npx expo`, which on
+  // Windows is a .cmd shim that spawnSync cannot start without a shell and
+  // which reports `status: null` with no output when it fails to.
+  const cli = join(root, 'node_modules', 'expo', 'bin', 'cli');
+  if (!existsSync(cli)) throw new Error(`expo CLI not found at ${cli}; run npm install`);
   const run = spawnSync(
-    process.platform === 'win32' ? 'npx.cmd' : 'npx',
-    ['expo', 'export', '--platform', 'web', '--output-dir', exportDir, '--clear'],
+    process.execPath,
+    [cli, 'export', '--platform', 'web', '--output-dir', exportDir, '--clear'],
     { cwd: root, stdio: 'inherit' },
   );
+  if (run.error) throw run.error;
   if (run.status !== 0) throw new Error(`expo export failed with status ${run.status}`);
 }
 

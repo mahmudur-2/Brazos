@@ -672,6 +672,44 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
     /<ScrollView style=/,
     'Worker Home’s scroller must stay unpainted, or it would cover the layer'
   );
+
+  // home(12) — THE SECOND SURFACE. A ScrollView paints its `style` AND its
+  // `contentContainerStyle`, and this fence checked only the first while the
+  // second painted an opaque ground over the whole layer. It was green on the
+  // exact defect it names ("the scroller's own ground being restored on top of
+  // it"). Both surfaces are checked now, on BOTH homes, and derived: the style
+  // key each screen hands its content container is parsed out and its own
+  // declaration read, so renaming the key cannot walk past this.
+  for (const path of ['screens/HomeScreen.tsx', 'screens/WorkerHomeScreen.tsx']) {
+    const flat = flatten(read(path));
+    const container = /contentContainerStyle=\{\[?([^}\]]*)/.exec(flat);
+    assert.ok(container, `${path} must still hand its scroller a content container style`);
+
+    const base = /styles\.(\w+)/.exec(container[1]);
+    assert.ok(base, `${path}: the content container must name a stylesheet key`);
+    const declaration = new RegExp(`\\b${base[1]}: \\{([^}]*)\\}`).exec(flat);
+    assert.ok(declaration, `${path}: styles.${base[1]} must stay a plain style object`);
+
+    const ground = /backgroundColor: ([^,}]+)/.exec(declaration[1]);
+    if (!ground) continue; // nothing painted at all — the layer shows through.
+
+    // It paints. Then dark must be given a transparent override at the call
+    // site, and that override must actually be transparent.
+    const override = new RegExp(`isDark && styles\\.(\\w+),? \\{ paddingHorizontal|isDark && styles\\.(\\w+)`).exec(
+      container[1]
+    );
+    assert.ok(
+      override,
+      `${path}: styles.${base[1]} paints ${ground[1].trim()} — in dark that covers the atmosphere, ` +
+        'so the content container needs an isDark override the way the scroller has one'
+    );
+    const key = override[1] ?? override[2];
+    assert.match(
+      flat,
+      new RegExp(`${key}: \\{ backgroundColor: 'transparent' \\}`),
+      `${path}: styles.${key} must be the transparent ground, not another colour`
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------

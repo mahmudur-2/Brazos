@@ -247,6 +247,7 @@ export function HomeScreen() {
           style={[styles.scroll, isDark && styles.scrollOverAtmosphere]}
           contentContainerStyle={[
             styles.content,
+            isDark && styles.contentOverAtmosphere,
             { paddingHorizontal: design.screenPadding, gap: design.sectionGap },
           ]}
           showsVerticalScrollIndicator={false}
@@ -305,7 +306,7 @@ export function HomeScreen() {
                 ]}
                 maxFontSizeMultiplier={1.25}
               >
-                Take a task off your plate.
+                Take a task{'\n'}off your plate.
               </Text>
               <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
                 Describe it. Hire help. Get it handled.
@@ -649,6 +650,29 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: 0,
     gap: 20,
   },
+  // home(12) — THE SECOND GROUND, and the one home(4) missed.
+  //
+  // A ScrollView paints TWO surfaces: `style` on the scroller itself, which
+  // home(4) stood down, and `contentContainerStyle` on the content box inside
+  // it, which it did not. The content box is `flexGrow: 1`, so it is at least
+  // viewport-tall and it was painting an opaque ground over the whole
+  // atmosphere from the safe-area inset downwards. That left the layer visible
+  // in exactly one place — the status-bar strip above the inset, where no
+  // content box reaches — and the raster is darker there than the flat token
+  // is, which is the hard horizontal seam at ~6% of screen height the operator
+  // photographed. It is not two ground COLOURS: `homeBackground` and
+  // `background` are both #03110E at HEAD and agree. It is one ground and one
+  // raster, meeting at the inset.
+  //
+  // Standing the content box down leaves the atmosphere as the page's single
+  // ground, top to bottom, with SafeAreaView's palette ground still underneath
+  // it so nothing can fall through to the platform root. Master 44's own
+  // gutters are darker than #03110E (measured: mean luminance 1.6 against the
+  // token's 13.8) and no hex here moves to meet that — the palette is frozen,
+  // and the seam was never a colour problem.
+  //
+  // Worker Home needs no equivalent: its content container declares no ground.
+  contentOverAtmosphere: { backgroundColor: 'transparent' },
   intro: { position: 'relative', minHeight: 160, paddingBottom: spacing.sm },
   introCopy: { position: 'relative', zIndex: 1, gap: spacing.sm },
   introTopLine: {
@@ -688,7 +712,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // The wider Prestige crop takes more of the band, so the headline holds a
   // narrower column in dark — master 44 breaks it after 'off'.
-  headlineDark: { maxWidth: '62%' },
+  headlineDark: { maxWidth: '74%' },
   heroSubtitle: {
     maxWidth: '73%',
     marginTop: spacing.sm,
