@@ -448,11 +448,22 @@ export type ProfileStackNavigation = NativeStackNavigationProp<ProfileStackParam
 //
 // Exactly one of these is mounted at a time (navigation/ModeShell.tsx), which
 // is §F's enforcement mechanism 2: a screen from the other tree cannot render
-// because it is not there. Since Prestige 0d (pre-made decision 4) the two
-// BARS are the same five tabs — Home · Map · My Jobs · Messages · Profile —
-// with the customer tree additionally registering Discover as a HIDDEN route
-// (see CustomerRoot.tsx for the mechanism and why). The trees stay separately
-// typed, so cross-tree navigation is still a compile error.
+// because it is not there. The trees stay separately typed, so cross-tree
+// navigation is still a compile error.
+//
+// THE TWO BARS ARE NOT THE SAME FIVE TABS. This block used to say they were —
+// `Home · Map · My Jobs · Messages · Profile`, with Discover hidden — which
+// has been wrong since emerald(1) and was flagged by the 2026-08-19 audit as
+// the single correction most worth making, because a run reading it would
+// restore Map and My Jobs to the customer bar. What is actually drawn:
+//
+//   WORKER    Home · Map · My Jobs · Messages · Profile
+//   CUSTOMER  Home · Discover · [ + ] · Messages · Profile
+//
+// The customer tree registers Map and MyJobs as HIDDEN routes — dispatchable,
+// absent from the bar — and the [ + ] is an ACTION, not a destination. See
+// navigation/CustomerRoot.tsx for the mechanism and why, and the per-field
+// JSDoc below for each hidden route's own reason.
 
 /** The customer tree. §F's `CustomerParamList`. */
 export type CustomerParamList = {
