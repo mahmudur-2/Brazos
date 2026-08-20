@@ -48,7 +48,15 @@ import { SearchBar } from '../ui/primitives';
 
 // Light keeps the approved Heritage brand crops; dark renders the Prestige
 // master-44 artwork (assets/prestige is dark-only by standing decision).
-const POST_MARK = require('../assets/brand/customer-home-post-mark-hd.png');
+//
+// home(1): the light mark used to be assets/brand/customer-home-post-mark-hd.png.
+// That file was deleted from disk while the transparent cut-outs were being
+// installed, and this line still named it. Metro resolves an asset `require`
+// at BUNDLE time, so that was not a light-mode blemish — it failed the whole
+// build, in both themes. It is repointed at the brand-folder drape installed
+// in the same batch (byte-identical to the prestige one; kept under
+// assets/brand so light never mounts an assets/prestige file).
+const POST_MARK = require('../assets/brand/brazos_b_drape.png');
 const HOME_HERO_ART = require('../assets/brand/customer-home-chair.png');
 const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png');
 const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');

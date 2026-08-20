@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 
 import { join, relative } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
@@ -376,24 +377,51 @@ test('[static] no raw colour literal in screens/, components/, ui/, hooks/, navi
 // nothing would say so. The roster below is the whole inventory — every
 // raster the app `require`s — with what each one's background actually is.
 //
-// The `bake: 'opaque-dark'` and `'opaque-brand'` claims are RE-DERIVED here
-// from each PNG's IHDR colour type (2 = RGB, i.e. no alpha channel exists at
-// all), so the roster cannot rot into a stale comment. The 'transparent'
-// entries were measured by decoding corner alpha during the dark device pass;
-// that decode is not repeated here, and those assets need no gate either way.
+// EVERY claim below is RE-DERIVED from the file itself, in BOTH directions
+// (home(1)). An `opaque-*` entry must really have no usable alpha — IHDR
+// colour type 2/0, or an alpha channel whose minimum sample is 255. A
+// `transparent` entry must really carry an alpha channel that goes below 255,
+// decoded out of the IDAT stream rather than trusted from a comment. The
+// earlier version of this roster checked the opaque half only, so relabelling
+// an asset 'transparent' silently removed it from all checking; it no longer
+// does.
+//
+// home(1) re-measured the whole roster after the operator installed cut-out
+// replacements. Three prestige rasters and the Heritage armchair moved from
+// baked to transparent, and their `gate` did NOT move with them: the gate is
+// no longer only about a ground leaking, it is the standing dark-only /
+// light-only ARTWORK decision (assets/prestige is dark-only by standing
+// decision; the Heritage armchair is the light composition), and a cut-out
+// does not retire that.
 // ---------------------------------------------------------------------------
 
 const BAKED_ART = {
-  // Master 44's hero crop and its gold-B drape: a dark room and a dark drape.
-  'assets/prestige/hero_armchair_customer.png': { bake: 'opaque-dark', gate: true },
-  'assets/prestige/brazos_b_drape.png': { bake: 'opaque-dark', gate: true },
-  // Master 43's hero crop.
-  'assets/prestige/hero_toolbox_worker.png': { bake: 'opaque-dark', gate: true },
-  // The Heritage armchair. Opaque, and its bake is the LIGHT ground
-  // (#FAF5F1) — the exact inverse hazard, so it carries the same gate.
-  'assets/brand/customer-home-chair.png': { bake: 'opaque-light', gate: true },
+  // Master 44's hero crop and its gold-B drape, and master 43's hero crop.
+  // All three shipped as RGB with the dark room baked in; the operator's
+  // replacements are RGBA cut-outs (measured: 72.66% / 69.39% / 38.51% of
+  // samples fully transparent, every corner at alpha 0). The GATE STAYS —
+  // these are the dark-only Prestige crops, and light mounts the Heritage set.
+  'assets/prestige/hero_armchair_customer.png': { bake: 'transparent', gate: true },
+  'assets/prestige/brazos_b_drape.png': { bake: 'transparent', gate: true },
+  'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
+  // The Heritage armchair. It used to be RGBA-but-fully-opaque over the LIGHT
+  // ground (#FAF5F1) — the exact inverse hazard — and was the one entry the
+  // old alpha check skipped BY NAME. It is now a real cut-out (62.81% fully
+  // transparent), so it is measured like everything else and the skip is gone.
+  // Still gated: it is the LIGHT-only composition.
+  'assets/brand/customer-home-chair.png': { bake: 'transparent', gate: true },
+  // The LIGHT mark on the promo card. It used to be
+  // assets/brand/customer-home-post-mark-hd.png, which was DELETED from disk
+  // during the cut-out install while screens/HomeScreen.tsx still `require`d
+  // it. That is not a light-mode-only fault: Metro resolves an asset
+  // `require` at BUNDLE time, so a missing file fails the whole build in both
+  // themes, and the app would not have started at all. home(1) repointed the
+  // light mark at the brand-folder drape installed alongside the cut-outs
+  // (byte-identical to the prestige one, but under assets/brand, so the
+  // dark-only standing decision on assets/prestige is not violated). Gated,
+  // because it is still the LIGHT half of a per-theme pair.
+  'assets/brand/brazos_b_drape.png': { bake: 'transparent', gate: true },
   // Transparent: no background to leak, so no gate is owed.
-  'assets/brand/customer-home-post-mark-hd.png': { bake: 'transparent', gate: false },
   'assets/brand/brazos-b-leaf.png': { bake: 'transparent', gate: false },
   'assets/brand/worker-home-toolbox.png': { bake: 'transparent', gate: false },
   // The app icon: a brand deep-green tile with a gold mark and transparent
@@ -436,18 +464,158 @@ test('[static] every raster the app mounts is on the roster', async () => {
   );
 });
 
-test('[static] an asset with no alpha channel really is baked, as the roster claims', async () => {
+/**
+ * Decode a PNG far enough to answer ONE question: does this file carry alpha
+ * that actually drops below 255 anywhere?
+ *
+ * The IHDR colour type alone cannot answer it. Type 2/0 has no alpha channel
+ * and is definitively opaque, but type 6/4 only says the channel EXISTS — the
+ * Heritage armchair sat at type 6 with every sample at 255 for months, which is
+ * why the old check had to skip it BY NAME. So the IDAT stream is inflated and
+ * unfiltered here and the alpha samples are read for real.
+ *
+ * Interlaced or non-8-bit files would need a different walk; none is on the
+ * roster, and meeting one is an assertion rather than a silent pass.
+ */
+function alphaProfile(bytes, asset) {
+  assert.equal(bytes.toString('ascii', 12, 16), 'IHDR', `${asset} is not a PNG`);
+  const width = bytes.readUInt32BE(16);
+  const height = bytes.readUInt32BE(20);
+  const depth = bytes[24];
+  const colourType = bytes[25];
+  const interlace = bytes[28];
+  const samples = width * height;
+  if (colourType !== 6 && colourType !== 4) {
+    // No alpha channel exists at all: the ground is baked in, whatever it is.
+    assert.ok([0, 2, 3].includes(colourType), `${asset}: unknown PNG colour type ${colourType}`);
+    return { colourType, hasAlphaChannel: false, minAlpha: 255, transparentSamples: 0, samples };
+  }
+  assert.equal(depth, 8, `${asset}: only 8-bit PNGs are on this roster`);
+  assert.equal(interlace, 0, `${asset}: only non-interlaced PNGs are on this roster`);
+
+  const idat = [];
+  for (let off = 8; off + 8 <= bytes.length; ) {
+    const len = bytes.readUInt32BE(off);
+    const type = bytes.toString('ascii', off + 4, off + 8);
+    if (type === 'IDAT') idat.push(bytes.subarray(off + 8, off + 8 + len));
+    if (type === 'IEND') break;
+    off += 12 + len;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+
+  // Unfilter the scanlines in place — PNG's five filter types, byte by byte.
+  const bpp = colourType === 6 ? 4 : 2;
+  const stride = width * bpp;
+  const paeth = (a, b, c) => {
+    const p = a + b - c;
+    const pa = Math.abs(p - a);
+    const pb = Math.abs(p - b);
+    const pc = Math.abs(p - c);
+    return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+  };
+  const img = Buffer.alloc(height * stride);
+  for (let y = 0, cursor = 0; y < height; y += 1) {
+    const filter = raw[cursor];
+    cursor += 1;
+    const line = raw.subarray(cursor, cursor + stride);
+    cursor += stride;
+    const cur = img.subarray(y * stride, (y + 1) * stride);
+    const prev = y > 0 ? img.subarray((y - 1) * stride, y * stride) : null;
+    for (let x = 0; x < stride; x += 1) {
+      const left = x >= bpp ? cur[x - bpp] : 0;
+      const up = prev ? prev[x] : 0;
+      const upLeft = prev && x >= bpp ? prev[x - bpp] : 0;
+      const v = line[x];
+      if (filter === 1) cur[x] = (v + left) & 255;
+      else if (filter === 2) cur[x] = (v + up) & 255;
+      else if (filter === 3) cur[x] = (v + ((left + up) >> 1)) & 255;
+      else if (filter === 4) cur[x] = (v + paeth(left, up, upLeft)) & 255;
+      else cur[x] = v;
+    }
+  }
+
+  let minAlpha = 255;
+  let transparentSamples = 0;
+  for (let i = bpp - 1; i < img.length; i += bpp) {
+    const a = img[i];
+    if (a < minAlpha) minAlpha = a;
+    if (a === 0) transparentSamples += 1;
+  }
+  return { colourType, hasAlphaChannel: true, minAlpha, transparentSamples, samples };
+}
+
+test('[static] every roster bake claim is re-derived from the file, both ways', async () => {
+  let opaqueChecked = 0;
+  let transparentChecked = 0;
   for (const [asset, { bake }] of Object.entries(BAKED_ART)) {
-    if (!bake.startsWith('opaque-')) continue;
-    if (asset === 'assets/brand/customer-home-chair.png') continue; // RGBA but fully opaque
+    // Every rostered asset must be ON DISK. Metro resolves an asset `require`
+    // at bundle time, so a roster entry with no file is not a cosmetic gap —
+    // it is a build that does not start. home(1) hit exactly that.
     const bytes = await readFile(new URL(`../${asset}`, import.meta.url));
-    // PNG: 8-byte signature, then IHDR — width(4) height(4) depth(1) type(1).
-    assert.equal(bytes.toString('ascii', 12, 16), 'IHDR', `${asset} is not a PNG`);
-    assert.equal(bytes[25], 2, `${asset} must be colour type 2 (RGB, no alpha) for this claim`);
+    const alpha = alphaProfile(bytes, asset);
+    if (bake.startsWith('opaque-')) {
+      opaqueChecked += 1;
+      // Either no alpha channel at all, or one that never leaves full opacity.
+      assert.equal(
+        alpha.minAlpha,
+        255,
+        `${asset} is claimed ${bake} but carries alpha down to ${alpha.minAlpha}`,
+      );
+    } else {
+      transparentChecked += 1;
+      assert.ok(
+        alpha.hasAlphaChannel,
+        `${asset} is claimed transparent but is PNG colour type ${alpha.colourType} — no alpha channel exists`,
+      );
+      assert.ok(
+        alpha.minAlpha < 255,
+        `${asset} is claimed transparent but every alpha sample is 255 — the ground is still baked in`,
+      );
+      // A stray soft pixel is not a cut-out. The thinnest real cut-out on this
+      // roster is the app icon at 3.37% fully transparent; the floor below sits
+      // under that and still excludes a token pixel or a rounded corner.
+      assert.ok(
+        alpha.transparentSamples > alpha.samples * 0.01,
+        `${asset} is claimed transparent but only ${alpha.transparentSamples}/${alpha.samples} samples are cut out`,
+      );
+    }
+  }
+  // The sweep must actually be measuring both halves of the roster.
+  assert.ok(opaqueChecked >= 2, `the opaque half must stay measured (saw ${opaqueChecked})`);
+  assert.ok(
+    transparentChecked >= 6,
+    `the transparent half must stay measured (saw ${transparentChecked})`,
+  );
+});
+
+test('[static] the three hero rasters are cut-outs, corner to corner', async () => {
+  // home(1)'s specific claim, pinned per file rather than in aggregate: these
+  // are the three the operator replaced, and a re-bake of any one of them is
+  // the exact regression this commit exists to prevent.
+  for (const asset of [
+    'assets/prestige/hero_armchair_customer.png',
+    'assets/prestige/hero_toolbox_worker.png',
+    'assets/prestige/brazos_b_drape.png',
+  ]) {
+    assert.equal(BAKED_ART[asset].bake, 'transparent', `${asset} left the transparent roster`);
+    const bytes = await readFile(new URL(`../${asset}`, import.meta.url));
+    const alpha = alphaProfile(bytes, asset);
+    assert.equal(alpha.colourType, 6, `${asset} must be RGBA (colour type 6)`);
+    assert.equal(alpha.minAlpha, 0, `${asset} must reach alpha 0, not merely be translucent`);
+    // A baked hero is opaque exactly where a cut-out is empty: at the edges.
+    assert.ok(
+      alpha.transparentSamples > alpha.samples * 0.3,
+      `${asset}: only ${alpha.transparentSamples}/${alpha.samples} samples cut out — that is a crop, not a cut-out`,
+    );
   }
 });
 
-test('[static] a baked asset is mounted only behind an isDark decision', async () => {
+test('[static] a theme-specific asset is mounted only behind an isDark decision', async () => {
+  // Renamed, not relaxed (home(1)): the four gated entries used to be gated
+  // because their ground was baked in. They are cut-outs now, and the gate
+  // survives them going transparent because the REAL rule was always the
+  // dark-only / light-only artwork decision. Same four assets, same sweep,
+  // same assertions.
   const repoRoot = fileURLToPath(new URL('../', import.meta.url));
   const gated = Object.entries(BAKED_ART).filter(([, meta]) => meta.gate);
   assert.ok(gated.length >= 4, 'the gated set must not empty out');
