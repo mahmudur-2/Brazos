@@ -14,6 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { HomeAtmosphere } from '../components/HomeAtmosphere';
 import { PulseDot } from '../components/PulseDot';
 import { Skeleton } from '../components/Skeleton';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
@@ -210,6 +211,10 @@ export function WorkerHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* home(4): a fixed layer, OUTSIDE the scroller, so the page slides over
+          it instead of carrying it. Dark only; renders nothing in light. The
+          ScrollView below paints no ground of its own, so nothing covers it. */}
+      <HomeAtmosphere />
       {/* Standard input mechanics (.claude/rules/native-ui.md) for the search
           field below — nothing visual, and the field sits at the top so the
           keyboard can never cover it or its submit affordance. */}

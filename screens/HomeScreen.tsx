@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from '../components/Chip';
+import { HomeAtmosphere } from '../components/HomeAtmosphere';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
 import { Skeleton } from '../components/Skeleton';
 import { useAuth } from '../hooks/useAuth';
@@ -230,12 +231,15 @@ export function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* home(4): a fixed layer, OUTSIDE the scroller, so the page slides over
+          it instead of carrying it. Dark only; renders nothing in light. */}
+      <HomeAtmosphere />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          style={styles.scroll}
+          style={[styles.scroll, isDark && styles.scrollOverAtmosphere]}
           contentContainerStyle={[
             styles.content,
             { paddingHorizontal: design.screenPadding, gap: design.sectionGap },
@@ -638,6 +642,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: { flex: 1, backgroundColor: colors.homeBackground },
   flex: { flex: 1 },
   scroll: { flex: 1, backgroundColor: colors.homeBackground },
+  // home(4): the scroller's own ground would paint straight over the
+  // atmosphere layer beneath it. SafeAreaView still carries the palette ground
+  // one level up, so nothing falls through to the platform root.
+  scrollOverAtmosphere: { backgroundColor: 'transparent' },
   content: {
     flexGrow: 1,
     backgroundColor: colors.homeBackground,

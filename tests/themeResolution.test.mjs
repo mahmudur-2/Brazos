@@ -404,6 +404,13 @@ const BAKED_ART = {
   'assets/prestige/hero_armchair_customer.png': { bake: 'transparent', gate: true },
   'assets/prestige/brazos_b_drape.png': { bake: 'transparent', gate: true },
   'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
+  // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
+  // is the strongest case on the roster — this one is genuinely still baked
+  // (RGB, no alpha channel at all, 1080x2335 of dark room), it is full-bleed
+  // rather than a corner crop, and it is mounted by a component rather than by
+  // the screen, so nothing on the screen itself would show the mistake.
+  // components/HomeAtmosphere.tsx returns null under the light palette.
+  'assets/prestige/home-atmosphere-dark.png': { bake: 'opaque-dark', gate: true },
   // The Heritage armchair. It used to be RGBA-but-fully-opaque over the LIGHT
   // ground (#FAF5F1) — the exact inverse hazard — and was the one entry the
   // old alpha check skipped BY NAME. It is now a real cut-out (62.81% fully

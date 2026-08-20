@@ -589,3 +589,62 @@ test('home(3) fence: -1 tracking on the serif headings, and only there', () => {
     }
   }
 });
+
+// ---------------------------------------------------------------------------
+// H4 — the atmosphere is a FIXED layer, outside the scroller, on both homes.
+//
+// CATCHES: the layer being moved inside the ScrollView (where it would travel
+// with the page — the one thing a fixed atmosphere must not do); one home
+// getting it and the other not; the scroller's own ground being restored on
+// top of it; and the gate being dropped, which would drop an opaque 1080x2335
+// dark room onto the light palette.
+// ---------------------------------------------------------------------------
+test('home(4) fence: the atmosphere sits behind both homes and never scrolls', () => {
+  const layer = stripComments(read('components/HomeAtmosphere.tsx'));
+
+  // It is the one mount of the raster, and it is gated.
+  assert.match(layer, /require\('\.\.\/assets\/prestige\/home-atmosphere-dark\.png'\)/);
+  assert.match(
+    layer,
+    /if \(!isDark\) return null;/,
+    'the atmosphere is an OPAQUE dark raster — light must render nothing at all'
+  );
+  // Fixed, full-bleed, aspect-preserving.
+  assert.match(flatten(layer), /layer: \{ position: 'absolute', left: 0, right: 0, bottom: 0, \}/);
+  assert.match(flatten(layer), /style=\{\[styles\.layer, \{ top: -insets\.top \}\]\}/,
+    'the layer must be pulled up by the safe-area inset or it leaves a band above the notch');
+  assert.match(flatten(layer), /resizeMode="cover"/,
+    'cover fills without distorting; contain would letterbox the ground');
+
+  for (const path of ['screens/HomeScreen.tsx', 'screens/WorkerHomeScreen.tsx']) {
+    const flat = flatten(read(path));
+    assert.match(flat, /<HomeAtmosphere \/>/, `${path} must mount the atmosphere`);
+
+    // OUTSIDE the scroller: the mount has to appear before the ScrollView
+    // opens, and must not appear again anywhere after it.
+    const mount = flat.indexOf('<HomeAtmosphere />');
+    const scroller = flat.indexOf('<ScrollView');
+    assert.notEqual(scroller, -1, `${path} must still render a ScrollView`);
+    assert.ok(
+      mount < scroller,
+      `${path}: the atmosphere must be a SIBLING before the scroller, not a row inside it`
+    );
+    assert.equal(
+      flat.indexOf('<HomeAtmosphere />', mount + 1),
+      -1,
+      `${path} must mount the atmosphere exactly once`
+    );
+  }
+
+  // Customer Home's scroller paints its own ground; in dark it must stand down
+  // or the layer beneath it is invisible. (Worker Home's ScrollView has no
+  // `style` at all, so there is nothing there to neutralise.)
+  const home = flatten(read('screens/HomeScreen.tsx'));
+  assert.match(home, /style=\{\[styles\.scroll, isDark && styles\.scrollOverAtmosphere\]\}/);
+  assert.match(home, /scrollOverAtmosphere: \{ backgroundColor: 'transparent' \}/);
+  assert.doesNotMatch(
+    flatten(read('screens/WorkerHomeScreen.tsx')),
+    /<ScrollView style=/,
+    'Worker Home’s scroller must stay unpainted, or it would cover the layer'
+  );
+});
