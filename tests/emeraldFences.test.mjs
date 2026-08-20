@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { inkBounds, tonePatches } from './pngGeometry.mjs';
+import { decode, inkBounds, luminance, tonePatches } from './pngGeometry.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -765,6 +765,9 @@ test('home(19) fence: nothing the master-44 run changed reached the light theme'
   assert.match(home, /headline: \{ maxWidth: '73%', fontFamily: fonts\.display, fontSize: 39, lineHeight: 45,/);
   assert.match(home, /sectionTitle: \{ fontFamily: fonts\.display, fontSize: 22,/);
   assert.match(home, /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25, lineHeight: 29,/);
+  // home(23) forked the subtitle: dark drops to 14 to set on master 44's one
+  // line, light keeps the 16/8 the Heritage composition was signed off at.
+  assert.match(home, /heroSubtitle: \{ maxWidth: '73%', marginTop: spacing\.sm, fontSize: 16,/);
   assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.forest \}/);
 
   // ARTWORK — home(14)/home(15). Light keeps the Heritage boxes and `contain`.
@@ -863,9 +866,14 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   const capRatio = constantOf(home, 'GEORGIA_CAP_RATIO');
   const ladder = (name) => Math.round((cap(name) * toDevice) / capRatio);
 
+  // home(20): 393/941 -> 852/1844. The master FILE was replaced (941x1672 ->
+  // 853x1844) and a cap height is a vertical measure. The old file's 0.5628
+  // aspect meant only its width transferred to a 393x852 device, so the width
+  // ratio stood in for both; 853x1844 is 0.46258 against the device's 0.46127,
+  // so the vertical conversion is now the honest one for a stem height.
   assert.ok(
-    Math.abs(toDevice - 393 / 941) < 0.0001,
-    'the conversion is master 44’s own width against the reference device'
+    Math.abs(toDevice - 852 / 1844) < 0.0001,
+    'the conversion is master 44’s own height against the reference device'
   );
 
   // "Live Nearby" is the rung that was out by more than a rounding, and it is
@@ -875,7 +883,9 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     /sectionTitleDark: \{ fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\) \}/,
     'the section title must be COMPUTED from the ladder, not restated as a number'
   );
-  assert.equal(ladder('sectionTitle'), 16, 'master 44’s "Live Nearby" measures 16pt of Georgia');
+  // home(20): 16 -> 20. The replaced master's L measures a 30px cap (13.86pt),
+  // where the old file's measured 26px (10.86pt). This REVERSES home(16)'s shrink.
+  assert.equal(ladder('sectionTitle'), 20, 'master 44’s "Live Nearby" measures 20pt of Georgia');
 
   // home(16b) — EVERY RUNG IS DARK-SCOPED. Master 44 is a DARK master; light is
   // the frozen Heritage composition and none of these numbers is its. The
@@ -890,10 +900,19 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     /styles\.sectionTitle, isDark && styles\.sectionTitleDark/,
     'the dark rung has to reach the control'
   );
+  // home(23): the dark leading is no longer light's 45/39 ratio. Master 44 runs
+  // 82px = 37.9pt of line pitch, which is an ABSOLUTE measurement; HEADLINE_LEADING
+  // is that pitch over the size the column allows, so the studio slider still
+  // moves size and leading together.
   assert.match(
     flat,
-    /isDark && \{ fontSize: design\.heroFontSize, lineHeight: Math\.round\(design\.heroFontSize \* \(45 \/ 39\)\),? \}/,
+    /isDark && \{ maxWidth: headlineColumn, fontSize: design\.heroFontSize, lineHeight: Math\.round\(design\.heroFontSize \* HEADLINE_LEADING\),? \}/,
     "the studio's live hero size is a DARK instrument; light keeps styles.headline's own 39/45"
+  );
+  const leading = constantOf(home, 'HEADLINE_LEADING');
+  assert.ok(
+    Math.abs(leading * Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]) - 37.9) < 1.2,
+    `the dark headline's leading must resolve to master 44's measured 37.9pt pitch, not ${(leading * 31).toFixed(1)}`
   );
   assert.match(
     flat,
@@ -911,26 +930,51 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     'light keeps its 29pt promo leading'
   );
 
-  // THE HERO IS GOVERNED BY ITS COLUMN, not by its cap. The artwork takes
-  // `homeHeroArtDark.width` out of the padded column, and master 44 leaves a
-  // gap beside it; whatever is left is what the headline may use. 39pt was
-  // 281.6pt of Georgia for "off your plate." — measured in a real 393pt
-  // viewport by scripts/home-shots.mjs — against ~222pt of room.
+  // THE HERO IS GOVERNED BY ITS COLUMN, not by its cap — and home(23) makes
+  // the column a real geometric statement rather than a subtraction of the
+  // artwork's whole box. The box's outer eighth carries no ink (the scene is
+  // vignetted), so the copy may run into it; what it may not reach is the ink.
+  //
+  // 210.0pt is "off your plate." at 30pt of Georgia in a real 393pt viewport,
+  // measured on .shots/customer-home-dark.png by scripts/home-diff.mjs.
+  // (home(16) recorded 281.6pt at 39pt for a different string, "Take a task
+  // off"; that number is void — the string it measured is not the one that
+  // sets the widest line.)
   const hero = Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))?.[1]);
   assert.ok(hero > 0, 'the hero size must stay a plain number in the design settings');
   const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
-  const art = Number(/homeHeroArtDark: \{ width: (\d+)/.exec(flat)[1]);
-  // One padding, not two: the slot's right edge IS the screen's right edge
-  // (home(14)), so the artwork occupies the right gutter as well. The copy runs
-  // from the left padding to the artwork's left edge.
-  const room = 393 - padding - art;
-  const LONGEST_LINE_AT_39 = 281.6;
-  const longest = (LONGEST_LINE_AT_39 * hero) / 39;
+  const artBox = /const HERO_ART_DARK = \{ width: (\d+), height: \d+, right: (-?\d+), top: \d+ \}/.exec(home);
+  assert.ok(artBox, 'the dark hero must keep a plain, readable box');
+  const artWidth = Number(artBox[1]);
+  const artRightEdge = 393 - padding - Number(artBox[2]);
+  const artInkLeft = artRightEdge - artWidth * (1 - constantOf(home, 'HERO_ART_INK_LEFT'));
+
+  // The column is COMPUTED from that box at render, so this asserts the
+  // arithmetic rather than a percentage someone typed.
+  assert.match(
+    flat,
+    /const artRight = screenWidth - design\.screenPadding - HERO_ART_DARK\.right;/,
+    "the dark headline's column has to be derived from the artwork's own box"
+  );
+  assert.match(
+    flat,
+    /const artInkLeft = artRight - HERO_ART_DARK\.width \* \(1 - HERO_ART_INK_LEFT\);/,
+    'and it has to stop at the INK, not at the box — a vignetted scene is empty at its edges'
+  );
+  const columnWidth = Math.round(artInkLeft - padding);
+
+  const LONGEST_LINE_AT_30 = 210.0;
+  const longest = (LONGEST_LINE_AT_30 * hero) / 30;
   assert.ok(
-    longest <= room,
-    `at ${hero}pt the headline's long line sets ${longest.toFixed(1)}pt into ${room}pt of column. ` +
-      'Master 44 never runs that type over the artwork, and a wider column cannot help — the ' +
-      'artwork is what the column ends at'
+    longest <= columnWidth,
+    `at ${hero}pt "off your plate." sets ${longest.toFixed(1)}pt into ${columnWidth}pt ` +
+      'of column, so it wraps to a third line. Master 44 sets the headline on exactly two'
+  );
+  // And exactly two: the break is the operator's own, and nothing else may add one.
+  assert.match(
+    flat,
+    /Take a task\{'\\n'\}off your plate\./,
+    "master 44's headline is two lines, broken after 'task' by the operator"
   );
   assert.ok(
     hero <= ladder('heroHeadline'),
@@ -949,7 +993,9 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24,/,
     'the CTA label is frozen at 24 by operator instruction'
   );
-  assert.equal(ladder('ctaLabel'), 15, 'the CTA label is the furthest rung off the ladder');
+  // home(20): the replaced master moves this rung from 15 to 19, so the frozen
+  // value is 5pt off the ladder rather than 9. Still not ours to move.
+  assert.equal(ladder('ctaLabel'), 19, 'the CTA label is the furthest rung off the ladder');
 });
 
 // ---------------------------------------------------------------------------
@@ -970,28 +1016,68 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
 test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
 
-  const box = /homeHeroArtDark: \{ width: (\d+), height: (\d+), right: (-?\d+), top: (\d+) \}/.exec(flat);
+  const home = stripComments(read('screens/HomeScreen.tsx'));
+  const box = /const HERO_ART_DARK = \{ width: (\d+), height: (\d+), right: (-?\d+), top: (\d+) \}/.exec(home);
   assert.ok(box, 'the dark hero must keep a plain, readable box');
-  const [width, height, right] = [Number(box[1]), Number(box[2]), Number(box[3])];
-
-  // Master 44: 361px of 941 wide and 324px of 1672 tall, converted at 393/941.
-  // A band rather than a pin — a point either way is not a design change.
-  assert.ok(
-    Math.abs(width - 151) <= 4,
-    `master 44's scene is 150.8pt wide at 393pt; this slot is ${width}pt`
-  );
-  assert.ok(
-    Math.abs(height - 135) <= 4,
-    `master 44's scene is 135.3pt tall at 393pt; this slot is ${height}pt`
+  const [width, height, right, top] = [Number(box[1]), Number(box[2]), Number(box[3]), Number(box[4])];
+  assert.match(
+    flat,
+    /homeHeroArtDark: \{ width: HERO_ART_DARK\.width, height: HERO_ART_DARK\.height, right: HERO_ART_DARK\.right, top: HERO_ART_DARK\.top,? \}/,
+    'the stylesheet must take the box from the constant, or the headline column and the picture drift'
   );
 
+  // home(20/23): the master FILE was replaced and every number here moved.
+  // 151 x 135 at right: 0 came off 941x1672 and is void. The new file puts the
+  // scene at 400 x 351 of its own 853x1844 pixels — x 470..870, y 221..572 —
+  // which converts at 393/853 and 852/1844 to 184.3 x 162.2 pt at (216.5, 102.1).
+  // A band rather than a pin: a point either way is not a design change.
+  assert.ok(
+    Math.abs(width - 184) <= 4,
+    `master 44's scene is 184.3pt wide at 393pt; this slot is ${width}pt`
+  );
+  assert.ok(
+    Math.abs(height - 162) <= 4,
+    `master 44's scene is 162.2pt tall at 393pt; this slot is ${height}pt`
+  );
+  // 34.9pt below the content box's top, and `top` is measured from `intro`,
+  // which starts there.
+  assert.ok(
+    Math.abs(top - 35) <= 3,
+    `master 44 starts the scene 34.9pt below the content top; this slot starts at ${top}pt`
+  );
+
+  // IT OVERHANGS THE SCREEN, and by a measured amount. `right` is relative to
+  // `intro`, inside the content box's own padding, so the drawn box reaches
+  // 393 - padding - right. home(14)'s `right: 0` stopped the BOX at the padded
+  // column's edge, 20pt short of the screen and 43pt short of where the master
+  // puts it.
+  const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  const overhang = -right - padding;
+  assert.ok(
+    Math.abs(overhang - 7.8) <= 3,
+    `master 44 runs the scene 7.8pt past the screen's right edge; this one runs ${overhang}pt`
+  );
+
+  // A room-baked scene has no alpha to be inset by, so `inkBounds` reports a
+  // full canvas — the box IS the art, and that is the correct answer here.
   const ink = inkBounds(join(root, 'assets/prestige/hero_armchair_customer.png'));
-  const drawnRightGap = right + width * ink.right;
+  assert.equal(ink.right, 0, 'the baked scene must stay alpha-free, or this box stops describing it');
+
+  // WHERE ITS INK ACTUALLY STARTS, re-derived from the asset rather than
+  // restated. The scene is vignetted, so its outer columns carry no structure
+  // at all; HERO_ART_INK_LEFT is what the headline's column has to stop at, and
+  // it is measured on the rows the headline occupies (the middle band of the
+  // scene) rather than over the whole canvas.
+  const declaredInk = constantOf(home, 'HERO_ART_INK_LEFT');
+  const measuredInk = structuredLeftFraction(
+    join(root, 'assets/prestige/hero_armchair_customer.png'),
+    0.53,
+    0.75,
+  );
   assert.ok(
-    Math.abs(drawnRightGap) < 4,
-    `the drawn art stops ${drawnRightGap.toFixed(1)}pt from the screen's right edge. A slot ` +
-      'bleeds; whatever is in it has to reach the edge, and pushing the BOX past the edge does ' +
-      "not move ink that is inset inside the box by the asset's own empty margin"
+    Math.abs(declaredInk - measuredInk) < 0.03,
+    `HERO_ART_INK_LEFT says the scene's ink starts at ${declaredInk} of its box; the file says ` +
+      `${measuredInk.toFixed(3)}. Swap the artwork and this number has to move with it`
   );
 
   assert.match(
@@ -1000,6 +1086,28 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
     "dark fills and crops; light's Heritage crop is frozen on contain"
   );
 });
+
+/**
+ * The leftmost column of a raster that carries real detail, as a fraction of
+ * its own width, looking only at the rows between `v0` and `v1`.
+ *
+ * "Detail" is adjacent-column luminance change. A vignetted scene fades to a
+ * flat wash at its edges, and a flat wash has none — which is exactly the
+ * difference between the box a slot reserves and the picture a reader sees.
+ */
+function structuredLeftFraction(path, v0, v1) {
+  const img = decode(path);
+  const y0 = Math.round(v0 * img.height);
+  const y1 = Math.round(v1 * img.height);
+  for (let x = 0; x < img.width - 1; x += 1) {
+    let hits = 0;
+    for (let y = y0; y <= y1; y += 1) {
+      if (Math.abs(luminance(...img.at(x, y)) - luminance(...img.at(x + 1, y))) > 4) hits += 1;
+    }
+    if (hits >= (y1 - y0) * 0.05) return x / img.width;
+  }
+  assert.fail(`${path} carries no structure between ${v0} and ${v1} of its height`);
+}
 
 // ---------------------------------------------------------------------------
 // H4b — the atmosphere is a VIGNETTE, and the layer crops rather than fits.

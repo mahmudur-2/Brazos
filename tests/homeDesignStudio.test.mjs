@@ -21,12 +21,14 @@ test('Home Design Studio defaults preserve the current Home geometry and control
   ]);
 
   for (const value of [
-    // home(16) UPDATED THIS RECORDED FACT from 39 to 30. It is not a relaxation:
-    // master 44's hero cap height converts to 33pt of Georgia, and the column
-    // the hero artwork leaves caps it at 30 — "off your plate." sets 281.6pt at
-    // 39 against ~222pt of room, which is what put it on a third line. The
-    // studio's slider still runs 28..56; this is where it starts.
-    'heroFontSize: 30',
+    // home(23) UPDATED THIS RECORDED FACT from 30 to 31, against the REPLACED
+    // master 44 (853x1844, not the 941x1672 home(16) measured). It is not a
+    // relaxation: the new file's hero cap converts to 35pt of Georgia — two
+    // points MORE than the old one said — and the column the hero artwork
+    // leaves caps it at 31, because "off your plate." sets 7.00pt of ink per
+    // point of size and the art's ink starts at 244.6pt. The studio's slider
+    // still runs 28..56; this is where it starts.
+    'heroFontSize: 31',
     'screenPadding: 20',
     'sectionGap: 20',
     'searchHeight: 70',

@@ -152,59 +152,95 @@ const B_DRAPE_RIGHT_INSET = 0;
 // Didone; `fonts.display` resolves to Georgia on iOS, a low-contrast
 // transitional serif, and no font file is bundled anywhere in this app by
 // standing decision (see the docblock on `fonts` in lib/theme.ts). Georgia is
-// the closest bundled face and it is materially WIDER: "Take a task off" sets
-// 288.6pt at 39pt here against the master's 203pt of ink. That gap is why the
-// hero's size is governed by its column rather than by its cap height — see
-// below — and it is recorded rather than closed, because closing it means
-// adding a font.
+// the closest bundled face and it is materially WIDER: "off your plate." sets
+// 210pt at 30pt here — measured in a real 393pt viewport by
+// scripts/home-shots.mjs — against the master's 198.6pt at an effective 34pt.
+// That is 22% more ink per point of size, and it is why the hero's size is
+// governed by its column rather than by its cap height. It is recorded rather
+// than closed, because closing it means adding a font.
 //
-// Measured on docs/mockups/44_customer_home_dark.png (941x1672), stem tops to
-// baselines, then converted at 393/941 and divided by Georgia's cap ratio:
-const MASTER_TO_DEVICE = 393 / 941;
+// home(20) — EVERY NUMBER BELOW WAS RE-MEASURED. The master file on disk was
+// REPLACED: it is 853x1844 where the file these caps were first read off was
+// 941x1672. Nothing here survived unchanged except the promo heading's rung,
+// which lands on the same 22 by coincidence of two different pixel grids.
+//
+// The conversion is now the VERTICAL one. A cap height is a vertical measure,
+// and the old master's 0.5628 aspect meant only its width transferred to a
+// 393x852 device, so 393/941 was used for everything. 853x1844 is 0.46258
+// against the device's 0.46127 — 0.28% apart — so heights transfer too, and
+// 852/1844 is the honest conversion for a stem height. (The horizontal one,
+// 393/853, is what every x and width in this file is converted at.)
+const MASTER_TO_DEVICE = 852 / 1844;
 /** Georgia's cap height as a fraction of its em. */
 const GEORGIA_CAP_RATIO = 0.692;
 const MASTER_SERIF_CAPS = {
-  /** "Take a task off", the T's stem: 55px. */
-  heroHeadline: 55,
-  /** "Describe the job.", the D's stem: 37px. */
-  promoHeading: 37,
-  /** "Live Nearby", the L's stem: 26px. */
-  sectionTitle: 26,
-  /** "Post a job", the P's stem: 25px. Frozen at 24 here — see below. */
-  ctaLabel: 25,
+  /** "Take a task", the T's stem: y 351..402 = 52px. */
+  heroHeadline: 52,
+  /** "Describe the job.", the D's stem: y 1217..1249 = 33px. */
+  promoHeading: 33,
+  /** "Live Nearby", the L's stem: y 1571..1600 = 30px. */
+  sectionTitle: 30,
+  /** "Post a job", the P's stem: y 1406..1434 = 29px. Frozen at 24 — see below. */
+  ctaLabel: 29,
 } as const;
 const serifSize = (capPx: number) =>
   Math.round((capPx * MASTER_TO_DEVICE) / GEORGIA_CAP_RATIO);
 
 // WHERE EACH RUNG LANDS, and which of them moved:
 //
-//   hero headline   33 by cap  ->  30 SHIPPED, capped by the column.
-//     The art takes 151pt of a 353pt column and master 44 leaves a 17pt gap
-//     beside it, so the copy has ~222pt. "off your plate." — the operator's
-//     own line break — measures 281.6pt at 39 in Georgia, which is why it was
-//     wrapping to a third line inside a 261pt column and why widening the
-//     column cannot be the whole fix: at any size that still needs more than
-//     222pt, the headline runs UNDER the hero, and master 44 never puts type
-//     over that artwork. 39 * 222/281.6 = 30.7, so 30. At 30 the line sets
-//     216.6pt wide and stops 5pt clear of the art. The operator's `maxWidth`
-//     of 74% and the break itself are both untouched.
+//   hero headline   35 by cap  ->  31 SHIPPED, capped by the column.
+//     The new master's T measures a 24.03pt cap, which is 35pt of Georgia —
+//     two points MORE than the old master said. It cannot be taken. Georgia
+//     sets "off your plate." at 7.00pt of ink per point of size, so 35 would
+//     be 245pt of ink starting at the 20pt gutter and ending at 265pt, and the
+//     hero artwork's own ink begins at 244.6pt on those very rows (measured on
+//     the master at y 430..498). 31 sets 217pt, ending at 238pt, and stops
+//     6.6pt clear. Master 44 never runs that type over that artwork.
+//     RECORDED, not taken: 4pt of size, 2.6pt of cap height.
 //
-//   promo heading   22 by cap  ->  25 UNCHANGED. tests/emeraldFences.test.mjs
-//     pins it, on the grounds that shrinking type was never the fix for that
-//     card's wrap — which is still true, and D6's premise is not: master 44
-//     sets that heading on THREE lines, exactly as this app does. What was
-//     making the card ~19% taller than the master's is the LEADING, not the
-//     size, so that is what moves (29 -> 27; the master's is 60px on a 37px
-//     cap, a ratio of 1.09 against this file's 1.16). The 3pt the cap says is
-//     still owed is recorded here, not taken.
+//   promo heading   22 by cap  ->  25 UNCHANGED. The rung is unmoved by the
+//     master replacement (37px of 1672 and 33px of 1844 both convert to 22pt
+//     of Georgia), so the 3pt this pin owes the ladder is the same 3pt.
+//     What the new master DOES change is the line count — see home(25).
 //
-//   section title   16 by cap  ->  16 SHIPPED. This is D10's "Live Nearby",
-//     the one rung that was out by more than a rounding: 22 against a master
-//     that measures 15.7.
+//   section title   20 by cap  ->  20 SHIPPED. A REVERSAL of home(16), which
+//     shrank it from 22 to 16 against the old master's 26px cap. The new
+//     master's "Live Nearby" measures a 30px cap = 13.86pt, which is 20pt of
+//     Georgia. See home(26).
 //
-//   CTA label       15 by cap  ->  24 UNCHANGED and FROZEN by operator
-//     instruction. It is the furthest off the ladder of anything on the
-//     screen and it is not this run's to move.
+//   CTA label       19 by cap  ->  24 UNCHANGED and FROZEN by operator
+//     instruction. The new master moves the rung from 15 to 19, so the frozen
+//     value is 5pt off the ladder rather than 9. Still not this run's to move.
+
+// home(23) — WHERE THE HERO ARTWORK'S INK STARTS INSIDE ITS OWN BOX.
+//
+// assets/prestige/hero_armchair_customer.png is a room-baked scene with a
+// vignette, so its left and right edges carry no detail at all: its leftmost
+// and rightmost tenths hold zero adjacent-column structure. The BOX therefore
+// begins well left of anything the eye can see, and the headline's column has
+// to stop at the INK, not at the box, or it gives up 22pt of line for nothing.
+//
+// 0.153 is that fraction measured on master 44 at the headline's own rows
+// (y 430..498, where the art's ink starts at x=531px = 244.6pt inside a box
+// running 470..870px), and tests/emeraldFences.test.mjs re-derives it from the
+// asset file so it cannot drift from the artwork.
+const HERO_ART_INK_LEFT = 0.153;
+/**
+ * The dark hero's box in points — master 44's own 400x351 of its 853x1844
+ * pixels, at (470, 221). See `homeHeroArtDark` for how it was found and why
+ * `right` is negative. They are constants rather than literals in the
+ * stylesheet because the headline's column is COMPUTED from them: the copy has
+ * to stop where the artwork's ink starts, and a number typed twice is a number
+ * that drifts.
+ */
+const HERO_ART_DARK = { width: 184, height: 162, right: -28, top: 35 } as const;
+/**
+ * The dark headline's leading, as a multiple of whatever size the studio is
+ * showing. Master 44 runs 82px of line pitch = 37.9pt, and this is that pitch
+ * over the 31pt the column allows — an ABSOLUTE measurement expressed as a
+ * ratio so the studio slider still moves both together.
+ */
+const HEADLINE_LEADING = 38 / 31;
 
 function similarPostedToday(jobs: OpenJob[], job: OpenJob): number {
   const midnight = new Date();
@@ -246,6 +282,17 @@ export function HomeScreen() {
       copyPaddingRight: width + B_DRAPE_RIGHT_INSET - B_DRAPE_COPY_OVERLAP,
     };
   }, [screenWidth]);
+
+  // home(23): the dark headline's column ends where the hero artwork's INK
+  // starts, not where its box does and not at a share of the screen. Derived
+  // here so it follows the device: the art is a fixed-point box pinned to the
+  // right edge, so on a wider phone the copy gets the extra width rather than
+  // the picture.
+  const headlineColumn = useMemo(() => {
+    const artRight = screenWidth - design.screenPadding - HERO_ART_DARK.right;
+    const artInkLeft = artRight - HERO_ART_DARK.width * (1 - HERO_ART_INK_LEFT);
+    return Math.round(artInkLeft - design.screenPadding);
+  }, [screenWidth, design.screenPadding]);
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -422,15 +469,19 @@ export function HomeScreen() {
                   // Heritage composition as well. `styles.headline` keeps
                   // light's 39/45.
                   isDark && {
+                    maxWidth: headlineColumn,
                     fontSize: design.heroFontSize,
-                    lineHeight: Math.round(design.heroFontSize * (45 / 39)),
+                    lineHeight: Math.round(design.heroFontSize * HEADLINE_LEADING),
                   },
                 ]}
                 maxFontSizeMultiplier={1.25}
               >
                 Take a task{'\n'}off your plate.
               </Text>
-              <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
+              <Text
+                style={[styles.heroSubtitle, isDark && styles.heroSubtitleDark]}
+                maxFontSizeMultiplier={1.3}
+              >
                 Describe it. Hire help. Get it handled.
               </Text>
             </View>
@@ -854,13 +905,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     letterSpacing: -0.3,
     color: colors.ink,
   },
-  // The wider Prestige crop takes more of the band, so the headline holds a
-  // narrower column in dark — master 44 breaks it after 'off'.
-  // home(16): the operator's 74% and the explicit break are both kept. What is
-  // added is the gap master 44 leaves under the greeting — its name line ends
-  // at y=197 and the headline's cap top starts at y=271, which is 74px = 30.9pt.
-  // The line box supplies about 16pt of that at this size; the rest is here.
-  headlineDark: { maxWidth: '74%', marginTop: 15 },
+  // home(23) — THE GAP ABOVE THE HEADLINE IS REAL SPACING.
+  //
+  // marginTop 30, not 15. Master 44 puts the headline's cap top at 95.0pt below
+  // the content box's top; the flow above it (the greeting/switch row at 50pt,
+  // then introCopy's 8pt gap) plus this face's own line box put the cap 8.4pt
+  // into the block, so 58 + 30 + 8.4 = 96.4 against the master's 95.0. No
+  // transform: the subtitle and everything under it move WITH it rather than
+  // having the headline slide over them.
+  //
+  // No `maxWidth` here on purpose — the operator's 74% was 261pt of column,
+  // which is 17pt past where the hero's ink starts. The dark column is computed
+  // from the artwork at the call site (`headlineColumn`), because a share of
+  // the screen and a share of the artwork are two different fractions and only
+  // one of them ends where the picture does.
+  headlineDark: { marginTop: 30 },
   heroSubtitle: {
     maxWidth: '73%',
     marginTop: spacing.sm,
@@ -868,29 +927,49 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '500',
     color: colors.homeSlate,
   },
+  // home(23), DARK ONLY — 16 -> 14, and that is what puts it on ONE line.
+  //
+  // Master 44 sets "Describe it. Hire help. Get it handled." on one line, 208pt
+  // wide, on a 21px = 9.70pt cap. This app was setting it on TWO, because the
+  // platform sans needs 265pt at 16pt against a 73% (258pt) column. 14pt is the
+  // master's own cap to within 0.7% (9.63 against 9.70) AND sets 232pt, which
+  // clears the column by 26pt. The 2pt of extra marginTop is the master's Y:
+  // its cap top is 187.8pt below the content top and 8 would land at 185.3.
+  // Light keeps 16/8 — the Heritage composition is frozen.
+  heroSubtitleDark: { fontSize: 14, marginTop: 10 },
   homeHeroArt: { position: 'absolute', zIndex: 0, width: 112, height: 124, right: -6, top: 47 },
-  // home(14) — THE HERO IS A SLOT, AND THESE ARE MASTER 44's OWN NUMBERS.
+  // home(23) — THE HERO IS A SLOT, AND THESE ARE THE NEW MASTER'S OWN NUMBERS.
   //
-  // Measured off docs/mockups/44_customer_home_dark.png at 941x1672 and
-  // converted at 393/941: the scene spans x 580..940 (361px = 150.8pt wide,
-  // running to the screen's right edge) and y 222..545 (324px = 135.3pt tall).
+  // Re-measured on the REPLACED docs/mockups/44_customer_home_dark.png
+  // (853x1844). home(14)'s 151 x 135 at right: 0 came off the old 941x1672 file
+  // and is void.
   //
-  // `top` is measured from `intro`, whose first row is the greeting/"Switch to
-  // Worker" line, and it is taken from the master's GAP below that pill (24px =
-  // 10pt) rather than from its offset below the pill's top (43pt). The two are
-  // the same statement on the master and different here: master 44 draws that
-  // pill 33pt tall and this app draws it 44, because 44 is CLAUDE.md's touch
-  // floor and the master is under it. Copying the offset would butt the scene
-  // against the pill; copying the gap keeps the composition.
+  // HOW THE BOX WAS FOUND, since a room-baked scene has no alpha to bound it.
+  // The asset's own structured columns run 0.1225..0.8750 of its canvas — its
+  // outer tenths are flat vignette. On the master, structure runs x 519..820.
+  // Two anchors, one scale: the box is 400 x 351 master pixels at (470, 221),
+  // which is EXACTLY the asset's own pixel dimensions, and converts at
+  // 393/853 and 852/1844 to 184.3 x 162.2 pt at (216.5, 102.1).
   //
-  // `right: 0` and not a negative overhang. The old -10 existed to push a
-  // CUT-OUT far enough right that its ink stopped looking inset; the ink still
-  // stopped ~13pt short, because the cut-out's own transparent margin is 15.4%
-  // of its canvas on that side. A room-baked scene has no margin — its box IS
-  // its art — so the box's right edge IS the screen's right edge and the art
-  // bleeds off it. See the require at the top of this file for which asset that
-  // is and why.
-  homeHeroArtDark: { width: 151, height: 135, right: 0, top: 54 },
+  // `right: -28`. The box's right edge lands at 400.8pt on a 393pt screen — it
+  // OVERHANGS by 7.8. This style's `right` is measured from `intro`, which is
+  // inside the content box's 20pt padding, so reaching 401 means -(20 + 8).
+  // The overhang is not decorative: the asset's rightmost eighth is flat
+  // vignette, so stopping the BOX at the screen edge would stop the visible
+  // scene 23pt short of it.
+  //
+  // `top: 35`. The master's box top is 34.9pt below the content box's top and
+  // its ink starts 7.9pt into the box, at 42.8. This app's "Switch to Worker"
+  // pill is 44pt tall against the master's 40.2 — CLAUDE.md's touch floor, and
+  // the master is under it — so its bottom sits at 47 and covers the art's
+  // first 4.2pt. RECORDED: the master's number is kept and the taller pill hides
+  // a sliver of scene behind an opaque fill, which is the smaller difference.
+  homeHeroArtDark: {
+    width: HERO_ART_DARK.width,
+    height: HERO_ART_DARK.height,
+    right: HERO_ART_DARK.right,
+    top: HERO_ART_DARK.top,
+  },
   // Laid over the shared SearchBar so the reference geometry wins; the input,
   // clear control and (when available) the voice mic ride SearchBar itself.
   searchField: {

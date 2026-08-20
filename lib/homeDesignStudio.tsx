@@ -13,11 +13,11 @@ export type HomeDesignSettings = {
 
 /** Defaults are visually identical to the approved Customer Home. */
 export const DEFAULT_HOME_DESIGN_SETTINGS: HomeDesignSettings = {
-  // home(16): 39 -> 30. See MASTER_SERIF_CAPS in screens/HomeScreen.tsx for
-  // where 30 comes from — master 44's cap height puts it at 33, and the column
-  // the hero artwork leaves caps it at 30. This is the studio's DEFAULT, not a
-  // frozen value: the slider still runs 28..56 and this is what it starts at.
-  heroFontSize: 30,
+  // home(23): 30 -> 31, against the REPLACED master 44. See MASTER_SERIF_CAPS
+  // in screens/HomeScreen.tsx: the new file's T measures a 24.03pt cap, which
+  // is 35pt of Georgia, and the artwork's ink caps the column at 31. This is
+  // the studio's DEFAULT, not a frozen value: the slider still runs 28..56.
+  heroFontSize: 31,
   screenPadding: 20,
   sectionGap: 20,
   searchHeight: 70,
