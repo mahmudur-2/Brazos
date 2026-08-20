@@ -757,6 +757,63 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 // same harness gives 0 differing pixels on light Customer Home and 0 on light
 // Worker Home. This fence is what keeps that true without a browser.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// H24 — THE SERVICE CHIPS FIT ON TWO ROWS, and the arithmetic says so.
+//
+// Master 44 draws five pills on two rows. This app drew six-across-THREE, with
+// "Other" alone on the last one, because row 2 wanted 359pt of a 353pt content
+// width. Nothing about that wrap was visible in a stylesheet: it is a sum.
+//
+// CATCHES: the dark paddings drifting back up (10pt each side puts row 2 over
+// again on the first device that renders it), the row gap going back to
+// spacing.sm, and the screen gutter widening without the pills being paid for.
+//
+// WHY NOT VACUOUS: the three content widths below are MEASURED — icon, gap and
+// label, in a real 393pt viewport, from .shots/customer-home-dark.png — and
+// every other term is read out of the source. Raise a padding by two and this
+// goes red before a screenshot could show it.
+// ---------------------------------------------------------------------------
+test('home(24) fence: master 44’s five service chips fit on master 44’s two rows', () => {
+  const flat = flatten(read('screens/HomeScreen.tsx'));
+  const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+
+  const chipPad = Number(/compactChipDark: \{ paddingHorizontal: (\d+) \}/.exec(flat)?.[1]);
+  const rowGap = Number(/serviceRowDark: \{ gap: (\d+) \}/.exec(flat)?.[1]);
+  assert.ok(chipPad > 0 && rowGap > 0, 'the dark chip row keeps its own padding and gap');
+
+  // icon (16) + gap (6) + label at 14pt, measured per pill. Row 2 is
+  // "House Cleaning", "TV Mounting" and "Other".
+  const ROW_2_CONTENT = [122, 105, 56];
+  const wanted =
+    ROW_2_CONTENT.reduce((sum, w) => sum + w + 2 * chipPad, 0) + rowGap * (ROW_2_CONTENT.length - 1);
+  const available = 393 - 2 * padding;
+  assert.ok(
+    wanted <= available,
+    `row 2 wants ${wanted}pt of ${available}pt, so "Other" wraps to a third row. Master 44 draws two`
+  );
+
+  // LIGHT IS UNTOUCHED: it keeps the shared 10pt compact padding and the 8pt
+  // gaps, and it is allowed its third row — the Heritage composition is frozen.
+  assert.match(flat, /compactServiceChip: \{ paddingHorizontal: 10 \}/);
+  assert.match(flat, /serviceRow: \{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing\.sm \}/);
+  assert.match(flat, /serviceRows: \{ gap: spacing\.sm \}/);
+
+  // PER-SECTION SPACING, not one global gap. Master 44's own gaps below the
+  // hero are five different numbers; `sectionGap` is one. Each dark override
+  // below is the difference between them, and each is measured:
+  //   search      237.0pt from the content top   (+8 on a 229 flow)
+  //   chip row 1  328.0                          (sectionGap, unchanged)
+  //   chip row 2  382.6                          (row gap 8 -> 10)
+  //   promo card  449.1                          (+3 on a 20pt sectionGap)
+  assert.match(flat, /searchFieldDark: \{ marginTop: 8 \}/);
+  assert.match(flat, /serviceRowsDark: \{ gap: 10 \}/);
+  assert.match(flat, /heroCardDark: \{ marginTop: 3,/);
+  assert.ok(
+    !/gap: design\.sectionGap \+/.test(flat),
+    'the rhythm is per-section; sectionGap stays the one number the studio shows'
+  );
+});
+
 test('home(19) fence: nothing the master-44 run changed reached the light theme', () => {
   const home = flatten(read('screens/HomeScreen.tsx'));
   const bar = stripComments(read('ui/primitives/BottomNav.tsx'));

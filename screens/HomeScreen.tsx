@@ -501,6 +501,7 @@ export function HomeScreen() {
             autoCorrect
             style={[
               styles.searchField,
+              isDark && styles.searchFieldDark,
               { minHeight: design.searchHeight, borderRadius: design.searchRadius },
             ]}
             trailing={
@@ -516,9 +517,12 @@ export function HomeScreen() {
             }
           />
 
-          <View style={styles.serviceRows}>
+          <View style={[styles.serviceRows, isDark && styles.serviceRowsDark]}>
             {HOME_SERVICE_ROWS.map((row, rowIndex) => (
-              <View key={`service-row-${rowIndex}`} style={styles.serviceRow}>
+              <View
+                key={`service-row-${rowIndex}`}
+                style={[styles.serviceRow, isDark && styles.serviceRowDark]}
+              >
                 {row.map((service) => (
                   <Chip
                     key={service.label}
@@ -530,6 +534,7 @@ export function HomeScreen() {
                       // light keeps the Heritage gold outline.
                       !isDark && styles.goldOutlineChip,
                       rowIndex === 1 && styles.compactServiceChip,
+                      isDark && (rowIndex === 1 ? styles.compactChipDark : styles.serviceChipDark),
                     ]}
                     onPress={() => searchCategory(service.key)}
                     accessibilityHint={`Find ${service.label.toLowerCase()} help`}
@@ -543,6 +548,7 @@ export function HomeScreen() {
                     style={[
                       !isDark && styles.goldOutlineChip,
                       styles.compactServiceChip,
+                      isDark && styles.compactChipDark,
                       styles.otherChip,
                     ]}
                     onPress={() => setMoreOpen(true)}
@@ -980,9 +986,47 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.surface,
     ...shadows.card,
   },
+  // home(24), DARK ONLY: the search control's Y, and nothing else about it.
+  //
+  // Master 44 puts its top 237.0pt below the content box's top; the hero block
+  // above it leaves the field at 229. The 8pt is a REAL gap on this one
+  // section, not a change to `sectionGap`: a global gap moves five sections to
+  // fix one, and the master's own gaps are five different numbers.
+  //
+  // RECORDED, NOT MET: the master's field is 67.0pt tall and this one is 70.
+  // `design.searchHeight` is the studio's live control and LIGHT reads the same
+  // value, and light geometry is frozen — so the 3pt (4.5%) stays a difference
+  // rather than becoming a dark-only second source for one control's height.
+  searchFieldDark: { marginTop: 8 },
   searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
   serviceRows: { gap: spacing.sm },
   serviceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
+  // home(24) — WHAT PUTS THE CHIPS ON TWO ROWS, which is the whole point.
+  //
+  // Master 44 draws five pills on two rows; this app drew six-across-three,
+  // with "Other" alone on a row of its own. Row 2 needed 360pt of a 353pt
+  // content width — over by 7 — so nothing about the wrap was subtle.
+  //
+  // The lever is the PILL's horizontal padding, and only in dark. The master's
+  // own padding is LARGER than this app's (17.5pt on row 1, ~14 on row 2), and
+  // its pills are still narrower, because its label face is narrower than the
+  // platform sans at 14pt. That label lives in components/Chip.tsx and is
+  // shared by every chip in the app, so it is not Home's to move; the padding
+  // is. What the numbers below buy, measured:
+  //
+  //   row 1   Furniture Assembly 172 -> 168  (master 167.7)
+  //           Moving Help        133 -> 129  (master 126.7)
+  //   row 2   House Cleaning     142 -> 138  (master 137.3)
+  //           TV Mounting        126 -> 122  (master 120.7)
+  //           Other               76 ->  81  (master  84.8, grown by flexGrow
+  //                                           into what the row has left)
+  //
+  // and the row gap goes to the master's own 6.4pt rather than spacing.sm's 8.
+  // Row 2 then totals 347 of 353. Light keeps 14/10 and the 8pt gaps.
+  serviceRowsDark: { gap: 10 },
+  serviceRowDark: { gap: 6 },
+  serviceChipDark: { paddingHorizontal: 12 },
+  compactChipDark: { paddingHorizontal: 8 },
   // Same gold hairline as the "Switch to Worker" pill above, so the quick-
   // service row reads as part of the same control family (light only — dark
   // wears the Chip's sage treatment).
@@ -1000,6 +1044,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...shadows.card,
   },
   heroCardDark: {
+    // home(24): master 44 leaves 22.6pt between the chip rows and this card,
+    // against the 20 `sectionGap` gives every section. Per-section, dark-only,
+    // for the reason on `searchFieldDark`.
+    marginTop: 3,
     backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.border,
