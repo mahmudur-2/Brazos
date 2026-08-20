@@ -740,6 +740,48 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 });
 
 // ---------------------------------------------------------------------------
+// H17 — "Switch to Worker" is ringed in the hairline token in dark, and LIGHT
+// keeps the gold it has always had.
+//
+// CATCHES: the ring going back to palette gold, or to any weight above a
+// hairline, on the one control that sits highest on the screen and next to the
+// artwork; and the dark treatment leaking into light, which is frozen.
+//
+// WHY NOT VACUOUS: the dark override and the base are read separately and
+// compared to each other, so the fence fails if either the override disappears
+// or the base picks the dark values up.
+// ---------------------------------------------------------------------------
+test('home(17) fence: the mode switch wears the hairline in dark, gold in light', () => {
+  const flat = flatten(read('screens/HomeScreen.tsx'));
+
+  const base = /modeSwitch: \{([^}]*)\}/.exec(flat);
+  assert.ok(base, 'modeSwitch must stay a plain style object');
+  assert.match(base[1], /borderColor: colors\.gold/, 'LIGHT is frozen on the gold ring');
+  assert.match(base[1], /minHeight: 44/, "44 is CLAUDE.md's touch floor; master 44 is under it");
+
+  const dark = /modeSwitchDark: \{([^}]*)\}/.exec(flat);
+  assert.ok(dark, 'dark must override the ring rather than repainting it for both themes');
+  assert.match(
+    dark[1],
+    /borderColor: colors\.border/,
+    'the dark ring is the hairline token — lib/theme.ts calls it gold at hairline alpha'
+  );
+  const weight = /borderWidth: ([\d.]+)/.exec(dark[1]);
+  assert.ok(weight, 'the dark ring must state its own weight');
+  const baseWeight = Number(/borderWidth: ([\d.]+)/.exec(base[1])[1]);
+  assert.ok(
+    Number(weight[1]) < baseWeight,
+    `master 44 rings this at 0.69pt; dark must draw it lighter than light's ${baseWeight}`
+  );
+
+  assert.match(
+    flat,
+    /styles\.modeSwitch, isDark && styles\.modeSwitchDark,/,
+    'the override has to reach the control, in that order'
+  );
+});
+
+// ---------------------------------------------------------------------------
 // H16 — the display serif is ONE ladder derived from master 44's cap heights,
 // not three sizes chosen one at a time.
 //

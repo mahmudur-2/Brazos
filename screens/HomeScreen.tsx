@@ -395,7 +395,11 @@ export function HomeScreen() {
                 <Pressable
                   onPress={switchToWorker}
                   disabled={switching}
-                  style={({ pressed }) => [styles.modeSwitch, pressed && styles.modeSwitchPressed]}
+                  style={({ pressed }) => [
+                    styles.modeSwitch,
+                    isDark && styles.modeSwitchDark,
+                    pressed && styles.modeSwitchPressed,
+                  ]}
                   accessibilityRole="button"
                   accessibilityLabel="Switch to Worker"
                   accessibilityHint="Opens the jobs you can bid on"
@@ -809,6 +813,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.gold,
     backgroundColor: colors.surface,
   },
+  // home(17) — DARK ONLY: the ring is the HAIRLINE token, at one point.
+  //
+  // It resolved `colors.gold` (#DCAB60) at 1.25pt, which is the brightest
+  // colour in the palette drawn heavier than any other line on the screen.
+  // Master 44 rings this control at an effective 1.66px of its 941 — 0.69pt —
+  // so the weight goes to 1, the nearest real weight below what shipped.
+  //
+  // The colour goes to `border`, which lib/theme.ts documents as "the flat
+  // equivalent of gold at hairline alpha". RECORDED DIFFERENCE: the master's
+  // own ring peaks at #A9814B, brighter than #55482E and brighter than the
+  // hairline it draws that card with (#6C5941 peak) — so master 44 does
+  // distinguish the two and this does not. Reaching #A9814B means either a new
+  // hex or an alpha blend of gold, and the palette is frozen; the token is the
+  // instruction and the gap is written down instead.
+  //
+  // THE HEIGHT DOES NOT MOVE. Master 44 draws this pill 79px = 33pt tall and
+  // CLAUDE.md's touch floor is 44 — the master is under the floor, so the floor
+  // wins and `minHeight: 44` stays. That is the whole of the "~21% taller"
+  // difference; nothing about it is a styling choice.
+  modeSwitchDark: { borderWidth: 1, borderColor: colors.border },
   // Phase 1's tactile answer to the tap — the press state itself, so the
   // feedback lands on touch-down rather than after an animation starts.
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
