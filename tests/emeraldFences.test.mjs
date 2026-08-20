@@ -3,7 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { inkBounds } from './pngGeometry.mjs';
+import { inkBounds, tonePatches } from './pngGeometry.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -710,6 +710,69 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
       `${path}: styles.${key} must be the transparent ground, not another colour`
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// H4b — the atmosphere is a VIGNETTE, and the layer crops rather than fits.
+//
+// CATCHES: the raster being swapped for a flat plate (which is what
+// `homeBackground` already is — a second flat ground buys nothing and costs
+// 2MB); it being swapped for something bright enough to stop reading as a dark
+// room; and `cover` being changed to `contain`, which honours the aspect by
+// letterboxing and puts back the bands of bare ground the layer exists to
+// remove.
+//
+// WHY NOT VACUOUS: every number is measured out of the PNGs at run time — the
+// raster's own corners against its own middle, and master 44's side gutters
+// against each other. Replacing the file changes the measurement; there is no
+// hex or literal here to keep in step.
+// ---------------------------------------------------------------------------
+test('home(13) fence: the atmosphere carries a vignette, and it crops to fill', () => {
+  const patches = {
+    topLeft: [0, 0, 0.14, 0.07],
+    topRight: [0.86, 0, 1, 0.07],
+    bottomLeft: [0, 0.93, 0.14, 1],
+    bottomRight: [0.86, 0.93, 1, 1],
+    middle: [0.3, 0.42, 0.7, 0.62],
+  };
+  const layer = tonePatches(join(root, 'assets/prestige/home-atmosphere-dark.png'), patches);
+  const corners =
+    (layer.topLeft + layer.topRight + layer.bottomLeft + layer.bottomRight) / 4;
+
+  assert.ok(
+    layer.middle > corners * 2,
+    `the atmosphere's middle reads ${layer.middle.toFixed(1)} against corners at ` +
+      `${corners.toFixed(1)} — that is a flat plate, not a vignette, and homeBackground is ` +
+      'already a flat plate'
+  );
+  assert.ok(
+    layer.middle < 64,
+    `the atmosphere's middle reads ${layer.middle.toFixed(1)}/255 — a dark room, not a wash, ` +
+      'is what every card and hairline on this screen is drawn to sit on'
+  );
+
+  // The reason a vignette is owed at all: master 44's ground is not one value.
+  // Its side gutters are the only strip of it with no card, art or chrome in
+  // the way, so they are what gets measured.
+  const master = tonePatches(join(root, 'docs/mockups/44_customer_home_dark.png'), {
+    upperGutter: [0, 0.08, 0.045, 0.3],
+    lowerGutter: [0, 0.55, 0.045, 0.85],
+  });
+  assert.notEqual(
+    master.upperGutter.toFixed(1),
+    master.lowerGutter.toFixed(1),
+    'master 44 is being read as a flat ground; if that is now true the vignette is not owed'
+  );
+
+  // Full-bleed wins over fitting: the layer covers both dimensions and crops.
+  const flat = flatten(read('components/HomeAtmosphere.tsx'));
+  assert.match(flat, /resizeMode="cover"/, 'contain would letterbox the ground back in');
+  assert.doesNotMatch(flat, /resizeMode="contain"/);
+  assert.match(
+    flat,
+    /layer: \{ position: 'absolute', left: 0, right: 0, bottom: 0, \}/,
+    'the layer must still reach three edges by declaration and the fourth by -insets.top'
+  );
 });
 
 // ---------------------------------------------------------------------------
