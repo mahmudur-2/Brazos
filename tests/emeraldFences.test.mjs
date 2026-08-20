@@ -823,3 +823,78 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // is WHY the footprint is unmoved, so it must stay a transform.
   assert.match(flat, /transform: \[\{ translateY: -14 \}\]/);
 });
+
+// ---------------------------------------------------------------------------
+// H9 — NO customer-Home surface links to Map, and the route survived anyway.
+//
+// CATCHES: the "View map" control (or any other Map link) reappearing on any
+// screen the customer Home stack mounts — not just on HomeScreen, which is the
+// spot-check a hand-written assertion would settle for; and the far worse
+// reflex of un-registering the route now that nothing calls it, which is the
+// exact mistake emerald D1 nearly made with MyJobs and which turns the next
+// customer-side dispatch into NAVIGATE-not-handled.
+//
+// WHY NOT VACUOUS: the screen list is DERIVED — the stack's registrations are
+// parsed out of CustomerRoot.tsx and resolved to files through that file's own
+// import map, and the resolution is asserted non-empty before anything is
+// checked. Adding a screen to the customer Home stack puts it under this fence
+// automatically.
+// ---------------------------------------------------------------------------
+test('home(9) fence: nothing on the customer Home stack links to Map', () => {
+  const customerRoot = stripComments(read('navigation/CustomerRoot.tsx'));
+
+  const stackStart = customerRoot.indexOf('function CustomerHomeStackNavigator');
+  assert.notEqual(stackStart, -1, 'CustomerHomeStackNavigator must stay a named function');
+  const stackEnd = customerRoot.indexOf('function DiscoverStackNavigator', stackStart);
+  assert.notEqual(stackEnd, -1, 'DiscoverStackNavigator must still follow it');
+  const stack = customerRoot.slice(stackStart, stackEnd);
+
+  // What the stack mounts, and where each component actually lives.
+  const components = [...stack.matchAll(/component=\{(\w+)\}/g)].map((m) => m[1]);
+  assert.ok(components.length >= 4, `the Home stack must mount its screens (saw ${components.length})`);
+  const imports = new Map(
+    [...customerRoot.matchAll(/import \{ (\w+) \} from '\.\.\/(screens\/\w+)';/g)].map((m) => [
+      m[1],
+      `${m[2]}.tsx`,
+    ])
+  );
+  const files = components.map((name) => imports.get(name)).filter(Boolean);
+  assert.ok(
+    files.length >= 4,
+    `every Home-stack screen must resolve to a file (resolved ${files.length} of ${components.length})`
+  );
+
+  for (const file of files) {
+    const source = stripComments(read(file));
+    assert.doesNotMatch(
+      source,
+      /navigate\('Map'\)/,
+      `${file} dispatches Map — no customer Home surface may link to the map (home(9))`
+    );
+    assert.doesNotMatch(
+      source,
+      /navigateAcrossTabs\('Map'/,
+      `${file} dispatches Map across tabs — no customer Home surface may link to the map`
+    );
+    assert.doesNotMatch(source, /View map/, `${file} still offers a "View map" affordance`);
+  }
+
+  // THE ROUTE SURVIVES the affordance. Registered, hidden, on the tab
+  // navigator — and the worker tree's visible Map tab is untouched.
+  const flatCustomer = flatten(read('navigation/CustomerRoot.tsx'));
+  assert.match(
+    flatCustomer,
+    /name="Map" component=\{MapStackNavigator\} options=\{HIDDEN_TAB_ITEM_OPTIONS\}/,
+    'Map must stay REGISTERED on the customer tab navigator — deleting it is the crash'
+  );
+  assert.match(
+    flatten(read('navigation/WorkerRoot.tsx')),
+    /name="Map" component=\{MapStackNavigator\} options=\{\{ tabBarLabel: 'Map' \}\}/,
+    'the worker Map tab is not part of home(9)'
+  );
+  assert.match(
+    flatten(read('ui/primitives/BottomNav.tsx')),
+    /export const WORKER_BAR_TABS: BottomNavTabKey\[\] = \['Home', 'Map', 'MyJobs', 'Messages', 'Profile'\];/,
+    'the worker bar still draws Map'
+  );
+});

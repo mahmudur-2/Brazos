@@ -360,21 +360,49 @@ test('each tree carries its own tab contract (emerald D1 + D4)', () => {
   assert.match(workerRoot, /bottomNavScreenOptions\(insets\.bottom, palette\)/);
 });
 
-test('the customer Home "View map" dispatch still resolves on the tab navigator', () => {
-  // Home's pill dispatches an untargeted NAVIGATE at the tab navigator
-  // (getParent). React Navigation 7 resolves that against the tab navigator
-  // and its ancestors only — never child navigators — so the route must stay
-  // registered HERE, not inside the Home stack. emerald D1 took Map's BAR
-  // ITEM; this is the assertion that its route survived, which is what keeps
-  // the pill from throwing NAVIGATE-not-handled.
-  assert.match(home, /getParent\(\)\?\.navigate\('Map'\)/);
+test('customer Home no longer links to Map, and the Map route survived anyway', () => {
+  // home(9) REPLACES the recorded fact this test used to hold. It asserted
+  // that Home's "View map" pill dispatched `getParent()?.navigate('Map')` and
+  // that the route was registered to catch it. The pill is gone — the map is a
+  // WORKER surface — and the surviving half is the important one: removing an
+  // affordance must not remove a destination.
+  //
+  // React Navigation 7 resolves an untargeted NAVIGATE against the tab
+  // navigator and its ancestors only, never child navigators, so the route has
+  // to live on the TAB navigator or a future customer-side dispatch throws
+  // NAVIGATE-not-handled.
+  // Comment-stripped: the docblock that RECORDS the removal necessarily names
+  // the thing it removed, and a record of an absence must not read as the
+  // absence coming back.
+  const homeCode = home.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.doesNotMatch(
+    homeCode,
+    /navigate\('Map'\)/,
+    'customer Home must not dispatch Map — home(9) removed that control'
+  );
+  assert.doesNotMatch(homeCode, /View map/, 'the "View map" affordance must not come back');
+
+  // The route is still registered, on the tab navigator, still hidden.
   assert.match(customerRoot, /name="Map"\s+component=\{MapStackNavigator\}/);
+  assert.match(
+    customerRoot.replace(/\s+/g, ' '),
+    /name="Map" component=\{MapStackNavigator\} options=\{HIDDEN_TAB_ITEM_OPTIONS\}/,
+    'Map stays registered-but-hidden; un-registering it is what breaks a future dispatch'
+  );
   // Registered on the TAB navigator, not smuggled into a child stack.
   const homeStack = customerRoot.slice(
     customerRoot.indexOf('function CustomerHomeStackNavigator'),
     customerRoot.indexOf('function DiscoverStackNavigator')
   );
   assert.doesNotMatch(homeStack, /name="Map"/);
+
+  // THE WORKER MAP IS UNTOUCHED — a visible tab, in the bar roster and in the
+  // tree, exactly as before.
+  assert.match(
+    workerRoot.replace(/\s+/g, ' '),
+    /name="Map" component=\{MapStackNavigator\} options=\{\{ tabBarLabel: 'Map' \}\}/,
+    'the worker Map tab is not part of this change'
+  );
 });
 
 test('a customer can still reach My Jobs after D1 took its tab', () => {

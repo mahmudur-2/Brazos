@@ -49,10 +49,14 @@ import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type Col
  * HIDDEN_TAB_ITEM_OPTIONS, because React Navigation 7 resolves an untargeted
  * NAVIGATE against the tab navigator and its ancestors only (never down into
  * child navigators), so every existing dispatch — the [ + ] sheet's "My jobs",
- * SavedWorkers' jump into Discover, the customer Home's "View map" pill, and
- * all notification routing through the MyJobs tab — must find its route right
- * there on the navigator. Removing a route to remove a bar item would have
- * turned four working taps into crashes.
+ * SavedWorkers' jump into Discover, and all notification routing through the
+ * MyJobs tab — must find its route right there on the navigator. Removing a
+ * route to remove a bar item would have turned working taps into crashes.
+ *
+ * home(9) removed the customer Home's "View map" pill, which used to be the
+ * fourth of those dispatches. Map's REGISTRATION did not go with it: an
+ * unreferenced hidden route costs one entry, while un-registering it is what
+ * makes the next customer-side dispatch throw.
  */
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -101,8 +105,9 @@ export const WORKER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Map', 'MyJobs', 'Mes
  *     never Discover". Label, glyph AND destination: the slot now points at
  *     the customer's own browse surface (the Discover stack, rooted at
  *     WorkerSearchScreen) rather than the shared job map. Map itself stays
- *     REGISTERED and hidden — the customer Home's "View map" pill dispatches
- *     it, so removing the route would break that tap.
+ *     REGISTERED and hidden. home(9) then took the customer's last link to it
+ *     — Home's "View map" pill — and left the registration standing, because
+ *     the route is the thing a future dispatch needs, not the pill.
  */
 export const CUSTOMER_BAR_TABS: BottomNavTabKey[] = ['Home', 'Discover', 'Messages', 'Profile'];
 
@@ -398,13 +403,18 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
  * `tabBarItemStyle` onto each item's container).
  *
  * The customer tree uses this for the two destinations emerald D1 took off its
- * bar — `Map` and `MyJobs`. Both are still dispatched by live code
- * (HomeScreen's "View map" pill via getParent(), the [ + ] sheet's "My jobs",
- * and every notification whose TAB_FOR_SCREEN entry is MyJobs), and all of
- * those are untargeted NAVIGATEs handled by the tab navigator itself, which
- * React Navigation 7 never forwards down into child navigators. So the routes
- * must stay registered on the navigator even though the bar draws no item for
- * them. Discover was hidden this way before D1 and is now the visible slot.
+ * bar — `Map` and `MyJobs`. MyJobs is still dispatched by live code (the [ + ]
+ * sheet's "My jobs", and every notification whose TAB_FOR_SCREEN entry is
+ * MyJobs); those are untargeted NAVIGATEs handled by the tab navigator itself,
+ * which React Navigation 7 never forwards down into child navigators, so the
+ * route must stay registered even though the bar draws no item for it.
+ *
+ * Map has no customer-side caller left after home(9) took Home's "View map"
+ * pill, and it stays registered regardless — hidden-but-registered is the
+ * cheap state, and the expensive one is discovering the route is missing from
+ * inside a crash. The WORKER tree draws Map as a real, visible tab and is
+ * untouched by any of this. Discover was hidden this way before D1 and is now
+ * the visible slot.
  */
 export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
   tabBarItemStyle: { display: 'none' },

@@ -225,9 +225,14 @@ export function HomeScreen() {
     navigation.navigate('WorkerSearch', { query: trimmed });
   }
 
-  function openMap() {
-    navigation.getParent()?.navigate('Map');
-  }
+  // home(9): the "View map" pill and its openMap() dispatch are gone from
+  // customer Home. The map is a WORKER surface — finding work near you — and
+  // the customer's Live Nearby row now offers only "View all". The Map ROUTE
+  // is untouched and still registered (hidden) on the customer tab navigator:
+  // see navigation/CustomerRoot.tsx. Removing the affordance is not removing
+  // the destination, and the route has to stay for the same reason MyJobs
+  // does — React Navigation 7 resolves an untargeted NAVIGATE against the tab
+  // navigator only.
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -431,16 +436,6 @@ export function HomeScreen() {
                 </View>
                 <Text style={styles.sectionTitle}>Live Nearby</Text>
               </View>
-              <Pressable
-                onPress={openMap}
-                style={({ pressed }) => [styles.mapPill, pressed && styles.mapPillPressed]}
-                accessibilityRole="button"
-                accessibilityLabel="View map"
-                accessibilityHint="Opens the map of nearby work"
-              >
-                <Ionicons name="location" size={17} color={isDark ? colors.emerald : colors.forest} />
-                <Text style={[styles.mapPillText, isDark && styles.mapPillTextDark]}>View map</Text>
-              </Pressable>
               <Pressable
                 onPress={browseOpenJobs}
                 style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
@@ -785,21 +780,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.homeLiveHalo,
   },
   liveDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: colors.homeLive },
-  mapPill: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    minHeight: 44,
-    paddingHorizontal: 10,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.homeHairline,
-    backgroundColor: colors.surface,
-  },
-  mapPillPressed: { opacity: 0.82 },
-  mapPillText: { fontSize: 14, fontWeight: '600', color: colors.forest },
-  mapPillTextDark: { color: colors.emerald },
+  // home(9): mapPill / mapPillPressed / mapPillText / mapPillTextDark were
+  // removed with the control they painted. The Map ROUTE is untouched.
   viewAll: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44 },
   viewAllPressed: { opacity: 0.78 },
   viewAllText: { fontSize: 15, fontWeight: '600', color: colors.forest },

@@ -48,6 +48,14 @@ import {
  *      and every navigation into it are untouched, and the customer's standing
  *      way in — the [ + ] sheet's "My jobs" action — is unchanged and pinned
  *      by a test. The WORKER tree keeps its My Jobs tab.
+ *   2a. **home(9): the customer lost its last link to Map.** `HomeScreen`'s
+ *      "View map" pill was the one live customer dispatch at the Map route,
+ *      and it is gone — the map is a WORKER surface ("find work near you") and
+ *      the customer's Live Nearby row offers "View all" alone now. The ROUTE
+ *      stays registered and hidden below, deliberately: it is dispatchable,
+ *      the worker tree's own Map tab is untouched, and un-registering it here
+ *      is the mistake this file's header already warns about. A customer-side
+ *      dispatch added tomorrow resolves without a navigator change.
  *   2. **Map became Discover** — label, glyph AND destination — reversing
  *      decision 4 / manifest Appendix B-2's "Map, never Discover". The
  *      destination is not new: `DiscoverStackNavigator` below has existed
@@ -70,7 +78,6 @@ import {
  * no longer searches child navigators; see @react-navigation/core's
  * useOnAction, which gates child propagation on `action.target`). So the route
  * has to exist on THIS navigator or the tap throws:
- *   - `HomeScreen`'s "View map" pill → `getParent()?.navigate('Map')`
  *   - the [ + ] sheet's "My jobs" → `navigateAcrossTabs('MyJobs')`
  *   - notification routing → `TAB_FOR_SCREEN` sends ClientJobDetail, WorkerJob
  *     and JobDetail through the `MyJobs` tab in BOTH trees

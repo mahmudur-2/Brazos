@@ -459,10 +459,12 @@ export type CustomerParamList = {
   Home: NavigatorScreenParams<CustomerHomeStackParamList> | undefined;
   /**
    * HIDDEN route since emerald D1 — registered and dispatchable, absent from
-   * the bar. The customer Home's "View map" pill dispatches it with an
-   * untargeted `getParent()?.navigate('Map')`, which React Navigation 7
-   * resolves on the tab navigator only, so the route stays here. The WORKER
-   * tree still draws Map as a visible tab.
+   * the bar. home(9) removed its last customer-side caller: Home's "View map"
+   * pill, which dispatched an untargeted `getParent()?.navigate('Map')`. The
+   * route STAYS registered anyway — React Navigation 7 resolves an untargeted
+   * NAVIGATE on the tab navigator only, so un-registering it is what turns a
+   * future customer-side dispatch into a crash, and the cost of keeping it is
+   * one hidden entry. The WORKER tree still draws Map as a visible tab.
    */
   Map: NavigatorScreenParams<MapStackParamList> | undefined;
   /**
