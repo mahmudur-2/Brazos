@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { inkBounds } from './pngGeometry.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -447,14 +448,38 @@ const constantOf = (source, name) => {
 // font size being shrunk instead, which was explicitly NOT the problem; and
 // the box being given an aspect the artwork does not have.
 // ---------------------------------------------------------------------------
-test('home(2) fence: the B drape is 18.3% of screen width, and the copy column follows it', () => {
+test('home(2) fence: the B drape is a fraction of the screen, and the copy column follows it', () => {
   const home = stripComments(read('screens/HomeScreen.tsx'));
   const flat = flatten(read('screens/HomeScreen.tsx'));
 
   const ratio = constantOf(home, 'B_DRAPE_WIDTH_RATIO');
+
+  // home(11) — THIS USED TO PIN THE RATIO AT 0.183 AND THAT WAS THE WRONG
+  // QUANTITY. 0.183 is the share of the screen the BOX takes. The drape is a
+  // cut-out that covers only 60.7% of its own canvas, so the box drew a mark
+  // 11.1% of the screen wide and this assertion never saw it. The pin is
+  // replaced by the number the eye actually measures — the INK — derived from
+  // the file rather than declared, so a replacement drape with different
+  // margins moves the arithmetic instead of silently shrinking the mark.
+  // home(15) sets the master's band on the ink; what stays here is the shape of
+  // the relationship, and the bound that says a box and its ink are not the
+  // same number.
+  const ink = inkBounds(join(root, 'assets/prestige/brazos_b_drape.png'));
+  assert.ok(ink.hasAlphaChannel, 'the dark mark is a cut-out; a re-bake changes what this measures');
   assert.ok(
-    Math.abs(ratio - 0.183) <= 0.01,
-    `the drape must be 18.3% of screen width (+/- 1%), found ${(ratio * 100).toFixed(1)}%`
+    ink.width < 0.95,
+    `brazos_b_drape.png covers ${(ink.width * 100).toFixed(1)}% of its canvas — if that reaches ` +
+      'the edges the box IS the ink and this fence is measuring the wrong thing'
+  );
+  const inkShareOfScreen = ratio * ink.width;
+  assert.ok(
+    inkShareOfScreen > 0.05 && inkShareOfScreen < 0.30,
+    `the drawn mark is ${(inkShareOfScreen * 100).toFixed(1)}% of the screen — outside anything ` +
+      'master 44 shows on that card'
+  );
+  assert.ok(
+    inkShareOfScreen < ratio,
+    'the ink cannot be wider than the box that draws it; the measurement is wrong'
   );
 
   // The aspect is the ARTWORK's, re-derived from both files on disk — so a
@@ -775,23 +800,36 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
   const flat = flatten(read('ui/primitives/BottomNav.tsx'));
 
-  const ratio = constantOf(bar, 'CREATE_BUTTON_WIDTH_RATIO');
-  assert.ok(
-    Math.abs(ratio - 0.149) <= 0.005,
-    `the control must be 14.9% of screen width (+/- 0.5%), found ${(ratio * 100).toFixed(1)}%`
-  );
-  assert.match(
-    flat,
-    /const size = isDark \? Math\.round\(screenWidth \* CREATE_BUTTON_WIDTH_RATIO\) : CREATE_BUTTON_LIGHT_SIZE;/,
-    'the size must be measured off the live screen width in dark, and frozen in light'
-  );
+  // home(11) — THIS USED TO PIN 0.149 OF THE SCREEN, AND A SHARE OF THE SCREEN
+  // IS THE WRONG QUANTITY FOR THIS CONTROL. The pill's height is a constant
+  // (layout.floatingNavHeight), so a control sized off the screen changes its
+  // relationship to the pill on every device: at 393pt it resolved to 59 in a
+  // 70pt pill, and the -14 lift then carried its top edge OUT through the
+  // pill's hairline. What the control has to satisfy is containment, and
+  // containment is a relationship between the two boxes — so that is what is
+  // asserted, arithmetically, from whatever the source declares. home(18) sets
+  // the master's share; this catches the control leaving the pill at any value.
+  const size = createButtonDarkSize(bar, flat);
+  assert.ok(size > 0, 'the dark control must resolve to a positive size');
   assert.match(flat, /\{ width: size, height: size \}/);
 
-  // FILLED GOLD WITH DARK CONTENT, dark only.
+  // LIGHT IS FROZEN and is measured on exactly the same arithmetic, so a change
+  // aimed at dark cannot quietly move it.
+  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_SIZE'), 52);
+
+  // FILLED GOLD, dark only. The FILL is the operator reversal this fence
+  // exists for; the RING is free to be any dark token — what it may not be is
+  // the fill's own colour, which paints a ring that is not there.
   assert.match(
     flat,
-    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: colors\.gold, \}/,
+    /createButtonDark: \{ backgroundColor: colors\.gold,/,
     'the dark control must be FILLED with palette gold'
+  );
+  const darkRing = /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: colors\.(\w+),/.exec(flat);
+  assert.ok(
+    darkRing,
+    'the dark control must still declare a ring, and it must come from the palette — a raw hex ' +
+      'here would be a new colour, which the Prestige pass does not introduce'
   );
   assert.match(
     flat,
@@ -820,9 +858,70 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
     'the static clearance token must not return as a side effect of home(8)'
   );
   // The control is raised by a TRANSFORM, which Yoga does not lay out — that
-  // is WHY the footprint is unmoved, so it must stay a transform.
-  assert.match(flat, /transform: \[\{ translateY: -14 \}\]/);
+  // is WHY the footprint is unmoved, so it must stay a transform, and the
+  // pressed state must raise it by the same amount or the control drops on
+  // touch-down.
+  const raise = createButtonRaise(flat);
+  assert.match(
+    flatten(read('ui/primitives/BottomNav.tsx')),
+    new RegExp(`createButtonPressed: \\{ opacity: [\\d.]+, transform: \\[\\{ translateY: ${raise.pressedToken} \\}`),
+    'the pressed state must use the same raise as the resting state'
+  );
+
+  // CONTAINMENT (home(11)). The control's laid-out box sits inside a slot of
+  // the pill's own height, packed to `justifyContent` with TAB_BOTTOM_GAP under
+  // it, then lifted by the transform. Both edges are computed here from the
+  // source's own numbers rather than eyeballed, so any future size or lift that
+  // pushes the control through the pill's hairline fails.
+  const pill = constantOf(stripComments(read('ui/tokens.ts')), 'FLOATING_NAV_HEIGHT');
+  const gap = constantOf(bar, 'TAB_BOTTOM_GAP');
+  const bottomEdge = pill - gap - raise.pt;      // distance from the pill's top
+  const topEdge = bottomEdge - size;
+  // A RECORDED FACT, not an endorsement. At the commit that installed this
+  // arithmetic the control cleared the pill's top hairline by 6pt and that is
+  // what home(18) exists to take to zero; until it does, the ceiling stops the
+  // overhang GROWING, which is the regression this can catch today.
+  const OVERHANG_CEILING_PT = 6;
+  assert.ok(
+    topEdge >= -OVERHANG_CEILING_PT,
+    `the [ + ] starts ${(-topEdge).toFixed(1)}pt above the pill's top edge, past the ` +
+      `${OVERHANG_CEILING_PT}pt this records — it belongs INSIDE the bar`
+  );
+  assert.ok(
+    bottomEdge <= pill,
+    `the [ + ] ends ${(bottomEdge - pill).toFixed(1)}pt below the pill's bottom edge`
+  );
+  assert.ok(
+    size <= pill,
+    `the [ + ] is ${size}pt in a ${pill}pt pill — it cannot be contained at all`
+  );
 });
+
+/**
+ * The dark control's resolved size at the reference 393pt width, whichever
+ * quantity the source derives it from. Kept as one function so the fence above
+ * reads as containment arithmetic rather than as a regex.
+ */
+function createButtonDarkSize(bar, flat) {
+  const screen = /Math\.round\(screenWidth \* CREATE_BUTTON_WIDTH_RATIO\)/.test(flat);
+  if (screen) return Math.round(393 * constantOf(bar, 'CREATE_BUTTON_WIDTH_RATIO'));
+  const ofPill = /Math\.round\(TAB_BAR_CONTENT_HEIGHT \* CREATE_BUTTON_PILL_RATIO\)/.test(flat);
+  if (ofPill) {
+    const pill = constantOf(stripComments(read('ui/tokens.ts')), 'FLOATING_NAV_HEIGHT');
+    return Math.round(pill * constantOf(bar, 'CREATE_BUTTON_PILL_RATIO'));
+  }
+  assert.fail('the dark control must derive its size from a declared ratio, never a pt literal');
+}
+
+/** How far the resting control is lifted, and the token the pressed state must repeat. */
+function createButtonRaise(flat) {
+  const literal = /transform: \[\{ translateY: (-?\d+) \}\]/.exec(flat);
+  if (literal) return { pt: -Number(literal[1]), pressedToken: literal[1] };
+  const derived = /transform: \[\{ translateY: -(\w+) \}\]/.exec(flat);
+  assert.ok(derived, 'the control must be raised by a transform, which Yoga does not lay out');
+  const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
+  return { pt: constantOf(bar, derived[1]), pressedToken: `-${derived[1]}` };
+}
 
 // ---------------------------------------------------------------------------
 // H9 — NO customer-Home surface links to Map, and the route survived anyway.

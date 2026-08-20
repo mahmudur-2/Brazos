@@ -595,26 +595,54 @@ test('[static] every roster bake claim is re-derived from the file, both ways', 
   );
 });
 
-test('[static] the three hero rasters are cut-outs, corner to corner', async () => {
-  // home(1)'s specific claim, pinned per file rather than in aggregate: these
-  // are the three the operator replaced, and a re-bake of any one of them is
-  // the exact regression this commit exists to prevent.
+test('[static] each hero raster is the bake the roster records', async () => {
+  // home(1) pinned all three of these as cut-outs. home(11) turns the pin into
+  // the RELATIONSHIP it was standing in for: the roster is the record of what
+  // each file is, and the file has to match its record. A re-bake or a re-cut
+  // of any of the three still fails here — it just fails by disagreeing with a
+  // recorded decision instead of with a hard-coded word, so a deliberate change
+  // has one place to be made and an accidental one has nowhere to hide.
+  //
+  // It matters because the two bakes are not interchangeable: a cut-out cannot
+  // bleed off a screen edge (its edges are empty), and a room-baked scene
+  // cannot sit on an arbitrary ground (it brings its own). The mount has to
+  // agree with the file, and the roster is where that agreement is written
+  // down.
+  let checked = 0;
   for (const asset of [
     'assets/prestige/hero_armchair_customer.png',
     'assets/prestige/hero_toolbox_worker.png',
     'assets/prestige/brazos_b_drape.png',
   ]) {
-    assert.equal(BAKED_ART[asset].bake, 'transparent', `${asset} left the transparent roster`);
+    const recorded = BAKED_ART[asset]?.bake;
+    assert.ok(recorded, `${asset} must stay on the roster`);
     const bytes = await readFile(new URL(`../${asset}`, import.meta.url));
     const alpha = alphaProfile(bytes, asset);
-    assert.equal(alpha.colourType, 6, `${asset} must be RGBA (colour type 6)`);
-    assert.equal(alpha.minAlpha, 0, `${asset} must reach alpha 0, not merely be translucent`);
-    // A baked hero is opaque exactly where a cut-out is empty: at the edges.
-    assert.ok(
-      alpha.transparentSamples > alpha.samples * 0.3,
-      `${asset}: only ${alpha.transparentSamples}/${alpha.samples} samples cut out — that is a crop, not a cut-out`,
-    );
+    checked += 1;
+
+    if (recorded === 'transparent') {
+      assert.equal(alpha.colourType, 6, `${asset} is recorded transparent but is not RGBA`);
+      assert.equal(alpha.minAlpha, 0, `${asset} must reach alpha 0, not merely be translucent`);
+      // A baked hero is opaque exactly where a cut-out is empty: at the edges.
+      assert.ok(
+        alpha.transparentSamples > alpha.samples * 0.3,
+        `${asset}: only ${alpha.transparentSamples}/${alpha.samples} samples cut out — that is a crop, not a cut-out`,
+      );
+    } else {
+      assert.equal(recorded, 'opaque-dark', `${asset}: unknown bake "${recorded}" on the roster`);
+      assert.equal(
+        alpha.hasAlphaChannel,
+        false,
+        `${asset} is recorded room-baked but carries an alpha channel`,
+      );
+      assert.equal(
+        alpha.transparentSamples,
+        0,
+        `${asset} is recorded room-baked but has transparent pixels`,
+      );
+    }
   }
+  assert.equal(checked, 3, 'all three hero rasters must stay measured');
 });
 
 test('[static] a theme-specific asset is mounted only behind an isDark decision', async () => {
