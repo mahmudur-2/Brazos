@@ -168,3 +168,13 @@ beyond what the task requires.
 cleanup. Report exceptions, not routine operations, and rewrite `HANDOFF.md`
 at the end of every run.
 
+
+## Home screenshots
+
+`node scripts/home-shots.mjs` writes Customer Home and Worker Home, dark and
+light, at 393x852 CSS px into `.shots/` (gitignored). Add `--build` to force a
+fresh `expo export` first; without it the export under `.shots/web` is reused.
+The harness supplies its own `__BRAZOS_CONFIG__` for a project that does not
+exist and answers every non-local request itself, so it needs no credentials and
+reaches no database. It is a comparison aid for `docs/mockups/`, not a check
+`npm run verify` runs.
