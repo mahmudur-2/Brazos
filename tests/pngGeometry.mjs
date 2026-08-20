@@ -23,11 +23,16 @@ import { inflateSync } from 'node:zlib';
 const luminance = (r, g, b) => 0.2126 * r + 0.7152 * g + 0.0722 * b;
 
 /**
- * Decodes an 8-bit non-interlaced PNG to `{ width, height, bpp, pixels }`,
- * where `pixels` is the unfiltered scanline buffer. Shared by both readers
- * below so there is one filter implementation, not two.
+ * Decodes an 8-bit non-interlaced PNG to `{ width, height, bpp, pixels, at }`,
+ * where `pixels` is the unfiltered scanline buffer and `at(x, y)` reads one
+ * pixel as `[r, g, b, a]`. Shared by both readers below so there is one filter
+ * implementation, not two.
+ *
+ * home(20): exported, so scripts/home-diff.mjs measures a render against
+ * master 44 through THIS decoder instead of carrying a second copy of the PNG
+ * filter loop. Nothing about the decoding itself changed.
  */
-function decode(path) {
+export function decode(path) {
   const bytes = readFileSync(path);
   if (bytes.toString('ascii', 12, 16) !== 'IHDR') throw new Error(`${path} is not a PNG`);
   const width = bytes.readUInt32BE(16);
@@ -80,8 +85,18 @@ function decode(path) {
       cur[x] = value & 0xff;
     }
   }
-  return { width, height, bpp, stride, pixels, colourType };
+  const at = (x, y) => {
+    const i = y * stride + x * bpp;
+    if (bpp >= 3) {
+      return [pixels[i], pixels[i + 1], pixels[i + 2], bpp === 4 ? pixels[i + 3] : 255];
+    }
+    return [pixels[i], pixels[i], pixels[i], bpp === 2 ? pixels[i + 1] : 255];
+  };
+  return { width, height, bpp, stride, pixels, colourType, at };
 }
+
+/** sRGB relative luminance, 0..255 — the same one the readers below use. */
+export { luminance };
 
 /**
  * Mean luminance (0..255) of named rectangles, each given as fractions of the
