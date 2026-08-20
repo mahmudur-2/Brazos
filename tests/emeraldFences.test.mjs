@@ -601,6 +601,23 @@ test('home(2) fence: the B drape is a fraction of the screen, and the copy colum
     `the promo heading's long line ends ${lineEnd.toFixed(1)}pt from the card's left edge; master ` +
       '44 ends it at 251.1, 18pt clear of the B mark'
   );
+
+  // home(25b) — AND THE BREAK IS THE MASTER'S, not the column's. Two lines is
+  // not the same statement as master 44's two lines: at 19pt the column forced
+  // the break after "job." because "Describe the job. BRAZOS" was one point too
+  // long for it, and at 18 it fits and the wrap slides a word right. A break
+  // that depends on a line being exactly too long is not a break.
+  assert.match(
+    flat,
+    /Describe the job\.\{'\\n'\}BRAZOS handles the rest\./,
+    "master 44 breaks the promo heading after 'job.'; a natural wrap cannot be relied on to"
+  );
+  const firstLine = 8.40 * darkSize;
+  assert.ok(
+    firstLine <= copyColumn,
+    `at ${darkSize}pt "Describe the job." sets ${firstLine.toFixed(1)}pt into ${copyColumn}pt of ` +
+      'column, so the explicit break becomes three lines rather than two'
+  );
 });
 
 // ---------------------------------------------------------------------------

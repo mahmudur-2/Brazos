@@ -595,7 +595,7 @@ export function HomeScreen() {
                   style={[styles.heroHeadline, isDark && styles.heroHeadlineDark]}
                   maxFontSizeMultiplier={1.3}
                 >
-                  Describe the job. BRAZOS handles the rest.
+                  Describe the job.{'\n'}BRAZOS handles the rest.
                 </Text>
               </View>
               <Pressable
@@ -1138,6 +1138,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // met, at 2.8pt of cap height. Light keeps 25/29 and is fenced.
   //
   // The leading is the master's own: 60px of line pitch = 27.7pt, so 28.
+  //
+  // home(25b) — AND THE BREAK IS EXPLICIT, because at 18 the column stopped
+  // making it. Two lines is not the same statement as the master's two lines:
+  // at 19pt "Describe the job. BRAZOS" measured 248pt and the column forced
+  // the break after "job." by accident; at 18 it measures 235 and fits, so the
+  // wrap slid one word right and set "Describe the job. BRAZOS" / "handles the
+  // rest." A break that depends on a line being exactly too long is not a
+  // break, so the copy now carries the master's own, the way the hero headline
+  // already does. LIGHT is unmoved by it: at 25pt in the same column the
+  // natural wrap already fell after "job." and again after "handles", which is
+  // exactly what the explicit break plus one natural wrap produces.
   heroHeadlineDark: { color: colors.ink, fontSize: 18, lineHeight: 28 },
   heroMark: { position: 'absolute', top: 12, right: 10, width: 79, height: 101 },
   // No width/height here on purpose: dark's box is B_DRAPE_WIDTH_RATIO of the
