@@ -412,3 +412,111 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
     'no second ground may be introduced through the library’s own hook for one'
   );
 });
+
+// ===========================================================================
+// HOME RECONSTRUCTION FENCES (home(2), home(7), home(8), home(9)).
+//
+// Same charter as the emerald fences above: each one names the reversion it
+// catches, and each derives its number from the source rather than restating
+// it, so deleting the mechanism makes the parse fail instead of the assertion
+// pass.
+// ===========================================================================
+
+/** The width/height an 8-byte-signature PNG declares in its IHDR. */
+const pngSize = (path) => {
+  const bytes = readFileSync(join(root, path));
+  assert.equal(bytes.toString('ascii', 12, 16), 'IHDR', `${path} is not a PNG`);
+  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
+};
+
+/** A bare number assigned to `name` at module scope. */
+const constantOf = (source, name) => {
+  const hit = new RegExp(`const ${name} = ([-0-9./ ]+);`).exec(source);
+  assert.ok(hit, `${name} must stay a plain numeric constant`);
+  // eslint-disable-next-line no-new-func -- a digits-and-operators literal only.
+  return Number(new Function(`return (${hit[1]});`)());
+};
+
+// ---------------------------------------------------------------------------
+// H2 — the B drape is a FRACTION OF THE SCREEN, and the headline column that
+// clears it is computed from the same number.
+//
+// CATCHES: the fixed 92x75 box coming back (it made the drape ~a fifth to a
+// third of the screen depending on the device, and the fixed 96pt reserve it
+// needed is what wrapped the promo heading onto three lines); the heading's
+// font size being shrunk instead, which was explicitly NOT the problem; and
+// the box being given an aspect the artwork does not have.
+// ---------------------------------------------------------------------------
+test('home(2) fence: the B drape is 18.3% of screen width, and the copy column follows it', () => {
+  const home = stripComments(read('screens/HomeScreen.tsx'));
+  const flat = flatten(read('screens/HomeScreen.tsx'));
+
+  const ratio = constantOf(home, 'B_DRAPE_WIDTH_RATIO');
+  assert.ok(
+    Math.abs(ratio - 0.183) <= 0.01,
+    `the drape must be 18.3% of screen width (+/- 1%), found ${(ratio * 100).toFixed(1)}%`
+  );
+
+  // The aspect is the ARTWORK's, re-derived from both files on disk — so a
+  // replacement drape of a different shape fails here rather than silently
+  // letterboxing inside a box the headline column was measured from.
+  const declaredAspect = constantOf(home, 'B_DRAPE_ASPECT');
+  for (const path of ['assets/brand/brazos_b_drape.png', 'assets/prestige/brazos_b_drape.png']) {
+    const { width, height } = pngSize(path);
+    assert.ok(
+      Math.abs(declaredAspect - width / height) < 0.001,
+      `${path} is ${width}x${height}; B_DRAPE_ASPECT says ${declaredAspect}`
+    );
+  }
+
+  // The mechanism: one width, measured at render, feeding BOTH the art box and
+  // the headline's reserve.
+  assert.match(
+    flat,
+    /const width = Math\.round\(screenWidth \* B_DRAPE_WIDTH_RATIO\);/,
+    'the drape width must be measured off the live screen width'
+  );
+  assert.match(
+    flat,
+    /art: \{ width, height: Math\.round\(width \/ B_DRAPE_ASPECT\) \}/,
+    'the drape height must be derived from the artwork aspect, never declared'
+  );
+  assert.match(
+    flat,
+    /copyPaddingRight: width \+ B_DRAPE_RIGHT_INSET - B_DRAPE_COPY_OVERLAP/,
+    'the headline column must be reserved FROM the drape width, not from a literal'
+  );
+  assert.match(flat, /style=\{\[styles\.heroMark, isDark && styles\.heroMarkDark, isDark && bDrape\.art\]\}/);
+  assert.match(flat, /isDark && \{ paddingRight: bDrape\.copyPaddingRight \}/);
+
+  // The fixed pair must not return, in either place.
+  assert.doesNotMatch(
+    flat,
+    /heroMarkDark: \{[^}]*width:/,
+    'heroMarkDark must not declare a fixed width again — a pt value cannot be a share of the screen'
+  );
+  assert.doesNotMatch(
+    flat,
+    /heroCopyDark/,
+    'the fixed 96pt dark reserve must not come back; it is computed from the drape now'
+  );
+
+  // The drape's stylesheet inset and the constant the copy is reserved from
+  // are two halves of one number.
+  const inset = constantOf(home, 'B_DRAPE_RIGHT_INSET');
+  const styleRight = /heroMarkDark: \{ top: \d+, right: (\d+) \}/.exec(flat);
+  assert.ok(styleRight, 'heroMarkDark must keep a plain `right` inset');
+  assert.equal(
+    Number(styleRight[1]),
+    inset,
+    'heroMarkDark.right and B_DRAPE_RIGHT_INSET must stay the same number'
+  );
+
+  // PRE-DECIDED, and fenced because it is the tempting wrong fix: the promo
+  // heading's size is correct and the wrap was never a font problem.
+  assert.match(
+    flat,
+    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25,/,
+    'the promo heading stays at 25pt — shrinking type is not the fix for the wrap'
+  );
+});

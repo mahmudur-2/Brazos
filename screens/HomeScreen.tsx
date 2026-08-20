@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -63,6 +64,39 @@ const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 const PREVIEW_COUNT = 4;
 const HOME_SERVICE_ROWS = [HOME_QUICK_SERVICES.slice(0, 2), HOME_QUICK_SERVICES.slice(2, 4)];
 
+// ---------------------------------------------------------------------------
+// home(2) — THE B DRAPE'S GEOMETRY.
+//
+// The drape was a FIXED 92x75 box, and the headline column was a fixed 96pt of
+// paddingRight cut out to clear it. Between them they left the promo card's
+// heading about 222pt on a 390pt phone, which is what wrapped "Describe the
+// job. BRAZOS handles the rest." onto three lines. The heading's font size is
+// not the problem and is not touched.
+//
+// WHY A RATIO AND NOT A SMALLER FIXED NUMBER. The target is a share of the
+// SCREEN — and a fixed pt width cannot hold one. Across the supported range
+// (320pt to 440pt) any single number swings by nearly a third: 71pt is 22.2%
+// of a 320 and 16.1% of a 440. Only a proportion is the same everywhere, so
+// the mechanism itself changes from a constant to a fraction.
+//
+// The height is derived from the artwork's own pixel aspect rather than
+// declared, so the box can never be given a shape the image does not have.
+// (`resizeMode="contain"` would letterbox rather than distort, but then the
+// reserved box and the drawn ink stop agreeing, and the headline's column is
+// measured off the box.)
+const B_DRAPE_WIDTH_RATIO = 0.183;
+/** Both copies of brazos_b_drape.png (brand and prestige) are 918 x 753. */
+const B_DRAPE_ASPECT = 918 / 753;
+/**
+ * How far the headline column is allowed to run PAST the drape's left edge.
+ * The drape is a cut-out whose left side is empty, so a few points of overlap
+ * costs nothing and is what the previous fixed pair already did (a 92 box at
+ * right: 8 reaches 100 in from the edge; the copy reserved 96).
+ */
+const B_DRAPE_COPY_OVERLAP = 4;
+/** The drape's inset from the card's right edge — see `heroMarkDark`. */
+const B_DRAPE_RIGHT_INSET = 8;
+
 function similarPostedToday(jobs: OpenJob[], job: OpenJob): number {
   const midnight = new Date();
   midnight.setHours(0, 0, 0, 0);
@@ -92,6 +126,17 @@ export function HomeScreen() {
   const { switchMode, switching } = useMode();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const { width: screenWidth } = useWindowDimensions();
+
+  // home(2): the drape's box and the headline column it clears, both derived
+  // from one fraction of the screen so they can never drift apart.
+  const bDrape = useMemo(() => {
+    const width = Math.round(screenWidth * B_DRAPE_WIDTH_RATIO);
+    return {
+      art: { width, height: Math.round(width / B_DRAPE_ASPECT) },
+      copyPaddingRight: width + B_DRAPE_RIGHT_INSET - B_DRAPE_COPY_OVERLAP,
+    };
+  }, [screenWidth]);
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -332,7 +377,12 @@ export function HomeScreen() {
               button and brand mark. */}
           <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
             <View style={styles.heroBody}>
-              <View style={[styles.heroCopy, isDark && styles.heroCopyDark]}>
+              <View
+                style={[
+                  styles.heroCopy,
+                  isDark && { paddingRight: bDrape.copyPaddingRight },
+                ]}
+              >
                 <Text style={styles.heroEyebrow}>FASTEST WAY TO START</Text>
                 <Text
                   style={[styles.heroHeadline, isDark && styles.heroHeadlineDark]}
@@ -362,7 +412,7 @@ export function HomeScreen() {
             </View>
             <Image
               source={isDark ? PRESTIGE_B_DRAPE : POST_MARK}
-              style={[styles.heroMark, isDark && styles.heroMarkDark]}
+              style={[styles.heroMark, isDark && styles.heroMarkDark, isDark && bDrape.art]}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
             />
@@ -683,8 +733,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
   },
   heroBody: { padding: 16, gap: 12 },
+  // Light keeps its fixed reserve for the fixed Heritage mark; dark's is
+  // computed from the drape's own width (home(2)) and applied at the call
+  // site, so the two numbers cannot drift apart.
   heroCopy: { gap: 4, paddingRight: 68 },
-  heroCopyDark: { paddingRight: 96 },
   heroEyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: colors.gold },
   heroHeadline: {
     fontFamily: fonts.display,
@@ -696,7 +748,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   heroHeadlineDark: { color: colors.ink },
   heroMark: { position: 'absolute', top: 12, right: 10, width: 79, height: 101 },
-  heroMarkDark: { top: 16, right: 8, width: 92, height: 75 },
+  // No width/height here on purpose: dark's box is B_DRAPE_WIDTH_RATIO of the
+  // screen, measured at render (home(2)). `right` must stay in step with
+  // B_DRAPE_RIGHT_INSET, which is what the headline column is reserved from.
+  heroMarkDark: { top: 16, right: 8 },
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,
