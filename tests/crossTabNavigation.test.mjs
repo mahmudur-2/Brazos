@@ -523,3 +523,120 @@ test('the guarded helper is the only thing that dispatches a nested target', asy
   assert.doesNotMatch(stripComments(routesModule), /navigationRef\.navigate\(/);
   assert.match(routesModule, /import \{ navigateAcrossTabs \} from '\.\/navigationRef'/);
 });
+
+// ---------------------------------------------------------------------------
+// home(27) — EVERY CROSS-TAB TARGET REACHABLE FROM CUSTOMER HOME RESOLVES IN
+// THE CUSTOMER TREE, or is gated on the mode that owns it.
+//
+// The device report was `NAVIGATE {"name":"WorkerResults","params":{"mode":
+// "all"}} was not handled by any navigator`, attributed to Customer Home's
+// "View all". THE TREE DOES NOT CONTAIN THAT DISPATCH and never has:
+// screens/HomeScreen.tsx has never held the string "WorkerResults" in its
+// history, its "View all" calls switchMode() — which navigates nothing, it
+// swaps which tree is mounted — and the only live dispatcher of that payload
+// is Worker Home, inside the stack that registers it. That is asserted above.
+//
+// WHAT WAS NOT ASSERTED, and is the one way the class could come back: a
+// SHARED screen dispatching a mode-specific route across tabs. Map is mounted
+// by both trees and offers "See all jobs" and "View list", both aimed at
+// WorkerResults, which the customer Home stack does not register. Both are
+// gated on worker mode today — one of those gates was already fenced, the
+// other was not — and `canNavigateTo()` would only log-and-drop the tap
+// anyway, which is a dead control rather than a crash. This closes the gate.
+//
+// SCOPE, stated rather than implied: screens/ only, literal `tab`/`screen`
+// arguments only. lib/notificationRoutes.ts dispatches from a data table and
+// is covered by its own tests; a dispatch built from a variable is not visible
+// here.
+// ---------------------------------------------------------------------------
+
+/** Which stack variable each tab of the CUSTOMER tree mounts. */
+const CUSTOMER_TAB_STACKS = {
+  Home: 'CustomerHomeStack',
+  Discover: 'DiscoverStack',
+  Create: null, // the [ + ] slot renders a sheet and never navigates
+  Messages: 'MessagesStack',
+  Profile: 'ProfileStack',
+  Map: 'MapStack',
+  MyJobs: 'MyJobsStack',
+};
+
+/** A dispatch may name a route the customer tree lacks only behind this. */
+const WORKER_GATE = /mode === 'worker'|isWorker/;
+
+test('every cross-tab target reachable from Customer Home resolves in the customer tree', async () => {
+  const [customerRoot, shared] = await Promise.all([
+    read('navigation/CustomerRoot.tsx'),
+    read('navigation/sharedStacks.tsx'),
+  ]);
+
+  // The tab list is read, not assumed: a new tab with no entry above turns
+  // this red instead of going unchecked.
+  const tabs = [...stripComments(customerRoot).matchAll(/<Tab\.Screen\s+name="([^"]+)"/g)].map(
+    (m) => m[1]
+  );
+  assert.deepEqual(
+    tabs.sort(),
+    Object.keys(CUSTOMER_TAB_STACKS).sort(),
+    'the customer tree mounts a tab this test has no stack for'
+  );
+
+  const registered = new Map(); // stack var -> Set(route)
+  const mountedIn = new Map(); // component -> Set(stack var)
+  for (const source of [customerRoot, shared]) {
+    for (const m of stripComments(source).matchAll(
+      /<(\w+)\.Screen\s+name="([^"]+)"\s+component=\{(\w+)\}/g
+    )) {
+      const [, navigator, route, component] = m;
+      if (navigator === 'Tab') continue;
+      if (!registered.has(navigator)) registered.set(navigator, new Set());
+      registered.get(navigator).add(route);
+      if (!mountedIn.has(component)) mountedIn.set(component, new Set());
+      mountedIn.get(component).add(navigator);
+    }
+  }
+  for (const stack of Object.values(CUSTOMER_TAB_STACKS)) {
+    if (stack) assert.ok(registered.has(stack), `${stack} must be parsed from the customer tree`);
+  }
+
+  const screenFiles = new Set(dir('screens').filter((f) => f.endsWith('.tsx')));
+  const failures = [];
+  let checked = 0;
+
+  for (const [component] of mountedIn) {
+    const file = `${component}.tsx`;
+    if (!screenFiles.has(file)) continue;
+    const source = stripComments(await read(`screens/${file}`));
+    for (const m of source.matchAll(
+      /navigateAcrossTabs\(\s*'([^']+)'\s*,\s*'([^']+)'/g
+    )) {
+      const [, tab, screen] = m;
+      checked += 1;
+      const stack = CUSTOMER_TAB_STACKS[tab];
+      if (stack && registered.get(stack)?.has(screen)) continue;
+      const lookback = source.slice(Math.max(0, m.index - 500), m.index);
+      if (WORKER_GATE.test(lookback)) continue;
+      failures.push(
+        `screens/${file} dispatches ${tab}/${screen}, which the customer tree's ` +
+          `${stack ?? '(no stack)'} does not register and no worker-mode gate covers`
+      );
+    }
+  }
+
+  // Anti-vacuity: MapScreen's two worker-only dispatches MUST be among the
+  // calls this walked, or the matcher has rotted and the sweep proves nothing.
+  assert.ok(checked >= 8, `expected the sweep to reach every cross-tab call; saw ${checked}`);
+  const map = stripComments(await read('screens/MapScreen.tsx'));
+  const mapCalls = [...map.matchAll(/navigateAcrossTabs\(\s*'Home'\s*,\s*'WorkerResults'/g)];
+  assert.equal(mapCalls.length, 2, 'Map still offers the worker list twice, header and footer');
+  for (const call of mapCalls) {
+    assert.match(
+      map.slice(Math.max(0, call.index - 500), call.index),
+      WORKER_GATE,
+      'both of Map’s worker-list controls must stay behind a worker-mode gate — ' +
+        'the customer Home stack does not register WorkerResults'
+    );
+  }
+
+  assert.deepEqual(failures.sort(), [], 'a customer-mounted screen may not aim at a route the customer tree lacks');
+});
