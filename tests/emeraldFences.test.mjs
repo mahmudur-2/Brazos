@@ -473,13 +473,41 @@ test('home(2) fence: the B drape is a fraction of the screen, and the copy colum
   );
   const inkShareOfScreen = ratio * ink.width;
   assert.ok(
-    inkShareOfScreen > 0.05 && inkShareOfScreen < 0.30,
-    `the drawn mark is ${(inkShareOfScreen * 100).toFixed(1)}% of the screen — outside anything ` +
-      'master 44 shows on that card'
-  );
-  assert.ok(
     inkShareOfScreen < ratio,
     'the ink cannot be wider than the box that draws it; the measurement is wrong'
+  );
+
+  // home(15) — THE MASTER'S BAND, on the ink, as a share of the CARD.
+  // Measured on docs/mockups/44_customer_home_dark.png: the gold ink spans
+  // x 684..843 (160px) inside a card 856px wide, i.e. 18.7%. The screen padding
+  // is what turns a share of the card into a share of the screen, so it is read
+  // from the design settings rather than restated.
+  const padding = /screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'));
+  assert.ok(padding, 'the screen padding must stay a plain number in the design settings');
+  const cardShareOfScreen = (393 - 2 * Number(padding[1])) / 393;
+  const inkShareOfCard = inkShareOfScreen / cardShareOfScreen;
+  assert.ok(
+    Math.abs(inkShareOfCard - 0.187) <= 0.02,
+    `the drawn mark is ${(inkShareOfCard * 100).toFixed(1)}% of the card's width; master 44 ` +
+      'measures 18.7% (+/- 2%)'
+  );
+
+  // And the copy stops where the master's does, at the INK's left edge rather
+  // than the box's — the box's left fifth is the asset's own empty margin, and
+  // reserving it as well is what made the heading's column too narrow.
+  const inset = constantOf(home, 'B_DRAPE_RIGHT_INSET');
+  const overlap = constantOf(home, 'B_DRAPE_COPY_OVERLAP');
+  const boxWidth = Math.round(393 * ratio);
+  const reservedForMark = boxWidth + inset - overlap;
+  const inkLeftFromBoxRight = boxWidth * (1 - ink.left);
+  assert.ok(
+    reservedForMark <= Math.round(inkLeftFromBoxRight) + 2,
+    `the copy column reserves ${reservedForMark}pt but the mark's ink only starts ` +
+      `${inkLeftFromBoxRight.toFixed(1)}pt in — the empty margin is being reserved twice`
+  );
+  assert.ok(
+    reservedForMark > 0,
+    'the copy column must still clear the mark; a reserve of zero puts text under the B'
   );
 
   // The aspect is the ARTWORK's, re-derived from both files on disk — so a
@@ -528,7 +556,6 @@ test('home(2) fence: the B drape is a fraction of the screen, and the copy colum
 
   // The drape's stylesheet inset and the constant the copy is reserved from
   // are two halves of one number.
-  const inset = constantOf(home, 'B_DRAPE_RIGHT_INSET');
   const styleRight = /heroMarkDark: \{ top: \d+, right: (\d+) \}/.exec(flat);
   assert.ok(styleRight, 'heroMarkDark must keep a plain `right` inset');
   assert.equal(

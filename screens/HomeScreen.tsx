@@ -100,18 +100,44 @@ const HOME_SERVICE_ROWS = [HOME_QUICK_SERVICES.slice(0, 2), HOME_QUICK_SERVICES.
 // (`resizeMode="contain"` would letterbox rather than distort, but then the
 // reserved box and the drawn ink stop agreeing, and the headline's column is
 // measured off the box.)
-const B_DRAPE_WIDTH_RATIO = 0.183;
+// home(15) — 0.183 WAS THE BOX AND THE EYE MEASURES THE INK.
+//
+// assets/prestige/brazos_b_drape.png IS the file master 44 draws this mark
+// from — a transparent-backed gold B with its leaf, and nothing else. (The
+// name is a leftover: there is no drape in it. The dark green fabric behind the
+// B on the master is a separate thing that exists in no asset here; see the run
+// report, where it is recorded as artwork still owed.) The file was never
+// wrong. Only its size was, and only because this number described the box.
+//
+// Its ink covers 60.7% of its canvas's width, so a box at 18.3% of the screen
+// drew a mark 11.1% of the screen wide — 12.4% of the card against master 44's
+// measured 18.7%. The ratio below is the box that DRAWS the master's ink:
+//   0.187 of the card / 0.6067 of the canvas, over 353/393 of the screen
+// which lands at 0.277 and resolves to a 109pt box drawing 66pt of mark.
+const B_DRAPE_WIDTH_RATIO = 0.277;
 /** Both copies of brazos_b_drape.png (brand and prestige) are 918 x 753. */
 const B_DRAPE_ASPECT = 918 / 753;
 /**
  * How far the headline column is allowed to run PAST the drape's left edge.
- * The drape is a cut-out whose left side is empty, so a few points of overlap
- * costs nothing and is what the previous fixed pair already did (a 92 box at
- * right: 8 reaches 100 in from the edge; the copy reserved 96).
+ *
+ * home(15): this is no longer "a few points". The box's left 19.2% is empty —
+ * that is where the asset's own margin lives — so the copy may run that far in
+ * and still stop clear of the ink. Master 44 does exactly that: its heading
+ * column ends 171px = 71.4pt from the card's content right edge, which is the
+ * B's ink edge and not the box's. 109 - 38 = 71 is that number, and holding the
+ * column there is what keeps the heading on the master's three lines while the
+ * mark grows by half.
  */
-const B_DRAPE_COPY_OVERLAP = 4;
-/** The drape's inset from the card's right edge — see `heroMarkDark`. */
-const B_DRAPE_RIGHT_INSET = 8;
+const B_DRAPE_COPY_OVERLAP = 38;
+/**
+ * The drape's inset from the card's right edge — see `heroMarkDark`.
+ *
+ * home(15): zero, because the ink's own right margin IS the inset now. Master
+ * 44 puts the B's ink 52px = 21.7pt from the card's inner right edge; the box's
+ * empty right margin is 20.2% of 109 = 22pt. Insetting the box on top of that
+ * would double it.
+ */
+const B_DRAPE_RIGHT_INSET = 0;
 
 function similarPostedToday(jobs: OpenJob[], job: OpenJob): number {
   const midnight = new Date();
@@ -816,7 +842,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // No width/height here on purpose: dark's box is B_DRAPE_WIDTH_RATIO of the
   // screen, measured at render (home(2)). `right` must stay in step with
   // B_DRAPE_RIGHT_INSET, which is what the headline column is reserved from.
-  heroMarkDark: { top: 16, right: 8 },
+  //
+  // home(15): `top` is master 44's — the B's ink starts 60px = 25pt below the
+  // card's inner top edge, and the asset has no empty margin above its ink, so
+  // the box's top and the ink's top are the same line.
+  heroMarkDark: { top: 25, right: 0 },
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,
