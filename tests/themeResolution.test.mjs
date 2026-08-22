@@ -250,7 +250,6 @@ const LITERAL_FILE_ALLOWLIST = {
   'screens/SetupScreen.tsx': 'LOCKED screen',
   'screens/LegalGateScreen.tsx': 'LOCKED screen',
   'screens/HomeScreen.tsx': 'LOCKED screen (customer Home, atlas set)',
-  'screens/BrowseJobsScreen.tsx': 'LOCKED screen (atlas 48, unmounted)',
   // The mode-transition shimmer core pairs with the baked LIGHT transition
   // PNGs — the 4D-3.5 allowance, unchanged; migrates when the assets do.
   'components/ModeTransitionOverlay.tsx': 'shimmer tint paired with baked light PNGs',
@@ -448,7 +447,6 @@ const BAKED_ART = {
   'assets/brand/brazos_b_drape.png': { bake: 'transparent', gate: true },
   // Transparent: no background to leak, so no gate is owed.
   'assets/brand/brazos-b-leaf.png': { bake: 'transparent', gate: false },
-  'assets/brand/worker-home-toolbox.png': { bake: 'transparent', gate: false },
   // The app icon: a brand deep-green tile with a gold mark and transparent
   // corners. It is the BRAND's own square, not a palette ground — an icon does
   // not change colour with the theme on any platform — and it is mounted on

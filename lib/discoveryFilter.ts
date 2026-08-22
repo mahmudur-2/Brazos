@@ -12,10 +12,9 @@
 
 /**
  * The app's standing "nearby" promise, in miles. Canonical here since 4D-2 —
- * screens/WorkerResultsScreen.tsx re-exports it so the LOCKED
- * BrowseJobsScreen's `import { NEARBY_RADIUS_MILES } from
- * './WorkerResultsScreen'` keeps resolving unchanged. Kept in sync with that
- * locked screen's own "within 5 miles" pill copy.
+ * screens/WorkerResultsScreen.tsx re-exports it so WorkerHomeScreen's
+ * `import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen'` keeps
+ * resolving unchanged.
  */
 export const NEARBY_RADIUS_MILES = 5;
 

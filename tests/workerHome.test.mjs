@@ -15,12 +15,12 @@ import test from 'node:test';
  *      ("Online"/"Offline", "Visible to customers"/"Not visible to
  *      customers" — master 43's own caption, which outranks the earlier
  *      two-word draft). The words follow the master; the fact behind them is
- *      still accepting_work, and the device-local useWorkerAvailability hook
- *      never appears here.
+ *      still accepting_work — the device-local availability hook was deleted
+ *      in Batch F.
  *   3. Every figure comes from an existing source: openJobsPotential() from
  *      lib/earningsMath.ts, jobMatchesSkills() for the skill count, phase41's
  *      jobs_within_radius (via lib/hotspots) for the nearby count — the same
- *      sources the locked screen's own pills use.
+ *      sources WorkerResults itself renders from.
  *   4. Mode changes only through switchMode(); the screen never drives the
  *      transition overlay itself.
  */
@@ -67,8 +67,7 @@ test('the toggle is phase53 accepting_work through the existing profile path', (
   assert.match(code, /profile\?\.accepting_work \?\? true/);
   assert.match(code, /updateProfile\(user\.id, \{ accepting_work: next \}\)/);
   // The status words are operator-authored 4D-6 copy rendered from the SAME
-  // availability fact; the device-local presence hook still must not appear.
-  assert.doesNotMatch(code, /useWorkerAvailability/);
+  // availability fact. (The device-local presence hook was deleted in Batch F.)
   assert.match(code, /\{accepting \? 'Online' : 'Offline'\}/);
   assert.match(
     code,
@@ -288,9 +287,10 @@ test('4D-6 light palette: every value the card reads is byte-identical', async (
 });
 
 // ===========================================================================
-// 4D-1b — one worker home. The LOCKED BrowseJobsScreen (atlas 48) stays on
-// disk but is UNMOUNTED: no navigator registers it, nothing dispatches to it,
-// and no landing value can resolve to it. T1–T7 are that contract.
+// 4D-1b — one worker home. The atlas-48 browse screen was UNMOUNTED in 4D-1b
+// and DELETED in Batch F: no navigator registers a BrowseJobs route, nothing
+// dispatches to it, and no landing value can resolve to it. T1–T7 are that
+// contract.
 // ===========================================================================
 
 const SOURCE_DIRS = ['screens', 'components', 'lib', 'hooks', 'modes', 'ui', 'navigation'];
@@ -303,7 +303,6 @@ const sourceFiles = SOURCE_DIRS.flatMap((d) =>
 
 test('T1: the worker tree registers no route named BrowseJobs', () => {
   assert.doesNotMatch(workerRoot, /name="BrowseJobs"/);
-  assert.doesNotMatch(workerRoot, /BrowseJobsScreen/);
 });
 
 test('T2+T3: nothing dispatches to BrowseJobs, and no landing value resolves to it', async () => {
@@ -359,18 +358,12 @@ test('T5: WorkerResults mode:all is reachable from View all and from the Map hea
   assert.match(map, /navigateAcrossTabs\('Home', 'WorkerResults', \{ mode: 'all' \}\)/);
 });
 
-test('T6: one availability writer on the mounted worker surface — the server-side one', async () => {
+test('T6: one availability writer — the server-side accepting_work path', () => {
   // The dashboard writes phase53 profiles.accepting_work through the
-  // existing updateProfile() path; the device-local AsyncStorage hook has
-  // exactly one consumer left — the locked, UNMOUNTED atlas-48 screen — so
-  // no mounted surface can show a second, disagreeing availability truth.
+  // existing updateProfile() path. The device-local AsyncStorage hook was
+  // deleted with the atlas-48 screen in Batch F, so no surface can show a
+  // second, disagreeing availability truth.
   assert.match(code, /updateProfile\(user\.id, \{ accepting_work: next \}\)/);
-  const users = [];
-  for (const file of sourceFiles) {
-    if (file === 'hooks/useWorkerAvailability.ts') continue;
-    if (/useWorkerAvailability/.test(stripComments(await read(file)))) users.push(file);
-  }
-  assert.deepEqual(users.sort(), ['screens/BrowseJobsScreen.tsx']);
 });
 
 // ---------------------------------------------------------------------------
@@ -488,10 +481,10 @@ test('D5: every notification preference uses the same shared toggle', async () =
   ];
   assert.ok(keys.length >= 5, `expected the five preference keys, saw ${keys.length}`);
   // Every surface D5 NAMES is on the shared control, and the native Switch
-  // survives in exactly two places, both outside that scope. Pinned as a set
-  // rather than asserted empty, so a NEW hand-rolled switch is still a
-  // failure while these two stay honestly recorded:
-  //   - BrowseJobsScreen: the atlas-48 screen, UNMOUNTED since 4D-1b.
+  // survives in exactly one place, outside that scope (the atlas-48 screen's
+  // Switch was deleted with it in Batch F). Pinned as a set rather than
+  // asserted empty, so a NEW hand-rolled switch is still a failure while
+  // this one stays honestly recorded:
   //   - SetupScreen: the onboarding permission rows. Part of the auth flow,
   //     which has no dark treatment at all (see themeResolution's auth test),
   //     so a dark toggle there would be the only dark control on a light
@@ -500,10 +493,7 @@ test('D5: every notification preference uses the same shared toggle', async () =
   for (const file of sourceFiles) {
     if (/<Switch\b/.test(stripComments(await read(file)))) switchUsers.push(file);
   }
-  assert.deepEqual(switchUsers.sort(), [
-    'screens/BrowseJobsScreen.tsx',
-    'screens/SetupScreen.tsx',
-  ]);
+  assert.deepEqual(switchUsers.sort(), ['screens/SetupScreen.tsx']);
   for (const path of [
     'screens/WorkerHomeScreen.tsx',
     'screens/ServicesPricingScreen.tsx',

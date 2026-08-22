@@ -71,7 +71,6 @@ const UNLOCKED_SCREENS = [
   'screens/SetupScreen.tsx',
   'screens/LegalGateScreen.tsx',
   'screens/HomeScreen.tsx',
-  'screens/BrowseJobsScreen.tsx',
 ];
 
 function resolvePowerShell() {

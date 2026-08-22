@@ -818,8 +818,8 @@ test('[static] the installed plugin resolves those options into the two Info.pli
 // ===========================================================================
 // 4D-4 tail — voice search is REACHABLE: the live search surfaces render the
 // shared SearchBar (mic on for every one of them), each conversion pinned as
-// behaviour-preserving. The locked search surfaces (HomeScreen,
-// BrowseJobsScreen) are deliberately absent from this list until unlocked.
+// behaviour-preserving. HomeScreen's search surface is deliberately absent
+// from this list — it has not been converted.
 // ===========================================================================
 
 const CONVERTED_SURFACES = ['screens/WorkerSearchScreen.tsx', 'screens/WorkerHomeScreen.tsx'];

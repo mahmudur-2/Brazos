@@ -152,7 +152,6 @@ test('every screen inside the tab bar leaves the bottom safe-area inset to it', 
   // reserves it twice and shows a blank cream band above the bar.
   const tabContained = [
     'screens/AdminReportsScreen.tsx',
-    'screens/BrowseJobsScreen.tsx',
     'screens/CellJobsScreen.tsx',
     'screens/HomeScreen.tsx',
     'screens/PostJobScreen.tsx',

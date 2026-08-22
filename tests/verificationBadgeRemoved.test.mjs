@@ -22,11 +22,11 @@ const stripComments = (source) =>
 // ---------------------------------------------------------------------------
 
 /**
- * Locked screens (CLAUDE.md 01–07 + 48) are excluded from the USER-COPY
+ * The formerly locked screens (01–07 + Home) are excluded from the USER-COPY
  * assertion EXPLICITLY, so the exclusion is visible here rather than silent.
  * The one known hit behind this list is screens/WelcomeScreen.tsx's
- * "Verified workers" marketing line — an operator unlock item, not something
- * this suite may edit around.
+ * "Verified workers" marketing line — an operator item, not something this
+ * suite may edit around.
  */
 const LOCKED_SCREENS = [
   'screens/LaunchScreen.tsx',
@@ -39,7 +39,6 @@ const LOCKED_SCREENS = [
   'screens/SetupScreen.tsx',
   'screens/LegalGateScreen.tsx',
   'screens/HomeScreen.tsx',
-  'screens/BrowseJobsScreen.tsx',
 ];
 
 const SCAN_DIRS = ['screens', 'components', 'ui', 'hooks', 'lib', 'modes', 'navigation'];
@@ -66,9 +65,8 @@ test('the badge component is gone and nothing references it — locked files inc
   const files = appFiles();
   assert.ok(files.length > 50, `the scan must actually walk the tree (saw ${files.length})`);
 
-  // NO allow-list here: a locked file importing the deleted component would
-  // be a stranded import (the useWorkerAvailability precedent), so this holds
-  // for every file or the removal was wrong.
+  // NO allow-list here: any file importing the deleted component would be a
+  // stranded import, so this holds for every file or the removal was wrong.
   for (const file of files) {
     const src = read(file);
     assert.ok(!src.includes('VerificationBadge'), `${file} still references VerificationBadge`);

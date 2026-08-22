@@ -37,9 +37,6 @@ const workerRoot = read('navigation/WorkerRoot.tsx');
 const routes = read('lib/navigation.ts');
 const app = read('App.tsx');
 const home = read('screens/HomeScreen.tsx');
-// LOCKED atlas 48 — unmounted since 4D-1b, but still on disk and still held
-// to the mode rules so a future remount cannot regress them.
-const lockedBrowse = read('screens/BrowseJobsScreen.tsx');
 const jobCard = read('ui/primitives/JobCard.tsx');
 const bottomNav = read('ui/primitives/BottomNav.tsx');
 const migration = read('supabase/phase42_active_mode.sql');
@@ -131,7 +128,6 @@ test('nothing outside ModeProvider sets a mode', () => {
   assert.match(provider, /const \[mode, setMode\] = useState<AppMode>\(DEFAULT_MODE\)/);
   for (const [path, source] of [
     ['screens/HomeScreen.tsx', home],
-    ['screens/BrowseJobsScreen.tsx', lockedBrowse],
     ['navigation/ModeShell.tsx', shell],
     ['navigation/CustomerRoot.tsx', customerRoot],
     ['navigation/WorkerRoot.tsx', workerRoot],
@@ -184,25 +180,18 @@ test('an awaited switch resolves only after the target tree is committed', () =>
 test('there is one transition owner', () => {
   // The overlay is started from the provider and nowhere else.
   assert.match(provider, /startTransition\(\{/);
-  for (const [path, source] of [
-    ['screens/HomeScreen.tsx', home],
-    ['screens/BrowseJobsScreen.tsx', lockedBrowse],
-  ]) {
-    assert.doesNotMatch(
-      source,
-      /useModeTransition/,
-      `${path} must go through switchMode(), not drive the overlay itself`
-    );
-  }
+  assert.doesNotMatch(
+    home,
+    /useModeTransition/,
+    'screens/HomeScreen.tsx must go through switchMode(), not drive the overlay itself'
+  );
   // And the mode flips inside the overlay's own callback — no timer of ours.
   assert.match(provider, /onSwitch: \(\) => setMode\(target\)/);
   assert.doesNotMatch(provider, /setTimeout\(/);
 });
 
-test('the locked screens switch through switchMode() and nothing else', () => {
+test('customer Home switches through switchMode() and nothing else', () => {
   assert.match(home, /void switchMode\('worker'\)/);
-  assert.match(lockedBrowse, /void switchMode\('customer'\)/);
-  assert.doesNotMatch(lockedBrowse, /navigation\.popToTop\(\)/);
 });
 
 // ---------------------------------------------------------------------------
@@ -235,7 +224,7 @@ test('customer code cannot name a worker route', () => {
     );
   }
   // ...and it is not registered there either, so it could not render anyway.
-  assert.doesNotMatch(customerRoot, /BrowseJobsScreen|WorkerResultsScreen|JobDetailScreen/);
+  assert.doesNotMatch(customerRoot, /WorkerResultsScreen|JobDetailScreen/);
 });
 
 test('worker code cannot name the customer post/search routes', () => {
@@ -259,10 +248,10 @@ test('worker code cannot name the customer post/search routes', () => {
 
 test('the Home tab roots at the home of the mode you are in', () => {
   assert.match(customerRoot, /name="HomeMain" component=\{HomeScreen\}/);
-  // Stage 4D: the worker home is the dashboard. 4D-1b unmounted the locked
-  // browse feed (atlas 48) — it stays on disk but no navigator registers it.
+  // Stage 4D: the worker home is the dashboard. 4D-1b unmounted the browse
+  // feed (atlas 48); Batch F deleted it. No navigator registers such a route.
   assert.match(workerRoot, /name="WorkerHome" component=\{WorkerHomeScreen\}/);
-  assert.doesNotMatch(workerRoot, /name="BrowseJobs"|BrowseJobsScreen/);
+  assert.doesNotMatch(workerRoot, /name="BrowseJobs"/);
   // The listener that used to infer mode from stack contents is gone, because
   // popping to the root is now correct in both trees. (Comments are stripped
   // first — CustomerRoot.tsx explains the absence in prose.)

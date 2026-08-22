@@ -60,11 +60,11 @@ test('every WorkerResults entry point is inside a stack that registers it', asyn
   // navigator first and logs-and-drops rather than throwing. There is no
   // unregistered-route defect at HEAD.
   //
-  // The one file that reproduces that error signature exactly is
-  // BrowseJobsScreen — four dispatches, the same mode set, and registered by NO
-  // navigator since 4D-1b unmounted it. This test is the general rule that
-  // covers both: a screen may dispatch WorkerResults only if it is unmounted,
-  // or if every stack that mounts it also registers WorkerResults.
+  // The one file that reproduced that error signature exactly — the atlas-48
+  // browse screen, four dispatches, the same mode set, registered by NO
+  // navigator since 4D-1b — was deleted in Batch F. This test is the general
+  // rule that outlives it: a screen may dispatch WorkerResults only if it is
+  // unmounted, or if every stack that mounts it also registers WorkerResults.
   const [customerRoot, workerRoot, shared] = await Promise.all([
     read('navigation/CustomerRoot.tsx'),
     read('navigation/WorkerRoot.tsx'),
@@ -92,9 +92,8 @@ test('every WorkerResults entry point is inside a stack that registers it', asyn
     ].map((m) => m[1]);
 
     if (mountedIn.length === 0) {
-      // Unmounted, so it cannot throw. BrowseJobsScreen is this case, and the
-      // next test holds its whole target list against the worker stack so a
-      // future remount cannot dangle.
+      // Unmounted, so it cannot throw — nothing can render a screen no
+      // navigator mounts.
       continue;
     }
     for (const stack of mountedIn) {
@@ -142,8 +141,11 @@ test('every mode WorkerResults is dispatched with is a mode it handles', async (
   const dispatched = new Set();
   for (const file of dir('screens').filter((f) => f.endsWith('.tsx'))) {
     const source = stripComments(await read(`screens/${file}`));
+    // 260-char window: WorkerHomeScreen's 'nearby' dispatch carries
+    // lat/lng/label and runs ~190 characters; the old 160 was tuned to the
+    // deleted browse screen's compact calls and silently missed it.
     for (const call of source.matchAll(
-      /navigate\w*\(\s*(?:'Home',\s*)?'WorkerResults',\s*\{([\s\S]{0,160}?)\}/g
+      /navigate\w*\(\s*(?:'Home',\s*)?'WorkerResults',\s*\{([\s\S]{0,260}?)\}/g
     )) {
       const mode = call[1].match(/mode: '([a-z]+)'/);
       if (mode) dispatched.add(mode[1]);
@@ -160,32 +162,6 @@ test('every mode WorkerResults is dispatched with is a mode it handles', async (
   // 'skills') and the radius chip's third ('nearby') all have live callers.
   for (const mode of declared) {
     assert.ok(dispatched.has(mode), `no caller ever dispatches WorkerResults mode '${mode}'`);
-  }
-});
-
-test('the locked browse screen could still resolve every target if remounted', async () => {
-  // Atlas 48 is UNMOUNTED since 4D-1b (nothing registers or dispatches to
-  // it), so the generalized mounted-screen sweep below no longer sees it.
-  // Its dispatch targets are still held against the worker stack here so a
-  // future authorized remount cannot dangle.
-  const [lockedBrowse, workerRoot] = await Promise.all([
-    read('screens/BrowseJobsScreen.tsx'),
-    read('navigation/WorkerRoot.tsx'),
-  ]);
-
-  const registered = new Set(
-    [...workerRoot.matchAll(/<WorkerHomeStack\.Screen name="([^"]+)"/g)].map((m) => m[1])
-  );
-  const targets = [
-    ...stripComments(lockedBrowse).matchAll(/navigation\.navigate\(\s*'([^']+)'/g),
-  ].map((m) => m[1]);
-
-  assert.ok(targets.length > 0, 'expected the locked browse screen to navigate somewhere');
-  for (const target of targets) {
-    assert.ok(
-      registered.has(target),
-      `BrowseJobsScreen dispatches '${target}', which the worker Home stack does not register`
-    );
   }
 });
 

@@ -59,7 +59,7 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
  * Every job-list intent here lands on WorkerResultsScreen — "View all" is
  * mode 'all', the search field is mode 'search', the two pills are 'skills'
  * and 'nearby' — one list surface, not a chain of them. The search field
- * mirrors the locked screen 48's field and dispatch exactly.
+ * keeps the retired atlas-48 browse screen's exact dispatch shape.
  *
  * Everything here is derived from data sources that already exist:
  *   - greeting + the mandatory-confirm mode switch: useProfile / switchMode()
@@ -69,12 +69,12 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
  *     operator's status copy ("Online"/"Offline", a pulse dot with
  *     "Visible"/"Not Visible") — the WORDS are operator-authored; the FACT
  *     behind them is still the public availability field, never device
- *     presence: nothing here reads or writes useWorkerAvailability.
+ *     presence (the device-local availability hook was deleted in Batch F).
  *   - potential earnings: lib/earningsMath.ts's openJobsPotential() over the
- *     same open-jobs feed the browse screen renders.
+ *     open-jobs feed.
  *   - the two counts: jobMatchesSkills() over the feed for skill matches, and
  *     phase41's jobs_within_radius lookup for the nearby count — the exact
- *     sources the locked screen's own pills use, so a count here can never
+ *     sources WorkerResults itself renders from, so a count here can never
  *     disagree with what tapping it opens.
  */
 export function WorkerHomeScreen() {

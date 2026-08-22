@@ -416,14 +416,14 @@ test('[static] B5 · match reasons render only for the worker view of another po
   assert.match(detail, /matchReasons\.length > 0 \?/);
 });
 
-test('[static] · NEARBY_RADIUS_MILES stays canonical in lib and re-exported for the locked import path', async () => {
+test('[static] · NEARBY_RADIUS_MILES stays canonical in lib and re-exported for its consumer', async () => {
   const lib = await read('lib/discoveryFilter.ts');
   assert.match(lib, /export const NEARBY_RADIUS_MILES = 5;/);
   const results = await read('screens/WorkerResultsScreen.tsx');
   assert.match(results, /export { NEARBY_RADIUS_MILES };/);
-  // The LOCKED browse screen's import keeps resolving from the same path.
-  const browse = await read('screens/BrowseJobsScreen.tsx');
-  assert.match(browse, /import { NEARBY_RADIUS_MILES } from '\.\/WorkerResultsScreen';/);
+  // WorkerHomeScreen's import keeps resolving from the same path.
+  const workerHome = await read('screens/WorkerHomeScreen.tsx');
+  assert.match(workerHome, /import { NEARBY_RADIUS_MILES } from '\.\/WorkerResultsScreen';/);
 });
 
 test('[static] B3 · the nearby title tracks the applied radius and a dead location is announced, not faked', async () => {

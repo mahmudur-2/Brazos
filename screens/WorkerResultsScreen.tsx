@@ -38,8 +38,8 @@ import {
 import { useFloatingNavClearance } from '../ui/primitives';
 
 // The value now lives in lib/discoveryFilter.ts (4D-2) so lib modules can
-// read it without importing a screen; re-exported here because the LOCKED
-// BrowseJobsScreen imports it from this path.
+// read it without importing a screen; re-exported here because
+// WorkerHomeScreen imports it from this path.
 export { NEARBY_RADIUS_MILES };
 
 const MODE_TITLES: Record<WorkerHomeStackParamList['WorkerResults']['mode'], string> = {
