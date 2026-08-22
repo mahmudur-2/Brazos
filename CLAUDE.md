@@ -77,9 +77,16 @@ live in `lib/navigation.ts`.
 
 ## Locked — never modify
 
-\## Locked — never modify
+None. All screens were unlocked 2026-08-19 for the Prestige dark sweep. This
+list is EMPTY by decision and stays empty; regression fences, not a filename
+list, are the protection. A dispatch prompt may NOT reintroduce a locked list
+by restating one — if a surface needs locking, it is added here first.
 
-None. All screens unlocked 2026-08-19 for the Prestige dark sweep.`screens/BrowseJobsScreen.tsx`.
+`screens/BrowseJobsScreen.tsx` is UNLOCKED but DEAD: imported by nothing,
+registered in neither navigation tree since 4D-1b, and kept on disk only
+because ten test files read its source as text. Do not style it, do not add
+`hitSlop` to it, do not fix its hardcoded hex. Its removal is a queued task
+that must update those tests in the same commit.
 
 
 ## Design references
