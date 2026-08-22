@@ -260,19 +260,17 @@ changed color, spacing, radius or palette values in either theme.
 - Setup screen's legal-row completion pulse (now native-driven — F-041).
 - Customer Home similar-jobs caption with real jobs posted today.
 
-## 2026-08-22 — BATCH C: corrective migration phase76 — AUTHORED, NOT APPLIED
+## 2026-08-22 — BATCH C: corrective migration phase76 — APPLIED TO STAGING, VERIFIED
 
-**`supabase/phase76_rls_and_search_path_corrections.sql` exists on `mainexpo`
-but has NOT been applied to any database. No database was contacted this run.
-F-002, F-004, F-040, F-049 and F-068 therefore STAY OPEN** — a committed file
-closes nothing. They close only when the operator step below is done and green.
-
-**THE OPERATOR STEP:** paste the entire phase76 file into the Supabase SQL
-Editor against STAGING (the only path — agents never execute SQL), then run
-`node scripts/verify-schema.mjs` and require exit 0 with the phase76 group
-green, including its last line — `rls posture: payments RLS on with a SELECT
-boundary`. The posture check calls the new `phase76_rls_posture()` RPC and
-fails the run if it cannot reach it; it never downgrades to a warning.
+**phase76 was hand-applied to STAGING by the operator on 2026-08-22, and the
+operator's own `node scripts/verify-schema.mjs` run came back green** — the
+posture line reading `rls posture: payments RLS on with a SELECT boundary
+[payments RLS on, 1 SELECT policy(ies)]` and the run closing with `All
+REQUIRED objects exist in the live database.` **F-002, F-004, F-040, F-049
+and F-068 are CLOSED.** The evidence is that operator-run verify against live
+staging — not a repository read; no agent run has contacted any database.
+(This supersedes this section's original "AUTHORED, NOT APPLIED" banner,
+which was true when written.)
 
 **If the paste aborts, that is the file working.** Everything runs in one
 transaction; nothing half-applies. The messages it can raise, and what each

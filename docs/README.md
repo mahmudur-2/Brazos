@@ -31,7 +31,11 @@ appears in no document.
 | `REVIEW_GUIDE.md` | Ordered device checklist for a human review pass. |
 | `docs/LOCKED_FILE_PATCHES.md` | Authorized-ready diffs for locked files; none applied. |
 | `docs/emerald-v2/**` | The v2 redesign plan and Phase 0 audit. Planning material; implementation status lives in `docs/architecture.md`. |
-| `hardening-report/**`, `project-audit/**`, `dev-tools/README.md`, `.claude/rules/*.md` | Point-in-time run output, local launchers, and harness rules loaded by tooling. |
+| `hardening-report/**`, `project-audit/**` | **STALE** point-in-time run output: last touched 2026-07-30, describing the pre-Prestige, pre-phase-60 codebase. In particular `project-audit/10_BUGS_AND_INCOMPLETE_WORK.md`, `12_TECHNICAL_DEBT_AND_RISKS.md` and `15_FILES_REQUIRING_REVIEW.md` are not current; deleting the two directories is an operator call. |
+| `PROD_APPLY_READY.sql`, `PROD_VERIFY.sql` | Root-level production migration SQL staged for the human-executed queue that `PROD_APPLY.md` owns; the apply file is self-labelled DO NOT APPLY. |
+| `docs/dispatch/` | Dispatch prompts for specific runs — instructions at a point in time, not current state. |
+| `.openai/hosting.json` | 96-byte vendor-hosting config from the PWA deploy (frozen web surface); untouched since 2026-07-30. |
+| `dev-tools/README.md`, `.claude/rules/*.md` | Local launchers and harness rules loaded by tooling. |
 
 ## Decision records
 
@@ -41,6 +45,7 @@ appears in no document.
 | `docs/emerald-v2/DECISIONS.md` | Forks resolved during the Emerald V2 redesign. |
 | `docs/emerald-v2/ARCHITECTURE_DECISION_job_offers.md` | Why `job_offers` replaced the two-table bid/request split. |
 | `docs/audits/` | Records of consequential runs, one file per run. |
+| `docs/audit/` | Point-in-time audit sweeps, one dated directory per audit (currently `2026-08-21/`). A historical record — never edited after the fact. One letter from `docs/audits/`; renaming either is an operator call. |
 
 ## Archive
 

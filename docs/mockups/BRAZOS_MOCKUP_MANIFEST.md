@@ -1,5 +1,18 @@
 # BRAZOS — Emerald Prestige golden-master manifest
 
+> **TWELVE ENTRIES IN THIS FILE ARE REJECTED AND ARE NOT AUTHORITY.**
+> The headings numbered 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 45 and 46
+> describe files that exist on disk only under WORD-NAMED filenames
+> (`Discover_Map_Dark.png`, `My_Jobs_Active_Dark.png`, …). The operator has
+> REJECTED that render pass as over-ornate — see HANDOFF.md, "THE MASTER SET
+> IS SPLIT". Those numbers were never assigned to a file. Never cite one of
+> those twelve to justify a change.
+>
+> This file also omits `9_job_post_dark.png` (941×1672), which does exist on
+> disk — "9" is not a numbering gap. The "43 unique PNG mockups" figure below
+> and the palette section's "all 43" should read 44 files, 32 of them
+> numbered masters.
+
 Authoritative set: **43 unique PNG mockups** (`Compare_Bids_Dark` = duplicate of 46; numbering gaps 9/21/28 are gaps in numbering only, confirmed by operator 2026-08-19). The PNGs in `docs/mockups/` are the golden masters. **On any conflict between this manifest and a PNG, the PNG wins.** This file is the index and the measured record, not a replacement for looking.
 
 Repo mappings marked (verify) are inferred from `repo_manifest` + HANDOFF and must be confirmed by reading the mounted navigation trees before implementation. Nothing in this document redesigns, merges, or normalizes a master; cross-screen contradictions are recorded in Appendix B and resolved only in the dispatch.
