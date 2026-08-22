@@ -77,8 +77,8 @@ import {
 } from '../lib/theme';
 import { MediaUploader, PINNED_FOOTER_BOTTOM_PADDING } from '../ui/primitives';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 // Ten per the screen-13 spec; phase49 raised create_job's server cap to match.
 const MAX_PHOTOS = 10;
 // Screen 13 asks for ONE video ≤60s. The server still tolerates the old cap

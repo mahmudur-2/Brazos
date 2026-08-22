@@ -23,6 +23,7 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { authColors, authRadius, authSpacing, authType } from '../lib/authTheme';
 import type { AuthStackNavigation, AuthStackParamList } from '../lib/navigation';
 import { OTP_LENGTH, isOtpToken, phoneAuth } from '../lib/phoneAuth';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 /**
  * Verify phone — reference screen 05.
@@ -45,7 +46,6 @@ import { OTP_LENGTH, isOtpToken, phoneAuth } from '../lib/phoneAuth';
 
 const ENTER_MS = 320;
 const SHAKE_MS = 240;
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 
 function formatCountdown(seconds: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;

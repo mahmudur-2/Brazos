@@ -11,8 +11,7 @@ import { StatusBar } from 'expo-status-bar';
 import { authColors, authSizes, authType } from '../lib/authTheme';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { BrandLogo } from '../components/BrandLogo';
-
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // The canonical app-icon export — see components/BrandLogo.tsx's SOURCE
 // comment for why the launch mark uses this instead of BrandLogo's own

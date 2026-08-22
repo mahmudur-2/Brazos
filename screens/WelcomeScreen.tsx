@@ -1,7 +1,6 @@
 import { useEffect, useRef } from 'react';
 import {
   Animated,
-  Platform,
   StyleSheet,
   Text,
   View,
@@ -22,8 +21,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // One driver, 500ms, with each element reading a different slice of it. That
 // produces the reference's short stagger without five timers to keep in sync,

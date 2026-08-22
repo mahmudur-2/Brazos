@@ -1,12 +1,12 @@
 import type { ComponentProps } from 'react';
 import { useEffect, useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 const SELECT_MS = 170;
 
 type SetupChoiceCardProps = {

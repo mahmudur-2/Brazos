@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { radius } from '../lib/theme';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 /**
  * A static dot with a soft animated halo behind it — the same pattern
@@ -28,13 +29,13 @@ export function PulseDot({ color, size = 10 }: { color: string; size?: number })
           toValue: 1,
           duration: 900,
           easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
         Animated.timing(pulse, {
           toValue: 0,
           duration: 900,
           easing: Easing.inOut(Easing.quad),
-          useNativeDriver: true,
+          useNativeDriver: USE_NATIVE_DRIVER,
         }),
       ])
     );

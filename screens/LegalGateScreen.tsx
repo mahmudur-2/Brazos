@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -34,8 +33,8 @@ import {
   authSpacing,
   authType,
 } from '../lib/authTheme';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 /** How long the "scroll to the end" hint stays up on its own. */
 const GUIDANCE_MS = 1800;
 const CHECK_MS = 200;

@@ -1,8 +1,7 @@
 import { useEffect } from 'react';
-import { Animated, Easing, Platform, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Easing, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { radius, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 /**
  * One opacity value drives every placeholder in the app, rather than each

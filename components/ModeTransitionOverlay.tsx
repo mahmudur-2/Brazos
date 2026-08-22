@@ -8,13 +8,12 @@ import {
   useState,
   type PropsWithChildren,
 } from 'react';
-import { Animated, Easing, Image, Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { colors } from '../lib/theme';
 import type { ModeDestination } from './modeTransitionAssets';
 import { LINE_GEOMETRY, SOURCE_ASPECT_RATIO, TRANSITION_IMAGES } from './modeTransitionAssets';
-
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 /**
  * The Customer <-> Worker mode switch, as one animated layer above the whole

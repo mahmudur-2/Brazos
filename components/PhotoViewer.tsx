@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { sharePhoto } from '../lib/sharing';
 import { alertAsync } from '../lib/dialog';
 import { themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 type PhotoViewerProps = {
   visible: boolean;
@@ -134,9 +135,9 @@ export function PhotoViewer({
     g.translateY = 0;
     if (animated) {
       Animated.parallel([
-        Animated.spring(scale, { toValue: 1, useNativeDriver: true }),
-        Animated.spring(translate, { toValue: { x: 0, y: 0 }, useNativeDriver: true }),
-        Animated.timing(backdropOpacity, { toValue: 1, duration: 150, useNativeDriver: true }),
+        Animated.spring(scale, { toValue: 1, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.spring(translate, { toValue: { x: 0, y: 0 }, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(backdropOpacity, { toValue: 1, duration: 150, useNativeDriver: USE_NATIVE_DRIVER }),
       ]).start();
     } else {
       scale.setValue(1);
@@ -164,7 +165,7 @@ export function PhotoViewer({
     const y = clamp(g.translateY, -bounds.y, bounds.y);
     g.translateX = x;
     g.translateY = y;
-    Animated.spring(translate, { toValue: { x, y }, useNativeDriver: true }).start();
+    Animated.spring(translate, { toValue: { x, y }, useNativeDriver: USE_NATIVE_DRIVER }).start();
   }
 
   function animateDismiss(dy: number) {
@@ -173,9 +174,9 @@ export function PhotoViewer({
       Animated.timing(translate, {
         toValue: { x: g.translateX, y: toY },
         duration: 200,
-        useNativeDriver: true,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
-      Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(backdropOpacity, { toValue: 0, duration: 200, useNativeDriver: USE_NATIVE_DRIVER }),
     ]).start(() => onClose());
   }
 
@@ -287,7 +288,7 @@ export function PhotoViewer({
           if (now - g.lastTapTime < DOUBLE_TAP_MS) {
             g.lastTapTime = 0;
             g.scale = ZOOM_TAP_SCALE;
-            Animated.spring(scale, { toValue: ZOOM_TAP_SCALE, useNativeDriver: true }).start();
+            Animated.spring(scale, { toValue: ZOOM_TAP_SCALE, useNativeDriver: USE_NATIVE_DRIVER }).start();
           } else {
             g.lastTapTime = now;
           }

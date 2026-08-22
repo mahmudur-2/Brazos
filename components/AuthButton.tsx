@@ -2,15 +2,13 @@ import { useRef } from 'react';
 import {
   ActivityIndicator,
   Animated,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
 } from 'react-native';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { authSurface, fonts, useThemeColors } from '../lib/theme';
-
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // Restrained press feedback: enough to register as a physical control, not
 // enough to read as a bounce. 100ms in, 120ms back.

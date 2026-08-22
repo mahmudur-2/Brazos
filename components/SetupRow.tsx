@@ -1,12 +1,12 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authSpacing } from '../lib/authTheme';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 const PRESS_IN_MS = 90;
 const PRESS_OUT_MS = 110;
 const PRESS_SCALE = 0.99;

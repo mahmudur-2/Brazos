@@ -47,6 +47,7 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { SearchBar } from '../ui/primitives';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // Light keeps the approved Heritage brand crops; dark renders the Prestige
 // master-44 artwork (assets/prestige is dark-only by standing decision).
@@ -331,8 +332,8 @@ export function HomeScreen() {
 
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(livePulse, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(livePulse, { toValue: 0, duration: 900, useNativeDriver: true }),
+        Animated.timing(livePulse, { toValue: 1, duration: 900, useNativeDriver: USE_NATIVE_DRIVER }),
+        Animated.timing(livePulse, { toValue: 0, duration: 900, useNativeDriver: USE_NATIVE_DRIVER }),
       ])
     );
     animation.start();

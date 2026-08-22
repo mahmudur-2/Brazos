@@ -3,7 +3,6 @@ import {
   Animated,
   FlatList,
   Modal,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -15,8 +14,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { flagEmoji, searchCountries, type Country } from '../lib/countries';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 const OPEN_MS = 220;
 const CLOSE_MS = 180;
 const ROW_HEIGHT = 56;

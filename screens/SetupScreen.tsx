@@ -3,7 +3,6 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   Animated,
-  Platform,
   Pressable,
   StyleSheet,
   Switch,
@@ -24,8 +23,8 @@ import type { OnboardingStackNavigation } from '../lib/navigation';
 import { setPendingLanding } from '../lib/setupLanding';
 import { writeSetupRecord } from '../lib/setupStorage';
 import { DEFAULT_LANDING, type LandingPreference } from '../lib/setupState';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
 const ENTER_MS = 340;
 const COMPLETE_PULSE_MS = 300;
 
@@ -124,12 +123,12 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
       Animated.timing(pulse, {
         toValue: 1,
         duration: COMPLETE_PULSE_MS / 2,
-        useNativeDriver: false,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
       Animated.timing(pulse, {
         toValue: 0,
         duration: COMPLETE_PULSE_MS / 2,
-        useNativeDriver: false,
+        useNativeDriver: USE_NATIVE_DRIVER,
       }),
     ]).start();
   }, [legalComplete, pulse, reducedMotion]);

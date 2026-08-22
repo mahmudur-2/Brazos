@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Platform, Pressable, StyleSheet } from 'react-native';
+import { Animated, Pressable, StyleSheet } from 'react-native';
 import { glow, radius, useThemeColors, withAlpha } from '../../lib/theme';
+import { USE_NATIVE_DRIVER } from '../../lib/motion';
 
 /**
  * The one toggle. In dark: a NEUTRAL track that never changes colour, and a
@@ -66,7 +67,7 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
     Animated.timing(position, {
       toValue: value ? 1 : 0,
       duration: 160,
-      useNativeDriver: Platform.OS !== 'web',
+      useNativeDriver: USE_NATIVE_DRIVER,
     }).start();
   }, [position, value]);
 

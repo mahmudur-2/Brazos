@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { authSurface, useThemeColors } from '../lib/theme';
+import { JS_DRIVER } from '../lib/motion';
 
 // Border crossfade on focus. Colour can't run on the native driver, so this is
 // a JS-driven value — one animated property on one view.
@@ -49,7 +50,7 @@ export const AuthField = forwardRef<TextInput, AuthFieldProps>(function AuthFiel
     Animated.timing(focus, {
       toValue: to,
       duration: FOCUS_MS,
-      useNativeDriver: false,
+      useNativeDriver: JS_DRIVER,
     }).start();
 
   // Masters 3/4: gold field label, gold hairline, cream value on the screen's

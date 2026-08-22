@@ -1,8 +1,7 @@
 import { useEffect, useRef } from 'react';
-import { Animated, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, type StyleProp, type ViewStyle } from 'react-native';
 import type { PropsWithChildren } from 'react';
-
-const USE_NATIVE_DRIVER = Platform.OS !== 'web';
+import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 /**
  * A short fade-and-lift for content arriving in place of a loading state.

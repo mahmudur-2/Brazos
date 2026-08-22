@@ -20,6 +20,7 @@ import {
   splitInternational,
 } from '../lib/phoneNumber';
 import { CountryPicker } from './CountryPicker';
+import { JS_DRIVER } from '../lib/motion';
 
 const FOCUS_MS = 160;
 
@@ -78,7 +79,7 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
       Animated.timing(focus, {
         toValue: to,
         duration: FOCUS_MS,
-        useNativeDriver: false,
+        useNativeDriver: JS_DRIVER,
       }).start();
 
     const borderColor = error
