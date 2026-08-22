@@ -4,7 +4,6 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { setAudioModeAsync } from 'expo-audio';
-import { useFonts } from 'expo-font';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -125,12 +124,17 @@ function RootNavigator() {
  * is restored.
  *
  * The layer is deliberately NOT a route: children mount and hydrate underneath
- * it as soon as the heading faces resolve (one local disk read, so within the
- * animation's first beats), and hydration overlaps the animation instead of
- * following it — whatever the session resolves to is already on screen when
+ * it from the first frame, so hydration overlaps the animation instead of
+ * following it, and whatever the session resolves to is already on screen when
  * the layer crossfades away. That is what keeps an authenticated user from
  * catching a frame of the Welcome screen, and what means there is no blank
  * frame in the handover.
+ *
+ * 2026-08-22: this gate briefly had a SECOND condition — expo-font resolving
+ * the bundled Playfair heading faces — and it is gone with them. No font file
+ * ships with this app any more (ui/tokens.ts `fonts`), so there is nothing to
+ * wait for and nothing that could paint in a fallback face. `sessionReady`
+ * is once again the only thing this gate holds for.
  *
  * It renders once per process. Signing out later returns to Welcome without
  * replaying it; a cold reload in Expo Go is a new process, so it plays again.
@@ -139,30 +143,12 @@ function LaunchGate({ children }: PropsWithChildren) {
   const { loading } = useAuth();
   const [complete, setComplete] = useState(false);
 
-  // The Playfair heading faces (ui/tokens.ts `fonts`, superseding emerald-v2
-  // DECISIONS.md D5 on 2026-08-22). Resolved here, at the root, so the gate
-  // below can hold the themed tree unmounted until the faces are in: nothing
-  // that could set a heading ever paints in the platform-serif fallback and
-  // then swaps. The launch layer is the existing affordance that covers the
-  // wait — it renders from the first frame, uses none of these faces, and
-  // cannot hand over (sessionReady) before they resolve. `error` releases
-  // the gate too: a failed load degrades those headings to the platform
-  // serif rather than holding the app on the launch layer forever.
-  const [fontsLoaded, fontLoadError] = useFonts({
-    'PlayfairDisplay-Bold': require('./assets/fonts/PlayfairDisplay-Bold.ttf'),
-    'PlayfairDisplay-ExtraBold': require('./assets/fonts/PlayfairDisplay-ExtraBold.ttf'),
-  });
-  const fontsResolved = fontsLoaded || fontLoadError != null;
-
   return (
     <LaunchCompleteContext.Provider value={complete}>
       <View style={styles.root}>
-        {fontsResolved ? children : null}
+        {children}
         {complete ? null : (
-          <LaunchScreen
-            sessionReady={!loading && fontsResolved}
-            onFinish={() => setComplete(true)}
-          />
+          <LaunchScreen sessionReady={!loading} onFinish={() => setComplete(true)} />
         )}
       </View>
     </LaunchCompleteContext.Provider>

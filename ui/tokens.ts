@@ -246,33 +246,37 @@ export const radius = {
 // ---------------------------------------------------------------------------
 
 /**
- * §I names Inter. Body copy uses the platform sans (undefined = system
- * default). The heading voice is Playfair Display: an operator decision of
- * 2026-08-22 superseded emerald-v2 DECISIONS.md D5 ("no bundled font") for
- * the three large heading roles ONLY — `display`, `h1`, `h2`. D5's
- * objection, a font-loading flash on the screens that most need to paint
- * instantly, is answered by a render gate instead: App.tsx resolves the two
- * static faces with expo-font's `useFonts` and holds the themed tree
- * unmounted (under the launch layer, which uses none of these roles) until
- * they resolve, so no frame ever paints a heading in the fallback face.
+ * §I names Inter. NOTHING IS BUNDLED AND NOTHING IS A SERIF.
  *
- * `display` (the platform serif) is still a live token: it remains the voice
- * of 15pt card `title`s — Playfair degrades below ~18pt and card titles are
- * ubiquitous — and of every screen style that names `fonts.display` directly.
+ * No font file ships with this app: `assets/fonts/` does not exist, App.tsx
+ * registers no faces, and there is no `useFonts` anywhere. Every role below
+ * resolves to the platform's own system sans — the same family body copy has
+ * always used.
+ *
+ * Two decisions arrived at that, both on 2026-08-22 and both deliberate
+ * (docs/emerald-v2/DECISIONS.md D5 carries them in order). The first bundled
+ * Playfair Display for the three large heading roles. The second reversed it
+ * in full AND retired the platform serif (Georgia on iOS, `serif` elsewhere)
+ * that had predated it, so the whole app now sets in one voice.
+ *
+ * `display` survives as a NAMED ROLE, not as a different face: roughly sixty
+ * screen styles reach the heading voice through `fonts.display`, and keeping
+ * it means the heading voice stays ONE lever rather than sixty. It resolving
+ * to the same family as `body` today is the point, not an oversight.
+ *
+ * CONSEQUENCE FOR WEIGHT. With a real file bundled, iOS picks the face from
+ * the family name and `fontWeight` goes inert; with nothing bundled it is
+ * load-bearing again, and it is how the heading roles below get their
+ * weight. Removing a `fontWeight` here renders that heading at normal.
+ *
+ * tests/themeTokens.test.mjs fences this state: it fails if any `fontFamily:`
+ * in the tree names anything but these tokens, or if a `.ttf` reappears.
  */
 export const fonts = {
-  display: Platform.select({
-    ios: 'Georgia',
-    android: 'serif',
-    default: 'Georgia, "Times New Roman", serif',
-  }) as TextStyle['fontFamily'],
-  /** Playfair Display statics, bundled in assets/fonts/ (OFL) and registered
-   *  at the root by App.tsx. One name per face: once a real file is bundled,
-   *  iOS no longer selects a face from `fontWeight`, so the weight lives in
-   *  the family name and the three heading roles carry no fontWeight — a
-   *  platform-synthesized bold on top of ExtraBold would double-embolden. */
-  displayBold: 'PlayfairDisplay-Bold' as TextStyle['fontFamily'],
-  displayExtraBold: 'PlayfairDisplay-ExtraBold' as TextStyle['fontFamily'],
+  /** The heading voice. The system sans — see above; it is a distinct ROLE,
+   *  not a distinct face, and it is the one lever for every heading style
+   *  that names `fonts.display`. */
+  display: undefined as TextStyle['fontFamily'],
   /** System sans. Explicitly undefined rather than a name, so each platform
    *  resolves its own default rather than us guessing at one. */
   body: undefined as TextStyle['fontFamily'],
@@ -286,10 +290,13 @@ export const fonts = {
  * are secondary/caption roles, not body copy, and unlike touch targets there
  * is no CLAUDE.md rule they violate.
  *
- * home(3) — LETTER SPACING ON THE DISPLAY SERIF. The three heading roles carry
- * `letterSpacing: -1`. A display serif set at 21pt and up tracks loose by
- * default; pulling it in a point is what makes a heading read as one word
- * shape rather than a row of letters. It is deliberately NOT applied to
+ * home(3) — LETTER SPACING ON THE HEADING ROLES. The three heading roles carry
+ * `letterSpacing: -1`. It was measured against a display serif set at 21pt and
+ * up, which tracks loose by default; pulling it in a point is what makes a
+ * heading read as one word shape rather than a row of letters. 2026-08-22:
+ * those roles are now the system sans, which tracks tighter to begin with, and
+ * this value is left exactly as it was — an OPERATOR DIAL to be re-measured on
+ * device, not something this run guessed at. It is deliberately NOT applied to
  * `title`, `body`, `sub`, `caption` or `eyebrow`: negative tracking closes up
  * small type until it smudges, and `eyebrow` wants the opposite (its +1.2 is
  * what makes 9pt uppercase legible). The same three-role decision is mirrored
@@ -297,10 +304,12 @@ export const fonts = {
  * two surfaces to it.
  */
 export const type = {
-  display: { fontSize: 28, lineHeight: 29, fontFamily: fonts.displayExtraBold, letterSpacing: -1 },
-  h1: { fontSize: 26, fontFamily: fonts.displayExtraBold, letterSpacing: -1 },
-  h2: { fontSize: 21, fontFamily: fonts.displayBold, letterSpacing: -1 },
-  // Prestige decision 9: card titles join the serif voice, both themes. At
+  // The fontWeight on these three is load-bearing, not decoration: no face is
+  // bundled, so iOS resolves the weight itself. See the `fonts` docblock.
+  display: { fontSize: 28, lineHeight: 29, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
+  h1: { fontSize: 26, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
+  h2: { fontSize: 21, fontWeight: '700', fontFamily: fonts.display, letterSpacing: -1 },
+  // Prestige decision 9: card titles join the heading voice, both themes. At
   // 15pt it stays on default tracking — see the docblock above.
   title: { fontSize: 15, fontWeight: '700', fontFamily: fonts.display },
   body: { fontSize: 14, fontWeight: '400' },

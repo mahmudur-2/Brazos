@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
-  Platform,
   StyleSheet,
   View,
   useWindowDimensions,
@@ -352,12 +351,11 @@ const styles = StyleSheet.create({
     marginTop: 20,
     // No custom font is loaded anywhere in the app, and adding one for a
     // single word would give the launch screen the font-loading flash it
-    // exists to avoid. These are the platform serifs.
-    fontFamily: Platform.select({
-      ios: 'Georgia',
-      android: 'serif',
-      default: 'Georgia, "Times New Roman", serif',
-    }),
+    // exists to avoid. 2026-08-22: this style used to name the platform
+    // serifs (Georgia / `serif`) explicitly; the operator retired the serif
+    // app-wide, so the wordmark takes the system sans with everything else
+    // and names no family at all. authType.wordmark still supplies the 30pt
+    // and the +6 tracking that make it read as a wordmark.
   },
   tagline: {
     ...authType.tagline,

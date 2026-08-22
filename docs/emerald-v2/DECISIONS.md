@@ -73,6 +73,29 @@ below the ~18pt degradation floor keeps the platform serif: 15pt card
 `title`s, the 17pt/600 `subheading`, and every screen style that names
 `fonts.display` directly. tests/themeTokens.test.mjs fences the mapping.
 
+**Reversed 2026-08-22 (operator decision, later the same day) — and the
+platform serif retired with it.** The app has no serif at all any more. The
+Playfair TTFs and their OFL file are deleted, `assets/fonts/` is gone,
+`fonts.displayBold` / `fonts.displayExtraBold` are gone from both token
+surfaces, App.tsx's `useFonts` load and the font half of its `LaunchGate` are
+gone (the gate still holds for `sessionReady`), and `LaunchScreen`'s wordmark
+dropped its own copy of the Georgia / `serif` stack. `fonts.display` survives
+as a NAMED ROLE resolving to the platform system sans — the family body copy
+already used — because roughly sixty screen styles reach the heading voice
+through it, and one lever is worth more than sixty edits if that voice is ever
+repointed again. **Why:** the operator reviewed ~60 real device captures
+(`docs/design/EMERALD_COMPLAINTS.md`) and chose the plain iOS system face for
+the whole app; both the bundling above and the platform serif that predated it
+are what the reversal removes. With no file bundled, `fontWeight` is
+load-bearing on iOS again, so the weights the bundling had made inert are
+restored to their pre-bundling values (`type.display`/`h1` 800, `type.h2` 700,
+`typography.title` 800, `typography.heading` 700). Type SIZES, line heights and
+the `letterSpacing: -1` on the heading roles are deliberately unchanged: they
+were measured against a serif and are an operator dial for a device pass, not
+something this change guessed at. tests/themeTokens.test.mjs's Playfair fence
+is INVERTED, not deleted — it now fails if a serif family name or a bundled
+`.ttf` returns.
+
 ### D6. `Chip` extended with variants instead of a parallel `Pill` component
 **Fork:** the brief listed "Pill" as a foundational component, but `Chip`
 already does that job.

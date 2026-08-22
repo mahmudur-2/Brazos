@@ -223,46 +223,49 @@ export const radius = {
 } as const;
 
 /**
- * The display faces used for Emerald headlines (Home's "Take a task off your
+ * The heading voice used for Emerald headlines (Home's "Take a task off your
  * plate.", section titles, the hero CTA).
  *
- * `display` is the platform serif, resolved the same way LaunchScreen's
- * wordmark resolves it, so the two can't drift. `displayBold` /
- * `displayExtraBold` are Playfair Display statics bundled in assets/fonts/
- * (OFL): an operator decision of 2026-08-22 superseded emerald-v2
- * DECISIONS.md D5 ("no bundled font") for the LARGE heading roles only. D5's
- * font-loading-flash objection is answered by App.tsx's render gate — the
- * themed tree stays unmounted under the launch layer until expo-font
- * resolves the faces, so no frame paints a heading in the fallback face.
- * With a real file bundled, iOS stops selecting a face from `fontWeight`,
- * so the weight lives in the family name and the repointed roles below
- * carry no fontWeight.
+ * NOTHING IS BUNDLED AND NOTHING IS A SERIF. No font file ships with this app
+ * — `assets/fonts/` does not exist and App.tsx registers no faces — and
+ * `display` resolves to the platform's own system sans, the same family body
+ * copy uses. Operator decision of 2026-08-22 (docs/emerald-v2/DECISIONS.md
+ * D5's second dated note): it reversed that morning's Playfair Display
+ * bundling in full AND retired the platform serif (Georgia on iOS, `serif`
+ * elsewhere) that had predated it. LaunchScreen's wordmark dropped its own
+ * copy of that serif in the same commit, so the two still can't drift.
+ *
+ * `display` is kept as a NAMED ROLE rather than deleted: the screens reach the
+ * heading voice through it, so it stays the single lever if that voice is ever
+ * repointed again. This surface mirrors ui/tokens.ts `fonts`, whose docblock
+ * carries the full reasoning; tests/emeraldFences.test.mjs holds the two in
+ * sync and tests/themeTokens.test.mjs fences the no-serif, no-.ttf state.
+ *
+ * With no file bundled, `fontWeight` is load-bearing again on iOS — it is how
+ * the heading roles below get their weight. Removing one renders that heading
+ * at normal.
  */
 export const fonts = {
-  display: Platform.select({
-    ios: 'Georgia',
-    android: 'serif',
-    default: 'Georgia, "Times New Roman", serif',
-  }) as TextStyle['fontFamily'],
-  displayBold: 'PlayfairDisplay-Bold' as TextStyle['fontFamily'],
-  displayExtraBold: 'PlayfairDisplay-ExtraBold' as TextStyle['fontFamily'],
+  display: undefined as TextStyle['fontFamily'],
 } as const;
 
 export const typography = {
-  // Prestige decision 9: the heading roles carry the display serif in BOTH
+  // Prestige decision 9: the heading roles carry the display voice in BOTH
   // themes (structure and type are theme-independent; only colours resolve
-  // per palette). Body/label/caption stay on the platform sans.
+  // per palette). Body/label/caption stay on the platform sans — and since
+  // 2026-08-22 so does the display voice itself, so the distinction is now
+  // one of ROLE and weight rather than of face.
   //
-  // home(3): those three serif heading roles — and only those three — take
+  // home(3): those three heading roles — and only those three — take
   // `letterSpacing: -1`, mirroring `display`/`h1`/`h2` in ui/tokens.ts. Body,
-  // label and caption are sans and small, and negative tracking closes small
-  // type up until it smudges.
-  // 2026-08-22: the two large roles take the Playfair statics by weight
-  // (800 → ExtraBold, 700 → Bold). `subheading` stays on the platform serif:
-  // it is 17pt — under the ~18pt floor where Playfair starts to degrade —
-  // and no 600 face is bundled, so its fontWeight still means something.
-  title: { fontSize: 28, fontFamily: fonts.displayExtraBold, letterSpacing: -1, color: colors.text },
-  heading: { fontSize: 22, fontFamily: fonts.displayBold, letterSpacing: -1, color: colors.text },
+  // label and caption are small, and negative tracking closes small type up
+  // until it smudges. The value was measured against a serif and is left
+  // untouched by the sans reversal: an operator dial for a device pass.
+  //
+  // Every fontWeight below is load-bearing: no face is bundled, so iOS picks
+  // the weight itself. See the `fonts` docblock above.
+  title: { fontSize: 28, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
+  heading: { fontSize: 22, fontWeight: '700', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
   subheading: { fontSize: 17, fontWeight: '600', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
   body: { fontSize: 15, fontWeight: '400', color: colors.text },
   label: { fontSize: 13, fontWeight: '600', color: colors.textMuted },

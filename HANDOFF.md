@@ -244,6 +244,25 @@ no batch opened.
 - Airplane-mode cold start still reaches the Terms retry screen (the font
   gate must release on error, never hold the launch layer forever).
 
+> **CORRECTION 2026-08-22 (later the same day) — EVERYTHING ABOVE ABOUT
+> PLAYFAIR AND ABOUT GEORGIA IS HISTORY, NOT CURRENT STATE.** The operator
+> reversed the bundling in full and retired the platform serif with it: the
+> app now sets entirely in the iOS system sans. `assets/fonts/` and the three
+> files in it are deleted; `fonts.displayBold` / `fonts.displayExtraBold` are
+> gone from both token surfaces; App.tsx's `useFonts` load and the font half
+> of `LaunchGate` are gone (the gate still holds for `sessionReady`);
+> `LaunchScreen`'s wordmark no longer names a serif either. `fonts.display`
+> DOES still exist and IS still the single lever for every heading style that
+> names it — but it now resolves to the system sans, so the instruction above
+> not to repoint it no longer describes a serif. The `fontWeight`s that the
+> bundling removed as inert are restored (`type.display`/`h1` 800, `type.h2`
+> 700, `typography.title` 800, `typography.heading` 700); sizes, line heights
+> and the heading `letterSpacing: -1` are untouched and are the operator's
+> dial for a device pass. The three device checks above are superseded by the
+> ones in this run's own section at the top of this file. The Playfair fence
+> in `tests/themeTokens.test.mjs` is INVERTED, not deleted. See
+> docs/emerald-v2/DECISIONS.md D5's second dated note.
+
 ## 2026-08-22 — BATCH F+J: dead code deleted, documents corrected (F-023, F-071 + J) — COMPLETE
 
 Six commits: `778fc5c` deletes `screens/BrowseJobsScreen.tsx`,

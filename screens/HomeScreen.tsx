@@ -150,15 +150,24 @@ const B_DRAPE_RIGHT_INSET = 0;
 // different typefaces.
 //
 // AND THEY ARE TWO DIFFERENT TYPEFACES. Master 44 is set in a high-contrast
-// Didone; `fonts.display` resolves to Georgia on iOS, a low-contrast
-// transitional serif, and no font file is bundled anywhere in this app by
-// standing decision (see the docblock on `fonts` in lib/theme.ts). Georgia is
-// the closest bundled face and it is materially WIDER: "off your plate." sets
-// 210pt at 30pt here — measured in a real 393pt viewport by
-// scripts/home-shots.mjs — against the master's 198.6pt at an effective 34pt.
-// That is 22% more ink per point of size, and it is why the hero's size is
-// governed by its column rather than by its cap height. It is recorded rather
-// than closed, because closing it means adding a font.
+// Didone; when these rungs were computed `fonts.display` resolved to Georgia
+// on iOS, a low-contrast transitional serif, and no font file was bundled
+// anywhere in this app by standing decision. Georgia was the closest platform
+// face and it is materially WIDER: "off your plate." set 210pt at 30pt here —
+// measured in a real 393pt viewport by scripts/home-shots.mjs — against the
+// master's 198.6pt at an effective 34pt. That is 22% more ink per point of
+// size, and it is why the hero's size is governed by its column rather than by
+// its cap height.
+//
+// 2026-08-22 — THE FACE UNDER THIS LADDER CHANGED; THE LADDER DID NOT. The
+// operator retired the serif app-wide: `fonts.display` now resolves to the
+// system sans (see the docblock on `fonts` in lib/theme.ts), which sets
+// NARROWER than Georgia, not wider. Every number below is deliberately frozen
+// at what Georgia measured — re-deriving them would be this file guessing at a
+// re-measurement it cannot perform, and sizes are the operator's to tune on a
+// device. So read `GEORGIA_CAP_RATIO`, `MASTER_SERIF_CAPS` and `serifSize`
+// below as the NAMES OF FROZEN ARITHMETIC, not as claims about the face in
+// use, and expect some strings to wrap differently than the captures show.
 //
 // home(20) — EVERY NUMBER BELOW WAS RE-MEASURED. The master file on disk was
 // REPLACED: it is 853x1844 where the file these caps were first read off was
