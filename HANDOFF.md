@@ -32,6 +32,80 @@ needed. Reaffirmed unchanged by the verification run (2026-08-19) and restated
 at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
+## 2026-08-22 (later) — SECURESTORE SESSION ADAPTER: CORE LANDED, WIRING STOPPED AT GUARD-DEPS
+
+The operator-approved move of the Supabase auth session into the device
+keychain ran as two dispatched commits; **commit 1 landed, commit 2 stopped
+at a hook collision before it began.** Bare `npm run verify` exit 0 twice in
+the run — baseline **846** pass, after commit 1 **856** pass / 0 fail (the +10
+are the new adapter suite). App behavior is UNCHANGED: nothing imports the
+adapter yet, and the session still lives in AsyncStorage until the wiring run.
+
+**Landed — `9552f70`:** `lib/secureSessionStorageCore.ts` + its executed
+suite `tests/secureSessionStorage.test.mjs`. Pure dependency-injected core
+(the themeResolution execution idiom, no stubbing needed): ≤2000-byte UTF-8
+chunking that never splits a surrogate pair; per-write GENERATION chunk keys
+with the manifest written LAST as the completion mark and old-generation
+cleanup strictly after it (torn reads return old, new, or absent — never a
+mixture; proven against equal-length values where a length check alone could
+not tell); missing/unreadable chunk, bad manifest, or length mismatch all
+read as absent; deterministic `[A-Za-z0-9._-]` key sanitization before every
+native call; one-time silent AsyncStorage migration behind a `.migrated`
+marker (returns the value, writes it through, clears the source, never
+re-consults — no sign-out); DEV-only fallback to AsyncStorage with one
+unmissable `██ DEV FALLBACK ██` warning vs a HARD REJECTION in non-dev
+builds. All ten tests were proven red first via thirteen targeted core
+mutations (each failure mode i–iv covered), then the pristine core re-proven
+green.
+
+**The blocker, precisely:** the dispatch carries operator approval
+(2026-08-22) for adding `expo-secure-store`, but `.claude/hooks/guard.ps1`
+rule 7 (GUARD-DEPS) blocks every package-manager mutation — `npm
+install/i/ci/add`, `yarn/pnpm/bun add`, and explicitly `npx expo install`.
+Observed verbatim on the one canonical attempt: `BLOCK GUARD-DEPS
+dependency-mutation`. The fence policy forbids granting the guard an
+allowance, and CLAUDE.md names both "a required new dependency" and "a
+collision with an active hook or deny rule" as mandatory stops — so the run
+stopped there. **No guard, hook, deny rule, fence or lint rule was weakened,
+disabled, narrowed or granted an allowance; no fence constant changed.**
+
+**To unblock (operator, outside an agent session, one command):**
+`npx expo install expo-secure-store` — expect `expo-secure-store@~15.0.8`,
+the SDK 54 match recorded in `node_modules/expo/bundledNativeModules.json`.
+Then dispatch the wiring run.
+
+**What the wiring run does (commit 2 as dispatched):** a small
+`lib/secureSessionStorage.ts` wiring module — `loadSecureStore` = a
+try/caught `require('expo-secure-store')` returning null on failure,
+`legacyStorage` = AsyncStorage, `isDev` = `__DEV__` — exported and pointed at
+by `lib/supabase.ts`'s `auth.storage` (today: `AsyncStorage`). NO app.json
+plugin entry is needed: the expo-secure-store config plugin only carries
+FaceID-permission / Android-backup options, neither used (FaceID-gating reads
+would change auth UX, which is frozen). Add the fence test — auth storage
+never repointed at plain storage, and no session-key access anywhere in app
+code bypassing the adapter — and mutate it red before keeping. Scope note for
+that fence, decided here: `lib/supabase.web.ts` (frozen web surface, its own
+AsyncStorage client) and `scripts/home-shots.mjs` (seeds
+`sb-harness-auth-token` into web localStorage for a fabricated host) are
+web-only surfaces OUTSIDE the native fence by design. Same commit: dated
+`docs/emerald-v2/DECISIONS.md` entry (keychain move, chunking forced by the
+~2048-byte ceiling, dev fallback deliberate and dev-only).
+
+**Phase 0 facts, so the next run does not re-derive them:** the client passes
+no `storageKey`, so the key is supabase-js's default — literally
+`` `sb-${baseUrl.hostname.split('.')[0]}-auth-token` ``
+(`@supabase/supabase-js/src/SupabaseClient.ts:324`), the project ref being
+the first hostname label of `SUPABASE_URL` from `@env`. No app code reads or
+writes that key directly anywhere.
+
+**How the operator tells which path a running app took:** exactly one console
+line at first session-storage use — keychain path:
+`[secureSessionStorage] auth session storage: device keychain (SecureStore).`
+— or the `██ DEV FALLBACK ██` warning. The EXISTING development build
+predates the native module and will take the dev fallback until a NEW dev
+client is built; a release/TestFlight build without the module hard-fails by
+design instead of silently downgrading.
+
 ## 2026-08-22 — SERIF RETIRED APP-WIDE + G-001 — COMPLETE, ONE COMMIT SKIPPED
 
 Four dispatched commits; **three landed, one was skipped on its own stated
