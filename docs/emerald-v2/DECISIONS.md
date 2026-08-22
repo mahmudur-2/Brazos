@@ -477,3 +477,39 @@ without the literal boundary in front of you.
 Nothing above is marked UNKNOWN: every scope was read directly from source.
 The one coverage that is not a path boundary is `verify-schema.mjs`, whose
 scope is a human cadence and is recorded as such rather than guessed at.
+
+## Auth session storage — device keychain (2026-08-22)
+
+### D32. Supabase auth session moved into the device keychain, chunked, with a deliberate dev-only fallback
+
+**Fork:** the session (two JWTs plus the user object) persisted in plain
+AsyncStorage — readable by anything that can read app storage — versus the
+platform keychain via `expo-secure-store`.
+
+**Chosen:** the keychain. `lib/supabase.ts`'s `auth.storage` now points at the
+adapter in `lib/secureSessionStorage.ts`, built from the pure core in
+`lib/secureSessionStorageCore.ts` (landed `9552f70`, executed by
+`tests/secureSessionStorage.test.mjs`). Three sub-decisions are permanent:
+
+- **2000-byte chunking, forced by the platform.** Expo documents a ~2048-byte
+  per-value ceiling for SecureStore, and a Supabase session routinely exceeds
+  it. Values split into ≤2000-byte UTF-8 chunks (margin under the ceiling,
+  never splitting a surrogate pair) under per-write generation keys, with the
+  manifest written last as the completion mark — a torn read returns old, new
+  or absent, never a mixture.
+- **Dev-only fallback, deliberate.** If the native module is absent and
+  `__DEV__` is true, the adapter falls back to plain AsyncStorage with one
+  unmissable `██ DEV FALLBACK ██` warning, so Metro stays usable against a dev
+  client that predates the module. A NON-dev build with the module absent
+  hard-rejects instead: a release must never quietly store tokens in plain
+  storage. The asymmetry is the point; do not "fix" either side.
+- **One wiring path, fenced.** `tests/secureSessionStorageFence.test.mjs`
+  (proven red first): `auth.storage` never resolves to plain AsyncStorage,
+  only the wiring imports the core, only `lib/supabase.ts` imports the wiring,
+  and no app code names the session key by literal. `lib/supabase.web.ts` and
+  `scripts/home-shots.mjs` are web-only surfaces outside the fence by design.
+
+**Why:** auth tokens are credentials; the keychain is the platform's answer
+for credentials. The move changes WHERE the session is written and nothing
+else — existing sessions migrate silently once (write-through first, clear
+the source after), so nobody is signed out.

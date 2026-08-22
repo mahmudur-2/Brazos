@@ -72,7 +72,8 @@
           "speechRecognitionPermission": "Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server."
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-secure-store"
     ],
     "extra": {
       "eas": {

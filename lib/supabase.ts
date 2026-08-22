@@ -1,7 +1,7 @@
 import 'react-native-url-polyfill/auto';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_KEY } from '@env';
+import { secureSessionStorage } from './secureSessionStorage';
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
   throw new Error(
@@ -12,8 +12,9 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_KEY, {
   auth: {
-    // Persist the session in AsyncStorage so the user stays logged in.
-    storage: AsyncStorage,
+    // Persist the session in the device keychain so the user stays logged in
+    // (lib/secureSessionStorage.ts; chunked SecureStore, dev-only fallback).
+    storage: secureSessionStorage,
     autoRefreshToken: true,
     persistSession: true,
     // React Native has no URL to parse the session from.
