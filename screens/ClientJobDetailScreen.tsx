@@ -121,6 +121,8 @@ export function ClientJobDetailScreen() {
   // screen, so RLS always grants the read; it simply comes back null when the
   // posting never carried one.
   const [privateAddress, setPrivateAddress] = useState<string | null>(null);
+  const [addressReadFailed, setAddressReadFailed] = useState(false);
+  const [addressReadAttempt, setAddressReadAttempt] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   // Handed to ReviewSection so focusing its comment field can lift the card
@@ -256,13 +258,18 @@ export function ClientJobDetailScreen() {
   useEffect(() => {
     let active = true;
     setPrivateAddress(null);
+    setAddressReadFailed(false);
     fetchJobLocation(job.id).then(({ data, error }) => {
-      if (active && !error) setPrivateAddress(data?.address_line ?? null);
+      if (!active) return;
+      // A failed read is not "this posting carries no address" — the timing
+      // card says so and offers a retry instead of omitting the row (F-026).
+      if (error) setAddressReadFailed(true);
+      else setPrivateAddress(data?.address_line ?? null);
     });
     return () => {
       active = false;
     };
-  }, [job.id]);
+  }, [job.id, addressReadAttempt]);
 
   // "Hire Again" is client-scoped by definition: only workers who have already
   // completed a job for *this* client. Workers never see this in reverse.
@@ -512,7 +519,7 @@ export function ClientJobDetailScreen() {
           </View>
         </Card>
 
-        {arrivalWindowLabel(job) || privateAddress ? (
+        {arrivalWindowLabel(job) || privateAddress || addressReadFailed ? (
           <Card palette={emeraldColors} style={[styles.timingCard, isDark && styles.hairlineDark]}>
             <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>TIMING &amp; ADDRESS</Text>
             {arrivalWindowLabel(job) ? (
@@ -545,6 +552,25 @@ export function ClientJobDetailScreen() {
                     Private — only you and the worker you hire can see this address.
                   </Text>
                 </View>
+              </View>
+            ) : addressReadFailed ? (
+              // A failed read, surfaced as itself — never rendered as "this
+              // posting has no exact address" (F-026).
+              <View style={styles.errorBanner} accessibilityRole="alert">
+                <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
+                <View style={styles.errorCopy}>
+                  <Text style={styles.errorTitle}>Couldn’t load the exact address</Text>
+                  <Text style={styles.errorMessage}>
+                    Check your connection and retry.
+                  </Text>
+                </View>
+                <Button
+                  title="Retry"
+                  size="sm"
+                  variant="secondary"
+                  palette={emeraldColors}
+                  onPress={() => setAddressReadAttempt((attempt) => attempt + 1)}
+                />
               </View>
             ) : null}
           </Card>

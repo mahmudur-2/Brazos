@@ -1,4 +1,4 @@
-import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Button } from './Button';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useJobOwnerActions } from '../hooks/useJobOwnerActions';
@@ -27,6 +27,8 @@ export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActi
   const styles = stylesFor(colors);
   const {
     canManage,
+    manageCheckFailed,
+    retryManageCheck,
     deleting,
     onEdit,
     onDelete,
@@ -35,7 +37,26 @@ export function JobOwnerActions({ jobId, posterId, status, style }: JobOwnerActi
     cancelDelete,
   } = useJobOwnerActions(jobId, posterId, status);
 
-  if (!canManage) return null;
+  if (!canManage) {
+    // The eligibility read failed on the owner's own open job: the buttons
+    // stay hidden (fail closed), but the failure says so instead of posing
+    // as "this job can no longer be edited" (F-026).
+    if (!manageCheckFailed) return null;
+    return (
+      <View style={[styles.row, styles.checkFailedRow, style]} accessibilityRole="alert">
+        <Text style={styles.checkFailedText}>
+          Couldn’t check this job’s bids, so Edit and Delete are hidden for
+          now.
+        </Text>
+        <Button
+          title="Retry"
+          size="sm"
+          variant="secondary"
+          onPress={retryManageCheck}
+        />
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.row, style]}>
@@ -84,6 +105,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   btn: {
     flex: 1,
     height: 44,
+  },
+  checkFailedRow: {
+    alignItems: 'center',
+  },
+  checkFailedText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
   },
   }),
 );

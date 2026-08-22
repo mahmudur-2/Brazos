@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -83,6 +83,59 @@ test('TrackWorkerScreen models a failed dispute read as unknown, not false', () 
   assert.match(src, /onRetry: \(\) => setReadAttempt/);
   // The dispute note renders only from a POSITIVE dispute answer.
   assert.match(src, /\{hasOpenDispute === true \? \(/);
+});
+
+// ===========================================================================
+// F-026 — the discarded-error idiom is extinct
+// ===========================================================================
+
+test('no screen, hook, or component silently discards a read error', () => {
+  // `if (active && !error) setX(data)` was the audit's signature for a
+  // failure indistinguishable from a fact (04_data_binding.md §3). Every
+  // read now either stores the failure or surfaces it; the idiom itself is
+  // fenced out.
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(join(root, dir))) {
+      const rel = `${dir}/${entry}`;
+      if (statSync(join(root, rel)).isDirectory()) {
+        walk(rel);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry)) continue;
+      if (read(rel).includes('if (active && !error)')) offenders.push(rel);
+    }
+  };
+  for (const dir of ['screens', 'hooks', 'components']) walk(dir);
+  assert.deepEqual(offenders, [], 'reads must record or surface their errors');
+});
+
+test('the remaining discarded reads each surface with a retry', () => {
+  const jobDetail = read('screens/JobDetailScreen.tsx');
+  assert.match(jobDetail, /setPosterReadFailed\(!!\(profileResult\.error \|\| statsResult\.error\)\)/);
+  assert.match(jobDetail, /Couldn’t load who posted this job/);
+  assert.match(jobDetail, /setPosterReadAttempt\(\(attempt\) => attempt \+ 1\)/);
+
+  const profileDetails = read('screens/ProfileDetailsScreen.tsx');
+  assert.match(profileDetails, /if \(error\) setStatsReadFailed\(true\);/);
+  assert.match(profileDetails, /Job history didn’t load — retry/);
+
+  const clientDetail = read('screens/ClientJobDetailScreen.tsx');
+  assert.match(clientDetail, /if \(error\) setAddressReadFailed\(true\);/);
+  assert.match(clientDetail, /Couldn’t load the exact address/);
+
+  // The owner-actions eligibility read fails CLOSED and says so.
+  const ownerHook = read('hooks/useJobOwnerActions.ts');
+  assert.match(ownerHook, /setCountError\(true\);/);
+  assert.doesNotMatch(
+    ownerHook,
+    /error \? 0|: 0\)\s*;?\s*\/\/ guessed/,
+    'a failed count must never be guessed to zero'
+  );
+  const ownerActions = read('components/JobOwnerActions.tsx');
+  assert.match(ownerActions, /manageCheckFailed/);
+  assert.match(ownerActions, /Couldn’t check this job’s bids/);
+  assert.match(ownerActions, /onPress=\{retryManageCheck\}/);
 });
 
 test('ClientJobDetailScreen passes unknown to the derivation and gates its money surfaces', () => {

@@ -60,20 +60,26 @@ export function ProfileDetailsScreen() {
   const { profile } = useProfile();
 
   const [jobStats, setJobStats] = useState<CategoryStat[] | null>(null);
+  // A failed read stays UNKNOWN — the completed-jobs figure is never shown as
+  // zero — but it also SAYS so: the meta row carries a retry instead of
+  // silently omitting the figure (F-026).
+  const [statsReadFailed, setStatsReadFailed] = useState(false);
+  const [statsReadAttempt, setStatsReadAttempt] = useState(0);
   const [avatarViewerUri, setAvatarViewerUri] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) return;
     let active = true;
+    setStatsReadFailed(false);
     fetchWorkerJobStats(user.id).then(({ data, error }) => {
-      // A failed read stays UNKNOWN — the completed-jobs figure is simply
-      // omitted rather than shown as zero.
-      if (active && !error) setJobStats(data);
+      if (!active) return;
+      if (error) setStatsReadFailed(true);
+      else setJobStats(data);
     });
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, statsReadAttempt]);
 
   const completed = jobStats?.reduce((total, row) => total + row.count, 0) ?? null;
   const ratingCount = profile?.rating_count ?? 0;
@@ -153,6 +159,16 @@ export function ProfileDetailsScreen() {
               <Text style={styles.metaText}>
                 {completed} completed
               </Text>
+            ) : statsReadFailed ? (
+              // The failed read, named as itself — never "0 completed".
+              <Pressable
+                onPress={() => setStatsReadAttempt((attempt) => attempt + 1)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Job history didn’t load. Retry."
+              >
+                <Text style={styles.metaText}>Job history didn’t load — retry</Text>
+              </Pressable>
             ) : null}
             {since ? <Text style={styles.metaText}>{since}</Text> : null}
           </View>

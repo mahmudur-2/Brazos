@@ -160,6 +160,10 @@ export function JobDetailScreen() {
   } | null>(
     null
   );
+  // A failed poster/history read renders as a retry row in the card's place —
+  // never as a job with no poster to show (F-026).
+  const [posterReadFailed, setPosterReadFailed] = useState(false);
+  const [posterReadAttempt, setPosterReadAttempt] = useState(0);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [confirmBidVisible, setConfirmBidVisible] = useState(false);
   const [activePhotoIndex, setActivePhotoIndex] = useState(0);
@@ -329,20 +333,25 @@ export function JobDetailScreen() {
     let active = true;
     setPoster(null);
     setPosterStats(null);
+    setPosterReadFailed(false);
     if (isOwnJob) return;
-    fetchProfileById(job.client_id).then(({ data, error }) => {
-      if (active && !error) setPoster(data);
-    });
-    // phase58: counted server-side — the direct counts only ever answered
-    // through the legacy permissive jobs policy the hardening run dropped.
-    fetchClientJobStatsCounted(job.client_id).then(({ data, error }) => {
-      if (active && !error) setPosterStats(data);
-      else if (error) console.warn('[JobDetail] poster stats failed', error.message);
+    // phase58: the stats are counted server-side — the direct counts only
+    // ever answered through the legacy permissive jobs policy the hardening
+    // run dropped. Settled together with the profile so a failure in either
+    // surfaces as one retry row rather than a silently posterless job (F-026).
+    Promise.all([
+      fetchProfileById(job.client_id),
+      fetchClientJobStatsCounted(job.client_id),
+    ]).then(([profileResult, statsResult]) => {
+      if (!active) return;
+      if (!profileResult.error) setPoster(profileResult.data);
+      if (!statsResult.error) setPosterStats(statsResult.data);
+      setPosterReadFailed(!!(profileResult.error || statsResult.error));
     });
     return () => {
       active = false;
     };
-  }, [job.client_id, isOwnJob]);
+  }, [job.client_id, isOwnJob, posterReadAttempt]);
 
   /**
    * Shared tail of both bid paths. Everything that decides whether the bid is
@@ -812,8 +821,24 @@ export function JobDetailScreen() {
                 </Card>
               ) : null}
               {/* Customer-side trust signals: real profile, real counted
-                  history. Rendered only once loaded — never placeholders. */}
-              {poster ? (
+                  history. Rendered only once loaded — never placeholders, and
+                  a FAILED read says so with a retry rather than posing as a
+                  job with no poster (F-026). */}
+              {posterReadFailed ? (
+                <Card style={[styles.noticeCard, styles.secondaryCard]}>
+                  <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
+                  <Text style={styles.noticeText}>
+                    Couldn’t load who posted this job. Check your connection
+                    and retry.
+                  </Text>
+                  <Button
+                    title="Retry"
+                    size="sm"
+                    variant="secondary"
+                    onPress={() => setPosterReadAttempt((attempt) => attempt + 1)}
+                  />
+                </Card>
+              ) : poster ? (
                 <Card style={[styles.posterCard, styles.secondaryCard]}>
                   <Text style={styles.sectionTitle}>Posted by</Text>
                   <View style={styles.posterRow}>

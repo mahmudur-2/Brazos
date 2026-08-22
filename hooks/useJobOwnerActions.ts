@@ -31,6 +31,11 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
   const navigation = useNavigation();
   const { user } = useAuth();
   const [bidCount, setBidCount] = useState<number | null>(null);
+  // A failed count read fails CLOSED (the buttons stay hidden) but not
+  // silently: countError lets JobOwnerActions say the eligibility check
+  // didn't load and offer a retry (F-026).
+  const [countError, setCountError] = useState(false);
+  const [countAttempt, setCountAttempt] = useState(0);
   const [deleting, setDeleting] = useState(false);
   // Owned here (not by the confirmation dialog itself) so JobOwnerActions can
   // render a BRAZOS ConfirmDialog around this hook's own delete logic without
@@ -47,6 +52,7 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
   useEffect(() => {
     if (!isOwner) {
       setBidCount(null);
+      setCountError(false);
       return;
     }
 
@@ -58,7 +64,15 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
     // counts root offers so a countered negotiation still reads as one.
     async function loadCount() {
       const { data, error } = await supabase.rpc('job_offer_count', { p_job_id: jobId });
-      if (active && !error) setBidCount(typeof data === 'number' ? data : 0);
+      if (!active) return;
+      if (error) {
+        // Fail closed AND say so: bidCount stays null (never guessed to 0),
+        // canManage stays false, and countError drives a visible retry.
+        setCountError(true);
+        return;
+      }
+      setCountError(false);
+      setBidCount(typeof data === 'number' ? data : 0);
     }
     loadCount();
 
@@ -80,11 +94,14 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
       active = false;
       supabase.removeChannel(channel);
     };
-  }, [isOwner, jobId, instanceId]);
+  }, [isOwner, jobId, instanceId, countAttempt]);
 
   // null (still loading) reads as "not manageable yet" so the buttons never
   // flash on before we actually know the bid count is zero.
   const canManage = isOwner && status === 'open' && bidCount === 0;
+  // The failed check only matters where the buttons could have rendered:
+  // the owner's own still-open job.
+  const manageCheckFailed = isOwner && status === 'open' && bidCount === null && countError;
 
   function onEdit() {
     // navigation here is intentionally untyped (this hook is shared across
@@ -128,6 +145,8 @@ export function useJobOwnerActions(jobId: string, posterId: string, status: stri
 
   return {
     canManage,
+    manageCheckFailed,
+    retryManageCheck: () => setCountAttempt((attempt) => attempt + 1),
     deleting,
     onEdit,
     onDelete,
