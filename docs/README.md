@@ -7,6 +7,23 @@ record** — why a fork was resolved; never rewritten · **archive** — history
 never an authority. Machine state (branch, HEAD, tree) is owned by Git and
 appears in no document.
 
+## Folders under docs/, at a glance
+
+| Folder | Holds |
+| --- | --- |
+| `docs/archive/` | History, never an authority: retired root documents, plus `root-audits/`, `diagnostics/`, `hardening-report/`, `project-audit/` (archived from the root 2026-08-22). |
+| `docs/audit/` | Point-in-time audit sweeps, one dated directory per audit (`2026-08-21/`, `2026-08-22/`). Never edited after the fact. |
+| `docs/audits/` | Records of consequential runs, one file per run. One letter from `docs/audit/` — read carefully. |
+| `docs/brand-source/` | Unbundled design master rasters (`brazos-logo-source.png`). |
+| `docs/cleanup/` | Repository-cleanup run inventories (`2026-08-22/inventory.md`). |
+| `docs/design/` | Operator-authored design notes. Not edited by runs. |
+| `docs/device-captures/` | Physical-device screenshot sets, dated. |
+| `docs/dispatch/` | Dispatch prompts for specific runs — instructions at a point in time. |
+| `docs/emerald-v2/` | The v2 redesign plan, Phase 0 audit, and its `DECISIONS.md`. |
+| `docs/handoff-archive/` | Per-run HANDOFF records, verbatim, indexed by `INDEX.md`; `HANDOFF.md` at the root keeps only the live edge. |
+| `docs/mockups/` | The numbered golden-master PNGs (binding), their manifest and run report; `rejected/` holds the operator-rejected word-named renders. |
+| `docs/runbooks/` | Procedures meant to be executed (currently the phase67 account-deletion apply). |
+
 ## Active
 
 | File | Owns |
