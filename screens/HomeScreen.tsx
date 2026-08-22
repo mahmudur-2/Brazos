@@ -509,8 +509,8 @@ export function HomeScreen() {
           {/* The shared SearchBar (Prestige 1a): the mic is the REAL voice
               search, rendered only when the on-device boundary is available —
               master 44's contract — replacing the old always-on stub that
-              apologised when tapped. The gold sparkle keeps the smart-matching
-              mark in the trailing slot. */}
+              apologised when tapped. The trailing slot holds the gold submit
+              arrow. */}
           <SearchBar
             value={query}
             onChangeText={setQuery}
@@ -530,7 +530,7 @@ export function HomeScreen() {
                   name="arrow-forward"
                   size={23}
                   color={colors.gold}
-                  accessibilityLabel="Smart matching is on"
+                  accessibilityLabel="Search"
                 />
               </>
             }
