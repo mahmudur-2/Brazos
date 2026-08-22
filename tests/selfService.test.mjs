@@ -92,6 +92,20 @@ test('a NULL price is "Ask for a quote", never zero dollars', async () => {
   assert.match(sql, /price_cents is null or price_cents > 0/);
 });
 
+test('services carries no currency formatting of its own — formatBudget is the one formatter (F-011)', async () => {
+  const services = await read('lib/services.ts');
+  // The dollar figure must flow through THE money formatter…
+  assert.match(services, /import \{ formatBudget \} from '\.\/jobs'/);
+  assert.match(services, /formatBudget\(service\.price_cents\)/);
+  // …and the byte-identical re-implementation cannot quietly return: no
+  // cents→dollars arithmetic, no locale call, no hand-assembled dollar string.
+  assert.doesNotMatch(
+    services,
+    /toLocaleString|minimumFractionDigits|\/ 100|\$\$\{/,
+    'lib/services.ts must not format currency itself'
+  );
+});
+
 test('the avatar path stays failure-safe', async () => {
   const src = await read('screens/ProfileScreen.tsx');
   // An upload error must fall back to the existing avatar and tell the user,

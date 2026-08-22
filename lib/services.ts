@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { formatBudget } from './jobs';
 
 /**
  * Screens 64/25 — a worker's advertised services with optional pricing
@@ -102,10 +103,9 @@ export async function removeWorkerService(serviceId: string) {
 /** "$60 flat" / "$45/hr" / "Ask for a quote" — the one price line. */
 export function servicePriceLabel(service: Pick<WorkerService, 'price_cents' | 'price_unit'>): string {
   if (service.price_cents == null) return 'Ask for a quote';
-  const dollars = service.price_cents / 100;
-  const amount = `$${dollars.toLocaleString('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 2,
-  })}`;
+  // The dollar figure comes from THE money formatter (CLAUDE.md: integer
+  // cents, formatted only through formatBudget). This function owns only the
+  // pricing-unit suffix.
+  const amount = formatBudget(service.price_cents);
   return service.price_unit === 'hourly' ? `${amount}/hr` : `${amount} flat`;
 }
