@@ -251,7 +251,7 @@ const HERO_ART_INK_LEFT = 0.153;
  * to stop where the artwork's ink starts, and a number typed twice is a number
  * that drifts.
  */
-const HERO_ART_DARK = { width: 184, height: 162, right: -28, top: 35 } as const;
+const HERO_ART_DARK = { width: 184, height: 162, right: -33, top: 70 } as const;
 /**
  * The dark headline's leading, as a multiple of whatever size the studio is
  * showing. Master 44 runs 82px of line pitch = 37.9pt, and this is that pitch
@@ -526,7 +526,7 @@ export function HomeScreen() {
               <>
                 <View style={styles.searchDivider} />
                 <Ionicons
-                  name="sparkles"
+                  name="arrow-forward"
                   size={23}
                   color={colors.gold}
                   accessibilityLabel="Smart matching is on"
@@ -889,7 +889,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: 7,
     minHeight: 44,
-    paddingHorizontal: 13,
+    paddingHorizontal: 10,
     borderRadius: radius.pill,
     borderWidth: 1.25,
     borderColor: colors.gold,
@@ -932,7 +932,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // measurement does not have, because the estimate's own spread — 151 to 168
   // depending on whether the ring is 0.92pt or 1.00pt — is twice that gap.
   // RECORDED: the difference, and the fact that no token is inside 8.
-  modeSwitchDark: { borderWidth: 1, borderColor: colors.homeSlate },
+  modeSwitchDark: { borderWidth: 1, borderColor: colors.homeModeRing },
   // Phase 1's tactile answer to the tap — the press state itself, so the
   // feedback lands on touch-down rather than after an animation starts.
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
@@ -1149,7 +1149,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // already does. LIGHT is unmoved by it: at 25pt in the same column the
   // natural wrap already fell after "job." and again after "handles", which is
   // exactly what the explicit break plus one natural wrap produces.
-  heroHeadlineDark: { color: colors.ink, fontSize: 18, lineHeight: 28 },
+  heroHeadlineDark: { color: colors.ink, fontSize: 19, lineHeight: 30 },
   heroMark: { position: 'absolute', top: 12, right: 10, width: 79, height: 101 },
   // No width/height here on purpose: dark's box is B_DRAPE_WIDTH_RATIO of the
   // screen, measured at render (home(2)). `right` must stay in step with

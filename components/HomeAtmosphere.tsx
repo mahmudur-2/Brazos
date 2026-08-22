@@ -45,7 +45,7 @@ const HOME_ATMOSPHERE = require('../assets/prestige/home-atmosphere-dark.png');
  * master's gutters average about 3.4 where this reads 9.8. It is left alone
  * anyway — the only ways to close that gap are editing the raster's bytes or
  * lowering the layer's opacity, and lowering opacity blends towards
- * `homeBackground` (#03110E, luminance 13.8), which would make the gutters
+ * `homeBackground` (#02110D, luminance 13.5), which would make the gutters
  * BRIGHTER. The palette is frozen and the raster is not ours to repaint, so the
  * difference is recorded here rather than chased.
  */

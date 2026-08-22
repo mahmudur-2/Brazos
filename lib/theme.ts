@@ -66,6 +66,11 @@ export const colors = {
   homeBackground: '#FAF5F1',
   /** The blue-slate secondary text used by the approved Customer Home reference. */
   homeSlate: '#526477',
+  /** The "Switch to Worker" pill's ring. Light rides the same blue-slate the
+   *  reference draws that ring in, so it matches `homeSlate` here. Dark does
+   *  NOT: the ring there is its own cooler grey. Two roles, two tokens, so
+   *  `homeSlate` can move without dragging the ring with it. */
+  homeModeRing: '#526477',
   /** The Home reference's own soft hairline (search pill, map pill). Kept as
    *  a token so the unlocked screen carries no literals; dark maps it to the
    *  Prestige gold hairline. */
@@ -144,9 +149,9 @@ export const darkColors: ColorPalette = {
   // Prestige v2: the masters' ONE solid conversion fill is the deep forest,
   // so the primary role IS emeraldDark.forest; pressed/soft steps stay in
   // the same family. Content on it is the cream ink, both palettes.
-  primary: '#1E3A2C',
+  primary: '#1B3527',
   primaryDark: '#162B21',
-  primarySoft: '#11241C',
+  primarySoft: '#0E1F18',
   onPrimary: '#F1EDE1',
   onForest: emeraldDark.onForest,
   star: '#F59E0B',
@@ -164,8 +169,9 @@ export const darkColors: ColorPalette = {
   mint: emeraldDark.mint,
   mint2: emeraldDark.mint2,
   ink: emeraldDark.ink,
-  homeBackground: '#03110E',
+  homeBackground: '#02110D',
   homeSlate: '#93A096',
+  homeModeRing: '#6A736C',
   homeHairline: '#55482E',
   homeLive: emeraldDark.emerald,
   homeLiveHalo: emeraldDark.mint2,
@@ -174,17 +180,17 @@ export const darkColors: ColorPalette = {
   textMuted: '#93A096',
   textSubtle: '#7C8A80',
 
-  background: '#03110E',
+  background: '#02110D',
   // The dim-gold hairline is what makes Prestige read as Prestige: `border`
   // is the flat equivalent of gold at hairline alpha, not a neutral grey.
-  surface: '#0E1D17',
+  surface: '#0A1813',
   border: '#55482E',
   navInactive: emeraldDark.navInactive,
 
   // Live-state/status greens ride the v2 emerald; warning rides the masters'
   // hot amber on the goldSoft wash. Danger SURFACES keep pre-v2 values.
   success: '#5FAE81',
-  successBg: '#11241C',
+  successBg: '#0E1F18',
   warning: '#F2B04F',
   warningBg: '#251E10',
   danger: '#D8604B',

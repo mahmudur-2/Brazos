@@ -134,16 +134,16 @@ export const light = colors;
  * active nav); `warn` is the hot amber of the delete gates.
  */
 export const dark = {
-  forest: '#1E3A2C',
+  forest: '#1B3527',
   emerald: '#5FAE81',
-  gold: '#DCAB60',
+  gold: '#D4A24C',
   goldSoft: '#251E10',
-  mint: '#11241C',
-  mint2: '#2A4C3D',
+  mint: '#0E1F18',
+  mint2: '#254539',
   ink: '#F1EDE1',
 
-  bg: '#03110E',
-  surface: '#0E1D17',
+  bg: '#02110D',
+  surface: '#0A1813',
   muted: '#93A096',
   line: '#55482E',
   danger: '#D8604B',
