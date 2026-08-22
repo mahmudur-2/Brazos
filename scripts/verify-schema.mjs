@@ -16,7 +16,8 @@
  * Exit codes — EXIT below is the one definition:
  *   0 every required object exists · 1 required object(s) MISSING ·
  *   2 missing .env values or control-probe failure · 3 env parity failure ·
- *   4 the production project ref was refused (F-003)
+ *   4 the production project ref was refused (F-003) ·
+ *   5 sentinel group(s) PENDING — migration not applied yet (F-006)
  *
  * IMPORT CONTRACT: importing this module has ZERO side effects — it reads no
  * env, constructs no request, opens no network and never exits. Everything
@@ -39,7 +40,23 @@ export const EXIT = Object.freeze({
   env: 2,
   parity: 3,
   production: 4,
+  pending: 5,
 });
+
+/**
+ * PENDING fails the run (F-006). An unmet sentinel used to print PENDING,
+ * suppress its group's checks and still exit 0 — a completely unmigrated
+ * database passed. MISSING keeps exit 1 ("applied wrong"); PENDING gets its
+ * own code ("not applied yet") so the operator can tell the two apart from
+ * the exit status alone. When both are true, missing wins the code — it is
+ * the stronger claim, against a database that says it IS migrated — and the
+ * summary still prints both counts.
+ */
+export function resolveExitCode({ missing, pending }) {
+  if (missing > 0) return EXIT.missing;
+  if (pending > 0) return EXIT.pending;
+  return EXIT.ok;
+}
 
 // Assigned by main() after its gates pass; the probe helpers below close
 // over them. Nothing assigns or reads them at import time.
@@ -139,22 +156,63 @@ async function checkColumn(table, column) {
 }
 
 /**
+ * The verdict for checkColumnRevoked, pure and exported so the suite can pin
+ * it without a network. Allow-list, never block-list: the ONLY pass is the
+ * denial itself — HTTP 403, or body code 42501 ("permission denied"), the
+ * same shape checkRpcDenied accepts — because that is the only response that
+ * proves a revoke. The old form passed on ANY non-2xx, so a 404 "table does
+ * not exist" was indistinguishable from "secured": 23 assertions, payments
+ * among them, could go green against a database missing the table entirely.
+ */
+export function classifyRevokedResponse({ status, code, message }, table, column) {
+  const squash = (s) => s.replace(/\s+/g, ' ').trim();
+  if (status === 403 || code === '42501') {
+    return { ok: true, note: `denied (responded ${status})` };
+  }
+  if (status >= 200 && status < 300) {
+    return {
+      ok: false,
+      detail: `${table}.${column} is still readable with the publishable key`,
+    };
+  }
+  if (status === 404 || code === 'PGRST205' || code === '42P01') {
+    return {
+      ok: false,
+      detail: squash(`${status} ${code ?? ''} ${message ?? ''} — table missing, not denied`),
+    };
+  }
+  if (code === 'PGRST204' || code === '42703') {
+    return {
+      ok: false,
+      detail: squash(`${status} ${code ?? ''} ${message ?? ''} — column missing, not denied`),
+    };
+  }
+  return {
+    ok: false,
+    detail: squash(`neither denied nor missing: ${status} ${code ?? ''} ${message ?? ''}`),
+  };
+}
+
+/**
  * The inverse of checkColumn: asserts a column is NOT readable with the
- * publishable key. phase29 revokes every direct grant on public.profiles and
- * re-grants only a public column list, so a column that still reads back here
- * means the hardening was never applied (or was rolled back) — the one part of
- * phase29 that an existence probe cannot see.
+ * publishable key — and specifically that the refusal is a DENIAL. phase29
+ * revokes every direct grant on public.profiles and re-grants only a public
+ * column list, so a column that still reads back here means the hardening
+ * was never applied (or was rolled back) — the one part of phase29 that an
+ * existence probe cannot see. A missing table or column fails too: absent
+ * is broken, not secured (classifyRevokedResponse above carries the rule).
  */
 async function checkColumnRevoked(table, column) {
   const res = await fetch(
     `${BASE}/rest/v1/${table}?select=${encodeURIComponent(column)}&limit=0`,
     { headers }
   );
-  if (!res.ok) return { ok: true, note: `not readable (responded ${res.status})` };
-  return {
-    ok: false,
-    detail: `${table}.${column} is still readable with the publishable key`,
-  };
+  const body = await res.json().catch(() => ({}));
+  return classifyRevokedResponse(
+    { status: res.status, code: body.code, message: body.message },
+    table,
+    column
+  );
 }
 
 /**
@@ -656,9 +714,10 @@ const MIGRATIONS = [
     // makes that distinction honest rather than a weakened check.
     //
     //   sentinel MISSING -> the migration has not been applied. Every check
-    //                       in this group reports PENDING and none of them
-    //                       counts toward the failure total. Nothing is
-    //                       marked as passing.
+    //                       in this group reports PENDING, and PENDING fails
+    //                       the run with its own exit code (EXIT.pending),
+    //                       distinct from MISSING. Nothing is marked as
+    //                       passing.
     //   sentinel PRESENT -> the migration HAS been applied. Every check
     //                       becomes mandatory, exactly like the groups above,
     //                       and a missing object fails the run.
@@ -1559,12 +1618,13 @@ async function main() {
   }
   if (pending > 0) {
     console.log(
-      `${pending} check(s) PENDING — their migration is not applied yet. This is ` +
-        'not a failure; the checks become mandatory automatically once the ' +
-        'migration lands.'
+      `${pending} check(s) PENDING — their migration is not applied yet. ` +
+        `PENDING FAILS the run (exit ${EXIT.pending}, distinct from MISSING's ` +
+        `${EXIT.missing}) so an unmigrated database can never read as green; ` +
+        'the checks become mandatory automatically once the migration lands.'
     );
   }
-  process.exit(missing === 0 ? EXIT.ok : EXIT.missing);
+  process.exit(resolveExitCode({ missing, pending }));
 }
 
 // main() runs only when this file is the entry point — the same guard
