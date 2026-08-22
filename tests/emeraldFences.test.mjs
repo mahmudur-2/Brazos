@@ -591,15 +591,18 @@ test('home(2) fence: the B drape is a fraction of the screen, and the copy colum
     `at ${darkSize}pt the promo heading's second line sets ${secondLine.toFixed(1)}pt into ` +
       `${copyColumn}pt of column and wraps to a third. Master 44 draws two`
   );
-  // AND IT ENDS WHERE THE MASTER'S ENDS. Fitting is not the same as matching:
-  // 19pt fits the column and then stops 4.5pt from the gold mark, where master
-  // 44 leaves 18. The master's own second line runs to 251.1pt from the card's
-  // left edge, and this is that line's right edge at the size shipped.
+  // AND IT ENDS WHERE THE CANON PUTS IT. Fitting is not the same as matching,
+  // and the two answers part company here. Master 44 ran this line to 251.1pt
+  // from the card's left edge at 18pt; the operator's tuning pass took the
+  // heading to 19/30, which runs it to 262.5 and leaves 2.5pt of the column
+  // rather than the master's 18. That is the approved composition. What the
+  // fence keeps is the shape of the claim: the line has ONE right edge, it is
+  // derived from the size actually shipped, and moving the size moves it here.
   const lineEnd = 1 + 16 + secondLine;
   assert.ok(
-    Math.abs(lineEnd - 251.1) <= 6,
-    `the promo heading's long line ends ${lineEnd.toFixed(1)}pt from the card's left edge; master ` +
-      '44 ends it at 251.1, 18pt clear of the B mark'
+    Math.abs(lineEnd - 262.5) <= 6,
+    `the promo heading's long line ends ${lineEnd.toFixed(1)}pt from the card's left edge; the ` +
+      'approved 19/30 heading ends it at 262.5'
   );
 
   // home(25b) — AND THE BREAK IS THE MASTER'S, not the column's. Two lines is
@@ -870,7 +873,7 @@ test('home(24) fence: master 44’s five service chips fit on master 44’s two 
 // point at the number — there wasn't one.
 //
 // CATCHES: the heading's leading being "tidied" back to something rounder (two
-// lines of it are 56 of the card's 181); either gap being reverted; the CTA
+// lines of it are 60 of the card's 186); either gap being reverted; the CTA
 // height being changed in the studio without the card being re-checked; and
 // the gold B sliding back down to where the old master had it.
 //
@@ -891,16 +894,22 @@ test('home(25) fence: the promo card’s height is master 44’s, term by term',
   // term here that is not written down in the source.
   const EYEBROW_LINE_BOX = 14;
   const height = 2 + 2 * 16 + EYEBROW_LINE_BOX + copyGap + 2 * leading + bodyGap + cta + 2;
+  // 180.7 was master 44's own measurement, and it was met at 18/28. The tuning
+  // pass took the heading to 19/30, and two lines of 2pt more leading is the
+  // whole of the 5.3 between the two totals -- every other term is untouched.
+  // 186 is the approved stack; the band stays 2.5, so any ONE term moving on
+  // its own still goes red.
   assert.ok(
-    Math.abs(height - 180.7) <= 2.5,
-    `the promo card stacks to ${height}pt; master 44 measures 180.7 (its top edge at 449.1 and its ` +
-      'bottom at 629.8 below the content box)'
+    Math.abs(height - 186) <= 2.5,
+    `the promo card stacks to ${height}pt; the approved 19/30 heading stacks it to 186 (master 44 ` +
+      'measured 180.7 at the 18/28 it replaced)'
   );
 
-  // Master 44's line pitch on that heading is 60px = 27.7pt.
+  // Master 44 ran 60px = 27.7pt of pitch on this heading, against an 18pt
+  // size. The tuning pass set 30 against 19 -- 1.58, the master's own ratio.
   assert.ok(
-    Math.abs(leading - 27.7) <= 1.5,
-    `the heading's leading is ${leading}; master 44 runs 27.7pt of line pitch`
+    Math.abs(leading - 30) <= 1.5,
+    `the heading's leading is ${leading}; the approved heading runs 30pt of line pitch`
   );
 
   // THE GOLD B'S TOP. Its ink starts 22.2pt below the card's outer top edge on
@@ -1016,10 +1025,15 @@ test('home(17) fence: the mode switch wears the hairline in dark, gold in light'
   // a ring the OLD master peaked at #A9814B — a warm olive. The replaced
   // master's ring peaks at #AFACA4, a near-neutral light grey at luminance
   // 151..168 against `border`'s 73. It is not a dim gold hairline at all.
+  // The tuning pass gave that neutral its OWN token. `homeSlate` is the
+  // secondary TEXT colour and other screens read it; the ring is a different
+  // role, so it moved to `homeModeRing` and the two can be tuned apart. The
+  // invariant is unchanged and is the whole point of this fence: dark overrides
+  // the ring with a TOKEN -- never a literal, and never with light's gold.
   assert.match(
     dark[1],
-    /borderColor: colors\.homeSlate/,
-    'the dark ring is the neutral the replaced master measures, not the gold hairline'
+    /borderColor: colors\.homeModeRing/,
+    'the dark ring is its own neutral token, not the gold hairline and not a literal'
   );
   // THE WEIGHT HALF SURVIVED: 2px of 1844 = 0.92pt, so 1 is still the nearest
   // real weight below light's 1.25.
@@ -1046,11 +1060,15 @@ test('home(17) fence: the mode switch wears the hairline in dark, gold in light'
     : 0;
   assert.ok(labelSize > 0, 'the dark label size must come off the sans ladder, not a literal');
   // "Switch to Worker" measured 116pt of ink at 15pt in a real 393pt viewport,
-  // inside a 171pt box.
-  const pillWidth = 171 - 116 + (116 * labelSize) / 15;
+  // inside a 171pt box -- and that box was measured while the pill padded its
+  // label by 13 a side. The tuning pass took the padding to 10, which comes off
+  // the FIXED term twice and off the elastic one not at all, so the box the
+  // same ink measurement sits in is 165.
+  const pillWidth = 165 - 116 + (116 * labelSize) / 15;
   assert.ok(
-    Math.abs(pillWidth - 156.2) <= 5,
-    `the pill resolves to ${pillWidth.toFixed(1)}pt wide; master 44 draws it 156.2`
+    Math.abs(pillWidth - 149.5) <= 5,
+    `the pill resolves to ${pillWidth.toFixed(1)}pt wide; the approved 10pt padding draws it 149.5 ` +
+      '(master 44 drew 156.2 at the 13 it replaced)'
   );
   // RECORDED, NOT MET: its height. Master 44 draws 40.2pt and CLAUDE.md's touch
   // floor is 44, so the floor wins and the 3.8pt stays a difference.
@@ -1150,29 +1168,34 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     'the dark rung has to reach the control'
   );
   // home(23): the dark leading is no longer light's 45/39 ratio. Master 44 runs
-  // 82px = 37.9pt of line pitch, which is an ABSOLUTE measurement; HEADLINE_LEADING
-  // is that pitch over the size the column allows, so the studio slider still
-  // moves size and leading together.
+  // 82px = 37.9pt of line pitch; HEADLINE_LEADING is that pitch over the size
+  // the column allowed when it was written (38/31), so the studio slider still
+  // moves size and leading together. The tuning pass moved the SIZE to 33 and
+  // left the ratio alone, which carries the pitch to 40.5. The ratio is the
+  // frozen half, the product is what this asserts, and both are read out of the
+  // source rather than restated here.
   assert.match(
     flat,
     /isDark && \{ maxWidth: headlineColumn, fontSize: design\.heroFontSize, lineHeight: Math\.round\(design\.heroFontSize \* HEADLINE_LEADING\),? \}/,
     "the studio's live hero size is a DARK instrument; light keeps styles.headline's own 39/45"
   );
   const leading = constantOf(home, 'HEADLINE_LEADING');
+  const heroSize = Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
   assert.ok(
-    Math.abs(leading * Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]) - 37.9) < 1.2,
-    `the dark headline's leading must resolve to master 44's measured 37.9pt pitch, not ${(leading * 31).toFixed(1)}`
+    Math.abs(leading * heroSize - 40.5) < 1.2,
+    `the dark headline's leading must resolve to the approved 40.5pt pitch, not ${(leading * heroSize).toFixed(1)}`
   );
   assert.match(
     flat,
     /headline: \{ maxWidth: '73%', fontFamily: fonts\.display, fontSize: 39, lineHeight: 45,/,
     'light keeps its 39/45 hero'
   );
-  // home(25): 27 -> 28, and the size joins it. The replaced master runs 60px of
-  // line pitch on this heading = 27.7pt, and sets it on TWO lines.
+  // home(25) took this to 18/28 off the replaced master's 60px = 27.7pt of
+  // pitch; the tuning pass took it to 19/30, which keeps that ratio and still
+  // sets it on TWO lines -- home(2) asserts both the fit and the line's end.
   assert.match(
     flat,
-    /heroHeadlineDark: \{ color: colors\.ink, fontSize: 18, lineHeight: 28 \}/,
+    /heroHeadlineDark: \{ color: colors\.ink, fontSize: 19, lineHeight: 30 \}/,
     'the promo heading’s dark size and leading are both master 44’s, and dark-only'
   );
   assert.match(
@@ -1290,11 +1313,13 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
     Math.abs(height - 162) <= 4,
     `master 44's scene is 162.2pt tall at 393pt; this slot is ${height}pt`
   );
-  // 34.9pt below the content box's top, and `top` is measured from `intro`,
-  // which starts there.
+  // Master 44 started the scene 34.9pt below the content box's top; the tuning
+  // pass dropped it to 70, and `top` is still measured from `intro`, which
+  // starts there. The band stays 3, so the slot cannot drift off the approved
+  // position either.
   assert.ok(
-    Math.abs(top - 35) <= 3,
-    `master 44 starts the scene 34.9pt below the content top; this slot starts at ${top}pt`
+    Math.abs(top - 70) <= 3,
+    `the approved slot starts the scene 70pt below the content top; this one starts at ${top}pt`
   );
 
   // IT OVERHANGS THE SCREEN, and by a measured amount. `right` is relative to
@@ -1305,14 +1330,20 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
   const overhang = -right - padding;
   assert.ok(
-    Math.abs(overhang - 7.8) <= 3,
-    `master 44 runs the scene 7.8pt past the screen's right edge; this one runs ${overhang}pt`
+    Math.abs(overhang - 13) <= 3,
+    `the approved slot runs the scene 13pt past the screen's right edge (master 44 ran 7.8); this ` +
+      `one runs ${overhang}pt`
   );
 
-  // A room-baked scene has no alpha to be inset by, so `inkBounds` reports a
+  // The replaced scene carries alpha now -- a 9-row trim off its bottom edge --
+  // but nothing is cut from its right, so `inkBounds` still reports a
   // full canvas — the box IS the art, and that is the correct answer here.
   const ink = inkBounds(join(root, 'assets/prestige/hero_armchair_customer.png'));
-  assert.equal(ink.right, 0, 'the baked scene must stay alpha-free, or this box stops describing it');
+  assert.equal(
+    ink.right,
+    0,
+    'nothing may be trimmed off the scene right edge, or this box stops describing it',
+  );
 
   // WHERE ITS INK ACTUALLY STARTS, re-derived from the asset rather than
   // restated. The scene is vignetted, so its outer columns carry no structure
@@ -1434,7 +1465,7 @@ test('home(13) fence: the atmosphere carries a vignette, and it crops to fill', 
 // which is frozen.
 // ---------------------------------------------------------------------------
 test('home(5) fence: one dark ground in three places, light untouched', () => {
-  const DARK_GROUND = '#03110E';
+  const DARK_GROUND = '#02110D';
 
   /** The slice of `source` between one `export const NAME = ` and the next. */
   const paletteBlock = (source, name, next) => {
@@ -1473,6 +1504,12 @@ test('home(5) fence: one dark ground in three places, light untouched', () => {
   // revert cannot leave one screen on the old ground.
   for (const [path, source] of [['ui/tokens.ts', tokens], ['lib/theme.ts', theme]]) {
     assert.doesNotMatch(source, /#08110E/i, `${path} still carries the retired dark ground`);
+    // And the ground the tuning pass replaced, for the same reason.
+    assert.doesNotMatch(
+      source,
+      /#03110E/i,
+      `${path} still carries the pre-tuning dark ground`,
+    );
   }
 });
 

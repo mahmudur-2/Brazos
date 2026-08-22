@@ -410,7 +410,16 @@ const BAKED_ART = {
   // prestige(0a) (715ddf8) by redirect; no bytes were altered. Still gated:
   // assets/prestige is dark-only, and being baked makes that stronger, not
   // weaker — this one really would drop a dark room onto the ivory ground.
-  'assets/prestige/hero_armchair_customer.png': { bake: 'opaque-dark', gate: true },
+  //
+  // THE TUNING PASS REPLACED THE FILE AGAIN, and the record moves with it. It
+  // is 400x351 of RGBA now, with a strip trimmed off its bottom edge: 2881 of
+  // its 140400 samples sit at alpha 0, 35 more are partial, and the other
+  // 97.92% are fully opaque. That is neither of the two bakes this roster knew,
+  // so it carries its own word rather than being rounded to whichever is
+  // closer -- calling it a cut-out would let a real re-cut through unnoticed,
+  // and calling it room-baked would be false while the alpha is there. Still
+  // gated, and for the unchanged reason: 97.9% of it is still a dark room.
+  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-trimmed', gate: true },
   'assets/prestige/brazos_b_drape.png': { bake: 'transparent', gate: true },
   'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
@@ -587,9 +596,10 @@ test('[static] every roster bake claim is re-derived from the file, both ways', 
         alpha.minAlpha < 255,
         `${asset} is claimed transparent but every alpha sample is 255 — the ground is still baked in`,
       );
-      // A stray soft pixel is not a cut-out. The thinnest real cut-out on this
-      // roster is the app icon at 3.37% fully transparent; the floor below sits
-      // under that and still excludes a token pixel or a rounded corner.
+      // A stray soft pixel is not a cut-out. The thinnest entry carrying real
+      // alpha on this roster is the trimmed hero at 2.05%, and the thinnest true
+      // cut-out is the app icon at 3.37%; the floor below sits under both and
+      // still excludes a token pixel or a rounded corner.
       assert.ok(
         alpha.transparentSamples > alpha.samples * 0.01,
         `${asset} is claimed transparent but only ${alpha.transparentSamples}/${alpha.samples} samples are cut out`,
@@ -636,6 +646,20 @@ test('[static] each hero raster is the bake the roster records', async () => {
       assert.ok(
         alpha.transparentSamples > alpha.samples * 0.3,
         `${asset}: only ${alpha.transparentSamples}/${alpha.samples} samples cut out — that is a crop, not a cut-out`,
+      );
+    } else if (recorded === 'baked-trimmed') {
+      // The third answer, measured as tightly as the two it sits between. The
+      // scene is still a room-baked picture, but the file carries an alpha
+      // channel with a strip trimmed out of it, so it is pinned BETWEEN the two
+      // bakes: it must really have alpha that reaches 0, and it must NOT have
+      // become a cut-out. Either drift fails here rather than passing quietly
+      // under whichever word was closer.
+      assert.equal(alpha.colourType, 6, `${asset} is recorded trimmed but is not RGBA`);
+      assert.equal(alpha.minAlpha, 0, `${asset} is recorded trimmed but never reaches alpha 0`);
+      assert.ok(
+        alpha.transparentSamples > 0 && alpha.transparentSamples < alpha.samples * 0.3,
+        `${asset}: ${alpha.transparentSamples}/${alpha.samples} samples are cut away — a trim is ` +
+          'neither a full bake nor a cut-out, and this file has become one of them',
       );
     } else {
       assert.equal(recorded, 'opaque-dark', `${asset}: unknown bake "${recorded}" on the roster`);

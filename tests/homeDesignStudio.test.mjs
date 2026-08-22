@@ -28,10 +28,15 @@ test('Home Design Studio defaults preserve the current Home geometry and control
     // leaves caps it at 31, because "off your plate." sets 7.00pt of ink per
     // point of size and the art's ink starts at 244.6pt. The studio's slider
     // still runs 28..56; this is where it starts.
-    'heroFontSize: 31',
+    // The tuning pass took this to 33. The hero art slot moved with it
+    // (right -28 -> -33), which widens the column the artwork leaves, and 33
+    // is the size the operator approved in that column.
+    'heroFontSize: 33',
     'screenPadding: 20',
     'sectionGap: 20',
-    'searchHeight: 70',
+    // 70 -> 65 in the same pass; searchRadius stays 35 and is no longer half
+    // the height, which is deliberate and is why they are two settings.
+    'searchHeight: 65',
     'searchRadius: 35',
     'ctaHeight: 48',
     'ctaRadius: 24',

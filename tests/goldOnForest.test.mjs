@@ -130,9 +130,13 @@ test('[static] the v2 dark palette keeps forest green and gold metal, distinct',
     assert.ok(hit, `ui/tokens.ts dark is missing ${key}`);
     return hit[1];
   };
-  assert.equal(value('forest'), '#1E3A2C');
-  assert.equal(value('gold'), '#DCAB60');
-  assert.equal(value('bg'), '#03110E');
+  // Prestige v2.1: the operator's tuning pass darkened the ground and cooled
+  // the forest and the gold by a step. The pins move with it; what they are
+  // for is unchanged -- these are the two hues v1 had merged, and the ground
+  // they sit on.
+  assert.equal(value('forest'), '#1B3527');
+  assert.equal(value('gold'), '#D4A24C');
+  assert.equal(value('bg'), '#02110D');
   assert.notEqual(value('forest'), value('gold'), 'v1 merged these; v2 must never re-merge them');
 });
 
