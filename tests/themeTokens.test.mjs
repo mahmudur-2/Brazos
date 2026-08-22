@@ -308,6 +308,89 @@ test('L-010 fence: the one star treatment resolves in LIGHT too, at every bare-�
 });
 
 // ---------------------------------------------------------------------------
+// L-002 — the eleven category accents are token-layer data, at unchanged values.
+//
+// They were twenty-two raw hexes in lib/jobs.ts: outside all three sanctioned
+// token surfaces (CLAUDE.md "Design system and navigation") and outside the
+// hex fence's scanned directories, so a twelfth could have been added with
+// nothing to catch it. The move to ui/tokens.ts is a REFACTOR — this fence is
+// what makes that claim checkable rather than asserted.
+//
+// WHY NOT VACUOUS. The table below is the pre-refactor lib/jobs.ts table
+// copied byte for byte, and it is compared against the EXECUTED token module,
+// so a single changed digit anywhere fails. It then pins the two properties
+// that make "both palettes resolve to today's exact hexes" true rather than
+// hopeful: the accents are not palette keys (so no theme resolution can move
+// them), and lib/jobs.ts holds the table but no literal (so the values were
+// moved, not copied). Gating — that dark never paints this table at all — is
+// tests/emeraldFences.test.mjs F5's job and is deliberately not restated here.
+// ---------------------------------------------------------------------------
+
+/** lib/jobs.ts's JOB_CATEGORY_COLORS exactly as it stood at dd518d9, before
+ *  the values moved to the token layer. A refactor moves no pixel. */
+const CATEGORY_ACCENTS_BEFORE_L002 = {
+  handyman: { bg: '#3B6FA6', icon: '#FFFFFF' },
+  cleaning: { bg: '#2E8B84', icon: '#FFFFFF' },
+  moving: { bg: '#C56A2E', icon: '#FFFFFF' },
+  dog_walking: { bg: '#7B5CA6', icon: '#FFFFFF' },
+  yard_work: { bg: '#5A8F3C', icon: '#FFFFFF' },
+  errands: { bg: '#E0A93A', icon: '#3D2B0F' },
+  furniture_assembly: { bg: '#8B6544', icon: '#FFFFFF' },
+  tv_mounting: { bg: '#5B6B75', icon: '#FFFFFF' },
+  painting: { bg: '#B85C7A', icon: '#FFFFFF' },
+  packing: { bg: '#4A5A9E', icon: '#FFFFFF' },
+  other: { bg: '#6B7280', icon: '#FFFFFF' },
+};
+
+test('L-002 fence: the category accents moved to the token layer at unchanged values', async () => {
+  const { categoryAccents, light, dark } = await tokensModule;
+
+  // 1. VALUE PARITY, executed. Every one of the twenty-two values, byte for
+  //    byte, against the table that lived in lib/jobs.ts.
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(categoryAccents)),
+    CATEGORY_ACCENTS_BEFORE_L002,
+    'L-002 is a refactor, not a retune — a category badge repainted',
+  );
+
+  // 2. BOTH PALETTES RESOLVE TO THOSE HEXES. The accents are identity colours,
+  //    not palette roles: they are absent from light and from dark, so there
+  //    is no resolution step that could move one theme's badge off the other's.
+  //    (An accent quietly repointed at a palette token — `colors.forest`, say —
+  //    WOULD flip between themes; this is what forbids that.)
+  for (const key of Object.keys(CATEGORY_ACCENTS_BEFORE_L002)) {
+    assert.ok(!(key in light), `${key} must not become a light palette token`);
+    assert.ok(!(key in dark), `${key} must not become a dark palette token`);
+  }
+  for (const [key, pair] of Object.entries(categoryAccents)) {
+    for (const half of ['bg', 'icon']) {
+      assert.match(pair[half], /^#[0-9A-F]{6}$/, `categoryAccents.${key}.${half} must be a plain hex`);
+    }
+  }
+
+  // 3. THE VALUES MOVED, they were not copied. lib/jobs.ts keeps the table and
+  //    its guarded accessor — tests/emeraldFences.test.mjs F5 pins both
+  //    declarations — but carries no colour literal of any kind any more, which
+  //    is the whole point of the finding.
+  const jobs = stripComments(await read('lib/jobs.ts'));
+  assert.match(
+    jobs,
+    /JOB_CATEGORY_COLORS: Record<JobCategory, \{ bg: string; icon: string \}> =\s*categoryAccents;/,
+    'lib/jobs.ts must take the table from the token layer',
+  );
+  assert.equal(
+    jobs.match(/#[0-9a-fA-F]{3,8}\b/),
+    null,
+    `lib/jobs.ts: a raw hex literal is back — ${jobs.match(/#[0-9a-fA-F]{3,8}\b/)?.[0] ?? ''}`,
+  );
+  assert.equal(
+    jobs.match(/\b(?:rgba?|hsla?)\(/),
+    null,
+    'lib/jobs.ts: a raw rgb/hsl colour literal is back',
+  );
+});
+
+// ---------------------------------------------------------------------------
 // Resolver plumbing — 4D-4: preference + system resolution, native sync
 // ---------------------------------------------------------------------------
 

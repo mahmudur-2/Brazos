@@ -408,9 +408,59 @@ export const buttonVariants = {
 
 export type ButtonVariant = keyof typeof buttonVariants;
 
+// ---------------------------------------------------------------------------
+// Per-category identity accents (L-002)
+// ---------------------------------------------------------------------------
+
+/**
+ * The eleven job-category accents — the icon chip on job cards, job details,
+ * the hub, the browse list and the portfolio picker. Every category used to
+ * share one muted green square, so a list of jobs was only distinguishable by
+ * reading each title; colour does that scanning work instead. `icon` is
+ * whichever of white/dark reads with better contrast against that category's
+ * `bg`.
+ *
+ * THESE LIVED IN lib/jobs.ts AS RAW HEXES UNTIL L-002
+ * (docs/audit/2026-08-22/light_mode_parity.md). That put twenty-two colour
+ * literals in a data-access module — outside all three sanctioned token
+ * surfaces (CLAUDE.md "Design system and navigation"), and outside the hex
+ * fence's scanned directories, so nothing would have caught a twelfth being
+ * added. Moving them here changes no rendered pixel in either theme:
+ * lib/jobs.ts's JOB_CATEGORY_COLORS IS this object, and
+ * tests/themeTokens.test.mjs pins all twenty-two values against the
+ * pre-refactor table.
+ *
+ * DELIBERATELY THEME-CONSTANT, and deliberately not a light/dark pair. A
+ * category's colour is its identity — the same reason `star`, `black`,
+ * `white` and `mediaChrome` carry one value in both palettes. Dark never
+ * renders this table at all: every read of it sits on the FALSE branch of an
+ * `isDark` ternary with gold in its place, which tests/emeraldFences.test.mjs
+ * F5 enforces per consuming file. A dark half would be unreachable by
+ * construction, and no golden master specifies one.
+ *
+ * NOT part of `colors`/`ColorToken`. These are eleven identity pairs, not
+ * palette roles: folding them in would put twenty-two keys into every
+ * resolved `EmeraldPalette` that no primitive reads, and would oblige the
+ * dark palette to restate values it can never paint.
+ */
+export const categoryAccents = {
+  handyman: { bg: '#3B6FA6', icon: '#FFFFFF' }, // blue
+  cleaning: { bg: '#2E8B84', icon: '#FFFFFF' }, // teal
+  moving: { bg: '#C56A2E', icon: '#FFFFFF' }, // orange
+  dog_walking: { bg: '#7B5CA6', icon: '#FFFFFF' }, // purple
+  yard_work: { bg: '#5A8F3C', icon: '#FFFFFF' }, // green (distinct from the brand's deeper forest green)
+  errands: { bg: '#E0A93A', icon: '#3D2B0F' }, // amber — light enough to need a dark glyph
+  furniture_assembly: { bg: '#8B6544', icon: '#FFFFFF' }, // brown/tan
+  tv_mounting: { bg: '#5B6B75', icon: '#FFFFFF' }, // slate gray
+  painting: { bg: '#B85C7A', icon: '#FFFFFF' }, // rose/pink
+  packing: { bg: '#4A5A9E', icon: '#FFFFFF' }, // indigo
+  other: { bg: '#6B7280', icon: '#FFFFFF' }, // neutral gray fallback
+} as const;
+
 export const tokens = {
   colors,
   brand,
+  categoryAccents,
   spacing,
   layout,
   radius,
