@@ -73,13 +73,26 @@ const RAW_MESSAGE_ALLOWLIST = new Set([
   // by owner authorization — the hook now wraps at its own setError.
 ]);
 
-test('no screen, component, or hook stores or shows raw error text', async () => {
+test('no screen, component, hook, or ui primitive stores or shows raw error text', async () => {
   const { readdirSync } = await import('node:fs');
-  const dirs = ['screens', 'components', 'hooks'];
+  // G-001 (docs/audit/2026-08-22/guard_coverage.md) widened this sweep to
+  // `ui/`. The leak it missed lived in ui/primitives/MediaUploader.tsx, one
+  // directory outside the scan: the component extracted a StorageError's
+  // `.message` and handed it to a callback, and by the time it reached
+  // PostJobScreen's `alertAsync` it was bound to a parameter named `message`,
+  // which the needle below cannot see. A seam is only guarded where it is.
+  //
+  // `recursive` closes G-006 at the same time: `ui/` HAS subdirectories
+  // (primitives/, templates/), and screens/, components/ and hooks/ were one
+  // `mkdir` away from the same silent hole.
+  const dirs = ['screens', 'components', 'hooks', 'ui'];
   const offenders = [];
 
   for (const dir of dirs) {
-    for (const file of readdirSync(join(root, dir)).filter((f) => /\.(ts|tsx)$/.test(f))) {
+    const entries = readdirSync(join(root, dir), { recursive: true })
+      .map((entry) => String(entry).replace(/\\/g, '/'))
+      .filter((entry) => /\.(ts|tsx)$/.test(entry));
+    for (const file of entries) {
       const rel = `${dir}/${file}`;
       if (RAW_MESSAGE_ALLOWLIST.has(rel)) continue;
       const src = await read(rel);

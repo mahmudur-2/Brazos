@@ -28,9 +28,15 @@ test('MediaUploader only ever appends a URL a real upload returned', async () =>
 
   // ...and a failed/errored upload returns without touching `items` at all —
   // no optimistic add, no rollback, nothing to clobber.
+  //
+  // The reported string changed with G-001 (2026-08-22): the seam used to
+  // hand out the service's own `error?.message`, and now routes it through
+  // userMessage() with the same sentence as the fallback, so a no-error/no-url
+  // failure still reads exactly as it did. The guard SHAPE — early return, no
+  // `items` mutation — is what this assertion is for and is unchanged.
   assert.match(
     source,
-    /if \(error \|\| !url\) \{\s*onUploadError\?\.\(error\?\.message \?\? 'Upload failed\. Please try again\.'\);\s*return;\s*\}/
+    /if \(error \|\| !url\) \{\s*onUploadError\?\.\(userMessage\(error, 'Upload failed\. Please try again\.'\)\);\s*return;\s*\}/
   );
 
   // Removal is exclusively user-initiated (the "x" on a tile) — never

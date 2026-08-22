@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { userMessage } from '../../lib/errorMessage';
 
 /**
  * §I "MediaUploader" (BRAZOS_MASTER_PLAN.md §J Phase 4 — the one Phase 1
@@ -119,8 +120,18 @@ export function MediaUploader({
 
     // Failure changes nothing: `items` is untouched, so previously-uploaded
     // media can never be clobbered by this attempt.
+    //
+    // G-001 (docs/audit/2026-08-22/guard_coverage.md): this seam used to hand
+    // the failure's own raw `.message` straight out, and `onUpload` is bound
+    // to lib/storage.ts's `uploadAsset()`, which returns the service's own
+    // StorageError — or a raw caught fetch exception — unwrapped. The string
+    // reached `alertAsync` verbatim on two live PostJobScreen mounts. It
+    // survived the ship-blocker guard only because `ui/` sat outside the
+    // sweep's directories, and because by the time it reached the screen it
+    // was bound to a parameter named `message`. The wrap belongs HERE, at the
+    // one seam every caller passes through, not at each caller.
     if (error || !url) {
-      onUploadError?.(error?.message ?? 'Upload failed. Please try again.');
+      onUploadError?.(userMessage(error, 'Upload failed. Please try again.'));
       return;
     }
 
