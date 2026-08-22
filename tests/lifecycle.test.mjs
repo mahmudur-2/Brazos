@@ -224,6 +224,17 @@ test('JobProgress is presentation over the canonical track (F-012)', async () =>
   assert.match(progress, /track < 0 \? -1/);
 });
 
+test('jobStage is presentation over the canonical derivation (F-012)', async () => {
+  const stage = await read('lib/jobStage.ts');
+  assert.match(stage, /deriveJobLifecycle\(\{ job: \{ status \}, payment: null \}\)/);
+  // The raw-status switch is gone — the only switch left runs over the
+  // DERIVED state, so a new status classifies in exactly one file.
+  assert.doesNotMatch(stage, /switch \(status\)/);
+  // decision 5: the unclassifiable state is an explicit branch, never an
+  // accidental fall-through.
+  assert.match(stage, /case 'unknown':/);
+});
+
 test('no module outside lib/jobLifecycle.ts maps a raw status to a step index (F-012)', () => {
   // A raw-status→number map literal is the JobProgress defect's signature;
   // the canonical file owns the only status→position knowledge.
