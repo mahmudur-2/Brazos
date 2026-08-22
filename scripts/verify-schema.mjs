@@ -578,7 +578,9 @@ const MIGRATIONS = [
   },
   {
     // Same relationship as phase30 — phase29 creates it, phase31 restores it.
-    // lib/jobStatusCompatibility.ts only exists to cover its absence.
+    // The app has no fallback if it is missing: transition_job_status() is
+    // the only jobs.status writer (the old client-side compatibility path
+    // was removed by audit F-008).
     file: 'phase31_transition_job_status_rpc.sql',
     checks: [
       ['rpc transition_job_status()', () =>

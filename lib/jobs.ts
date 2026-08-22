@@ -1,7 +1,6 @@
 import type { ComponentProps } from 'react';
 import type { Ionicons } from '@expo/vector-icons';
 import { supabase } from './supabase';
-import { transitionJobStatusWithoutRpc } from './jobStatusCompatibility';
 import { coordinateLocationError, publicLocationLabel } from './locationPrivacy';
 import { moneyCeilingError } from './validation';
 
@@ -625,9 +624,6 @@ export async function updateJobStatus(
     p_completion_photos: photoUrls ?? null,
     p_completion_videos: videoUrls ?? null,
   });
-  if (error?.code === 'PGRST202') {
-    return transitionJobStatusWithoutRpc({ jobId, status, photoUrls, videoUrls });
-  }
   return { error };
 }
 

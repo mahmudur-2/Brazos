@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync as fsExistsSync, readFileSync } from 'node:fs';
+import { existsSync as fsExistsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -146,31 +146,42 @@ test('offer acceptance has no client-side fallback write path', async () => {
   assert.strictEqual(existsSync('lib/acceptBidCompatibility.ts'), false);
 });
 
-test('missing transition_job_status deployments have a constrained compatibility path', async () => {
-  const [jobsSource, compatibility, phase31] = await Promise.all([
-    read('lib/jobs.ts'),
-    read('lib/jobStatusCompatibility.ts'),
-    read('supabase/phase31_transition_job_status_rpc.sql'),
-  ]);
+test('no client-side jobs.status writer exists anywhere', () => {
+  // transition_job_status() is the ONLY status mover (CLAUDE.md). The
+  // compatibility module that once wrote jobs.status directly is deleted and
+  // stays deleted, and no fallback branch may reintroduce the write path —
+  // the RPC being missing is a deployment defect, not something the client
+  // may paper over with a direct table write.
+  assert.strictEqual(existsSync('lib/jobStatusCompatibility.ts'), false);
+  assert.doesNotMatch(jobs, /PGRST202/);
+  assert.doesNotMatch(jobs, /transitionJobStatusWithoutRpc/);
+  assert.match(jobs, /\.rpc\('transition_job_status'/);
 
-  assert.match(jobsSource, /error\?\.code === 'PGRST202'/);
-  assert.match(
-    jobsSource,
-    /transitionJobStatusWithoutRpc\(\{ jobId, status, photoUrls, videoUrls \}\)/
-  );
-  assert.match(compatibility, /supabase\.auth\.getUser\(\)/);
-  assert.match(compatibility, /\.select\('id, assigned_worker_id, status'\)/);
-  assert.match(compatibility, /\.eq\('assigned_worker_id', user\.id\)/);
-  assert.match(compatibility, /\.eq\('status', expectedStatus\)/);
-  assert.match(compatibility, /photos\.length > 5/);
-  // phase35 caps completion evidence at one video; the compatibility path has
-  // to refuse a second one for the same reason the RPC does.
-  assert.match(compatibility, /videos\.length > 1/);
-  assert.doesNotMatch(compatibility, /client_id|accepted_bid_id|final_amount_cents/);
+  // The RPC the app depends on still exists and is still transactional.
+  const phase31 = read('supabase/phase31_transition_job_status_rpc.sql');
   assert.match(phase31, /create or replace function public\.transition_job_status\(/i);
   assert.match(phase31, /where id = p_job_id\s+for update;/i);
   assert.match(phase31, /v_job\.assigned_worker_id <> v_user/i);
   assert.match(phase31, /notify pgrst, 'reload schema'/i);
+
+  // Sweep: no file under lib/, hooks/, screens/ or components/ chains an
+  // update off the jobs table at all — status or any other column; RPCs are
+  // the jobs write path. (Posting inserts and the owner's delete are
+  // different verbs and stay out of this fence.) The frozen *.web.* files
+  // are deliberately included: the invariant is the data layer's, not a
+  // styling rule, and no platform is exempt.
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(join(root, dir))) {
+      const rel = `${dir}/${entry}`;
+      if (statSync(join(root, rel)).isDirectory()) walk(rel);
+      else if (/\.tsx?$/.test(entry) && /\.from\(['"`]jobs['"`]\)\s*\.update\(/.test(read(rel))) {
+        offenders.push(rel);
+      }
+    }
+  };
+  for (const dir of ['lib', 'hooks', 'screens', 'components']) walk(dir);
+  assert.deepEqual(offenders, []);
 });
 
 test('chat media is private, membership-scoped, and stored by caller-owned path', () => {
