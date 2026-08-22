@@ -242,7 +242,7 @@ const sansSize = (capPx: number) =>
 // (y 430..498, where the art's ink starts at x=531px = 244.6pt inside a box
 // running 470..870px), and tests/emeraldFences.test.mjs re-derives it from the
 // asset file so it cannot drift from the artwork.
-const HERO_ART_INK_LEFT = 0.153;
+const HERO_ART_INK_LEFT = 0.1775;
 /**
  * The dark hero's box in points — master 44's own 400x351 of its 853x1844
  * pixels, at (470, 221). See `homeHeroArtDark` for how it was found and why
