@@ -36,6 +36,10 @@ yarn-error.*
 .claude/*.local.json
 .claude/_claude_bak/
 brazos-review.zip
+# Per-run agent scratch: commit messages passed to `git commit -F`, verify
+# logs, one-off probe scripts. Working material for a single run, never an
+# authority for anything — nothing in the repo may cite it.
+.audit-scratch/
 
 # Supplied design comps (78MB of PNG/PDF/ZIP). Source material for the auth
 # flow, not something the app builds against — the production copy of the one
