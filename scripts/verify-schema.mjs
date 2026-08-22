@@ -297,6 +297,55 @@ async function checkRpcDenied(fn, args) {
   };
 }
 
+/**
+ * The verdict for the phase76 RLS-posture probe, pure and exported so the
+ * suite can pin it without a network. phase76_rls_posture() is the definer
+ * function that finally lets this harness SEE row-level security state
+ * (relrowsecurity / pg_policies have no PostgREST surface — F-002's blind
+ * spot). The rules, allow-list as ever: only a 2xx with a body that reports
+ * payments.rls_enabled === true AND payments.select_policy_count >= 1
+ * passes. Anything else — a refusal, a missing function, a malformed body,
+ * rls_enabled false or absent — FAILS the check. Never a warning: a posture
+ * probe that cannot reach the function proves nothing, and "proves nothing"
+ * is a failure here.
+ */
+export function classifyPostureResponse({ status, json }) {
+  if (!(status >= 200 && status < 300)) {
+    const code = json?.code ? ` ${json.code}` : '';
+    const message = json?.message ? ` ${json.message}` : '';
+    return {
+      ok: false,
+      detail: `posture RPC not reachable: ${status}${code}${message}`.trim(),
+    };
+  }
+  const payments = json?.payments;
+  if (payments?.rls_enabled !== true) {
+    return {
+      ok: false,
+      detail:
+        'phase76_rls_posture reports payments.rls_enabled is not true — RLS is off or the table is gone (F-002)',
+    };
+  }
+  const count = payments?.select_policy_count;
+  if (!Number.isInteger(count) || count < 1) {
+    return {
+      ok: false,
+      detail: `phase76_rls_posture reports payments.select_policy_count = ${count} — no SELECT boundary exists`,
+    };
+  }
+  return { ok: true, note: `payments RLS on, ${count} SELECT policy(ies)` };
+}
+
+async function checkRlsPosture() {
+  const res = await fetch(`${BASE}/rest/v1/rpc/phase76_rls_posture`, {
+    method: 'POST',
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: '{}',
+  });
+  const json = await res.json().catch(() => null);
+  return classifyPostureResponse({ status: res.status, json });
+}
+
 // Grouped by the migration that introduces them.
 const MIGRATIONS = [
   {
@@ -1487,6 +1536,48 @@ const MIGRATIONS = [
         checkColumn('jobs', 'photos')],
       ['push_tokens still readable by the publishable key', () =>
         checkColumn('push_tokens', 'id')],
+    ],
+  },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 76. Corrective migration for the 2026-08-21 audit: payments RLS
+    // asserted and its SELECT boundary version-controlled (F-002), the
+    // job_request_parties_ok pg_temp pin restored (F-004), write grants
+    // revoked where RLS holds no write policy (F-040), a money ceiling on
+    // worker_services.price_cents (F-049), and add_location_column.sql's
+    // orphan DDL folded in (F-068).
+    //
+    // Grants, proconfig and pg_constraint are invisible to a publishable-key
+    // probe, so the migration's in-transaction self-check carries those and
+    // the sentinel proves it passed. What IS visible from here:
+    //   * jobs.location — the folded-in column, on a table anon can read.
+    //   * payments stays DENIED (classifyRevokedResponse distinguishes the
+    //     denial from a missing table, so a vanished ledger reads as broken).
+    //   * job_request_parties_ok still resolves after the ALTER.
+    //   * worker_services stays denied to anon (phase53:72); the probe cannot
+    //     see price_cents through a table-level denial, so the ceiling and
+    //     the column itself are carried by self-check (d), same delegation
+    //     as the phase75 group's constraints.
+    //   * the NEW posture probe: phase76_rls_posture() is granted to anon
+    //     precisely so this harness can finally read RLS state. It must
+    //     answer 200 and report payments covered — a posture check that
+    //     cannot reach the function FAILS the group (classifyPostureResponse
+    //     allows no warning path).
+    // -----------------------------------------------------------------------
+    file: 'phase76_rls_and_search_path_corrections.sql',
+    sentinel: ['rpc phase76_corrections_enabled()', () =>
+      checkRpc('phase76_corrections_enabled', {})],
+    checks: [
+      ['jobs.location (F-068 folded in)', () =>
+        checkColumn('jobs', 'location')],
+      ['payments still not readable with the publishable key', () =>
+        checkColumnRevoked('payments', 'payer_id')],
+      ['rpc job_request_parties_ok() still resolves after the re-pin', () =>
+        checkRpc('job_request_parties_ok', { p_a: ZERO_UUID, p_b: ZERO_UUID })],
+      ['worker_services still not readable by anon', () =>
+        checkColumnRevoked('worker_services', 'price_cents')],
+      ['rls posture: payments RLS on with a SELECT boundary', () =>
+        checkRlsPosture()],
     ],
   },
 ];
