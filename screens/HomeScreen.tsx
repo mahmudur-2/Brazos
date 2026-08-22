@@ -820,13 +820,13 @@ function OpenJobCard({
               size={16}
               color={isDark ? colors.emerald : colors.forest}
             />
-            <Text style={[styles.demandText, isDark && styles.demandTextDark]}>
-              High demand in your area
+            {/* States exactly what similarPostedToday() measures — same
+                category, posted since midnight. No distance term is computed,
+                so no geographic claim is made (F-024). */}
+            <Text style={[styles.demandText, isDark && styles.demandTextDark]} numberOfLines={1}>
+              {similarToday} similar {similarToday === 1 ? 'job' : 'jobs'} posted today
             </Text>
           </View>
-          <Text style={styles.jobMetaText} numberOfLines={1}>
-            {similarToday} similar {similarToday === 1 ? 'job' : 'jobs'} posted today
-          </Text>
         </View>
       ) : null}
     </Pressable>
@@ -1252,7 +1252,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   demandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, flexShrink: 1 },
   demandText: { fontSize: 13, fontWeight: '600', color: colors.forest },
   demandTextDark: { color: colors.emerald },
-  jobMetaText: { flexShrink: 1, fontSize: 13, color: colors.homeSlate },
   notice: { gap: spacing.xs },
   noticeError: { fontSize: 14, color: colors.danger },
   retry: { fontSize: 14, fontWeight: '700', color: colors.forest },
