@@ -223,14 +223,20 @@ export const radius = {
 } as const;
 
 /**
- * The display serif used for Emerald headlines (Home's "Take a task off your
+ * The display faces used for Emerald headlines (Home's "Take a task off your
  * plate.", section titles, the hero CTA).
  *
- * No custom font is loaded anywhere in this app, deliberately — see
- * LaunchScreen's wordmark comment: bundling one for a handful of headlines
- * buys a font-loading flash on the very screens that most need to paint
- * instantly. These are the platform serifs, resolved the same way the launch
- * wordmark already resolves them, so the two can't drift.
+ * `display` is the platform serif, resolved the same way LaunchScreen's
+ * wordmark resolves it, so the two can't drift. `displayBold` /
+ * `displayExtraBold` are Playfair Display statics bundled in assets/fonts/
+ * (OFL): an operator decision of 2026-08-22 superseded emerald-v2
+ * DECISIONS.md D5 ("no bundled font") for the LARGE heading roles only. D5's
+ * font-loading-flash objection is answered by App.tsx's render gate — the
+ * themed tree stays unmounted under the launch layer until expo-font
+ * resolves the faces, so no frame paints a heading in the fallback face.
+ * With a real file bundled, iOS stops selecting a face from `fontWeight`,
+ * so the weight lives in the family name and the repointed roles below
+ * carry no fontWeight.
  */
 export const fonts = {
   display: Platform.select({
@@ -238,6 +244,8 @@ export const fonts = {
     android: 'serif',
     default: 'Georgia, "Times New Roman", serif',
   }) as TextStyle['fontFamily'],
+  displayBold: 'PlayfairDisplay-Bold' as TextStyle['fontFamily'],
+  displayExtraBold: 'PlayfairDisplay-ExtraBold' as TextStyle['fontFamily'],
 } as const;
 
 export const typography = {
@@ -249,8 +257,12 @@ export const typography = {
   // `letterSpacing: -1`, mirroring `display`/`h1`/`h2` in ui/tokens.ts. Body,
   // label and caption are sans and small, and negative tracking closes small
   // type up until it smudges.
-  title: { fontSize: 28, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
-  heading: { fontSize: 22, fontWeight: '700', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
+  // 2026-08-22: the two large roles take the Playfair statics by weight
+  // (800 → ExtraBold, 700 → Bold). `subheading` stays on the platform serif:
+  // it is 17pt — under the ~18pt floor where Playfair starts to degrade —
+  // and no 600 face is bundled, so its fontWeight still means something.
+  title: { fontSize: 28, fontFamily: fonts.displayExtraBold, letterSpacing: -1, color: colors.text },
+  heading: { fontSize: 22, fontFamily: fonts.displayBold, letterSpacing: -1, color: colors.text },
   subheading: { fontSize: 17, fontWeight: '600', fontFamily: fonts.display, letterSpacing: -1, color: colors.text },
   body: { fontSize: 15, fontWeight: '400', color: colors.text },
   label: { fontSize: 13, fontWeight: '600', color: colors.textMuted },

@@ -57,6 +57,22 @@ same way `LaunchScreen`'s wordmark already does.
 **Why:** bundling a font buys a font-loading flash on exactly the screens that
 most need to paint instantly, and adds a dependency for a handful of headlines.
 
+**Superseded 2026-08-22 (operator decision), for the large heading roles
+only.** Playfair Display static TTFs (Bold 700, ExtraBold 800, with the OFL
+license) are bundled in `assets/fonts/` and carried by `fonts.displayBold` /
+`fonts.displayExtraBold` on both token surfaces. `type.display`/`h1`/`h2`
+(ui/tokens.ts) and `typography.title`/`heading` (lib/theme.ts) now name those
+faces — weight-mapped, their inert `fontWeight` removed so iOS cannot
+synthesize a fake bold on top of a real face. The flash objection above is
+answered by a render gate rather than by abstaining: App.tsx's `LaunchGate`
+resolves the faces with expo-font's `useFonts` (runtime loading — no new
+package, no native rebuild) and neither mounts the themed tree nor lets the
+launch layer hand over until they resolve (or error, which degrades to the
+platform serif), so no frame paints a heading in the fallback face. Everything
+below the ~18pt degradation floor keeps the platform serif: 15pt card
+`title`s, the 17pt/600 `subheading`, and every screen style that names
+`fonts.display` directly. tests/themeTokens.test.mjs fences the mapping.
+
 ### D6. `Chip` extended with variants instead of a parallel `Pill` component
 **Fork:** the brief listed "Pill" as a foundational component, but `Chip`
 already does that job.

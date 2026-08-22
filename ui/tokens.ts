@@ -246,13 +246,19 @@ export const radius = {
 // ---------------------------------------------------------------------------
 
 /**
- * §I names Inter. No custom font is bundled anywhere in this app and none
- * should be added — see lib/theme.ts's `fonts` comment and DECISIONS.md D5:
- * bundling one buys a font-loading flash on exactly the screens that most
- * need to paint instantly. Body copy therefore uses the platform sans
- * (undefined = system default), and display headlines use the platform serif
- * the locked screens already render with, so this scale cannot drift from
- * screens 07/48.
+ * §I names Inter. Body copy uses the platform sans (undefined = system
+ * default). The heading voice is Playfair Display: an operator decision of
+ * 2026-08-22 superseded emerald-v2 DECISIONS.md D5 ("no bundled font") for
+ * the three large heading roles ONLY — `display`, `h1`, `h2`. D5's
+ * objection, a font-loading flash on the screens that most need to paint
+ * instantly, is answered by a render gate instead: App.tsx resolves the two
+ * static faces with expo-font's `useFonts` and holds the themed tree
+ * unmounted (under the launch layer, which uses none of these roles) until
+ * they resolve, so no frame ever paints a heading in the fallback face.
+ *
+ * `display` (the platform serif) is still a live token: it remains the voice
+ * of 15pt card `title`s — Playfair degrades below ~18pt and card titles are
+ * ubiquitous — and of every screen style that names `fonts.display` directly.
  */
 export const fonts = {
   display: Platform.select({
@@ -260,6 +266,13 @@ export const fonts = {
     android: 'serif',
     default: 'Georgia, "Times New Roman", serif',
   }) as TextStyle['fontFamily'],
+  /** Playfair Display statics, bundled in assets/fonts/ (OFL) and registered
+   *  at the root by App.tsx. One name per face: once a real file is bundled,
+   *  iOS no longer selects a face from `fontWeight`, so the weight lives in
+   *  the family name and the three heading roles carry no fontWeight — a
+   *  platform-synthesized bold on top of ExtraBold would double-embolden. */
+  displayBold: 'PlayfairDisplay-Bold' as TextStyle['fontFamily'],
+  displayExtraBold: 'PlayfairDisplay-ExtraBold' as TextStyle['fontFamily'],
   /** System sans. Explicitly undefined rather than a name, so each platform
    *  resolves its own default rather than us guessing at one. */
   body: undefined as TextStyle['fontFamily'],
@@ -284,9 +297,9 @@ export const fonts = {
  * two surfaces to it.
  */
 export const type = {
-  display: { fontSize: 28, lineHeight: 29, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
-  h1: { fontSize: 26, fontWeight: '800', fontFamily: fonts.display, letterSpacing: -1 },
-  h2: { fontSize: 21, fontWeight: '700', fontFamily: fonts.display, letterSpacing: -1 },
+  display: { fontSize: 28, lineHeight: 29, fontFamily: fonts.displayExtraBold, letterSpacing: -1 },
+  h1: { fontSize: 26, fontFamily: fonts.displayExtraBold, letterSpacing: -1 },
+  h2: { fontSize: 21, fontFamily: fonts.displayBold, letterSpacing: -1 },
   // Prestige decision 9: card titles join the serif voice, both themes. At
   // 15pt it stays on default tracking — see the docblock above.
   title: { fontSize: 15, fontWeight: '700', fontFamily: fonts.display },

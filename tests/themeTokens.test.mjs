@@ -128,6 +128,56 @@ test('[static] dark palette is compile-checked against ColorToken', async () => 
 });
 
 // ---------------------------------------------------------------------------
+// Playfair heading faces — 2026-08-22, supersedes emerald-v2 DECISIONS.md D5
+// for the three large heading roles only. Executed against ui/tokens.ts;
+// lib/theme.ts (the screens' surface) and App.tsx's render gate are pinned
+// statically.
+// ---------------------------------------------------------------------------
+
+test('Playfair fence: the three heading roles resolve to the bundled statics', async () => {
+  const { type } = await tokensModule;
+
+  // Executed, not pattern-matched: repointing any of the three back at the
+  // platform serif (fonts.display → 'Georgia' under the ios stub) fails here.
+  assert.equal(type.display.fontFamily, 'PlayfairDisplay-ExtraBold');
+  assert.equal(type.h1.fontFamily, 'PlayfairDisplay-ExtraBold');
+  assert.equal(type.h2.fontFamily, 'PlayfairDisplay-Bold');
+
+  // With a real file bundled the face IS the weight; a fontWeight on top
+  // would make iOS synthesize a second embolden over ExtraBold.
+  assert.equal(type.display.fontWeight, undefined);
+  assert.equal(type.h1.fontWeight, undefined);
+  assert.equal(type.h2.fontWeight, undefined);
+
+  // The card-title voice did NOT move: 15pt sits under Playfair's ~18pt
+  // floor, so `title` keeps the platform serif and a meaningful fontWeight.
+  assert.equal(type.title.fontFamily, 'Georgia');
+  assert.equal(type.title.fontWeight, '700');
+
+  // lib/theme.ts mirrors the decision for its two large roles; subheading
+  // (17pt/600) stays on the platform serif — no 600 face is bundled.
+  const theme = stripComments(await read('lib/theme.ts'));
+  assert.match(theme, /displayBold: 'PlayfairDisplay-Bold'/);
+  assert.match(theme, /displayExtraBold: 'PlayfairDisplay-ExtraBold'/);
+  assert.match(theme, /title: \{ fontSize: 28, fontFamily: fonts\.displayExtraBold,/);
+  assert.match(theme, /heading: \{ fontSize: 22, fontFamily: fonts\.displayBold,/);
+  assert.match(theme, /subheading: \{ fontSize: 17, fontWeight: '600', fontFamily: fonts\.display,/);
+
+  // The faces the roles name are real bundled TTFs, registered and gated at
+  // the root — a deleted asset or an ungated root resurrects D5's flash.
+  for (const file of ['PlayfairDisplay-Bold.ttf', 'PlayfairDisplay-ExtraBold.ttf']) {
+    const ttf = await readFile(new URL(`../assets/fonts/${file}`, import.meta.url));
+    assert.ok(ttf.length > 50_000, `${file} is implausibly small for a real face`);
+    assert.equal(ttf.readUInt32BE(0), 0x00010000, `${file} must carry the TrueType magic`);
+  }
+  const app = stripComments(await read('App.tsx'));
+  assert.match(app, /useFonts\(\{/);
+  assert.match(app, /'PlayfairDisplay-Bold': require\('\.\/assets\/fonts\/PlayfairDisplay-Bold\.ttf'\)/);
+  assert.match(app, /'PlayfairDisplay-ExtraBold': require\('\.\/assets\/fonts\/PlayfairDisplay-ExtraBold\.ttf'\)/);
+  assert.match(app, /fontsResolved \? children : null/);
+});
+
+// ---------------------------------------------------------------------------
 // Resolver plumbing — 4D-4: preference + system resolution, native sync
 // ---------------------------------------------------------------------------
 
