@@ -18,10 +18,10 @@ schema claim below is one of:
    last reported, recorded in `HANDOFF.md`. Never re-verified from here;
    running it needs `.env` and a live database.
 4. **Pending / unapplied migrations** — SQL in the repository that has not been
-   executed anywhere. `HANDOFF.md` names these. As of 2026-08-16 this layer is
-   **empty**: phases 67-73 are all applied to staging and `verify-schema`
-   reports zero MISSING and zero PENDING across every group. The layer is kept
-   because it fills again the moment a new `phaseNN_*.sql` is written.
+   executed anywhere. `HANDOFF.md` names these. As of 2026-08-22 the newest
+   repository phases are 74–76; which of them are applied to staging is
+   `HANDOFF.md`'s fact, not this file's. The layer is kept because it fills
+   again the moment a new `phaseNN_*.sql` is written.
 
 A migration file existing (layer 2) is not evidence the database has it (layer
 3). Only a green verify-schema is.
@@ -74,15 +74,16 @@ customer mode because it is not mounted — and it gives `switchMode()` its stac
 reset for free. Since Stage 4D the two BARS differ: the worker bar keeps the
 five classic tabs (Home, Map, MyJobs, Messages, Profile); the customer bar
 shows Home · Discover · [ + ] · Messages · Profile, with Map and MyJobs still
-REGISTERED as hidden routes (the locked Customer Home dispatches
-`navigate('Map')`, and notification routing targets MyJobs in both modes —
-see `ui/primitives/BottomNav.tsx` for the mechanism). The Home tab is the
+REGISTERED as hidden routes. home(9) removed Customer Home's "View map" pill
+and its dispatch — the map is a worker surface — but the ROUTES stay, because
+React Navigation 7 resolves an untargeted NAVIGATE against the tab navigator
+only, and notification routing targets MyJobs in both modes (see
+`ui/primitives/BottomNav.tsx` for the mechanism). The Home tab is the
 mode-defining tab: customer Home roots at `HomeMain`, worker Home roots
 at `WorkerHome` (explicit `initialRouteName`, 4D-1b) and carries the bid flow
-(`WorkerResults`, `JobDetail`, `SubmitBid`, `BidSent`). The locked atlas-48
-browse screen (`screens/BrowseJobsScreen.tsx`) is unmounted since 4D-1b —
-kept on disk, registered nowhere, with every job-list intent landing on
-`WorkerResults{mode:'all'}` instead.
+(`WorkerResults`, `JobDetail`, `SubmitBid`, `BidSent`). The atlas-48 browse
+screen was unmounted in 4D-1b and deleted in Batch F; every job-list intent
+lands on `WorkerResults{mode:'all'}`.
 
 The other four stacks are declared **once** in `navigation/sharedStacks.tsx`
 and mounted by both trees, because one account's job hub, inbox, map and
@@ -105,8 +106,11 @@ navigation path can render EST. PAY or a bid CTA to a customer.
 `ui/tokens.ts` is the authoritative token file and since 4D-3.5 exports TWO
 palettes with identical key names, compile-checked by
 `satisfies Record<ColorToken, string>`: `light` (Heritage — the existing §I
-values, unchanged) and `dark` (Emerald Prestige: near-black emerald bg,
-dark-green cards, gold hairline `line`, gold primary with a dark `onForest`).
+values, unchanged) and `dark` (Emerald Prestige v2: near-black emerald bg,
+deep-green `forest` as the one solid conversion fill, `gold` reserved for
+metal line-work — eyebrows, hairlines, icons, rings — and never a fill, with
+a cream `onForest`. v2 inverted v1's gold-primary premise; see the notes on
+`dark` in ui/tokens.ts).
 `lib/theme.ts` wraps it for screens (CLAUDE.md: screens never import
 ui/tokens.ts directly) and re-exports the §I helpers — `withAlpha`, `layout`,
 `controls`, and the §I radius scale as `emeraldRadius`. `darkColors`' seven
@@ -115,11 +119,15 @@ definition.
 
 Resolution is a context: `lib/ThemeContext.tsx`'s ThemeProvider (mounted once
 in App.tsx, above auth and mode) feeds `hooks/useThemeColors.ts`, the single
-reactive read. **In this stage the provider returns the light palette
-unconditionally** — no `useColorScheme()`/Appearance read anywhere, no stored
-preference, and app.json keeps `userInterfaceStyle: "light"`. 4D-4 turns the
-provider's value into real state (AsyncStorage preference + Appearance) and
-does the both-themes screen sweep; nothing resolves to `dark` before then.
+reactive read. Since 4D-4 the provider resolves a real preference in order:
+stored preference (AsyncStorage, `lib/themePreferenceStorage.ts`, read BEFORE
+the themed tree mounts so there is no light flash) → system appearance
+(`useColorScheme()`, subscribed to Appearance change events so an OS flip
+repaints live) → light. A pinned preference is pushed to the native side with
+`Appearance.setColorScheme` (RN 0.81.5 has it; react-native-web does not, and
+the helper hands control back with null). `app.json` sets
+`userInterfaceStyle: "automatic"`. `screens/AppearanceScreen.tsx` is the
+setting surface. Both palettes are live and both are swept.
 
 Translucent colours are derived, never restated: `withAlpha(token, alpha)`
 (`ui/colorAlpha.ts`, pure and executed by tests byte-for-byte against the
@@ -146,7 +154,7 @@ nothing otherwise — the client never guesses at coordinates `job_locations`
 keeps unreadable. The distance filter is a single-select chip row
 (`components/DistanceChips.tsx`) whose rules live in `lib/discoveryFilter.ts`
 (also home of the canonical `NEARBY_RADIUS_MILES = 5`, re-exported by
-WorkerResultsScreen for the locked BrowseJobsScreen import) and whose
+WorkerResultsScreen for WorkerHomeScreen's import) and whose
 selection persists per account via `lib/discoveryFilterStorage.ts`
 (AsyncStorage, modeStorage pattern). WorkerResults routes all/skills through
 the radius when one is chosen, arrives at the stated 5 in nearby mode with a
@@ -182,11 +190,21 @@ sets `status` or `assigned_worker_id`.
 
 Everything richer than those four values is *derived* in exactly one place,
 `lib/jobLifecycle.ts`, from four facts: job status, payment state, the phase51
-arrival timestamps, and whether a dispute is open. It yields `draft, open,
+arrival timestamps, and whether a dispute is open — where a FAILED dispute
+read arrives as `'unknown'`, never as "no dispute". It yields `draft, open,
 pending_payment, confirmed, en_route, arrived, in_progress, awaiting_approval,
-disputed, completed, cancelled, unknown`, and no screen re-derives any of it.
-`lib/jobStage.ts` separately turns status + bid count + ownership into the
-badge a card shows.
+disputed, completed, cancelled, unknown`. Since Batch I (F-012) every other
+status vocabulary is presentation over that one derivation: `lib/jobStage.ts`
+(the card badge — runs the raw status through the derivation, keeps only the
+bid overlay, the poster privacy rule and the frozen labels, and owns the one
+`formatStatus` title-caser), `components/StatusBadge.tsx` (a colour map over
+caller-supplied keys, importing that title-caser), `components/JobProgress.tsx`
+(renders `trackStepIndex()`; off-track statuses claim nothing), and
+`ui/primitives/StatusPill.tsx` (label maps over caller-supplied enums; derives
+nothing). Screens still branch on raw `job.status` for control flow — fetch
+gates, permission gates, section selection — but no screen re-derives a
+lifecycle classification, and a raw status→step map anywhere outside
+`lib/jobLifecycle.ts` fails `tests/lifecycle.test.mjs`'s sweep.
 
 ## Offers — one negotiation model
 
