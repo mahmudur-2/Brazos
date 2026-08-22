@@ -66,6 +66,9 @@ export function TrackWorkerScreen() {
   // either both landed clean, or one failed, or they are still in flight.
   const [statusReads, setStatusReads] = useState<'loading' | 'error' | 'ready'>('loading');
   const [readAttempt, setReadAttempt] = useState(0);
+  // The worker-name read's settling, tracked so the screen never renders
+  // ready and then reflows as the name lands (F-027).
+  const [workerRead, setWorkerRead] = useState<'pending' | 'settled'>('pending');
 
   useFocusEffect(
     useCallback(() => {
@@ -88,9 +91,18 @@ export function TrackWorkerScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      if (!job.assigned_worker_id) return;
+      if (!job.assigned_worker_id) {
+        setWorkerRead('settled');
+        return;
+      }
+      setWorkerRead('pending');
+      // The name is cosmetic — a failed read settles to the "your worker"
+      // fallback rather than blocking the screen, so only its SETTLING is
+      // tracked, not its success.
       fetchProfileById(job.assigned_worker_id).then(({ data }) => {
-        if (active) setWorkerName(data?.full_name ?? null);
+        if (!active) return;
+        setWorkerName(data?.full_name ?? null);
+        setWorkerRead('settled');
       });
       return () => {
         active = false;
@@ -123,7 +135,11 @@ export function TrackWorkerScreen() {
               'Where this job stands didn’t load. Check your connection and try again.',
             onRetry: () => setReadAttempt((attempt) => attempt + 1),
           }
-        : currentIndex < 0
+        : statusReads === 'loading' || workerRead === 'pending'
+          ? // Ready is earned, not assumed: the timeline renders only after
+            // the reads settle, never wrong-then-right (F-027).
+            { kind: 'loading' }
+          : currentIndex < 0
           ? {
               kind: 'empty',
               title: 'No worker to track yet',

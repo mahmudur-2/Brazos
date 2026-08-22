@@ -138,6 +138,27 @@ test('the remaining discarded reads each surface with a retry', () => {
   assert.match(ownerActions, /onPress=\{retryManageCheck\}/);
 });
 
+// ===========================================================================
+// F-027 — TrackWorkerScreen earns its ready state
+// ===========================================================================
+
+test('TrackWorkerScreen holds loading until its reads settle, through the shared template', () => {
+  const src = read('screens/TrackWorkerScreen.tsx');
+  // Configured, not reinvented: the states flow through DetailScreen's
+  // ScreenState prop, which renders the shared loading/error variants.
+  assert.match(src, /from '\.\.\/ui\/templates\/DetailScreen'/);
+  assert.match(src, /statusReads === 'loading' \|\| workerRead === 'pending'/);
+  assert.match(src, /\{ kind: 'loading' \}/);
+  // Both fetch paths settle the tracker — including the no-worker shortcut.
+  assert.match(src, /setWorkerRead\('settled'\)/);
+  // Ready is the ternary's LAST resort, after error and loading.
+  const ternary = src.slice(src.indexOf('const state: ScreenState'));
+  const errorAt = ternary.indexOf("kind: 'error'");
+  const loadingAt = ternary.indexOf("kind: 'loading'");
+  const readyAt = ternary.indexOf("kind: 'ready'");
+  assert.ok(errorAt >= 0 && loadingAt > errorAt && readyAt > loadingAt);
+});
+
 test('ClientJobDetailScreen passes unknown to the derivation and gates its money surfaces', () => {
   const src = read('screens/ClientJobDetailScreen.tsx');
   assert.match(src, /hasOpenDispute: statusReadError \? 'unknown' : !!openDispute/);
