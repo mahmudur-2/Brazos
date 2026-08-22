@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -210,6 +211,38 @@ test('every derived state has a label and a track position that make sense', () 
   assert.equal(trackStepIndex('disputed'), trackStepIndex('awaiting_approval'));
   assert.equal(trackStepIndex('open'), -1);
   assert.equal(trackStepIndex('cancelled'), -1);
+});
+
+test('JobProgress is presentation over the canonical track (F-012)', async () => {
+  const progress = await read('components/JobProgress.tsx');
+  // The step position flows through THE derivation and THE track index…
+  assert.match(progress, /trackStepIndex\(deriveJobLifecycle\(/);
+  // …the local status→index duplicate is gone and may not return, and the
+  // old `?? 0` fall-through (any unknown status drew "Assigned" as done) is
+  // replaced by an explicit claim-nothing branch.
+  assert.doesNotMatch(progress, /const ORDER|\?\? 0/);
+  assert.match(progress, /track < 0 \? -1/);
+});
+
+test('no module outside lib/jobLifecycle.ts maps a raw status to a step index (F-012)', () => {
+  // A raw-status→number map literal is the JobProgress defect's signature;
+  // the canonical file owns the only status→position knowledge.
+  const statusIndexMap = /\b(?:open|assigned|in_progress|completed|cancelled|draft)\s*:\s*-?\d/;
+  const offenders = [];
+  const walk = (rel) => {
+    for (const entry of readdirSync(join(root, rel))) {
+      const relPath = `${rel}/${entry}`;
+      const full = join(root, relPath);
+      if (statSync(full).isDirectory()) {
+        walk(relPath);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry) || relPath === 'lib/jobLifecycle.ts') continue;
+      if (statusIndexMap.test(readFileSync(full, 'utf8'))) offenders.push(relPath);
+    }
+  };
+  for (const dir of ['screens', 'components', 'ui', 'hooks', 'lib']) walk(dir);
+  assert.deepEqual(offenders, [], 'raw status→step-index maps outside the canonical file');
 });
 
 test('screens derive lifecycle through the one helper, never locally', async () => {

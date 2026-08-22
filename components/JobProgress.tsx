@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
 import { spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const STEPS = [
@@ -7,12 +8,6 @@ const STEPS = [
   { key: 'in_progress', label: 'In progress' },
   { key: 'completed', label: 'Completed' },
 ] as const;
-
-const ORDER: Record<string, number> = {
-  assigned: 0,
-  in_progress: 1,
-  completed: 2,
-};
 
 export function JobProgress({
   status,
@@ -23,7 +18,17 @@ export function JobProgress({
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
-  const current = ORDER[status] ?? 0;
+  // Presentation over THE track (F-012): the raw status runs through the
+  // canonical derivation, deliberately payment-blind, because the three
+  // visual steps collapse the five-step track — the whole assigned family
+  // (pending_payment/confirmed/en_route/arrived, track 0–2) is step 0 and
+  // the whole completed family (awaiting_approval/disputed/completed,
+  // track 4) is step 2, so no payment or dispute fact can move the drawing.
+  const track = trackStepIndex(deriveJobLifecycle({ job: { status }, payment: null }));
+  // Off the track (open, cancelled, a status this client cannot classify):
+  // claim NOTHING — every step stays pending, never a fall-through that
+  // draws "Assigned" as done for a job that was not.
+  const current = track < 0 ? -1 : track <= 2 ? 0 : track === 3 ? 1 : 2;
   // Masters 6 and 17 draw the stepper as line-work: a done node is the deep
   // green disc inside a GOLD ring with a gold check, a pending node is a bare
   // grey ring around its numeral, and the connector behind a done node is
