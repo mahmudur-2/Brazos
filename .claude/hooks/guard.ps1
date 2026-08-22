@@ -14,6 +14,12 @@
 # permissions.deny matrix in .claude/settings.json carries the same
 # prohibitions independently.
 #
+# GATED PUSH. 'git push origin mainexpo', flag-free, is the ONE permitted
+# push form (CLAUDE.md "Agent autonomy"). The deny matrix's prefix language
+# cannot express a ref-scoped allowance, so the wrong-ref and flagged-push
+# blocks live HERE, while force/destructive push prefixes stay denied in
+# settings.json as the second layer.
+#
 # THE SOLE DELIBERATE BYPASS is the exact guard-swap `git mv` excepted in rule
 # 9 (GUARD-CLAUDEDIR). That is how this file is promoted over the registered
 # guard path, and it is documented rather than hidden.
@@ -158,22 +164,10 @@ try {
             Write-Deny 'GUARD-PATH-SECRET' 'secret-or-frozen-basename'
         }
 
-        # 6. locked screens, verbatim from CLAUDE.md "Locked -- never modify".
-        $locked = @(
-            'screens/launchscreen.tsx',
-            'screens/welcomescreen.tsx',
-            'screens/signinscreen.tsx',
-            'screens/emailsigninscreen.tsx',
-            'screens/createaccountscreen.tsx',
-            'screens/emailcreateaccountscreen.tsx',
-            'screens/verifyphonescreen.tsx',
-            'screens/setupscreen.tsx',
-            'screens/legalgatescreen.tsx',
-            'screens/homescreen.tsx',
-            'screens/browsejobsscreen.tsx'
-        )
-                # UNLOCKED 2026-08-19 by operator for the Prestige dark sweep
-        if ($false) { Write-Deny 'GUARD-PATH-LOCKED' 'locked-screen' }
+        # 6. locked screens: the locked set is EMPTY by operator decision
+        #    (2026-08-19, Prestige dark sweep). CLAUDE.md "Locked -- never
+        #    modify" is the authority; regression fences, not a path list,
+        #    protect screens now. No path rule fires here.
 
         exit 0
     }
@@ -216,10 +210,11 @@ try {
     for ($i = 0; $i -lt $tokens.Length; $i++) {
         if (-not (Test-GitVerb $tokens[$i])) { continue }
         $j = $i + 1
+        $preFlags = $false
         while ($j -lt $tokens.Length) {
             $t = $tokens[$j]
-            if ($t -eq '-c') { $j += 2; continue }
-            if ($t.StartsWith('--git-dir=') -or $t.StartsWith('--work-tree=')) { $j += 1; continue }
+            if ($t -eq '-c') { $j += 2; $preFlags = $true; continue }
+            if ($t.StartsWith('--git-dir=') -or $t.StartsWith('--work-tree=')) { $j += 1; $preFlags = $true; continue }
             break
         }
         $sub = ''
@@ -232,7 +227,7 @@ try {
                 $callArgs.Add($tokens[$k])
             }
         }
-        $gitCalls.Add(@{ Sub = $sub; Args = $callArgs })
+        $gitCalls.Add(@{ Sub = $sub; Args = $callArgs; PreFlags = $preFlags })
     }
 
     # ---- 1. GUARD-PRODREF --------------------------------------------------
@@ -273,7 +268,7 @@ try {
 
     # ---- 4. GUARD-GIT ------------------------------------------------------
     $blockedSubs = @(
-        'push', 'pull', 'fetch', 'reset', 'clean', 'stash', 'checkout',
+        'pull', 'fetch', 'reset', 'clean', 'stash', 'checkout',
         'switch', 'restore', 'rebase', 'merge', 'cherry-pick', 'revert',
         'filter-branch', 'filter-repo', 'tag', 'worktree', 'submodule'
     )
@@ -289,6 +284,24 @@ try {
 
         if ($blockedSubs -contains $sub) {
             Write-Deny 'GUARD-GIT' "forbidden-git-subcommand"
+        }
+
+        if ($sub -eq 'push') {
+            # Gated push (CLAUDE.md "Agent autonomy"): the ONE permitted
+            # form is an explicit, flag-free push of mainexpo to origin --
+            # 'git push origin mainexpo' (or 'origin mainexpo:mainexpo'),
+            # with no -c / --git-dir / --work-tree prefix. Anything else --
+            # any flag (--force, -f, --force-with-lease, --delete, --mirror,
+            # --tags, --all, -u, ...), any other remote, ref or refspec, or
+            # a bare 'git push' -- is blocked. Allow-list, never block-list.
+            $pushOk = $false
+            $pa = @($call.Args)
+            if (-not $call.PreFlags -and $pa.Count -eq 2 -and
+                $pa[0] -eq 'origin' -and
+                ($pa[1] -eq 'mainexpo' -or $pa[1] -eq 'mainexpo:mainexpo')) {
+                $pushOk = $true
+            }
+            if (-not $pushOk) { Write-Deny 'GUARD-GIT' 'git-push-not-gated-mainexpo' }
         }
 
         if ($sub -eq 'branch') {
@@ -442,7 +455,8 @@ try {
     # cannot be determined for ANY reason is a block.
     $needsBranch = $false
     foreach ($call in $gitCalls) {
-        if ($call.Sub -eq 'commit' -or $call.Sub -eq 'add' -or $call.Sub -eq 'mv') {
+        if ($call.Sub -eq 'commit' -or $call.Sub -eq 'add' -or
+            $call.Sub -eq 'mv' -or $call.Sub -eq 'push') {
             $needsBranch = $true
             break
         }
