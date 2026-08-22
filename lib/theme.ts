@@ -350,9 +350,14 @@ export function authSurface(palette: ColorPalette, isDark: boolean) {
  * one). Like `emeraldColorsFor()` and `authSurface()` this is a function of
  * the resolved palette, not a new token surface.
  *
- * Light is deliberately unmoved: it keeps the `star` token it has always
- * rendered and the neutral empty-star border, so this resolves the dark
- * inconsistency without repainting Heritage. The light pass owns that call.
+ * Light keeps the `star` token it has always rendered and the neutral
+ * empty-star border — the VALUES did not move. What moved is reach: the dark
+ * pass left the three bare-`★`-in-a-sentence spans (BidDetail, Profile, Saved
+ * & past workers) painting through `isDark ? goldStyle : undefined`, so the
+ * light half of those three fell back to inheriting the meta line's muted
+ * grey instead of resolving here at all. The light pass (L-010) repointed all
+ * three at `starColors(palette, isDark).filled`, so this helper is now the
+ * ONE star treatment in BOTH palettes rather than in dark only.
  */
 export function starColors(palette: ColorPalette, isDark: boolean) {
   return {

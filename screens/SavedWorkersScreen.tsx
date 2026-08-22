@@ -19,6 +19,7 @@ import {
   fonts,
   radius,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -145,11 +146,12 @@ export function SavedWorkersScreen() {
           {/* Master 22 draws this row's star in the set's gold, like every
               other rating in the app. It was inheriting the meta line's grey
               because it is a glyph inside the sentence, so it gets its own
-              span; light keeps the Heritage muted star. */}
+              span — painted through the one star treatment in BOTH palettes
+              (gold in dark, the Heritage `star` gold in light). */}
           <Text style={styles.rowMeta}>
             {(profile.rating_count ?? 0) > 0 ? (
               <>
-                <Text style={isDark ? styles.rowMetaStarDark : undefined}>★</Text>
+                <Text style={{ color: starColors(colors, isDark).filled }}>★</Text>
                 {` ${(profile.rating_avg ?? 0).toFixed(1)} (${profile.rating_count})`}
               </>
             ) : (
@@ -266,7 +268,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     color: colors.textMuted,
   },
-  rowMetaStarDark: { color: colors.gold },
   hireButton: {
     paddingHorizontal: spacing.lg,
     minHeight: 40,

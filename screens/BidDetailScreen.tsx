@@ -27,6 +27,7 @@ import {
   emeraldColorsFor,
   radius,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   type ColorPalette,
@@ -196,9 +197,12 @@ export function BidDetailScreen() {
                         <Text style={styles.workerMeta}>
                           {(offer.worker?.rating_count ?? 0) > 0 ? (
                             <>
-                              {/* One star treatment: gold in dark, wherever a
-                                  rating is drawn. Light keeps Heritage. */}
-                              <Text style={isDark ? styles.workerMetaStarDark : undefined}>
+                              {/* One star treatment, BOTH palettes: gold in
+                                  dark, the Heritage `star` gold in light. The
+                                  light side used to be `undefined`, which let
+                                  the glyph inherit the meta line's muted grey
+                                  — the one washed-out star left in the app. */}
+                              <Text style={{ color: starColors(colors, isDark).filled }}>
                                 ★
                               </Text>
                               {` ${(offer.worker?.rating_avg ?? 0).toFixed(1)} (${
@@ -419,7 +423,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
   },
-  workerMetaStarDark: { color: colors.gold },
   pitch: {
     fontSize: 15,
     color: colors.text,

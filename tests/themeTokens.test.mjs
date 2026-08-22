@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import { stripTypeScriptTypes } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 // ---------------------------------------------------------------------------
@@ -46,6 +48,56 @@ const tokensModule = (async () => {
   assert.ok(!stubbed.includes("from './colorAlpha'"), 'colorAlpha re-export must be removed');
   return import(toDataUrl(stubbed));
 })();
+
+/**
+ * lib/theme.ts — the screens' token surface — EXECUTED, the same way
+ * ui/tokens.ts is above. react-native is stubbed; its `../ui/tokens` import is
+ * fed from the module already executed here, so the palette the helpers see is
+ * the real one and the two can never drift; and its three pass-through
+ * re-exports are dropped, since a data: URL cannot resolve a relative
+ * specifier and none of them is under test on this surface.
+ *
+ * This is what lets the star helper below be a FACT rather than a source
+ * pattern: `starColors(colors, false).filled` is called and its answer
+ * compared to the palette, so repointing either branch fails here.
+ */
+const themeModule = (async () => {
+  const [tokens, { withAlpha }] = await Promise.all([tokensModule, colorAlphaModule]);
+  globalThis.__THEME_TOKENS__ = { ...tokens, withAlpha };
+  const js = stripTypeScriptTypes(await read('lib/theme.ts'), { mode: 'strip' });
+  const stubbed = js
+    .replace(
+      /import \{[^}]*\} from 'react-native';/,
+      "const Platform = { OS: 'ios', select: (options) => ('ios' in options ? options.ios : options.default) };",
+    )
+    .replace(
+      /import \{[^}]*\} from '\.\.\/ui\/tokens';/,
+      'const { brand, dark: emeraldDark, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+    )
+    .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
+    .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');
+  assert.doesNotMatch(
+    stubbed,
+    /from '(?:react-native|\.[^']*)'/,
+    'every import lib/theme.ts carries must be stubbed or dropped',
+  );
+  return import(toDataUrl(stubbed));
+})();
+
+const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+
+/** Every .ts/.tsx file under the given roots, repo-relative, forward-slashed. */
+const filesUnder = async (roots) => {
+  const out = [];
+  for (const root of roots) {
+    const entries = await readdir(join(repoRoot, root), { withFileTypes: true, recursive: true });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.(ts|tsx)$/.test(entry.name)) continue;
+      out.push(relative(repoRoot, join(entry.parentPath, entry.name)).replace(/\\/g, '/'));
+    }
+  }
+  return out.sort();
+};
 
 // ---------------------------------------------------------------------------
 // withAlpha — executed, byte-exact against every value the sweep replaced
@@ -175,6 +227,84 @@ test('Playfair fence: the three heading roles resolve to the bundled statics', a
   assert.match(app, /'PlayfairDisplay-Bold': require\('\.\/assets\/fonts\/PlayfairDisplay-Bold\.ttf'\)/);
   assert.match(app, /'PlayfairDisplay-ExtraBold': require\('\.\/assets\/fonts\/PlayfairDisplay-ExtraBold\.ttf'\)/);
   assert.match(app, /fontsResolved \? children : null/);
+});
+
+// ---------------------------------------------------------------------------
+// L-010 — the one star treatment reaches LIGHT, not just dark.
+//
+// docs/audit/2026-08-22/light_mode_parity.md's only rendering finding. The
+// dark pass gave the app ONE star (lib/theme.ts `starColors`), but three
+// bare-`★`-in-a-sentence spans were repointed on the dark side only:
+//
+//     <Text style={isDark ? styles.xStarDark : undefined}>★</Text>
+//
+// `undefined` is not "the Heritage star" — it is no paint at all, so in light
+// the glyph inherited the muted grey of the meta line it sits in. The helper
+// had expressed light correctly the whole time; nothing called it there.
+//
+// WHY NOT VACUOUS. Half one EXECUTES lib/theme.ts and compares the helper's
+// answer to the palette, so flipping either branch fails. Half two DERIVES the
+// site list by scanning the tree for the glyph — a fourth bare star added
+// anywhere under screens/, components/ or ui/ fails until it is painted the
+// same way — and counts painted spans against glyphs per file, so reverting
+// one site to the `isDark ? … : undefined` shape fails on that file by name
+// while the glyph count stays put.
+// ---------------------------------------------------------------------------
+
+test('L-010 fence: the one star treatment resolves in LIGHT too, at every bare-★ site', async () => {
+  const { colors, darkColors, starColors } = await themeModule;
+
+  // --- half one: the helper, executed against both palettes ----------------
+  assert.equal(starColors(colors, false).filled, colors.star, 'light filled star is the star token');
+  assert.equal(starColors(darkColors, true).filled, darkColors.gold, 'dark filled star is Prestige gold');
+  assert.equal(starColors(colors, false).empty, colors.border, 'light empty star is the neutral border');
+  // The exact regression: a light star that reads as body-meta grey.
+  for (const grey of ['textMuted', 'textSubtle', 'text']) {
+    assert.notEqual(
+      starColors(colors, false).filled,
+      colors[grey],
+      `the light filled star must never resolve to ${grey} — that IS the washed-out star`,
+    );
+  }
+
+  // --- half two: every bare glyph in the tree, derived --------------------
+  // The painted shape, and the glyph itself. Comment-stripped first, so a
+  // docblock that draws a ★ to explain the rule is not mistaken for a site.
+  const PAINTED = /<Text style=\{\{ color: starColors\(colors, isDark\)\.filled \}\}> ?★/g;
+  const GLYPH = /★/g;
+
+  const sites = [];
+  for (const path of await filesUnder(['screens', 'components', 'ui'])) {
+    const flat = stripComments(await read(path)).replace(/\s+/g, ' ');
+    const glyphs = [...flat.matchAll(GLYPH)].length;
+    if (glyphs === 0) continue;
+    sites.push(path);
+    assert.equal(
+      [...flat.matchAll(PAINTED)].length,
+      glyphs,
+      `${path}: every bare ★ must be painted through starColors(colors, isDark).filled — ` +
+        'an isDark-gated style leaves the light half inheriting the meta line',
+    );
+  }
+
+  // The three L-010 sites, derived rather than trusted. A new bare star lands
+  // here as a failure with its own path, not as silence.
+  assert.deepEqual(sites, [
+    'screens/BidDetailScreen.tsx',
+    'screens/ProfileScreen.tsx',
+    'screens/SavedWorkersScreen.tsx',
+  ]);
+
+  // The style keys the three sites used to carry are gone, not merely unused —
+  // a dead `…StarDark: { color: colors.gold }` is the shape a future run
+  // re-attaches to the glyph.
+  for (const path of sites) {
+    assert.doesNotMatch(
+      stripComments(await read(path)),
+      /StarDark:\s*\{/,
+      `${path}: the dark-only star style key must be deleted, not left dangling`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------

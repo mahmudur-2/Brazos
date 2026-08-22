@@ -53,6 +53,7 @@ import {
   fonts,
   radius,
   spacing,
+  starColors,
   themedStyles,
   useThemeColors,
   withAlpha,
@@ -575,8 +576,9 @@ export function ProfileScreen() {
             )}
             <Text style={styles.email}>{user?.email}</Text>
             <Text style={styles.roleNote}>
+              {/* One star treatment, BOTH palettes — see BidDetailScreen. */}
               {summaryLeadsWithStar ? (
-                <Text style={isDark ? styles.roleNoteStarDark : undefined}>★ </Text>
+                <Text style={{ color: starColors(colors, isDark).filled }}>★ </Text>
               ) : null}
               {profileSummary}
             </Text>
@@ -913,7 +915,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
   },
-  roleNoteStarDark: { color: colors.gold },
   reviewsLink: {
     flexDirection: 'row',
     alignItems: 'center',
