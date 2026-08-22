@@ -52,7 +52,7 @@ import { goBackOrHome } from '../lib/navigationRef';
 import { acceptOffer, type OfferWithWorker } from '../lib/offers';
 import { BID_SORT_CHIPS, sortBidsForChip, type BidSortChip } from '../lib/compareBids';
 import { jobStage } from '../lib/jobStage';
-import { deriveJobLifecycle } from '../lib/jobLifecycle';
+import { deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
 import {
   arrivalWindowLabel,
   budgetRangeLabel,
@@ -142,7 +142,12 @@ export function ClientJobDetailScreen() {
   const assignedWorker = worker?.id === job.assigned_worker_id ? worker : null;
   const workerName = assignedWorker?.full_name ?? 'the worker';
   const accent = categoryAccent(job.category);
-  const hasLifecycle = ['assigned', 'in_progress', 'completed'].includes(job.status);
+  // "An accepted price exists" = the job sits on the hire-to-done track,
+  // classified through THE derivation (F-012). Deliberately payment- and
+  // dispute-blind — whether the job left the market must not flip on a
+  // failed payment read — so it runs payment-null, exactly like
+  // RouteArrival's derivation, instead of reusing `lifecycle` below.
+  const hasLifecycle = trackStepIndex(deriveJobLifecycle({ job, payment: null })) >= 0;
   const pendingBids = useMemo(
     () => bids.filter((bid) => bid.status === 'pending'),
     [bids]
@@ -906,9 +911,13 @@ export function ClientJobDetailScreen() {
                   {payment?.status === 'authorized'
                     ? ' It’s authorized — not charged — finish checkout to protect it.'
                     : ''}
-                  {job.status === 'in_progress'
+                  {/* Derived, not raw (F-012): inside this branch canFundNow
+                      holds, so the payment is null/authorized and the raw
+                      in_progress/completed statuses map 1:1 onto these
+                      derived states. */}
+                  {lifecycle === 'in_progress'
                     ? ' The work has started; protecting the payment works exactly the same.'
-                    : job.status === 'completed'
+                    : lifecycle === 'completed'
                       ? ' The work is finished, but the worker can’t be paid until the payment is protected and then released.'
                       : ''}
                 </Text>

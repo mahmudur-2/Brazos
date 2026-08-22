@@ -16,6 +16,7 @@ import {
   setChecklistItemDone,
   type ChecklistItem,
 } from '../lib/checklist';
+import { deriveJobLifecycle } from '../lib/jobLifecycle';
 import type { MyJobsStackParamList } from '../lib/navigation';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
@@ -61,6 +62,11 @@ export function WorkChecklistScreen() {
 
   const isWorker = !!user && !!job && job.assigned_worker_id === user.id;
   const editable = isWorker && (job?.status === 'assigned' || job?.status === 'in_progress');
+  // Presentation only (F-012): the read-only caption classifies through THE
+  // derivation, payment-blind — raw 'completed' is 1:1 with the derived
+  // state when no payment fact is in play. `editable` above stays a raw
+  // status gate on purpose: it mirrors the RLS write rule, not a label.
+  const lifecycle = job ? deriveJobLifecycle({ job, payment: null }) : null;
   const doneCount = items.filter((i) => i.done).length;
 
   const state: ScreenState = loading || !itemsLoaded
@@ -178,7 +184,7 @@ export function WorkChecklistScreen() {
         </Text>
         {!editable && job ? (
           <Text style={styles.readOnlyTag}>
-            {job.status === 'completed' ? 'Job completed — record only' : 'Read only'}
+            {lifecycle === 'completed' ? 'Job completed — record only' : 'Read only'}
           </Text>
         ) : null}
       </View>

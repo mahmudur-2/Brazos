@@ -274,6 +274,7 @@ test('screens derive lifecycle through the one helper, never locally', async () 
   for (const screen of [
     'screens/TrackWorkerScreen.tsx',
     'screens/RouteArrivalScreen.tsx',
+    'screens/WorkChecklistScreen.tsx',
   ]) {
     const src = await read(screen);
     assert.match(src, /deriveJobLifecycle|trackStepIndex/, `${screen} must use lib/jobLifecycle`);

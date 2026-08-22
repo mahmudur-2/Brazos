@@ -185,7 +185,9 @@ export function RouteArrivalScreen() {
                     />
                     {!beforeStart ? (
                       <Text style={styles.infoCaption}>
-                        {job.status === 'in_progress'
+                        {/* Derived, not raw (F-012): only raw in_progress
+                            derives 'in_progress', so this is 1:1. */}
+                        {lifecycle === 'in_progress'
                           ? 'The job is already in progress — arrival is behind you.'
                           : 'This job is no longer awaiting arrival.'}
                       </Text>
