@@ -32,6 +32,151 @@ needed. Reaffirmed unchanged by the verification run (2026-08-19) and restated
 at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
+## 2026-08-22 — LIGHT-PARITY CLEANUP + GUARD-COVERAGE AUDIT — COMPLETE, ONE COMMIT SKIPPED
+
+Four dispatched commits; **three landed, one was skipped at its own gate**,
+plus this record. `dd518d9` fixes the light star (L-010), `1714fd8` moves the
+category accents into the token layer (L-002), `19357ab` writes the read-only
+guard-coverage audit. Bare `npm run verify` exit 0 at baseline and after every
+commit — **suite 844 → 845 → 846 → 846 pass / 0 fail / 0 skipped / 0 TS
+errors**. Every delta is one added fence: +1 the L-010 star fence, +1 the L-002
+value-parity fence, +0 for the docs-only audit. `git` is the authority on what
+reached the remote.
+
+**No guard, hook, deny rule, fence or lint rule was weakened, disabled,
+narrowed or granted an allowance anywhere in this run.** That constraint is
+what skipped a commit and what shaped the L-002 design; both are recorded
+below rather than quietly absorbed.
+
+### L-010 — the light star, fixed (`dd518d9`)
+
+The dark pass gave the app ONE star treatment (`lib/theme.ts` `starColors`)
+but repointed the three bare-`★`-in-a-sentence spans on the dark side only:
+`<Text style={isDark ? styles.xStarDark : undefined}>★</Text>`. `undefined` is
+not "the Heritage star" — it is no paint at all, so in light the glyph
+inherited the muted grey of the meta line it sat in. The helper had expressed
+light correctly the whole time; nothing called it there.
+
+All three sites (`BidDetailScreen`, `ProfileScreen`, `SavedWorkersScreen`,
+each re-located against current code rather than trusting the audit's recorded
+line numbers) now paint through `starColors(colors, isDark).filled`, the same
+expression the six Ionicons star sites already use. The three dark-only
+`…StarDark: { color: colors.gold }` keys are deleted, not left dangling. Dark
+is byte-unchanged. The `starColors` docblock, which had recorded "the light
+pass owns that call", now records that the pass happened.
+
+`tests/themeTokens.test.mjs` gains the fence — and with it an **executed
+`lib/theme.ts`** (react-native stubbed, its `ui/tokens` import fed from the
+module that file already executes, so the palette the helpers see is the real
+one). Half one calls `starColors` against both palettes; half two derives the
+site list by scanning `screens/`, `components/`, `ui/` for the glyph and
+counts painted spans against glyphs per file, so a fourth bare star anywhere
+fails by path. **Proven red before green:** repointing `SavedWorkersScreen` to
+the exact pre-fix shape failed with `0 !== 1` at suite exit 1, then reverted.
+
+### L-001 — SKIPPED at its gate: `emeraldColors` has live consumers
+
+The dispatch's gate was "zero live consumers → delete; any live consumer → do
+not delete, report and continue." Two search passes (gitignore-respecting and
+raw, with `\bemeraldColors\b` so `emeraldColorsFor` cannot be confused for it)
+found **zero production importers** — the five screens that name
+`emeraldColors` all declare it as a LOCAL const from
+`emeraldColorsFor(colors)` — but **two live consumers in test code**:
+
+* `tests/customerCore.test.mjs:225` — `assert.match(theme, /export const emeraldColors/)`, a hard assertion the export exists.
+* `tests/emeraldFences.test.mjs:1485` — `paletteBlock(theme, 'colors = {', 'emeraldColors')` uses the export's NAME as the end delimiter for slicing the light palette block, and `paletteBlock` asserts `${next} must stay a named export after ${name}`.
+
+Deleting the export turns both red, and the only way through is to edit two
+fences — which this run's binding constraint forbids. **The audit's L-001 line
+("zero live consumers") is therefore contradicted by current code**: it
+counted importers, not the two fences that pin the export's existence and use
+its name as a source delimiter. Recorded, skipped, continued. Whoever picks
+this up owns those two fences as part of the change.
+
+### L-002 — category accents moved to the token layer (`1714fd8`)
+
+The eleven job-category accents were twenty-two raw hexes in `lib/jobs.ts`: a
+data-access module, so outside all three sanctioned token surfaces AND outside
+the hex fence's scanned directories, where a twelfth could have been added with
+nothing to catch it. They are now `categoryAccents` in `ui/tokens.ts`;
+`lib/jobs.ts` keeps the vocabulary it owns and carries **no colour literal of
+any kind**. All twenty-two values moved byte for byte — a refactor, pinned by a
+fence that compares the executed token module against a copy of the
+pre-refactor table.
+
+**Two deliberate deviations from the dispatch's wording, both because current
+code wins:**
+
+1. The dispatch asked for resolution "through the palette". `emeraldFences` F5
+   pins **both** `lib/jobs.ts` declarations verbatim —
+   `JOB_CATEGORY_COLORS: Record<JobCategory, { bg: string; icon: string }>` and
+   `categoryAccent(category: JobCategory)` — so a palette-parameterised
+   accessor cannot land without editing that fence. It is also F5 that proves
+   dark never paints this table at all (every read sits on the FALSE branch of
+   an `isDark` ternary), so a dark half would be **dead by construction** and
+   no golden master specifies one. One theme-constant group, the same shape
+   `star`/`black`/`white`/`mediaChrome` already have.
+2. The group is deliberately NOT folded into `colors`/`ColorToken`: eleven
+   identity pairs are not palette roles, and folding them in would put
+   twenty-two keys into every resolved `EmeraldPalette` that no primitive reads.
+
+The hex fence was **not** extended to `lib/` and no allowance was recorded
+anywhere — the dispatch forbade the allowance, and extending the fence would
+have required them for `lib/theme.ts`, `lib/authTheme.ts` and `lib/hotspots.ts`.
+
+### Guard-coverage audit (`19357ab`) — read-only, P0 0 / P1 2 / P2 8
+
+`docs/audit/2026-08-22/guard_coverage.md`. Every active guard enumerated from
+disk with its boundary quoted verbatim, then each guard's COMPLEMENT scanned
+for the class of violation it exists to prevent.
+`docs/emerald-v2/DECISIONS.md` **D31** carries the boundary table, which is the
+part that must not be lost — the drift between a fence's docblock intent and
+its actual directory list is what both P1s are made of.
+
+**P1 · G-001 — raw Supabase Storage error text reaches a user-facing alert.**
+`lib/storage.ts`'s `uploadAsset()` returns the service's own `StorageError`
+unwrapped; `ui/primitives/MediaUploader.tsx:123` extracts `error?.message`;
+`screens/PostJobScreen.tsx:1030,1051` render it with `alertAsync`. Two live
+mounts (photo + video). This is exactly the class
+`tests/errorMessage.test.mjs` calls a ship-blocker — and it survives because
+that fence's `dirs` are `['screens','components','hooks']` and **`ui/` is not
+among them**, so the extraction happens one directory outside the sweep and
+arrives at the scanned screen bound to a parameter named `message`, which the
+fence's `\w*[Ee]rr\w*\??\.message` needle cannot see.
+
+**P1 · G-002 — the guard layer's own regression suite never runs in CI.**
+`tests/safety.test.mjs` holds **120 of the 846 tests** — every executed proof
+that `guard.ps1`'s ten rules and the deny matrix still behave — inside
+`describe(…, { skip: PLATFORM_SKIP })`, and `PLATFORM_SKIP` is falsy only on
+win32. `.github/workflows/ci.yml` is `runs-on: ubuntu-latest`. CI therefore
+runs 726 tests and skips precisely the 120 that protect the controls: a
+weakening edit to the guard or the matrix is green on every PR and is caught
+only when the operator happens to run `verify` on Windows.
+
+**P2s:** `lib/` outside the hex fence, with 4 live literals in
+`lib/hotspots.ts` (L-003) and nothing mechanical separating a sanctioned token
+surface from any other `lib/` file; `lib/sharing.ts` → `PhotoViewer` showing a
+raw platform exception (same class as G-001, different source); the two Deno
+edge functions type-checked by nothing (`tsconfig` excludes
+`supabase/functions`); three non-recursive sweeps (F-ERRMSG, F-TOKENIMPORT,
+F-SQLENUM) one `mkdir` from silently shrinking; `lib/adapters/payments.ts`
+dropping `code` and degrading `userMessage`'s classification (no leak — it
+fails safe — but it lands on the generic branch); `MIGRATED_FILES` being a
+hand-list rather than a walk; and the two already-recorded frozen/dev-only
+literals (L-009, L-008).
+
+**Nine complement scans came back clean** and are recorded as measured facts,
+including a tree-wide sweep for CSS **named** colour literals across all 257
+app files — zero hits, confirmed by an independent grep. **Nothing is marked
+UNKNOWN**: every scope was read from source. The one coverage that is not a
+path boundary is `scripts/verify-schema.mjs`, whose scope is a human cadence.
+
+**Not reached, named rather than sampled:** `dist/` and `.shots/` (build
+output), `public/` + `hosting/` (counted, not itemised — frozen web),
+`node_modules/`, `assets/`, `design-reference/`, `docs/`, and a full SECURITY
+DEFINER ACL sweep of the ~80 migrations, which is database-shaped and out of
+scope for a run that touches no SQL.
+
 ## 2026-08-22 — PLAYFAIR HEADINGS + ORPHAN DELETE + LIGHT-MODE AUDIT — COMPLETE
 
 Three functional commits plus this record: `341fae8` bundles Playfair
@@ -1080,10 +1225,27 @@ rather than a per-component hook. Nine screens read it. Fetch behaviour is
 unchanged — each mount still refreshes — but a write on one screen is now
 visible on the others immediately.
 
-## NEXT SCHEDULED RUN — the LIGHT-mode parity audit
+## THE LIGHT-mode parity audit — DISPATCHED, AUDITED, PARTLY FIXED
 
-**It has still never been dispatched**, and no `light(N)` commit exists anywhere
-in this repository on any ref. The debt is now **three runs** deep.
+**No longer outstanding as an audit.** `ce4e6ec` wrote it
+(`docs/audit/2026-08-22/light_mode_parity.md`, P0 0 / P1 0 / P2 10) and the
+2026-08-22 cleanup run above closed **L-010** (`dd518d9`) and **L-002**
+(`1714fd8`), skipped **L-001** at its gate, and left the rest.
+
+**Still open from that audit:** L-003 (`lib/hotspots.ts`'s 4 heat-tier
+strokes — the last live-rendering literal with no token home, and now also
+recorded as G-003), L-004/L-006 (auth-surface literals whose token home
+`lib/authTheme.ts` is editable again), L-005 (`CountryPicker`'s hand-mixed
+scrim), L-007 (shimmer core, blocked on dark transition assets), L-008 and
+L-009 (dev-only and frozen-web, no action available).
+
+**C2's item L1 is CLOSED.** `lib/jobs.ts`'s light-only `JOB_CATEGORY_COLORS`
+was named there as "the biggest outstanding light decision"; `1714fd8`
+resolved it — the values are a theme-constant token group in `ui/tokens.ts`,
+F5 continues to prove dark never paints them, and the light rendering did not
+move. Do not re-open it from the run report's C2 list.
+
+The rest of the light debt below stands as written.
 
 Light stayed FROZEN through the home reconstruction as it did through emerald:
 every colour change branched on `isDark` or moved a dark-palette value only, and
@@ -1111,13 +1273,23 @@ transparent. L4 is closed. Everything else in section (c) stands.
 **The scope is written out in full** as section **(c) THE LIGHT AUDIT HANDOFF
 LIST** at the end of `docs/mockups/PRESTIGE_RUN_REPORT.md`, in four parts: C1
 (thirteen shared components with light branches), C2 (the five D10 deferrals —
-of which L1, `lib/jobs.ts`'s light-only `JOB_CATEGORY_COLORS`, is the biggest
-outstanding light decision), C3 (both-theme changes nobody has seen under light
-— read it for its debt list, NOT for the bar's composition, which it describes
-wrongly as six slots), and C4 (theme-neutral changes, listed so they are not
-re-audited).
+of which L1, `lib/jobs.ts`'s light-only `JOB_CATEGORY_COLORS`, was the biggest
+outstanding light decision and is now CLOSED by `1714fd8`), C3 (both-theme
+changes nobody has seen under light — read it for its debt list, NOT for the
+bar's composition, which it describes wrongly as six slots), and C4
+(theme-neutral changes, listed so they are not re-audited).
 
 ### Open items carried forward
+
+0. **The two P1s from the guard-coverage audit** (`19357ab`) are the most
+   actionable items on this list and both are one-file changes with a fence
+   attached. **G-001**: wrap the extraction in
+   `ui/primitives/MediaUploader.tsx` through `userMessage()`, and add `'ui'`
+   to `tests/errorMessage.test.mjs`'s `dirs` **with** `{ recursive: true }`.
+   **G-002**: CI cannot run the 120-test guard suite on `ubuntu-latest`, so
+   either add a Windows job for it or stop treating a green CI badge as
+   evidence the guards were verified. Neither was fixed here — that audit was
+   dispatched read-only.
 
 1. **Master 34's inbox search, its four filter tabs and its per-thread unread
    COUNT** are not built — functionality, not presentation, and the data model
@@ -1151,13 +1323,26 @@ re-audited).
     It still excludes both sign-in screens, which emerald(5) converted and
     un-allowlisted elsewhere. Harmless today; the operator's call.
 12. **Guard rules that fire on command TEXT rather than command effect**, now
-    reproduced by a third run. This run hit four: `git commit` refused for a
+    reproduced by a **fourth** run. Earlier runs hit: `git commit` refused for a
     message containing the bare token `Claude`
     (`GUARD-NESTED-CLAUDE` matches any whitespace-delimited `claude` token
     anywhere in the command, including inside a heredoc body); `node -e` refused
     as `GUARD-DYNEXEC`; `git stash list` refused as a forbidden subcommand
     despite being read-only; and `Write` to the session's own scratchpad refused
-    as a path escape. All fail safe. **None was worked around** — commit messages
-    went through a temporary `-F` file, probes were written as files in the
-    project root and deleted after running, and the `stash list` call was simply
-    dropped. Worth fixing at the guard, because every run pays this tax.
+    as a path escape. The 2026-08-22 cleanup run reproduced the scratchpad
+    refusal and added a fifth shape: **`GUARD-CLAUDEDIR` fires on any command
+    whose text contains `.claude/` together with a `>` anywhere**, so the purely
+    read-only `ls -la .claude/ 2>&1` is blocked as a config mutation — the `2>&1`
+    is the whole trigger. All fail safe. **None has ever been worked around** —
+    commit messages go through `-F` files in the allowlisted `.audit-scratch/`,
+    probes are written into the project tree, `.claude/` is read with the file
+    tools instead of the shell, and refused calls are dropped rather than
+    rephrased. Worth fixing at the guard, because every run pays this tax and it
+    is now the single most reproducible friction in the contract.
+13. **`tests/customerCore.test.mjs:225` and `tests/emeraldFences.test.mjs:1485`
+    own `lib/theme.ts`'s dead `emeraldColors` export.** The first asserts the
+    export exists; the second uses its NAME as the slice delimiter for the light
+    palette block. There are zero production importers, so the export is dead
+    code that two fences keep alive. Deleting it is a three-file change (export
+    + both fences) and needs a dispatch that authorises touching them — this run
+    was forbidden from editing any fence and correctly skipped it.
