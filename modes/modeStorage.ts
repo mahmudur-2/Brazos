@@ -39,3 +39,42 @@ export async function writeCachedMode(userId: string, mode: AppMode): Promise<vo
     // Intentionally swallowed — see above.
   }
 }
+
+/**
+ * The server-write debt marker (F-042). Set when set_active_mode() failed
+ * after its retry, so the NEXT resolution knows the local cache is AHEAD of
+ * the server — a stale remote answer must not silently revert the user's
+ * switch — and re-pushes the choice. Cleared the moment a server write lands.
+ * Scoped and versioned exactly like the cache key above, for the same
+ * two-accounts-one-device reason.
+ */
+export function pendingModeWriteKey(userId: string): string {
+  return `brazos.mode.pendingWrite.v1.${userId}`;
+}
+
+/** The mode still owed to the server, or null when nothing is owed. */
+export async function readPendingModeWrite(userId: string): Promise<AppMode | null> {
+  try {
+    const raw = await AsyncStorage.getItem(pendingModeWriteKey(userId));
+    return isAppMode(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function writePendingModeWrite(userId: string, mode: AppMode): Promise<void> {
+  try {
+    await AsyncStorage.setItem(pendingModeWriteKey(userId), coerceAppMode(mode));
+  } catch {
+    // Best-effort: an unwritable flag costs cross-device sync, not the app.
+  }
+}
+
+export async function clearPendingModeWrite(userId: string): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(pendingModeWriteKey(userId));
+  } catch {
+    // The debt is paid server-side; a sticky flag only re-pushes the same
+    // value on the next resolution.
+  }
+}

@@ -1,8 +1,8 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { handleNotificationData } from '../lib/notificationRoutes';
-import { registerPushToken } from '../lib/pushNotifications';
+import { registerPushToken, settlePendingPushDeactivation } from '../lib/pushNotifications';
 import { useAuth } from './useAuth';
 import { useNotificationModeBridge } from './useNotificationModeBridge';
 
@@ -26,19 +26,49 @@ export function usePushNotifications() {
   const handledColdStart = useRef(false);
 
   // --- Token upkeep --------------------------------------------------------
+  // A failed sync is retried once, and the failure is HELD (F-042): the sync
+  // re-runs on the next app foreground until it lands, instead of leaving the
+  // user silently without notifications for the whole session. Classed
+  // best-effort rather than alerted: this is an unprompted background re-sync
+  // of an already-granted permission, and an alert would misfire on every
+  // routine offline launch. 'denied'/'unsupported'/'no_project_id' are
+  // terminal answers, not failures — they neither retry nor re-arm.
+  const syncFailedRef = useRef(false);
   useEffect(() => {
     if (!user) return;
-    // interactive:false — never trigger the OS permission dialog on launch.
-    // iOS grants exactly one prompt per install, and it's spent deliberately
-    // after a meaningful action instead (see maybePromptForPush).
-    // This only re-syncs a token the user has already agreed to, which is what
-    // keeps a rotated token (OS reissue, reinstall, restore to a new phone)
-    // attached to the right account.
-    registerPushToken({ interactive: false }).then((result) => {
+    let active = true;
+    const sync = async () => {
+      // A deactivation owed from a previous sign-out settles first, so this
+      // account's registration below cannot be undone by paying it later.
+      await settlePendingPushDeactivation();
+      if (!active) return;
+      // interactive:false — never trigger the OS permission dialog on launch.
+      // iOS grants exactly one prompt per install, and it's spent deliberately
+      // after a meaningful action instead (see maybePromptForPush).
+      // This only re-syncs a token the user has already agreed to, which is
+      // what keeps a rotated token (OS reissue, reinstall, restore to a new
+      // phone) attached to the right account.
+      let result = await registerPushToken({ interactive: false });
+      if (!active) return;
+      if (!result.ok && result.reason === 'error') {
+        result = await registerPushToken({ interactive: false });
+        if (!active) return;
+      }
       if (!result.ok && result.reason === 'error') {
         console.error('[push] token sync failed:', result.message);
+        syncFailedRef.current = true;
+      } else {
+        syncFailedRef.current = false;
       }
+    };
+    void sync();
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active' && syncFailedRef.current) void sync();
     });
+    return () => {
+      active = false;
+      subscription.remove();
+    };
   }, [user?.id]);
 
   // --- Cold start: app was closed, tapping the notification launched it ----

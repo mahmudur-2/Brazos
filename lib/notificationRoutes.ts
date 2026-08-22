@@ -1,3 +1,4 @@
+import { alertAsync } from './dialog';
 import { fetchJobById } from './jobs';
 import type { OpenJob } from './jobs';
 import type { AppMode } from '../modes/types';
@@ -222,6 +223,17 @@ export async function handleNotificationData(
       console.error('[push] unknown notification screen', data.screen);
     } else if (data?.screen) {
       console.error('[push] notification missing jobId for screen', data.screen);
+    }
+    if (data?.screen) {
+      // A tapped alert that routes nowhere says so instead of silently doing
+      // nothing (F-042). Only a payload that NAMED a destination gets the
+      // dialog — a bare informational push opening the app is not an error.
+      // The in-app feed never reaches this: canRouteNotification() disables
+      // its unroutable rows before they can be tapped.
+      await alertAsync(
+        'Couldn’t open this notification',
+        'It points at a screen this version of the app can’t open.'
+      );
     }
     return;
   }

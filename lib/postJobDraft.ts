@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { alertAsync } from './dialog';
 import type { JobCategory } from './jobs';
 
 /**
@@ -103,11 +104,35 @@ export async function loadPostJobDraft(userId: string): Promise<PostJobDraft | n
   }
 }
 
+/**
+ * True while a draft-save failure streak has already been announced. The
+ * autosave fires on every field change, so the warning shows ONCE per streak
+ * — a later successful save re-arms it — instead of an alert per keystroke.
+ */
+let draftSaveFailureAnnounced = false;
+
 export async function savePostJobDraft(userId: string, draft: PostJobDraft): Promise<void> {
+  const write = () => AsyncStorage.setItem(draftStorageKey(userId), JSON.stringify(draft));
   try {
-    await AsyncStorage.setItem(draftStorageKey(userId), JSON.stringify(draft));
-  } catch (e) {
-    console.error('[postJobDraft] failed to persist draft', e);
+    await write();
+    draftSaveFailureAnnounced = false;
+  } catch {
+    // One retry (F-042) — storage writes fail transiently under pressure.
+    try {
+      await write();
+      draftSaveFailureAnnounced = false;
+    } catch (e) {
+      console.error('[postJobDraft] failed to persist draft', e);
+      // The user is typing work this device is silently NOT keeping — that
+      // must surface, once per streak, so they can finish or copy it out.
+      if (!draftSaveFailureAnnounced) {
+        draftSaveFailureAnnounced = true;
+        await alertAsync(
+          'Draft not saving',
+          'Your draft could not be saved on this device, so it may be lost if the app closes. Keep the app open until you finish posting.'
+        );
+      }
+    }
   }
 }
 

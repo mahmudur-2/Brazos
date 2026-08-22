@@ -258,21 +258,98 @@ export async function maybePromptForPush(rationale: string): Promise<PushRegistr
 }
 
 /**
+ * The deactivation debt marker (F-042). Written when sign-out could not
+ * deactivate this device's token after a retry, so the next sign-in settles
+ * it instead of the failure living only in a console line. Holds the exact
+ * token, or '*' when even resolving the token failed.
+ */
+const PENDING_DEACTIVATION_KEY = 'brazos.push.pendingDeactivation';
+
+/** RLS restricts this to the caller's own rows, so a user can only ever
+ *  deactivate a token registered to themselves. */
+function deactivateToken(token: string) {
+  return supabase.from('push_tokens').update({ active: false }).eq('token', token);
+}
+
+/**
  * Detaches this device from the signed-out account, so the next person to use
  * the phone doesn't receive the previous user's notifications. Deactivates
  * rather than deletes — signing back in re-activates the same row.
+ *
+ * Best-effort BY DESIGN (F-042): it runs in the closing seconds of a session
+ * and must not block sign-out on a dead network. The contract is one retry,
+ * then the debt is RECORDED for settlePendingPushDeactivation() to pay on
+ * the next sign-in — never a console line as the only handling.
  */
 export async function unregisterPushToken(): Promise<void> {
   if (Platform.OS === 'web' || !Device.isDevice || isExpoGo()) return;
   const projectId = getProjectId();
   if (!projectId) return;
 
+  let token: string | null = null;
   try {
-    const { data: token } = await Notifications.getExpoPushTokenAsync({ projectId });
-    // RLS restricts this to the caller's own rows, so a user can only ever
-    // deactivate a token registered to themselves.
-    await supabase.from('push_tokens').update({ active: false }).eq('token', token);
-  } catch (err) {
-    console.error('[push] unregisterPushToken failed', err);
+    token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+  } catch {
+    try {
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    } catch (err) {
+      console.error('[push] unregisterPushToken could not resolve this device token', err);
+    }
+  }
+
+  let owed = true;
+  if (token) {
+    let { error } = await deactivateToken(token);
+    if (error) ({ error } = await deactivateToken(token));
+    if (error) console.error('[push] unregisterPushToken failed after retry', error);
+    owed = !!error;
+  }
+
+  if (owed) {
+    try {
+      await AsyncStorage.setItem(PENDING_DEACTIVATION_KEY, token ?? '*');
+    } catch {
+      // An unwritable flag leaves only the console record above — storage
+      // and network both failing at once has no client-side remedy.
+    }
+  }
+}
+
+/**
+ * Pays the deactivation debt a failed sign-out recorded. Called on sign-in,
+ * BEFORE registerPushToken: if the same account returns, its row is
+ * deactivated here and deliberately re-activated by the registration that
+ * follows; a different account's registration reassigns the row anyway, so
+ * settling is idempotent in every path.
+ */
+export async function settlePendingPushDeactivation(): Promise<void> {
+  let pending: string | null = null;
+  try {
+    pending = await AsyncStorage.getItem(PENDING_DEACTIVATION_KEY);
+  } catch {
+    return;
+  }
+  if (!pending) return;
+
+  let token: string | null = pending === '*' ? null : pending;
+  if (!token) {
+    if (Platform.OS === 'web' || !Device.isDevice || isExpoGo()) return;
+    const projectId = getProjectId();
+    if (!projectId) return;
+    try {
+      token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
+    } catch {
+      // Still owed — the next sign-in tries again.
+      return;
+    }
+  }
+
+  const { error } = await deactivateToken(token);
+  if (!error) {
+    try {
+      await AsyncStorage.removeItem(PENDING_DEACTIVATION_KEY);
+    } catch {
+      // The debt is paid; a sticky flag only costs a redundant settle later.
+    }
   }
 }

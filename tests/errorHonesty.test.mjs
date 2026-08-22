@@ -309,3 +309,73 @@ test("the fail-open log line is extinct in source", () => {
   if (read('App.tsx').includes(needle)) offenders.push('App.tsx');
   assert.deepEqual(offenders, [], 'the gate fails closed; nothing allows through');
 });
+
+// ===========================================================================
+// F-042 — the six user-visible console-only paths recover or surface
+// ===========================================================================
+// The draft-save and dead-tap paths are EXECUTED in postJobDraft.test.mjs and
+// crossModeNotification.test.mjs; the wiring fences here hold the remaining
+// best-effort paths to their contract: one retry, then the failure RECORDED
+// in state a later moment acts on — never a console line as the only record.
+
+test('sign-out token deactivation retries once and records its debt for the next sign-in', () => {
+  const lib = read('lib/pushNotifications.ts');
+  // Two deactivation attempts, then the recorded debt.
+  assert.match(lib, /if \(error\) \(\{ error \} = await deactivateToken\(token\)\);/);
+  assert.match(lib, /PENDING_DEACTIVATION_KEY = 'brazos\.push\.pendingDeactivation'/);
+  assert.match(lib, /AsyncStorage\.setItem\(PENDING_DEACTIVATION_KEY, token \?\? '\*'\)/);
+  // The settle path exists and clears only on a successful write.
+  assert.match(lib, /export async function settlePendingPushDeactivation/);
+  assert.match(lib, /AsyncStorage\.removeItem\(PENDING_DEACTIVATION_KEY\)/);
+});
+
+test('the launch token sync retries, then re-arms on every app foreground', () => {
+  const hook = read('hooks/usePushNotifications.ts');
+  // The debt from a failed sign-out settles BEFORE this account registers.
+  assert.ok(
+    hook.indexOf('settlePendingPushDeactivation()') < hook.indexOf('registerPushToken({ interactive: false })'),
+    'settling must precede registration'
+  );
+  // A failed sync retries once, is held, and re-syncs on foreground.
+  assert.match(hook, /result = await registerPushToken\(\{ interactive: false \}\);/);
+  assert.match(hook, /syncFailedRef\.current = true;/);
+  assert.match(hook, /nextState === 'active' && syncFailedRef\.current/);
+  // Terminal answers are not failures: only reason 'error' retries.
+  assert.match(hook, /result\.reason === 'error'/);
+});
+
+test('a failed server-side mode write is recorded and repaid at the next resolution', () => {
+  const provider = read('modes/ModeProvider.tsx');
+  // One retry, then the debt.
+  assert.match(provider, /if \(error\) \(\{ error \} = await setMyActiveMode\(mode\)\);/);
+  assert.match(provider, /await writePendingModeWrite\(userId, mode\);/);
+  // Resolution reads the debt, refuses the stale remote, and re-pushes.
+  assert.match(provider, /readPendingModeWrite\(userId\)/);
+  assert.match(provider, /const remote = pendingWrite \? null : remoteResult\.data;/);
+  assert.match(provider, /local: pendingWrite \?\? local/);
+  assert.match(provider, /if \(pendingWrite \|\| resolved !== remoteResult\.data\)/);
+  // Both write paths go through the one retrying, recording helper.
+  assert.match(provider, /void persistModeServerSide\(userId, target\);/);
+  assert.doesNotMatch(
+    provider,
+    /void setMyActiveMode/,
+    'no bare fire-and-forget server write may remain'
+  );
+
+  const storage = read('modes/modeStorage.ts');
+  assert.match(storage, /brazos\.mode\.pendingWrite\.v1\./);
+});
+
+test('every ReviewSection storage cleanup goes through the retrying helper', () => {
+  const review = read('components/ReviewSection.tsx');
+  assert.match(review, /async function deletePhotoWithRetry\(url: string\)/);
+  // The helper itself is the only caller of deleteJobPhoto in this file.
+  const direct = review.match(/deleteJobPhoto\(/g) ?? [];
+  assert.equal(
+    direct.length,
+    2,
+    'exactly the two attempts inside deletePhotoWithRetry may call deleteJobPhoto'
+  );
+  // A url that still fails stays in draftPhotosRef for the later sweeps.
+  assert.match(review, /if \(deleted\) draftPhotosRef\.current\.delete\(url\);/);
+});

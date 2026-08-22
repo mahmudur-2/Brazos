@@ -29,7 +29,7 @@ const toDataUrl = (js) =>
 
 // --- Load the real module with its effectful imports stubbed ---------------
 
-const calls = { navigate: [], fetch: [] };
+const calls = { navigate: [], fetch: [], alerts: [] };
 let fetchResult = { data: null, error: null };
 globalThis.__crossMode_fetchJobById = async (jobId) => {
   calls.fetch.push(jobId);
@@ -38,9 +38,16 @@ globalThis.__crossMode_fetchJobById = async (jobId) => {
 globalThis.__crossMode_navigateAcrossTabs = (...args) => {
   calls.navigate.push(args);
 };
+globalThis.__crossMode_alertAsync = async (title, message) => {
+  calls.alerts.push({ title, message });
+};
 
 let js = stripTypeScriptTypes(read('lib/notificationRoutes.ts'), { mode: 'strip' });
 const replacements = [
+  [
+    "import { alertAsync } from './dialog';",
+    'const alertAsync = globalThis.__crossMode_alertAsync;',
+  ],
   [
     "import { fetchJobById } from './jobs';",
     'const fetchJobById = globalThis.__crossMode_fetchJobById;',
@@ -55,8 +62,8 @@ for (const [from, to] of replacements) {
   js = js.replace(from, to);
 }
 assert.ok(
-  !js.includes("'./jobs'") && !js.includes("'./navigationRef'"),
-  'both runtime imports must be stubbed before the module loads'
+  !js.includes("'./jobs'") && !js.includes("'./navigationRef'") && !js.includes("'./dialog'"),
+  'every runtime import must be stubbed before the module loads'
 );
 
 const { canRouteNotification, handleNotificationData } = await import(toDataUrl(js));
@@ -77,6 +84,7 @@ function makeBridge(mode, switchScript) {
 function resetCalls() {
   calls.navigate.length = 0;
   calls.fetch.length = 0;
+  calls.alerts.length = 0;
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
@@ -202,4 +210,35 @@ test('both tap consumers forward ModeContext through the bridge hook', () => {
   const feed = read('screens/NotificationsScreen.tsx');
   assert.match(feed, /useNotificationModeBridge\(\)/);
   assert.match(feed, /handleNotificationData\(notification\.data, modeBridge\)/);
+});
+
+// ---------------------------------------------------------------------------
+// Batch H (F-042): a tap that routes nowhere says so — never a silent nothing
+// ---------------------------------------------------------------------------
+
+test('an unroutable payload that names a screen alerts instead of doing nothing', async () => {
+  resetCalls();
+  const bridge = makeBridge('customer', async () => true);
+
+  // A screen this build does not know (a newer server contract).
+  await handleNotificationData({ screen: 'FutureScreen', jobId: 'job-9' }, bridge);
+  // A known screen missing the record it needs.
+  await handleNotificationData({ screen: 'ClientJobDetail' }, bridge);
+
+  assert.equal(calls.alerts.length, 2, 'both dead taps must announce themselves');
+  assert.equal(calls.alerts[0].title, 'Couldn’t open this notification');
+  assert.equal(calls.navigate.length, 0, 'nothing may route');
+  assert.equal(calls.fetch.length, 0, 'nothing may fetch');
+  assert.equal(bridge.switchCalls.length, 0, 'no mode switch may be asked for');
+});
+
+test('a payload with no screen at all stays silent — opening the app is not an error', async () => {
+  resetCalls();
+  const bridge = makeBridge('customer', async () => true);
+
+  await handleNotificationData(null, bridge);
+  await handleNotificationData({ type: 'plain' }, bridge);
+
+  assert.equal(calls.alerts.length, 0);
+  assert.equal(calls.navigate.length, 0);
 });

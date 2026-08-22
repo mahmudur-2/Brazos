@@ -40,6 +40,23 @@ import {
 // feedback without inviting an essay.
 const MAX_COMMENT_LENGTH = 300;
 
+/**
+ * Storage cleanup with the F-042 contract: one retry, and a false return
+ * means the url is STILL in storage — callers keep such urls in
+ * draftPhotosRef so the session's later sweeps try again, instead of a
+ * console line being the only record of the leak.
+ */
+async function deletePhotoWithRetry(url: string): Promise<boolean> {
+  const first = await deleteJobPhoto(url);
+  if (!first.error) return true;
+  const second = await deleteJobPhoto(url);
+  if (second.error) {
+    console.error('[ReviewSection] photo cleanup failed after retry', second.error);
+    return false;
+  }
+  return true;
+}
+
 type ReviewSectionProps = {
   jobId: string;
   reviewerId: string;
@@ -95,8 +112,12 @@ export function ReviewSection({
 
   function cleanupDraftPhotos() {
     for (const url of draftPhotosRef.current) {
-      deleteJobPhoto(url).then(({ error }) => {
-        if (error) console.error('[ReviewSection] orphan photo cleanup failed', error);
+      // A url that still fails after the retry STAYS in the set, so any later
+      // sweep in this session (another cleanup call, the submit-time pass)
+      // tries it again. At unmount the set dies with the process — that last
+      // residual leak has no in-app actor left to pay it (F-042).
+      deletePhotoWithRetry(url).then((deleted) => {
+        if (deleted) draftPhotosRef.current.delete(url);
       });
     }
   }
@@ -181,12 +202,10 @@ export function ReviewSection({
       if (error || !url) failures++;
       else if (!mountedRef.current) {
         // The picker/upload can finish after navigation removed this form.
-        // This URL was never rendered or committed, so delete it immediately.
-        deleteJobPhoto(url).then(({ error: cleanupError }) => {
-          if (cleanupError) {
-            console.error('[ReviewSection] late upload cleanup failed', cleanupError);
-          }
-        });
+        // This URL was never rendered or committed, so delete it immediately —
+        // with the retry; a double failure here is the one leak with no later
+        // sweep, since the form is already gone.
+        void deletePhotoWithRetry(url);
       } else {
         draftPhotosRef.current.add(url);
         uploaded.push(url);
@@ -216,9 +235,10 @@ export function ReviewSection({
     const next = photosRef.current.filter((photo) => photo !== url);
     photosRef.current = next;
     setPhotos(next);
-    deleteJobPhoto(url).then(({ error }) => {
-      if (error) console.error('[ReviewSection] deleteJobPhoto failed', error);
-      else draftPhotosRef.current.delete(url);
+    // A url whose delete still fails stays in draftPhotosRef — the
+    // submit-time sweep retries it once the review is safely stored.
+    deletePhotoWithRetry(url).then((deleted) => {
+      if (deleted) draftPhotosRef.current.delete(url);
     });
   }
 
@@ -245,15 +265,12 @@ export function ReviewSection({
       uploadsCommittedRef.current = true;
       const committed = new Set(submittedPhotos);
       // A photo removed from the draft may have had a failed first delete.
-      // Retry any such unreferenced upload once the review is safely stored.
+      // Retry any such unreferenced upload once the review is safely stored;
+      // what still fails stays in the set for cleanupDraftPhotos at unmount.
       for (const url of draftPhotosRef.current) {
         if (committed.has(url)) continue;
-        deleteJobPhoto(url).then(({ error: cleanupError }) => {
-          if (cleanupError) {
-            console.error('[ReviewSection] removed photo cleanup failed', cleanupError);
-          } else {
-            draftPhotosRef.current.delete(url);
-          }
+        deletePhotoWithRetry(url).then((deleted) => {
+          if (deleted) draftPhotosRef.current.delete(url);
         });
       }
     }

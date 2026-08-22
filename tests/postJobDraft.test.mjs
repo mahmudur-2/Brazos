@@ -13,20 +13,32 @@ const toDataUrl = (js) =>
   'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
 
 // lib/postJobDraft.ts EXECUTED, not just pattern-matched — the mode.test.mjs
-// arrangement. Its one native dependency (AsyncStorage) is replaced with an
-// in-memory Map read through globalThis at call time, so each test can swap
-// in a fresh store.
+// arrangement. Its native dependencies (AsyncStorage, and since Batch H the
+// dialog used to surface a persistently failing save) are replaced with
+// in-memory doubles read through globalThis at call time, so each test can
+// swap in a fresh store and count the alerts a failure produced.
+globalThis.__draftTestAlerts = [];
 const draftModule = (async () => {
   const js = stripTypeScriptTypes(await read('lib/postJobDraft.ts'), { mode: 'strip' });
-  const stubbed = js.replace(
+  let stubbed = js.replace(
     /import AsyncStorage from '@react-native-async-storage\/async-storage';/,
     'const AsyncStorage = {' +
       ' getItem: async (k) => (globalThis.__draftTestStore.has(k) ? globalThis.__draftTestStore.get(k) : null),' +
-      ' setItem: async (k, v) => { globalThis.__draftTestStore.set(k, String(v)); },' +
+      ' setItem: async (k, v) => {' +
+      '   if (globalThis.__draftTestStoreFailWrites > 0) { globalThis.__draftTestStoreFailWrites--; throw new Error("disk full"); }' +
+      '   globalThis.__draftTestStore.set(k, String(v));' +
+      ' },' +
       ' removeItem: async (k) => { globalThis.__draftTestStore.delete(k); },' +
       ' };'
   );
   assert.notEqual(stubbed, js, 'the AsyncStorage import must be found and stubbed');
+  const withDialog = stubbed.replace(
+    /import \{ alertAsync \} from '\.\/dialog';/,
+    'const alertAsync = async (title, message) => { globalThis.__draftTestAlerts.push({ title, message }); };'
+  );
+  assert.notEqual(withDialog, stubbed, 'the dialog import must be found and stubbed');
+  stubbed = withDialog;
+  assert.ok(!stubbed.includes("'./dialog'"), 'no runtime import may survive stubbing');
   return import(toDataUrl(stubbed));
 })();
 
@@ -182,4 +194,41 @@ test('clearing one account leaves the other account untouched', async () => {
   assert.equal(await mod.loadPostJobDraft('user-a'), null);
   const b = await mod.loadPostJobDraft('user-b');
   assert.equal(b?.title, 'B draft');
+});
+
+// ---------------------------------------------------------------------------
+// Batch H (F-042): a failing save retries once, then surfaces — never a
+// console line as the only handling, never an alert per keystroke.
+// ---------------------------------------------------------------------------
+
+test('a transient write failure is absorbed by the retry, with no alert', async () => {
+  const mod = await draftModule;
+  globalThis.__draftTestStore = new Map();
+  globalThis.__draftTestAlerts = [];
+  globalThis.__draftTestStoreFailWrites = 1;
+
+  await mod.savePostJobDraft('user-a', { ...blankDraft, title: 'kept' });
+
+  assert.equal((await mod.loadPostJobDraft('user-a'))?.title, 'kept');
+  assert.equal(globalThis.__draftTestAlerts.length, 0, 'a recovered save must not nag');
+});
+
+test('a persistent write failure alerts once per streak and re-arms on success', async () => {
+  const mod = await draftModule;
+  globalThis.__draftTestStore = new Map();
+  globalThis.__draftTestAlerts = [];
+
+  // Two autosaves during a dead-storage streak: both attempts of each fail.
+  globalThis.__draftTestStoreFailWrites = 4;
+  await mod.savePostJobDraft('user-a', { ...blankDraft, title: 'lost 1' });
+  await mod.savePostJobDraft('user-a', { ...blankDraft, title: 'lost 2' });
+  assert.equal(globalThis.__draftTestAlerts.length, 1, 'one streak, one alert');
+  assert.equal(globalThis.__draftTestAlerts[0].title, 'Draft not saving');
+
+  // Storage recovers, then dies again: the warning must re-arm.
+  globalThis.__draftTestStoreFailWrites = 0;
+  await mod.savePostJobDraft('user-a', { ...blankDraft, title: 'saved' });
+  globalThis.__draftTestStoreFailWrites = 2;
+  await mod.savePostJobDraft('user-a', { ...blankDraft, title: 'lost 3' });
+  assert.equal(globalThis.__draftTestAlerts.length, 2, 'a new streak alerts again');
 });

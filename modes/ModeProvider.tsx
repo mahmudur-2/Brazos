@@ -13,7 +13,13 @@ import { useAuth } from '../hooks/useAuth';
 import { confirmAsync } from '../lib/dialog';
 import { fetchMyActiveMode, setMyActiveMode } from '../lib/profiles';
 import { consumePendingLanding } from '../lib/setupLanding';
-import { readCachedMode, writeCachedMode } from './modeStorage';
+import {
+  clearPendingModeWrite,
+  readCachedMode,
+  readPendingModeWrite,
+  writeCachedMode,
+  writePendingModeWrite,
+} from './modeStorage';
 import {
   DEFAULT_MODE,
   modeFromLanding,
@@ -128,6 +134,24 @@ function defaultConfirmation(target: AppMode): SwitchConfirmation {
       };
 }
 
+/**
+ * The server half of a mode change, with the F-042 contract: one retry, then
+ * a still-failing write is RECORDED as a pending-write debt — never left as
+ * a console line only. The next resolution reads the debt, refuses to let
+ * the stale server answer silently revert the user's switch, and re-pushes;
+ * any successful write clears it.
+ */
+async function persistModeServerSide(userId: string, mode: AppMode): Promise<void> {
+  let { error } = await setMyActiveMode(mode);
+  if (error) ({ error } = await setMyActiveMode(mode));
+  if (error) {
+    console.warn('[modes] active_mode not persisted server-side', error.message);
+    await writePendingModeWrite(userId, mode);
+    return;
+  }
+  await clearPendingModeWrite(userId);
+}
+
 export function ModeProvider({ children }: PropsWithChildren) {
   const { user } = useAuth();
   const { start: startTransition, busy } = useModeTransition();
@@ -176,16 +200,20 @@ export function ModeProvider({ children }: PropsWithChildren) {
     const landing = landingPreference ? modeFromLanding(landingPreference) : undefined;
 
     (async () => {
-      const [local, remoteResult] = await Promise.all([
+      const [local, remoteResult, pendingWrite] = await Promise.all([
         readCachedMode(userId),
         fetchMyActiveMode(),
+        readPendingModeWrite(userId),
       ]);
       if (!active) return;
 
       // A failed/absent RPC (phase42 not applied, offline, permissions) yields
       // null, and null simply loses to the local cache in resolveInitialMode.
-      const remote = remoteResult.data;
-      const resolved = resolveInitialMode({ landing, remote, local });
+      // A recorded pending write means LOCAL is ahead of the server — the
+      // last switch never landed there — so the stale remote answer is set
+      // aside instead of silently reverting the user's choice (F-042).
+      const remote = pendingWrite ? null : remoteResult.data;
+      const resolved = resolveInitialMode({ landing, remote, local: pendingWrite ?? local });
 
       setMode(resolved);
       setResolvedFor(userId);
@@ -193,7 +221,9 @@ export function ModeProvider({ children }: PropsWithChildren) {
       // Make every source agree with what was just decided. Both are
       // best-effort: the user is already in the right mode on screen.
       void writeCachedMode(userId, resolved);
-      if (resolved !== remote) void setMyActiveMode(resolved);
+      if (pendingWrite || resolved !== remoteResult.data) {
+        void persistModeServerSide(userId, resolved);
+      }
     })();
 
     return () => {
@@ -263,12 +293,10 @@ export function ModeProvider({ children }: PropsWithChildren) {
         // Persistence runs alongside the animation rather than gating it — a
         // slow network must not stall a UI state change the user already
         // committed to, and the local cache carries the answer either way.
+        // The server write retries once and records its failure as a debt
+        // the next resolution repays (F-042) — see persistModeServerSide.
         void writeCachedMode(userId, target);
-        void setMyActiveMode(target).then(({ error }) => {
-          if (error) {
-            console.warn('[modes] active_mode not persisted server-side', error.message);
-          }
-        });
+        void persistModeServerSide(userId, target);
       } finally {
         // The request window closes when the transition takes over ownership
         // of the guard (`busy`) — exactly as before; the settled promise is
