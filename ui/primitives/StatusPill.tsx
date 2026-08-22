@@ -7,19 +7,17 @@ import { useThemeColors } from '../../lib/theme';
  *
  * WHY THE UNIONS ARE LOCAL TYPES RIGHT NOW
  * §I specifies this as "job/offer/payment enum-driven", and §L forbids status
- * string literals in favour of generated database enums. Those generated types
- * do not exist yet — Phase 0 confirmed there is no database.types.ts anywhere
- * in the repo, and generating them is Phase 3 work. The unions below are
+ * string literals in favour of generated database enums. Those generated
+ * types do not exist — no database.types.ts anywhere in the repo, which
+ * CLAUDE.md records as the standing state. The unions below are
  * transcribed from BRAZOS_MASTER_PLAN.md §H's canonical state machines, so
  * they are the plan's values rather than invented ones, and a caller passing
- * anything outside them is already a compile error today. Phase 3 retargets
- * these three types at the generated enums; every consumer keeps working
- * because the string values are identical by construction.
+ * anything outside them is already a compile error today.
  *
- * This does not replace components/StatusBadge.tsx, which several existing
- * screens use with the older `open|assigned|in_progress|completed` vocabulary.
- * That one stays untouched for those screens; this is what new screens use.
- * They converge in Phase 3 when the enums land.
+ * The app's LIVE job lifecycle renders through lib/jobLifecycle.ts and its
+ * JOB_LIFECYCLE_LABELS; this pill's job arm speaks §H's plan vocabulary and
+ * currently has no kind="job" caller. Every label here is frozen by
+ * tests/statusVocabulary.test.mjs — changing one is an operator decision.
  */
 
 /** §H.1 job lifecycle, including its branches. */

@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { formatStatus } from '../lib/jobStage';
 import {
   fonts,
   radius,
@@ -41,10 +42,6 @@ const statusStylesFor = themedStyles((colors: ColorPalette) => {
   };
   return { byStatus, fallback: { bg: colors.neutralBg, text: colors.neutral } };
 });
-
-function formatStatus(status: string) {
-  return status.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
 
 type StatusBadgeProps = {
   /** Drives the colour pair. */

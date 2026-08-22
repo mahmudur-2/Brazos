@@ -235,6 +235,20 @@ test('jobStage is presentation over the canonical derivation (F-012)', async () 
   assert.match(stage, /case 'unknown':/);
 });
 
+test('one title-caser: StatusBadge imports formatStatus from jobStage (F-012)', async () => {
+  const badge = await read('components/StatusBadge.tsx');
+  assert.match(badge, /import \{ formatStatus \} from '\.\.\/lib\/jobStage'/);
+  assert.doesNotMatch(
+    badge,
+    /function formatStatus|\.replace\(\/_\/g/,
+    'the character-identical local copy must not return'
+  );
+  // The pill's stale Phase 3 promises are gone and nothing promissory
+  // replaced them — decision 9: the file states facts, not futures.
+  const pill = await read('ui/primitives/StatusPill.tsx');
+  assert.doesNotMatch(pill, /Phase 3|converge/i);
+});
+
 test('no module outside lib/jobLifecycle.ts maps a raw status to a step index (F-012)', () => {
   // A raw-status→number map literal is the JobProgress defect's signature;
   // the canonical file owns the only status→position knowledge.
