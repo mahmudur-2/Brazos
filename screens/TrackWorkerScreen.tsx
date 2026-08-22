@@ -57,22 +57,32 @@ export function TrackWorkerScreen() {
   const { user } = useAuth();
 
   const [payment, setPayment] = useState<Payment | null>(null);
-  const [hasOpenDispute, setHasOpenDispute] = useState(false);
+  // 'unknown' is a FAILED dispute read, which is a different fact from "no
+  // dispute" — deriveJobLifecycle refuses to place the job on the track from
+  // it, and this screen shows its error state instead (F-026).
+  const [hasOpenDispute, setHasOpenDispute] = useState<boolean | 'unknown'>(false);
   const [workerName, setWorkerName] = useState<string | null>(null);
+  // The payment + dispute reads feeding the lifecycle, settled together:
+  // either both landed clean, or one failed, or they are still in flight.
+  const [statusReads, setStatusReads] = useState<'loading' | 'error' | 'ready'>('loading');
+  const [readAttempt, setReadAttempt] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
       let active = true;
-      fetchJobPaymentState(job.id).then(({ data, error }) => {
-        if (active && !error) setPayment(data);
-      });
-      fetchOpenJobDispute(job.id).then(({ data, error }) => {
-        if (active && !error) setHasOpenDispute(!!data);
-      });
+      setStatusReads('loading');
+      Promise.all([fetchJobPaymentState(job.id), fetchOpenJobDispute(job.id)]).then(
+        ([paymentResult, disputeResult]) => {
+          if (!active) return;
+          if (!paymentResult.error) setPayment(paymentResult.data);
+          setHasOpenDispute(disputeResult.error ? 'unknown' : !!disputeResult.data);
+          setStatusReads(paymentResult.error || disputeResult.error ? 'error' : 'ready');
+        }
+      );
       return () => {
         active = false;
       };
-    }, [job.id])
+    }, [job.id, readAttempt])
   );
 
   useFocusEffect(
@@ -106,15 +116,22 @@ export function TrackWorkerScreen() {
           title: 'Only the job’s owner can track it here',
           body: 'This surface belongs to the person who posted the job.',
         }
-      : currentIndex < 0
+      : statusReads === 'error'
         ? {
-            kind: 'empty',
-            title: 'No worker to track yet',
-            body: 'Once you hire a worker, their progress appears here.',
-            actionLabel: 'Back to the job',
-            onAction: goBackOrHome,
+            kind: 'error',
+            message:
+              'Where this job stands didn’t load. Check your connection and try again.',
+            onRetry: () => setReadAttempt((attempt) => attempt + 1),
           }
-        : { kind: 'ready' };
+        : currentIndex < 0
+          ? {
+              kind: 'empty',
+              title: 'No worker to track yet',
+              body: 'Once you hire a worker, their progress appears here.',
+              actionLabel: 'Back to the job',
+              onAction: goBackOrHome,
+            }
+          : { kind: 'ready' };
 
   const stepTime = (stepState: JobLifecycleState): string | null => {
     if (stepState === 'en_route' && job.en_route_at) return formatTimeAgo(job.en_route_at);
@@ -222,7 +239,7 @@ export function TrackWorkerScreen() {
                       SANDBOX — NO REAL MONEY
                     </Text>
                     <MoneyText cents={payment.amount_cents} state={payment.status} />
-                    {hasOpenDispute ? (
+                    {hasOpenDispute === true ? (
                       <Text style={styles.paymentNote}>
                         Your issue report is holding this payment.
                       </Text>

@@ -47,7 +47,14 @@ export type JobLifecycleInput = {
   };
   /** The job's active job_payment row, or null when checkout never ran. */
   payment: Pick<Payment, 'status'> | null;
-  hasOpenDispute?: boolean;
+  /**
+   * true = an open report exists, false = the read said there is none.
+   * 'unknown' = the dispute read FAILED — which is a different fact from
+   * "no dispute". A failed read must never render as a normal job quietly
+   * progressing to auto-release (F-026), so 'unknown' here derives 'unknown'
+   * and nothing else.
+   */
+  hasOpenDispute?: boolean | 'unknown';
 };
 
 /** phase51's on-read auto-release clock, from jobs.completed_at. */
@@ -68,6 +75,11 @@ export function deriveJobLifecycle(
   { job, payment, hasOpenDispute = false }: JobLifecycleInput,
   nowMs: number = Date.now()
 ): JobLifecycleState {
+  // A failed dispute read poisons the whole derivation: from 'unknown' this
+  // function may not place the job anywhere on the track — not progressing,
+  // not awaiting approval, never auto-releasing. Callers hold their error
+  // state instead of consuming this value as a fact.
+  if (hasOpenDispute === 'unknown') return 'unknown';
   switch (job.status) {
     case 'draft':
       return 'draft';

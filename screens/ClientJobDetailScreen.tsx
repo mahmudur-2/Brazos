@@ -110,6 +110,11 @@ export function ClientJobDetailScreen() {
   // The open issue report, if any (phase51) — it freezes release and reroutes
   // the completed-job section to the approval surface.
   const [openDispute, setOpenDispute] = useState<JobDispute | null>(null);
+  // A failed payment/dispute read is a different fact from "no payment, no
+  // dispute" (F-026): while true, the money and completed-job surfaces below
+  // render a retry banner instead of consuming the absent rows as truth.
+  const [statusReadError, setStatusReadError] = useState(false);
+  const [statusReadAttempt, setStatusReadAttempt] = useState(0);
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
   // The exact service address (job_private_details). This is the poster's own
@@ -155,7 +160,12 @@ export function ClientJobDetailScreen() {
   const stage = jobStage(job.status, actionableBidCount, true);
   // THE lifecycle derivation point (run addendum §1) — the completed-job fork
   // below branches on this, never on a hand-rolled status+payment combo.
-  const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: !!openDispute });
+  const lifecycle = deriveJobLifecycle({
+    job,
+    payment,
+    // A failed read derives 'unknown', never "no dispute" (F-026).
+    hasOpenDispute: statusReadError ? 'unknown' : !!openDispute,
+  });
   // THE funding-CTA derivation (AUD-P1-02) — expressed once in lib/payments,
   // never as a per-branch status conditional. The worker starting or even
   // finishing must never strand an unfunded job with no checkout path.
@@ -209,6 +219,7 @@ export function ClientJobDetailScreen() {
     setWorkerError(null);
     setPayment(null);
     setOpenDispute(null);
+    setStatusReadError(false);
   }, [job.id]);
 
   // The ledger row, re-read on every focus: Checkout and the approval flow are
@@ -219,16 +230,20 @@ export function ClientJobDetailScreen() {
     useCallback(() => {
       let active = true;
       if (job.status === 'open' || job.status === 'cancelled') return;
-      fetchJobPaymentState(job.id).then(({ data, error }) => {
-        if (active && !error) setPayment(data);
-      });
-      fetchOpenJobDispute(job.id).then(({ data, error }) => {
-        if (active && !error) setOpenDispute(data);
-      });
+      Promise.all([fetchJobPaymentState(job.id), fetchOpenJobDispute(job.id)]).then(
+        ([paymentResult, disputeResult]) => {
+          if (!active) return;
+          if (!paymentResult.error) setPayment(paymentResult.data);
+          if (!disputeResult.error) setOpenDispute(disputeResult.data);
+          // Either read failing marks the pair failed: both feed the same
+          // lifecycle answer, and a retry re-runs them together.
+          setStatusReadError(!!(paymentResult.error || disputeResult.error));
+        }
+      );
       return () => {
         active = false;
       };
-    }, [job.id, job.status])
+    }, [job.id, job.status, statusReadAttempt])
   );
 
   useEffect(() => {
@@ -835,7 +850,29 @@ export function ClientJobDetailScreen() {
                 authorize-after-start exists exactly for the worker outrunning
                 checkout. It never renders over a held/released/refunded or
                 otherwise unclassifiable row — that is the double-charge line. */}
-            {canFundNow ? (
+            {statusReadError ? (
+              // The failed reads' surface (F-026): every card below that
+              // renders from the payment/dispute rows is held back behind
+              // this retry rather than treating the absent rows as truth.
+              <View style={styles.errorBanner} accessibilityRole="alert">
+                <Ionicons name="cloud-offline-outline" size={20} color={colors.danger} />
+                <View style={styles.errorCopy}>
+                  <Text style={styles.errorTitle}>Couldn’t load payment details</Text>
+                  <Text style={styles.errorMessage}>
+                    This job’s payment and issue-report info didn’t load, so
+                    what’s shown may be incomplete. Check your connection and
+                    retry.
+                  </Text>
+                </View>
+                <Button
+                  title="Retry"
+                  size="sm"
+                  variant="secondary"
+                  palette={emeraldColors}
+                  onPress={() => setStatusReadAttempt((attempt) => attempt + 1)}
+                />
+              </View>
+            ) : canFundNow ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT NOT PROTECTED YET</Text>
                 <Text style={styles.paymentNote}>
@@ -976,8 +1013,10 @@ export function ClientJobDetailScreen() {
               // (canFundNow) — a missing ledger is NOT a settled legacy
               // payment, so nothing here may imply the payment finished,
               // the worker was paid, or review/tip is available merely
-              // because the status reads completed (AUD-P1-02).
-              payment ? (
+              // because the status reads completed (AUD-P1-02). And when the
+              // payment/dispute reads FAILED, none of this may render at all —
+              // the retry banner above owns that state (F-026).
+              statusReadError ? null : payment ? (
                 lifecycle === 'disputed' && openDispute ? (
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     <Text style={styles.approvalTitle}>Issue reported</Text>
