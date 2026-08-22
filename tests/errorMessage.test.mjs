@@ -66,7 +66,8 @@ const RAW_MESSAGE_ALLOWLIST = new Set([
   'screens/EmailSignInScreen.tsx', // LOCKED auth flow — patch doc addendum
   'screens/EmailCreateAccountScreen.tsx', // LOCKED auth flow — patch doc addendum
   'screens/LegalGateScreen.tsx', // LOCKED auth flow — patch doc addendum
-  'hooks/useChat.ts', // LOCKED hook — wrapped at the ChatScreen render seam
+  // The superseded chat hook left the list in Batch F: deleted outright, zero
+  // importers — ChatScreen reads useConversationChat instead.
   'hooks/useConversations.ts', // LOCKED hook — wrapped at the MessagesInbox render seam
   // hooks/useOpenJobs.ts left the list 2026-08-12: patch doc A7 was applied
   // by owner authorization — the hook now wraps at its own setError.
@@ -102,15 +103,16 @@ test('no screen, component, or hook stores or shows raw error text', async () =>
   );
 });
 
-test('locked hooks stay raw only because their render seams wrap', async () => {
-  // The two LOCKED hooks still storing the raw message; the guarantee is the
-  // consumer wrap. If a wrap disappears, this — not just a device — says so.
-  // (useOpenJobs wraps at its own setError since the A7 patch landed.)
+test('raw-error hooks stay raw only because their render seams wrap', async () => {
+  // Hooks that store a raw error object rely on the consumer wrap; the
+  // guarantee is asserted here so a vanished wrap fails before a device shows
+  // it. ChatScreen's hook is useConversationChat since Batch F deleted its
+  // predecessor. (useOpenJobs wraps at its own setError since the A7 patch.)
   const chat = await read('screens/ChatScreen.tsx');
   assert.match(
     chat,
     /\{error \? <Text style=\{styles\.error\}>\{userMessage\(error\)\}<\/Text> : null\}/,
-    'ChatScreen must wrap useChat.error with userMessage() at render'
+    'ChatScreen must wrap useConversationChat.error with userMessage() at render'
   );
   const inbox = await read('screens/MessagesInboxScreen.tsx');
   assert.match(

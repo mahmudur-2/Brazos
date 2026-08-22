@@ -36,12 +36,12 @@ export type OpenJobsPotential = { cents: number; count: number };
 /**
  * Worker Home's POTENTIAL EARNINGS pair over the open-jobs feed: the summed
  * budgets of every open job the viewer could actually earn from, and how many
- * rows that sum spans. Same semantics as the LOCKED BrowseJobsScreen's inline
- * stats memo (tests/potentialEarnings.test.mjs executes both and compares):
- * the viewer's own posted jobs are excluded — you cannot earn from your own
- * job — and a budget-less job still counts as a row while adding $0. The
- * locked screen keeps its authorized inline copy until its unlock session;
- * every NEW surface derives the figure from here.
+ * rows that sum spans. The viewer's own posted jobs are excluded — you cannot
+ * earn from your own job — and a budget-less job still counts as a row while
+ * adding $0. This is the ONE implementation of the rule
+ * (tests/potentialEarnings.test.mjs executes it directly); the atlas-48
+ * browse screen's authorized inline duplicate was deleted with that screen in
+ * Batch F. Every surface derives the figure from here.
  */
 export function openJobsPotential(
   jobs: ReadonlyArray<{ client_id: string; budget_cents: number | null }>,
