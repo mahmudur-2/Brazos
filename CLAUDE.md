@@ -21,7 +21,9 @@ implemented, the code wins and this file gets fixed.
 
 ## Target and trunk
 
-Expo / iOS native app. Android deferred. Derive the Expo SDK from
+Expo / iOS native app. Android deferred — `app.json` carries a complete
+Android block and `npm run android` exists, but Android is not built, tested,
+or shipped, and no work should target it. Derive the Expo SDK from
 `package.json`; consult version-matched Expo docs only before changing
 behavior that depends on a version-sensitive Expo API — not for ordinary
 layout, styling, or app logic. Base branch is **`mainexpo`**: single trunk,
@@ -65,10 +67,15 @@ rule; if a second copy seems needed, extract and share instead.
 ## Design system and navigation
 
 Token source of truth: `ui/tokens.ts`. `lib/theme.ts` wraps it and is the
-standard import for screens. Never hardcode hex, radii, or spacing; never
-import `ui/tokens.ts` directly in a new screen; never create a third token
-surface. Shared templates provide loading / empty / error / offline /
-permission-denied states — configure them, don't reinvent them.
+standard import for screens. `lib/authTheme.ts` is the one sanctioned
+exception: the auth/launch flow renders on the emerald/ivory brand palette
+rather than the in-app forest/cream one, so it carries auth-surface-only
+values — and it takes its seven shared brand hues from `ui/tokens.ts`'s
+`brand`, so there is still one definition of "forest". Never create a FOURTH
+token surface. Never hardcode hex, radii, or spacing outside those three;
+never import `ui/tokens.ts` directly in a new screen. Shared templates
+provide loading / empty / error / offline / permission-denied states —
+configure them, don't reinvent them.
 Dual navigation trees: `navigation/CustomerRoot.tsx` and
 `navigation/WorkerRoot.tsx` under `navigation/ModeShell.tsx`; `switchMode()`
 and `ModeContext` live in `modes/ModeProvider.tsx`. The trees are separately
@@ -81,12 +88,6 @@ None. All screens were unlocked 2026-08-19 for the Prestige dark sweep. This
 list is EMPTY by decision and stays empty; regression fences, not a filename
 list, are the protection. A dispatch prompt may NOT reintroduce a locked list
 by restating one — if a surface needs locking, it is added here first.
-
-`screens/BrowseJobsScreen.tsx` is UNLOCKED but DEAD: imported by nothing,
-registered in neither navigation tree since 4D-1b, and kept on disk only
-because ten test files read its source as text. Do not style it, do not add
-`hitSlop` to it, do not fix its hardcoded hex. Its removal is a queued task
-that must update those tests in the same commit.
 
 ## Agent autonomy — what a run may finish without the operator
 
