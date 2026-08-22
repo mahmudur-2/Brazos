@@ -399,3 +399,58 @@ target a job conversation but cannot target a direct-thread id. The header
 action is therefore shown only in job-backed chats (and remains available from
 supported worker/profile entry points) instead of risking an offer appearing
 in the wrong older conversation.
+
+---
+
+## Guard coverage — the recorded boundary of every active guard
+
+### D31. Each guard's REAL coverage boundary, read off disk and written down
+
+**Fork:** guards were being reasoned about by their names and their docblocks'
+intent ("EVERY screen, component and hook is scanned") rather than by the
+directory list actually in the source, and the two had drifted. A fence whose
+scope is assumed is a fence that can be argued past.
+
+**Chosen:** record the literal scope of every active guard here, quoted from
+the file that defines it, so a future run reads the boundary instead of
+inferring one. Full findings and the complement scans are in
+[docs/audit/2026-08-22/guard_coverage.md](../audit/2026-08-22/guard_coverage.md);
+this table is the boundary itself, which is the part that must not be lost.
+
+**Why:** two of the ten findings that audit produced exist *only* because a
+scope was narrower than its docblock implied — a ship-blocker fence that says
+it sweeps every component does not sweep `ui/`, and the suite that proves the
+guard layer works is skipped on the platform CI runs on. Neither is visible
+without the literal boundary in front of you.
+
+| Guard | Coverage boundary, verbatim |
+|-------|-----------------------------|
+| `.claude/settings.json` deny matrix | 100 patterns. Paths: `Edit(/design-reference/**)`, `Edit(/public/**)`, `Edit(/hosting/**)`, `Edit(/dist/**)`, `Edit(/WEB_DEPLOYMENT.md)`, `Edit(**/*.web.ts)`, `Edit(**/*.web.tsx)`, `Edit(/.claude/**)`, `Read(./start.ps1)`, `Read(./.env)`, `Read(./.env.*)`, `Edit(./start.ps1)`, `Edit(./.env)`, `Edit(./.env.*)`, `Bash(*avkighsiufeefyycbebf*)`. |
+| `.claude/hooks/guard.ps1` | Tools: `"matcher": "Bash\|PowerShell\|Edit\|Write\|NotebookEdit"`. Frozen prefixes: `@('design-reference/', 'public/', 'hosting/', 'dist/')`. Web modules: `.web.ts` / `.web.tsx`. Secret basenames: `web_deployment.md`, `start.ps1`, `.env`, `^\.env\..+$`. Push allow-list: `origin mainexpo` \| `origin mainexpo:mainexpo`, no pre-flags. Fails closed — every ambiguity is `exit 2`. |
+| `.claude/hooks/session-context.ps1` | SessionStart, informational. Enforces nothing, blocks nothing, `exit 0` unconditionally. |
+| `npm run lint` / `typecheck` | `tsconfig.json`: `"exclude": ["node_modules", "supabase/functions"]`, no `include`/`files`. Everything else under the root is type-checked; the two Deno edge functions are checked by nothing. |
+| `npm test` | `node --test tests/*.test.mjs` — one directory deep, `.test.mjs` only. |
+| `npm run verify` | `npm run lint && npm test` — exactly two sub-steps, short-circuiting on lint. |
+| `.github/workflows/ci.yml` | `branches: [mainexpo]` (push + PR) and `workflow_dispatch`; `runs-on: ubuntu-latest`; one step, `npm run verify`. |
+| `scripts/verify-schema.mjs` | Not repo-enforced. Needs `.env` and live staging, so it never runs in `verify` or in an autonomous run — its cadence is the operator's. |
+| F-HEX `themeResolution` | `['screens', 'components', 'ui', 'hooks', 'navigation', 'modes']` recursive, minus a 10-file `LITERAL_FILE_ALLOWLIST` and every `*.web.tsx?`. **`lib/` is not covered.** |
+| F-TOKENIMPORT `themeResolution` | `screens/` only, **non-recursive**. |
+| F-RASTER / F-ARTGATE `themeResolution` | `['screens', 'components', 'ui']` recursive; gate window 240 chars. |
+| F-MAP `themeResolution` | `['components', 'screens']` recursive. |
+| F-EMERALD `emeraldFences` | `['screens', 'components', 'ui', 'hooks', 'lib', 'navigation', 'modes']` recursive — the only colour-adjacent fence that includes `lib/`. |
+| F-GOLD `goldOnForest` | `['screens', 'components', 'ui']` recursive. |
+| F-COPY `copyHonesty` | `['components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui']` recursive, `*.web.tsx?` skipped, comments included. |
+| F-MOTION `motionDriver` | `['components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui']` + `['App.tsx', 'index.ts']`, `*.web.tsx?` skipped — the widest app-source scope in the suite. |
+| F-ERRREAD `errorHonesty` | `['screens', 'hooks', 'components']` recursive. |
+| F-FAILOPEN `errorHonesty` | `['screens','hooks','components','lib','modes','navigation','ui','dev-tools','tests', …]` recursive, over `.ts/.tsx/.mjs/.js/.json/.md`. |
+| F-ERRMSG `errorMessage` | `['screens', 'components', 'hooks']`, **non-recursive**, minus a 4-entry allowlist. **`ui/` and `lib/` are not covered** — the G-001 hole. |
+| F-JOBSUPD `hardening` | `['lib', 'hooks', 'screens', 'components']` recursive, `*.web.*` deliberately INCLUDED. |
+| F-STEPMAP `lifecycle` | `['screens', 'components', 'ui', 'hooks', 'lib']` recursive, minus `lib/jobLifecycle.ts`. |
+| F-SQLENUM `statusVocabulary` | `supabase/` only, **non-recursive**, `.sql` only. |
+| F-MIGRATED `themeTokens` | A hand-maintained 31-entry `MIGRATED_FILES` array — an explicit list, not a walk. |
+| F-STAR / F-L002 `themeTokens` | Star sweep: `['screens', 'components', 'ui']` recursive. L-002: file-specific (`lib/jobs.ts`, executed `ui/tokens.ts`). |
+| `tests/safety.test.mjs` | `describe('agent safety guard', { skip: PLATFORM_SKIP })` where `PLATFORM_SKIP` is falsy **only on win32**. 120 of the suite's 846 tests. CI is `ubuntu-latest`, so CI never runs them. |
+
+Nothing above is marked UNKNOWN: every scope was read directly from source.
+The one coverage that is not a path boundary is `verify-schema.mjs`, whose
+scope is a human cadence and is recorded as such rather than guessed at.
