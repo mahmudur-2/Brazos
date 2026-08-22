@@ -188,8 +188,12 @@ stash, reset, clean, revert, or edit them. Stop only if they overlap files
 the task must change, and list those paths in the final report.
 * Stage by explicit path only — never `git add .`, `-A`, `-u`, or a wildcard.
 Inspect `git diff --cached --name-status` before every commit. One commit per
-milestone. Never autonomously `git push`, `reset --hard`, `clean`, `stash`,
-force checkout, rewrite history, or `commit --amend`; also mechanically denied.
+milestone. Pushing is governed solely by the "Agent autonomy" contract above:
+the one permitted form is a flag-free `git push origin mainexpo`, only after
+`npm run verify` exits 0 in that same run — never forced, never any other
+ref, remote, or flag; the `.claude/` deny matrix and guard enforce exactly
+that form. Never autonomously `reset --hard`, `clean`, `stash`, force
+checkout, rewrite history, or `commit --amend`; also mechanically denied.
 * Inspect → execute → verify → self-repair → continue, without asking the user
 to run a command you can run. Self-repair covers repository-local,
 reversible, mechanical failures only, and may never enlarge the tracked diff
