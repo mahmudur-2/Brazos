@@ -49,8 +49,10 @@ try {
     }
   }
 
+  # The design master is archived OUTSIDE assets/: Metro bundles anything
+  # under assets/, and the master is not a runtime asset (audit F-016).
   Copy-Item -LiteralPath $resolvedSource -Destination (
-    Join-Path $projectRoot 'assets\brazos-logo-source.png'
+    Join-Path $projectRoot 'docs\brand-source\brazos-logo-source.png'
   ) -Force
 
   $exports = @(
