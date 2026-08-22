@@ -20,6 +20,7 @@ import { AuthFlow } from './screens/AuthFlow';
 import { OnboardingFlow } from './screens/OnboardingFlow';
 import { LaunchScreen } from './screens/LaunchScreen';
 import { LegalGateScreen } from './screens/LegalGateScreen';
+import { ScreenStateView } from './ui/templates';
 import { useLegalGate } from './hooks/useLegalGate';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { HomeDesignStudio } from './dev-tools/HomeDesignStudio';
@@ -79,6 +80,24 @@ function RootNavigator() {
         onLegalAccepted={legal.markAccepted}
         onFinished={setup.markComplete}
       />
+    );
+  }
+
+  // F-013: the gate FAILS CLOSED. An unanswered acceptance read blocks here
+  // with the shared error state and a retry that re-runs the read — it never
+  // admits by default and never fakes an accepted state.
+  if (legal.state === 'unknown') {
+    return (
+      <View style={[styles.loader, { backgroundColor: palette.background }]}>
+        <ScreenStateView
+          state={{
+            kind: 'error',
+            message:
+              'The Terms of Service check didn’t load. Check your connection and try again.',
+            onRetry: legal.recheck,
+          }}
+        />
+      </View>
     );
   }
 

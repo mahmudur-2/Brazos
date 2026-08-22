@@ -2,19 +2,29 @@ import { useCallback, useEffect, useState } from 'react';
 import { fetchLegalStatus } from '../lib/legal';
 import { useAuth } from './useAuth';
 
-type GateState = 'loading' | 'accepted' | 'needs_acceptance';
+type GateState = 'loading' | 'accepted' | 'needs_acceptance' | 'unknown';
+
+/**
+ * The gate's read→state mapping, pure so the fail-closed rule is executable
+ * by tests/errorHonesty.test.mjs. Allow-list, never block-list: only the two
+ * positive answers the read can return map to themselves; everything else —
+ * a failed read's 'unknown' included — stays 'unknown'.
+ */
+export function gateStateForStatus(status: string): GateState {
+  if (status === 'accepted') return 'accepted';
+  if (status === 'needs_acceptance') return 'needs_acceptance';
+  return 'unknown';
+}
 
 /**
  * Whether the signed-in user still owes acceptance of the current legal
  * documents.
  *
- * FAILS OPEN, on purpose. If the check itself errors — offline, or the
- * phase21 migration hasn't been run yet — this reports 'accepted' rather than
- * blocking. A gate that fails closed would lock every user out of a working
- * app over a dropped connection, and would make deploying the client before
- * the migration a hard outage instead of a missing feature. The gate exists to
- * capture consent from reachable users, not to be a second authentication
- * layer.
+ * FAILS CLOSED (F-013, operator decision 2026-08-22). A failed or thrown
+ * acceptance read resolves to 'unknown' — never 'accepted' — and App.tsx
+ * holds the shared error state with a Retry that re-runs this read. Nothing
+ * is persisted and nothing is admitted by default: a network blip must not
+ * be a consent bypass whose only record is a console line.
  */
 export function useLegalGate() {
   const { user } = useAuth();
@@ -25,11 +35,17 @@ export function useLegalGate() {
       setState('accepted');
       return;
     }
-    const { status, error } = await fetchLegalStatus(user.id);
-    if (error) {
-      console.error('[legal] acceptance check failed, allowing through:', error);
+    setState('loading');
+    let status: string;
+    try {
+      ({ status } = await fetchLegalStatus(user.id));
+    } catch (err) {
+      // The read itself threw (an offline fetch failure rejects before
+      // fetchLegalStatus can shape it): the same fact as a failed read.
+      console.error('[legal] acceptance check failed:', err);
+      status = 'unknown';
     }
-    setState(status === 'needs_acceptance' ? 'needs_acceptance' : 'accepted');
+    setState(gateStateForStatus(status));
   }, [user?.id]);
 
   useEffect(() => {

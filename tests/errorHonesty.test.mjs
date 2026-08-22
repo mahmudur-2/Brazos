@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -168,4 +169,143 @@ test('ClientJobDetailScreen passes unknown to the derivation and gates its money
   assert.match(src, /setStatusReadAttempt\(\(attempt\) => attempt \+ 1\)/);
   // The failed pair is recorded from either read's error.
   assert.match(src, /setStatusReadError\(!!\(paymentResult\.error \|\| disputeResult\.error\)\)/);
+});
+
+// ===========================================================================
+// F-013 — the legal gate fails CLOSED
+// ===========================================================================
+// hooks/useLegalGate.ts EXECUTED offline — react, useAuth and the legal read
+// replaced with stubs (the postJobDraft.test.mjs arrangement) — so "a failed
+// read never admits" is a property this suite proves, not prose it repeats.
+
+const toDataUrl = (js) =>
+  'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+
+// A micro hook runtime: enough React for this one hook. Effects are captured
+// per render and run by the harness; state lives across renders.
+globalThis.__legalHarness = { states: [], idx: 0, effects: [] };
+const reactStub =
+  'const h = () => globalThis.__legalHarness;' +
+  'export function useState(init) {' +
+  '  const i = h().idx++;' +
+  "  if (h().states.length <= i) h().states.push(typeof init === 'function' ? init() : init);" +
+  "  const set = (v) => { h().states[i] = typeof v === 'function' ? v(h().states[i]) : v; };" +
+  '  return [h().states[i], set];' +
+  '}' +
+  'export function useCallback(fn) { return fn; }' +
+  'export function useEffect(fn) { h().effects.push(fn); }';
+
+const legalGateModule = (async () => {
+  let js = stripTypeScriptTypes(read('hooks/useLegalGate.ts'), { mode: 'strip' });
+  const replacements = [
+    [
+      "import { useCallback, useEffect, useState } from 'react';",
+      `import { useCallback, useEffect, useState } from '${toDataUrl(reactStub)}';`,
+    ],
+    [
+      "import { fetchLegalStatus } from '../lib/legal';",
+      'const fetchLegalStatus = (...args) => globalThis.__legalFetch(...args);',
+    ],
+    [
+      "import { useAuth } from './useAuth';",
+      "const useAuth = () => ({ user: { id: 'user-1' } });",
+    ],
+  ];
+  for (const [from, to] of replacements) {
+    assert.ok(js.includes(from), `expected the runtime import: ${from}`);
+    js = js.replace(from, to);
+  }
+  return import(toDataUrl(js));
+})();
+
+/** Mount the hook, run its effect, let the read settle, read the state. */
+async function settleGate(useLegalGate) {
+  const h = globalThis.__legalHarness;
+  h.states = [];
+  h.idx = 0;
+  h.effects = [];
+  useLegalGate();
+  const effects = h.effects;
+  for (const fn of effects) fn();
+  // Two macrotask turns: one for the read to settle, one for the setState.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  h.idx = 0;
+  h.effects = [];
+  return useLegalGate();
+}
+
+test('a REJECTED acceptance read resolves to unknown — never accepted', async () => {
+  const { useLegalGate } = await legalGateModule;
+  globalThis.__legalFetch = () => Promise.reject(new Error('offline'));
+  const gate = await settleGate(useLegalGate);
+  assert.equal(gate.state, 'unknown');
+  assert.notEqual(gate.state, 'accepted');
+});
+
+test('a failed (status unknown) read resolves to unknown — never accepted', async () => {
+  const { useLegalGate } = await legalGateModule;
+  globalThis.__legalFetch = () =>
+    Promise.resolve({ status: 'unknown', error: 'network request failed' });
+  const gate = await settleGate(useLegalGate);
+  assert.equal(gate.state, 'unknown');
+});
+
+test('the gate still admits on a real accepted answer and re-prompts on needs_acceptance', async () => {
+  const { useLegalGate } = await legalGateModule;
+  globalThis.__legalFetch = () => Promise.resolve({ status: 'accepted' });
+  assert.equal((await settleGate(useLegalGate)).state, 'accepted');
+  globalThis.__legalFetch = () => Promise.resolve({ status: 'needs_acceptance' });
+  assert.equal((await settleGate(useLegalGate)).state, 'needs_acceptance');
+});
+
+test('the pure mapping allow-lists: anything unrecognized stays unknown', async () => {
+  const { gateStateForStatus } = await legalGateModule;
+  assert.equal(gateStateForStatus('accepted'), 'accepted');
+  assert.equal(gateStateForStatus('needs_acceptance'), 'needs_acceptance');
+  for (const bad of ['unknown', '', 'error', 'ACCEPTED', 'yes', 'null']) {
+    assert.equal(gateStateForStatus(bad), 'unknown', `'${bad}' must stay unknown`);
+  }
+});
+
+test('App.tsx blocks on unknown with the shared error state and a retry', () => {
+  const app = read('App.tsx');
+  assert.match(app, /legal\.state === 'unknown'/);
+  assert.match(app, /ScreenStateView/);
+  assert.match(app, /onRetry: legal\.recheck/);
+  // The unknown block sits BEFORE the ready fall-through to MainTabs.
+  assert.ok(app.indexOf("legal.state === 'unknown'") < app.indexOf('return <MainTabs />'));
+});
+
+test("the fail-open log line is extinct in source", () => {
+  // The fail-open path's own words, fenced extinct. The needle is assembled
+  // so this file never contains it either; docs/ keeps the audit record.
+  const needle = 'allowing' + ' through';
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(join(root, dir))) {
+      const rel = `${dir}/${entry}`;
+      if (statSync(join(root, rel)).isDirectory()) {
+        walk(rel);
+        continue;
+      }
+      if (!/\.(ts|tsx|mjs|js|json|md)$/.test(entry)) continue;
+      if (read(rel).includes(needle)) offenders.push(rel);
+    }
+  };
+  for (const dir of [
+    'screens',
+    'hooks',
+    'components',
+    'lib',
+    'modes',
+    'navigation',
+    'ui',
+    'dev-tools',
+    'tests',
+  ]) {
+    walk(dir);
+  }
+  if (read('App.tsx').includes(needle)) offenders.push('App.tsx');
+  assert.deepEqual(offenders, [], 'the gate fails closed; nothing allows through');
 });
