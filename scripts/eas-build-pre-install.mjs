@@ -39,11 +39,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { keyKind, refFromRestUrl, refFromJwt } from './supabase-ref.mjs';
-
-const STAGING_REF = 'zzkumxcjtbqoselzptig';
-
-const PRODUCTION_REF = 'avkighsiufeefyycbebf';
+import {
+  keyKind,
+  refFromRestUrl,
+  refFromJwt,
+  STAGING_REF,
+  PRODUCTION_REF,
+} from './supabase-ref.mjs';
 
 /**
  * The one Supabase project each EAS BUILD PROFILE may build against. testflight

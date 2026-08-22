@@ -36,6 +36,18 @@ export function refFromJwt(k) {
 }
 
 /**
+ * The two Supabase projects this repository may ever name — moved here from
+ * eas-build-pre-install.mjs so there is exactly ONE definition of each.
+ * eas-build-pre-install.mjs pins every EAS build profile to one of them, and
+ * verify-schema.mjs hard-refuses the production one before constructing any
+ * request. Import these, never retype a ref: a second literal is how the two
+ * gates drift apart, and the production literal doubles as the mechanical
+ * deny sentinel (see CLAUDE.md), so every occurrence must be deliberate.
+ */
+export const STAGING_REF = 'zzkumxcjtbqoselzptig';
+export const PRODUCTION_REF = 'avkighsiufeefyycbebf';
+
+/**
  * SUPABASE_KEY format classification — one rule for both gates.
  *
  *   'legacy-jwt'  — eyJ… anon key; its payload embeds the project ref, so

@@ -13,33 +13,39 @@
  *   * present         -> 2xx (limit=0 keeps it cheap, and means RLS
  *                        row-visibility can't be mistaken for absence)
  *
- * Exits non-zero if anything is missing, so it can gate a release.
+ * Exit codes — EXIT below is the one definition:
+ *   0 every required object exists · 1 required object(s) MISSING ·
+ *   2 missing .env values or control-probe failure · 3 env parity failure ·
+ *   4 the production project ref was refused (F-003)
+ *
+ * IMPORT CONTRACT: importing this module has ZERO side effects — it reads no
+ * env, constructs no request, opens no network and never exits. Everything
+ * effectful lives in main(), which runs only when this file is invoked
+ * directly. tests/verifySchemaGuards.test.mjs relies on that to execute the
+ * exported decisions offline.
  */
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { keyKind, refFromRestUrl, refFromPgUrl, refFromJwt } from './supabase-ref.mjs';
+import { PRODUCTION_REF } from './supabase-ref.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-const env = Object.fromEntries(
-  readFileSync(join(root, '.env'), 'utf8')
-    .split(/\r?\n/)
-    .filter((l) => l && !l.trimStart().startsWith('#') && l.includes('='))
-    .map((l) => {
-      const i = l.indexOf('=');
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    })
-);
+/** Exit codes, one meaning each — see the header. */
+export const EXIT = Object.freeze({
+  ok: 0,
+  missing: 1,
+  env: 2,
+  parity: 3,
+  production: 4,
+});
 
-const BASE = env.SUPABASE_URL?.replace(/\/$/, '');
-const KEY = env.SUPABASE_KEY;
-if (!BASE || !KEY) {
-  console.error('Missing SUPABASE_URL / SUPABASE_KEY in .env');
-  process.exit(2);
-}
-
-const headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
+// Assigned by main() after its gates pass; the probe helpers below close
+// over them. Nothing assigns or reads them at import time.
+let BASE;
+let KEY;
+let headers;
 
 // ---------------------------------------------------------------------------
 // ENV PARITY (added after the device found four "column does not exist"
@@ -94,40 +100,32 @@ export function envParityProblems({ appRef, keyRef, keyIsPublishable = false, to
   return problems;
 }
 
-{
-  const appRef = refFromRestUrl(BASE);
-  const kind = keyKind(KEY);
-  const keyRef = kind === 'legacy-jwt' ? refFromJwt(KEY) : null;
-  const toolingRef = refFromPgUrl(process.env.SUPABASE_DB_URL_STAGING);
-
-  console.log('env parity');
-  console.log(`  app .env SUPABASE_URL ref : ${appRef ?? 'UNRESOLVED'}`);
-  console.log(
-    `  app .env SUPABASE_KEY ref : ${keyRef ?? (kind === 'publishable' ? 'NONE (publishable key)' : 'UNRESOLVED')}`
-  );
-  console.log(`  SUPABASE_DB_URL_STAGING   : ${toolingRef ?? 'NOT SET'}`);
-  if (kind === 'publishable') {
-    console.log('  note: key format carries no ref; URL ref is authoritative');
+/**
+ * The production hard-refusal (F-003), pure and exported for the same reason
+ * as envParityProblems: the suite must prove the refusal without ever
+ * pointing .env at production. Parity above only proves the refs AGREE —
+ * three refs that all point at production agree perfectly — so nothing short
+ * of naming the forbidden ref can stop a mis-pointed .env. ANY resolved ref
+ * equal to PRODUCTION_REF (imported from supabase-ref.mjs, never retyped) is
+ * refused; main() evaluates this before a single request object exists.
+ * A null ref contributes nothing here — resolvability is parity's problem.
+ */
+export function productionRefusalProblems({ appRef, keyRef, toolingRef }) {
+  const refusals = [];
+  const sources = [
+    ['SUPABASE_URL in .env', appRef],
+    ['SUPABASE_KEY in .env', keyRef],
+    ['SUPABASE_DB_URL_STAGING', toolingRef],
+  ];
+  for (const [name, ref] of sources) {
+    if (ref && ref === PRODUCTION_REF) {
+      refusals.push(
+        `${name} resolves to the PRODUCTION project (${ref}) — this script ` +
+          'must never probe production (CLAUDE.md: production is never contacted)'
+      );
+    }
   }
-
-  const problems = envParityProblems({
-    appRef,
-    keyRef,
-    keyIsPublishable: kind === 'publishable',
-    toolingRef,
-  });
-  if (!toolingRef) {
-    console.log('  WARNING: SUPABASE_DB_URL_STAGING is not set in this shell, so the');
-    console.log('           app-vs-tooling comparison could not be made. The SQL proofs');
-    console.log('           cannot run without it either.');
-  }
-  if (problems.length > 0) {
-    console.error('\nENV PARITY FAILED:');
-    for (const p of problems) console.error(`  - ${p}`);
-    console.error('\nRefusing to report on a database the app does not use.');
-    process.exit(3);
-  }
-  console.log(`  parity: OK${toolingRef ? '' : ' (app side only)'}\n`);
+  return refusals;
 }
 
 async function checkColumn(table, column) {
@@ -1436,66 +1434,150 @@ const MIGRATIONS = [
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
 
-// Proves the probe itself works — if this fails, the credentials or network
-// are the problem, not the migration.
-const control = await checkColumn('jobs', 'photos');
-if (!control.ok) {
-  console.error(`Probe is not working (control check failed): ${control.detail}`);
-  console.error('Check SUPABASE_URL / SUPABASE_KEY before trusting anything below.');
-  process.exit(2);
-}
-console.log('control check (jobs.photos): OK — probe is working\n');
-
-let missing = 0;
-let pending = 0;
-for (const migration of MIGRATIONS) {
-  console.log(migration.file);
-
-  // A group with a sentinel is one whose migration may legitimately not be
-  // applied yet. Ask the sentinel first; it decides whether this group's
-  // checks are mandatory or merely expected-missing. A group without one is
-  // mandatory, exactly as it always was.
-  let applied = true;
-  if (migration.sentinel) {
-    const [sentinelLabel, runSentinel] = migration.sentinel;
-    const s = await runSentinel();
-    applied = s.ok;
-    if (applied) {
-      console.log(`  OK       ${sentinelLabel}${s.note ? `  [${s.note}]` : ''}`);
-    } else {
-      pending++;
-      console.log(`  PENDING  ${sentinelLabel}  — NOT APPLIED (${s.detail})`);
-    }
-  }
-
-  for (const [label, run] of migration.checks) {
-    if (!applied) {
-      // Reported, counted as pending, never counted as passing.
-      pending++;
-      console.log(`  PENDING  ${label}  — EXPECTED MISSING until the migration is applied`);
-      continue;
-    }
-    const r = await run();
-    if (r.ok) {
-      console.log(`  OK       ${label}${r.note ? `  [${r.note}]` : ''}`);
-    } else {
-      missing++;
-      console.log(`  MISSING  ${label}  (${r.detail})`);
-    }
-  }
-  console.log('');
-}
-
-if (missing === 0) {
-  console.log('All REQUIRED objects exist in the live database.');
-} else {
-  console.log(`${missing} object(s) missing — run the SQL file(s) listed above.`);
-}
-if (pending > 0) {
-  console.log(
-    `${pending} check(s) PENDING — their migration is not applied yet. This is ` +
-      'not a failure; the checks become mandatory automatically once the ' +
-      'migration lands.'
+async function main() {
+  const env = Object.fromEntries(
+    readFileSync(join(root, '.env'), 'utf8')
+      .split(/\r?\n/)
+      .filter((l) => l && !l.trimStart().startsWith('#') && l.includes('='))
+      .map((l) => {
+        const i = l.indexOf('=');
+        return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
+      })
   );
+
+  BASE = env.SUPABASE_URL?.replace(/\/$/, '');
+  KEY = env.SUPABASE_KEY;
+  if (!BASE || !KEY) {
+    console.error('Missing SUPABASE_URL / SUPABASE_KEY in .env');
+    process.exit(EXIT.env);
+  }
+
+  const appRef = refFromRestUrl(BASE);
+  const kind = keyKind(KEY);
+  const keyRef = kind === 'legacy-jwt' ? refFromJwt(KEY) : null;
+  const toolingRef = refFromPgUrl(process.env.SUPABASE_DB_URL_STAGING);
+
+  // F-003: the production refusal is the FIRST gate. It is evaluated and
+  // exits BEFORE `headers` is assigned below and before any probe can run,
+  // so no request is ever constructed, let alone issued, at production.
+  const refusals = productionRefusalProblems({ appRef, keyRef, toolingRef });
+  if (refusals.length > 0) {
+    console.error('PRODUCTION REF REFUSED:');
+    for (const r of refusals) console.error(`  - ${r}`);
+    console.error('\nThis script may only probe staging. No request was constructed.');
+    process.exit(EXIT.production);
+  }
+
+  headers = { apikey: KEY, Authorization: `Bearer ${KEY}` };
+
+  console.log('env parity');
+  console.log(`  app .env SUPABASE_URL ref : ${appRef ?? 'UNRESOLVED'}`);
+  console.log(
+    `  app .env SUPABASE_KEY ref : ${keyRef ?? (kind === 'publishable' ? 'NONE (publishable key)' : 'UNRESOLVED')}`
+  );
+  console.log(`  SUPABASE_DB_URL_STAGING   : ${toolingRef ?? 'NOT SET'}`);
+  if (kind === 'publishable') {
+    console.log('  note: key format carries no ref; URL ref is authoritative');
+  }
+
+  const problems = envParityProblems({
+    appRef,
+    keyRef,
+    keyIsPublishable: kind === 'publishable',
+    toolingRef,
+  });
+  if (!toolingRef) {
+    // Deliberately a WARNING, not a refusal: the tooling ref feeds only the
+    // cross-check (no probe below ever uses it), the verdict line refuses to
+    // over-claim ("app side only"), and envParity.test.mjs pins the choice.
+    console.log('  WARNING: SUPABASE_DB_URL_STAGING is not set in this shell, so the');
+    console.log('           app-vs-tooling comparison could not be made. The SQL proofs');
+    console.log('           cannot run without it either.');
+  }
+  if (problems.length > 0) {
+    console.error('\nENV PARITY FAILED:');
+    for (const p of problems) console.error(`  - ${p}`);
+    console.error('\nRefusing to report on a database the app does not use.');
+    process.exit(EXIT.parity);
+  }
+  console.log(`  parity: OK${toolingRef ? '' : ' (app side only)'}\n`);
+
+  // Proves the probe itself works — if this fails, the credentials or network
+  // are the problem, not the migration.
+  const control = await checkColumn('jobs', 'photos');
+  if (!control.ok) {
+    console.error(`Probe is not working (control check failed): ${control.detail}`);
+    console.error('Check SUPABASE_URL / SUPABASE_KEY before trusting anything below.');
+    process.exit(EXIT.env);
+  }
+  console.log('control check (jobs.photos): OK — probe is working\n');
+
+  let missing = 0;
+  let pending = 0;
+  for (const migration of MIGRATIONS) {
+    console.log(migration.file);
+
+    // A group with a sentinel is one whose migration may legitimately not be
+    // applied yet. Ask the sentinel first; it decides whether this group's
+    // checks are mandatory or merely expected-missing. A group without one is
+    // mandatory, exactly as it always was.
+    let applied = true;
+    if (migration.sentinel) {
+      const [sentinelLabel, runSentinel] = migration.sentinel;
+      const s = await runSentinel();
+      applied = s.ok;
+      if (applied) {
+        console.log(`  OK       ${sentinelLabel}${s.note ? `  [${s.note}]` : ''}`);
+      } else {
+        pending++;
+        console.log(`  PENDING  ${sentinelLabel}  — NOT APPLIED (${s.detail})`);
+      }
+    }
+
+    for (const [label, run] of migration.checks) {
+      if (!applied) {
+        // Reported, counted as pending, never counted as passing.
+        pending++;
+        console.log(`  PENDING  ${label}  — EXPECTED MISSING until the migration is applied`);
+        continue;
+      }
+      const r = await run();
+      if (r.ok) {
+        console.log(`  OK       ${label}${r.note ? `  [${r.note}]` : ''}`);
+      } else {
+        missing++;
+        console.log(`  MISSING  ${label}  (${r.detail})`);
+      }
+    }
+    console.log('');
+  }
+
+  if (missing === 0) {
+    console.log('All REQUIRED objects exist in the live database.');
+  } else {
+    console.log(`${missing} object(s) missing — run the SQL file(s) listed above.`);
+  }
+  if (pending > 0) {
+    console.log(
+      `${pending} check(s) PENDING — their migration is not applied yet. This is ` +
+        'not a failure; the checks become mandatory automatically once the ' +
+        'migration lands.'
+    );
+  }
+  process.exit(missing === 0 ? EXIT.ok : EXIT.missing);
 }
-process.exit(missing === 0 ? 0 : 1);
+
+// main() runs only when this file is the entry point — the same guard
+// eas-build-pre-install.mjs uses — so importing this module stays free of
+// side effects on every platform.
+const scriptPath = process.argv[1] ? resolve(process.argv[1]) : '';
+const selfPath = fileURLToPath(import.meta.url);
+const isMain =
+  scriptPath !== '' &&
+  (process.platform === 'win32'
+    ? scriptPath.toLowerCase() === selfPath.toLowerCase()
+    : scriptPath === selfPath);
+
+if (isMain) {
+  await main();
+}
