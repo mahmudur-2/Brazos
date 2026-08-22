@@ -88,6 +88,30 @@ because ten test files read its source as text. Do not style it, do not add
 `hitSlop` to it, do not fix its hardcoded hex. Its removal is a queued task
 that must update those tests in the same commit.
 
+## Agent autonomy — what a run may finish without the operator
+
+A run may complete end to end without stopping, including:
+- Editing any source file (the locked list is empty).
+- Running `npm run verify`, type checks, and any read-only repo command.
+- Committing, by explicit path only.
+- `git push` to `mainexpo` — ONLY after `npm run verify` exits 0 in that same
+  run. A red or unrun suite means commit and report; never push.
+
+A run must STOP and hand back only for:
+- A required new dependency.
+- A destructive or schema migration awaiting operator approval.
+- Any need to execute SQL or contact any database.
+- Any need to touch production, `.env`, `start.ps1`, or the frozen web surface.
+- Any need to weaken a regression fence's logic rather than update its
+  expected constants.
+- Physical-device verification, which only the operator can perform.
+- A collision with an active hook or deny rule.
+
+Everything the deny matrix forbids stays forbidden. This section widens what a
+run may FINISH; it does not widen what a run may DO.
+
+A stop that this contract already answers is a wasted dispatch.
+
 
 ## Design references
 
