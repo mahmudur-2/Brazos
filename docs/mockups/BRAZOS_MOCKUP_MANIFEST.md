@@ -6,7 +6,10 @@
 > (`Discover_Map_Dark.png`, `My_Jobs_Active_Dark.png`, …). The operator has
 > REJECTED that render pass as over-ornate — see HANDOFF.md, "THE MASTER SET
 > IS SPLIT". Those numbers were never assigned to a file. Never cite one of
-> those twelve to justify a change.
+> those twelve to justify a change. Since 2026-08-22 the rejected files live
+> in `docs/mockups/rejected/` — all except `Discover_Map_Dark.png`, which
+> stays beside the masters because `components/HotspotMap.native.tsx` cites
+> it by name.
 >
 > This file also omits `9_job_post_dark.png` (941×1672), which does exist on
 > disk — "9" is not a numbering gap. The "43 unique PNG mockups" figure below

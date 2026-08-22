@@ -26,12 +26,12 @@ appears in no document.
 | File | Subject |
 | --- | --- |
 | `brazos-product-spec.md` | Product intent. Its "Status" line is a 2026-06 snapshot and is not current. |
-| `AUDIT_2026-08-12.md`, `SECURITY_AUDIT.md` | Read-only pre-release and staging-security audits; their open items feed `BRAZOS_MASTER_PLAN.md`. |
-| `DIAG_inbox_and_routes.md`, `DIAG_offer_negotiation_messaging.md` | Read-only diagnostics, 2026-08-12. |
+| `docs/archive/root-audits/AUDIT_2026-08-12.md`, `docs/archive/root-audits/SECURITY_AUDIT.md` | Read-only pre-release and staging-security audits (archived 2026-08-22); their open items feed `BRAZOS_MASTER_PLAN.md`. |
+| `docs/archive/diagnostics/DIAG_inbox_and_routes.md`, `DIAG_offer_negotiation_messaging.md` | Read-only diagnostics, 2026-08-12. The first is archived; the second stays at the root because `lib/offerNavigation.ts` cites it. |
 | `REVIEW_GUIDE.md` | Ordered device checklist for a human review pass. |
 | `docs/LOCKED_FILE_PATCHES.md` | Authorized-ready diffs for locked files; none applied. |
 | `docs/emerald-v2/**` | The v2 redesign plan and Phase 0 audit. Planning material; implementation status lives in `docs/architecture.md`. |
-| `hardening-report/**`, `project-audit/**` | **STALE** point-in-time run output: last touched 2026-07-30, describing the pre-Prestige, pre-phase-60 codebase. In particular `project-audit/10_BUGS_AND_INCOMPLETE_WORK.md`, `12_TECHNICAL_DEBT_AND_RISKS.md` and `15_FILES_REQUIRING_REVIEW.md` are not current; deleting the two directories is an operator call. |
+| `docs/archive/hardening-report/**`, `docs/archive/project-audit/**` | **STALE** point-in-time run output (archived from the root 2026-08-22): last touched 2026-07-30, describing the pre-Prestige, pre-phase-60 codebase. In particular `10_BUGS_AND_INCOMPLETE_WORK.md`, `12_TECHNICAL_DEBT_AND_RISKS.md` and `15_FILES_REQUIRING_REVIEW.md` are not current; deleting the two directories is an operator call. |
 | `PROD_APPLY_READY.sql`, `PROD_VERIFY.sql` | Root-level production migration SQL staged for the human-executed queue that `PROD_APPLY.md` owns; the apply file is self-labelled DO NOT APPLY. |
 | `docs/dispatch/` | Dispatch prompts for specific runs — instructions at a point in time, not current state. |
 | `.openai/hosting.json` | 96-byte vendor-hosting config from the PWA deploy (frozen web surface); untouched since 2026-07-30. |

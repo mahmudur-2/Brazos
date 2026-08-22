@@ -2,8 +2,8 @@
 
 Audit date: 2026-08-04. Branch `feature/setup-onboarding-v1`, HEAD `0b1f170`, tree clean.
 Baseline for this document: direct repository inspection, cross-checked against
-`project-audit/*.md` (2026-07-29, branch `master`, HEAD `065a420`),
-`hardening-report/*.md` (2026-07-30), and `docs/CURRENT_IMPLEMENTATION_HANDOFF.md`
+`docs/archive/project-audit/*.md` (2026-07-29, branch `master`, HEAD `065a420`),
+`docs/archive/hardening-report/*.md` (2026-07-30), and `docs/CURRENT_IMPLEMENTATION_HANDOFF.md`
 (Sessions 1–4, latest recorded HEAD `15d88e7` — this branch is newer and adds the
 auth/onboarding redesign on top).
 
@@ -132,7 +132,7 @@ extraction in `02_SCREEN_CROSSWALK.md`'s sourcing.
 Full detail and file:line evidence: see the delta findings folded into
 [02_SCREEN_CROSSWALK.md](02_SCREEN_CROSSWALK.md) and
 [08_REGRESSION_AND_ACCEPTANCE_MATRIX.md](08_REGRESSION_AND_ACCEPTANCE_MATRIX.md).
-Summary status, updated from `project-audit/03_FEATURE_INVENTORY.md`
+Summary status, updated from `docs/archive/project-audit/03_FEATURE_INVENTORY.md`
 (2026-07-29) to account for Sessions 3–4:
 
 | Feature | 2026-07-29 status | Current status | What changed |

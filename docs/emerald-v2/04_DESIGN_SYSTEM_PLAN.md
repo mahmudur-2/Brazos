@@ -102,7 +102,7 @@ file — it is already the closer match to the Emerald palette:
   reusable pattern for every future OS-permission surface in the atlas, e.g.
   Screen 33 Track Worker's location permission, Screen 58's camera
   permission). No formal shared "EmptyState"/"ErrorState" component set was
-  found reused system-wide; `project-audit/07_UI_PAGES_AND_COMPONENTS.md`
+  found reused system-wide; `docs/archive/project-audit/07_UI_PAGES_AND_COMPONENTS.md`
   flagged this as PARTIAL consistency in 2026-07-29 and it was not
   re-verified as fixed in this pass.
 
