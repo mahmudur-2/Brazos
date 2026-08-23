@@ -65,6 +65,26 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 
+/**
+ * The filter pill's height in points, and the ONLY place it is stated.
+ *
+ * It has to be a real height rather than a `minHeight`, because of what was
+ * wrong here: the pills are children of a HORIZONTAL ScrollView, and React
+ * Native gives that view `baseHorizontal = { flexGrow: 1, flexShrink: 1 }`
+ * (Libraries/Components/ScrollView/ScrollView.js). So the scroller grew into
+ * every point of free vertical space the column had, and the content
+ * container's cross-axis default — `alignItems: 'stretch'` — handed that
+ * whole height to each pill. A `minHeight` is a floor and cannot cap a
+ * stretch, which is why the row rendered as half-screen ovals in both themes
+ * while the style block looked correct.
+ *
+ * The stretch is fixed where it is caused (`filterScroll` refuses to grow,
+ * `filterRow` centres instead of stretching) — this constant is what the pill
+ * measures once the stretch is gone, not a cap hiding it. `radius.pill` is
+ * 999, so the corner is half the height at whatever this says.
+ */
+const FILTER_PILL_HEIGHT = 34;
+
 type SheetTarget = {
   userId: string;
   name: string;
@@ -431,6 +451,7 @@ export function MessagesInboxScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
         contentContainerStyle={styles.filterRow}
         keyboardShouldPersistTaps="handled"
       >
@@ -575,8 +596,20 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     backgroundColor: colors.background,
   },
+  // The scroller itself takes the height of its row and no more. Without
+  // this it keeps RN's `baseHorizontal` flexGrow of 1 and swallows the free
+  // vertical space between the header and the list — which is the height the
+  // pills were then stretched to.
+  filterScroll: {
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   filterRow: {
     flexDirection: 'row',
+    // Cross-axis. A row's default is `stretch`, and that default is what made
+    // the pills as tall as the scroller; centring is what makes each pill
+    // measure itself instead of its container.
+    alignItems: 'center',
     gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
@@ -585,7 +618,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // is a hairline on the page ground so the ACTIVE one is the only filled
   // thing in the row.
   pill: {
-    minHeight: 32,
+    height: FILTER_PILL_HEIGHT,
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,

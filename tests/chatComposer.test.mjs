@@ -603,6 +603,81 @@ test('[executed] every pill has its OWN empty state, and each one is true', () =
   assert.equal(inbox.emptyStateFor('support').title, 'Support coming soon');
 });
 
+test('[static] the filter pills measure themselves, not their scroller', () => {
+  // WHAT WENT WRONG, so it cannot go wrong the same way twice. The pills live
+  // in a horizontal ScrollView. React Native styles that view with
+  // `baseHorizontal = { flexGrow: 1, flexShrink: 1 }`, so it grew into all the
+  // free vertical space between the header and the list; the content
+  // container's cross-axis default of `stretch` then gave that entire height
+  // to every pill. The style block read `minHeight: 32` throughout and was
+  // never wrong — a floor cannot cap a stretch — and both themes rendered
+  // half-screen ovals.
+  //
+  // So this fence pins the two properties that CAUSE the stretch, not the
+  // height that suffers it. Capping the height alone would go green while the
+  // scroller still ate the column.
+  const source = read('screens/MessagesInboxScreen.tsx');
+  const screen = stripComments(source);
+  const flat = flatten(source);
+
+  const filterScroll = /filterScroll: \{([^}]*)\}/.exec(screen);
+  assert.ok(filterScroll, 'the filter scroller needs its own style to refuse RN flexGrow of 1');
+  assert.match(
+    filterScroll[1],
+    /flexGrow: 0/,
+    "the scroller must not grow — RN's baseHorizontal gives it flexGrow: 1 otherwise",
+  );
+  assert.match(flat, /<ScrollView horizontal[^>]*style=\{styles\.filterScroll\}/, 'and it must be mounted');
+
+  const filterRow = /filterRow: \{([^}]*)\}/.exec(screen);
+  assert.ok(filterRow, 'the filter row style must exist');
+  assert.match(
+    filterRow[1],
+    /alignItems: 'center'/,
+    "a row's cross-axis default is stretch, which is what made the pills full-height",
+  );
+
+  // ONE named constant owns the height, and it sits in the WhatsApp-subtle
+  // band the row was measured against rather than being a free number.
+  const declared = /const FILTER_PILL_HEIGHT = (\d+);/.exec(screen);
+  assert.ok(declared, 'the pill height belongs to a single named constant');
+  const height = Number(declared[1]);
+  assert.ok(
+    height >= 32 && height <= 36,
+    `a filter pill above a list reads at 32-36pt; this one is ${height}pt`,
+  );
+
+  const pill = /\n  pill: \{([^}]*)\}/.exec(screen);
+  assert.ok(pill, 'the pill style must exist');
+  assert.match(pill[1], /height: FILTER_PILL_HEIGHT/, 'the pill takes the named height');
+  assert.doesNotMatch(
+    pill[1],
+    /minHeight/,
+    'a minHeight is the floor that failed to cap the stretch; it must not come back',
+  );
+  assert.match(pill[1], /borderRadius: radius\.pill/, 'radius.pill is 999, so the corner is half the height');
+  assert.match(pill[1], /borderWidth: 1/);
+  assert.match(pill[1], /backgroundColor: 'transparent'/, 'the resting pill is a hairline on the page ground');
+
+  // Label metrics, and the selected treatment as a RECOLOUR: the active pill
+  // changes two colours and nothing structural, so light is dark's palette
+  // rather than a second design. `primarySoft` is the pale emerald in light
+  // and the deep one in dark, which is the per-theme fill the row wants.
+  const label = /pillLabel: \{([^}]*)\}/.exec(screen)[1];
+  assert.match(label, /fontSize: 13/);
+  assert.match(label, /fontWeight: '600'/);
+  assert.match(/pillLabelActive: \{([^}]*)\}/.exec(screen)[1], /color: colors\.emerald/);
+
+  const active = /pillActive: \{([^}]*)\}/.exec(screen)[1];
+  assert.match(active, /borderColor: colors\.emerald/);
+  assert.match(active, /backgroundColor: colors\.primarySoft/);
+  assert.doesNotMatch(
+    active,
+    /height|padding|margin|borderWidth|borderRadius|shadow|elevation/,
+    'selecting a pill recolours it; it must not resize or re-elevate it',
+  );
+});
+
 test('[static] one action model, two entry mechanics, and no empty second sheet', () => {
   const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
 
