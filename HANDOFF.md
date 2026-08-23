@@ -43,40 +43,59 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-23 share-profile run (RUN B1)
+## Current state — after the 2026-08-23 share-pin run (RUN B2)
 
 One commit:
 
 | # | commit | what landed |
 |-|-|-|
-|C1|`9e3de06`|a `share` build profile in `eas.json` — internal distribution, no dev client, its own `internal` update channel, `development`'s staging env copied verbatim — plus a fence in `tests/buildGate.test.mjs`|
+|C1|`79b1ac8`|`share: STAGING_REF` in `scripts/eas-build-pre-install.mjs`'s `EXPECTED_REF`, plus the expected-key and pin assertions in `tests/buildGate.test.mjs`|
 
 The offline suite stands at **926 pass / 0 fail / 0 skipped**, bare
-`npm run verify` exit 0 (from 925 at run start: +1, none retired). Branch and
+`npm run verify` exit 0 — unchanged from 926 at run start, because the new
+assertions went into two existing tests rather than adding cases. Branch and
 commit state are Git's to report, never this file's.
 
-### THE `share` PROFILE CANNOT BUILD YET — one operator decision
+### THE `share` PROFILE CAN BUILD NOW — the operator decision is taken
 
-`scripts/eas-build-pre-install.mjs` runs as the `eas-build-pre-install` npm
-hook on every EAS build, and it refuses outright any profile absent from its
-`EXPECTED_REF` map — which holds exactly `development`, `preview`,
-`testflight` and `production`. So `eas build --profile share` fails closed at
-pre-install with `unknown profile "share"`. That is the safe direction, and it
-is the gate working as designed, but the new profile is inert until it is
-pinned. The gate's own comment says the unreachable `preview` row is kept
-"only so adding one cannot land unpinned" — this is the case it was written
-for.
+The blocker the previous run logged here is closed. `share` is pinned to
+**staging**, through the `STAGING_REF` constant `scripts/supabase-ref.mjs`
+exports — never a copied ref literal, and the gate file still holds no bare
+project ref of its own. The decision was the operator's, not the run's:
+`share` is an ad hoc build for registered testers, its `eas.json` `env` block
+is `development`'s byte for byte, and it must never be pinned to production.
 
-The fix is two lines, and this run's scope did not include them: add
-`share: STAGING_REF` to `EXPECTED_REF`, and add `'share'` to the expected key
-list in `tests/buildGate.test.mjs`'s "every profile in the expected-ref map"
-test — an expected-constant update, not a fence weakening. Staging is the
-right pin: the profile's `env` block is `development`'s, byte for byte, and
-the new fence asserts the production ref appears nowhere in `eas.json`.
-Neither line was written, because pinning a build profile to a Supabase
-project is a control decision rather than a mechanical one.
+`eas.json`'s `share.env.SUPABASE_URL` and the gate's `EXPECTED_REF.share` now
+name the same project, and the share fence asserts that URL against
+`EXPECTED_REF.share` rather than against `development`'s pin — so the two
+files cannot drift apart without a red test. Without that binding the gate
+would be decorative for exactly this profile.
 
-### The run before this one (RUN B0) — its two commits, carried forward
+Nothing else moved: the unreachable `preview` row, every other profile's pin
+and the fail-closed behaviour are untouched.
+
+Measured by spawning `scripts/eas-build-pre-install.mjs` as a real process
+from a directory holding no dotenv file, which is how EAS runs it:
+
+| probe | result |
+|-|-|
+|`share` + the staging URL|exit 0 — `gate: OK — "share" builds against zzkumxcjtbqoselzptig`|
+|`share` + a foreign project ref|exit 1, naming both the ref found and the ref expected|
+|an unlisted profile (`nightly`)|exit 1 — `unknown profile "nightly"`, still failing closed|
+
+**Still unperformed:** no `eas build --profile share` has been run. The pin is
+proven by process spawn and by the suite, not by a real EAS build — only the
+operator can run one.
+
+### The run before this one (RUN B1) — its one commit, carried forward
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`9e3de06`|a `share` build profile in `eas.json` — internal distribution, no dev client, its own `internal` update channel, `development`'s staging env copied verbatim — plus a fence in `tests/buildGate.test.mjs`|
+
+The suite was 926/0 at the end of that run.
+
+### The run before that (RUN B0) — its two commits, carried forward
 
 | # | commit | what landed |
 |-|-|-|
@@ -400,7 +419,7 @@ installed, so every item here needs the BUILD and nothing else.**
 ### The queued operator steps
 
 **1. ONE NEW EAS DEV BUILD.** This is now the only thing standing between the
-tree and every dormant path above. `npm run verify` is green at 925/0; run it
+tree and every dormant path above. `npm run verify` is green at 926/0; run it
 again after the build before layering anything on it.
 
 **The one thing to watch on that build:** RUN B0 removed
@@ -435,12 +454,10 @@ so that is the name the product implies, not a domain any run could verify.
 Share Profile is LIVE and emits that URL. Confirm or register it, or change the
 constant, before anything ships to TestFlight. It is one line.
 
-**5. PIN `share` IN THE BUILD GATE — two lines, see the section at the top of
-this file.** Until `EXPECTED_REF` in `scripts/eas-build-pre-install.mjs` names
-`share`, the profile added this run cannot build: the pre-install hook refuses
-it as an unknown profile. Decide the pin (staging is what the profile's env
-implies) and the same edit updates the expected key list in
-`tests/buildGate.test.mjs`.
+**5. PIN `share` IN THE BUILD GATE — DONE in RUN B2 (`79b1ac8`).** No operator
+action remains here: `EXPECTED_REF` names `share` and pins it to `STAGING_REF`,
+so `eas build --profile share` now clears the pre-install hook. What is still
+unperformed is the build itself — see step 1.
 
 ### Device checks OWED from RUN B0 (operator, physical device)
 
