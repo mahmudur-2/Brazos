@@ -37,6 +37,10 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 
 const COMPOSER = 'components/ChatComposer.tsx';
 const DROPMENU = 'components/DropMenu.tsx';
+const METER = 'components/AudioMeterBars.tsx';
+const RECORDER = 'hooks/useVoiceRecorder.ts';
+
+const meter = await import('../lib/audioMeter.ts');
 
 test('[static] the composer is three zones, and every glyph is bare', () => {
   const flat = flatten(read(COMPOSER));
@@ -111,8 +115,10 @@ test('[static] no dead control: the mic waits on the boundary, the [ + ] on havi
   assert.match(source, /const showSend = !listening && text\.trim\(\)\.length > 0;/);
   assert.match(source, /const sendDisabled = !text\.trim\(\) \|\| sending \|\| busy \|\| isPreviewing;/);
 
-  // The [ + ] is absent, not empty, when the thread can take no attachment.
-  assert.match(source, /\{menuItems\.length > 0 && \(/);
+  // The [ + ] is absent, not empty, when the thread can take no attachment —
+  // and absent again while a take is running, where a greyed-out button beside
+  // a live recording would take space the waveform can use.
+  assert.match(source, /\{!isRecording && menuItems\.length > 0 && \(/);
 });
 
 test('[static] the attachment gate survived the redesign, and the flags need their handlers', () => {
@@ -158,6 +164,112 @@ test('[static] the drop-up is the shared DropMenu, on the boundary timings', () 
   // Rows meet the touch floor by their DRAWN height — adjacent rows with
   // overlapping hitSlop would steal each other's taps.
   assert.match(menu, /minHeight: 46,/);
+});
+
+// ---------------------------------------------------------------------------
+// THE VOICE RECORDER — three phases, a REAL waveform, and no invented one.
+// ---------------------------------------------------------------------------
+
+test('[static] metering is asked for explicitly, because every preset has it off', () => {
+  const recorder = stripComments(read(RECORDER));
+  // expo-audio's own createRecordingOptions does `options.isMeteringEnabled ??
+  // false`, so RecordingPresets.HIGH_QUALITY alone reports no levels at all
+  // and the waveform would be permanently indeterminate.
+  assert.match(
+    recorder,
+    /useAudioRecorder\(\{ \.\.\.RecordingPresets\.HIGH_QUALITY, isMeteringEnabled: true \}\)/,
+    'the live waveform needs metering turned on by name'
+  );
+  // The window advances on the POLL, not on the level changing: a run of
+  // identical readings is exactly what silence is, and a component watching
+  // `metering` alone would freeze the waveform through it.
+  assert.match(recorder, /recorderState\.durationMillis, recorderState\.metering\]/);
+  // Each take starts from silence rather than inheriting the last one's shape.
+  assert.match(recorder, /resetMeter\(\);\s*setPhase\('recording'\)/);
+  // "No metering on this binary" is a latched fact, not a per-frame guess.
+  assert.match(recorder, /meterLevels: phase === 'recording' && meteringSeen \? meterLevels : null/);
+});
+
+test('[executed] the meter maps dBFS honestly, and NULL never collapses into silence', () => {
+  // The floor is what makes speech use the height: iOS reports down to -160,
+  // and mapping the full range pins every ordinary voice in the top sixth.
+  assert.equal(meter.METER_FLOOR_DB, -60);
+
+  // The two facts that must stay distinct.
+  assert.equal(meter.normalizeMeter(undefined), null, 'no reading is not silence');
+  assert.equal(meter.normalizeMeter(null), null);
+  assert.equal(meter.normalizeMeter(NaN), null, 'a NaN reading is no reading');
+  assert.equal(meter.normalizeMeter(-Infinity), null, 'and neither is an infinite one');
+  assert.equal(meter.normalizeMeter(-60), 0, 'the floor IS silence, and it is a real 0');
+  assert.equal(meter.normalizeMeter(-160), 0, 'below the floor clamps rather than going negative');
+
+  // The range in between, and both ends of it.
+  assert.equal(meter.normalizeMeter(0), 1);
+  assert.equal(meter.normalizeMeter(12), 1, 'a positive reading clamps rather than overflowing the bar');
+  assert.equal(meter.normalizeMeter(-30), 0.5);
+  assert.ok(Math.abs(meter.normalizeMeter(-15) - 0.75) < 1e-9);
+
+  // The window is fixed-width BY CONSTRUCTION, so no caller can grow it into
+  // an unbounded recording of the take.
+  const start = meter.emptyMeterWindow();
+  assert.equal(start.length, meter.METER_BAR_COUNT);
+  assert.ok(start.every((v) => v === 0));
+  let window = start;
+  for (const level of [0.2, 0.4, 0.9]) window = meter.advanceMeterWindow(window, level);
+  assert.equal(window.length, meter.METER_BAR_COUNT);
+  assert.deepEqual(window.slice(-3), [0.2, 0.4, 0.9], 'newest samples arrive at the RIGHT');
+  assert.deepEqual(start, meter.emptyMeterWindow(), 'and the previous window is not mutated');
+});
+
+test('[static] the waveform is never synthesised, and silence still draws', () => {
+  const bars = stripComments(read(METER));
+
+  // THE LINE THIS FENCE EXISTS FOR. A pseudo-random or sine-driven "waveform"
+  // over a mic nobody is measuring is a picture of nothing presented as a
+  // picture of your voice.
+  assert.doesNotMatch(bars, /Math\.random|Math\.sin|Math\.cos/, 'no invented amplitude, ever');
+
+  // No metering -> an INDETERMINATE pulse, visibly not a waveform.
+  assert.match(bars, /const indeterminate = levels === null;/);
+  assert.match(bars, /opacity: pulse\.interpolate\(\{ inputRange: \[0, 1\], outputRange: \[0\.35, 1\] \}\)/);
+  // ...and it is announced as something different, too.
+  assert.match(bars, /indeterminate \? 'Recording' : 'Recording, microphone level'/);
+
+  // Silence draws a floor: a flat line reads as "broken", not as "quiet".
+  assert.match(bars, /const BAR_MIN_SCALE = 0\.12;/);
+  assert.match(bars, /scaleY: Math\.max\(BAR_MIN_SCALE, Math\.min\(1, level\)\)/);
+  // SCALE, not height — ten updates a second must cost zero Yoga passes.
+  assert.doesNotMatch(bars, /height: [\d.]+ \+ /, 'bars are scaled, not re-laid-out');
+  assert.match(bars, /useNativeDriver: USE_NATIVE_DRIVER/);
+});
+
+test('[static] the three recorder phases each render their own controls', () => {
+  const flat = flatten(read(COMPOSER));
+
+  // RECORDING — one pill holding the live dot, the waveform and the elapsed
+  // time, with the stop OUTSIDE it, so the pill is a readout and the row keeps
+  // exactly one button.
+  assert.match(flat, /<View style=\{styles\.recordingPill\}> <View style=\{styles\.recordingDot\} \/> <AudioMeterBars levels=\{recorderLevels\} \/>/);
+  assert.match(flat, /<Text style=\{styles\.recordingTime\}>\{formatClipDuration\(recorderDurationMs\)\}<\/Text>/);
+  assert.match(flat, /accessibilityLabel="Stop recording"/);
+  // The pill is EMERALD, not danger: a take in progress is not an error. The
+  // one red thing in it is the universal live-dot.
+  const pill = /recordingPill: \{([^}]*)\}/.exec(flat);
+  assert.ok(pill, 'the recording pill must stay a plain style');
+  assert.match(pill[1], /borderColor: withAlpha\(colors\.emerald, 0\.45\)/);
+  assert.match(pill[1], /backgroundColor: withAlpha\(colors\.emerald, 0\.1\)/);
+  // Tabular figures, or the pill's width jitters once a second and the
+  // waveform appears to slide.
+  assert.match(flat, /recordingTime: \{[^}]*fontVariant: \['tabular-nums'\]/);
+
+  // PREVIEW — X to discard, the clip's own scrubber, arrow-up to send.
+  assert.match(flat, /accessibilityLabel="Discard recording" > <Ionicons name="close"/);
+  assert.match(flat, /<VoiceNote url=\{previewUri\} durationMs=\{recorderDurationMs\} isOwn=\{false\} \/>/);
+  assert.match(flat, /accessibilityLabel="Send voice message" > <Ionicons name="arrow-up"/);
+
+  // And the levels come from the recorder rather than from the composer, so
+  // there is one source for what the bars mean.
+  assert.match(stripComments(read('screens/ChatScreen.tsx')), /recorderLevels=\{recorder\.meterLevels\}/);
 });
 
 test('[static] the quick-reply row and its templates are gone from the whole tree', () => {

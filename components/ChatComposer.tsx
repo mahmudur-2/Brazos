@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AudioMeterBars } from './AudioMeterBars';
 import { DropMenu, type DropMenuItem } from './DropMenu';
 import { VoiceNote } from './VoiceNote';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -76,6 +77,9 @@ type ChatComposerProps = {
   /** idle | pending | recording | preview — see useVoiceRecorder.ts. */
   recorderPhase: RecorderPhase;
   recorderDurationMs: number;
+  /** The live waveform's samples, or null when this binary reports no
+   *  metering — see components/AudioMeterBars.tsx. Never synthesised. */
+  recorderLevels: number[] | null;
   /** Local file URI of the just-recorded clip, set only during 'preview'. */
   previewUri: string | null;
   /** Enter the voice-MESSAGE recorder. Reached from the [ + ] menu now, not
@@ -125,6 +129,7 @@ export function ChatComposer({
   onPickLibrary,
   recorderPhase,
   recorderDurationMs,
+  recorderLevels,
   previewUri,
   onMicTap,
   onStopRecording,
@@ -256,6 +261,11 @@ export function ChatComposer({
   // Preview replaces the whole row: reviewing/sending a voice note and
   // composing a text message at the same time isn't a state this needs to
   // support, so the attachment button, the field and the send all step aside.
+  // PHASE 3 — PREVIEW. It replaces the whole row: reviewing a take and
+  // composing a text message at the same time is not a state this needs to
+  // support, so the attachment button, the field and the send all step aside.
+  // X to discard, the clip's own scrubber in the middle, arrow-up to send —
+  // the same two-decision shape as the recording pill, one step later.
   if (isPreviewing) {
     return (
       <View style={styles.row}>
@@ -264,10 +274,11 @@ export function ChatComposer({
           disabled={sending}
           style={[styles.iconBtn, sending && styles.iconBtnDisabled]}
           hitSlop={6}
+          accessibilityRole="button"
           accessibilityLabel="Discard recording"
         >
           <Ionicons
-            name="trash-outline"
+            name="close"
             size={ICON_GLYPH_SIZE}
             color={sending ? colors.textSubtle : colors.danger}
           />
@@ -284,6 +295,7 @@ export function ChatComposer({
           disabled={sending}
           style={[styles.iconBtn, sending && styles.iconBtnDisabled]}
           hitSlop={6}
+          accessibilityRole="button"
           accessibilityLabel="Send voice message"
         >
           <Ionicons name="arrow-up" size={SEND_GLYPH_SIZE} color={glyph} />
@@ -306,7 +318,11 @@ export function ChatComposer({
       />
 
       <View style={styles.row}>
-        {menuItems.length > 0 && (
+        {/* Hidden, not disabled, while a take is running: the recording pill
+            takes the row, and a greyed-out attachment button beside a live
+            recording is a control nobody can use taking space the waveform
+            can. */}
+        {!isRecording && menuItems.length > 0 && (
           <Pressable
             onPress={() => setMenuOpen((open) => !open)}
             style={styles.iconBtn}
@@ -322,11 +338,13 @@ export function ChatComposer({
         )}
 
         {isRecording ? (
-          <View style={styles.recordingFill}>
+          // PHASE 2 — RECORDING. One pill: the live-dot, the waveform, the
+          // elapsed time. The stop control sits outside it on the right, so
+          // the pill is a READOUT and the row still has exactly one button.
+          <View style={styles.recordingPill}>
             <View style={styles.recordingDot} />
-            <Text style={styles.recordingText}>
-              Recording… {formatClipDuration(recorderDurationMs)}
-            </Text>
+            <AudioMeterBars levels={recorderLevels} />
+            <Text style={styles.recordingTime}>{formatClipDuration(recorderDurationMs)}</Text>
           </View>
         ) : (
           <TextInput
@@ -450,22 +468,35 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
-  recordingFill: {
+  // The pill the take runs inside. Emerald hairline on the emerald wash in
+  // both palettes — the same "live, and being measured" vocabulary the
+  // dictation mic uses — so a recording never reads as an error state.
+  recordingPill: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.sm + 2,
+    minHeight: COMPOSER_CONTROL_SIZE,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.emerald, 0.45),
+    backgroundColor: withAlpha(colors.emerald, 0.1),
   },
+  // The one red thing in the pill, and it is the universal "live" dot rather
+  // than a danger signal.
   recordingDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.danger,
   },
-  recordingText: {
-    fontSize: 15,
-    color: colors.textMuted,
+  recordingTime: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+    // Tabular figures, or the pill's width jitters once a second as the
+    // digits change and the waveform appears to slide.
     fontVariant: ['tabular-nums'],
   },
   previewWrap: {

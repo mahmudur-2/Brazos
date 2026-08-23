@@ -1202,6 +1202,7 @@ export function ChatScreen() {
                 onPickLibrary={pickFromLibrary}
                 recorderPhase={recorder.phase}
                 recorderDurationMs={recorder.durationMs}
+                recorderLevels={recorder.meterLevels}
                 previewUri={recorder.previewUri}
                 onMicTap={handleMicTap}
                 onStopRecording={handleStopRecording}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { advanceMeterWindow, emptyMeterWindow, normalizeMeter } from '../lib/audioMeter';
 import { userMessage } from '../lib/errorMessage';
 import {
   RecordingPresets,
@@ -48,8 +49,12 @@ async function setAudioMode(overrides: { allowsRecording: boolean }) {
  *               the caller either sends it (reset()) or discard()s it.
  */
 export function useVoiceRecorder() {
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
-  // 100ms polling keeps the on-screen timer smooth without much overhead.
+  // isMeteringEnabled is OFF in every preset (expo-audio's own
+  // createRecordingOptions defaults it to false), so the live waveform needs
+  // it asked for explicitly. Everything else is HIGH_QUALITY's, untouched.
+  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  // 100ms polling keeps the on-screen timer smooth without much overhead, and
+  // is also the waveform's sample rate — one bar per poll.
   const recorderState = useAudioRecorderState(recorder, 100);
 
   const [phase, setPhase] = useState<RecorderPhase>('idle');
@@ -65,6 +70,34 @@ export function useVoiceRecorder() {
       lastDurationRef.current = recorderState.durationMillis;
     }
   }, [recorderState.isRecording, recorderState.durationMillis]);
+
+  // --- the live meter ------------------------------------------------------
+  // A rolling window of normalised samples, newest LAST. It lives here rather
+  // than in the bar component because this hook already re-renders on every
+  // poll — a component watching `metering` alone would freeze the waveform
+  // through a run of identical readings, which is exactly what silence is.
+  const meterWindowRef = useRef<number[]>(emptyMeterWindow());
+  const [meterLevels, setMeterLevels] = useState<number[]>(meterWindowRef.current);
+  // null = no reading has ever arrived on this binary. It flips true the first
+  // time one does and never flips back, so the UI can distinguish "no metering
+  // here" from "quiet right now" without guessing.
+  const [meteringSeen, setMeteringSeen] = useState(false);
+
+  useEffect(() => {
+    if (!recorderState.isRecording) return;
+    const level = normalizeMeter(recorderState.metering);
+    if (level == null) return;
+    if (!meteringSeen) setMeteringSeen(true);
+    meterWindowRef.current = advanceMeterWindow(meterWindowRef.current, level);
+    setMeterLevels(meterWindowRef.current);
+    // durationMillis is in the deps on purpose: it changes on EVERY poll, so
+    // the window advances even when the level itself repeats.
+  }, [meteringSeen, recorderState.isRecording, recorderState.durationMillis, recorderState.metering]);
+
+  function resetMeter() {
+    meterWindowRef.current = emptyMeterWindow();
+    setMeterLevels(meterWindowRef.current);
+  }
 
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   function clearPendingTimer() {
@@ -91,6 +124,7 @@ export function useVoiceRecorder() {
       await recorder.prepareToRecordAsync();
       recorder.record();
       lastDurationRef.current = 0;
+      resetMeter();
       setPhase('recording');
     } catch (err) {
       console.error('[useVoiceRecorder] start failed', err);
@@ -183,6 +217,12 @@ export function useVoiceRecorder() {
     durationMs:
       phase === 'preview' ? (previewClip?.durationMs ?? 0) : recorderState.durationMillis,
     previewUri: previewClip?.uri ?? null,
+    /**
+     * The waveform's samples while recording, or NULL when this binary has
+     * produced no metering at all — see AudioMeterBars for why those two are
+     * drawn differently and why neither is ever faked.
+     */
+    meterLevels: phase === 'recording' && meteringSeen ? meterLevels : null,
     error,
     clearError: () => setError(null),
     tapMic,
