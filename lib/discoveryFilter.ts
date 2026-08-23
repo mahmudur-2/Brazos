@@ -1,13 +1,20 @@
 /**
  * The worker discovery distance filter (4D-2 B3) — pure rules only, so
- * `node --test` executes them directly. The AsyncStorage half lives in
+ * `node --test` executes them directly. The session-state half lives in
  * ./discoveryFilterStorage.ts, split exactly the way modes/types.ts and
  * modes/modeStorage.ts are.
  *
- * `null` means "Any distance" — no radius constraint. It is a real state,
- * stored as the literal 'any' so an absent key (never chosen) and a chosen
- * "Any" are distinguishable in storage even though both currently resolve to
- * the same behavior.
+ * `null` means "Any distance" — no radius constraint.
+ *
+ * 2026-08-22, two operator decisions:
+ *  - The filter is SESSION-ONLY: every cold start begins at Any, and the
+ *    last choice survives only in memory (shared across Map and the results
+ *    list). The persisted-value era's wire codec is gone with it; the
+ *    storage KEY survives solely so the retired stored value can be erased.
+ *  - A CUSTOM radius joined the presets: any whole mile from
+ *    DISTANCE_FILTER_MIN to DISTANCE_FILTER_MAX, picked with the Map filter
+ *    sheet's stepper, so the type widened from the preset union to a
+ *    validated number.
  */
 
 /**
@@ -18,38 +25,41 @@
  */
 export const NEARBY_RADIUS_MILES = 5;
 
+/** The preset chips both discovery surfaces draw. */
 export const DISTANCE_FILTER_OPTIONS = [2, 5, 10, 25] as const;
 
-export type DistanceFilterMiles = (typeof DISTANCE_FILTER_OPTIONS)[number];
+/** The custom stepper's bounds, whole miles inclusive. The presets sit
+ *  inside them, so one validator covers both entry paths. */
+export const DISTANCE_FILTER_MIN = 1;
+export const DISTANCE_FILTER_MAX = 50;
 
+export type DistanceFilterMiles = number;
+
+/** Allow-list validation for anything claiming to be a radius: a whole mile
+ *  inside the stepper's bounds. Fail-safe callers coerce failures to null
+ *  (Any), which only ever shows MORE real jobs. */
 export function isDistanceFilterMiles(value: unknown): value is DistanceFilterMiles {
-  return (DISTANCE_FILTER_OPTIONS as readonly number[]).includes(value as number);
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= DISTANCE_FILTER_MIN &&
+    value <= DISTANCE_FILTER_MAX
+  );
+}
+
+/** Clamp a stepper step to the custom range, whole miles. */
+export function clampDistanceFilterMiles(value: number): DistanceFilterMiles {
+  return Math.min(DISTANCE_FILTER_MAX, Math.max(DISTANCE_FILTER_MIN, Math.round(value)));
 }
 
 /**
- * Device-local storage key, scoped per account for the modes/types.ts reason:
- * two accounts on one device must not inherit each other's filter. Versioned
- * so a shape change takes a new key instead of migrating values.
+ * The RETIRED device-local storage key. The filter stopped persisting on
+ * 2026-08-22 (session-only, Any on every cold start); this survives solely so
+ * discoveryFilterStorage can erase whatever a previous build stored under it.
+ * Nothing may write to it again.
  */
 export function distanceFilterStorageKey(userId: string): string {
   return `brazos.discovery.distance.v1.${userId}`;
-}
-
-/** Wire format: a radius stores its number, "Any distance" stores 'any'. */
-export function encodeDistanceFilter(value: DistanceFilterMiles | null): string {
-  return value === null ? 'any' : String(value);
-}
-
-/**
- * Stored string → filter value. Anything unrecognized — a legacy value, a
- * corrupted write, a radius that later left the option list — coerces to
- * null (Any) rather than to a radius the UI cannot represent: the fail-safe
- * direction, since "Any" only ever shows MORE real jobs.
- */
-export function coerceStoredDistanceFilter(raw: string | null): DistanceFilterMiles | null {
-  if (raw === null || raw === 'any') return null;
-  const parsed = Number(raw);
-  return isDistanceFilterMiles(parsed) ? parsed : null;
 }
 
 /** The chip caption for one option. */

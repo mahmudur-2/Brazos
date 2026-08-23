@@ -599,12 +599,15 @@ test('every cross-tab target reachable from Customer Home resolves in the custom
     }
   }
 
-  // Anti-vacuity: MapScreen's two worker-only dispatches MUST be among the
-  // calls this walked, or the matcher has rotted and the sweep proves nothing.
-  assert.ok(checked >= 8, `expected the sweep to reach every cross-tab call; saw ${checked}`);
+  // Anti-vacuity: MapScreen's worker-only dispatch MUST be among the calls
+  // this walked, or the matcher has rotted and the sweep proves nothing.
+  // 2026-08-22: the header's "See all jobs" duplicate became the distance
+  // filter (which navigates nothing), so the bottom row's "View list" is the
+  // ONE list dispatch left on the map.
+  assert.ok(checked >= 7, `expected the sweep to reach every cross-tab call; saw ${checked}`);
   const map = stripComments(await read('screens/MapScreen.tsx'));
   const mapCalls = [...map.matchAll(/navigateAcrossTabs\(\s*'Home'\s*,\s*'WorkerResults'/g)];
-  assert.equal(mapCalls.length, 2, 'Map still offers the worker list twice, header and footer');
+  assert.equal(mapCalls.length, 1, "Map offers the worker list once — the bottom row's View list");
   for (const call of mapCalls) {
     assert.match(
       map.slice(Math.max(0, call.index - 500), call.index),

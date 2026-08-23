@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,7 +15,6 @@ import { useHotspots } from '../hooks/useHotspots';
 import { useOfferCounts } from '../hooks/useOfferCounts';
 import { JOB_CATEGORY_LABELS, type OpenJob } from '../lib/jobs';
 import {
-  HOTSPOT_TIERS,
   cellsWithinMiles,
   fetchJobsWithinRadius,
   fetchOpenJobsInCells,
@@ -25,7 +24,11 @@ import {
   type HotspotCell,
 } from '../lib/hotspots';
 import { clusterPoints, type ClusterPin } from '../lib/mapClustering';
-import { type DistanceFilterMiles } from '../lib/discoveryFilter';
+import {
+  clampDistanceFilterMiles,
+  distanceChipLabel,
+  type DistanceFilterMiles,
+} from '../lib/discoveryFilter';
 import { readDistanceFilter, writeDistanceFilter } from '../lib/discoveryFilterStorage';
 import { userMessage } from '../lib/errorMessage';
 import { useMode } from '../modes';
@@ -69,9 +72,12 @@ export function MapScreen() {
   // The device's own position, reported once by the native map after a
   // granted fix. Stays null otherwise — never guessed.
   const [userLoc, setUserLoc] = useState<{ lat: number; lng: number } | null>(null);
-  // B3: the persisted distance filter, shared with WorkerResults through
-  // lib/discoveryFilterStorage. undefined = still reading.
+  // B3, session-only since 2026-08-22: the distance filter, shared with
+  // WorkerResults through lib/discoveryFilterStorage's in-memory session
+  // store. undefined = still reading.
   const [radius, setRadius] = useState<DistanceFilterMiles | null | undefined>(undefined);
+  // The header filter sheet (2026-08-22): presets + the custom stepper.
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const userId = user?.id ?? null;
   useEffect(() => {
@@ -214,80 +220,48 @@ export function MapScreen() {
           titleIcon={
             <Ionicons name="location-outline" size={22} color={colors.primary} />
           }
-          // Worker-only. Map is a SHARED tab, so this screen renders in both
-          // modes, but its destination — `WorkerResults`, the worker job
-          // list — exists only in the worker tree's Home stack. Rendering the
-          // control in customer mode offered a worker surface to a customer
-          // (§F) and threw "The 'state' or 'screen' passed in the params
-          // couldn't be applied to the navigator with the screens: HomeMain,
-          // PostJob, WorkerSearch, WorkerProfile, ProfileReviews" when
-          // tapped. Absent beats disabled beats a redirect somewhere else:
-          // there is no customer equivalent of "all open jobs" to send them
-          // to.
+          // Worker-only, for the same §F reason the old "See all jobs"
+          // control was: the distance filter is worker discovery state, and
+          // customer mode has no radius to set. Perspective from ModeContext,
+          // never a passed prop.
           //
-          // Same mode-conditional shape SubmitBidScreen and JobDetailScreen
-          // use — perspective read from ModeContext, never a passed prop.
+          // 2026-08-22: this slot is the FILTER now — it opens the distance
+          // sheet below, and when a radius is applied the control widens to
+          // carry its label so the active distance is readable from the
+          // header. The list intent it used to duplicate lives on in the
+          // bottom row's "View list".
           right={
             mode === 'worker' ? (
               <Pressable
-                // Reuses the existing complete open-jobs list rather than
-                // duplicating it inside MapStack. Master 33 puts this at the
-                // header's right as a gold-outline squircle and repeats the
-                // same intent as the footer card's "View list".
-                onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
+                onPress={() => setFilterOpen(true)}
                 hitSlop={10}
-                style={({ pressed }) => [styles.squircle, pressed && styles.squirclePressed]}
+                style={({ pressed }) => [
+                  styles.squircle,
+                  radius != null && styles.squircleLabeled,
+                  pressed && styles.squirclePressed,
+                ]}
                 accessibilityRole="button"
-                accessibilityLabel="See all jobs"
+                accessibilityLabel={
+                  radius != null
+                    ? `Distance filter, within ${radius} miles`
+                    : 'Distance filter, any distance'
+                }
               >
                 <Ionicons name="options-outline" size={20} color={accent} />
+                {radius != null ? (
+                  <Text style={styles.squircleLabel}>{`${radius} mi`}</Text>
+                ) : null}
               </Pressable>
             ) : null
           }
         />
       </View>
 
-      {/* Master 33's header card. Everything in it is real: the radius is the
-          persisted filter, the legend the lib/hotspots tiers. */}
-      <View style={styles.cardWrap}>
-        <View style={styles.mapCard}>
-          <Text style={styles.cardEyebrow}>MAP DISCOVERY</Text>
-          <Text style={styles.cardTitle}>Open jobs on the map</Text>
-
-          {isWorker && radius !== undefined ? (
-            <View style={styles.chipsWrap}>
-              <DistanceChips value={radius ?? null} onChange={selectRadius} />
-              {radiusUnavailable ? (
-                <Text style={styles.radiusNote}>
-                  Location is off — showing all areas.
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* The tier legend explains the customer glow overlay's colors.
-              Worker mode renders count-badged pins instead — the number IS
-              the legend — so the row would only describe something no longer
-              on screen. */}
-          {!isWorker ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.legend}
-              contentContainerStyle={styles.legendContent}
-            >
-              {HOTSPOT_TIERS.map((t) => (
-                <View key={t.key} style={styles.legendItem}>
-                  <View style={[styles.legendDot, { backgroundColor: t.stroke }]} />
-                  <Text style={[styles.legendLabel, { color: colors.textMuted }]}>
-                    {t.label}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-          ) : null}
-        </View>
-      </View>
+      {/* 2026-08-22: the "MAP DISCOVERY / Open jobs on the map" header card
+          is GONE on operator instruction — the map fills from directly under
+          the title to directly above the bottom row. The distance controls
+          it carried moved into the header filter sheet below; the customer
+          tier legend rode in the card and went with it. */}
 
       {error ? (
         // Retryable, not just announced — the map without hotspot data is a
@@ -314,38 +288,32 @@ export function MapScreen() {
         />
       </View>
 
-      {/* Master 33's footer card. The count is the sum of the cells actually
-          in view — never a placeholder, and absent entirely while the read is
-          still in flight. */}
+      {/* The bottom row, reduced 2026-08-22 from the "NEAR YOU" footer card
+          to ONE compact bar on the page ground — count left, "View list →"
+          right, no solid slab behind it. (The only map mockup on disk,
+          Discover_Map_Dark.png, is a rejected word-named render and draws
+          the very slab this removes; with no numbered master for this
+          screen, the dispatch's instruction governs, and the row sits in a
+          minimal bar rather than overlaying tiles so its text never fights
+          the map for contrast.) The count is still the sum of the cells
+          actually in view — never a placeholder, absent while loading. */}
       {!loading && !error ? (
-        <View style={styles.cardWrap}>
-          <View style={styles.mapCard}>
-            <Text style={styles.cardEyebrow}>NEAR YOU</Text>
-            <View style={styles.footerRow}>
-              <View style={styles.footerCopy}>
-                <Text style={styles.cardTitle}>
-                  {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
-                </Text>
-                <Text style={styles.footerSub}>
-                  List view remains the clearest way to compare.
-                </Text>
-              </View>
-              {isWorker ? (
-                <Pressable
-                  onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
-                  style={({ pressed }) => [
-                    styles.listPill,
-                    pressed && styles.squirclePressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="View the list of open jobs"
-                >
-                  <Text style={styles.listPillText}>View list</Text>
-                  <Ionicons name="arrow-forward" size={16} color={accent} />
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
+        <View style={styles.footerBar}>
+          <Text style={styles.footerCount} numberOfLines={1}>
+            {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
+          </Text>
+          {isWorker ? (
+            <Pressable
+              onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
+              hitSlop={8}
+              style={({ pressed }) => [styles.listLink, pressed && styles.squirclePressed]}
+              accessibilityRole="button"
+              accessibilityLabel="View the list of open jobs"
+            >
+              <Text style={styles.listLinkText}>View list</Text>
+              <Ionicons name="arrow-forward" size={16} color={accent} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 
@@ -394,6 +362,68 @@ export function MapScreen() {
           </Card>
         </View>
       )}
+
+      {/* The distance filter sheet (2026-08-22) — the presets as the SAME
+          DistanceChips row the results list draws, plus the custom stepper:
+          1–50 whole miles, each tap applied immediately. From Any, the first
+          tap in either direction turns the dial on at 10 mi; the value then
+          steps by one. Session-only state — see lib/discoveryFilterStorage. */}
+      <Sheet
+        visible={filterOpen}
+        onClose={() => setFilterOpen(false)}
+        title="Distance"
+      >
+        {radius !== undefined ? (
+          <View style={styles.filterSheetBody}>
+            <DistanceChips value={radius ?? null} onChange={selectRadius} />
+            <View style={styles.stepperRow}>
+              <Text style={styles.stepperLabel}>Custom</Text>
+              <View style={styles.stepper}>
+                <Pressable
+                  onPress={() =>
+                    selectRadius(
+                      radius == null ? 10 : clampDistanceFilterMiles(radius - 1)
+                    )
+                  }
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.stepperButton,
+                    pressed && styles.squirclePressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="One mile closer"
+                >
+                  <Ionicons name="remove" size={20} color={accent} />
+                </Pressable>
+                <Text style={styles.stepperValue} numberOfLines={1}>
+                  {distanceChipLabel(radius ?? null)}
+                </Text>
+                <Pressable
+                  onPress={() =>
+                    selectRadius(
+                      radius == null ? 10 : clampDistanceFilterMiles(radius + 1)
+                    )
+                  }
+                  hitSlop={8}
+                  style={({ pressed }) => [
+                    styles.stepperButton,
+                    pressed && styles.squirclePressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="One mile farther"
+                >
+                  <Ionicons name="add" size={20} color={accent} />
+                </Pressable>
+              </View>
+            </View>
+            {radiusUnavailable ? (
+              <Text style={styles.radiusNote}>
+                Location is off — showing all areas.
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+      </Sheet>
 
       {/* Worker discovery: the tapped pin's jobs as photo-first cards. Cards
           open the market job detail inside this same Map stack. */}
@@ -468,80 +498,87 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.surface,
   },
   squirclePressed: { opacity: 0.8 },
-  // The two cards master 33 floats over the map: one above it, one below.
-  cardWrap: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.md,
-    backgroundColor: colors.background,
+  // With a radius applied the control widens into a labeled pill so the
+  // header reads the active distance without opening the sheet.
+  squircleLabeled: {
+    width: undefined,
+    flexDirection: 'row',
+    gap: spacing.xs + 2,
+    paddingHorizontal: spacing.sm + 2,
   },
-  mapCard: {
-    gap: spacing.sm,
-    padding: spacing.lg - 2,
-    borderRadius: radius.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  cardEyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1.4,
+  squircleLabel: {
+    fontSize: 13,
+    fontWeight: '700',
     color: colors.gold,
   },
-  cardTitle: {
-    fontFamily: fonts.display,
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.ink,
-  },
-  footerRow: {
+  // The compact bottom row (2026-08-22): the page ground, no card slab.
+  footerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
+    minHeight: 44,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.xs,
+    backgroundColor: colors.background,
   },
-  footerCopy: { flex: 1, gap: 2 },
-  footerSub: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: colors.textMuted,
+  footerCount: {
+    flexShrink: 1,
+    fontFamily: fonts.display,
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.ink,
   },
-  listPill: {
+  listLink: {
     flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
     minHeight: 44,
-    paddingHorizontal: spacing.lg - 2,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.gold,
   },
-  listPillText: {
+  listLinkText: {
     fontFamily: fonts.display,
     fontSize: 16,
     fontWeight: '700',
     color: colors.gold,
   },
-  legend: {
-    flexGrow: 0,
-  },
-  legendContent: {
+  filterSheetBody: {
     gap: spacing.md,
   },
-  legendItem: {
+  stepperRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs + 2,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
-  legendDot: {
-    width: 12,
-    height: 12,
-    borderRadius: radius.pill,
-  },
-  legendLabel: {
-    fontSize: 12,
+  stepperLabel: {
+    fontSize: 15,
     fontWeight: '600',
+    color: colors.textMuted,
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+  },
+  stepperButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  stepperValue: {
+    minWidth: 96,
+    textAlign: 'center',
+    fontFamily: fonts.display,
+    fontSize: 17,
+    fontWeight: '700',
+    color: colors.ink,
   },
   mapWrap: {
     flex: 1,

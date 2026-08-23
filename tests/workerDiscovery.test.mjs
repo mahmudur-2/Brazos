@@ -167,31 +167,43 @@ test('[static] B1 · the shared props stay optional so the frozen web map ignore
 
 const discoveryFilterUrl = pathToFileURL(join(root, 'lib/discoveryFilter.ts')).href;
 const {
+  DISTANCE_FILTER_MAX,
+  DISTANCE_FILTER_MIN,
   DISTANCE_FILTER_OPTIONS,
-  coerceStoredDistanceFilter,
+  clampDistanceFilterMiles,
   distanceChipLabel,
   distanceFilterStorageKey,
-  encodeDistanceFilter,
+  isDistanceFilterMiles,
   formatDistanceMiles,
 } = await import(discoveryFilterUrl);
 
-test('B3 · storage round-trips every option, including Any', () => {
-  assert.equal(coerceStoredDistanceFilter(encodeDistanceFilter(null)), null);
+// 2026-08-22: the filter became SESSION-ONLY and gained a custom 1–50 mile
+// range. The wire codec went with the persistence; what the rules half owns
+// now is validation and clamping, executed here.
+
+test('B3 · every preset is a valid radius, and the custom bounds hold', () => {
+  assert.equal(DISTANCE_FILTER_MIN, 1);
+  assert.equal(DISTANCE_FILTER_MAX, 50);
   for (const option of DISTANCE_FILTER_OPTIONS) {
-    assert.equal(coerceStoredDistanceFilter(encodeDistanceFilter(option)), option);
+    assert.ok(isDistanceFilterMiles(option), `${option} must be a valid radius`);
   }
 });
 
-test('B3 · unrecognized stored values coerce to Any, never to a fake radius', () => {
-  assert.equal(coerceStoredDistanceFilter(null), null);
-  assert.equal(coerceStoredDistanceFilter(''), null);
-  assert.equal(coerceStoredDistanceFilter('7'), null);
-  assert.equal(coerceStoredDistanceFilter('NaN'), null);
-  assert.equal(coerceStoredDistanceFilter('25mi'), null);
-  assert.equal(coerceStoredDistanceFilter('-5'), null);
+test('B3 · validation allow-lists whole miles in range, never a fake radius', () => {
+  for (const good of [1, 2, 37, 50]) assert.ok(isDistanceFilterMiles(good));
+  for (const bad of [0, -5, 51, 2.5, NaN, Infinity, '5', null, undefined]) {
+    assert.ok(!isDistanceFilterMiles(bad), `${String(bad)} must not be a radius`);
+  }
+  // The stepper's clamp lands every step back inside the range, whole miles.
+  assert.equal(clampDistanceFilterMiles(0), 1);
+  assert.equal(clampDistanceFilterMiles(51), 50);
+  assert.equal(clampDistanceFilterMiles(9.6), 10);
+  assert.equal(clampDistanceFilterMiles(25), 25);
 });
 
-test('B3 · the storage key is per-account and versioned', () => {
+test('B3 · the retired storage key survives only as an eraser target', () => {
+  // Per-account and versioned, exactly as when it persisted — the cleanup
+  // must aim at the very key old builds wrote.
   assert.equal(distanceFilterStorageKey('u1'), 'brazos.discovery.distance.v1.u1');
   assert.notEqual(distanceFilterStorageKey('u1'), distanceFilterStorageKey('u2'));
 });
@@ -206,11 +218,18 @@ test('B3 · chip labels and distance formatting', () => {
   assert.equal(formatDistanceMiles(10), '10 mi away');
 });
 
-test('B3 · the storage half follows the modeStorage pattern: AsyncStorage, best-effort, per-account key', async () => {
+test('B3 · the state half is session-only: cold start is Any, and the one storage call is the eraser', async () => {
   const storage = stripComments(await read('lib/discoveryFilterStorage.ts'));
-  assert.match(storage, /@react-native-async-storage\/async-storage/);
+  // In-memory session state — a Map, no hydration from disk, so every cold
+  // start begins at Any by construction.
+  assert.match(storage, /const sessionFilter = new Map</);
+  assert.match(storage, /sessionFilter\.get\(userId\) \?\? null/);
+  assert.match(storage, /sessionFilter\.set\(userId, value\)/);
+  // NOTHING persists any more: the only AsyncStorage touch is the one-time
+  // removal of the retired key, best-effort, and no write path exists.
+  assert.match(storage, /AsyncStorage\.removeItem\(distanceFilterStorageKey\(userId\)\)/);
+  assert.doesNotMatch(storage, /setItem|getItem/);
   assert.doesNotMatch(storage, /SecureStore/i);
-  assert.match(storage, /distanceFilterStorageKey\(userId\)/);
   assert.match(storage, /catch/);
 });
 
@@ -241,6 +260,38 @@ test('[static] B2 · the no-photo state is the category-glyph tile, never stock 
   assert.match(card, /onError=\{\(\) => setImageFailed\(true\)\}/);
   // No remote placeholder/stock fallback URL anywhere in the card.
   assert.doesNotMatch(stripComments(card), /https?:\/\//);
+});
+
+test('[static] the Map screen structure holds: no header card, sheet-filtered, compact bottom row', async () => {
+  // 2026-08-22 restructure, each half pinned:
+  const map = stripComments(await read('screens/MapScreen.tsx'));
+  // 1. The "MAP DISCOVERY / Open jobs on the map" card is gone — the map
+  //    fills from under the title to the bottom row — and the tier legend
+  //    that rode in it went with it.
+  assert.doesNotMatch(map, /MAP DISCOVERY|Open jobs on the map|HOTSPOT_TIERS/);
+  // 2. The header's right control opens the distance sheet (it no longer
+  //    navigates) and carries the active distance as a label when a radius
+  //    is applied.
+  assert.match(map, /onPress=\{\(\) => setFilterOpen\(true\)\}/);
+  assert.match(map, /radius != null && styles\.squircleLabeled/);
+  assert.match(map, /\{`\$\{radius\} mi`\}/);
+  // 3. The sheet is the existing Sheet primitive holding the SAME preset
+  //    chips plus the custom stepper, each tap clamped to the 1–50 range and
+  //    applied immediately through the one selectRadius path.
+  assert.match(map, /<Sheet\s+visible=\{filterOpen\}/);
+  assert.match(map, /<DistanceChips value=\{radius \?\? null\} onChange=\{selectRadius\} \/>/);
+  assert.match(map, /clampDistanceFilterMiles\(radius - 1\)/);
+  assert.match(map, /clampDistanceFilterMiles\(radius \+ 1\)/);
+  // 4. The bottom row is one compact bar on the page ground — count left,
+  //    View list right — never the old card slab.
+  assert.match(map, /styles\.footerBar/);
+  assert.match(map, /styles\.footerCount/);
+  assert.doesNotMatch(map, /NEAR YOU|mapCard|cardEyebrow/);
+  assert.match(
+    map,
+    /footerBar: \{[^}]*backgroundColor: colors\.background/s,
+    'the bottom row sits on the page ground, not a surface slab'
+  );
 });
 
 test('[static] B3 · both discovery surfaces render the shared chips and persist through the one storage module', async () => {
