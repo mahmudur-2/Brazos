@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   FlatList,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -31,6 +30,7 @@ import { ReactionPicker } from '../components/ReactionPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversationChat } from '../hooks/useConversationChat';
+import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 import { useJob } from '../hooks/useJob';
 import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
@@ -101,6 +101,14 @@ export function ChatScreen() {
   // emerald(3): the floating pill's real footprint. The Messages thread was on
   // the device pass's list.
   const navClearance = useFloatingNavClearance();
+  // The composer column's rise, as a NATIVE-DRIVEN transform rather than the
+  // KeyboardAvoidingView padding it replaces. See hooks/useKeyboardOffset.ts
+  // for why padding could not be made smooth: it is a layout property, so
+  // every frame of the keyboard's rise re-ran Yoga over the whole column —
+  // list, cells, reply chip, composer — on the JS thread, competing with the
+  // FlatList's own windowing. The clearance is passed in so the column lands
+  // ON the keyboard instead of a nav-pill's height above it.
+  const keyboardRise = useKeyboardOffset(navClearance);
   // Chat is nested in more than one tab's stack, so its nav/route types are
   // declared standalone (ChatRouteParamList) rather than tied to one parent
   // stack — it only needs goBack() and its own params.
@@ -966,252 +974,267 @@ export function ChatScreen() {
           2026-08-10 — see docs/LOCKED_FILE_PATCHES.md). */}
       {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
-      {/* keyboardVerticalOffset is 0, not 90. With `behavior="padding"` RN
-          computes padding as (frameBottom - keyboardTop + offset), and this
-          view already ends at the screen bottom — so any non-zero offset is
-          added verbatim as dead space above the keyboard. The old 90 was the
-          gap that showed up whenever the keyboard opened. The header is a
-          sibling above this view, not an overlay, so nothing needs
-          compensating for. */}
-      <KeyboardAvoidingView
-        // emerald(3): the whole chat column clears the floating pill, not just
-        // the composer — the bottom-most element here is the composer, the
-        // locked notice or the blocked notice depending on state, and putting
-        // the clearance on the column covers all three rather than three
-        // places to forget. The bar does not hide on keyboard
-        // (tabBarHideOnKeyboard is off), so the pill is still there behind it.
-        style={[styles.flex, { paddingBottom: navClearance }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={0}
-      >
-        {loading || (threadsLoading && targets.length === 0) ? (
-          <View style={styles.center}>
-            <ActivityIndicator size="large" color={colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            // flex:1 is load-bearing, not cosmetic. Without it this list sizes
-            // to its CONTENT inside the composer column, so once the keyboard
-            // shrinks that column the list overflows and shoves the quick-reply
-            // row past the bottom edge — the chips getting sliced in half.
-            // contentContainerStyle's flexGrow only affects the inner content
-            // view, so it does not bound the scroller itself.
-            style={styles.list}
-            data={items}
-            keyExtractor={(entry) => entry.key}
-            renderItem={({ item: entry }) => {
-              // The job context changed here. Not a section header — the same
-              // job can head several of these when two conversations
-              // interleave, which is what actually happened.
-              if (entry.kind === 'divider') {
-                return (
-                  <View style={styles.jobDivider}>
-                    <View style={styles.jobDividerRule} />
-                    <Text style={styles.jobDividerLabel} numberOfLines={1}>
-                      {entry.title}
-                    </Text>
-                    <View style={styles.jobDividerRule} />
-                  </View>
-                );
-              }
-
-              const item = entry.message;
-              // A hire-request event renders as a negotiation card instead of
-              // an ordinary bubble — same thread, no separate screen.
-              const offerId = offerIdOf(item);
-              if (offerId) {
-                const request = requestsById[offerId];
-                const isOwn = item.sender_id === user?.id;
-                return (
-                  <View
-                    style={[
-                      styles.requestRow,
-                      isOwn ? styles.requestRowOwn : styles.requestRowOther,
-                    ]}
-                  >
-                    <OfferCard
-                      variant="thread"
-                      message={item}
-                      offer={request}
-                      chain={threadOffers.filter(
-                        (o) => o.root_offer_id === request?.root_offer_id
-                      )}
-                      job={request?.job ?? null}
-                      isLatest={latestMessageIdByRequest[offerId] === item.id}
-                      currentUserId={user?.id ?? ''}
-                      counterpartyName={counterparty?.full_name}
-                      busy={respondingId === offerId}
-                      onAccept={() =>
-                        request && setConfirmResponse({ request, action: 'accept' })
-                      }
-                      onDecline={() =>
-                        request && setConfirmResponse({ request, action: 'decline' })
-                      }
-                      onCounter={() => request && setCounterTarget(request)}
-                      onWithdraw={() =>
-                        request && setConfirmResponse({ request, action: 'withdraw' })
-                      }
-                      // Live and accepted offers alike lead to the job they
-                      // are about; offerJobTarget() is the single rule for
-                      // whether there is a destination and which one.
-                      onOpenJob={
-                        request && offerJobTarget(request, user?.id)
-                          ? () => openOfferJob(request)
-                          : undefined
-                      }
-                    />
-                  </View>
-                );
-              }
-
-              return (
-                <ChatBubble
-                  message={item}
-                  isOwn={item.sender_id === user?.id}
-                  senderName={counterparty?.full_name}
-                  senderAvatarUrl={counterparty?.avatar_url}
-                  reactions={reactionsByMessage[item.id]}
-                  // Nothing to react to or reply to on an already-unsent
-                  // placeholder.
-                  onLongPress={item.unsent_at ? undefined : () => setMenuTarget(item)}
-                  onPressImage={setViewerUri}
-                  replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
-                  replyToName={
-                    item.reply_to_id
-                      ? messagesById[item.reply_to_id]?.sender_id === user?.id
-                        ? 'You'
-                        : counterparty?.full_name ?? 'Them'
-                      : null
-                  }
-                  onLongPressAvatar={
-                    counterparty?.avatar_url
-                      ? () => setAvatarUri(counterparty.avatar_url!)
-                      : undefined
-                  }
-                />
-              );
-            }}
-            contentContainerStyle={styles.messages}
-            // A legacy jobId entry owns the initial scroll (see
-            // scrollTargetIndex) — sticking to the bottom here would undo it
-            // the moment an image finished measuring.
-            onContentSizeChange={() => {
-              if (scrollTargetIndex >= 0) return;
-              listRef.current?.scrollToEnd({ animated: false });
-            }}
-            onScrollToIndexFailed={({ index, averageItemLength }) => {
-              // Variable-height rows: the target may not be measured yet.
-              listRef.current?.scrollToOffset({
-                offset: index * averageItemLength,
-                animated: false,
-              });
-            }}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <View style={styles.emptyIcon}>
-                  <Ionicons name="chatbubbles-outline" size={28} color={colors.primary} />
-                </View>
-                <Text style={styles.emptyTitle}>Say hello</Text>
-                <Text style={styles.emptyText}>
-                  Messages and photos here are only visible to you and{' '}
-                  {counterparty?.full_name ?? 'the other person'}.
-                </Text>
-              </View>
-            }
-          />
-        )}
-
-        {isBlocked ? (
-          <View style={styles.blockedNotice}>
-            <Ionicons name="ban-outline" size={18} color={colors.danger} />
-            <Text style={styles.blockedText}>
-              {relation.blocking
-                ? "You've blocked this person. Unblock them from Messages to start talking again."
-                : "You can't reply to this conversation."}
-            </Text>
-          </View>
-        ) : messagingUnlocked !== true ? (
-          // Every free-form entry point at once — composer, send button, quick
-          // replies, camera, photo library and voice — rather than disabling
-          // them one by one and leaving the next one to be forgotten. The
-          // negotiation cards above stay fully interactive. While the answer
-          // is still unknown (null) nothing is offered, so a slow read can
-          // never flash a composer the server would refuse.
-          messagingUnlocked === false ? (
-            <View style={styles.lockedNotice}>
-              <Ionicons
-                name="lock-closed-outline"
-                size={18}
-                color={colors.textMuted}
-              />
-              <Text style={styles.lockedText}>{MESSAGING_LOCKED_MESSAGE}</Text>
+      {/* THE CLIP. It does not move, and it is what stops the translated
+          column from riding up OVER the header — a transform draws outside its
+          parent's box unless the parent clips, and this column is a LATER
+          sibling than the header, so it would paint on top of it. `overflow`
+          here is load-bearing, not tidiness. */}
+      <View style={styles.keyboardClip}>
+        {/* 2026-08-23 — THE COMPOSER RISES ON A TRANSFORM.
+            KeyboardAvoidingView's `behavior="padding"` is retired here: see
+            hooks/useKeyboardOffset.ts for the root cause. The visual result is
+            identical and the mechanism is not — no relayout, no measurement,
+            and the interpolation runs on the UI thread, so the rise holds its
+            frame budget while JS is busy with exactly the work the keyboard
+            appearing tends to trigger.
+            The keyboardVerticalOffset note the padding version carried is void
+            with it: there is no frame arithmetic left to get wrong. */}
+        <Animated.View
+          // emerald(3): the whole chat column clears the floating pill, not just
+          // the composer — the bottom-most element here is the composer, the
+          // locked notice or the blocked notice depending on state, and putting
+          // the clearance on the column covers all three rather than three
+          // places to forget. The bar does not hide on keyboard
+          // (tabBarHideOnKeyboard is off), so the pill is still there behind it.
+          //
+          // ...and the rise SUBTRACTS that clearance, because the keyboard
+          // covers the pill completely once it is up. That dead band above the
+          // keyboard is a bug the padding version always had.
+          style={[
+            styles.flex,
+            { paddingBottom: navClearance },
+            { transform: [{ translateY: Animated.multiply(keyboardRise, -1) }] },
+          ]}
+        >
+          {loading || (threadsLoading && targets.length === 0) ? (
+            <View style={styles.center}>
+              <ActivityIndicator size="large" color={colors.primary} />
             </View>
-          ) : null
-        ) : (
-          <>
-            {/* The templates are about work in progress — "On my way",
-                "Running late", "When can you start?". They are only true of a
-                job thread with a live job, so on the pair thread there are no
-                quick replies at all rather than a second set invented to fill
-                the row. */}
-            {!isSelfConversation && !replyTo && !!activeJob && (
-              <QuickReplies onSelect={handleTemplate} disabled={sending} />
-            )}
+          ) : (
+            <FlatList
+              ref={listRef}
+              // flex:1 is load-bearing, not cosmetic. Without it this list sizes
+              // to its CONTENT inside the composer column, so once the keyboard
+              // shrinks that column the list overflows and shoves the quick-reply
+              // row past the bottom edge — the chips getting sliced in half.
+              // contentContainerStyle's flexGrow only affects the inner content
+              // view, so it does not bound the scroller itself.
+              style={styles.list}
+              data={items}
+              keyExtractor={(entry) => entry.key}
+              renderItem={({ item: entry }) => {
+                // The job context changed here. Not a section header — the same
+                // job can head several of these when two conversations
+                // interleave, which is what actually happened.
+                if (entry.kind === 'divider') {
+                  return (
+                    <View style={styles.jobDivider}>
+                      <View style={styles.jobDividerRule} />
+                      <Text style={styles.jobDividerLabel} numberOfLines={1}>
+                        {entry.title}
+                      </Text>
+                      <View style={styles.jobDividerRule} />
+                    </View>
+                  );
+                }
 
-            {/* Quoted-reply chip: what you're replying to, above the input,
-                with a way to back out — same as WhatsApp. */}
-            {replyTo && recorder.phase === 'idle' && (
-              <View style={styles.replyBar}>
-                <View style={styles.replyAccent} />
-                <View style={styles.replyBody}>
-                  <Text style={styles.replyName} numberOfLines={1}>
-                    Replying to{' '}
-                    {replyTo.sender_id === user?.id
-                      ? 'yourself'
-                      : counterparty?.full_name ?? 'them'}
-                  </Text>
-                  <Text style={styles.replyText} numberOfLines={1}>
-                    {messagePreviewText(replyTo)}
+                const item = entry.message;
+                // A hire-request event renders as a negotiation card instead of
+                // an ordinary bubble — same thread, no separate screen.
+                const offerId = offerIdOf(item);
+                if (offerId) {
+                  const request = requestsById[offerId];
+                  const isOwn = item.sender_id === user?.id;
+                  return (
+                    <View
+                      style={[
+                        styles.requestRow,
+                        isOwn ? styles.requestRowOwn : styles.requestRowOther,
+                      ]}
+                    >
+                      <OfferCard
+                        variant="thread"
+                        message={item}
+                        offer={request}
+                        chain={threadOffers.filter(
+                          (o) => o.root_offer_id === request?.root_offer_id
+                        )}
+                        job={request?.job ?? null}
+                        isLatest={latestMessageIdByRequest[offerId] === item.id}
+                        currentUserId={user?.id ?? ''}
+                        counterpartyName={counterparty?.full_name}
+                        busy={respondingId === offerId}
+                        onAccept={() =>
+                          request && setConfirmResponse({ request, action: 'accept' })
+                        }
+                        onDecline={() =>
+                          request && setConfirmResponse({ request, action: 'decline' })
+                        }
+                        onCounter={() => request && setCounterTarget(request)}
+                        onWithdraw={() =>
+                          request && setConfirmResponse({ request, action: 'withdraw' })
+                        }
+                        // Live and accepted offers alike lead to the job they
+                        // are about; offerJobTarget() is the single rule for
+                        // whether there is a destination and which one.
+                        onOpenJob={
+                          request && offerJobTarget(request, user?.id)
+                            ? () => openOfferJob(request)
+                            : undefined
+                        }
+                      />
+                    </View>
+                  );
+                }
+
+                return (
+                  <ChatBubble
+                    message={item}
+                    isOwn={item.sender_id === user?.id}
+                    senderName={counterparty?.full_name}
+                    senderAvatarUrl={counterparty?.avatar_url}
+                    reactions={reactionsByMessage[item.id]}
+                    // Nothing to react to or reply to on an already-unsent
+                    // placeholder.
+                    onLongPress={item.unsent_at ? undefined : () => setMenuTarget(item)}
+                    onPressImage={setViewerUri}
+                    replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
+                    replyToName={
+                      item.reply_to_id
+                        ? messagesById[item.reply_to_id]?.sender_id === user?.id
+                          ? 'You'
+                          : counterparty?.full_name ?? 'Them'
+                        : null
+                    }
+                    onLongPressAvatar={
+                      counterparty?.avatar_url
+                        ? () => setAvatarUri(counterparty.avatar_url!)
+                        : undefined
+                    }
+                  />
+                );
+              }}
+              contentContainerStyle={styles.messages}
+              // A legacy jobId entry owns the initial scroll (see
+              // scrollTargetIndex) — sticking to the bottom here would undo it
+              // the moment an image finished measuring.
+              onContentSizeChange={() => {
+                if (scrollTargetIndex >= 0) return;
+                listRef.current?.scrollToEnd({ animated: false });
+              }}
+              onScrollToIndexFailed={({ index, averageItemLength }) => {
+                // Variable-height rows: the target may not be measured yet.
+                listRef.current?.scrollToOffset({
+                  offset: index * averageItemLength,
+                  animated: false,
+                });
+              }}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.empty}>
+                  <View style={styles.emptyIcon}>
+                    <Ionicons name="chatbubbles-outline" size={28} color={colors.primary} />
+                  </View>
+                  <Text style={styles.emptyTitle}>Say hello</Text>
+                  <Text style={styles.emptyText}>
+                    Messages and photos here are only visible to you and{' '}
+                    {counterparty?.full_name ?? 'the other person'}.
                   </Text>
                 </View>
-                {replyTo.image_url ? (
-                  <Image source={{ uri: replyTo.image_url }} style={styles.replyThumb} />
-                ) : null}
-                <Pressable
-                  onPress={() => setReplyTo(null)}
-                  hitSlop={10}
-                  accessibilityLabel="Cancel reply"
-                >
-                  <Ionicons name="close" size={18} color={colors.textMuted} />
-                </Pressable>
-              </View>
-            )}
-
-            <ChatComposer
-              text={text}
-              onChangeText={setText}
-              onSend={handleSendText}
-              sending={sending}
-              onPickCamera={pickFromCamera}
-              onPickLibrary={pickFromLibrary}
-              recorderPhase={recorder.phase}
-              recorderDurationMs={recorder.durationMs}
-              previewUri={recorder.previewUri}
-              onMicTap={handleMicTap}
-              onStopRecording={handleStopRecording}
-              onSendVoice={handleSendVoice}
-              onDiscardVoice={recorder.discard}
-              // Whether the RESOLVED send target is job-scoped, not which
-              // route opened the screen: chat media is stored under
-              // `{jobId}/{userId}/…` and the pair thread has no job id to key
-              // a path on.
-              allowAttachments={!!sendJobId}
+              }
             />
-          </>
-        )}
-      </KeyboardAvoidingView>
+          )}
+
+          {isBlocked ? (
+            <View style={styles.blockedNotice}>
+              <Ionicons name="ban-outline" size={18} color={colors.danger} />
+              <Text style={styles.blockedText}>
+                {relation.blocking
+                  ? "You've blocked this person. Unblock them from Messages to start talking again."
+                  : "You can't reply to this conversation."}
+              </Text>
+            </View>
+          ) : messagingUnlocked !== true ? (
+            // Every free-form entry point at once — composer, send button, quick
+            // replies, camera, photo library and voice — rather than disabling
+            // them one by one and leaving the next one to be forgotten. The
+            // negotiation cards above stay fully interactive. While the answer
+            // is still unknown (null) nothing is offered, so a slow read can
+            // never flash a composer the server would refuse.
+            messagingUnlocked === false ? (
+              <View style={styles.lockedNotice}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={18}
+                  color={colors.textMuted}
+                />
+                <Text style={styles.lockedText}>{MESSAGING_LOCKED_MESSAGE}</Text>
+              </View>
+            ) : null
+          ) : (
+            <>
+              {/* The templates are about work in progress — "On my way",
+                  "Running late", "When can you start?". They are only true of a
+                  job thread with a live job, so on the pair thread there are no
+                  quick replies at all rather than a second set invented to fill
+                  the row. */}
+              {!isSelfConversation && !replyTo && !!activeJob && (
+                <QuickReplies onSelect={handleTemplate} disabled={sending} />
+              )}
+
+              {/* Quoted-reply chip: what you're replying to, above the input,
+                  with a way to back out — same as WhatsApp. */}
+              {replyTo && recorder.phase === 'idle' && (
+                <View style={styles.replyBar}>
+                  <View style={styles.replyAccent} />
+                  <View style={styles.replyBody}>
+                    <Text style={styles.replyName} numberOfLines={1}>
+                      Replying to{' '}
+                      {replyTo.sender_id === user?.id
+                        ? 'yourself'
+                        : counterparty?.full_name ?? 'them'}
+                    </Text>
+                    <Text style={styles.replyText} numberOfLines={1}>
+                      {messagePreviewText(replyTo)}
+                    </Text>
+                  </View>
+                  {replyTo.image_url ? (
+                    <Image source={{ uri: replyTo.image_url }} style={styles.replyThumb} />
+                  ) : null}
+                  <Pressable
+                    onPress={() => setReplyTo(null)}
+                    hitSlop={10}
+                    accessibilityLabel="Cancel reply"
+                  >
+                    <Ionicons name="close" size={18} color={colors.textMuted} />
+                  </Pressable>
+                </View>
+              )}
+
+              <ChatComposer
+                text={text}
+                onChangeText={setText}
+                onSend={handleSendText}
+                sending={sending}
+                onPickCamera={pickFromCamera}
+                onPickLibrary={pickFromLibrary}
+                recorderPhase={recorder.phase}
+                recorderDurationMs={recorder.durationMs}
+                previewUri={recorder.previewUri}
+                onMicTap={handleMicTap}
+                onStopRecording={handleStopRecording}
+                onSendVoice={handleSendVoice}
+                onDiscardVoice={recorder.discard}
+                // Whether the RESOLVED send target is job-scoped, not which
+                // route opened the screen: chat media is stored under
+                // `{jobId}/{userId}/…` and the pair thread has no job id to key
+                // a path on.
+                allowAttachments={!!sendJobId}
+              />
+            </>
+          )}
+        </Animated.View>
+      </View>
 
       <ReactionPicker
         visible={!!reactionTarget}
@@ -1309,6 +1332,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   flex: {
     flex: 1,
+  },
+  // The stationary frame the rising column is clipped to. Its bounds end
+  // where the header ends, so a column translated up by the keyboard's height
+  // disappears under the header instead of painting over it.
+  keyboardClip: {
+    flex: 1,
+    overflow: 'hidden',
   },
   center: {
     flex: 1,

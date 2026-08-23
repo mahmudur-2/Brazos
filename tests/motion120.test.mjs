@@ -209,6 +209,99 @@ test('[static] MotionRoot is a Fragment without gesture-handler, and App wraps i
   assert.match(app, /<\/SafeAreaProvider>\s*<\/MotionRoot>/);
 });
 
+// ---------------------------------------------------------------------------
+// THE JANK SWEEP — 2026-08-23, and the property it locks is a NEGATIVE one.
+//
+// tests/motionDriver.test.mjs already pins that every driver value in the tree
+// is one of lib/motion.ts's two constants and that no call site spells a
+// literal. What it does NOT ask is how many animations are on the JS driver
+// and WHY, or whether a layout-property animation has crept in by another
+// route. Those are the two ways this app can get slow again, so they are the
+// two things asserted here — a green re-statement of the driver fence would
+// add nothing.
+// ---------------------------------------------------------------------------
+
+/**
+ * The ONLY animations in the tree permitted off the native driver, and the
+ * reason each is there. Both interpolate a COLOUR, which the native animated
+ * module cannot drive on ANY platform — that is what `JS_DRIVER` names at the
+ * call site (lib/motion.ts's docblock states the rule).
+ *
+ * A new entry here is a claim that something else cannot be driven natively.
+ * Transform and opacity always can, so that claim is almost always wrong.
+ */
+const JS_DRIVER_SITES = new Map([
+  ['components/AuthField.tsx', 'the field hairline interpolating between palette colours on focus'],
+  ['components/PhoneNumberInput.tsx', 'the same hairline on the phone field'],
+]);
+
+test('[static] JS-driven motion is colour-only, and no layout animation exists at all', () => {
+  const files = appSources();
+  const jsDriven = [];
+  const layoutAnimations = [];
+  for (const path of files) {
+    const source = stripComments(read(path));
+    if (/useNativeDriver:\s*JS_DRIVER/.test(source)) jsDriven.push(path);
+    // LayoutAnimation is the other way to animate layout: it is global, it is
+    // uninterruptible, and on iOS it takes the whole screen's next relayout
+    // with it. There is none in this tree and there must not be one.
+    if (/\bLayoutAnimation\b/.test(source)) layoutAnimations.push(path);
+  }
+  assert.deepEqual(layoutAnimations, [], 'animate a transform, not the layout');
+  assert.deepEqual(
+    jsDriven.sort(),
+    [...JS_DRIVER_SITES.keys()].sort(),
+    'a JS-driven animation appeared or moved — record it above with the property that forces it, or drive it natively'
+  );
+  // Each recorded site must still be interpolating a COLOUR. A JS-driven
+  // animation that has stopped being a colour has stopped having its excuse.
+  for (const [path] of JS_DRIVER_SITES) {
+    const source = stripComments(read(path));
+    assert.match(
+      source,
+      /[Cc]olor\s*=[\s\S]{0,240}?\.interpolate\(/,
+      `${path} is on the JS driver but is not interpolating a colour any more`
+    );
+  }
+});
+
+test('[static] the chat composer rises on a native-driven transform, not on padding', () => {
+  const chat = stripComments(read('screens/ChatScreen.tsx'));
+  const hook = stripComments(read('hooks/useKeyboardOffset.ts'));
+
+  // THE ROOT CAUSE, closed. `behavior="padding"` animates a LAYOUT property:
+  // every frame re-runs Yoga over the message list, its cells, the reply chip
+  // and the composer, on the JS thread, and none of it can reach the native
+  // animated module. It cannot be tuned smooth, so it is gone from this
+  // screen — replaced, not merely removed.
+  assert.doesNotMatch(chat, /KeyboardAvoidingView/, 'the padding path must not come back to chat');
+  assert.match(chat, /const keyboardRise = useKeyboardOffset\(navClearance\);/);
+  assert.match(
+    chat,
+    /transform: \[\{ translateY: Animated\.multiply\(keyboardRise, -1\) \}\]/,
+    'the column must rise on a transform — the one thing the native driver can carry'
+  );
+  // The clip is load-bearing: a transformed child draws outside its parent's
+  // box, and this column is a LATER sibling than the header, so without it
+  // the messages paint over the header as they rise.
+  assert.match(chat, /keyboardClip:\s*\{\s*flex: 1,\s*overflow: 'hidden',/);
+  assert.match(chat, /<View style=\{styles\.keyboardClip\}>/);
+
+  // THE HOOK. Native driver through the shared constant; the SYSTEM's own
+  // duration so the column and the keyboard read as one object; the WILL
+  // events on iOS, which fire before the keyboard moves; and the inset
+  // subtracted and clamped, which is what closes the dead band above the
+  // keyboard that the padding version always had.
+  assert.match(hook, /useNativeDriver: USE_NATIVE_DRIVER/);
+  assert.match(hook, /duration: event\?\.duration && event\.duration > 0 \? event\.duration : KEYBOARD_FALLBACK_MS/);
+  assert.match(hook, /Platform\.OS === 'ios' \? 'keyboardWillShow' : 'keyboardDidShow'/);
+  assert.match(hook, /Platform\.OS === 'ios' \? 'keyboardWillHide' : 'keyboardDidHide'/);
+  assert.match(hook, /Math\.max\(0, event\.endCoordinates\.height - inset\.current\)/);
+  // Listeners are removed. A keyboard listener that outlives its screen drives
+  // an Animated.Value nothing is rendering.
+  assert.match(hook, /show\.remove\(\);\s*hide\.remove\(\);/);
+});
+
 test('[static] every feature flag is false and carries the dependency it waits on', () => {
   // M2's contract: the UI behind a flag is BUILT, and the flag is what keeps
   // it from being offered. A flag with no recorded dependency is a flag
