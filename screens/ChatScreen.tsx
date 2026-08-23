@@ -61,9 +61,14 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
-import { MUTE } from '../lib/featureFlags';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
-import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
+import {
+  EMPTY_RELATION,
+  fetchRelation,
+  muteUser,
+  unmuteUser,
+  type RelationState,
+} from '../lib/moderation';
 import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
 import { shareProfileLink } from '../lib/sharing';
 import { useMode } from '../modes';
@@ -573,6 +578,34 @@ export function ChatScreen() {
     }
   }
 
+  /**
+   * MUTE IS LIVE, not flagged.
+   *
+   * The overnight dispatch expected this to wait on a per-conversation mute
+   * row. It does not: `mutes` has shipped since phase13 and the inbox row has
+   * been calling muteUser/unmuteUser all along — and a conversation in BRAZOS
+   * IS a person (the inbox is keyed by counterparty), so per-user and
+   * per-conversation mute are the same feature here. `relation` already
+   * carries the current state, so the menu row can say which way it toggles.
+   */
+  async function toggleMute() {
+    if (!user || !counterpartyId) return;
+    const { error: muteError } = relation.muted
+      ? await unmuteUser(user.id, counterpartyId)
+      : await muteUser(user.id, counterpartyId);
+    if (muteError) {
+      await alertAsync(
+        relation.muted ? 'Could not unmute' : 'Could not mute',
+        userMessage(muteError)
+      );
+      return;
+    }
+    // Re-read rather than assuming: the same relation carries the block state
+    // the composer gate reads, and a locally-flipped copy of it could disagree
+    // with the server about more than mute.
+    if (user && counterpartyId) setRelation(await fetchRelation(user.id, counterpartyId));
+  }
+
   async function handleShareProfile() {
     if (!counterpartyId) return;
     const result = await shareProfileLink(counterpartyId, counterparty?.full_name);
@@ -613,6 +646,13 @@ export function ChatScreen() {
    * message long-press sheet and the inbox row, and a third entry point for
    * the same two actions is three places to keep in step.
    */
+  const muteMenuItem: DropMenuItem = {
+    key: 'mute',
+    label: relation.muted ? 'Unmute' : 'Mute',
+    icon: relation.muted ? 'notifications' : 'notifications-off-outline',
+    onPress: () => void toggleMute(),
+  };
+
   const headerMenuItems: DropMenuItem[] = [];
   if (counterparty && !isSelfConversation) {
     if (mode === 'customer') {
@@ -652,9 +692,7 @@ export function ChatScreen() {
           onPress: () => void toggleSavedWorker(),
         });
       }
-      if (MUTE) {
-        headerMenuItems.push({ key: 'mute', label: 'Mute', icon: 'notifications-off-outline', onPress: () => {} });
-      }
+      headerMenuItems.push(muteMenuItem);
       headerMenuItems.push({
         key: 'share-profile',
         label: 'Share Profile',
@@ -674,9 +712,7 @@ export function ChatScreen() {
         icon: 'star-outline',
         onPress: openCounterpartyReviews,
       });
-      if (MUTE) {
-        headerMenuItems.push({ key: 'mute', label: 'Mute', icon: 'notifications-off-outline', onPress: () => {} });
-      }
+      headerMenuItems.push(muteMenuItem);
     }
   }
 

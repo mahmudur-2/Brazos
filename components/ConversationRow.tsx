@@ -30,6 +30,10 @@ type ConversationRowProps = {
    *  from onLongPress above (the row's own long-press opens the moderation
    *  menu); the two are independent nested Pressables. */
   onLongPressAvatar?: () => void;
+  /** How this build reveals the row's actions. Passed in rather than derived
+   *  here because the MECHANIC depends on the binary's gesture capability and
+   *  the row must not have an opinion about that (2026-08-23). */
+  accessibilityHint?: string;
 };
 
 export function ConversationRow({
@@ -45,6 +49,7 @@ export function ConversationRow({
   onPress,
   onLongPress,
   onLongPressAvatar,
+  accessibilityHint,
 }: ConversationRowProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -52,6 +57,7 @@ export function ConversationRow({
     <Card
       onPress={onPress}
       onLongPress={onLongPress}
+      accessibilityHint={accessibilityHint}
       style={[
         unread && !isDark && styles.unreadCard,
         awaitingRequest && styles.awaitingCard,

@@ -18,6 +18,10 @@ type CardProps = PropsWithChildren<{
   style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   onLongPress?: () => void;
+  /** What a pressable card can DO, for a screen reader. A long-press is
+   *  invisible without one — there is nothing on screen that says the gesture
+   *  exists. Ignored on a card with no press handler at all. */
+  accessibilityHint?: string;
   /** Overrides surface/border colors, e.g. for the Map tab's dark mode. Defaults to the light palette. */
   palette?: ColorPalette;
 }>;
@@ -27,6 +31,7 @@ export function Card({
   style,
   onPress,
   onLongPress,
+  accessibilityHint,
   palette: paletteProp,
 }: CardProps) {
   const { palette: colors } = useThemeColors();
@@ -41,6 +46,7 @@ export function Card({
       <Pressable
         onPress={onPress}
         onLongPress={onLongPress}
+        accessibilityHint={accessibilityHint}
         delayLongPress={350}
         style={({ pressed }) => [
           styles.card,

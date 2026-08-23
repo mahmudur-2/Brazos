@@ -308,16 +308,22 @@ test('[static] every feature flag is false and carries the dependency it waits o
   // nobody can ever safely flip, so the WAITS ON line is part of the flag.
   const source = read('lib/featureFlags.ts');
   const flags = [...source.matchAll(/export const (\w+) = (false|true) as boolean;/g)];
-  assert.equal(flags.length, 12, `the roster is twelve flags (saw ${flags.length})`);
+  assert.equal(flags.length, 11, `the roster is eleven flags (saw ${flags.length})`);
   assert.deepEqual(
     flags.map((f) => f[1]).sort(),
     [
       'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'DELIVERED_TICKS', 'DOCUMENTS',
-      'HIDDEN_CHATS', 'LIVE_LOCATION', 'MARK_UNREAD', 'MUTE', 'READ_TICKS',
+      'HIDDEN_CHATS', 'LIVE_LOCATION', 'MARK_UNREAD', 'READ_TICKS',
       'TIMED_BLOCK', 'TRANSLATION',
     ],
     'the flag roster changed — say so in HANDOFF.md as well as here'
   );
+  // MUTE was REMOVED from this table (2026-08-23) rather than shipped false:
+  // it had no unmet dependency to record, because `mutes` and
+  // muteUser/unmuteUser already exist and are already wired. A flag with
+  // nothing to wait on is a flag nobody can ever safely flip.
+  assert.doesNotMatch(source, /export const MUTE\b/);
+  assert.match(source, /NOT A FLAG — MUTE WAS RETIRED/);
   for (const [, name, value] of flags) {
     assert.equal(value, 'false', `${name} is live — flip it here only once its dependency has landed`);
     const doc = source.slice(0, source.indexOf(`export const ${name}`));

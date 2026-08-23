@@ -44,6 +44,7 @@ const CHAT = 'screens/ChatScreen.tsx';
 const meter = await import('../lib/audioMeter.ts');
 const ticks = await import('../lib/messageTicks.ts');
 const webRoute = await import('../lib/webRoute.ts');
+const inbox = await import('../lib/inboxFilters.ts');
 
 test('[static] the composer is three zones, and every glyph is bare', () => {
   const flat = flatten(read(COMPOSER));
@@ -338,10 +339,18 @@ test('[static] the overflow menu is MODE-shaped, and perspective comes from Mode
   }
   assert.doesNotMatch(worker, /key: 'save-worker'|key: 'hire-again'|key: 'share-profile'/);
 
-  // Mute is BUILT and flag-gated in both, so it appears the day its row
-  // exists and not before.
-  assert.equal((chat.match(/if \(MUTE\) \{/g) ?? []).length, 2);
-  assert.match(chat, /import \{ MUTE \} from '\.\.\/lib\/featureFlags';/);
+  // MUTE IS LIVE IN BOTH MENUS, not flagged. The dispatch expected a flag; the
+  // repo already had `mutes` (phase13) and lib/moderation's muteUser/unmuteUser
+  // wired into the inbox, and a conversation in BRAZOS IS a person — the inbox
+  // is keyed by counterparty — so per-user and per-conversation mute are the
+  // same feature. Flagging it would have hidden working behaviour.
+  assert.equal((chat.match(/headerMenuItems\.push\(muteMenuItem\);/g) ?? []).length, 2);
+  assert.match(chat, /label: relation\.muted \? 'Unmute' : 'Mute'/);
+  assert.match(chat, /await unmuteUser\(user\.id, counterpartyId\)/);
+  assert.match(chat, /await muteUser\(user\.id, counterpartyId\)/);
+  // ...and it re-reads rather than flipping a local copy: the same relation
+  // carries the block state the composer gate reads.
+  assert.match(chat, /setRelation\(await fetchRelation\(user\.id, counterpartyId\)\)/);
 
   // Nothing was extracted or duplicated for Save: lib/savedWorkers was
   // already shared, and this calls it directly — with a rollback.
@@ -541,6 +550,91 @@ test('[static] the public page is honest about what an anonymous visitor can see
   assert.match(page, /'Deleted user'/);
   // Read through the EXISTING public read, not a new one.
   assert.match(page, /import \{ fetchProfileById, type Profile \} from '\.\.\/lib\/profiles';/);
+});
+
+// ---------------------------------------------------------------------------
+// THE INBOX — five pills, one action model, two entry mechanics.
+// ---------------------------------------------------------------------------
+
+test('[executed] two pills filter live state and three are honestly empty', () => {
+  const rows = [
+    { key: 'a', unread: true, awaitingRequest: false },
+    { key: 'b', unread: false, awaitingRequest: true },
+    { key: 'c', unread: false, awaitingRequest: false },
+    { key: 'd', unread: true, awaitingRequest: true },
+  ];
+
+  assert.deepEqual(inbox.filterRows(rows, 'all').map((r) => r.key), ['a', 'b', 'c', 'd']);
+  assert.deepEqual(inbox.filterRows(rows, 'unread').map((r) => r.key), ['a', 'd']);
+  assert.deepEqual(inbox.filterRows(rows, 'requests').map((r) => r.key), ['b', 'd']);
+  // Nothing can be archived and there is no support conversation, so these
+  // return NOTHING rather than quietly falling through to everything — which
+  // is the failure mode a default case invites.
+  assert.deepEqual(inbox.filterRows(rows, 'archived'), []);
+  assert.deepEqual(inbox.filterRows(rows, 'support'), []);
+  // 'all' preserves the order the inbox already built; the pills are a VIEW,
+  // never a re-sort and never a second fetch.
+  assert.deepEqual(inbox.filterRows(rows, 'all'), rows);
+
+  // Five pills, in order, with the labels the dispatch named.
+  assert.deepEqual(
+    inbox.INBOX_FILTERS.map((p) => p.key),
+    ['all', 'unread', 'archived', 'requests', 'support']
+  );
+  assert.deepEqual(
+    inbox.INBOX_FILTERS.map((p) => p.label),
+    ['All', 'Unread', 'Archived', 'Requests', 'Support']
+  );
+});
+
+test('[executed] every pill has its OWN empty state, and each one is true', () => {
+  // "No messages yet" under the Archived pill would be a different and untrue
+  // statement, which is why this is per-filter rather than one shared line.
+  const seen = new Set();
+  for (const { key } of inbox.INBOX_FILTERS) {
+    const state = inbox.emptyStateFor(key);
+    assert.ok(state.title && state.body, `${key} needs a title and a body`);
+    assert.ok(!seen.has(state.title), `${key} must not reuse another pill's empty title`);
+    seen.add(state.title);
+  }
+  assert.equal(inbox.emptyStateFor('archived').title, 'Nothing archived yet');
+  assert.equal(inbox.emptyStateFor('requests').title, 'No requests yet');
+  assert.equal(inbox.emptyStateFor('support').title, 'Support coming soon');
+});
+
+test('[static] one action model, two entry mechanics, and no empty second sheet', () => {
+  const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
+
+  // The pills are a VIEW over the rows already built.
+  assert.match(screen, /const visibleRows = useMemo\(\(\) => filterRows\(rows, filter\), \[rows, filter\]\);/);
+  assert.match(screen, /data=\{visibleRows\}/);
+  assert.match(screen, /emptyStateFor\(filter\)\.title/);
+
+  // MUTE IS LIVE and always was — `mutes` has shipped since phase13. It is not
+  // flagged, and flagging it would have hidden working behaviour.
+  assert.match(screen, /label: sheetTarget\.muted \? 'Unmute' : 'Mute'/);
+  assert.doesNotMatch(screen, /\bMUTE\b/, 'the retired MUTE flag must not come back');
+
+  // The PERMANENT block stays exactly where it lives today, in the first
+  // sheet. The timed variant is a separate, flagged row so shipping it cannot
+  // quietly change what the existing one does.
+  assert.match(screen, /key: 'block',\s*label: sheetTarget\.blocking \? 'Unblock' : 'Block'/);
+  assert.match(screen, /if \(TIMED_BLOCK\) \{/);
+  assert.match(screen, /key: 'block-timed'/);
+
+  // MORE renders only if it would have something in it — an empty second
+  // sheet behind a visible button is the dead control this repo refuses.
+  assert.match(screen, /\.\.\.\(moreItems\.length > 0/);
+  for (const flag of ['MARK_UNREAD', 'CLEAR_CHAT', 'HIDDEN_CHATS', 'ARCHIVE', 'DELETE_CHAT']) {
+    assert.ok(screen.includes(`if (${flag}) {`), `More must carry a ${flag} row`);
+  }
+
+  // The MECHANIC is capability-chosen; the ACTIONS are not. An action
+  // reachable by one mechanic and not the other would be two apps.
+  assert.match(screen, /import \{ canSwipe \} from '\.\.\/lib\/motion120';/);
+  assert.match(screen, /const rowActionHint = canSwipe\(\)/);
+  assert.match(screen, /'Press and hold for mute, block, report and more'/);
+  assert.match(screen, /accessibilityHint=\{item\.isSelf \? undefined : rowActionHint\}/);
 });
 
 test('[static] the quick-reply row and its templates are gone from the whole tree', () => {

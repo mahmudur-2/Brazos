@@ -47,15 +47,19 @@ export const LIVE_LOCATION = false as boolean;
  */
 export const DOCUMENTS = false as boolean;
 
-/**
- * Muting a conversation's notifications.
- *
- * WAITS ON: a per-conversation mute row (conversation, user, muted_until) and
- * a read of it in the notification fan-out. Both the chat overflow menu and
- * the inbox row action carry the entry already.
- */
-export const MUTE = false as boolean;
-
+// NOT A FLAG — MUTE WAS RETIRED FROM THIS TABLE ON 2026-08-23, before it ever
+// gated anything, because it had no unmet dependency to record and this table
+// admits nothing that cannot name one.
+//
+// The overnight dispatch specified Mute as flag-gated in both the inbox row and
+// the chat overflow menu. Measured against the repo, that premise is wrong:
+// `mutes` has existed since supabase/phase13_moderation_photos_location.sql,
+// lib/moderation.ts's muteUser/unmuteUser are live, and the inbox long-press
+// sheet has been calling them all along. And a conversation in BRAZOS IS a
+// person — the inbox rows are keyed by counterparty, not by thread — so the
+// per-conversation mute the dispatch described and the per-user mute that
+// already ships are the same feature. Flagging it would have HIDDEN working
+// behaviour. The chat menu's Mute is wired to the same two calls instead.
 /**
  * Blocking someone FOR A PERIOD rather than permanently.
  *

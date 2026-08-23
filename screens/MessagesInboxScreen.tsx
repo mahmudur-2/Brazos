@@ -2,7 +2,9 @@ import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
+  Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -40,7 +42,23 @@ import {
 } from '../lib/moderation';
 import type { MessagesStackNavigation } from '../lib/navigation';
 import {
+  ARCHIVE,
+  CLEAR_CHAT,
+  DELETE_CHAT,
+  HIDDEN_CHATS,
+  MARK_UNREAD,
+  TIMED_BLOCK,
+} from '../lib/featureFlags';
+import { canSwipe } from '../lib/motion120';
+import {
+  INBOX_FILTERS,
+  emptyStateFor,
+  filterRows,
+  type InboxFilter,
+} from '../lib/inboxFilters';
+import {
   fonts,
+  radius,
   spacing,
   themedStyles,
   useThemeColors,
@@ -73,7 +91,12 @@ export function MessagesInboxScreen() {
   } = useConversations();
   const [refreshing, setRefreshing] = useState(false);
   const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
+  const [moreTarget, setMoreTarget] = useState<SheetTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
+  // Session-only, deliberately. Which slice of your own inbox you were last
+  // looking at is not worth a stored preference, and restoring a filter that
+  // hides most of your conversations is a confusing way to open a screen.
+  const [filter, setFilter] = useState<InboxFilter>('all');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   // Threads with a job offer waiting on THIS user. There are no push
   // notifications, so this list is the only thing that surfaces a new offer
@@ -288,6 +311,53 @@ export function MessagesInboxScreen() {
     await refresh();
   }
 
+  /**
+   * THE SECOND SHEET. Six rows, all of them flag-gated, none of them rendering
+   * today — each waits on a column or a policy lib/featureFlags.ts names.
+   *
+   * The permanent block is deliberately NOT here: it is in the first sheet,
+   * where it already was. TIMED_BLOCK is the variant that needs an expiry
+   * column, and it is a different row precisely so shipping it cannot quietly
+   * change what the existing one does.
+   */
+  const moreItems: ActionSheetItem[] = [];
+  if (TIMED_BLOCK) {
+    moreItems.push({ key: 'block-timed', label: 'Block for a while', icon: 'time-outline', destructive: true, onPress: () => {} });
+  }
+  if (MARK_UNREAD) {
+    moreItems.push({ key: 'mark-unread', label: 'Mark as Unread', icon: 'mail-unread-outline', onPress: () => {} });
+  }
+  if (CLEAR_CHAT) {
+    moreItems.push({ key: 'clear-chat', label: 'Clear Chat', icon: 'trash-bin-outline', destructive: true, onPress: () => {} });
+  }
+  if (HIDDEN_CHATS) {
+    moreItems.push({ key: 'hide', label: 'Mark as Hidden 🔒', icon: 'lock-closed-outline', onPress: () => {} });
+  }
+  if (ARCHIVE) {
+    moreItems.push({ key: 'archive', label: 'Archive', icon: 'archive-outline', onPress: () => {} });
+  }
+  if (DELETE_CHAT) {
+    moreItems.push({ key: 'delete-chat', label: 'Delete Chat', icon: 'close-circle-outline', destructive: true, onPress: () => {} });
+  }
+
+  /**
+   * ONE ACTION MODEL, TWO ENTRY MECHANICS.
+   *
+   * The dispatch specifies a swipe-left revealing Mute · Report · More on a
+   * build that has react-native-gesture-handler, and the SAME actions through
+   * the existing long-press ActionSheet on a build that does not. The list is
+   * built once, here, for exactly that reason: an action reachable by one
+   * mechanic and not the other is two apps.
+   *
+   * `canSwipe()` is false on every build today (the packages are not
+   * installed — see lib/motion120/vendor.ts), so long-press is the live entry
+   * and the swipe surface is the deferred one. When it lands it consumes this
+   * same array; nothing below has to move.
+   *
+   * MUTE IS LIVE and always has been (`mutes`, phase13). BLOCK stays exactly
+   * where it lives today — permanent, in this sheet, untouched — and the
+   * dispatch's TIMED block is a separate, flagged row inside More.
+   */
   const sheetItems: ActionSheetItem[] = sheetTarget
     ? [
         {
@@ -314,12 +384,78 @@ export function MessagesInboxScreen() {
             setReportTarget(target);
           },
         },
+        // MORE renders only if it would have something in it. Every row it
+        // holds is flag-gated and every flag is false, so today it does not
+        // render at all — an empty second sheet behind a visible button is
+        // exactly the dead control this repo refuses to ship.
+        ...(moreItems.length > 0
+          ? [
+              {
+                key: 'more',
+                label: 'More',
+                icon: 'ellipsis-horizontal' as const,
+                onPress: () => {
+                  const target = sheetTarget;
+                  setSheetTarget(null);
+                  setMoreTarget(target);
+                },
+              },
+            ]
+          : []),
       ]
     : [];
+
+  // The pill's slice of the list, and the ONLY thing the pills change. They
+  // are a view over the rows the inbox already built, never a second fetch.
+  const visibleRows = useMemo(() => filterRows(rows, filter), [rows, filter]);
+
+  // Which mechanic reveals the row actions on THIS build. The action list is
+  // the same either way (see sheetItems); this only decides what the row tells
+  // a screen reader it can do, which is the one place the difference is
+  // user-visible today.
+  const rowActionHint = canSwipe()
+    ? 'Swipe left for mute, report and more'
+    : 'Press and hold for mute, block, report and more';
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader title="Messages" />
+
+      {/* THE FILTER ROW (2026-08-23). Deliberately small and quiet — it is a
+          navigation aid above a list, not a set of tabs — and horizontal so a
+          sixth pill can arrive without the row wrapping. Two of the five
+          filter live state; the other three are honest about carrying none,
+          which is why each has its own empty state rather than sharing one.
+          This row SUPERSEDES the never-built master-34 All/Jobs/Offers/Support
+          tabs; those are not being built. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterRow}
+        keyboardShouldPersistTaps="handled"
+      >
+        {INBOX_FILTERS.map((pill) => {
+          const active = filter === pill.key;
+          return (
+            <Pressable
+              key={pill.key}
+              onPress={() => setFilter(pill.key)}
+              style={({ pressed }) => [
+                styles.pill,
+                active && styles.pillActive,
+                pressed && styles.pillPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${pill.label} conversations`}
+            >
+              <Text style={[styles.pillLabel, active && styles.pillLabelActive]}>
+                {pill.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
 
       {/* useConversations is a LOCKED hook and still stores the raw message;
           the wrap happens here at the render seam instead (raw-error sweep,
@@ -332,7 +468,7 @@ export function MessagesInboxScreen() {
         </View>
       ) : (
         <FlatList
-          data={rows}
+          data={visibleRows}
           keyExtractor={(item) => item.key}
           renderItem={({ item }) => (
             <ConversationRow
@@ -363,17 +499,18 @@ export function MessagesInboxScreen() {
               onLongPressAvatar={
                 item.avatarUrl ? () => setAvatarUri(item.avatarUrl) : undefined
               }
+              accessibilityHint={item.isSelf ? undefined : rowActionHint}
             />
           )}
           contentContainerStyle={
-            rows.length === 0
+            visibleRows.length === 0
               ? styles.emptyContainer
               : // A handful of rows with the default padding left most of the
                 // screen bare below them — reads as broken, not "caught up".
                 // Roomier padding/gap between rows (not centering the group —
                 // that read as an empty/broken state instead of a real,
                 // short list) makes it read as deliberately minimal.
-              rows.length <= 3
+              visibleRows.length <= 3
               ? styles.sparseContent
               : styles.listContent
           }
@@ -386,10 +523,10 @@ export function MessagesInboxScreen() {
               <View style={styles.emptyIcon}>
                 <Ionicons name="chatbubbles-outline" size={32} color={isDark ? colors.gold : colors.primary} />
               </View>
-              <Text style={styles.emptyTitle}>No messages yet</Text>
-              <Text style={styles.emptyText}>
-                Conversations start once a bid is accepted.
-              </Text>
+              {/* Per-pill, because "no messages yet" under the Archived pill
+                  would be a different and untrue statement. */}
+              <Text style={styles.emptyTitle}>{emptyStateFor(filter).title}</Text>
+              <Text style={styles.emptyText}>{emptyStateFor(filter).body}</Text>
             </View>
           }
         />
@@ -401,6 +538,14 @@ export function MessagesInboxScreen() {
         subtitle="Manage this conversation"
         items={sheetItems}
         onClose={() => setSheetTarget(null)}
+      />
+
+      <ActionSheet
+        visible={!!moreTarget}
+        title={moreTarget?.name}
+        subtitle="More actions"
+        items={moreItems}
+        onClose={() => setMoreTarget(null)}
       />
 
       {user && reportTarget && (
@@ -429,6 +574,39 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  filterRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.md,
+  },
+  // Small and quiet: a filter above a list, not a tab bar. The resting pill
+  // is a hairline on the page ground so the ACTIVE one is the only filled
+  // thing in the row.
+  pill: {
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
+  },
+  pillActive: {
+    borderColor: colors.emerald,
+    backgroundColor: colors.primarySoft,
+  },
+  pillPressed: {
+    opacity: 0.7,
+  },
+  pillLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  pillLabelActive: {
+    color: colors.emerald,
   },
   center: {
     flex: 1,
