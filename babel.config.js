@@ -15,9 +15,6 @@ module.exports = function (api) {
           allowUndefined: true,
         },
       ],
-      // Must stay LAST: the worklets/reanimated plugin has to run after every
-      // other transform so it sees the final shape of each worklet body.
-      'react-native-reanimated/plugin',
     ],
   };
 };
