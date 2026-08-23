@@ -43,37 +43,52 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-22 repository cleanup run
+## Current state — after the 2026-08-22 mode-switch/parity/map/serif run
 
 The newest run record is
-`docs/handoff-archive/2026-08-22-securestore-session-adapter.md`: the auth
-session lives in the device keychain via the SecureStore adapter, F-KEYCHAIN
-fence suite green. The offline suite stands at 860 pass / 0 fail / 0 skipped,
-bare `npm run verify` exit 0. Branch and commit state are Git's to report,
-never this file's.
+`docs/handoff-archive/2026-08-22-modeswitch-parity-map-serif.md` — five
+functional commits plus this HANDOFF: the mode-switch navigation red box is
+fixed at its root (the tree swap is TWO commits now — `treeMode` trails
+`mode` by one commit and ModeShell mounts no tree in the gap, so the
+container's one root-state store is empty before the incoming tree
+initializes; awaited switches resolve on the [treeMode] effect); light mode
+inherits dark's implemented layout on BOTH Home screens (colours-only *Dark
+styles, fenced by the repurposed home(19)); the customer search arrow
+submits and worker Home carries customer Home's category pill row (one
+HOME_SERVICE_ROWS definition, pills seed WorkerResults' existing filter
+model via a new allow-listed `category` param); the worker Map is card-free
+(filter sheet with presets + a 1–50 mi stepper off the header icon, one
+slab-free bottom row) and the distance filter is SESSION-ONLY (in-memory
+store shared by Map and list, cold start = Any, the retired AsyncStorage key
+erased once in code); and the customer Home hero title alone returned to
+Playfair Display — `fonts.displayHero`, the Bold static recovered
+byte-identical from history with its OFL license, registered by the restored
+LaunchGate `useFonts` hold, fenced by themeTokens' narrowed ONE-serif fence
+(everything else stays the system sans).
 
-The cleanup run itself (2026-08-22, after the SecureStore run): root
-historical documents moved under `docs/archive/` (`root-audits/`,
-`diagnostics/`, `hardening-report/`, `project-audit/`); eleven rejected
-word-named mockup renders moved to `docs/mockups/rejected/`
-(`Discover_Map_Dark.png` stays beside the masters — source cites it);
-`DIAG_offer_negotiation_messaging.md` stays at the root
-(`lib/offerNavigation.ts:57` cites it); this file split into live edge plus
-archive. Full inventory and evidence: `docs/cleanup/2026-08-22/inventory.md`.
-Nothing was deleted, no source or test file moved, no fence changed, nothing
-under `supabase/` touched, no behavior changed.
+The offline suite stands at 864 pass / 0 fail / 0 skipped, bare
+`npm run verify` exit 0. Branch and commit state are Git's to report, never
+this file's.
 
 ### Device checks OWED (operator, physical device) — carried forward
 
 Each list lives verbatim in its run's archive file; none has been performed
 yet:
 
+- **The five-point tap-through for THIS run** (mode-switch repro both
+  directions with no reload; light/dark Home parity including the toolbox
+  halo on light; hero Playfair + one-line fit + launch hold; pills seeding
+  the filtered list and both search arrows; the card-free Map, the stepper,
+  and Any-on-relaunch) →
+  `2026-08-22-modeswitch-parity-map-serif.md`.
 - SecureStore keychain line on a NEW dev client, silent session migration,
   chunked writes against the real keychain →
   `2026-08-22-securestore-session-adapter.md`.
 - Every heading's weight in the system sans, wrapping everywhere, the two
   typography dials, cold start, LaunchScreen wordmark, chat composer
-  footprint, upload-failure copy → `2026-08-22-serif-retired-g001.md`.
+  footprint, upload-failure copy → `2026-08-22-serif-retired-g001.md`
+  (the customer hero's line of that list is superseded by this run's
+  Playfair restore; the rest stands).
 - One-job lifecycle label walk, every label at every step →
   `2026-08-22-batch-i-money-lifecycle.md`.
 - Airplane-mode cold start, airplane-mode job detail, Track Worker skeleton
@@ -82,15 +97,6 @@ yet:
   similar-jobs caption → `2026-08-22-run-deg-motion-assets-copy.md`.
 - Safe-area seam and Live Nearby card peek on Customer Home →
   `2026-08-20-customer-home-replaced-master44.md`.
-
-### Known staleness in the list below, left uncorrected by the cleanup run
-
-Open item 0 still describes G-001 as unfixed; the
-`2026-08-22-serif-retired-g001.md` record closed it (`fc5a78d`, with the
-F-ERRMSG widening to `ui/`). The cleanup run preserves records verbatim and
-corrects nothing; the next functional run's HANDOFF rewrite should reconcile
-item 0. G-002 (CI cannot run the 120-test guard suite) remains genuinely
-open.
 
 ## THE LIGHT-mode parity audit — DISPATCHED, AUDITED, PARTLY FIXED
 
@@ -148,15 +154,13 @@ bar's composition, which it describes wrongly as six slots), and C4
 
 ### Open items carried forward
 
-0. **The two P1s from the guard-coverage audit** (`19357ab`) are the most
-   actionable items on this list and both are one-file changes with a fence
-   attached. **G-001**: wrap the extraction in
-   `ui/primitives/MediaUploader.tsx` through `userMessage()`, and add `'ui'`
-   to `tests/errorMessage.test.mjs`'s `dirs` **with** `{ recursive: true }`.
-   **G-002**: CI cannot run the 120-test guard suite on `ubuntu-latest`, so
-   either add a Windows job for it or stop treating a green CI badge as
-   evidence the guards were verified. Neither was fixed here — that audit was
-   dispatched read-only.
+0. **G-001 is CLOSED; G-002 remains open** (reconciled 2026-08-22 — the
+   cleanup run had left this item stale by design). **G-001** was fixed by
+   `fc5a78d` (`2026-08-22-serif-retired-g001.md`): MediaUploader's extraction
+   goes through `userMessage()` and `tests/errorMessage.test.mjs` scans `ui/`
+   recursively. **G-002** is genuinely open: CI cannot run the 120-test guard
+   suite on `ubuntu-latest`, so either add a Windows job for it or stop
+   treating a green CI badge as evidence the guards were verified.
 
 1. **Master 34's inbox search, its four filter tabs and its per-thread unread
    COUNT** are not built — functionality, not presentation, and the data model

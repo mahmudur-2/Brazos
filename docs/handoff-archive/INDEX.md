@@ -21,3 +21,4 @@ newest-first; this list is its reverse).
 13. [2026-08-22-light-parity-guard-audit.md](2026-08-22-light-parity-guard-audit.md) — Light-parity cleanup + guard-coverage audit.
 14. [2026-08-22-serif-retired-g001.md](2026-08-22-serif-retired-g001.md) — Serif retired app-wide + G-001 closed.
 15. [2026-08-22-securestore-session-adapter.md](2026-08-22-securestore-session-adapter.md) — SecureStore session adapter wired and landed.
+16. [2026-08-22-modeswitch-parity-map-serif.md](2026-08-22-modeswitch-parity-map-serif.md) — Mode-switch crash root cause (two-commit swap), Home light/dark parity, worker pills, Map restructure + session-only distance, hero Playfair restore.
