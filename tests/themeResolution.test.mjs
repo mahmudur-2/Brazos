@@ -418,7 +418,23 @@ const BAKED_ART = {
   // closer -- calling it a cut-out would let a real re-cut through unnoticed,
   // and calling it room-baked would be false while the alpha is there. Still
   // gated, and for the unchanged reason: 97.9% of it is still a dark room.
-  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-trimmed', gate: true },
+  //
+  // 2026-08-23 — THE GATE COMES OFF THIS ONE ENTRY, on operator instruction,
+  // and it is the recorded decision that moved, not the rule. `gate` has
+  // never meant "lives under assets/prestige"; the comment above says what it
+  // means — the dark-only / light-only ARTWORK decision. The customer Home
+  // hero is no longer a dark-only composition: light's Heritage cut-out is
+  // retired and both palettes mount this scene, so screens/HomeScreen.tsx
+  // renders it with no isDark in front of it and SHOULD. Leaving gate: true
+  // here would make the scan demand a palette test that must not exist.
+  //
+  // WHAT STILL HOLDS. The bake measurement is untouched and still enforced by
+  // the alpha sweep below (it is the same 400x351 RGBA file, byte for byte).
+  // assets/prestige/brazos_b_drape.png, hero_toolbox_worker.png and
+  // home-atmosphere-dark.png stay gated, so the dark-only decision is intact
+  // everywhere it is still true — this is one asset leaving the set by a
+  // decision, not the set being emptied to make a mount pass.
+  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-trimmed', gate: false },
   'assets/prestige/brazos_b_drape.png': { bake: 'transparent', gate: true },
   'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
@@ -428,12 +444,14 @@ const BAKED_ART = {
   // the screen, so nothing on the screen itself would show the mistake.
   // components/HomeAtmosphere.tsx returns null under the light palette.
   'assets/prestige/home-atmosphere-dark.png': { bake: 'opaque-dark', gate: true },
-  // The Heritage armchair. It used to be RGBA-but-fully-opaque over the LIGHT
-  // ground (#FAF5F1) — the exact inverse hazard — and was the one entry the
-  // old alpha check skipped BY NAME. It is now a real cut-out (62.81% fully
-  // transparent), so it is measured like everything else and the skip is gone.
-  // Still gated: it is the LIGHT-only composition.
-  'assets/brand/customer-home-chair.png': { bake: 'transparent', gate: true },
+  // GONE 2026-08-23 — the Heritage armchair. It was the LIGHT-only hero (RGBA,
+  // 62.81% fully transparent, a stem-less rosette and a whole chair on
+  // nothing) opposite the baked prestige scene, and the operator unified both
+  // themes onto the scene. screens/HomeScreen.tsx no longer requires it, so it
+  // leaves this roster BECAUSE the added-or-removed assertion below demands
+  // exactly that of a raster the app stops mounting — the entry is not being
+  // hidden, it is being retired with its mount. The file itself stays on disk,
+  // required by nothing.
   // The LIGHT mark on the promo card. It used to be
   // assets/brand/customer-home-post-mark-hd.png, which was DELETED from disk
   // during the cut-out install while screens/HomeScreen.tsx still `require`d

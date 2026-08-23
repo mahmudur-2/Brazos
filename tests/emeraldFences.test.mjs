@@ -999,8 +999,13 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
     );
   }
 
-  // ARTWORK — one box and one fill rule; the FILES stay per-theme.
-  assert.match(home, /source=\{isDark \? PRESTIGE_HERO_ART : HOME_HERO_ART\}/);
+  // ARTWORK — one box, one fill rule, and since 2026-08-23 one FILE. The
+  // per-theme artwork was the last thing the parity pass left forked on this
+  // slot, and it could not be closed by unifying numbers because the
+  // difference was never numeric — two different pictures. Both themes now
+  // mount the room-baked scene.
+  assert.match(home, /source=\{PRESTIGE_HERO_ART\}/);
+  assert.doesNotMatch(home, /HOME_HERO_ART/, "light's retired hero must not come back");
   assert.match(home, /source=\{isDark \? PRESTIGE_B_DRAPE : POST_MARK\}/);
   assert.match(home, /resizeMode="cover"/);
   assert.doesNotMatch(home, /resizeMode=\{isDark/);
@@ -1399,11 +1404,18 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   );
 
   // Parity 2026-08-22: one fill rule. The hero slot fills and crops in both
-  // themes (the chair crop's aspect is within 0.4% of the box's, so cover
-  // crops it imperceptibly); the isDark fork must not come back.
-  const heroImage = /<Image source=\{isDark \? PRESTIGE_HERO_ART : HOME_HERO_ART\}([^>]*)>/.exec(flat);
-  assert.ok(heroImage, 'the hero image keeps its per-theme FILES');
+  // themes; the isDark fork must not come back.
+  // 2026-08-23: and ONE FILE. The per-theme fork is gone from the source
+  // expression — light's Heritage cut-out is retired — so what this pins is
+  // the absence of the fork, not its shape.
+  const heroImage = /<Image source=\{PRESTIGE_HERO_ART\}([^>]*)>/.exec(flat);
+  assert.ok(heroImage, 'the hero mounts ONE file, unconditionally, in both themes');
   assert.match(heroImage[1], /resizeMode="cover"/, 'the slot fills in both themes');
+  assert.doesNotMatch(
+    flat,
+    /HOME_HERO_ART|customer-home-chair/,
+    'the light-geometry hero must not be referenced anywhere on this screen again'
+  );
 });
 
 /**

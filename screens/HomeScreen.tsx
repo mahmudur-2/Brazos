@@ -60,7 +60,11 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
 // in the same batch (byte-identical to the prestige one; kept under
 // assets/brand so light never mounts an assets/prestige file).
 const POST_MARK = require('../assets/brand/brazos_b_drape.png');
-const HOME_HERO_ART = require('../assets/brand/customer-home-chair.png');
+// 2026-08-23: the light hero's own file is GONE FROM THE SOURCE. It was
+// assets/brand/customer-home-chair.png and it is still on disk, required by
+// nothing — see the <Image> below for why, and note that it left the
+// BAKED_ART roster with its `require`, which is what that roster's
+// added-or-removed assertion demands.
 // home(14): the ROOM-BAKED hero, restored from prestige(0a) (715ddf8) by
 // redirect — its bytes are untouched. It and the cut-out that had replaced it
 // are two different pictures, not one picture at two sizes: the baked scene has
@@ -76,6 +80,12 @@ const HOME_HERO_ART = require('../assets/brand/customer-home-chair.png');
 // reads a little soft. The composition is the thing master 44 is drawn from;
 // the resolution is fixed by exporting the scene again at the size in the
 // run report, into this same path.
+//
+// 2026-08-23: this is now the hero in BOTH themes, so that softness is a
+// LIGHT-mode cost as well. Nothing about the file changed — the operator
+// chose the composition over the resolution a second time, for the second
+// palette — and the fix is the same one: re-export the scene larger into
+// this same path.
 const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png');
 const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 const PREVIEW_COUNT = 4;
@@ -438,15 +448,34 @@ export function HomeScreen() {
         >
           <View style={styles.intro}>
             <Image
-              source={isDark ? PRESTIGE_HERO_ART : HOME_HERO_ART}
+              // 2026-08-23 — ONE FILE, BOTH THEMES, and the last fork on this
+              // slot closes. Light had been mounting the Heritage cut-out
+              // (assets/brand/customer-home-chair.png: a stem-less leaf
+              // rosette in a narrow-footed urn, with a whole four-legged chair
+              // standing on nothing) while dark mounted the room-baked scene
+              // master 44 is actually drawn from. Two different PICTURES under
+              // one box, one geometry and one fill rule — which is a fork the
+              // parity pass could not close by unifying numbers, because the
+              // difference was never numeric. The operator resolved it onto
+              // the baked scene.
+              //
+              // NO isDark HERE ANY MORE, deliberately: that is exactly why
+              // this asset is no longer `gate: true` on the BAKED_ART roster
+              // in tests/themeResolution.test.mjs. The gate scan requires a
+              // palette test in front of every gated mount, and it is right to
+              // — but the decision it was guarding ("assets/prestige is a
+              // dark-only composition") is the decision that just changed for
+              // this one file. The gate moved with the fact rather than the
+              // fact being hidden from the gate.
+              source={PRESTIGE_HERO_ART}
               style={styles.homeHeroArt}
               // home(14): the hero is a SLOT, and a slot fills. `cover`
               // scales whatever is dropped in until both dimensions are
               // covered and crops the remainder, so a room-baked scene reaches
               // the screen edge instead of sitting inside its own margins.
-              // Parity 2026-08-22: one box and one fill rule in both themes;
-              // only the artwork file differs (the chair crop's 1.14 aspect is
-              // within 0.4% of the box's, so cover crops it imperceptibly).
+              // Parity 2026-08-22 made the box and the fill rule one for both
+              // themes; the FILE is one now too, so `cover` crops the same
+              // aspect against the same box in both.
               resizeMode="cover"
               accessibilityIgnoresInvertColors
             />
@@ -1001,7 +1030,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Re-measured on the REPLACED docs/mockups/44_customer_home_dark.png
   // (853x1844). home(14)'s 151 x 135 at right: 0 came off the old 941x1672 file
   // and is void. Parity 2026-08-22: ONE box in both themes — light's Heritage
-  // 112x124 at (-6, 47) is retired and only the artwork file stays per-theme.
+  // 112x124 at (-6, 47) is retired. 2026-08-23 retires the per-theme FILE too,
+  // so nothing about this slot is per-theme any more.
   //
   // HOW THE BOX WAS FOUND, since a room-baked scene has no alpha to bound it.
   // The asset's own structured columns run 0.1225..0.8750 of its canvas — its
