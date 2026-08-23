@@ -48,20 +48,12 @@ test('phase52: trigger-backed thread creation, sealed and non-fatal', async () =
   assert.ok(!/create policy|drop policy/.test(sql), 'phase52 must not rewrite message policies');
 });
 
-test('quick replies are mode-specific through ModeContext', async () => {
-  const messages = await read('lib/messages.ts');
-  assert.match(messages, /WORKER_CHAT_TEMPLATES/);
-  assert.match(messages, /CUSTOMER_CHAT_TEMPLATES/);
-  assert.match(messages, /chatTemplatesForMode/);
-
-  const quickReplies = await read('components/QuickReplies.tsx');
-  assert.match(quickReplies, /useMode\(\)/, 'perspective must come from ModeContext');
-  assert.match(quickReplies, /chatTemplatesForMode\(mode\)/);
-  assert.ok(
-    !quickReplies.includes('CHAT_TEMPLATES'),
-    'QuickReplies must use the mode-aware source, not a fixed list'
-  );
-});
+// RETIRED 2026-08-23 — 'quick replies are mode-specific through ModeContext'.
+// components/QuickReplies.tsx is deleted and the three exports it read
+// (WORKER_CHAT_TEMPLATES, CUSTOMER_CHAT_TEMPLATES, chatTemplatesForMode) are
+// gone from lib/messages.ts with it, so this test described a component that
+// no longer exists. Deleting it is the honest move: leaving it pointed at
+// something else would be a different test wearing this one's name.
 
 test('Chat rides along wherever JobDetail is registered', async () => {
   const nav = await read('lib/navigation.ts');

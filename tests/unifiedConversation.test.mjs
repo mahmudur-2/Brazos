@@ -397,25 +397,22 @@ test('attachments follow the resolved target, so the pair thread has none', asyn
   assert.match(chat, /uploadChatPhoto\(\s*sendJobId,/);
 });
 
-test('the en-route quick replies only appear on a live job', async () => {
-  const chat = stripComments(await read('screens/ChatScreen.tsx'));
-  // "On my way" / "Running late" are claims about work in progress. With no
-  // active job the row renders nothing rather than a second set invented for
-  // the pair thread.
-  assert.match(chat, /!isSelfConversation && !replyTo && !!activeJob && \(/);
-
-  // The sets themselves are unchanged and still mode-specific.
-  const messages = await read('lib/messages.ts');
-  assert.match(messages, /'On my way',\s*'Running late',\s*'Here, where do I go\?'/);
-});
+// RETIRED 2026-08-23 — 'the en-route quick replies only appear on a live job'.
+// The row it fenced (components/QuickReplies.tsx) and the template sets behind
+// it (WORKER_CHAT_TEMPLATES / CUSTOMER_CHAT_TEMPLATES / chatTemplatesForMode)
+// were deleted with the composer rebuild, so the test asserted the shape of
+// something that no longer exists. The half worth keeping — that the row does
+// not come back — moved to messagingLock's free-form-entry-point test, which
+// already owns "what may render in this column".
 
 test('every send goes to the resolved target, and only there', async () => {
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
-  // Four send paths (text, quick reply, photo, voice), one target between them.
+  // THREE send paths (text, photo, voice), one target between them. It was
+  // four until 2026-08-23: the quick-reply send went with the row.
   assert.equal(
     (chat.match(/target: sendTarget,/g) ?? []).length,
-    4,
-    'all four send paths must use the resolved target'
+    3,
+    'all three send paths must use the resolved target'
   );
   // Read state is cleared across the WHOLE conversation, or the inbox row it
   // folds into would stay lit with nothing left to open.

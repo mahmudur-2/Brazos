@@ -25,7 +25,7 @@ import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
-import { QuickReplies } from '../components/QuickReplies';
+
 import { ReactionPicker } from '../components/ReactionPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
@@ -802,21 +802,6 @@ export function ChatScreen() {
     setConfirmResponse(null);
   }
 
-  async function handleTemplate(template: string) {
-    if (!user || sending || !sendTarget) return;
-    setSending(true);
-    const { data, error } = await sendMessage({
-      target: sendTarget,
-      senderId: user.id,
-      content: template,
-    });
-    setSending(false);
-    if (error) {
-      await reportSendFailure('Could not send message', error);
-      return;
-    }
-    if (data) addLocal(data);
-  }
 
   async function handleSelectReaction(emoji: string) {
     // message_reactions is keyed by job, so reactions are a job-thread
@@ -1173,14 +1158,11 @@ export function ChatScreen() {
             ) : null
           ) : (
             <>
-              {/* The templates are about work in progress — "On my way",
-                  "Running late", "When can you start?". They are only true of a
-                  job thread with a live job, so on the pair thread there are no
-                  quick replies at all rather than a second set invented to fill
-                  the row. */}
-              {!isSelfConversation && !replyTo && !!activeJob && (
-                <QuickReplies onSelect={handleTemplate} disabled={sending} />
-              )}
+              {/* The one-tap template row lived here until 2026-08-23. It is
+                  gone with components/QuickReplies.tsx: the rebuilt composer
+                  gives the message field its full width, and a fixed-height
+                  chip row above it was the one element in this column that
+                  refused to shrink to make room for the keyboard. */}
 
               {/* Quoted-reply chip: what you're replying to, above the input,
                   with a way to back out — same as WhatsApp. */}

@@ -118,10 +118,13 @@ test('a pre-confirmation free-form message is rejected by the database', async (
   assert.match(sql, /grant execute on function public\.messaging_unlocked\(uuid, uuid\) to authenticated/);
 });
 
-test('the attachment and quick-reply paths are the same rejected mutation', async () => {
+test('every send path is the same rejected mutation', async () => {
   const messages = stripComments(await read('lib/messages.ts'));
-  // Text, quick reply, photo and voice all go through ONE insert, so the
-  // policy covers every one of them without a per-path rule.
+  // Text, photo and voice all go through ONE insert, so the policy covers
+  // every one of them without a per-path rule. (It was four paths until
+  // 2026-08-23: the quick-reply send went with components/QuickReplies.tsx.
+  // Removing a CALLER of the one insert cannot weaken this — the property is
+  // that there is exactly one insert, and there still is.)
   assert.equal(
     (messages.match(/\.from\('messages'\)\s*\.insert\(/g) ?? []).length,
     1,
@@ -138,15 +141,16 @@ test('the attachment and quick-reply paths are the same rejected mutation', asyn
   assert.doesNotMatch(send, /job_request_id/);
 
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
-  for (const handler of ['handleSendText', 'handleTemplate', 'sendPhoto', 'handleSendVoice']) {
+  for (const handler of ['handleSendText', 'sendPhoto', 'handleSendVoice']) {
     assert.match(chat, new RegExp(`function ${handler}`), `${handler} must exist`);
   }
+  assert.doesNotMatch(chat, /handleTemplate/, 'the quick-reply send is retired with its row');
   // Every one of them reports a refused send through the one mapper, so a
   // stale screen gets the rule in words and never a raw database error.
   assert.equal(
     (chat.match(/await reportSendFailure\(/g) ?? []).length,
-    4,
-    'all four send paths must route failures through reportSendFailure()'
+    3,
+    'all three send paths must route failures through reportSendFailure()'
   );
   assert.match(chat, /isMessagingLockedError\(error\)/);
   assert.match(chat, /MESSAGING_LOCKED_MESSAGE/);
@@ -181,15 +185,22 @@ test('a refused send is named, never leaked as database text', async () => {
 test('no free-form entry point renders before the conversation opens', async () => {
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
 
-  // ONE branch removes the whole composer block — text input, send button,
-  // quick replies, camera, photo library and voice — rather than disabling
-  // them one at a time and leaving the next one to be forgotten.
+  // ONE branch removes the whole composer block — text input, send control,
+  // the attachment menu, camera, photo library and voice — rather than
+  // disabling them one at a time and leaving the next one to be forgotten.
+  // (The quick-reply row was the second element this used to check for; it
+  // was deleted on 2026-08-23 with components/QuickReplies.tsx, so there is
+  // one entry point left to place rather than two.)
   assert.match(chat, /messagingUnlocked !== true \? \(/);
   const gateStart = chat.indexOf('messagingUnlocked !== true ? (');
   const composerStart = chat.indexOf('<ChatComposer');
-  const quickStart = chat.indexOf('<QuickReplies');
-  assert.ok(gateStart > 0 && composerStart > gateStart && quickStart > gateStart,
-    'both the composer and the quick replies must sit inside the unlocked branch');
+  assert.ok(
+    gateStart > 0 && composerStart > gateStart,
+    'the composer must sit inside the unlocked branch'
+  );
+  // ...and the retired row must not reappear outside it, which is the half
+  // that would otherwise be lost by dropping the second index.
+  assert.doesNotMatch(chat, /QuickReplies/, 'the quick-reply row is retired, not relocated');
 
   // Unknown is treated as closed: a slow read never flashes a composer.
   assert.match(chat, /messagingUnlocked === false \? \(/);
