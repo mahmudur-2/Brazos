@@ -445,10 +445,31 @@ test('D5: the toggle track is state-blind in dark, and only the knob carries sta
     'the dark track may be neither the danger red nor emerald'
   );
 
-  // THE KNOB. Gold and glowing when ON, cream when OFF — every part of it
+  // THE KNOB. Gold when ON in BOTH palettes since 2026-08-23 (light was a
+  // plain white disc, so the same state read two different ways depending on
+  // the theme); each palette's own quiet disc when OFF; every part of it
   // reading the same `value`, and the position doing the same.
-  assert.match(toggle, /const knobColor = isDark[\s\S]{0,120}?value[\s\S]{0,80}?withAlpha\(palette\.gold, 0\.92\)/);
-  assert.match(toggle, /const knobBorder = isDark && value \? palette\.gold : 'transparent';/);
+  const knobColor = /const knobColor = ([\s\S]+?);/.exec(toggle);
+  assert.ok(knobColor, 'Toggle must resolve a knob colour');
+  assert.match(
+    knobColor[1],
+    /^\s*value\b/,
+    'the knob colour must branch on `value` FIRST — theme-first is how the two palettes drifted apart'
+  );
+  assert.match(
+    knobColor[1],
+    /withAlpha\(palette\.gold, 0\.92\)/,
+    'the ON face is the gold tint, and it is not inside an isDark branch'
+  );
+  assert.doesNotMatch(
+    knobColor[1].slice(0, knobColor[1].indexOf('withAlpha')),
+    /isDark/,
+    'nothing may gate the gold face on the theme'
+  );
+  assert.match(knobColor[1], /isDark[\s\S]*?palette\.onPrimary[\s\S]*?palette\.white/);
+  assert.match(toggle, /const knobBorder = value \? palette\.gold : 'transparent';/);
+  // The halo stays DARK-ONLY and deliberately so: a glow is an atmosphere the
+  // dark ground has and the cream one does not.
   assert.match(toggle, /const knobGlow = isDark && value \? glow\.halo\(withAlpha\(palette\.gold, 0\.55\)\) : null;/);
   assert.match(toggle, /toValue: value \? 1 : 0/);
   assert.match(toggle, /outputRange: \[0, TRAVEL\]/);
@@ -462,10 +483,10 @@ test('D5: the toggle track is state-blind in dark, and only the knob carries sta
     'the ON knob must be a gold ring over a gold tint, never a gold fill'
   );
 
-  // LIGHT IS UNTOUCHED: the Heritage arrangement is still emerald track,
-  // white knob, no rim.
+  // LIGHT'S TRACK IS UNTOUCHED: the Heritage arrangement is still emerald
+  // when ON, border when OFF. Only the knob crossed over.
   assert.match(trackColor[1], /value \? palette\.emerald : palette\.border/);
-  assert.match(toggle, /: palette\.white;/);
+  assert.match(toggle, /: palette\.white;/, "light's OFF knob is still the plain white disc");
 });
 
 test('D5: the two availability toggles cannot show different states', async () => {

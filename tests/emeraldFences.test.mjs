@@ -989,7 +989,7 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   assert.match(home, /headline: \{ marginTop: 30, fontFamily: fonts\.displayHero,/);
   assert.doesNotMatch(home, /headlineDark|heroSubtitleDark|sectionTitleDark/);
   assert.match(home, /heroSubtitle: \{ maxWidth: '73%', marginTop: 10, fontSize: 14,/);
-  assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.forest \}/);
+  assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.onForest \}/);
   // The remaining *Dark styles on the customer Home are colour-only.
   for (const dark of home.matchAll(/(\w+Dark): \{([^}]*)\}/g)) {
     assert.doesNotMatch(
@@ -1014,12 +1014,15 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   // THE MODE SWITCH — one 1pt ring, per-theme ring colours.
   assert.match(/modeSwitch: \{([^}]*)\}/.exec(home)[1], /borderWidth: 1, borderColor: colors\.gold/);
 
-  // THE [ + ] — one pill-ratio geometry; light keeps decision 3's colours.
+  // THE [ + ] — one pill-ratio geometry, and since 2026-08-23 one set of
+  // COLOURS too: the gold tile with the forest ring that home(8) had given
+  // dark alone. Light's forest-fill-and-gold-ring inverse is retired, so the
+  // parity this fence exists for now covers the control completely.
   assert.doesNotMatch(bar, /CREATE_BUTTON_LIGHT_SIZE|CREATE_BUTTON_LIGHT_RAISE/);
   assert.match(
     flatten(read('ui/primitives/BottomNav.tsx')),
-    /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/,
-    "light's control keeps the forest fill and the gold ring decision 3 gave it"
+    /backgroundColor: colors\.gold, borderWidth: 1, borderColor: colors\.forest,/,
+    'the control is one gold tile with one forest ring, in both themes'
   );
 
   // WORKER HOME — same contract: its *Dark styles are colour-only and the
@@ -1671,11 +1674,20 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   );
   assert.match(
     flat,
-    /color=\{isDark \? colors\.forest : colors\.gold\}/,
+    /color=\{colors\.forest\}/,
     'the glyph must be dark content on the gold fill — gold on gold is invisible'
   );
-  // LIGHT keeps decision 3's COLOURS: forest fill, gold ring, gold glyph.
-  assert.match(flat, /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/);
+  // 2026-08-23: LIGHT ADOPTS THE SAME COLOURS. The reversal home(8) made for
+  // dark alone now covers both themes, so the BASE style carries the gold
+  // tile and the forest ring, and the glyph is a single palette read rather
+  // than a ternary. The assertion below is what stops light drifting back to
+  // its old forest-fill-and-gold-ring inverse.
+  assert.match(flat, /backgroundColor: colors\.gold, borderWidth: 1, borderColor: colors\.forest,/);
+  assert.doesNotMatch(
+    flat,
+    /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/,
+    'the retired light treatment must not return beside the shared one'
+  );
 
   // THE CONSTRAINT. The pill's height and the clearance are functions of the
   // two declared geometry tokens and nothing else — the control's ratio must

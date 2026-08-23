@@ -47,19 +47,30 @@ const GOLD_FILL_ALLOWLIST = new Set(['components/ModeTransitionOverlay.tsx']);
 /**
  * home(8) — the ONE control decision 3 was reversed for, on operator
  * instruction: the customer bar's centre [ + ]. It was a gold glyph and gold
- * ring on the deep-green conversion fill; in DARK it is now palette gold,
- * filled, with dark content. The masters draw it as a gradient, no gradient
- * library exists here and none is being added, so flat gold is the accepted
+ * ring on the deep-green conversion fill; it is now palette gold, filled,
+ * with dark content. The masters draw it as a gradient, no gradient library
+ * exists here and none is being added, so flat gold is the accepted
  * approximation.
  *
+ * 2026-08-23 EXTENDS THE SAME REVERSAL TO LIGHT, on operator instruction:
+ * light was still painting the inverse (forest fill, gold ring), which made
+ * one control two designs. The base style now carries the gold tile, so the
+ * exception set names BOTH keys. This widens the reversal by exactly the one
+ * style the operator named and by nothing else — it is not a relaxation of
+ * the rule's shape.
+ *
  * Recorded as file-AND-style-key, deliberately NOT as a file entry in
- * GOLD_FILL_ALLOWLIST above: a second gold fill introduced in
- * ui/primitives/BottomNav.tsx is still an offender, and `createButtonDark` is
- * still an offender if it moves to another file. Light is untouched and still
- * paints `forest` with a gold ring, so the rule is unreversed everywhere else
- * and in the other theme.
+ * GOLD_FILL_ALLOWLIST above: a THIRD gold fill introduced in
+ * ui/primitives/BottomNav.tsx is still an offender, and either of these is
+ * still an offender if it moves to another file. Every other control in the
+ * tree, in both themes, is still forbidden to fill with gold — and the
+ * deepEqual below means a key that stops matching is a hard failure rather
+ * than a hole left standing.
  */
-const GOLD_FILL_EXCEPTIONS = new Set(['ui/primitives/BottomNav.tsx::createButtonDark']);
+const GOLD_FILL_EXCEPTIONS = new Set([
+  'ui/primitives/BottomNav.tsx::createButton',
+  'ui/primitives/BottomNav.tsx::createButtonDark',
+]);
 
 /**
  * The one shape decision 3's "no gold fills" was never about: the filled part

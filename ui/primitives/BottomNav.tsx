@@ -477,8 +477,11 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
 
   // Home parity 2026-08-22: ONE geometry in both themes — home(18)'s share of
   // the pill, centred inside it. Light's frozen 52pt square raised 14 above
-  // the slot is retired; light keeps only its colours (forest fill, gold ring
-  // and glyph) over dark's shape, size, placement and inset.
+  // the slot is retired.
+  //
+  // 2026-08-23 FINISHES THE JOB: light's own COLOURS go too. Both themes now
+  // draw the gold tile with the forest ring and the forest glyph, which is why
+  // the glyph below is a single palette read rather than a theme ternary.
   const size = Math.round(TAB_BAR_CONTENT_HEIGHT * CREATE_BUTTON_PILL_RATIO);
   // The control CENTRES in the pill. The slot packs to flex-end with
   // TAB_BOTTOM_GAP beneath it, so lifting by half the slack minus that gap
@@ -510,7 +513,7 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         accessibilityLabel="Create"
         accessibilityHint="Post a job, hire someone again, or open your jobs"
       >
-        <Ionicons name="add" size={glyph} color={isDark ? colors.forest : colors.gold} />
+        <Ionicons name="add" size={glyph} color={colors.forest} />
       </Pressable>
     </View>
   );
@@ -599,11 +602,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // Width/height are supplied at render — one pill-ratio size for both
     // themes since the parity pass (home(18)'s arithmetic).
     borderRadius: radius.lg,
-    // LIGHT keeps decision 3's treatment exactly: the one solid conversion
-    // fill, ringed in gold, gold as line-work and never the fill.
-    backgroundColor: colors.forest,
+    // home(8) IS NOW BOTH THEMES (2026-08-23). Dark had been the ONE control
+    // decision 3 was reversed for — filled palette gold, dark content — while
+    // light kept the inverse, a forest fill ringed in gold. Two treatments for
+    // one control is exactly what the parity pass exists to end, so light
+    // adopts dark's: same gold tile, same forest ring, same forest glyph.
+    // `createButtonDark` below now restates this pair rather than overriding
+    // it; it stays because the render site's shape is not this commit's to
+    // change and the fence names it by key.
+    backgroundColor: colors.gold,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
     // home(18): the lift is supplied at render, per theme — see CenterCreateButton.
@@ -616,8 +625,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     shadowOffset: { width: 0, height: 3 },
     elevation: 6,
   },
-  // home(8), DARK ONLY: filled palette gold with dark content. The box model is
-  // unchanged either way — RN borders are inside the width.
+  // home(8): filled palette gold with dark content. NO LONGER DARK-ONLY — the
+  // base style above carries the same pair since 2026-08-23, so this is a
+  // restatement, not an override. The box model is unchanged either way —
+  // RN borders are inside the width.
   // home(18): the ring becomes the DARK content colour the glyph already uses.
   // Gold on gold is not a ring; this is the one master 44 would show if it drew
   // this control at all, and it introduces no colour the screen does not have.

@@ -587,9 +587,10 @@ export function HomeScreen() {
           </View>
 
           {/* Master 44's promo card: dark is a hairlined surface card with the
-              gold B drape and the screen's ONE solid-forest conversion pill
-              (decision 3); light keeps the Heritage forest card with its white
-              button and brand mark. */}
+              gold B drape and the screen's ONE conversion pill (decision 3).
+              2026-08-23: light is the SAME design in the light palette, not a
+              second design — its pill was a solid white fill with an invisible
+              ring, and is now the outlined treatment dark draws. */}
           <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
             <View style={styles.heroBody}>
               {/* Parity 2026-08-22: one copy column, reserved from the B
@@ -1035,14 +1036,27 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // home(24): the 8pt marginTop is the control's Y against master 44 — a REAL
   // gap on this one section, not a change to `sectionGap` — and it applies in
   // both themes since the parity pass (2026-08-22).
+  // 2026-08-23: THE FIELD IS A HAIRLINE, NOT A CARD, in both themes. Dark drew
+  // it as a near-transparent pill under a dim-gold hairline; light drew the
+  // same box as an elevated WHITE card, because `surface` is #FFFFFF there and
+  // shadows.card is theme-blind. Two designs again. The recolour:
+  //
+  //   fill    `colors.surface` -> transparent. Dark loses a #0A1813-over-
+  //           #02110D lift that is under 5% luminance and reads as flat
+  //           already; light loses the white card the operator flagged.
+  //   ring    `homeHairline` -> `border`. DARK IS PIXEL-IDENTICAL: both
+  //           tokens are #55482E in the dark palette. Light goes from the
+  //           #F1EAE2 whisper (invisible on #FAF5F1 once the fill is gone)
+  //           to the #DDD6C4 warm hairline, which is what dark's gold
+  //           hairline reads as against its own ground.
+  //   depth   shadows.card removed. An outlined field does not float.
   searchField: {
     marginTop: 8,
     gap: spacing.md,
     paddingHorizontal: 18,
     borderWidth: 1,
-    borderColor: colors.homeHairline,
-    backgroundColor: colors.surface,
-    ...shadows.card,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
   },
   searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
   searchGoPressed: { opacity: 0.7 },
@@ -1176,21 +1190,33 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // arithmetic home(15) used — and the difference is smaller than the
   // measurement's own threshold sensitivity on a downscaled screenshot.
   heroMark: { position: 'absolute', top: 21, right: 0 },
-  // The 1pt ring is part of the box in both themes (parity 2026-08-22);
-  // light draws it transparent on its white pill.
+  // The 1pt ring is part of the box in both themes (parity 2026-08-22), and
+  // since 2026-08-23 it is DRAWN in both.
+  //
+  // WHAT DARK ACTUALLY DOES, which is what light was not doing. Dark fills the
+  // pill one step off its own card (forest #1B3527 over surface #0A1813) and
+  // lets the mint2 ring carry the edge — an OUTLINED pill with a faint lift.
+  // Light was the opposite: pure white over the forest card, ring transparent,
+  // forest text. Same geometry, a different design.
+  //
+  // The fix is a recolour, not a restructure: the same token ROLES resolved
+  // through the light palette. `emerald` is light's one-step-off-the-card fill
+  // exactly as `forest` is dark's, `mint2` is the ring in both, and `onForest`
+  // is the content on a green fill in both (its docblock in lib/theme.ts says
+  // so). Nothing here moved, grew or gained a shadow.
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: colors.white,
+    borderColor: colors.mint2,
+    backgroundColor: colors.emerald,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
   heroButtonDark: { backgroundColor: colors.forest, borderColor: colors.mint2 },
   heroButtonPressed: { opacity: 0.9 },
-  heroButtonText: { fontFamily: fonts.display, fontSize: 24, fontWeight: '700', color: colors.forest },
+  heroButtonText: { fontFamily: fonts.display, fontSize: 24, fontWeight: '700', color: colors.onForest },
   heroButtonTextDark: { color: colors.onForest },
   // home(26) — the NEGATIVE margin is honest, and both themes carry it since
   // the parity pass.

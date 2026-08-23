@@ -6,8 +6,13 @@ import { USE_NATIVE_DRIVER } from '../../lib/motion';
 /**
  * The one toggle. In dark: a NEUTRAL track that never changes colour, and a
  * knob that carries the whole state — gold and glowing when ON, cream when
- * OFF, sliding left to right as normal. Light keeps its Heritage arrangement
- * untouched: emerald track, white knob, no rim.
+ * OFF, sliding left to right as normal. Light keeps its Heritage TRACK
+ * (emerald when ON, border when OFF) and, since 2026-08-23, dark's KNOB: the
+ * ON knob is the gold ring over the gold tint in both palettes, so the state
+ * colour a worker learns in one theme is the state colour in the other. The
+ * OFF knob stays each palette's own quiet disc (cream in dark, white in
+ * light), and the halo stays dark-only — a glow is an atmosphere the dark
+ * ground has and the cream one does not.
  *
  * emerald D5 REVERSES THE PREVIOUS RUN'S D1 ENTIRELY. That pass had made the
  * dark track emerald when ON and DANGER RED when OFF, arguing that a worker's
@@ -82,12 +87,15 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   // ...so the KNOB carries the whole state, and every part of it reads the one
   // `value` prop. Gold as line-work: a gold ring around a gold-tinted face,
   // never a gold fill (decision 3 / tests/goldOnForest.test.mjs).
-  const knobColor = isDark
-    ? value
-      ? withAlpha(palette.gold, 0.92)
-      : palette.onPrimary
-    : palette.white;
-  const knobBorder = isDark && value ? palette.gold : 'transparent';
+  // `value` branches FIRST, deliberately: the ON face is one colour for the
+  // whole app, and only the OFF face is a per-palette read. Written the other
+  // way round (isDark first) the two themes could drift apart again.
+  const knobColor = value
+    ? withAlpha(palette.gold, 0.92)
+    : isDark
+      ? palette.onPrimary
+      : palette.white;
+  const knobBorder = value ? palette.gold : 'transparent';
   const knobGlow = isDark && value ? glow.halo(withAlpha(palette.gold, 0.55)) : null;
 
   return (
