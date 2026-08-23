@@ -403,7 +403,7 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
   );
   assert.match(
     shell,
-    /\{mode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
+    /\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
     'the ground must wrap the tree swap so it covers both modes at once'
   );
   // …and it stays the ONLY painted surface in the bar row: the pill's own.

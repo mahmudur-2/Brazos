@@ -61,6 +61,27 @@ import {
  *   to paper over a navigation race, because there is no navigation: swapping
  *   `mode` swaps which navigator tree is mounted, which resets both stacks to
  *   their tab roots by construction (see navigation/ModeShell.tsx).
+ *
+ * THE SWAP IS TWO COMMITS, NOT ONE (device defect, 2026-08-22)
+ *   `mode` is the answer consumers read; `treeMode` is the tree the shell may
+ *   mount, and it trails `mode` by exactly one commit during a switch. The gap
+ *   commit renders NO navigator tree, so the outgoing tree unmounts fully —
+ *   and only then does the incoming tree first render.
+ *
+ *   Why: both trees root in a bottom-tab navigator, and React Navigation's
+ *   container keeps ONE authoritative state store whose adoption check is the
+ *   router's `type` alone (`useNavigationBuilder`'s isStateInitialized). Swap
+ *   the trees in a single commit and the incoming tree's first render adopts
+ *   the outgoing mode's state — route keys preserved by
+ *   getStateForRouteNamesChange — while the outgoing tree's unmount cleanup
+ *   and the incoming tree's first state publication interleave over that one
+ *   store. The tree DRAWS correctly (render uses its locally fixed-up state)
+ *   but dispatches evaluate against the store, which is left holding the other
+ *   mode's nested Home-stack routeNames: every navigate inside the Home tab
+ *   throws "was not handled by any navigator" until a reload rebuilds the
+ *   store from scratch. Sequencing unmount before mount means the incoming
+ *   tree always initializes from an EMPTY store — nothing to adopt, no
+ *   cleanup left to race — which no library ordering can un-fix.
  */
 
 type SwitchConfirmation = {
@@ -82,6 +103,15 @@ export type SwitchModeOptions = {
 export type ModeContextValue = {
   /** The current mode. Only ever one of the two literals — see coerceAppMode. */
   mode: AppMode;
+  /**
+   * The mode whose navigator tree the shell may mount. Equal to `mode` except
+   * for the single gap commit of a switch, during which the shell renders no
+   * tree at all so the outgoing navigators unmount before the incoming ones
+   * first render (see "THE SWAP IS TWO COMMITS" above). Only
+   * navigation/ModeShell.tsx should render from this; everything else reads
+   * `mode`.
+   */
+  treeMode: AppMode;
   /**
    * False until the initial resolution for the signed-in account has finished.
    * The shell holds a neutral loader on this rather than rendering a guessed
@@ -159,6 +189,7 @@ export function ModeProvider({ children }: PropsWithChildren) {
   const userId = user?.id ?? null;
 
   const [mode, setMode] = useState<AppMode>(DEFAULT_MODE);
+  const [treeMode, setTreeMode] = useState<AppMode>(DEFAULT_MODE);
   /** Which account the value in `mode` was resolved for. */
   const [resolvedFor, setResolvedFor] = useState<string | null>(null);
   const [armed, setArmed] = useState(false);
@@ -187,7 +218,17 @@ export function ModeProvider({ children }: PropsWithChildren) {
     setArmed(false);
     setResolvedFor(null);
     setMode(DEFAULT_MODE);
+    setTreeMode(DEFAULT_MODE);
   }, [userId]);
+
+  // The trailing half of the two-commit swap: `treeMode` follows `mode` one
+  // commit later, and the shell renders no tree while they differ. This effect
+  // is the ONLY writer of treeMode after a switch; the initial resolution and
+  // the sign-out reset set both values in one commit so no gap frame exists
+  // outside an actual switch.
+  useEffect(() => {
+    if (treeMode !== mode) setTreeMode(mode);
+  }, [mode, treeMode]);
 
   useEffect(() => {
     if (!armed || !userId || resolvedFor === userId) return;
@@ -216,6 +257,7 @@ export function ModeProvider({ children }: PropsWithChildren) {
       const resolved = resolveInitialMode({ landing, remote, local: pendingWrite ?? local });
 
       setMode(resolved);
+      setTreeMode(resolved);
       setResolvedFor(userId);
 
       // Make every source agree with what was just decided. Both are
@@ -233,12 +275,14 @@ export function ModeProvider({ children }: PropsWithChildren) {
 
   /**
    * Switches awaited by their callers (Stage 4D). The overlay flips `mode` at
-   * its midpoint; the [mode] effect below runs AFTER that render commits —
-   * and after the newly mounted tree's own effects, children before parents —
-   * so resolving here is the earliest moment a dispatch into the new tree can
-   * find it mounted. Entries that never match (the provider unmounting
-   * mid-switch) simply never resolve, which drops the caller's follow-up
-   * navigation rather than dispatching it into the wrong tree.
+   * its midpoint; the tree itself mounts one commit later, when `treeMode`
+   * catches up — so resolution keys on the [treeMode] effect below, which runs
+   * AFTER the tree's commit and after the newly mounted tree's own effects
+   * (children before parents). That makes resolving here the earliest moment a
+   * dispatch into the new tree can find it mounted and registered. Entries
+   * that never match (the provider unmounting mid-switch) simply never
+   * resolve, which drops the caller's follow-up navigation rather than
+   * dispatching it into the wrong tree.
    */
   const pendingSwitchResolvers = useRef<
     Array<{ target: AppMode; resolve: (switched: boolean) => void }>
@@ -247,11 +291,11 @@ export function ModeProvider({ children }: PropsWithChildren) {
   useEffect(() => {
     if (pendingSwitchResolvers.current.length === 0) return;
     pendingSwitchResolvers.current = pendingSwitchResolvers.current.filter((entry) => {
-      if (entry.target !== mode) return true;
+      if (entry.target !== treeMode) return true;
       entry.resolve(true);
       return false;
     });
-  }, [mode]);
+  }, [treeMode]);
 
   const switchMode = useCallback(
     async (target: AppMode, options?: SwitchModeOptions): Promise<boolean> => {
@@ -312,12 +356,13 @@ export function ModeProvider({ children }: PropsWithChildren) {
   const value = useMemo<ModeContextValue>(
     () => ({
       mode,
+      treeMode,
       ready: userId !== null && resolvedFor === userId,
       switching: requesting || busy,
       switchMode,
       armResolution,
     }),
-    [mode, userId, resolvedFor, requesting, busy, switchMode, armResolution]
+    [mode, treeMode, userId, resolvedFor, requesting, busy, switchMode, armResolution]
   );
 
   return <ModeContext.Provider value={value}>{children}</ModeContext.Provider>;

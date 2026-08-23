@@ -134,6 +134,7 @@ test('nothing outside ModeProvider sets a mode', () => {
     ['App.tsx', app],
   ]) {
     assert.doesNotMatch(source, /setMode\(/, `${path} must not set the mode`);
+    assert.doesNotMatch(source, /setTreeMode\(/, `${path} must not set the tree mode`);
   }
 });
 
@@ -149,6 +150,7 @@ test('sign-out disarms resolution so the next account cannot race Setup', () => 
   assert.match(signOutReset[0], /setArmed\(false\)/);
   assert.match(signOutReset[0], /setResolvedFor\(null\)/);
   assert.match(signOutReset[0], /setMode\(DEFAULT_MODE\)/);
+  assert.match(signOutReset[0], /setTreeMode\(DEFAULT_MODE\)/);
 });
 
 test('a switch always confirms, and there is no flag to skip it', () => {
@@ -162,18 +164,23 @@ test('a switch always confirms, and there is no flag to skip it', () => {
 
 test('an awaited switch resolves only after the target tree is committed', () => {
   // Stage 4D: cross-mode notification routing awaits switchMode() and then
-  // dispatches — so the promise must not settle until the [mode] effect has
-  // run with the new value, which happens after the swapped tree's own
-  // effects (children before parents). A decline or refusal resolves false.
+  // dispatches — so the promise must not settle until the TREE for the target
+  // mode has committed. Since the two-commit swap, that is the [treeMode]
+  // effect: it runs one commit after `mode` flips, after the mounted tree's
+  // own effects (children before parents). Resolving on [mode] would hand the
+  // caller a promise that settles during the gap commit, when NO tree is
+  // mounted and the dispatch would be dropped. A decline or refusal resolves
+  // false.
   assert.match(
     provider,
     /switchMode: \(target: AppMode, options\?: SwitchModeOptions\) => Promise<boolean>/
   );
   assert.match(provider, /pendingSwitchResolvers\.current\.push\(\{ target, resolve \}\)/);
   const resolverEffect = provider.match(
-    /useEffect\(\(\) => \{\s*if \(pendingSwitchResolvers[\s\S]*?\}, \[mode\]\);/
+    /useEffect\(\(\) => \{\s*if \(pendingSwitchResolvers[\s\S]*?\}, \[treeMode\]\);/
   );
-  assert.ok(resolverEffect, 'the resolver must fire from the [mode] effect');
+  assert.ok(resolverEffect, 'the resolver must fire from the [treeMode] effect');
+  assert.match(resolverEffect[0], /entry\.target !== treeMode/);
   assert.match(resolverEffect[0], /entry\.resolve\(true\)/);
 });
 
@@ -263,9 +270,41 @@ test('the Home tab roots at the home of the mode you are in', () => {
 });
 
 test('exactly one tree is mounted, and swapping them is the stack reset', () => {
-  assert.match(shell, /mode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>/);
+  assert.match(shell, /treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>/);
   // No redirect, no reset call, nothing that could loop.
   assert.doesNotMatch(shell, /navigate\(|reset\(|navigationRef/);
+});
+
+test('the tree swap is sequenced: unmount commit, then mount commit', () => {
+  // The device-reproduced 2026-08-22 defect: swapping the two same-type
+  // navigator trees in ONE commit let the incoming tree adopt the outgoing
+  // mode's navigation state from the container's single root-state store
+  // (React Navigation's adoption check is the router `type` alone, and its
+  // route-names fixup preserves route keys), leaving every Home-tab dispatch
+  // evaluating against the other mode's routes — "NAVIGATE ... was not
+  // handled by any navigator" until a reload. The fix is structural
+  // sequencing, and each half is pinned here.
+  //
+  // 1. The provider owns a `treeMode` that trails `mode` by one commit, and
+  //    only its trailing effect moves it after a switch.
+  assert.match(provider, /const \[treeMode, setTreeMode\] = useState<AppMode>\(DEFAULT_MODE\)/);
+  assert.match(
+    provider,
+    /useEffect\(\(\) => \{\s*if \(treeMode !== mode\) setTreeMode\(mode\);\s*\}, \[mode, treeMode\]\);/
+  );
+  // 2. The switch seam flips `mode` ONLY. Setting treeMode there too would
+  //    collapse the swap back into a single commit — the defect itself.
+  assert.match(provider, /onSwitch: \(\) => setMode\(target\)/);
+  assert.doesNotMatch(provider, /onSwitch:[^\n]*setTreeMode/);
+  // 3. The initial resolution and sign-out set both in one commit, so the gap
+  //    frame exists only during an actual switch.
+  assert.match(provider, /setMode\(resolved\);\s*setTreeMode\(resolved\);/);
+  // 4. The shell renders NO tree while the two disagree — ground only. The
+  //    outgoing tree must be fully unmounted before the incoming one renders.
+  assert.match(
+    shell,
+    /if \(treeMode !== mode\) \{\s*return <View style=\{\[styles\.tree, \{ backgroundColor: palette\.background \}\]\} \/>;\s*\}/
+  );
 });
 
 test('the shell holds rather than guessing while the mode resolves', () => {

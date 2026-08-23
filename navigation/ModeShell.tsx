@@ -27,6 +27,21 @@ import { WorkerRoot } from './WorkerRoot';
  * The only thing that changes the value is switchMode(), and it is driven by a
  * user action, never by what is on screen.
  *
+ * WHY THE SWAP TAKES TWO COMMITS
+ * `treeMode` trails `mode` by one commit during a switch (the provider owns
+ * that sequencing — see "THE SWAP IS TWO COMMITS" in modes/ModeProvider.tsx).
+ * While they differ, this shell renders the painted ground and NO navigator
+ * tree: the outgoing tree unmounts completely — its cleanup empties the
+ * navigation container's one root-state store — before the incoming tree
+ * first renders and initializes fresh. Mounting both halves of the swap in a
+ * single commit let the incoming tree adopt the outgoing mode's navigation
+ * state (both trees root in the same navigator type), which left every
+ * dispatch inside the Home tab evaluating against the other mode's routes:
+ * the device-reproduced "NAVIGATE ... was not handled by any navigator" red
+ * box that only a reload cleared. The gap commit is a single frame of the
+ * same background the trees paint, and the mode-switch overlay is at rest
+ * covering the screen for the whole of it.
+ *
  * WHY THIS ALSO PAINTS THE GROUND (emerald D2)
  * The floating nav pill (Prestige 0d) sits in normal layout flow and floats by
  * MARGINS — 12pt each side and at least 12pt below, growing to the full home-
@@ -49,7 +64,7 @@ import { WorkerRoot } from './WorkerRoot';
  * introduced.
  */
 export function ModeShell() {
-  const { mode, ready, armResolution } = useMode();
+  const { mode, treeMode, ready, armResolution } = useMode();
   const { palette } = useThemeColors();
 
   // Resolution starts here rather than when the session appears, because this
@@ -68,9 +83,16 @@ export function ModeShell() {
     );
   }
 
+  // The gap commit of the two-commit swap: no tree at all, so the outgoing
+  // navigators unmount before the incoming ones exist. Ground only — the
+  // switch overlay covers this frame entirely.
+  if (treeMode !== mode) {
+    return <View style={[styles.tree, { backgroundColor: palette.background }]} />;
+  }
+
   return (
     <View style={[styles.tree, { backgroundColor: palette.background }]}>
-      {mode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
+      {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
     </View>
   );
 }

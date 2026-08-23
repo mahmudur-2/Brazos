@@ -47,7 +47,7 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
   assert.match(shell, /<View style=\{\[styles\.tree, \{ backgroundColor: palette\.background \}\]\}>/);
   assert.match(
     shell,
-    /\{mode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
+    /\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
     'the ground must wrap the tree swap, not replace it'
   );
 
