@@ -331,3 +331,71 @@ test('[static] every feature flag is false and carries the dependency it waits o
     assert.match(block, /WAITS ON:/, `${name} must record the table, column, policy, deploy or key it waits on`);
   }
 });
+
+test('[static] every feature flag either gates something or says plainly that it does not', () => {
+  // AUDIT F1. A flag table's implicit contract is "flip this and the feature
+  // appears". READ_TICKS and DELIVERED_TICKS broke it: both were named only in
+  // PROSE — components/MessageTicks.tsx and lib/messageTicks.ts mention them,
+  // neither imports them — so flipping either changed nothing on screen.
+  // ChatBubble calls `tickStateFor(delivery ?? {})` and no caller passes
+  // `delivery`, so every own message draws one tick whatever the flags say.
+  //
+  // Both are still false and still blocked on schema that does not exist, so
+  // the fix is not to wire them — wiring READ_TICKS today would light gold on
+  // a pair's direct-thread bubbles and never on their job-thread ones, in the
+  // SAME conversation, which is worse than not offering it. The fix is that
+  // the table stops implying a switch it does not have.
+  //
+  // This fence keeps that honest in BOTH directions: a flag with a guard site
+  // is fine, a flag without one must SAY it has none, and the day the wiring
+  // lands the declaration has to come back out.
+  const source = read('lib/featureFlags.ts');
+  const flags = [...source.matchAll(/export const (\w+) = (?:false|true) as boolean;/g)].map(
+    (m) => m[1],
+  );
+
+  const sources = [];
+  for (const dir of ['components', 'screens', 'hooks', 'lib']) {
+    for (const name of readdirSync(join(root, dir))) {
+      if (!name.endsWith('.ts') && !name.endsWith('.tsx')) continue;
+      if (`${dir}/${name}` === 'lib/featureFlags.ts') continue;
+      sources.push([`${dir}/${name}`, stripComments(read(`${dir}/${name}`))]);
+    }
+  }
+
+  let gated = 0;
+  let declared = 0;
+  for (const name of flags) {
+    const pattern = new RegExp(`\\b${name}\\b`);
+    const sites = sources.filter(([, body]) => pattern.test(body)).map(([file]) => file);
+    const doc = source.slice(0, source.indexOf(`export const ${name}`));
+    const block = doc.slice(doc.lastIndexOf('/**'));
+    const declaresNoGuard = /NO GUARD SITE/.test(block);
+
+    if (sites.length > 0) {
+      gated += 1;
+      assert.ok(
+        !declaresNoGuard,
+        `${name} is guarded at ${sites.join(', ')} but its doc still says NO GUARD SITE — ` +
+          'delete that paragraph now the wiring exists',
+      );
+    } else {
+      declared += 1;
+      assert.ok(
+        declaresNoGuard,
+        `${name} gates nothing — no file outside lib/featureFlags.ts references it — so ` +
+          'flipping it changes nothing. Say so in its doc block and name what must be built.',
+      );
+      assert.match(
+        block,
+        /WHAT MUST BE BUILT/,
+        `${name} declares no guard site but does not name the wiring that would give it one`,
+      );
+    }
+  }
+
+  // The sweep must be measuring both halves; an empty `sources` would make
+  // every flag look unguarded and still pass the loop above.
+  assert.ok(gated >= 8, `most flags do gate something (saw ${gated})`);
+  assert.equal(declared, 2, `exactly the two tick flags gate nothing today (saw ${declared})`);
+});

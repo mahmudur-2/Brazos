@@ -148,6 +148,13 @@ export function ChatBubble({
             <Text style={[styles.time, isOwn && !isUnsent && styles.timeOwn]}>
               {formatClockTime(message.created_at)}
             </Text>
+            {/* `delivery` is UNPASSED by every caller today, so this resolves
+                to 'sent' — one tick — on every own message. That is not an
+                oversight here: the two states above it are blocked on schema
+                that does not exist, and READ_TICKS / DELIVERED_TICKS in
+                lib/featureFlags.ts name what has to be built before anything
+                can fill this prop. The prop and the derivation are ready; the
+                source of the facts is not. */}
             {isOwn && !isUnsent ? <MessageTicks state={tickStateFor(delivery ?? {})} /> : null}
           </View>
         </View>

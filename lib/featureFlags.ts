@@ -156,6 +156,24 @@ export const MARK_UNREAD = false as boolean;
  * "unknowable here" on the next. What the schema needs is one of: a
  * party-scoped select policy on message_reads, or a security-definer function
  * returning the other party's last_read_at for a job the caller is party to.
+ *
+ * NO GUARD SITE TODAY — and this line is the correction, because the rest of
+ * this block implies one. Flipping this constant to `true` changes NOTHING on
+ * screen. The only two files that name it, components/MessageTicks.tsx and
+ * lib/messageTicks.ts, name it in prose; neither imports it. The bubble calls
+ * `tickStateFor(delivery ?? {})` and no caller passes `delivery`, so every own
+ * message renders one tick whatever this says.
+ *
+ * WHAT MUST BE BUILT, in order:
+ *   1. the read source above, since there is none for job threads;
+ *   2. screens/ChatScreen.tsx assembling a MessageDelivery per own message —
+ *      `readAt` from the counterparty's watermark via coveredByReadWatermark();
+ *   3. that assembly guarded by THIS flag, and passed to ChatBubble's existing
+ *      `delivery` prop, which already accepts it.
+ *
+ * Step 3 is the one that turns this constant into a switch. Until it exists,
+ * the honest description of this flag is that the element is built, the
+ * derivation is built and tested, and the WIRING BETWEEN THEM IS NOT.
  */
 export const READ_TICKS = false as boolean;
 
@@ -170,6 +188,18 @@ export const READ_TICKS = false as boolean;
  * live wiring waits. This is the strictly harder half of [[READ_TICKS]]: read
  * state at least EXISTS in the schema for one thread kind, and delivery
  * exists for neither.
+ *
+ * NO GUARD SITE TODAY, exactly as for [[READ_TICKS]] and for the same reason:
+ * flipping this constant changes nothing, because nothing imports it. It is
+ * named only in the prose of components/MessageTicks.tsx and
+ * lib/messageTicks.ts.
+ *
+ * WHAT MUST BE BUILT: a per-recipient `delivered_at` (a column and the client
+ * write that sets it when a device receives the row), then the same step 3
+ * [[READ_TICKS]] names — ChatScreen assembling `deliveredAt` into the
+ * MessageDelivery it passes to ChatBubble, guarded by this flag. Both flags
+ * feed ONE prop, so whichever lands first builds the assembly and the second
+ * only adds its field.
  */
 export const DELIVERED_TICKS = false as boolean;
 
