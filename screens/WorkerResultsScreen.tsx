@@ -22,7 +22,12 @@ import {
   applyJobFilters,
   type JobFilterModel,
 } from '../lib/jobFilters';
-import { jobMatchesSkills, type OpenJob } from '../lib/jobs';
+import {
+  JOB_CATEGORY_LABELS,
+  jobMatchesSkills,
+  type JobCategory,
+  type OpenJob,
+} from '../lib/jobs';
 import { geocodeQuery } from '../lib/reverseGeocode';
 import type {
   WorkerHomeStackNavigation,
@@ -140,7 +145,20 @@ export function WorkerResultsScreen() {
   // Screen 50 (Phase 8): one filter model over whichever feed this mode
   // shows. Applied AFTER the mode picks its base set, so a filtered nearby
   // list is still genuinely "within N miles".
-  const [filters, setFilters] = useState<JobFilterModel>(DEFAULT_JOB_FILTERS);
+  //
+  // Worker Home's category pills (2026-08-22) arrive as `params.category`
+  // and SEED this same model rather than growing a parallel filter: the
+  // header badge shows it, the sheet's category chip arrives pre-selected,
+  // and clearing filters clears it. Allow-list validation — an unknown key
+  // seeds nothing rather than silently emptying the list.
+  const [filters, setFilters] = useState<JobFilterModel>(() =>
+    params.category != null && params.category in JOB_CATEGORY_LABELS
+      ? {
+          ...DEFAULT_JOB_FILTERS,
+          categories: new Set<JobCategory>([params.category as JobCategory]),
+        }
+      : DEFAULT_JOB_FILTERS
+  );
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Distance sort only means something when rows carry distance_miles.
   const distanceAvailable =

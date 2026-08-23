@@ -14,8 +14,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
+import { Chip } from '../components/Chip';
 import { HomeAtmosphere } from '../components/HomeAtmosphere';
 import { PulseDot } from '../components/PulseDot';
+import { ServicePickerSheet } from '../components/ServicePickerSheet';
 import { Skeleton } from '../components/Skeleton';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useAuth } from '../hooks/useAuth';
@@ -30,6 +32,7 @@ import { fetchJobsWithinRadius } from '../lib/hotspots';
 import { formatBudget, jobMatchesSkills, type OpenJob } from '../lib/jobs';
 import type { WorkerHomeStackNavigation } from '../lib/navigation';
 import { updateProfile } from '../lib/profiles';
+import { HOME_SERVICE_ROWS, MORE_SERVICES } from '../lib/skillCategories';
 import { greetingFor } from '../lib/time';
 import { useMode } from '../modes';
 import {
@@ -95,6 +98,7 @@ export function WorkerHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [savingAvailability, setSavingAvailability] = useState(false);
   const [query, setQuery] = useState('');
+  const [moreOpen, setMoreOpen] = useState(false);
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
   const accepting = profile?.accepting_work ?? true;
@@ -186,6 +190,13 @@ export function WorkerHomeScreen() {
     const trimmed = query.trim();
     if (!trimmed) return;
     navigation.navigate('WorkerResults', { mode: 'search', query: trimmed });
+  }
+
+  // The category pills' dispatch: the full feed, seeded with that one
+  // category through WorkerResults' existing filter model — the same list
+  // surface every other job intent lands on, no new screen.
+  function searchCategory(categoryKey: string) {
+    navigation.navigate('WorkerResults', { mode: 'all', category: categoryKey });
   }
 
   async function saveAcceptingWork(next: boolean) {
@@ -334,6 +345,46 @@ export function WorkerHomeScreen() {
               </>
             }
           />
+
+          {/* --- The category pills (2026-08-22): the same rows, component
+              and geometry as customer Home — HOME_SERVICE_ROWS is the one
+              shared arrangement — with every tap landing on WorkerResults
+              seeded with that category. --- */}
+          <View style={styles.serviceRows}>
+            {HOME_SERVICE_ROWS.map((row, rowIndex) => (
+              <View key={`service-row-${rowIndex}`} style={styles.serviceRow}>
+                {row.map((service) => (
+                  <Chip
+                    key={service.label}
+                    label={service.label}
+                    icon={service.icon}
+                    variant="service"
+                    style={[
+                      !isDark && styles.goldOutlineChip,
+                      rowIndex === 1 ? styles.compactServiceChip : styles.serviceChip,
+                    ]}
+                    onPress={() => searchCategory(service.key)}
+                    accessibilityHint={`Find ${service.label.toLowerCase()} jobs`}
+                  />
+                ))}
+                {rowIndex === HOME_SERVICE_ROWS.length - 1 ? (
+                  <Chip
+                    label="Other"
+                    icon="chevron-down"
+                    variant="service"
+                    style={[
+                      !isDark && styles.goldOutlineChip,
+                      styles.compactServiceChip,
+                      styles.otherChip,
+                    ]}
+                    onPress={() => setMoreOpen(true)}
+                    accessibilityLabel="Other services"
+                    accessibilityHint="Opens the full list of services"
+                  />
+                ) : null}
+              </View>
+            ))}
+          </View>
 
           {/* --- The summary card (4D-6, operator spec — the ONE card where
               the mockup is a pixel target): a surface container with a gold
@@ -506,6 +557,18 @@ export function WorkerHomeScreen() {
           )}
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <ServicePickerSheet
+        visible={moreOpen}
+        title="All services"
+        subtitle="Pick the kind of work you're after"
+        services={MORE_SERVICES}
+        onSelect={(categoryKey) => {
+          setMoreOpen(false);
+          searchCategory(categoryKey);
+        }}
+        onClose={() => setMoreOpen(false)}
+      />
     </SafeAreaView>
   );
 }
@@ -596,6 +659,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.emerald,
   },
   searchGoPressed: { opacity: 0.85 },
+  // The category pill rows — home(24)'s geometry, verbatim from customer
+  // Home (tests/workerHome.test.mjs pins the two screens' copies together):
+  // gap 10 between rows, 6 inside them, 12/8 pill paddings, and light's gold
+  // outline as a borderColor over the Chip's shared 1pt border.
+  serviceRows: { gap: 10 },
+  serviceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  serviceChip: { paddingHorizontal: 12 },
+  compactServiceChip: { paddingHorizontal: 8 },
+  goldOutlineChip: { borderColor: colors.gold },
+  otherChip: { flexGrow: 1, flexShrink: 1, justifyContent: 'center' },
   // ONE container, surface-filled with a GOLD hairline — never a forest
   // fill: under Prestige forest is the gold primary, and gold-family text on
   // it disappears (the defect e195012 repaired on ClientJobDetail's hero).

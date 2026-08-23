@@ -237,6 +237,12 @@ export type WorkerHomeStackParamList = {
   WorkerResults: {
     mode: 'all' | 'skills' | 'nearby' | 'search';
     query?: string;
+    /** Worker Home's category pills (2026-08-22): seeds the screen's existing
+     *  job-filter model with this one category — the same filter the sheet's
+     *  own category chips drive, so the badge shows it and the user can clear
+     *  it. Validated against JOB_CATEGORY_LABELS at the seed; an unknown key
+     *  seeds nothing. Same plain-string shape as WorkerSearch's `category`. */
+    category?: string;
     /** For "nearby": the already-resolved center point from Home's own pill,
      *  so this screen filters the exact same coordinates rather than calling
      *  the GPS again and risking a different (if nearly identical) cell set.

@@ -32,7 +32,7 @@ import {
   jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
-import { HOME_QUICK_SERVICES, MORE_SERVICES } from '../lib/skillCategories';
+import { HOME_SERVICE_ROWS, MORE_SERVICES } from '../lib/skillCategories';
 import { greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
@@ -79,7 +79,6 @@ const HOME_HERO_ART = require('../assets/brand/customer-home-chair.png');
 const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png');
 const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 const PREVIEW_COUNT = 4;
-const HOME_SERVICE_ROWS = [HOME_QUICK_SERVICES.slice(0, 2), HOME_QUICK_SERVICES.slice(2, 4)];
 
 // ---------------------------------------------------------------------------
 // home(2) — THE B DRAPE'S GEOMETRY.
@@ -531,12 +530,19 @@ export function HomeScreen() {
             trailing={
               <>
                 <View style={styles.searchDivider} />
-                <Ionicons
-                  name="arrow-forward"
-                  size={23}
-                  color={colors.gold}
+                {/* The submit affordance, not decoration: same submitSearch()
+                    the keyboard return fires, and an empty query is a no-op
+                    inside it. The worker Home arrow carries the same
+                    contract (tests/voiceSearch.test.mjs pins both). */}
+                <Pressable
+                  onPress={submitSearch}
+                  hitSlop={10}
+                  style={({ pressed }) => pressed && styles.searchGoPressed}
+                  accessibilityRole="button"
                   accessibilityLabel="Search"
-                />
+                >
+                  <Ionicons name="arrow-forward" size={23} color={colors.gold} />
+                </Pressable>
               </>
             }
           />
@@ -1022,6 +1028,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...shadows.card,
   },
   searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
+  searchGoPressed: { opacity: 0.7 },
   // home(24)'s row rhythm — gap 10 between rows, 6.4 -> 6 inside them — in
   // BOTH themes since the parity pass (light's spacing.sm pair is retired).
   serviceRows: { gap: 10 },

@@ -63,6 +63,48 @@ test("the search field mirrors the locked 48's dispatch and sits above the toggl
     'the search field must sit between the hero block and the summary card');
 });
 
+test('the category pills mirror customer Home and land on WorkerResults seeded', async () => {
+  // 2026-08-22: the pill row under the worker search bar is customer Home's
+  // row — same component (Chip, service variant), same categories, same
+  // geometry — with every tap landing on the EXISTING list surface.
+  //
+  // Same rows: ONE shared arrangement, defined once in lib/skillCategories.
+  assert.match(code, /HOME_SERVICE_ROWS\.map/);
+  const customer = stripComments(await read('screens/HomeScreen.tsx'));
+  assert.match(customer, /HOME_SERVICE_ROWS\.map/);
+  assert.match(
+    stripComments(await read('lib/skillCategories.ts')),
+    /export const HOME_SERVICE_ROWS: SkillCategory\[\]\[\] = \[\s*HOME_QUICK_SERVICES\.slice\(0, 2\),\s*HOME_QUICK_SERVICES\.slice\(2, 4\),\s*\]/
+  );
+  // Same component and the same "Other" sheet behind the trailing chip.
+  assert.match(code, /variant="service"/);
+  assert.match(code, /<ServicePickerSheet/);
+  assert.match(code, /services=\{MORE_SERVICES\}/);
+  // Same geometry: the row's style entries are byte-identical between the two
+  // screens' stylesheets, so the copies cannot drift apart.
+  for (const entry of [
+    /serviceRows: \{ gap: 10 \}/,
+    /serviceRow: \{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 \}/,
+    /serviceChip: \{ paddingHorizontal: 12 \}/,
+    /compactServiceChip: \{ paddingHorizontal: 8 \}/,
+    /goldOutlineChip: \{ borderColor: colors\.gold \}/,
+    /otherChip: \{ flexGrow: 1, flexShrink: 1, justifyContent: 'center' \}/,
+  ]) {
+    assert.match(code, entry, `worker Home must carry ${entry}`);
+    assert.match(customer, entry, `customer Home must carry ${entry}`);
+  }
+  // The dispatch: the existing WorkerResults surface with a category seed —
+  // no new screen — and the seed is allow-listed against the category map,
+  // feeding the SAME filter model the sheet's own category chips drive.
+  assert.match(
+    code,
+    /navigation\.navigate\('WorkerResults', \{ mode: 'all', category: categoryKey \}\)/
+  );
+  const results = stripComments(await read('screens/WorkerResultsScreen.tsx'));
+  assert.match(results, /params\.category != null && params\.category in JOB_CATEGORY_LABELS/);
+  assert.match(results, /categories: new Set<JobCategory>\(\[params\.category as JobCategory\]\)/);
+});
+
 test('the toggle is phase53 accepting_work through the existing profile path', () => {
   assert.match(code, /profile\?\.accepting_work \?\? true/);
   assert.match(code, /updateProfile\(user\.id, \{ accepting_work: next \}\)/);

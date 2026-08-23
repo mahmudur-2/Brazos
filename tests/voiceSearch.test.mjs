@@ -897,6 +897,24 @@ test('[static] WorkerHome keeps the locked-48 mirror behind the conversion', () 
   assert.match(code, /searchGo: \{[^}]*backgroundColor: colors\.emerald/s);
 });
 
+test("[static] customer Home's trailing arrow submits — same contract as the worker's", () => {
+  // 2026-08-22: the gold arrow was a bare <Ionicons> — decoration that did
+  // nothing on tap. It is now a Pressable firing the SAME submitSearch() the
+  // keyboard return fires, whose empty-query guard makes an empty tap a
+  // silent no-op (the pre-resolved behaviour), exactly like worker Home's
+  // disc above.
+  const code = stripCommentsForScan(read('screens/HomeScreen.tsx'));
+  assert.match(code, /onSubmit=\{submitSearch\}/);
+  const trailing = /trailing=\{([\s\S]*?)\n\s*\}\n\s*\/>/.exec(code);
+  assert.ok(trailing, 'the customer search bar must keep its trailing slot');
+  assert.match(trailing[1], /<Pressable/, 'the arrow must be pressable, not decoration');
+  assert.match(trailing[1], /onPress=\{submitSearch\}/);
+  assert.match(trailing[1], /name="arrow-forward"/);
+  assert.match(trailing[1], /accessibilityRole="button"/);
+  // The guard that makes empty a no-op lives in submitSearch itself.
+  assert.match(code, /const trimmed = query\.trim\(\);\s*if \(!trimmed\) return;/);
+});
+
 test("[static] SearchBar's additive props default to the exact posture existing consumers had", () => {
   // Each default reproduces the previously hardcoded value, so a consumer
   // passing nothing new (the catalog) renders byte-identically.

@@ -52,6 +52,18 @@ export const HOME_QUICK_SERVICES: SkillCategory[] = [
 ];
 
 /**
+ * The two-row arrangement both Home screens draw (master 44's five pills:
+ * four quick services plus the trailing "Other"). One definition, because the
+ * customer and worker rows must be the SAME pills in the same order — a
+ * per-screen slice would let them drift. The last two quick services stay
+ * reachable through "Other"'s sheet.
+ */
+export const HOME_SERVICE_ROWS: SkillCategory[][] = [
+  HOME_QUICK_SERVICES.slice(0, 2),
+  HOME_QUICK_SERVICES.slice(2, 4),
+];
+
+/**
  * The longer service list behind Home's "Other" chip.
  *
  * Every entry carries a `key` that is already a real category — the same keys
