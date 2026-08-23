@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import {
   fetchConversations,
   fetchMyReadStates,
@@ -18,6 +18,13 @@ type ModerationLists = {
   blockedBy: Set<string>;
   muted: Set<string>;
 };
+
+/**
+ * The trailing window a burst of realtime inserts collapses into. Shorter than
+ * useHotspots' 1500ms because this list is the screen the user is looking at
+ * while the messages arrive, not a background aggregation.
+ */
+const REFRESH_DEBOUNCE_MS = 250;
 
 const EMPTY_MODERATION: ModerationLists = {
   blocking: new Set(),
@@ -43,6 +50,19 @@ export function useConversations() {
   const [moderation, setModeration] = useState<ModerationLists>(EMPTY_MODERATION);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // See useOpenJobs.ts for why the channel topic needs both a per-instance id
+  // and a per-effect-run counter: supabase.channel() dedupes by topic string,
+  // and removeChannel() tears down asynchronously, so a fast remount can
+  // otherwise hand back a still-subscribing channel and throw on .on().
+  //
+  // This hook needed it MORE than the five that already had it, and had it
+  // least: it backs a tab screen, where remount is the ordinary gesture
+  // rather than an edge case, and its topic was the fixed string
+  // 'messages:inbox' — the same string for every instance and every mount.
+  const instanceId = useId();
+  const runRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!user) {
@@ -95,26 +115,42 @@ export function useConversations() {
 
   useEffect(() => {
     if (!user) return;
+
+    // A BURST OF MESSAGES IS ONE INBOX READ. Every INSERT on `messages`
+    // app-wide used to call refresh() directly, and refresh() re-queries the
+    // WHOLE inbox — conversations, read states, counterparty profiles and
+    // last-message reactions. Ten messages arriving together were ten of
+    // those. The trailing debounce collapses the burst into a single read,
+    // and the inbox is a summary surface, so arriving a fraction of a second
+    // later costs nothing a user can perceive.
+    const scheduleRefresh = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(refresh, REFRESH_DEBOUNCE_MS);
+    };
+
     // RLS scopes delivery to messages/reactions the user can read, so this
     // only ever fires for the user's own jobs even without a per-job filter.
     const channel = supabase
-      .channel('messages:inbox')
+      .channel(`messages:inbox:${instanceId}:${runRef.current++}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
-        () => refresh()
+        scheduleRefresh
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'message_reactions' },
-        () => refresh()
+        scheduleRefresh
       )
       .subscribe();
 
     return () => {
+      // The timer first: a refresh that fires after teardown would set state
+      // on an unmounted hook and re-query for a screen that is gone.
+      if (debounceRef.current) clearTimeout(debounceRef.current);
       supabase.removeChannel(channel);
     };
-  }, [user, refresh]);
+  }, [user, refresh, instanceId]);
 
   return {
     conversations,

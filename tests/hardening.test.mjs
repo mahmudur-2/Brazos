@@ -468,3 +468,93 @@ test('profile reviews are readable without widening the reviews policy', () => {
   );
   assert.doesNotMatch(phase37, /drop policy if exists "job_photos_insert" on/i);
 });
+
+// ---------------------------------------------------------------------------
+// REALTIME CHANNEL TOPICS — every subscription is unique per mount.
+// ---------------------------------------------------------------------------
+
+test('every realtime channel topic is unique per mount', () => {
+  // WHY THIS IS A HARDENING CONCERN rather than a style one. `supabase
+  // .channel(topic)` dedupes against the client's existing channels BY TOPIC
+  // STRING, and `removeChannel()` tears down asynchronously — it awaits
+  // `channel.unsubscribe()` before splicing the old channel out. So a fast
+  // unmount/remount on a fixed topic can hand the new effect the OLD,
+  // already-subscribed channel object, and `.on()` on it throws
+  //   "cannot add postgres_changes callbacks ... after subscribe()".
+  //
+  // A per-instance `useId()` alone does not fix it: a remount of the SAME
+  // instance reuses the same id. The established mitigation, documented at
+  // length in hooks/useOpenJobs.ts, is id + a per-effect-run counter, so every
+  // mount gets a topic string that has never existed before.
+  //
+  // hooks/useConversations.ts was the last hook subscribing on a fixed literal
+  // ('messages:inbox'), and it was the one that needed the mitigation MOST:
+  // it backs a tab screen, where remount is the ordinary gesture.
+  const SUFFIX = /\$\{instanceId\}:\$\{runRef\.current\+\+\}`/;
+
+  // The ONE remaining fixed-topic subscription, recorded rather than excused.
+  // It is keyed per job, so two different jobs cannot collide — but a fast
+  // remount on the SAME job still can. Not fixed here because it is outside
+  // this run's scope; listed so a new fixed topic cannot hide among the
+  // existing ones, and so removing it from this list is the whole fix.
+  const KNOWN_FIXED_TOPIC = ['hooks/useReactions.ts'];
+
+  const sources = [];
+  for (const dir of ['hooks', 'screens', 'components', 'lib']) {
+    for (const name of readdirSync(join(root, dir))) {
+      if (name.endsWith('.ts') || name.endsWith('.tsx')) sources.push(`${dir}/${name}`);
+    }
+  }
+
+  // Comments in these files QUOTE the broken form on purpose — useOpenjobs.ts
+  // explains the bug with `.channel(sameTopic)` in prose — so the sweep reads
+  // code only.
+  const stripComments = (source) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+  let checked = 0;
+  const offenders = [];
+  for (const file of sources) {
+    const body = stripComments(read(file));
+    for (const call of body.matchAll(/\.channel\(([^)]*)\)/g)) {
+      checked += 1;
+      if (KNOWN_FIXED_TOPIC.includes(file)) continue;
+      if (!SUFFIX.test(call[1])) offenders.push(`${file}: .channel(${call[1].trim()})`);
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'these realtime topics are not unique per mount — see hooks/useOpenJobs.ts:\n' +
+      offenders.join('\n'),
+  );
+  // The sweep must actually be finding call sites; a rename that emptied it
+  // would otherwise pass silently.
+  assert.ok(checked >= 7, `the channel sweep must stay wired (saw ${checked} call sites)`);
+
+  // And the inbox specifically, since it is the one this run moved: unique
+  // topic, debounced refresh, and a teardown that cancels the pending timer
+  // before removing the channel.
+  const inbox = read('hooks/useConversations.ts');
+  assert.match(inbox, /\.channel\(`messages:inbox:\$\{instanceId\}:\$\{runRef\.current\+\+\}`\)/);
+  assert.doesNotMatch(inbox, /\.channel\('messages:inbox'\)/, 'the fixed topic must not come back');
+  assert.match(inbox, /const REFRESH_DEBOUNCE_MS = (\d+);/);
+  const window = Number(/const REFRESH_DEBOUNCE_MS = (\d+);/.exec(inbox)[1]);
+  assert.ok(window >= 200 && window <= 300, `a trailing inbox debounce belongs in 200-300ms, not ${window}`);
+  assert.match(
+    inbox,
+    /debounceRef\.current = setTimeout\(refresh, REFRESH_DEBOUNCE_MS\)/,
+    'the burst must collapse into one refresh',
+  );
+  assert.doesNotMatch(
+    inbox,
+    /table: 'messages' \},\s*\(\) => refresh\(\)/,
+    'an INSERT must schedule a refresh, not perform one',
+  );
+  assert.match(
+    inbox,
+    /if \(debounceRef\.current\) clearTimeout\(debounceRef\.current\);\s*supabase\.removeChannel\(channel\);/,
+    'teardown must cancel the pending refresh before dropping the channel',
+  );
+});
