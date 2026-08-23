@@ -43,6 +43,7 @@ const CHAT = 'screens/ChatScreen.tsx';
 
 const meter = await import('../lib/audioMeter.ts');
 const ticks = await import('../lib/messageTicks.ts');
+const webRoute = await import('../lib/webRoute.ts');
 
 test('[static] the composer is three zones, and every glyph is bare', () => {
   const flat = flatten(read(COMPOSER));
@@ -478,6 +479,68 @@ test('[static] the read-model verdicts are recorded where the next run will look
   // Mark-as-unread: rewindable on job threads, not on direct threads.
   assert.match(flags, /message_reads_update_own/);
   assert.match(flags, /mark_direct_thread_read\(\), hard-codes `now\(\)`/);
+});
+
+// ---------------------------------------------------------------------------
+// THE SHARED LINK'S LANDING PAGE — /profile/{id} on the web build.
+// ---------------------------------------------------------------------------
+
+test('[executed] the web route matches /profile/{id} and nothing near it', () => {
+  assert.deepEqual(webRoute.parseWebRoute('/profile/abc-123'), { kind: 'profile', userId: 'abc-123' });
+  // A trailing slash is the same address.
+  assert.deepEqual(webRoute.parseWebRoute('/profile/abc-123/'), { kind: 'profile', userId: 'abc-123' });
+  // Percent-encoding is undone, because lib/appLinks.ts applies it on the way out.
+  assert.deepEqual(webRoute.parseWebRoute('/profile/a%20b'), { kind: 'profile', userId: 'a b' });
+
+  // STRICT: everything else belongs to the navigator, and a too-permissive
+  // match here would swallow paths it should have had.
+  for (const path of [
+    '/',
+    '/profile',
+    '/profile/',
+    '/profiles/abc',
+    '/profile/abc/extra',
+    '/x/profile/abc',
+    '/PROFILE/abc',
+    '/profile/%',
+    '/profile/%E0%A4%A',
+    '/profile/   ',
+  ]) {
+    assert.equal(webRoute.parseWebRoute(path), null, `${path} must not resolve to a profile`);
+  }
+});
+
+test('[static] the public page is honest about what an anonymous visitor can see', () => {
+  const app = stripComments(read('App.tsx'));
+  const page = stripComments(read('screens/PublicProfileScreen.tsx'));
+
+  // Resolved BEFORE the navigator, and native is gated out by construction.
+  assert.match(app, /Platform\.OS === 'web' && typeof window !== 'undefined'/);
+  assert.match(app, /parseWebRoute\(window\.location\.pathname\)/);
+  assert.match(app, /if \(webRoute\?\.kind === 'profile'\) \{/);
+  // No launch layer for a visitor with no account to restore — but the
+  // session still matters, so AuthProvider stays.
+  const branch = /if \(webRoute\?\.kind === 'profile'\) \{([\s\S]*?)\n  \}/.exec(app);
+  assert.ok(branch, 'the public-page branch must stay a plain if block');
+  assert.doesNotMatch(branch[1], /LaunchGate|ModeShell|ThemedNavigation/);
+  assert.match(branch[1], /<AuthProvider>/);
+  assert.match(branch[1], /<PublicProfileScreen userId=\{webRoute\.userId\} \/>/);
+
+  // NOTHING IS INVENTED. The rating block renders only on a real positive
+  // count — an unrated person gets no stars, no "New" badge and no zero.
+  assert.match(page, /state\.profile\.rating_count > 0/);
+  assert.match(page, /typeof state\.profile\.rating_avg === 'number'/);
+  assert.match(page, /\{rated \? \(/);
+
+  // An empty read is ONE state whether the cause is RLS or a missing id: the
+  // page must not tell strangers which user ids exist.
+  assert.match(page, /setState\(data \? \{ status: 'ready', profile: data \} : \{ status: 'unavailable' \}\)/);
+  assert.match(page, /Profiles live in the app/);
+  assert.match(page, /Get the app/);
+  // The repo's verbatim label for an absent account.
+  assert.match(page, /'Deleted user'/);
+  // Read through the EXISTING public read, not a new one.
+  assert.match(page, /import \{ fetchProfileById, type Profile \} from '\.\.\/lib\/profiles';/);
 });
 
 test('[static] the quick-reply row and its templates are gone from the whole tree', () => {

@@ -20,6 +20,8 @@ import { ModeShell } from './navigation/ModeShell';
 import { AuthFlow } from './screens/AuthFlow';
 import { OnboardingFlow } from './screens/OnboardingFlow';
 import { LaunchScreen } from './screens/LaunchScreen';
+import { PublicProfileScreen } from './screens/PublicProfileScreen';
+import { parseWebRoute } from './lib/webRoute';
 import { LegalGateScreen } from './screens/LegalGateScreen';
 import { ScreenStateView } from './ui/templates';
 import { useLegalGate } from './hooks/useLegalGate';
@@ -221,6 +223,27 @@ function ThemedNavigation() {
 }
 
 export default function App() {
+  /**
+   * THE ONE URL THE WEB BUILD ANSWERS BEFORE THE NAVIGATOR.
+   *
+   * A shared profile link (lib/appLinks.ts) is opened cold by strangers with
+   * no session and, usually, no app — so it cannot be a route inside a
+   * navigator that begins by deciding whether to show them a sign-in screen.
+   * It is read ONCE, at mount, from the location the SPA shell was served for:
+   * hosting/sites-worker.js already falls back to /index.html for any HTML
+   * 404, so no hosting configuration was added or needed.
+   *
+   * Native is untouched by construction — Platform.OS gates the whole thing,
+   * and on any native build this is null on every render.
+   */
+  const webRoute = useMemo(
+    () =>
+      Platform.OS === 'web' && typeof window !== 'undefined'
+        ? parseWebRoute(window.location.pathname)
+        : null,
+    []
+  );
+
   // Foreground presentation + the Android channel. Set before anything can
   // arrive, and independent of auth — a notification can land while the app is
   // on the sign-in screen.
@@ -240,6 +263,24 @@ export default function App() {
       console.error('[App] setAudioModeAsync failed', err);
     });
   }, []);
+
+  // The public page renders on its own: no launch layer (nothing is being
+  // restored for a visitor who may have no account), no navigator, no tab bar.
+  // AuthProvider still wraps it, because a signed-in web visitor's session is
+  // exactly what turns the install page into the real profile.
+  if (webRoute?.kind === 'profile') {
+    return (
+      <MotionRoot>
+        <SafeAreaProvider>
+          <AuthProvider>
+            <ThemeProvider>
+              <PublicProfileScreen userId={webRoute.userId} />
+            </ThemeProvider>
+          </AuthProvider>
+        </SafeAreaProvider>
+      </MotionRoot>
+    );
+  }
 
   return (
     // The motion boundary's root. On a binary that has react-native-gesture-
