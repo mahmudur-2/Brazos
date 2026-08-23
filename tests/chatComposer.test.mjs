@@ -39,6 +39,7 @@ const COMPOSER = 'components/ChatComposer.tsx';
 const DROPMENU = 'components/DropMenu.tsx';
 const METER = 'components/AudioMeterBars.tsx';
 const RECORDER = 'hooks/useVoiceRecorder.ts';
+const CHAT = 'screens/ChatScreen.tsx';
 
 const meter = await import('../lib/audioMeter.ts');
 
@@ -270,6 +271,137 @@ test('[static] the three recorder phases each render their own controls', () => 
   // And the levels come from the recorder rather than from the composer, so
   // there is one source for what the bars mean.
   assert.match(stripComments(read('screens/ChatScreen.tsx')), /recorderLevels=\{recorder\.meterLevels\}/);
+});
+
+// ---------------------------------------------------------------------------
+// THE CHAT HEADER — 2026-08-23. Avatar, serif name, three gold dots.
+// ---------------------------------------------------------------------------
+
+test('[static] the header carries the face on the left and one affordance on the right', () => {
+  const chat = stripComments(read(CHAT));
+  const header = stripComments(read('components/ScreenHeader.tsx'));
+
+  // The shared header gained a LEADING slot rather than chat growing a
+  // bespoke header of its own and losing the serif-title convention with it.
+  assert.match(header, /leading\?: ReactNode;/);
+  assert.match(header, /\{leading\}\s*\{onPressTitle \?/, 'leading sits between the back control and the title');
+
+  // The avatar opens the SAME view-only viewer the message avatars open.
+  assert.match(chat, /<Avatar uri=\{counterparty\.avatar_url\} name=\{counterparty\.full_name\} size=\{34\} \/>/);
+  assert.match(chat, /allowShare=\{false\}/, 'a profile photo is view-only — forwarding it is not an affordance');
+  // No photo is a real state and it must not be a dead button.
+  assert.match(chat, /disabled=\{!counterparty\.avatar_url\}/);
+
+  // The chip is gone; the dots are gold LINE-WORK, not a filled pill.
+  assert.doesNotMatch(chat, /hireAgainButton|hireAgainLabel/, 'the Hire Again chip is retired from the header');
+  assert.match(chat, /<Ionicons name="ellipsis-horizontal" size=\{22\} color=\{colors\.gold\} \/>/);
+  const dots = /headerDots: \{([^}]*)\}/.exec(chat.replace(/\s+/g, ' '));
+  assert.ok(dots, 'the dots must stay a plain style');
+  assert.doesNotMatch(dots[1], /backgroundColor|borderWidth/, 'gold is line-work here too');
+
+  // zIndex is load-bearing: the menu drops DOWN out of the header and the
+  // message column is a LATER sibling, so without it the dropdown would
+  // render beneath the messages it covers.
+  assert.match(chat, /headerLayer: \{\s*zIndex: 20,\s*\}/);
+  assert.match(chat, /<View style=\{styles\.headerLayer\}>/);
+  assert.match(chat, /headerMenuAnchor: \{\s*position: 'relative',\s*\}/);
+  assert.match(chat, /direction="down"/);
+  assert.match(chat, /align="right"/);
+});
+
+test('[static] the overflow menu is MODE-shaped, and perspective comes from ModeContext', () => {
+  const chat = stripComments(read(CHAT));
+
+  // Repo rule: perspective is never a hand-passed prop.
+  assert.match(chat, /import \{ useMode \} from '\.\.\/modes';/);
+  assert.match(chat, /const \{ mode \} = useMode\(\);/);
+  assert.match(chat, /if \(mode === 'customer'\) \{/);
+
+  // The customer's set. Hire Again is gated on the relationship, and Save is
+  // gated on the read having landed — a row that cannot say which way it
+  // would toggle is not offered yet.
+  const customer = chat.slice(chat.indexOf("if (mode === 'customer') {"), chat.indexOf('} else {'));
+  for (const key of ['hire-again', 'reviews', 'save-worker', 'share-profile']) {
+    assert.match(customer, new RegExp(`key: '${key}'`), `the customer menu must offer ${key}`);
+  }
+  assert.match(customer, /if \(savedWorker !== null\) \{/);
+  assert.match(customer, /label: savedWorker \? 'Saved — tap to remove' : 'Save Worker'/);
+
+  // The worker's set. There is deliberately no "save a customer": no such
+  // list exists in this product, and inventing one to balance the two menus
+  // would be inventing a feature.
+  const worker = chat.slice(chat.indexOf('} else {', chat.indexOf("if (mode === 'customer') {")));
+  for (const key of ['view-profile', 'reviews']) {
+    assert.match(worker, new RegExp(`key: '${key}'`), `the worker menu must offer ${key}`);
+  }
+  assert.doesNotMatch(worker, /key: 'save-worker'|key: 'hire-again'|key: 'share-profile'/);
+
+  // Mute is BUILT and flag-gated in both, so it appears the day its row
+  // exists and not before.
+  assert.equal((chat.match(/if \(MUTE\) \{/g) ?? []).length, 2);
+  assert.match(chat, /import \{ MUTE \} from '\.\.\/lib\/featureFlags';/);
+
+  // Nothing was extracted or duplicated for Save: lib/savedWorkers was
+  // already shared, and this calls it directly — with a rollback.
+  assert.match(chat, /import \{ fetchSavedWorkerIds, saveWorker, unsaveWorker \} from '\.\.\/lib\/savedWorkers';/);
+  assert.match(chat, /setSavedWorker\(!next\);/, 'an optimistic toggle owes a rollback');
+});
+
+test('[static] Share Profile builds its URL from ONE constant and shares a name with it', () => {
+  const chat = stripComments(read(CHAT));
+  // RAW, not comment-stripped: the naive stripper every fence in this repo
+  // uses eats `//` wherever it appears, and a URL literal contains one.
+  const links = read('lib/appLinks.ts');
+  const sharing = stripComments(read('lib/sharing.ts'));
+
+  // One constant, one path shape, one place to change when the domain exists.
+  assert.match(links, /export const PROFILE_WEB_BASE_URL = '[^']+';/);
+  assert.match(links, /return `\$\{PROFILE_WEB_BASE_URL\}\/profile\/\$\{encodeURIComponent\(userId\)\}`;/);
+  // The id is the ONLY user datum in the URL, and it is encoded.
+  assert.doesNotMatch(links, /full_name|email|phone/);
+
+  // React Native's own Share for a LINK — the download-then-share dance
+  // sharePhoto needs would buy no extra target here.
+  assert.match(sharing, /export async function shareProfileLink\(/);
+  assert.match(sharing, /const url = profileUrl\(userId\);/);
+  assert.match(sharing, /await Share\.share\(\{ url, message \}\)/);
+  // A bare URL is a grey rectangle in Messages, and the name is also the part
+  // that still works before the domain resolves.
+  assert.match(sharing, /const message = name \? `\$\{name\} on BRAZOS: \$\{url\}` : url;/);
+  // Dismissing the browser's own share UI is a cancellation, not a failure.
+  assert.match(sharing, /if \(err instanceof Error && err\.name === 'AbortError'\) return \{ ok: true \};/);
+
+  assert.match(chat, /await shareProfileLink\(counterpartyId, counterparty\?\.full_name\)/);
+  assert.match(chat, /if \(!result\.ok\) await alertAsync\('Could not share', result\.message\);/);
+});
+
+test('[static] the report sheet can block in the same breath, and says so when it is done', () => {
+  const dialog = stripComments(read('components/ReportDialog.tsx'));
+
+  // The EXISTING permanent block, opt-in. No new store, and no timed variant
+  // implied — that one waits on TIMED_BLOCK.
+  assert.match(dialog, /import \{ blockUser, createReport, REPORT_REASONS, type ReportReason \}/);
+  assert.match(dialog, /const \[alsoBlock, setAlsoBlock\] = useState\(false\);/);
+  assert.match(dialog, /if \(alsoBlock\) \{\s*const \{ error: blockError \} = await blockUser\(reporterId, reportedId\);/);
+  // THE REPORT IS THE PRIMARY ACTION: a failed block is named on its own, or
+  // someone files the same report twice believing the first did not land.
+  assert.match(dialog, /alertAsync\('Reported, but not blocked', userMessage\(blockError\)\)/);
+  assert.match(dialog, /Also block this person/);
+
+  // THE SENT STATE replaces the sheet's body rather than firing an alert
+  // after the sheet has already closed — a confirmation that appears
+  // somewhere else once the thing you were looking at is gone reads as an
+  // interruption rather than as an answer.
+  assert.match(dialog, /const \[sent, setSent\] = useState\(false\);/);
+  assert.match(dialog, /\{sent \? \(/);
+  assert.match(dialog, /<Ionicons name="checkmark" size=\{26\}/);
+  assert.match(dialog, /Sent to the Brazos team/);
+  assert.match(dialog, /const SENT_DISMISS_MS = 1600;/);
+  assert.match(dialog, /dismissTimer\.current = setTimeout\(/);
+  // A sheet unmounted mid-confirmation must not close something else later.
+  assert.match(dialog, /if \(dismissTimer\.current\) clearTimeout\(dismissTimer\.current\);/);
+  // The old fire-and-forget alert is gone.
+  assert.doesNotMatch(dialog, /alertAsync\(\s*'Report sent'/);
 });
 
 test('[static] the quick-reply row and its templates are gone from the whole tree', () => {

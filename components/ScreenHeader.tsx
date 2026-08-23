@@ -16,6 +16,11 @@ type ScreenHeaderProps = {
   /** Small glyph rendered inline immediately after the title text. Distinct
    *  from `right`, which pins its content to the far edge of the header. */
   titleIcon?: ReactNode;
+  /** Rendered between the back control and the title block — chat's
+   *  counterparty avatar is the first user. Distinct from `titleIcon`, which
+   *  sits AFTER the title text and scrolls with it, and from `right`, which
+   *  pins to the far edge. */
+  leading?: ReactNode;
   /** Bumps the title's own size. Defaults to the standard 24. */
   titleSize?: number;
 };
@@ -28,6 +33,7 @@ export function ScreenHeader({
   onPressTitle,
   palette: paletteProp,
   titleIcon,
+  leading,
   titleSize,
 }: ScreenHeaderProps) {
   const { palette: colors, isDark } = useThemeColors();
@@ -79,6 +85,8 @@ export function ScreenHeader({
           <Ionicons name="chevron-back" size={26} color={backColor} />
         </Pressable>
       ) : null}
+
+      {leading}
 
       {onPressTitle ? (
         <Pressable style={styles.titles} onPress={onPressTitle}>

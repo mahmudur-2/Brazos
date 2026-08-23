@@ -1,6 +1,7 @@
 import { Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
+import { profileUrl } from './appLinks';
 
 /**
  * Hands a photo to the OS share sheet.
@@ -42,6 +43,52 @@ function fileNameFor(url: string): string {
 }
 
 export type ShareResult = { ok: true } | { ok: false; message: string };
+
+/**
+ * Hands someone's public profile LINK to the OS share sheet.
+ *
+ * A link, not a file, so this is React Native's own `Share` rather than the
+ * download-then-share dance sharePhoto needs: link targets are exactly what is
+ * wanted here, and staging anything locally would be work for no extra target.
+ *
+ * The message carries the NAME as well as the URL. A bare URL in Messages is a
+ * grey rectangle its recipient has to open to understand, and — until
+ * PROFILE_WEB_BASE_URL is pointed at a real host — the name is the part of the
+ * share that still works.
+ *
+ * NOTHING PRIVATE CROSSES THIS. The only user datum in the URL is the id the
+ * public profile page is keyed on, and the only other datum is the display
+ * name the profile already shows to anyone who can see it.
+ */
+export async function shareProfileLink(userId: string, name?: string | null): Promise<ShareResult> {
+  const url = profileUrl(userId);
+  const message = name ? `${name} on BRAZOS: ${url}` : url;
+
+  if (Platform.OS === 'web') {
+    try {
+      const nav = typeof navigator !== 'undefined' ? (navigator as any) : null;
+      if (nav?.share) {
+        await nav.share({ url, text: message });
+        return { ok: true };
+      }
+      return { ok: false, message: 'Sharing isn’t supported in this browser.' };
+    } catch (err) {
+      // Dismissing the browser's own share UI throws AbortError; that is a
+      // cancellation, not a failure.
+      if (err instanceof Error && err.name === 'AbortError') return { ok: true };
+      console.error('[sharing] web profile share failed', err);
+      return { ok: false, message: 'Could not share this profile.' };
+    }
+  }
+
+  try {
+    await Share.share({ url, message });
+    return { ok: true };
+  } catch (err) {
+    console.error('[sharing] profile share failed', err);
+    return { ok: false, message: 'Could not share this profile.' };
+  }
+}
 
 export async function sharePhoto(url: string): Promise<ShareResult> {
   // react-native-web has no native share sheet and expo-file-system's web

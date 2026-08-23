@@ -20,9 +20,11 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { AmountPrompt } from '../components/AmountPrompt';
+import { Avatar } from '../components/Avatar';
 import { ChatBubble } from '../components/ChatBubble';
 import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { DropMenu, type DropMenuItem } from '../components/DropMenu';
 import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 
@@ -59,8 +61,12 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
+import { MUTE } from '../lib/featureFlags';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
 import { EMPTY_RELATION, fetchRelation, type RelationState } from '../lib/moderation';
+import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
+import { shareProfileLink } from '../lib/sharing';
+import { useMode } from '../modes';
 import {
   canUnsend,
   fetchMessagingUnlocked,
@@ -96,8 +102,10 @@ type TimelineItem =
   | { kind: 'message'; key: string; message: Message };
 
 export function ChatScreen() {
-  const { palette: colors, isDark } = useThemeColors();
+  const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  // Perspective for the header menu comes from ModeContext, never a prop.
+  const { mode } = useMode();
   // emerald(3): the floating pill's real footprint. The Messages thread was on
   // the device pass's list.
   const navClearance = useFloatingNavClearance();
@@ -137,6 +145,10 @@ export function ChatScreen() {
   // Profile pictures open in the same viewer but without the share sheet, so
   // they're tracked separately from ordinary chat photos.
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  // Whether this customer has already saved this worker. `null` while the read
+  // is in flight, so the menu row never claims either state before it knows.
+  const [savedWorker, setSavedWorker] = useState<boolean | null>(null);
   // Long-press target for the message menu (React / Reply).
   const [menuTarget, setMenuTarget] = useState<Message | null>(null);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -527,6 +539,147 @@ export function ChatScreen() {
     };
   }, [user, counterpartyId]);
 
+  // WHETHER THIS WORKER IS ALREADY SAVED, for the menu's Save row. The same
+  // lib/savedWorkers calls the profile screen's "Saved — tap to remove" runs
+  // on — nothing was extracted or duplicated, the module was already shared.
+  // Customer perspective only: saved_workers is a customer's own private list.
+  useEffect(() => {
+    setSavedWorker(null);
+    if (mode !== 'customer' || !user || !counterpartyId || counterpartyId === user.id) return;
+    let active = true;
+    fetchSavedWorkerIds(user.id).then(({ data }) => {
+      if (active) setSavedWorker(data.has(counterpartyId));
+    });
+    return () => {
+      active = false;
+    };
+  }, [mode, user, counterpartyId]);
+
+  async function toggleSavedWorker() {
+    if (!user || !counterpartyId || savedWorker === null) return;
+    const next = !savedWorker;
+    // Optimistic, with a rollback: the row is a one-tap toggle and waiting on
+    // a round trip to redraw it reads as an unresponsive menu.
+    setSavedWorker(next);
+    const { error: saveError } = next
+      ? await saveWorker(user.id, counterpartyId)
+      : await unsaveWorker(user.id, counterpartyId);
+    if (saveError) {
+      setSavedWorker(!next);
+      await alertAsync(
+        next ? 'Could not save' : 'Could not remove',
+        userMessage(saveError)
+      );
+    }
+  }
+
+  async function handleShareProfile() {
+    if (!counterpartyId) return;
+    const result = await shareProfileLink(counterpartyId, counterparty?.full_name);
+    if (!result.ok) await alertAsync('Could not share', result.message);
+  }
+
+  function openCounterpartyProfile() {
+    if (!counterparty) return;
+    (navigation.navigate as (n: string, p?: object) => void)('WorkerProfile', {
+      workerId: counterparty.id,
+      workerName: counterparty.full_name ?? undefined,
+    });
+  }
+
+  function openCounterpartyReviews() {
+    if (!counterparty) return;
+    (navigation.navigate as (n: string, p?: object) => void)('ProfileReviews', {
+      userId: counterparty.id,
+      name: counterparty.full_name ?? undefined,
+    });
+  }
+
+  /**
+   * THE HEADER'S OVERFLOW MENU, and it is MODE-SHAPED.
+   *
+   * Perspective comes from ModeContext (repo rule: never a hand-passed prop),
+   * because the two sides of a conversation want different things from the
+   * same person. A customer looking at a worker can hire them again, save
+   * them, and pass their profile on; a worker looking at a customer can read
+   * who they are and what other people said about them, and that is the
+   * honest end of the list — there is no "save a customer" list in this
+   * product and inventing one to balance the menus would be inventing a
+   * feature.
+   *
+   * WHAT IS NOT HERE. Mute is written and flag-gated (lib/featureFlags.ts:
+   * MUTE), so it renders the day its per-conversation row exists and not
+   * before. Report and Block are NOT duplicated here: they live on the
+   * message long-press sheet and the inbox row, and a third entry point for
+   * the same two actions is three places to keep in step.
+   */
+  const headerMenuItems: DropMenuItem[] = [];
+  if (counterparty && !isSelfConversation) {
+    if (mode === 'customer') {
+      if (canRehire) {
+        headerMenuItems.push({
+          key: 'hire-again',
+          label: 'Hire Again',
+          icon: 'person-add-outline',
+          onPress: () =>
+            (navigation as unknown as {
+              navigate: (screen: 'PostJob', params: object) => void;
+            }).navigate('PostJob', {
+              hireWorkerId: counterparty.id,
+              hireWorkerName: counterparty.full_name ?? 'this worker',
+              // Post the request into the same thread a message would go to.
+              // With no active job there is nothing to name and the server's
+              // own fallback — their most recent shared completed job, then
+              // their pair thread — lands in this conversation anyway,
+              // because every one of those threads IS it.
+              threadJobId: activeJob?.id,
+            }),
+        });
+      }
+      headerMenuItems.push({
+        key: 'reviews',
+        label: 'Rating / Reviews',
+        icon: 'star-outline',
+        onPress: openCounterpartyReviews,
+      });
+      // Hidden, not disabled, while the read is in flight: a row that cannot
+      // say which way it would toggle should not be offered yet.
+      if (savedWorker !== null) {
+        headerMenuItems.push({
+          key: 'save-worker',
+          label: savedWorker ? 'Saved — tap to remove' : 'Save Worker',
+          icon: savedWorker ? 'bookmark' : 'bookmark-outline',
+          onPress: () => void toggleSavedWorker(),
+        });
+      }
+      if (MUTE) {
+        headerMenuItems.push({ key: 'mute', label: 'Mute', icon: 'notifications-off-outline', onPress: () => {} });
+      }
+      headerMenuItems.push({
+        key: 'share-profile',
+        label: 'Share Profile',
+        icon: 'share-outline',
+        onPress: () => void handleShareProfile(),
+      });
+    } else {
+      headerMenuItems.push({
+        key: 'view-profile',
+        label: 'View Profile',
+        icon: 'person-outline',
+        onPress: openCounterpartyProfile,
+      });
+      headerMenuItems.push({
+        key: 'reviews',
+        label: 'Rating / Reviews',
+        icon: 'star-outline',
+        onPress: openCounterpartyReviews,
+      });
+      if (MUTE) {
+        headerMenuItems.push({ key: 'mute', label: 'Mute', icon: 'notifications-off-outline', onPress: () => {} });
+      }
+    }
+  }
+
   // Once the jump has happened, only genuinely NEW messages pull the view back
   // down — otherwise the conversation would snap to the bottom the moment a
   // photo finished measuring and the jump would be pointless.
@@ -889,74 +1042,96 @@ export function ChatScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <ScreenHeader
-        title={
-          counterparty?.full_name
-            ? isSelfConversation
-              ? `${counterparty.full_name} (You)`
-              : counterparty.full_name
-            : 'Chat'
-        }
-        // The job this conversation is about right now — the same one the
-        // inbox row names and the same one a message sent now would go to.
-        subtitle={activeJob?.title}
-        onBack={goBackOrHome}
-        // Tapping the title opens the other party's profile — including their
-        // Past Work gallery, which is the point of having one.
-        onPressTitle={
-          counterparty && !isSelfConversation
-            ? () =>
-                (navigation.navigate as (n: string, p?: object) => void)(
-                  'WorkerProfile',
-                  {
-                    workerId: counterparty.id,
-                    workerName: counterparty.full_name ?? undefined,
-                  }
-                )
-            : undefined
-        }
-        right={
-          canRehire && counterparty ? (
-            <Pressable
-              onPress={() =>
-                (navigation as unknown as {
-                  navigate: (screen: 'PostJob', params: object) => void;
-                }).navigate('PostJob', {
-                  hireWorkerId: counterparty.id,
-                  hireWorkerName: counterparty.full_name ?? 'this worker',
-                  // Post the request into the same thread a message would go
-                  // to. With no active job there is nothing to name and the
-                  // server's own fallback — their most recent shared completed
-                  // job, then their pair thread — lands in this conversation
-                  // anyway, because every one of those threads IS it.
-                  threadJobId: activeJob?.id,
-                })
-              }
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={`Hire ${counterparty.full_name ?? 'this worker'} again`}
-              style={({ pressed }) => [
-                styles.hireAgainButton,
-                isDark && styles.hireAgainButtonDark,
-                pressed && styles.hireAgainButtonPressed,
-              ]}
-            >
-              <Ionicons
-                name="person-add"
-                size={14}
-                color={isDark ? colors.gold : colors.onPrimary}
-              />
-              <Text style={[styles.hireAgainLabel, isDark && styles.hireAgainLabelDark]}>
-                Hire Again
-              </Text>
-            </Pressable>
-          ) : undefined
-        }
-      />
+      {/* THE HEADER LAYER. `zIndex` is load-bearing: the overflow menu
+          below drops DOWN out of the header, and the message column is a
+          LATER sibling, so without this the dropdown would render beneath
+          the messages it is supposed to cover. */}
+      <View style={styles.headerLayer}>
+        <ScreenHeader
+          title={
+            counterparty?.full_name
+              ? isSelfConversation
+                ? `${counterparty.full_name} (You)`
+                : counterparty.full_name
+              : 'Chat'
+          }
+          // The job this conversation is about right now — the same one the
+          // inbox row names and the same one a message sent now would go to.
+          subtitle={activeJob?.title}
+          onBack={goBackOrHome}
+          // Tapping the title opens the other party's profile — including their
+          // Past Work gallery, which is the point of having one.
+          onPressTitle={
+            counterparty && !isSelfConversation
+              ? () =>
+                  (navigation.navigate as (n: string, p?: object) => void)(
+                    'WorkerProfile',
+                    {
+                      workerId: counterparty.id,
+                      workerName: counterparty.full_name ?? undefined,
+                    }
+                  )
+              : undefined
+          }
+          // 2026-08-23: the counterparty's face, left of the serif name. It
+          // opens the SAME view-only PhotoViewer the message avatars open —
+          // allowShare={false}, because forwarding someone else's photo of
+          // themselves is not an affordance this app hands out.
+          leading={
+            counterparty && !isSelfConversation ? (
+              <Pressable
+                onPress={
+                  counterparty.avatar_url ? () => setAvatarUri(counterparty.avatar_url!) : undefined
+                }
+                disabled={!counterparty.avatar_url}
+                hitSlop={6}
+                accessibilityRole={counterparty.avatar_url ? 'imagebutton' : 'image'}
+                accessibilityLabel={
+                  counterparty.avatar_url
+                    ? `${counterparty.full_name ?? 'Their'} profile photo`
+                    : `${counterparty.full_name ?? 'They'} have no profile photo`
+                }
+              >
+                <Avatar uri={counterparty.avatar_url} name={counterparty.full_name} size={34} />
+              </Pressable>
+            ) : undefined
+          }
+          // 2026-08-23: the "Hire Again" chip is retired FROM THE HEADER — the
+          // action itself is not, it is the first item of the menu below. A
+          // header has room for one affordance and it should be the one that
+          // reaches all of them.
+          right={
+            counterparty && !isSelfConversation ? (
+              <View style={styles.headerMenuAnchor}>
+                <Pressable
+                  onPress={() => setHeaderMenuOpen((open) => !open)}
+                  hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel="More"
+                  accessibilityHint={`Actions for ${counterparty.full_name ?? 'this person'}`}
+                  accessibilityState={{ expanded: headerMenuOpen }}
+                  style={({ pressed }) => [styles.headerDots, pressed && styles.headerDotsPressed]}
+                >
+                  <Ionicons name="ellipsis-horizontal" size={22} color={colors.gold} />
+                </Pressable>
+                <DropMenu
+                  visible={headerMenuOpen}
+                  onClose={() => setHeaderMenuOpen(false)}
+                  items={headerMenuItems}
+                  direction="down"
+                  align="right"
+                  closeLabel="Close menu"
+                />
+              </View>
+            ) : undefined
+          }
+        />
+      </View>
 
       {/* useConversationChat keeps the failure itself rather than its text, so
           the one mapper still runs here at the render seam (raw-error sweep,
           2026-08-10 — see docs/LOCKED_FILE_PATCHES.md). */}
+
       {error ? <Text style={styles.error}>{userMessage(error)}</Text> : null}
 
       {/* THE CLIP. It does not move, and it is what stops the translated
@@ -1467,31 +1642,30 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // name rather than as the one action in the header. Bounded and filled
   // instead — 36 tall plus the Pressable's hitSlop clears a comfortable
   // target without making the header taller.
-  hireAgainButton: {
-    flexDirection: 'row',
+  // THE HEADER LAYER, and `zIndex` is the whole reason it exists: the overflow
+  // menu drops DOWN out of the header, and the message column is a later
+  // sibling, so without this the dropdown renders beneath the messages it is
+  // meant to cover.
+  headerLayer: {
+    zIndex: 20,
+  },
+  // The box DropMenu measures itself against. Nothing is drawn here.
+  headerMenuAnchor: {
+    position: 'relative',
+  },
+  // Three gold dots where "Hire Again" used to be a chip. Gold as line-work:
+  // a glyph, not a pill — a header has room for one affordance and it should
+  // be the one that reaches all of them. The 44pt floor comes from the drawn
+  // box plus hitSlop at the call site.
+  headerDots: {
+    width: 34,
+    height: 34,
     alignItems: 'center',
-    gap: spacing.xs + 2,
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
-    backgroundColor: colors.primary,
+    justifyContent: 'center',
   },
-  // Master 19 draws "Hire Again" as a gold-outline chip, not a filled pill;
-  // light keeps the Heritage fill.
-  hireAgainButtonDark: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.gold,
+  headerDotsPressed: {
+    opacity: 0.6,
   },
-  hireAgainButtonPressed: {
-    opacity: 0.85,
-  },
-  hireAgainLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.onPrimary,
-  },
-  hireAgainLabelDark: { color: colors.ink },
   error: {
     color: colors.danger,
     backgroundColor: colors.dangerBg,

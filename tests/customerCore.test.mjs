@@ -154,7 +154,13 @@ test('Customer job detail keeps evidence and honest lifecycle recovery states', 
   // inbox opens chats by counterparty, so that gate hid the CTA on exactly the
   // completed-job conversations it exists for. Where the offer is posted is
   // pinned here instead, which is the part that was actually load-bearing.
-  assert.match(chat, /canRehire && counterparty \?/);
+  //
+  // 2026-08-23: the CTA moved OUT of the header and INTO the overflow menu —
+  // the chip became three dots. Both halves above survive that move verbatim
+  // (the relationship gate and the thread the offer is posted into); only the
+  // expression carrying the gate changed shape.
+  assert.match(chat, /if \(canRehire\) \{/);
+  assert.match(chat, /key: 'hire-again',\s*label: 'Hire Again',/);
   assert.match(chat, /threadJobId: activeJob\?\.id/);
 });
 
