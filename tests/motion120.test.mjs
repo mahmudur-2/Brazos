@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -685,4 +686,304 @@ test('[static] the inbox swipe and its long press share ONE action model', () =>
   // Flag-gated rows still do not render, and the swipe inherits that because
   // it renders entries of the same array rather than a list of its own.
   assert.match(screen, /\.\.\.\(moreItems\.length > 0/);
+});
+
+// ===========================================================================
+// THE RESOLVABILITY FENCE — 2026-08-23, and it is a DIFFERENT question from
+// everything above it.
+//
+// The static-exclusivity scan at the top of this file tests IMPORT SITES: who
+// is allowed to name a vendor package. It is correct and nothing here weakens
+// it. But it can only ever be as true as the packages themselves, and it never
+// opens one. Metro follows require() STATICALLY, so the *.motion120 siblings
+// sit in the bundle graph on every build regardless of what motionCapability
+// resolves to at runtime — the boundary is a RUNTIME guard, not a bundling
+// one. A package the graph reaches and cannot resolve is a red screen at
+// bundle time, before a single capability check has run.
+//
+// That is not hypothetical. A device bundle failed on
+// "Unable to resolve module ./ReanimatedModule" — a relative import made by
+// reanimated's OWN entry point. The cause was a stale Metro cache rather than
+// a broken package, but the shape of the failure is the point: nothing in this
+// repository would have caught it, and nothing would catch the real version of
+// it either. This repository also lives inside a OneDrive folder, where a file
+// can appear in a listing, satisfy statSync, and still fail to deliver bytes.
+//
+// So these four tests ask, from disk and by READING:
+//   a. Do all three vendor packages resolve, and do their entries hand over
+//      real bytes rather than merely existing?
+//   b. Does reanimated's own entry — whichever file its package.json names —
+//      exist, and does every relative import it makes resolve?
+//   c. Is reanimated's declared peer on react-native-worklets satisfied by the
+//      version installed? Nothing else checks this: there is no postinstall
+//      peer validation in this project.
+//   d. Does babel.config.js still leave the worklets plugin to the preset?
+//
+// The whole purpose is converting a red device screen into a red test, so
+// every assertion below names the exact path or version that failed.
+// ===========================================================================
+
+const requireFromRepo = createRequire(join(root, 'noop.js'));
+const repoPath = (file) => relative(root, file).split(sep).join('/');
+
+/** Metro resolves platform-suffixed and extension-less files; node does not,
+ *  so the candidate list has to be built rather than delegated. */
+const RESOLVE_PLATFORMS = ['', '.ios', '.native', '.android', '.web'];
+const RESOLVE_EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.json'];
+
+/** Bytes, or null. NOT existsSync: on OneDrive a placeholder can pass an
+ *  existence check and still throw on read, which is exactly the failure this
+ *  fence exists to catch before a device does. */
+function readableBytes(file) {
+  try {
+    if (!statSync(file).isFile()) return null;
+    return readFileSync(file);
+  } catch {
+    return null;
+  }
+}
+
+/** The one relative resolver, used for both the entry and its imports. */
+function resolveRelative(fromFile, spec) {
+  const base = resolve(dirname(fromFile), spec);
+  const candidates = [base];
+  for (const platform of RESOLVE_PLATFORMS) {
+    for (const extension of RESOLVE_EXTENSIONS) {
+      candidates.push(base + platform + extension);
+      candidates.push(join(base, 'index' + platform + extension));
+    }
+  }
+  for (const candidate of candidates) {
+    const bytes = readableBytes(candidate);
+    if (bytes) return { file: candidate, bytes: bytes.length };
+  }
+  return null;
+}
+
+function manifestOf(pkg) {
+  const file = join(root, 'node_modules', pkg, 'package.json');
+  const bytes = readableBytes(file);
+  assert.ok(bytes, repoPath(file) + ' is missing or unreadable — the install is incomplete');
+  return JSON.parse(bytes.toString('utf8'));
+}
+
+/** Every package the bundle graph reaches through the motion boundary. */
+const RESOLVABLE = [...VENDOR_PACKAGES, 'react-native-worklets'];
+
+test('[static] every vendor package resolves and its entry hands over real bytes', () => {
+  for (const pkg of RESOLVABLE) {
+    let entry;
+    try {
+      entry = requireFromRepo.resolve(pkg);
+    } catch (error) {
+      assert.fail(
+        'require.resolve(' + pkg + ') failed with ' + (error.code ?? error.message) +
+          ' — a partial or interrupted install, not a code defect. Reinstall before debugging further.'
+      );
+    }
+    const bytes = readableBytes(entry);
+    assert.ok(
+      bytes,
+      pkg + ' resolves to ' + repoPath(entry) + ' but that file delivers no bytes — on OneDrive a ' +
+        'placeholder can satisfy an existence check and still fail to read'
+    );
+    assert.ok(
+      bytes.length > 0,
+      pkg + ' entry ' + repoPath(entry) + ' is zero bytes — a truncated or file-synced-away install'
+    );
+    // The installed version is read in the same breath, so a resolve that
+    // succeeded against a GUTTED package still has something to fail on.
+    assert.match(
+      manifestOf(pkg).version ?? '',
+      /^\d+\.\d+\.\d+/,
+      pkg + ' has no usable version in its package.json'
+    );
+  }
+});
+
+test('[static] the reanimated entry resolves, and so does every relative import it makes', () => {
+  const manifest = manifestOf('react-native-reanimated');
+  // Whichever field the package NAMES — never a hardcoded src/ or lib/. Metro
+  // reads react-native first, which is the entry a device actually bundles and
+  // therefore the one whose relative imports can break a build.
+  const field = ['react-native', 'main', 'module'].find((name) => typeof manifest[name] === 'string');
+  assert.ok(field, 'react-native-reanimated declares no entry point at all in its package.json');
+
+  const declared = manifest[field];
+  const spec = declared.startsWith('.') ? declared : './' + declared;
+  const entry = resolveRelative(join(root, 'node_modules/react-native-reanimated/package.json'), spec);
+  assert.ok(
+    entry,
+    'react-native-reanimated package.json names "' + field + '": "' + declared + '" and no file ' +
+      'matching it resolves or reads under node_modules/react-native-reanimated/'
+  );
+
+  const source = readFileSync(entry.file, 'utf8');
+  const specs = [
+    ...new Set([...source.matchAll(/(?:from|require\()\s*['"](\.[^'"]*)['"]/g)].map((match) => match[1])),
+  ].sort();
+  // ANTI-VACUITY. This entry re-exports the whole library; an extraction that
+  // found nothing would pass the loop below with the package gutted.
+  assert.ok(
+    specs.length > 10,
+    'only ' + specs.length + ' relative imports were found in ' + repoPath(entry.file) +
+      ' — the scan is not reading the entry'
+  );
+
+  const unresolved = [];
+  for (const relativeSpec of specs) {
+    if (!resolveRelative(entry.file, relativeSpec)) unresolved.push(relativeSpec);
+  }
+  assert.deepEqual(
+    unresolved,
+    [],
+    repoPath(entry.file) + ' imports ' + unresolved.join(', ') + ' and no file matching them resolves — ' +
+      'this is the "Unable to resolve module ./ReanimatedModule" bundle failure, caught off-device'
+  );
+});
+
+// Minimal range satisfaction. npm resolved this tree, so the job here is to
+// NOTICE a mismatch, not to re-implement npm: hyphen ranges, ^, ~ and plain
+// comparators cover every shape these packages actually publish, and an
+// unrecognised one fails loudly rather than passing quietly.
+const versionParts = (value) =>
+  value.replace(/^[v=]+/, '').split('+')[0].split('-')[0].split('.').map((n) => Number.parseInt(n, 10) || 0);
+
+const compareVersions = (a, b) => {
+  for (let i = 0; i < 3; i += 1) {
+    const left = a[i] ?? 0;
+    const right = b[i] ?? 0;
+    if (left !== right) return left < right ? -1 : 1;
+  }
+  return 0;
+};
+
+/** The exclusive upper bound implied by a PARTIAL version: "0.8" means
+ *  anything below 0.9.0. A complete version implies no ceiling. */
+const partialCeiling = (value) => {
+  const parts = versionParts(value);
+  const depth = value.replace(/^[v=]+/, '').split('+')[0].split('-')[0].split('.').length;
+  if (depth >= 3) return null;
+  if (depth === 2) return [parts[0], parts[1] + 1, 0];
+  return [parts[0] + 1, 0, 0];
+};
+
+/** true, false, or null for a range shape this fence does not understand. */
+function satisfiesRange(version, range) {
+  const target = versionParts(version);
+  for (const alternative of range.split('||')) {
+    const clause = alternative.trim();
+    if (clause === '' || clause === '*' || clause === 'x') return true;
+    const hyphen = clause.match(/^(\S+)\s+-\s+(\S+)$/);
+    if (hyphen) {
+      const [, low, high] = hyphen;
+      const ceiling = partialCeiling(high);
+      const withinTop = ceiling
+        ? compareVersions(target, ceiling) < 0
+        : compareVersions(target, versionParts(high)) <= 0;
+      if (compareVersions(target, versionParts(low)) >= 0 && withinTop) return true;
+      continue;
+    }
+    let holds = true;
+    for (const term of clause.split(/\s+/)) {
+      const parsed = term.match(/^(>=|<=|>|<|\^|~|=)?(.+)$/);
+      if (!parsed) return null;
+      const [, operator, raw] = parsed;
+      const bound = versionParts(raw);
+      if (operator === '>=') holds = compareVersions(target, bound) >= 0;
+      else if (operator === '<=') holds = compareVersions(target, bound) <= 0;
+      else if (operator === '>') holds = compareVersions(target, bound) > 0;
+      else if (operator === '<') holds = compareVersions(target, bound) < 0;
+      else if (operator === '^') {
+        const ceiling =
+          bound[0] > 0 ? [bound[0] + 1, 0, 0] : bound[1] > 0 ? [0, bound[1] + 1, 0] : [0, 0, bound[2] + 1];
+        holds = compareVersions(target, bound) >= 0 && compareVersions(target, ceiling) < 0;
+      } else if (operator === '~') {
+        holds =
+          compareVersions(target, bound) >= 0 && compareVersions(target, [bound[0], bound[1] + 1, 0]) < 0;
+      } else {
+        const ceiling = partialCeiling(raw);
+        holds = ceiling
+          ? compareVersions(target, bound) >= 0 && compareVersions(target, ceiling) < 0
+          : compareVersions(target, bound) === 0;
+      }
+      if (!holds) break;
+    }
+    if (holds) return true;
+  }
+  return false;
+}
+
+test('[static] the installed worklets version satisfies the reanimated peer declaration', () => {
+  // The comparator is pinned FIRST. A satisfiesRange() that answered true to
+  // everything would make the real assertion below vacuous.
+  for (const [version, range, expected] of [
+    ['0.5.1', '0.5 - 0.8', true],
+    ['0.4.9', '0.5 - 0.8', false],
+    ['0.9.0', '0.5 - 0.8', false],
+    ['0.81.5', '0.78 - 0.82', true],
+    ['4.1.7', '^4.1.1', true],
+    ['5.0.0', '^4.1.1', false],
+    ['2.29.0', '~2.28.0', false],
+    ['1.2.3', '*', true],
+  ]) {
+    assert.equal(satisfiesRange(version, range), expected, version + ' vs "' + range + '"');
+  }
+
+  const reanimated = manifestOf('react-native-reanimated');
+  const worklets = manifestOf('react-native-worklets');
+  const range = reanimated.peerDependencies?.['react-native-worklets'];
+
+  if (typeof range !== 'string') {
+    // CONTINUE-PATH, recorded rather than skipped: reanimated 4 moved its
+    // worklets runtime into this package, so it must at minimum be installed.
+    assert.ok(
+      worklets.version,
+      'react-native-worklets is not installed and reanimated 4 cannot run its worklets runtime without it'
+    );
+    return;
+  }
+
+  const satisfied = satisfiesRange(worklets.version, range);
+  assert.notEqual(
+    satisfied,
+    null,
+    'reanimated declares peer react-native-worklets "' + range + '" in a shape this fence cannot ' +
+      'read — teach satisfiesRange() that form rather than deleting the check'
+  );
+  assert.ok(
+    satisfied,
+    'react-native-worklets ' + worklets.version + ' is installed but reanimated ' + reanimated.version +
+      ' declares its peer as "' + range + '" — the worklets runtime and the library are out of step'
+  );
+});
+
+test('[static] babel.config.js declares no reanimated or worklets plugin — the preset owns it', () => {
+  const config = read('babel.config.js');
+
+  // babel-preset-expo checks hasModule('react-native-worklets') and adds
+  // 'react-native-worklets/plugin' itself, falling back to reanimated's own
+  // when worklets is absent. Naming either by hand declares the same transform
+  // twice. Asserted on the RAW source, comments included: a commented-out
+  // entry is a line waiting to be uncommented back into a duplicate.
+  assert.doesNotMatch(
+    config,
+    /react-native-(reanimated|worklets)\/plugin/,
+    'babel.config.js names a reanimated or worklets Babel plugin. babel-preset-expo already adds it ' +
+      'when the package is installed, so a manual entry is a duplicate transform — delete it, and do ' +
+      'not swap in the other name'
+  );
+
+  // ANTI-VACUITY, both halves. The claim above is only true because the preset
+  // is in use, and the file being read is actually the config.
+  assert.match(
+    config,
+    /presets: \['babel-preset-expo'\]/,
+    'the assertion above rests on babel-preset-expo being the preset that adds the worklets plugin'
+  );
+  assert.match(
+    config,
+    /'module:react-native-dotenv'/,
+    'babel.config.js still owns the dotenv plugin — an empty plugin list would pass the check above'
+  );
 });
