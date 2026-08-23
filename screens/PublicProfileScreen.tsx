@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { fetchProfileById, type Profile } from '../lib/profiles';
+import { DELETED_USER_LABEL } from '../lib/rebook';
 import {
   fonts,
   radius,
@@ -92,7 +93,7 @@ export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
           <View style={styles.card}>
             <Avatar uri={state.profile.avatar_url} name={state.profile.full_name} size={96} />
             <Text style={styles.name} numberOfLines={2}>
-              {state.profile.full_name ?? 'Deleted user'}
+              {state.profile.full_name ?? DELETED_USER_LABEL}
             </Text>
             {rated ? (
               <View style={styles.ratingRow}>

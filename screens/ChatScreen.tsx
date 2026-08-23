@@ -26,6 +26,7 @@ import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DropMenu, type DropMenuItem } from '../components/DropMenu';
 import { nextMenu, type ChatMenu } from '../lib/chatMenus';
+import { canCopy, copyText } from '../lib/clipboard';
 import { TranslationSheet } from '../components/TranslationSheet';
 import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -178,6 +179,10 @@ export function ChatScreen() {
   // The translation sheet's own state. `null` while a request is in flight —
   // the sheet reads that as "loading" and renders nothing else.
   const [translateOpen, setTranslateOpen] = useState(false);
+  // Which translation request the sheet is currently showing. Bumped on every
+  // new request AND on close, so an answer that arrives late can tell that
+  // nobody is waiting for it any more (audit F5).
+  const translateRunRef = useRef(0);
   const [translateResult, setTranslateResult] = useState<TranslateResult | null>(null);
   // Whether this customer has already saved this worker. `null` while the read
   // is in flight, so the menu row never claims either state before it knows.
@@ -650,9 +655,36 @@ export function ChatScreen() {
    * would resolve `unavailable`, which is exactly what the sheet says.
    */
   async function runTranslation(texts: string[]) {
+    // AUDIT F5 — A LIVENESS GUARD. The fetch is awaited, and the sheet can be
+    // closed (or a SECOND translation started on another message) while it is
+    // in flight. Without this, the stale answer lands in the sheet's state:
+    // either re-opening it later shows a translation of a message the user has
+    // moved on from, or the second request's result is overwritten by the
+    // first one to return. The counter is the same shape the customer-core
+    // hooks use for their own out-of-order reads.
+    const runId = ++translateRunRef.current;
     setTranslateResult(null);
     setTranslateOpen(true);
-    setTranslateResult(await translateTexts(texts, deviceLanguage()));
+    const result = await translateTexts(texts, deviceLanguage());
+    if (runId !== translateRunRef.current) return;
+    setTranslateResult(result);
+  }
+
+  /** Closing INVALIDATES whatever is in flight, which is what makes the guard
+   *  above cover the closed-mid-flight case rather than only the raced one. */
+  function closeTranslation() {
+    translateRunRef.current += 1;
+    setTranslateOpen(false);
+    setTranslateResult(null);
+  }
+
+  async function handleCopyTranslation(text: string) {
+    // The control only renders when `canCopy()`, so reaching here without a
+    // clipboard means the native call itself refused — say so rather than
+    // letting the user believe the text is on their clipboard.
+    if (!(await copyText(text))) {
+      await alertAsync('Could not copy', 'The translation could not be copied on this device.');
+    }
   }
 
   async function handleShareProfile() {
@@ -1551,8 +1583,12 @@ export function ChatScreen() {
 
       <TranslationSheet
         visible={translateOpen}
-        onClose={() => setTranslateOpen(false)}
+        onClose={closeTranslation}
         result={translateResult}
+        // Rendered only where the clipboard actually exists — on a build
+        // without expo-clipboard's native module there is no core fallback to
+        // fall back TO, so the control is absent rather than broken.
+        onCopy={canCopy() ? handleCopyTranslation : undefined}
       />
 
       <AmountPrompt

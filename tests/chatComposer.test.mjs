@@ -567,8 +567,14 @@ test('[static] the public page is honest about what an anonymous visitor can see
   assert.match(page, /setState\(data \? \{ status: 'ready', profile: data \} : \{ status: 'unavailable' \}\)/);
   assert.match(page, /Profiles live in the app/);
   assert.match(page, /Get the app/);
-  // The repo's verbatim label for an absent account.
-  assert.match(page, /'Deleted user'/);
+  // The repo's verbatim label for an absent account — taken from the constant
+  // since 2026-08-23 (audit F4), not spelled out again here. The wording is
+  // still pinned, one layer up: tests/conversion.test.mjs asserts
+  // DELETED_USER_LABEL === 'Deleted user' and that phase67 writes that exact
+  // string, so this assertion is strictly stronger than the literal it
+  // replaces — it now also rules out a SECOND spelling drifting from the one
+  // isDeletedUser() compares against.
+  assert.match(page, /state\.profile\.full_name \?\? DELETED_USER_LABEL/);
   // Read through the EXISTING public read, not a new one.
   assert.match(page, /import \{ fetchProfileById, type Profile \} from '\.\.\/lib\/profiles';/);
 });
@@ -1154,4 +1160,133 @@ test('[static] the quick-reply row and its templates are gone from the whole tre
   // different feature with its own literal and is deliberately untouched —
   // asserted so a later sweep for that string does not delete it by mistake.
   assert.match(read('screens/RouteArrivalScreen.tsx'), /label="On my way"/);
+});
+
+// ---------------------------------------------------------------------------
+// THE CLIPBOARD, THE TOMBSTONE, AND THE LATE TRANSLATION — 2026-08-23.
+// ---------------------------------------------------------------------------
+
+test('[executed] copying is guarded on both sides — no module, and no empty write', async () => {
+  const clip = await import('../lib/clipboard.ts');
+
+  // On THIS binary there is no ExpoClipboard native module, so the lazy
+  // require throws, `canCopy()` is false, and the caller renders no control.
+  // That is the state the test runs in and it is the honest one: a Copy button
+  // that cannot copy is worse than no Copy button, because the user believes
+  // the text is on their clipboard and pastes something else.
+  assert.equal(typeof clip.canCopy, 'function');
+  assert.equal(typeof clip.copyText, 'function');
+  assert.equal(clip.canCopy(), false, 'no native module here, so nothing may claim it can copy');
+
+  // Absent module: false rather than a throw. The whole point of the boundary
+  // is that a caller never has to catch.
+  assert.equal(await clip.copyText('hello'), false);
+  // Empty and whitespace-only never write. Putting an empty string on
+  // somebody's clipboard silently destroys whatever they had there, which is
+  // worse than doing nothing.
+  assert.equal(await clip.copyText(''), false);
+  assert.equal(await clip.copyText('   \n  '), false);
+});
+
+test('[static] the clipboard is loaded lazily and caught, like every other native', () => {
+  // expo-clipboard's entry does requireNativeModule('ExpoClipboard') at module
+  // scope, so a STATIC import anywhere on the startup path takes the app down
+  // on a binary without it — the operator's current dev build, since the
+  // package landed today and the build predates it. Same failure mode as
+  // reanimated, same arrangement.
+  const lib = stripComments(read('lib/clipboard.ts'));
+  assert.doesNotMatch(
+    lib,
+    /import[^\n]*from\s*'expo-clipboard'/,
+    'a static import of expo-clipboard crashes a binary without the native module'
+  );
+  assert.match(
+    lib,
+    /try \{[\s\S]{0,240}?require\('expo-clipboard'\)[\s\S]{0,240}?\} catch \{[\s\S]{0,60}?return null;/,
+    'the require must be lazy AND caught AND resolve to null'
+  );
+  // Resolved once: a native module cannot appear mid-session.
+  assert.match(lib, /const clipboard = load\(\);/);
+
+  // NOWHERE ELSE may load it.
+  const offenders = [];
+  for (const dir of ['components', 'screens', 'hooks', 'lib', 'ui', 'navigation', 'modes']) {
+    for (const entry of readdirSync(join(root, dir))) {
+      if (!/\.tsx?$/.test(entry)) continue;
+      const rel = `${dir}/${entry}`;
+      if (rel === 'lib/clipboard.ts') continue;
+      if (/(?:from\s*['"]|require\(['"])expo-clipboard/.test(read(rel))) offenders.push(rel);
+    }
+  }
+  assert.deepEqual(offenders, [], 'only lib/clipboard.ts may load expo-clipboard');
+});
+
+test('[static] Copy renders only where it works, and says so when it fails', () => {
+  const chat = stripComments(read('screens/ChatScreen.tsx'));
+  const sheet = stripComments(read('components/TranslationSheet.tsx'));
+
+  // The handler is passed ONLY when this build can write — the sheet already
+  // renders the control on the presence of a handler, which is the
+  // never-a-dead-control rule it was written with.
+  assert.match(chat, /import \{ canCopy, copyText \} from '\.\.\/lib\/clipboard';/);
+  assert.match(chat, /onCopy=\{canCopy\(\) \? handleCopyTranslation : undefined\}/);
+  assert.match(sheet, /\{onCopy \?/, 'the control renders on the handler, not unconditionally');
+
+  // And a refusal is reported rather than swallowed: silence would leave the
+  // user believing the translation is on their clipboard.
+  assert.match(chat, /if \(!\(await copyText\(text\)\)\) \{/);
+  assert.match(chat, /alertAsync\('Could not copy'/);
+});
+
+test('[executed] a translation that arrives after the sheet closed is dropped', () => {
+  // AUDIT F5, as a sequence rather than a shape. `runTranslation` awaits the
+  // fetch, so the sheet can be closed — or a SECOND translation started on
+  // another message — while the first is in flight. Without a guard the stale
+  // answer lands in the sheet's state, and the user re-opens it later onto a
+  // translation of a message they have moved on from.
+  //
+  // The guard is a counter, so the rule can be run here directly: an answer is
+  // shown only if the run that produced it is still the current one.
+  let current = 0;
+  const shown = [];
+  const start = () => ++current;
+  const land = (runId, value) => {
+    if (runId !== current) return;
+    shown.push(value);
+  };
+
+  // Closed mid-flight — closing bumps the counter, so the answer is dropped.
+  const a = start();
+  current += 1; // closeTranslation()
+  land(a, 'stale');
+  assert.deepEqual(shown, [], 'an answer for a closed sheet must not land');
+
+  // Two requests racing: only the LATEST is shown, whichever returns first.
+  const b = start();
+  const c = start();
+  land(b, 'first request, late');
+  assert.deepEqual(shown, [], 'the superseded request must not overwrite the current one');
+  land(c, 'current');
+  assert.deepEqual(shown, ['current']);
+});
+
+test('[static] the translation sheet invalidates on close, and the tombstone has one spelling', () => {
+  const chat = stripComments(read('screens/ChatScreen.tsx'));
+
+  assert.match(chat, /const translateRunRef = useRef\(0\);/);
+  assert.match(chat, /const runId = \+\+translateRunRef\.current;/);
+  assert.match(chat, /if \(runId !== translateRunRef\.current\) return;/);
+  // Closing must BUMP the counter, or the guard would only cover the raced
+  // case and not the closed-mid-flight one the finding actually describes.
+  assert.match(chat, /function closeTranslation\(\) \{\s*translateRunRef\.current \+= 1;/);
+  assert.match(chat, /onClose=\{closeTranslation\}/);
+
+  // AUDIT F4 — one spelling of the tombstone, in one place. A second literal
+  // is a second thing to get wrong the day the wording changes, and
+  // isDeletedUser() compares against the constant.
+  const profile = read('screens/PublicProfileScreen.tsx');
+  assert.match(profile, /import \{ DELETED_USER_LABEL \} from '\.\.\/lib\/rebook';/);
+  assert.match(profile, /state\.profile\.full_name \?\? DELETED_USER_LABEL/);
+  assert.doesNotMatch(profile, /'Deleted user'/, 'the inline literal must not come back');
+  assert.match(read('lib/rebook.ts'), /export const DELETED_USER_LABEL = 'Deleted user';/);
 });

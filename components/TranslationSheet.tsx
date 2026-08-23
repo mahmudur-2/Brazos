@@ -25,11 +25,14 @@ import {
  * failure than no label at all, and it is the kind of wrong that reads as
  * confident.
  *
- * COPY IS OPTIONAL, and absent today. Nothing in this project can write the
- * clipboard: `Clipboard` left React Native core, and expo-clipboard is not a
- * dependency (adding one is an operator step — see HANDOFF.md). The control
- * renders only when a handler is passed, which is the same
- * never-a-dead-control rule the composer's dictation mic follows.
+ * COPY IS OPTIONAL, and is now WIRED — expo-clipboard landed 2026-08-23. It
+ * stays optional rather than becoming unconditional because the module is a
+ * native one: `Clipboard` left React Native core, so a binary without
+ * expo-clipboard's native module has nothing to fall back TO. lib/clipboard.ts
+ * answers whether this build can write at all, and the caller passes a handler
+ * only when it can. The control therefore renders exactly where it works,
+ * which is the same never-a-dead-control rule the composer's dictation mic
+ * follows.
  */
 
 type TranslationSheetProps = {
