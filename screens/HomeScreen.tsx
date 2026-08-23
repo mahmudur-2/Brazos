@@ -440,13 +440,15 @@ export function HomeScreen() {
           <View style={styles.intro}>
             <Image
               source={isDark ? PRESTIGE_HERO_ART : HOME_HERO_ART}
-              style={[styles.homeHeroArt, isDark && styles.homeHeroArtDark]}
-              // home(14): dark's hero is a SLOT, and a slot fills. `cover`
+              style={styles.homeHeroArt}
+              // home(14): the hero is a SLOT, and a slot fills. `cover`
               // scales whatever is dropped in until both dimensions are
               // covered and crops the remainder, so a room-baked scene reaches
               // the screen edge instead of sitting inside its own margins.
-              // Light keeps `contain` and the Heritage crop, untouched.
-              resizeMode={isDark ? 'cover' : 'contain'}
+              // Parity 2026-08-22: one box and one fill rule in both themes;
+              // only the artwork file differs (the chair crop's 1.14 aspect is
+              // within 0.4% of the box's, so cover crops it imperceptibly).
+              resizeMode="cover"
               accessibilityIgnoresInvertColors
             />
             <View style={styles.introCopy}>
@@ -490,13 +492,11 @@ export function HomeScreen() {
               <Text
                 style={[
                   styles.headline,
-                  isDark && styles.headlineDark,
-                  // home(16b): the studio's live size is a DARK instrument. It
-                  // used to apply to both themes, which meant home(16)'s ladder
-                  // — measured off a dark master — silently retyped the frozen
-                  // Heritage composition as well. `styles.headline` keeps
-                  // light's 39/45.
-                  isDark && {
+                  // Parity 2026-08-22 (supersedes home(16b)'s dark-only gate):
+                  // one hero composition. The column ends where the artwork's
+                  // ink starts, and the studio's live size drives both themes
+                  // — light inherits dark's implemented numbers exactly.
+                  {
                     maxWidth: headlineColumn,
                     fontSize: design.heroFontSize,
                     lineHeight: Math.round(design.heroFontSize * HEADLINE_LEADING),
@@ -506,10 +506,7 @@ export function HomeScreen() {
               >
                 Take a task{'\n'}off your plate.
               </Text>
-              <Text
-                style={[styles.heroSubtitle, isDark && styles.heroSubtitleDark]}
-                maxFontSizeMultiplier={1.3}
-              >
+              <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
                 Describe it. Hire help. Get it handled.
               </Text>
             </View>
@@ -529,7 +526,6 @@ export function HomeScreen() {
             autoCorrect
             style={[
               styles.searchField,
-              isDark && styles.searchFieldDark,
               { minHeight: design.searchHeight, borderRadius: design.searchRadius },
             ]}
             trailing={
@@ -545,12 +541,9 @@ export function HomeScreen() {
             }
           />
 
-          <View style={[styles.serviceRows, isDark && styles.serviceRowsDark]}>
+          <View style={styles.serviceRows}>
             {HOME_SERVICE_ROWS.map((row, rowIndex) => (
-              <View
-                key={`service-row-${rowIndex}`}
-                style={[styles.serviceRow, isDark && styles.serviceRowDark]}
-              >
+              <View key={`service-row-${rowIndex}`} style={styles.serviceRow}>
                 {row.map((service) => (
                   <Chip
                     key={service.label}
@@ -558,11 +551,11 @@ export function HomeScreen() {
                     icon={service.icon}
                     variant="service"
                     style={[
-                      // Dark wears the Chip's own sage treatment (master 44);
-                      // light keeps the Heritage gold outline.
+                      // Parity 2026-08-22: one pill geometry (home(24)'s
+                      // paddings) in both themes; light keeps only the gold
+                      // outline COLOUR over the Chip's shared 1pt border.
                       !isDark && styles.goldOutlineChip,
-                      rowIndex === 1 && styles.compactServiceChip,
-                      isDark && (rowIndex === 1 ? styles.compactChipDark : styles.serviceChipDark),
+                      rowIndex === 1 ? styles.compactServiceChip : styles.serviceChip,
                     ]}
                     onPress={() => searchCategory(service.key)}
                     accessibilityHint={`Find ${service.label.toLowerCase()} help`}
@@ -576,7 +569,6 @@ export function HomeScreen() {
                     style={[
                       !isDark && styles.goldOutlineChip,
                       styles.compactServiceChip,
-                      isDark && styles.compactChipDark,
                       styles.otherChip,
                     ]}
                     onPress={() => setMoreOpen(true)}
@@ -593,13 +585,10 @@ export function HomeScreen() {
               (decision 3); light keeps the Heritage forest card with its white
               button and brand mark. */}
           <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
-            <View style={[styles.heroBody, isDark && styles.heroBodyDark]}>
-              <View
-                style={[
-                  styles.heroCopy,
-                  isDark && { paddingRight: bDrape.copyPaddingRight, gap: 8 },
-                ]}
-              >
+            <View style={styles.heroBody}>
+              {/* Parity 2026-08-22: one copy column, reserved from the B
+                  drape's own computed width in both themes (home(2)). */}
+              <View style={[styles.heroCopy, { paddingRight: bDrape.copyPaddingRight }]}>
                 <Text style={styles.heroEyebrow}>FASTEST WAY TO START</Text>
                 <Text
                   style={[styles.heroHeadline, isDark && styles.heroHeadlineDark]}
@@ -623,28 +612,26 @@ export function HomeScreen() {
                 accessibilityLabel="Post a job"
               >
                 <Text style={[styles.heroButtonText, isDark && styles.heroButtonTextDark]}>
-                  {isDark ? 'Post a job ›' : 'Post a job'}
+                  Post a job ›
                 </Text>
               </Pressable>
             </View>
             <Image
               source={isDark ? PRESTIGE_B_DRAPE : POST_MARK}
-              style={[styles.heroMark, isDark && styles.heroMarkDark, isDark && bDrape.art]}
+              style={[styles.heroMark, bDrape.art]}
               resizeMode="contain"
               accessibilityIgnoresInvertColors
             />
           </View>
 
-          <View style={[styles.section, isDark && styles.sectionDark]}>
+          <View style={styles.section}>
             <View style={styles.liveNearbyHeader}>
               <View style={styles.liveNearbyTitle}>
                 <View style={styles.liveIndicator} accessibilityLabel="Live nearby jobs">
                   <Animated.View style={[styles.liveDotHalo, livePulseStyle]} />
                   <View style={styles.liveDot} />
                 </View>
-                <Text style={[styles.sectionTitle, isDark && styles.sectionTitleDark]}>
-                  Live Nearby
-                </Text>
+                <Text style={styles.sectionTitle}>Live Nearby</Text>
               </View>
               <Pressable
                 onPress={browseOpenJobs}
@@ -893,6 +880,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   greetingBlock: { flexShrink: 1, gap: 2 },
   greeting: { fontSize: 18, fontWeight: '500', color: colors.homeSlate },
   greetingName: { color: colors.gold },
+  // Parity 2026-08-22: the ring is ONE point in both themes (home(17)'s
+  // weight, which light now inherits); only the ring's colour is per-theme.
   modeSwitch: {
     flexShrink: 0,
     flexDirection: 'row',
@@ -901,7 +890,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     minHeight: 44,
     paddingHorizontal: 10,
     borderRadius: radius.pill,
-    borderWidth: 1.25,
+    borderWidth: 1,
     borderColor: colors.gold,
     backgroundColor: colors.surface,
   },
@@ -942,27 +931,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // measurement does not have, because the estimate's own spread — 151 to 168
   // depending on whether the ring is 0.92pt or 1.00pt — is twice that gap.
   // RECORDED: the difference, and the fact that no token is inside 8.
-  modeSwitchDark: { borderWidth: 1, borderColor: colors.homeModeRing },
+  modeSwitchDark: { borderColor: colors.homeModeRing },
   // Phase 1's tactile answer to the tap — the press state itself, so the
   // feedback lands on touch-down rather than after an animation starts.
   modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
-  modeSwitchText: { fontSize: 15, fontWeight: '600', color: colors.forest },
-  // home(26), DARK ONLY: 15 -> 13, off the sans ladder. That 2pt is the whole
-  // of the pill's width problem — the label is the only elastic term in it, and
-  // it took the box from 171pt to 155.5 against the master's measured 156.2.
-  modeSwitchTextDark: {
-    color: colors.emerald,
+  // home(26)'s sans-ladder 13, now in BOTH themes (parity 2026-08-22): the
+  // label is the pill's only elastic term, and one size keeps one pill width.
+  modeSwitchText: {
     fontSize: sansSize(MASTER_SANS_CAPS.switchLabel),
-  },
-  headline: {
-    maxWidth: '73%',
-    fontFamily: fonts.display,
-    fontSize: 39,
-    lineHeight: 45,
     fontWeight: '600',
-    letterSpacing: -0.3,
-    color: colors.ink,
+    color: colors.forest,
   },
+  modeSwitchTextDark: { color: colors.emerald },
   // home(23) — THE GAP ABOVE THE HEADLINE IS REAL SPACING.
   //
   // marginTop 30, not 15. Master 44 puts the headline's cap top at 95.0pt below
@@ -972,35 +952,32 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // transform: the subtitle and everything under it move WITH it rather than
   // having the headline slide over them.
   //
-  // No `maxWidth` here on purpose — the operator's 74% was 261pt of column,
-  // which is 17pt past where the hero's ink starts. The dark column is computed
-  // from the artwork at the call site (`headlineColumn`), because a share of
-  // the screen and a share of the artwork are two different fractions and only
-  // one of them ends where the picture does.
-  headlineDark: { marginTop: 30 },
+  // No `maxWidth`, `fontSize` or `lineHeight` here on purpose — the column is
+  // computed from the artwork at the call site (`headlineColumn`) and the size
+  // is the studio's live value, both applied to BOTH themes since the parity
+  // pass (2026-08-22) retired light's 39/45/'73%' Heritage composition.
+  headline: {
+    marginTop: 30,
+    fontFamily: fonts.display,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+    color: colors.ink,
+  },
+  // home(23)'s 14/10 (one line, master 44's own cap), both themes since the
+  // parity pass — light's 16/8 two-line setting is retired.
   heroSubtitle: {
     maxWidth: '73%',
-    marginTop: spacing.sm,
-    fontSize: 16,
+    marginTop: 10,
+    fontSize: 14,
     fontWeight: '500',
     color: colors.homeSlate,
   },
-  // home(23), DARK ONLY — 16 -> 14, and that is what puts it on ONE line.
-  //
-  // Master 44 sets "Describe it. Hire help. Get it handled." on one line, 208pt
-  // wide, on a 21px = 9.70pt cap. This app was setting it on TWO, because the
-  // platform sans needs 265pt at 16pt against a 73% (258pt) column. 14pt is the
-  // master's own cap to within 0.7% (9.63 against 9.70) AND sets 232pt, which
-  // clears the column by 26pt. The 2pt of extra marginTop is the master's Y:
-  // its cap top is 187.8pt below the content top and 8 would land at 185.3.
-  // Light keeps 16/8 — the Heritage composition is frozen.
-  heroSubtitleDark: { fontSize: 14, marginTop: 10 },
-  homeHeroArt: { position: 'absolute', zIndex: 0, width: 112, height: 124, right: -6, top: 47 },
   // home(23) — THE HERO IS A SLOT, AND THESE ARE THE NEW MASTER'S OWN NUMBERS.
   //
   // Re-measured on the REPLACED docs/mockups/44_customer_home_dark.png
   // (853x1844). home(14)'s 151 x 135 at right: 0 came off the old 941x1672 file
-  // and is void.
+  // and is void. Parity 2026-08-22: ONE box in both themes — light's Heritage
+  // 112x124 at (-6, 47) is retired and only the artwork file stays per-theme.
   //
   // HOW THE BOX WAS FOUND, since a room-baked scene has no alpha to bound it.
   // The asset's own structured columns run 0.1225..0.8750 of its canvas — its
@@ -1022,7 +999,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // the master is under it — so its bottom sits at 47 and covers the art's
   // first 4.2pt. RECORDED: the master's number is kept and the taller pill hides
   // a sliver of scene behind an opaque fill, which is the smaller difference.
-  homeHeroArtDark: {
+  homeHeroArt: {
+    position: 'absolute',
+    zIndex: 0,
     width: HERO_ART_DARK.width,
     height: HERO_ART_DARK.height,
     right: HERO_ART_DARK.right,
@@ -1030,7 +1009,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Laid over the shared SearchBar so the reference geometry wins; the input,
   // clear control and (when available) the voice mic ride SearchBar itself.
+  // home(24): the 8pt marginTop is the control's Y against master 44 — a REAL
+  // gap on this one section, not a change to `sectionGap` — and it applies in
+  // both themes since the parity pass (2026-08-22).
   searchField: {
+    marginTop: 8,
     gap: spacing.md,
     paddingHorizontal: 18,
     borderWidth: 1,
@@ -1038,33 +1021,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.surface,
     ...shadows.card,
   },
-  // home(24), DARK ONLY: the search control's Y, and nothing else about it.
-  //
-  // Master 44 puts its top 237.0pt below the content box's top; the hero block
-  // above it leaves the field at 229. The 8pt is a REAL gap on this one
-  // section, not a change to `sectionGap`: a global gap moves five sections to
-  // fix one, and the master's own gaps are five different numbers.
-  //
-  // RECORDED, NOT MET: the master's field is 67.0pt tall and this one is 70.
-  // `design.searchHeight` is the studio's live control and LIGHT reads the same
-  // value, and light geometry is frozen — so the 3pt (4.5%) stays a difference
-  // rather than becoming a dark-only second source for one control's height.
-  searchFieldDark: { marginTop: 8 },
   searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
-  serviceRows: { gap: spacing.sm },
-  serviceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing.sm },
+  // home(24)'s row rhythm — gap 10 between rows, 6.4 -> 6 inside them — in
+  // BOTH themes since the parity pass (light's spacing.sm pair is retired).
+  serviceRows: { gap: 10 },
+  serviceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   // home(24) — WHAT PUTS THE CHIPS ON TWO ROWS, which is the whole point.
   //
   // Master 44 draws five pills on two rows; this app drew six-across-three,
   // with "Other" alone on a row of its own. Row 2 needed 360pt of a 353pt
   // content width — over by 7 — so nothing about the wrap was subtle.
   //
-  // The lever is the PILL's horizontal padding, and only in dark. The master's
-  // own padding is LARGER than this app's (17.5pt on row 1, ~14 on row 2), and
-  // its pills are still narrower, because its label face is narrower than the
-  // platform sans at 14pt. That label lives in components/Chip.tsx and is
-  // shared by every chip in the app, so it is not Home's to move; the padding
-  // is. What the numbers below buy, measured:
+  // The lever is the PILL's horizontal padding. The master's own padding is
+  // LARGER than this app's (17.5pt on row 1, ~14 on row 2), and its pills are
+  // still narrower, because its label face is narrower than the platform sans
+  // at 14pt. That label lives in components/Chip.tsx and is shared by every
+  // chip in the app, so it is not Home's to move; the padding is. What the
+  // numbers buy, measured:
   //
   //   row 1   Furniture Assembly 172 -> 168  (master 167.7)
   //           Moving Help        133 -> 129  (master 126.7)
@@ -1073,52 +1046,54 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   //           Other               76 ->  81  (master  84.8, grown by flexGrow
   //                                           into what the row has left)
   //
-  // and the row gap goes to the master's own 6.4pt rather than spacing.sm's 8.
-  // Row 2 then totals 347 of 353. Light keeps 14/10 and the 8pt gaps.
-  serviceRowsDark: { gap: 10 },
-  serviceRowDark: { gap: 6 },
-  serviceChipDark: { paddingHorizontal: 12 },
-  compactChipDark: { paddingHorizontal: 8 },
-  // Same gold hairline as the "Switch to Worker" pill above, so the quick-
-  // service row reads as part of the same control family (light only — dark
-  // wears the Chip's sage treatment).
-  goldOutlineChip: { borderWidth: 1.25, borderColor: colors.gold },
-  compactServiceChip: { paddingHorizontal: 10 },
+  // Parity 2026-08-22: the paddings apply in both themes (light's 14/10 pair
+  // is retired with its 8pt gaps).
+  serviceChip: { paddingHorizontal: 12 },
+  compactServiceChip: { paddingHorizontal: 8 },
+  // Same gold hairline COLOUR as the "Switch to Worker" pill above, so the
+  // quick-service row reads as part of the same control family (light only —
+  // dark wears the Chip's sage treatment). The WIDTH is the Chip's own 1pt in
+  // both themes since the parity pass.
+  goldOutlineChip: { borderColor: colors.gold },
   // Fills whatever room is left in row 2 next to House Cleaning/TV Mounting —
   // flexShrink keeps it from forcing a wrap to a 3rd row if space is tight,
   // flexGrow claims any leftover space when there's room to spare, so it's
   // always as wide as it can be without ever leaving this row.
   otherChip: { flexGrow: 1, flexShrink: 1, justifyContent: 'center' },
+  // home(24): master 44 leaves 22.6pt between the chip rows and this card,
+  // against the 20 `sectionGap` gives every section — the 3pt marginTop is
+  // that per-section correction, both themes since the parity pass. The 1pt
+  // border is part of the box in both; light draws it transparent so only the
+  // colours differ.
   heroCard: {
+    marginTop: 3,
     borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'transparent',
     backgroundColor: colors.forest,
     overflow: 'hidden',
     ...shadows.card,
   },
   heroCardDark: {
-    // home(24): master 44 leaves 22.6pt between the chip rows and this card,
-    // against the 20 `sectionGap` gives every section. Per-section, dark-only,
-    // for the reason on `searchFieldDark`.
-    marginTop: 3,
     backgroundColor: colors.surface,
-    borderWidth: 1,
     borderColor: colors.border,
   },
-  heroBody: { padding: 16, gap: 12 },
-  // home(25), DARK ONLY. Master 44 leaves 40.9pt between the heading's second
-  // cap top and the "Post a job" pill's top edge; 12 leaves 34.6. The 8pt goes
-  // here rather than into the heading's leading, because the leading is the
-  // master's own measured line pitch and this gap is not.
-  heroBodyDark: { gap: 20 },
-  // Light keeps its fixed reserve for the fixed Heritage mark; dark's is
-  // computed from the drape's own width (home(2)) and applied at the call
-  // site, so the two numbers cannot drift apart.
-  heroCopy: { gap: 4, paddingRight: 68 },
+  // home(25): master 44 leaves 40.9pt between the heading's second cap top
+  // and the "Post a job" pill's top edge; gap 12 left 34.6, so 20. Both
+  // themes since the parity pass.
+  heroBody: { padding: 16, gap: 20 },
+  // The copy column's reserve is computed from the drape's own width (home(2))
+  // and applied at the call site — one number, both themes.
+  heroCopy: { gap: 8 },
   heroEyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: colors.gold },
+  // home(25)'s 19/30 (the master's two-line setting with its own leading), in
+  // BOTH themes since the parity pass — light's 25/29 three-line setting is
+  // retired, and with it the size gap that grew the wrap. Colour stays
+  // per-theme: white on light's forest card, ink on dark's surface card.
   heroHeadline: {
     fontFamily: fonts.display,
-    fontSize: 25,
-    lineHeight: 29,
+    fontSize: 19,
+    lineHeight: 30,
     letterSpacing: -0.25,
     fontWeight: '700',
     color: colors.white,
@@ -1159,13 +1134,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // already does. LIGHT is unmoved by it: at 25pt in the same column the
   // natural wrap already fell after "job." and again after "handles", which is
   // exactly what the explicit break plus one natural wrap produces.
-  heroHeadlineDark: { color: colors.ink, fontSize: 19, lineHeight: 30 },
-  heroMark: { position: 'absolute', top: 12, right: 10, width: 79, height: 101 },
-  // No width/height here on purpose: dark's box is B_DRAPE_WIDTH_RATIO of the
-  // screen, measured at render (home(2)). `right` must stay in step with
-  // B_DRAPE_RIGHT_INSET, which is what the headline column is reserved from.
+  heroHeadlineDark: { color: colors.ink },
+  // No width/height here on purpose: the box is B_DRAPE_WIDTH_RATIO of the
+  // screen, measured at render (home(2)) and applied in BOTH themes since the
+  // parity pass — light's fixed 79x101 at (12, 10) is retired, which is what
+  // makes the B render the same size in both modes. `right` must stay in step
+  // with B_DRAPE_RIGHT_INSET, which is what the headline column is reserved
+  // from.
   //
-  // home(25): 25 -> 21, re-measured on the replaced master. The B's ink starts
+  // home(25): top 21, re-measured on the replaced master. The B's ink starts
   // 48px = 22.2pt below the card's OUTER top edge; `top` is measured from the
   // padding box, inside the 1pt border, and the asset has no empty margin above
   // its ink, so 21 puts the ink at 22.
@@ -1174,21 +1151,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // measures 61.7pt of ink against the 63 this draws — 0.272 by the same
   // arithmetic home(15) used — and the difference is smaller than the
   // measurement's own threshold sensitivity on a downscaled screenshot.
-  heroMarkDark: { top: 21, right: 0 },
+  heroMark: { position: 'absolute', top: 21, right: 0 },
+  // The 1pt ring is part of the box in both themes (parity 2026-08-22);
+  // light draws it transparent on its white pill.
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: 'transparent',
     backgroundColor: colors.white,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-  heroButtonDark: { backgroundColor: colors.forest, borderWidth: 1, borderColor: colors.mint2 },
+  heroButtonDark: { backgroundColor: colors.forest, borderColor: colors.mint2 },
   heroButtonPressed: { opacity: 0.9 },
   heroButtonText: { fontFamily: fonts.display, fontSize: 24, fontWeight: '700', color: colors.forest },
   heroButtonTextDark: { color: colors.onForest },
-  section: { gap: 12 },
-  // home(26), DARK ONLY — a NEGATIVE margin, and it is honest.
+  // home(26) — the NEGATIVE margin is honest, and both themes carry it since
+  // the parity pass.
   //
   // Master 44 leaves 28.4pt between the promo card's bottom edge and the "L" of
   // Live Nearby. This app leaves 34: `sectionGap` gives 20, and the header row
@@ -1197,15 +1178,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // one to the INK, so the layout gap has to be 14.2 for the ink gap to be
   // 28.4. -6 is that difference; there is no smaller lever, because the 44 is
   // CLAUDE.md's and the 20 is the studio's one global number.
-  sectionDark: { marginTop: -6 },
+  section: { gap: 12, marginTop: -6 },
   liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
   liveNearbyTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
-  sectionTitle: { fontFamily: fonts.display, fontSize: 22, fontWeight: '700', color: colors.ink },
-  // home(16), D10, DARK ONLY: 22 -> serifSize(26) = 16. Master 44's "Live
-  // Nearby" measures a 26px cap, which is 15.7pt of Georgia; 22 was the one
-  // rung out by more than a rounding. Light keeps 22 — 44 is a DARK master and
-  // the Heritage composition is frozen (home(16b)).
-  sectionTitleDark: { fontSize: serifSize(MASTER_SERIF_CAPS.sectionTitle) },
+  // home(16)/home(26)'s ladder rung (serifSize(30) = 20), in BOTH themes since
+  // the parity pass — light's 22 is retired.
+  sectionTitle: {
+    fontFamily: fonts.display,
+    fontSize: serifSize(MASTER_SERIF_CAPS.sectionTitle),
+    fontWeight: '700',
+    color: colors.ink,
+  },
   liveIndicator: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
   liveDotHalo: {
     position: 'absolute',
@@ -1219,16 +1202,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // removed with the control they painted. The Map ROUTE is untouched.
   viewAll: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44 },
   viewAllPressed: { opacity: 0.78 },
-  viewAllText: { fontSize: 15, fontWeight: '600', color: colors.forest },
-  // home(26), DARK ONLY: 15 -> 14, off the same sans ladder as the mode switch.
-  // Master 44's V measures a 21px stem = 9.70pt of cap; 15pt draws 11.
-  viewAllTextDark: {
-    color: colors.emerald,
+  // home(26)'s sans-ladder 14 (master 44's own cap), both themes since the
+  // parity pass — light's 15 is retired; the colour stays per-theme.
+  viewAllText: {
     fontSize: sansSize(MASTER_SANS_CAPS.viewAll),
+    fontWeight: '600',
+    color: colors.forest,
   },
+  viewAllTextDark: { color: colors.emerald },
   cardList: { gap: spacing.md },
-  jobCard: { borderRadius: 20, backgroundColor: colors.surface, overflow: 'hidden', ...shadows.card },
-  jobCardDark: { borderWidth: 1, borderColor: colors.border },
+  // The 1pt hairline is part of the card box in both themes (parity
+  // 2026-08-22); light draws it transparent over its shadow treatment.
+  jobCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'transparent',
+    backgroundColor: colors.surface,
+    overflow: 'hidden',
+    ...shadows.card,
+  },
+  jobCardDark: { borderColor: colors.border },
   jobCardPressed: { opacity: 0.9 },
   jobBody: { flexDirection: 'row', gap: spacing.md, padding: 14 },
   jobThumb: { width: 104, height: 104, borderRadius: radius.md, backgroundColor: colors.neutralBg },

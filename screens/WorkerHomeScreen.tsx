@@ -45,8 +45,9 @@ import {
 import { SearchBar, Toggle } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
-// Master 43's hero crop. Dark-only by standing decision: light keeps the
-// approved full-width Heritage arrangement.
+// Master 43's hero crop, mounted in BOTH themes since the 2026-08-22 parity
+// pass (light previously omitted it and kept a full-width copy block). It is
+// the only toolbox asset; its baked dark halo disc renders as drawn on light.
 const PRESTIGE_TOOLBOX_ART = require('../assets/prestige/hero_toolbox_worker.png');
 
 const PREVIEW_COUNT = 3;
@@ -270,21 +271,22 @@ export function WorkerHomeScreen() {
             </Pressable>
           </View>
 
-          {/* --- The hero (master 43): serif headline with the second
-              sentence on the palette's GREEN accent, subtitle beneath, and —
-              under the dark palette only — the toolbox artwork beside it,
-              mounted the same way master 44's armchair is. Light keeps the
-              full-width Heritage block; the crop is a dark-only asset. --- */}
+          {/* --- The hero (master 43): headline with the second sentence on
+              the palette's GREEN accent, subtitle beneath, the toolbox
+              artwork beside it — mounted the same way master 44's armchair
+              is. Parity 2026-08-22: one composition in both themes (the
+              dark-only gate and light's full-width Heritage block are
+              retired). The crop carries its own baked dark halo disc, which
+              light shows as drawn — an asset property, recorded in the run
+              report for the operator's device pass. --- */}
           <View style={styles.heroBlock}>
-            {isDark ? (
-              <Image
-                source={PRESTIGE_TOOLBOX_ART}
-                style={styles.heroArt}
-                resizeMode="contain"
-                accessibilityIgnoresInvertColors
-              />
-            ) : null}
-            <View style={[styles.heroCopy, isDark && styles.heroCopyDark]}>
+            <Image
+              source={PRESTIGE_TOOLBOX_ART}
+              style={styles.heroArt}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+            />
+            <View style={styles.heroCopy}>
               <Text style={styles.heroHeadline} maxFontSizeMultiplier={1.25}>
                 Get hired.{'\n'}
                 <Text style={styles.heroHeadlineAccent}>Get paid.</Text>
@@ -533,7 +535,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // display face, 39/45, -0.3 tracking, ink). heroBlock is the positioning
   // context for the dark-only toolbox crop; heroCopy holds the rhythm.
   heroBlock: {},
-  heroCopy: { gap: spacing.sm },
+  // Master 43 holds the headline in a narrow column beside the toolbox — in
+  // BOTH themes since the parity pass (2026-08-22); light's full-width block
+  // is retired.
+  heroCopy: { gap: spacing.sm, maxWidth: '58%' },
   heroHeadline: {
     fontFamily: fonts.display,
     fontSize: 39,
@@ -544,9 +549,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   heroHeadlineAccent: { color: colors.emerald },
   heroSubtitle: { fontSize: 16, fontWeight: '500', color: colors.homeSlate },
-  // Master 43 holds the headline in a narrow column beside the toolbox; the
-  // Prestige crop is dark-only, so light keeps the full-width block.
-  heroCopyDark: { maxWidth: '58%' },
   heroArt: { position: 'absolute', zIndex: 0, right: -10, top: 18, width: 162, height: 108 },
   modeSwitch: {
     flexShrink: 0,

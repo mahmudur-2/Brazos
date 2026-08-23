@@ -435,10 +435,9 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
  * file-wide allowlist, so a second gold fill in this same file is still an
  * offender.
  *
- * SIZE IS A SHARE OF THE SCREEN, not a pt value. A fixed number cannot be a
- * fixed percentage: across 320pt to 440pt any single value swings by a third.
- * Light is frozen — it keeps the 52pt square, the forest fill and the gold
- * ring, and only the size arithmetic (which resolves to the same 52) is shared.
+ * SIZE IS A SHARE OF THE PILL — see home(18) below. Home parity 2026-08-22:
+ * light shares dark's whole geometry (size, centring, inset) and keeps only
+ * its colours — the forest fill and the gold ring.
  *
  * THE BAR'S FOOTPRINT DOES NOT MOVE. The pill's height is
  * TAB_BAR_CONTENT_HEIGHT, a constant; this control lives inside a flex item of
@@ -469,10 +468,6 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
  */
 /** home(18): the control's height as a share of the PILL's. */
 const CREATE_BUTTON_PILL_RATIO = 0.857;
-/** The frozen LIGHT square. */
-const CREATE_BUTTON_LIGHT_SIZE = 52;
-/** How far LIGHT lifts its square above the slot. Frozen with the square. */
-const CREATE_BUTTON_LIGHT_RAISE = 14;
 /** The glyph inside it, as a share of the control — 32 on 52, as it shipped. */
 const CREATE_GLYPH_RATIO = 0.615;
 
@@ -480,15 +475,15 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
 
-  const size = isDark
-    ? Math.round(TAB_BAR_CONTENT_HEIGHT * CREATE_BUTTON_PILL_RATIO)
-    : CREATE_BUTTON_LIGHT_SIZE;
-  // Dark CENTRES the control in the pill. The slot packs to flex-end with
+  // Home parity 2026-08-22: ONE geometry in both themes — home(18)'s share of
+  // the pill, centred inside it. Light's frozen 52pt square raised 14 above
+  // the slot is retired; light keeps only its colours (forest fill, gold ring
+  // and glyph) over dark's shape, size, placement and inset.
+  const size = Math.round(TAB_BAR_CONTENT_HEIGHT * CREATE_BUTTON_PILL_RATIO);
+  // The control CENTRES in the pill. The slot packs to flex-end with
   // TAB_BOTTOM_GAP beneath it, so lifting by half the slack minus that gap
-  // leaves the same clearance above and below. Light is frozen on its 14.
-  const raise = isDark
-    ? Math.round((TAB_BAR_CONTENT_HEIGHT - size) / 2) - TAB_BOTTOM_GAP
-    : CREATE_BUTTON_LIGHT_RAISE;
+  // leaves the same clearance above and below.
+  const raise = Math.round((TAB_BAR_CONTENT_HEIGHT - size) / 2) - TAB_BOTTOM_GAP;
   // Derived rather than fixed so the plus keeps its proportion inside the
   // control at any size — a fixed 32 would read hollow in the larger box.
   const glyph = Math.round(size * CREATE_GLYPH_RATIO);
@@ -601,10 +596,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: TAB_BOTTOM_GAP,
   },
   createButton: {
-    // Width/height are supplied at render (home(8)) — this pair is the LIGHT
-    // value and the fallback shape.
-    width: CREATE_BUTTON_LIGHT_SIZE,
-    height: CREATE_BUTTON_LIGHT_SIZE,
+    // Width/height are supplied at render — one pill-ratio size for both
+    // themes since the parity pass (home(18)'s arithmetic).
     borderRadius: radius.lg,
     // LIGHT keeps decision 3's treatment exactly: the one solid conversion
     // fill, ringed in gold, gold as line-work and never the fill.

@@ -539,48 +539,50 @@ test('home(2) fence: the B drape is a fraction of the screen, and the copy colum
     /copyPaddingRight: width \+ B_DRAPE_RIGHT_INSET - B_DRAPE_COPY_OVERLAP/,
     'the headline column must be reserved FROM the drape width, not from a literal'
   );
-  assert.match(flat, /style=\{\[styles\.heroMark, isDark && styles\.heroMarkDark, isDark && bDrape\.art\]\}/);
-  // home(25) added the dark copy block's own row gap alongside the reserve —
-  // master 44 leaves 25.9pt between the eyebrow's cap and the heading's, where
-  // 4 leaves 20. It is a gap, not a second fixed reserve.
-  assert.match(flat, /isDark && \{ paddingRight: bDrape\.copyPaddingRight, gap: \d+ \}/);
+  // Home parity 2026-08-22: ONE mark box and ONE copy reserve, both themes.
+  // The dark-only gates (heroMarkDark, the isDark paddingRight) are retired —
+  // light renders the same computed geometry with its own artwork file.
+  assert.match(flat, /style=\{\[styles\.heroMark, bDrape\.art\]\}/);
+  assert.match(flat, /style=\{\[styles\.heroCopy, \{ paddingRight: bDrape\.copyPaddingRight \}\]\}/);
+  // home(25)'s row gap rides the shared style now — a gap, not a second
+  // fixed reserve.
+  assert.match(flat, /heroCopy: \{ gap: \d+ \}/);
 
   // The fixed pair must not return, in either place.
   assert.doesNotMatch(
     flat,
-    /heroMarkDark: \{[^}]*width:/,
-    'heroMarkDark must not declare a fixed width again — a pt value cannot be a share of the screen'
+    /heroMark: \{[^}]*width:/,
+    'heroMark must not declare a fixed width again — a pt value cannot be a share of the screen'
   );
   assert.doesNotMatch(
     flat,
-    /heroCopyDark/,
-    'the fixed 96pt dark reserve must not come back; it is computed from the drape now'
+    /heroCopyDark|heroMarkDark/,
+    'the per-theme mark/reserve styles must not come back; the geometry is one computed pair'
   );
 
   // The drape's stylesheet inset and the constant the copy is reserved from
   // are two halves of one number.
-  const styleRight = /heroMarkDark: \{ top: \d+, right: (\d+) \}/.exec(flat);
-  assert.ok(styleRight, 'heroMarkDark must keep a plain `right` inset');
+  const styleRight = /heroMark: \{ position: 'absolute', top: \d+, right: (\d+) \}/.exec(flat);
+  assert.ok(styleRight, 'heroMark must keep a plain `right` inset');
   assert.equal(
     Number(styleRight[1]),
     inset,
-    'heroMarkDark.right and B_DRAPE_RIGHT_INSET must stay the same number'
+    'heroMark.right and B_DRAPE_RIGHT_INSET must stay the same number'
   );
 
-  // LIGHT's promo heading stays at 25pt: shrinking type was not the fix for
-  // the wrap the Heritage composition was signed off with, and it is frozen.
-  assert.match(
+  // The promo heading is ONE size in both themes (parity 2026-08-22 retired
+  // light's 25pt Heritage setting): the replaced master sets it on TWO lines,
+  // the size is the largest that fits two inside the column the drape leaves,
+  // and the arithmetic is here rather than in a screenshot.
+  const darkSize = Number(
+    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: (\d+),/.exec(flat)?.[1]
+  );
+  assert.ok(darkSize > 0, 'the promo heading must keep a plain size');
+  assert.doesNotMatch(
     flat,
-    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25,/,
-    'the LIGHT promo heading stays at 25pt — the Heritage composition is frozen'
+    /heroHeadlineDark: \{[^}]*fontSize/,
+    'the promo heading must stay one size for both themes — only its colour is per-theme'
   );
-
-  // DARK's is a different question, and the replaced master answered it: it
-  // sets that heading on TWO lines where the old file set three. The size is
-  // the largest that fits two inside the column the drape leaves, and the
-  // arithmetic is here rather than in a screenshot.
-  const darkSize = Number(/heroHeadlineDark: \{ color: colors\.ink, fontSize: (\d+),/.exec(flat)?.[1]);
-  assert.ok(darkSize > 0, 'the dark promo heading must keep a plain size');
   const cardInner = 393 - 2 * Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]) - 2;
   const copyColumn = cardInner - 2 * 16 - (Math.round(393 * ratio) + inset - overlap);
   // "BRAZOS handles the rest." measured at 25pt of Georgia in a real 393pt
@@ -827,9 +829,15 @@ test('home(24) fence: master 44’s five service chips fit on master 44’s two 
   const flat = flatten(read('screens/HomeScreen.tsx'));
   const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
 
-  const chipPad = Number(/compactChipDark: \{ paddingHorizontal: (\d+) \}/.exec(flat)?.[1]);
-  const rowGap = Number(/serviceRowDark: \{ gap: (\d+) \}/.exec(flat)?.[1]);
-  assert.ok(chipPad > 0 && rowGap > 0, 'the dark chip row keeps its own padding and gap');
+  // Home parity 2026-08-22: one chip geometry for both themes — the dark-only
+  // styles are retired and light shares home(24)'s paddings and gaps.
+  const chipPad = Number(/compactServiceChip: \{ paddingHorizontal: (\d+) \}/.exec(flat)?.[1]);
+  const rowGap = Number(
+    /serviceRow: \{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: (\d+) \}/.exec(
+      flat
+    )?.[1]
+  );
+  assert.ok(chipPad > 0 && rowGap > 0, 'the chip row keeps its own padding and gap');
 
   // icon (16) + gap (6) + label at 14pt, measured per pill. Row 2 is
   // "House Cleaning", "TV Mounting" and "Other".
@@ -842,22 +850,23 @@ test('home(24) fence: master 44’s five service chips fit on master 44’s two 
     `row 2 wants ${wanted}pt of ${available}pt, so "Other" wraps to a third row. Master 44 draws two`
   );
 
-  // LIGHT IS UNTOUCHED: it keeps the shared 10pt compact padding and the 8pt
-  // gaps, and it is allowed its third row — the Heritage composition is frozen.
-  assert.match(flat, /compactServiceChip: \{ paddingHorizontal: 10 \}/);
-  assert.match(flat, /serviceRow: \{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing\.sm \}/);
-  assert.match(flat, /serviceRows: \{ gap: spacing\.sm \}/);
+  // The per-theme chip styles must not come back: one geometry, colour-only
+  // theme differences (light's gold outline is a borderColor alone).
+  assert.doesNotMatch(flat, /compactChipDark|serviceRowsDark|serviceRowDark|serviceChipDark/);
+  assert.match(flat, /goldOutlineChip: \{ borderColor: colors\.gold \}/);
+  assert.match(flat, /serviceChip: \{ paddingHorizontal: 12 \}/);
 
   // PER-SECTION SPACING, not one global gap. Master 44's own gaps below the
-  // hero are five different numbers; `sectionGap` is one. Each dark override
-  // below is the difference between them, and each is measured:
+  // hero are five different numbers; `sectionGap` is one. Each per-section
+  // number below is the difference between them, measured, and shared by both
+  // themes since the parity pass:
   //   search      237.0pt from the content top   (+8 on a 229 flow)
   //   chip row 1  328.0                          (sectionGap, unchanged)
   //   chip row 2  382.6                          (row gap 8 -> 10)
   //   promo card  449.1                          (+3 on a 20pt sectionGap)
-  assert.match(flat, /searchFieldDark: \{ marginTop: 8 \}/);
-  assert.match(flat, /serviceRowsDark: \{ gap: 10 \}/);
-  assert.match(flat, /heroCardDark: \{ marginTop: 3,/);
+  assert.match(flat, /searchField: \{ marginTop: 8,/);
+  assert.match(flat, /serviceRows: \{ gap: 10 \}/);
+  assert.match(flat, /heroCard: \{ marginTop: 3,/);
   assert.ok(
     !/gap: design\.sectionGap \+/.test(flat),
     'the rhythm is per-section; sectionGap stays the one number the studio shows'
@@ -883,9 +892,12 @@ test('home(24) fence: master 44’s five service chips fit on master 44’s two 
 test('home(25) fence: the promo card’s height is master 44’s, term by term', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
 
-  const copyGap = Number(/isDark && \{ paddingRight: bDrape\.copyPaddingRight, gap: (\d+) \}/.exec(flat)?.[1]);
-  const bodyGap = Number(/heroBodyDark: \{ gap: (\d+) \}/.exec(flat)?.[1]);
-  const leading = Number(/heroHeadlineDark: \{ color: colors\.ink, fontSize: \d+, lineHeight: (\d+) \}/.exec(flat)?.[1]);
+  // Parity 2026-08-22: every term below is ONE number for both themes.
+  const copyGap = Number(/heroCopy: \{ gap: (\d+) \}/.exec(flat)?.[1]);
+  const bodyGap = Number(/heroBody: \{ padding: 16, gap: (\d+) \}/.exec(flat)?.[1]);
+  const leading = Number(
+    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: \d+, lineHeight: (\d+),/.exec(flat)?.[1]
+  );
   const cta = Number(/ctaHeight: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))?.[1]);
   assert.ok(copyGap && bodyGap && leading && cta, 'every term of the card’s height must stay a plain number');
 
@@ -915,7 +927,7 @@ test('home(25) fence: the promo card’s height is master 44’s, term by term',
   // THE GOLD B'S TOP. Its ink starts 22.2pt below the card's outer top edge on
   // the master; `top` is measured from the padding box, inside the 1pt border,
   // and the asset carries no empty margin above its ink.
-  const markTop = Number(/heroMarkDark: \{ top: (\d+), right: \d+ \}/.exec(flat)?.[1]);
+  const markTop = Number(/heroMark: \{ position: 'absolute', top: (\d+), right: \d+ \}/.exec(flat)?.[1]);
   assert.ok(
     Math.abs(markTop + 1 - 22.2) <= 2,
     `the B mark's ink starts ${markTop + 1}pt below the card's top edge; master 44 puts it at 22.2`
@@ -942,8 +954,10 @@ test('home(25) fence: the promo card’s height is master 44’s, term by term',
 test('home(26) fence: Live Nearby lands on master 44’s own gap below the card', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
   const sectionGap = Number(/sectionGap: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
-  const margin = Number(/sectionDark: \{ marginTop: (-?\d+) \}/.exec(flat)?.[1]);
-  assert.ok(Number.isFinite(margin), 'the Live Nearby section keeps its own dark margin');
+  // Parity 2026-08-22: the corrective margin is part of the section's one
+  // shared style — the dark-only override is retired.
+  const margin = Number(/section: \{ gap: 12, marginTop: (-?\d+) \}/.exec(flat)?.[1]);
+  assert.ok(Number.isFinite(margin), 'the Live Nearby section keeps its corrective margin');
 
   // The distance from the section's top to the title's cap, measured in
   // .shots/customer-home-dark.png: the header row is 44pt for the touch floor
@@ -954,49 +968,69 @@ test('home(26) fence: Live Nearby lands on master 44’s own gap below the card'
     Math.abs(inkGap - 28.4) <= 2,
     `the card's bottom edge to the L of Live Nearby is ${inkGap}pt; master 44 measures 28.4`
   );
-  assert.match(
-    flat,
-    /styles\.section, isDark && styles\.sectionDark/,
-    'the override has to reach the section, and light keeps its own rhythm'
-  );
-  assert.match(flat, /section: \{ gap: 12 \}/, "light's Live Nearby block is frozen");
+  assert.doesNotMatch(flat, /sectionDark/, 'one section rhythm for both themes');
 });
 
-test('home(19) fence: nothing the master-44 run changed reached the light theme', () => {
+// home(19) used to freeze the light theme against the master-44 run; the
+// 2026-08-22 parity pass DISSOLVED that freeze for the two Home screens on
+// operator instruction: light inherits dark's implemented layout exactly, and
+// only colours (and artwork files) stay per-theme. The fence now enforces the
+// new contract — no mode-conditional LAYOUT value on the Home surfaces.
+test('home(19) fence: the Home screens carry no mode-conditional layout — only colours differ', () => {
   const home = flatten(read('screens/HomeScreen.tsx'));
   const bar = stripComments(read('ui/primitives/BottomNav.tsx'));
 
-  // TYPE — home(16)/home(16b).
-  assert.match(home, /headline: \{ maxWidth: '73%', fontFamily: fonts\.display, fontSize: 39, lineHeight: 45,/);
-  assert.match(home, /sectionTitle: \{ fontFamily: fonts\.display, fontSize: 22,/);
-  assert.match(home, /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25, lineHeight: 29,/);
-  // home(23) forked the subtitle: dark drops to 14 to set on master 44's one
-  // line, light keeps the 16/8 the Heritage composition was signed off at.
-  assert.match(home, /heroSubtitle: \{ maxWidth: '73%', marginTop: spacing\.sm, fontSize: 16,/);
+  // TYPE — one set of metrics, both themes. The retired light-only settings
+  // (39/45 headline, 22 section title, 25/29 promo, 16/8 subtitle) must not
+  // return as *Dark forks.
+  assert.match(home, /headline: \{ marginTop: 30, fontFamily: fonts\.display,/);
+  assert.doesNotMatch(home, /headlineDark|heroSubtitleDark|sectionTitleDark/);
+  assert.match(home, /heroSubtitle: \{ maxWidth: '73%', marginTop: 10, fontSize: 14,/);
   assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.forest \}/);
+  // The remaining *Dark styles on the customer Home are colour-only.
+  for (const dark of home.matchAll(/(\w+Dark): \{([^}]*)\}/g)) {
+    assert.doesNotMatch(
+      dark[2],
+      /width|height|padding|margin|font|line|gap|radius|top:|right:|left:|bottom:|maxWidth|minHeight|borderWidth/,
+      `${dark[1]} must carry colours only — layout is one set of numbers for both themes`
+    );
+  }
 
-  // ARTWORK — home(14)/home(15). Light keeps the Heritage boxes and `contain`.
-  assert.match(home, /homeHeroArt: \{ position: 'absolute', zIndex: 0, width: 112, height: 124, right: -6, top: 47 \}/);
-  assert.match(home, /heroMark: \{ position: 'absolute', top: 12, right: 10, width: 79, height: 101 \}/);
-  assert.match(home, /resizeMode=\{isDark \? 'cover' : 'contain'\}/);
+  // ARTWORK — one box and one fill rule; the FILES stay per-theme.
+  assert.match(home, /source=\{isDark \? PRESTIGE_HERO_ART : HOME_HERO_ART\}/);
+  assert.match(home, /source=\{isDark \? PRESTIGE_B_DRAPE : POST_MARK\}/);
+  assert.match(home, /resizeMode="cover"/);
+  assert.doesNotMatch(home, /resizeMode=\{isDark/);
 
-  // GROUND — home(12). Light's content container still paints its own.
+  // GROUND — home(12). Light's content container still paints its own; the
+  // atmosphere raster stays a dark-only COLOUR treatment (it is absolutely
+  // positioned and lays out nothing).
   assert.match(home, /content: \{ flexGrow: 1, backgroundColor: colors\.homeBackground,/);
+  assert.match(stripComments(read('components/HomeAtmosphere.tsx')), /if \(!isDark\) return null;/);
 
-  // THE MODE SWITCH — home(17).
-  assert.match(/modeSwitch: \{([^}]*)\}/.exec(home)[1], /borderWidth: 1\.25, borderColor: colors\.gold/);
+  // THE MODE SWITCH — one 1pt ring, per-theme ring colours.
+  assert.match(/modeSwitch: \{([^}]*)\}/.exec(home)[1], /borderWidth: 1, borderColor: colors\.gold/);
 
-  // THE [ + ] — home(18).
-  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_SIZE'), 52);
-  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_RAISE'), 14);
+  // THE [ + ] — one pill-ratio geometry; light keeps decision 3's colours.
+  assert.doesNotMatch(bar, /CREATE_BUTTON_LIGHT_SIZE|CREATE_BUTTON_LIGHT_RAISE/);
   assert.match(
     flatten(read('ui/primitives/BottomNav.tsx')),
     /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/,
     "light's control keeps the forest fill and the gold ring decision 3 gave it"
   );
 
-  // THE ATMOSPHERE — home(13). Light renders none of it.
-  assert.match(stripComments(read('components/HomeAtmosphere.tsx')), /if \(!isDark\) return null;/);
+  // WORKER HOME — same contract: its *Dark styles are colour-only and the
+  // hero column/artwork are one geometry.
+  const worker = flatten(read('screens/WorkerHomeScreen.tsx'));
+  assert.doesNotMatch(worker, /heroCopyDark/);
+  assert.match(worker, /heroCopy: \{ gap: spacing\.sm, maxWidth: '58%' \}/);
+  for (const dark of worker.matchAll(/(\w+Dark): \{([^}]*)\}/g)) {
+    assert.doesNotMatch(
+      dark[2],
+      /width|height|padding|margin|font|line|gap|radius|top:|right:|left:|bottom:|maxWidth|minHeight|borderWidth/,
+      `WorkerHome ${dark[1]} must carry colours only`
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -1016,11 +1050,11 @@ test('home(17) fence: the mode switch wears the hairline in dark, gold in light'
 
   const base = /modeSwitch: \{([^}]*)\}/.exec(flat);
   assert.ok(base, 'modeSwitch must stay a plain style object');
-  assert.match(base[1], /borderColor: colors\.gold/, 'LIGHT is frozen on the gold ring');
+  assert.match(base[1], /borderColor: colors\.gold/, 'light keeps the gold ring COLOUR');
   assert.match(base[1], /minHeight: 44/, "44 is CLAUDE.md's touch floor; master 44 is under it");
 
   const dark = /modeSwitchDark: \{([^}]*)\}/.exec(flat);
-  assert.ok(dark, 'dark must override the ring rather than repainting it for both themes');
+  assert.ok(dark, 'dark must override the ring colour rather than repainting it for both themes');
   // home(26) REVERSED THE COLOUR HALF of home(17). `border` was chosen against
   // a ring the OLD master peaked at #A9814B — a warm olive. The replaced
   // master's ring peaks at #AFACA4, a near-neutral light grey at luminance
@@ -1035,15 +1069,11 @@ test('home(17) fence: the mode switch wears the hairline in dark, gold in light'
     /borderColor: colors\.homeModeRing/,
     'the dark ring is its own neutral token, not the gold hairline and not a literal'
   );
-  // THE WEIGHT HALF SURVIVED: 2px of 1844 = 0.92pt, so 1 is still the nearest
-  // real weight below light's 1.25.
-  const weight = /borderWidth: ([\d.]+)/.exec(dark[1]);
-  assert.ok(weight, 'the dark ring must state its own weight');
-  const baseWeight = Number(/borderWidth: ([\d.]+)/.exec(base[1])[1]);
-  assert.ok(
-    Number(weight[1]) < baseWeight,
-    `master 44 rings this at 0.92pt; dark must draw it lighter than light's ${baseWeight}`
-  );
+  // THE WEIGHT: home(17) took dark to 1pt (master 44 rings at 0.92, and 1 is
+  // the nearest real weight); the 2026-08-22 parity pass gave light the SAME
+  // 1pt — one weight in the base, no per-theme width override.
+  assert.match(base[1], /borderWidth: 1,/, 'the ring is one point in both themes');
+  assert.doesNotMatch(dark[1], /borderWidth/, 'the dark override carries colour only');
 
   assert.match(
     flat,
@@ -1054,11 +1084,17 @@ test('home(17) fence: the mode switch wears the hairline in dark, gold in light'
   // home(26) — THE PILL'S OUTER WIDTH, which the label is the only elastic term
   // of. Master 44 draws it 156.2pt wide; at 15pt this rendered 171. The two
   // paddings, the gap and the glyph are fixed, so the box is
-  // `fixed + label`, and the label scales with its size.
-  const labelSize = /modeSwitchTextDark: \{ color: colors\.emerald, fontSize: sansSize\(MASTER_SANS_CAPS\.switchLabel\),? \}/.test(flat)
+  // `fixed + label`, and the label scales with its size. Parity 2026-08-22:
+  // the ladder size lives on the BASE label style, both themes.
+  const labelSize = /modeSwitchText: \{ fontSize: sansSize\(MASTER_SANS_CAPS\.switchLabel\), fontWeight: '600', color: colors\.forest,? \}/.test(flat)
     ? sansLadder(read('screens/HomeScreen.tsx'), 'switchLabel')
     : 0;
-  assert.ok(labelSize > 0, 'the dark label size must come off the sans ladder, not a literal');
+  assert.ok(labelSize > 0, 'the label size must come off the sans ladder, not a literal');
+  assert.match(
+    flat,
+    /modeSwitchTextDark: \{ color: colors\.emerald \}/,
+    'the dark label override carries colour only'
+  );
   // "Switch to Worker" measured 116pt of ink at 15pt in a real 393pt viewport,
   // inside a 171pt box -- and that box was measured while the pill padded its
   // label by 13 a side. The tuning pass took the padding to 10, which comes off
@@ -1128,12 +1164,14 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   );
 
   // "Live Nearby" is the rung that was out by more than a rounding, and it is
-  // the one the screen computes rather than states.
+  // the one the screen computes rather than states — in BOTH themes since the
+  // 2026-08-22 parity pass (light's 22 is retired).
   assert.match(
     flat,
-    /sectionTitleDark: \{ fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\) \}/,
+    /sectionTitle: \{ fontFamily: fonts\.display, fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\),/,
     'the section title must be COMPUTED from the ladder, not restated as a number'
   );
+  assert.doesNotMatch(flat, /sectionTitleDark/, 'one rung, both themes');
   // home(20/26): 16 -> 20. The replaced master's L measures a 30px cap
   // (13.86pt) where the old file's measured 26px (10.86pt). This REVERSES
   // home(16)'s shrink, which took the same control from 22 down to 16.
@@ -1141,68 +1179,56 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
 
   // home(26): "View all" sits beside it and is SANS on the master — checked at
   // 1:1, no serifs and no stroke contrast — so it takes the same measurement
-  // through the sans divisor rather than a literal.
+  // through the sans divisor rather than a literal. On the BASE style, both
+  // themes; the dark override is colour alone.
   assert.match(
     flat,
-    /viewAllTextDark: \{ color: colors\.emerald, fontSize: sansSize\(MASTER_SANS_CAPS\.viewAll\),? \}/,
+    /viewAllText: \{ fontSize: sansSize\(MASTER_SANS_CAPS\.viewAll\), fontWeight: '600', color: colors\.forest,? \}/,
     '"View all" must be COMPUTED from the sans ladder, not restated as a number'
   );
+  assert.match(flat, /viewAllTextDark: \{ color: colors\.emerald \}/);
   assert.equal(
     sansLadder(read('screens/HomeScreen.tsx'), 'viewAll'),
     14,
     'master 44’s "View all" measures 14pt of the platform sans'
   );
-  assert.match(flat, /viewAllText: \{ fontSize: 15,/, 'light keeps its 15pt "View all"');
 
-  // home(16b) — EVERY RUNG IS DARK-SCOPED. Master 44 is a DARK master; light is
-  // the frozen Heritage composition and none of these numbers is its. The
-  // ladder reached both themes when it landed, and this is what stops it.
-  assert.match(
-    flat,
-    /sectionTitle: \{ fontFamily: fonts\.display, fontSize: 22,/,
-    'light keeps its 22pt section title'
-  );
-  assert.match(
-    flat,
-    /styles\.sectionTitle, isDark && styles\.sectionTitleDark/,
-    'the dark rung has to reach the control'
-  );
-  // home(23): the dark leading is no longer light's 45/39 ratio. Master 44 runs
+  // home(23): the leading is no longer light's 45/39 ratio. Master 44 runs
   // 82px = 37.9pt of line pitch; HEADLINE_LEADING is that pitch over the size
   // the column allowed when it was written (38/31), so the studio slider still
   // moves size and leading together. The tuning pass moved the SIZE to 33 and
   // left the ratio alone, which carries the pitch to 40.5. The ratio is the
   // frozen half, the product is what this asserts, and both are read out of the
-  // source rather than restated here.
+  // source rather than restated here. Parity 2026-08-22: the studio's live
+  // size drives BOTH themes — the isDark gate (home(16b)) is retired with the
+  // light 39/45 it protected.
   assert.match(
     flat,
-    /isDark && \{ maxWidth: headlineColumn, fontSize: design\.heroFontSize, lineHeight: Math\.round\(design\.heroFontSize \* HEADLINE_LEADING\),? \}/,
-    "the studio's live hero size is a DARK instrument; light keeps styles.headline's own 39/45"
+    /\{ maxWidth: headlineColumn, fontSize: design\.heroFontSize, lineHeight: Math\.round\(design\.heroFontSize \* HEADLINE_LEADING\),? \}/,
+    "the studio's live hero size must drive the headline"
   );
+  assert.doesNotMatch(flat, /isDark && \{ maxWidth: headlineColumn/);
   const leading = constantOf(home, 'HEADLINE_LEADING');
   const heroSize = Number(/heroFontSize: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
   assert.ok(
     Math.abs(leading * heroSize - 40.5) < 1.2,
-    `the dark headline's leading must resolve to the approved 40.5pt pitch, not ${(leading * heroSize).toFixed(1)}`
+    `the headline's leading must resolve to the approved 40.5pt pitch, not ${(leading * heroSize).toFixed(1)}`
   );
-  assert.match(
+  assert.doesNotMatch(
     flat,
-    /headline: \{ maxWidth: '73%', fontFamily: fonts\.display, fontSize: 39, lineHeight: 45,/,
-    'light keeps its 39/45 hero'
+    /headline: \{[^}]*fontSize: \d+/,
+    'the hero headline takes its size from the studio value, never a stylesheet literal'
   );
   // home(25) took this to 18/28 off the replaced master's 60px = 27.7pt of
   // pitch; the tuning pass took it to 19/30, which keeps that ratio and still
   // sets it on TWO lines -- home(2) asserts both the fit and the line's end.
+  // One size for both themes; dark's override is colour alone.
   assert.match(
     flat,
-    /heroHeadlineDark: \{ color: colors\.ink, fontSize: 19, lineHeight: 30 \}/,
-    'the promo heading’s dark size and leading are both master 44’s, and dark-only'
+    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 19, lineHeight: 30,/,
+    'the promo heading’s size and leading are both master 44’s'
   );
-  assert.match(
-    flat,
-    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25, lineHeight: 29,/,
-    'light keeps its 29pt promo leading'
-  );
+  assert.match(flat, /heroHeadlineDark: \{ color: colors\.ink \}/);
 
   // THE HERO IS GOVERNED BY ITS COLUMN, not by its cap — and home(23) makes
   // the column a real geometric statement rather than a subtraction of the
@@ -1258,8 +1284,8 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
   // THE TWO DELIBERATE DIVERGENCES, asserted as divergences.
   assert.match(
     flat,
-    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 25,/,
-    'the promo heading is pinned at 25 — see the H2 fence; the ladder says 22 and that 3pt is owed'
+    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 19,/,
+    'the promo heading is pinned at 19 — see the H2 fence; the ladder says 22 and that 3pt is owed'
   );
   assert.equal(ladder('promoHeading'), 22, 'the recorded gap for the promo heading is 3pt');
   assert.match(
@@ -1292,13 +1318,17 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
 
   const home = stripComments(read('screens/HomeScreen.tsx'));
   const box = /const HERO_ART_DARK = \{ width: (\d+), height: (\d+), right: (-?\d+), top: (\d+) \}/.exec(home);
-  assert.ok(box, 'the dark hero must keep a plain, readable box');
+  assert.ok(box, 'the hero must keep a plain, readable box');
   const [width, height, right, top] = [Number(box[1]), Number(box[2]), Number(box[3]), Number(box[4])];
+  // Parity 2026-08-22: ONE box for both themes (light's Heritage 112x124 is
+  // retired), still taken from the constant the headline column derives from.
   assert.match(
     flat,
-    /homeHeroArtDark: \{ width: HERO_ART_DARK\.width, height: HERO_ART_DARK\.height, right: HERO_ART_DARK\.right, top: HERO_ART_DARK\.top,? \}/,
+    /homeHeroArt: \{ position: 'absolute', zIndex: 0, width: HERO_ART_DARK\.width, height: HERO_ART_DARK\.height, right: HERO_ART_DARK\.right, top: HERO_ART_DARK\.top,? \}/,
     'the stylesheet must take the box from the constant, or the headline column and the picture drift'
   );
+  assert.doesNotMatch(flat, /homeHeroArtDark/, 'one hero box, both themes');
+  assert.match(flat, /resizeMode="cover"/, 'the slot fills in both themes');
 
   // home(20/23): the master FILE was replaced and every number here moved.
   // 151 x 135 at right: 0 came off 941x1672 and is void. The new file puts the
@@ -1362,11 +1392,12 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
       `${measuredInk.toFixed(3)}. Swap the artwork and this number has to move with it`
   );
 
-  assert.match(
-    flat,
-    /resizeMode=\{isDark \? 'cover' : 'contain'\}/,
-    "dark fills and crops; light's Heritage crop is frozen on contain"
-  );
+  // Parity 2026-08-22: one fill rule. The hero slot fills and crops in both
+  // themes (the chair crop's aspect is within 0.4% of the box's, so cover
+  // crops it imperceptibly); the isDark fork must not come back.
+  const heroImage = /<Image source=\{isDark \? PRESTIGE_HERO_ART : HOME_HERO_ART\}([^>]*)>/.exec(flat);
+  assert.ok(heroImage, 'the hero image keeps its per-theme FILES');
+  assert.match(heroImage[1], /resizeMode="cover"/, 'the slot fills in both themes');
 });
 
 /**
@@ -1611,9 +1642,9 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
       '85% and 88%'
   );
 
-  // LIGHT IS FROZEN and is measured on exactly the same arithmetic, so a change
-  // aimed at dark cannot quietly move it.
-  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_SIZE'), 52);
+  // Parity 2026-08-22: ONE geometry for both themes — the frozen light square
+  // and its lift are retired; light keeps only its colours.
+  assert.doesNotMatch(bar, /CREATE_BUTTON_LIGHT_SIZE|CREATE_BUTTON_LIGHT_RAISE/);
 
   // FILLED GOLD, dark only. The FILL is the operator reversal this fence
   // exists for; the RING is free to be any dark token — what it may not be is
@@ -1640,9 +1671,8 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
     /color=\{isDark \? colors\.forest : colors\.gold\}/,
     'the glyph must be dark content on the gold fill — gold on gold is invisible'
   );
-  // LIGHT IS FROZEN on decision 3: forest fill, gold ring, gold glyph, 52pt.
+  // LIGHT keeps decision 3's COLOURS: forest fill, gold ring, gold glyph.
   assert.match(flat, /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/);
-  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_SIZE'), 52);
 
   // THE CONSTRAINT. The pill's height and the clearance are functions of the
   // two declared geometry tokens and nothing else — the control's ratio must
@@ -1687,8 +1717,8 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   const gap = constantOf(bar, 'TAB_BOTTOM_GAP');
   assert.match(
     flat,
-    /const raise = isDark \? Math\.round\(\(TAB_BAR_CONTENT_HEIGHT - size\) \/ 2\) - TAB_BOTTOM_GAP : CREATE_BUTTON_LIGHT_RAISE;/,
-    'the dark lift must be DERIVED from the slack the pill leaves, never chosen'
+    /const raise = Math\.round\(\(TAB_BAR_CONTENT_HEIGHT - size\) \/ 2\) - TAB_BOTTOM_GAP;/,
+    'the lift must be DERIVED from the slack the pill leaves, never chosen — one lift, both themes'
   );
   const raise = Math.round((pillHeight - size) / 2) - gap;
   const bottomEdge = pillHeight - gap - raise;   // distance from the pill's top
@@ -1707,9 +1737,9 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
       'centring it in the pill is what "inside" means here'
   );
 
-  // LIGHT IS FROZEN on both of its numbers, and the fence reads them the same
-  // way it reads dark's, so a change aimed at dark cannot move either.
-  assert.equal(constantOf(bar, 'CREATE_BUTTON_LIGHT_RAISE'), 14);
+  // And the size expression itself is unconditional — the isDark fork must
+  // not come back around either the size or the lift.
+  assert.match(flat, /const size = Math\.round\(TAB_BAR_CONTENT_HEIGHT \* CREATE_BUTTON_PILL_RATIO\);/);
 });
 
 /**

@@ -239,33 +239,38 @@ export function WorkerJobCardSkeleton() {
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+  // Every dark master draws this card as surface + gold hairline; light keeps
+  // its shadow treatment. Home parity 2026-08-22: the 1pt hairline is part of
+  // the card's BOX in both themes — light draws it transparent, so only the
+  // colours differ between modes.
   card: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: spacing.md,
     borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: 'transparent',
     backgroundColor: colors.surface,
     padding: spacing.md,
     ...shadows.card,
   },
-  // Every dark master draws this card as surface + gold hairline; in light
-  // the Heritage card carries its shadow alone.
   cardDark: {
-    borderWidth: 1,
     borderColor: colors.border,
   },
   cardPressed: {
     opacity: 0.92,
   },
+  // Master 12 rings the tile — photo or glyph — in the same gold hairline;
+  // same box-parity arrangement as the card above.
   thumb: {
     width: THUMB_SIZE,
     height: THUMB_SIZE,
     borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'transparent',
     backgroundColor: colors.neutralBg,
   },
-  // Master 12 rings the tile — photo or glyph — in the same gold hairline.
   thumbDark: {
-    borderWidth: 1,
     borderColor: colors.border,
   },
   thumbFallback: {
@@ -274,7 +279,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   thumbFallbackDark: {
     backgroundColor: colors.mint,
-    borderWidth: 1,
     borderColor: colors.border,
   },
   info: {

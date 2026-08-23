@@ -114,13 +114,17 @@ test('the hero headline and subtitle render, second sentence on the GREEN accent
   // forest, which is the gold primary under Prestige.
   assert.match(code, /heroHeadlineAccent: \{ color: colors\.emerald \}/);
   // The toolbox art beside the master's headline is the OPERATOR's asset,
-  // now placed (assets/prestige). Nothing is invented or sourced elsewhere,
-  // and — the standing boundary — baked dark artwork renders only under the
-  // dark palette, so light keeps the approved full-width arrangement.
+  // now placed (assets/prestige). Nothing is invented or sourced elsewhere.
+  // Home parity 2026-08-22: the art renders in BOTH themes — one composition,
+  // one 58% copy column — and its baked halo is recorded as an asset property
+  // for the operator's light device pass, not re-gated here.
   const assets = [...code.matchAll(/require\('([^']*\.(?:png|jpe?g|webp|gif))'\)/g)]
     .map((m) => m[1]);
   assert.deepEqual(assets, ['../assets/prestige/hero_toolbox_worker.png']);
-  assert.match(code, /\{isDark \? \(\s*<Image\s+source=\{PRESTIGE_TOOLBOX_ART\}/);
+  assert.match(code, /<Image\s+source=\{PRESTIGE_TOOLBOX_ART\}/);
+  assert.doesNotMatch(code, /\{isDark \? \(\s*<Image/, 'the art is one composition, both themes');
+  assert.match(code, /heroCopy: \{ gap: spacing\.sm, maxWidth: '58%' \}/);
+  assert.doesNotMatch(code, /heroCopyDark/);
   assert.doesNotMatch(code, /ImageBackground/);
 });
 
