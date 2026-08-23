@@ -604,6 +604,84 @@ test('[executed] every pill has its OWN empty state, and each one is true', () =
   assert.equal(inbox.emptyStateFor('support').title, 'Support coming soon');
 });
 
+test('[executed] a refresh between opening the sheet and tapping it moves the action', () => {
+  // AUDIT F2, played out. The sheet used to copy { muted, blocking } out of
+  // the long-pressed row. Those two values decide what the row SAYS and which
+  // call the tap MAKES, so a realtime refresh landing in between left the
+  // sheet offering "Mute" for somebody already muted — and the tap then
+  // unmuted them. The user read one thing and got its opposite.
+  const { resolveSheetTarget, muteActionFor, blockActionFor } = inbox;
+
+  const row = (over = {}) => ({
+    otherId: 'u1',
+    rawName: 'Sam',
+    jobId: 'job-1',
+    blocking: false,
+    muted: false,
+    ...over,
+  });
+
+  // OPEN. The user long-presses an unmuted row; the sheet offers to mute.
+  let rows = [row(), row({ otherId: 'u2', rawName: 'Alex', muted: true })];
+  const opened = resolveSheetTarget(rows, 'u1');
+  assert.equal(opened.muted, false);
+  assert.equal(muteActionFor(opened), 'mute');
+
+  // REFRESH. Another device mutes Sam and blocks them while the sheet is up.
+  // This is the whole point: `rows` is a NEW array, exactly as a realtime
+  // refresh produces, and the sheet is still open on the same id.
+  rows = [row({ muted: true, blocking: true }), row({ otherId: 'u2', rawName: 'Alex', muted: true })];
+
+  // TAP. The action follows the LIVE row, not the one that was on screen when
+  // the sheet opened. Under the old snapshot this said 'mute' and would have
+  // unmuted somebody who was already muted.
+  const tapped = resolveSheetTarget(rows, 'u1');
+  assert.equal(tapped.muted, true);
+  assert.equal(muteActionFor(tapped), 'unmute', 'the tap must not invert the intent');
+  assert.equal(blockActionFor(tapped), 'unblock');
+  // Identity is stable across the refresh — it is only the mutable facts that
+  // moved.
+  assert.equal(tapped.userId, 'u1');
+  assert.equal(tapped.name, 'Sam');
+  assert.equal(tapped.jobId, 'job-1');
+
+  // The label and the call read the SAME value, which is the property that
+  // makes the inversion impossible rather than merely unlikely.
+  for (const muted of [true, false]) {
+    const target = resolveSheetTarget([row({ muted })], 'u1');
+    const label = target.muted ? 'Unmute' : 'Mute';
+    assert.equal(muteActionFor(target), label.toLowerCase());
+  }
+
+  // A row that has GONE closes the sheet rather than acting on a conversation
+  // that is no longer there.
+  assert.equal(resolveSheetTarget(rows, 'nobody'), null);
+  assert.equal(resolveSheetTarget([], 'u1'), null);
+  assert.equal(resolveSheetTarget(rows, null), null);
+});
+
+test('[static] the inbox sheet holds an id, and re-reads the row it acts on', () => {
+  const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
+
+  // The state is the identity only. The snapshot that carried the two mutable
+  // facts must not come back.
+  assert.match(screen, /const \[sheetUserId, setSheetUserId\] = useState<string \| null>\(null\)/);
+  assert.doesNotMatch(screen, /const \[sheetTarget, setSheetTarget\]/, 'the snapshot must not return');
+  assert.doesNotMatch(
+    screen,
+    /setSheetUserId\(\{|setSheetTarget\(\{/,
+    'opening the sheet must pass an id, never a copy of the row',
+  );
+  assert.match(screen, /setSheetUserId\(item\.otherId\)/, 'the long press stores the id');
+
+  // And the row is resolved live, from the rows the inbox just built.
+  assert.match(
+    screen,
+    /const sheetTarget = useMemo\(\(\) => resolveSheetTarget\(rows, sheetUserId\), \[rows, sheetUserId\]\)/,
+    'the sheet must re-read its row rather than remember it',
+  );
+});
+
 test('[static] the composer row sits on the thread, not on a band of its own', () => {
   // The device walk: the voice-recording bar in light sat on a full-width
   // WHITE band; dark appeared to have none. One token, `colors.surface`, doing

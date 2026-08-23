@@ -54,7 +54,9 @@ import {
   INBOX_FILTERS,
   emptyStateFor,
   filterRows,
+  resolveSheetTarget,
   type InboxFilter,
+  type ResolvedSheetTarget,
 } from '../lib/inboxFilters';
 import {
   fonts,
@@ -85,14 +87,15 @@ import {
  */
 const FILTER_PILL_HEIGHT = 34;
 
-type SheetTarget = {
-  userId: string;
-  name: string;
-  /** Null in a direct thread (phase36) — reporting there carries no job. */
-  jobId: string | null;
-  blocking: boolean;
-  muted: boolean;
-};
+/**
+ * What the sheets act on. `jobId` is null in a direct thread (phase36), so
+ * reporting there carries no job.
+ *
+ * This is RESOLVED from the live rows rather than declared here — see
+ * lib/inboxFilters.ts. The sheet holds an id; the row behind it is read again
+ * on every render.
+ */
+type SheetTarget = ResolvedSheetTarget;
 
 export function MessagesInboxScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -110,7 +113,13 @@ export function MessagesInboxScreen() {
     refresh,
   } = useConversations();
   const [refreshing, setRefreshing] = useState(false);
-  const [sheetTarget, setSheetTarget] = useState<SheetTarget | null>(null);
+  // AN IDENTITY, NOT A SNAPSHOT (audit F2). This used to hold the whole row,
+  // including `muted` and `blocking` — the two values that decide both what
+  // the sheet SAYS and which call the tap MAKES. A realtime refresh while the
+  // sheet was open left that copy behind, and the tap then inverted the user's
+  // intent: the row read "Mute", the person was already muted, and tapping
+  // unmuted them. The id cannot go stale; the row is re-read below.
+  const [sheetUserId, setSheetUserId] = useState<string | null>(null);
   const [moreTarget, setMoreTarget] = useState<SheetTarget | null>(null);
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
   // Session-only, deliberately. Which slice of your own inbox you were last
@@ -295,7 +304,7 @@ export function MessagesInboxScreen() {
 
   async function toggleBlock(target: SheetTarget) {
     if (!user) return;
-    setSheetTarget(null);
+    setSheetUserId(null);
 
     if (target.blocking) {
       const { error } = await unblockUser(user.id, target.userId);
@@ -321,7 +330,7 @@ export function MessagesInboxScreen() {
 
   async function toggleMute(target: SheetTarget) {
     if (!user) return;
-    setSheetTarget(null);
+    setSheetUserId(null);
     const { error } = target.muted
       ? await unmuteUser(user.id, target.userId)
       : await muteUser(user.id, target.userId);
@@ -378,6 +387,13 @@ export function MessagesInboxScreen() {
    * where it lives today — permanent, in this sheet, untouched — and the
    * dispatch's TIMED block is a separate, flagged row inside More.
    */
+  // THE LIVE ROW behind the open sheet, re-read every render from the rows the
+  // inbox just built. A refresh that lands while the sheet is open moves this
+  // with it, so the label and the call it makes are the same fact. A row that
+  // has gone resolves to null, which closes the sheet rather than acting on a
+  // conversation that is no longer there.
+  const sheetTarget = useMemo(() => resolveSheetTarget(rows, sheetUserId), [rows, sheetUserId]);
+
   const sheetItems: ActionSheetItem[] = sheetTarget
     ? [
         {
@@ -400,7 +416,7 @@ export function MessagesInboxScreen() {
           destructive: true,
           onPress: () => {
             const target = sheetTarget;
-            setSheetTarget(null);
+            setSheetUserId(null);
             setReportTarget(target);
           },
         },
@@ -416,7 +432,7 @@ export function MessagesInboxScreen() {
                 icon: 'ellipsis-horizontal' as const,
                 onPress: () => {
                   const target = sheetTarget;
-                  setSheetTarget(null);
+                  setSheetUserId(null);
                   setMoreTarget(target);
                 },
               },
@@ -509,13 +525,10 @@ export function MessagesInboxScreen() {
                 item.isSelf
                   ? undefined
                   : () =>
-                      setSheetTarget({
-                        userId: item.otherId,
-                        name: item.rawName,
-                        jobId: item.jobId,
-                        blocking: item.blocking,
-                        muted: item.muted,
-                      })
+                      // The ID ONLY. Copying `blocking`/`muted` out of the row
+                      // here is what F2 was: the sheet then had a second copy
+                      // of two facts that a realtime refresh could move.
+                      setSheetUserId(item.otherId)
               }
               onLongPressAvatar={
                 item.avatarUrl ? () => setAvatarUri(item.avatarUrl) : undefined
@@ -558,7 +571,7 @@ export function MessagesInboxScreen() {
         title={sheetTarget?.name}
         subtitle="Manage this conversation"
         items={sheetItems}
-        onClose={() => setSheetTarget(null)}
+        onClose={() => setSheetUserId(null)}
       />
 
       <ActionSheet

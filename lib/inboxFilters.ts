@@ -91,3 +91,74 @@ export function emptyStateFor(filter: InboxFilter): InboxEmptyState {
       return { title: 'No messages yet', body: 'Conversations start once a bid is accepted.' };
   }
 }
+
+// ---------------------------------------------------------------------------
+// THE ACTION SHEET'S TARGET — an identity, resolved live, never a snapshot.
+// ---------------------------------------------------------------------------
+
+/** The fields the sheet needs off whichever inbox row it is acting on. */
+export type SheetTargetRow = {
+  otherId: string;
+  rawName: string;
+  jobId: string | null;
+  blocking: boolean;
+  muted: boolean;
+};
+
+export type ResolvedSheetTarget = {
+  userId: string;
+  name: string;
+  jobId: string | null;
+  blocking: boolean;
+  muted: boolean;
+};
+
+/**
+ * The row the open action sheet is acting on, read from the CURRENT rows.
+ *
+ * WHY THIS IS NOT A SNAPSHOT. The sheet used to be opened by copying
+ * `{ muted, blocking }` out of the long-pressed row into state. Those two
+ * values decide both what the sheet says and which call the tap makes —
+ * `muted ? unmuteUser : muteUser`. A realtime refresh while the sheet is open
+ * (another device muting, a block landing) updates the row underneath and
+ * leaves the copy behind, so the sheet goes on offering "Mute" for somebody
+ * already muted and the tap INVERTS the user's intent: they read "Mute", they
+ * tap, and the person is unmuted.
+ *
+ * Holding the id and resolving through here means the sheet has no second copy
+ * to go stale. Every render re-reads the live row, so the label and the call it
+ * makes are the same fact.
+ *
+ * A row that has GONE resolves to null, which closes the sheet — acting on a
+ * conversation that is no longer there is the same mistake in a different
+ * shape.
+ */
+export function resolveSheetTarget<T extends SheetTargetRow>(
+  rows: T[],
+  userId: string | null,
+): ResolvedSheetTarget | null {
+  if (!userId) return null;
+  const row = rows.find((candidate) => candidate.otherId === userId);
+  if (!row) return null;
+  return {
+    userId: row.otherId,
+    name: row.rawName,
+    jobId: row.jobId,
+    blocking: row.blocking,
+    muted: row.muted,
+  };
+}
+
+/**
+ * Which call a tap on the sheet's first row should make, given the live target.
+ * Stated once so the LABEL and the ACTION cannot disagree — the inversion F2
+ * describes is exactly those two reading different values.
+ */
+export function muteActionFor(target: Pick<ResolvedSheetTarget, 'muted'>): 'mute' | 'unmute' {
+  return target.muted ? 'unmute' : 'mute';
+}
+
+/** Same rule for the block row. */
+export function blockActionFor(target: Pick<ResolvedSheetTarget, 'blocking'>): 'block' | 'unblock' {
+  return target.blocking ? 'unblock' : 'block';
+}
