@@ -4,6 +4,7 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { setAudioModeAsync } from 'expo-audio';
+import { useFonts } from 'expo-font';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -131,10 +132,14 @@ function RootNavigator() {
  * frame in the handover.
  *
  * 2026-08-22: this gate briefly had a SECOND condition — expo-font resolving
- * the bundled Playfair heading faces — and it is gone with them. No font file
- * ships with this app any more (ui/tokens.ts `fonts`), so there is nothing to
- * wait for and nothing that could paint in a fallback face. `sessionReady`
- * is once again the only thing this gate holds for.
+ * the bundled Playfair heading faces — lost it when the serif retirement
+ * deleted every face, and holds it AGAIN since the operator's partial
+ * reversal later that day (docs/emerald-v2/DECISIONS.md D5, third dated
+ * note): exactly one face ships now, the customer Home hero title's
+ * PlayfairDisplay-Bold, and the gate is restored the way the pre-retirement
+ * code had it so no frame can paint that title in a fallback face. `error`
+ * releases the gate too: a failed load degrades the hero to the system sans
+ * rather than holding the app on the launch layer forever.
  *
  * It renders once per process. Signing out later returns to Welcome without
  * replaying it; a cold reload in Expo Go is a new process, so it plays again.
@@ -143,12 +148,20 @@ function LaunchGate({ children }: PropsWithChildren) {
   const { loading } = useAuth();
   const [complete, setComplete] = useState(false);
 
+  const [fontsLoaded, fontLoadError] = useFonts({
+    'PlayfairDisplay-Bold': require('./assets/fonts/PlayfairDisplay-Bold.ttf'),
+  });
+  const fontsResolved = fontsLoaded || fontLoadError != null;
+
   return (
     <LaunchCompleteContext.Provider value={complete}>
       <View style={styles.root}>
-        {children}
+        {fontsResolved ? children : null}
         {complete ? null : (
-          <LaunchScreen sessionReady={!loading} onFinish={() => setComplete(true)} />
+          <LaunchScreen
+            sessionReady={!loading && fontsResolved}
+            onFinish={() => setComplete(true)}
+          />
         )}
       </View>
     </LaunchCompleteContext.Provider>

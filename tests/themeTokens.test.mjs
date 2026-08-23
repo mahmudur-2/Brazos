@@ -180,47 +180,61 @@ test('[static] dark palette is compile-checked against ColorToken', async () => 
 });
 
 // ---------------------------------------------------------------------------
-// NO SERIF, NO BUNDLED FACE — 2026-08-22, the operator's SECOND font decision
-// of that day (docs/emerald-v2/DECISIONS.md D5's second dated note). It
-// reversed that morning's Playfair Display bundling in full AND retired the
-// platform serif (Georgia on iOS, `serif` elsewhere) that had predated it:
-// the whole app sets in the platform's system sans.
+// ONE SERIF ROLE, NOTHING ELSE — 2026-08-22, the operator's THIRD font
+// decision of that day (docs/emerald-v2/DECISIONS.md D5's third dated note).
+// The second retired every serif; the third PARTIALLY reverses it: the
+// customer Home hero title — that one role, nothing else — returns to
+// Playfair Display (the Bold static, recovered byte-identical from the
+// pre-retirement commit with its OFL license, registered by App.tsx's
+// LaunchGate exactly the way the pre-retirement code registered it).
 //
-// This test is the INVERSION of the Playfair fence that stood here. Inverted
-// rather than deleted, because a deleted fence protects nothing — this one
-// goes red the moment a serif family name or a bundled .ttf comes back.
+// This test is the no-serif fence NARROWED by exactly that one allowance.
+// It still goes red the moment a serif appears anywhere else — a second
+// role, a second file, a second face, a platform-serif stack, a stray .ttf.
 //
 // WHY IT IS NOT VACUOUS. Four halves, none a restatement of another:
 //
-//   1. EXECUTED. Both token surfaces are RUN and their resolved `fontFamily`
-//      read. Repointing any role at a face — a bare literal, a Platform.select
-//      serif, a re-added `displayBold` token — fails here, in the resolved
-//      value, not in a source pattern.
-//   2. WEIGHTS, AS VALUES. With nothing bundled iOS picks the face from
-//      `fontWeight`, so the heading weights are load-bearing again. They are
-//      pinned to their exact values rather than merely "defined": dropping one
-//      renders that heading at normal weight, which is invisible in a diff and
-//      obvious on a device.
-//   3. DERIVED, NOT ENUMERATED. Every `fontFamily:` in the app tree is found by
-//      scanning, and its right-hand side must be one of the two tokens or
-//      `undefined` — an ALLOW-LIST, so a serif in a file this test has never
-//      heard of still fails, and so does a newly-added `fonts.displayBold`
-//      (the word boundary rejects it).
-//   4. THE ASSET AND THE LOADER. No .ttf/.otf anywhere under assets/, and no
-//      expo-font import, `useFonts` call or font render-gate left in App.tsx.
+//   1. EXECUTED. Both token surfaces are RUN. Every type ROLE still resolves
+//      to no family (the system sans); the one face token, `displayHero`,
+//      must resolve to exactly 'PlayfairDisplay-Bold' — a rename, a second
+//      face token or a Platform.select serif fails in the resolved value.
+//   2. WEIGHTS, AS VALUES. The sans heading roles still get their weight
+//      from `fontWeight` (nothing else is bundled), pinned exactly. The hero
+//      role is the inverse: the FAMILY is the weight, so the style that
+//      names it must carry no fontWeight for iOS to honour the file.
+//   3. DERIVED, NOT ENUMERATED. Every `fontFamily:` in the app tree is found
+//      by scanning. The global allow-list is unchanged (fonts.display /
+//      fonts.body / undefined); `fonts.displayHero` is permitted in
+//      screens/HomeScreen.tsx ONLY, and EXACTLY ONCE — a second naming site
+//      in that file, or one anywhere else, fails.
+//   4. THE ASSET AND THE LOADER. Exactly ONE font file under assets/ —
+//      PlayfairDisplay-Bold.ttf — and App.tsx registers exactly that face,
+//      gates children on its resolution and couples the launch handover to
+//      it, the pre-retirement arrangement restored.
 // ---------------------------------------------------------------------------
 
 /** The only right-hand sides a `fontFamily:` may carry anywhere in the tree. */
-const ALLOWED_FONT_FAMILY = /^(fonts\.display|fonts\.body|undefined)\b/;
+const ALLOWED_FONT_FAMILY = /^(fonts\.display\b|fonts\.body\b|undefined\b)/;
+
+/** The one serif role's token, permitted in the one screen file only. */
+const HERO_FONT_FAMILY = /^fonts\.displayHero\b/;
 
 /** Family names that are serifs. Applied to font-family positions only — the
  *  word "serif" is legitimate in prose, in HomeScreen's cap-height ladder, and
  *  in `lib/countries.ts`'s entry for the country Georgia. */
 const SERIF_FAMILY = /playfair|georgia|times new roman|\bserif\b/i;
 
-test('no-serif fence: nothing resolves to a serif and no face is bundled', async () => {
+/** The one quoted serif value each of these files may carry, and must. */
+const QUOTED_SERIF_ALLOWANCE = new Map([
+  // The token definition site.
+  ['lib/theme.ts', "'PlayfairDisplay-Bold'"],
+  // The registration's face name and its require path.
+  ['App.tsx', "'PlayfairDisplay-Bold'"],
+]);
+
+test('one-serif fence: the hero role alone is Playfair, and nothing else is a serif', async () => {
   const { type } = await tokensModule;
-  const { typography } = await themeModule;
+  const { typography, fonts } = await themeModule;
 
   // --- half one: executed, both surfaces -----------------------------------
   // `undefined` IS the system sans here: RN resolves an absent family to the
@@ -231,8 +245,15 @@ test('no-serif fence: nothing resolves to a serif and no face is bundled', async
   for (const role of ['title', 'heading', 'subheading', 'body', 'label', 'caption']) {
     assert.equal(typography[role].fontFamily, undefined, `typography.${role} must name no family`);
   }
+  assert.equal(fonts.display, undefined, 'the shared heading voice stays the system sans');
+  assert.equal(
+    fonts.displayHero,
+    'PlayfairDisplay-Bold',
+    'the hero face is the one recovered Playfair static, under exactly this name'
+  );
 
-  // --- half two: the weights the bundled faces had made inert --------------
+  // --- half two: the weights ----------------------------------------------
+  // Sans roles: fontWeight is load-bearing (no file backs them), pinned.
   assert.equal(type.display.fontWeight, '800');
   assert.equal(type.h1.fontWeight, '800');
   assert.equal(type.h2.fontWeight, '700');
@@ -240,9 +261,21 @@ test('no-serif fence: nothing resolves to a serif and no face is bundled', async
   assert.equal(typography.title.fontWeight, '800');
   assert.equal(typography.heading.fontWeight, '700');
   assert.equal(typography.subheading.fontWeight, '600');
+  // The hero role is the inverse: a bundled static makes fontWeight inert on
+  // iOS, so the style that names the face must not carry one.
+  const homeSource = stripComments(await read('screens/HomeScreen.tsx'));
+  const heroStyle = /headline: \{([^}]*)\}/.exec(homeSource.replace(/\s+/g, ' '));
+  assert.ok(heroStyle, 'the hero headline style must stay a plain object');
+  assert.match(heroStyle[1], /fontFamily: fonts\.displayHero/);
+  assert.doesNotMatch(
+    heroStyle[1],
+    /fontWeight/,
+    'the family IS the weight for a bundled static — a fontWeight here is inert on iOS'
+  );
 
   // --- half three: every fontFamily: in the tree, derived by scanning ------
   const offenders = [];
+  let heroSites = 0;
   const sources = await filesUnder([
     'components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui',
   ]);
@@ -250,6 +283,14 @@ test('no-serif fence: nothing resolves to a serif and no face is bundled', async
     const source = stripComments(await read(path));
     for (const match of source.matchAll(/fontFamily:\s*/g)) {
       const rhs = source.slice(match.index + match[0].length, match.index + match[0].length + 80);
+      if (HERO_FONT_FAMILY.test(rhs)) {
+        if (path === 'screens/HomeScreen.tsx') {
+          heroSites += 1;
+        } else {
+          offenders.push(`${path}: fontFamily: fonts.displayHero outside the hero screen`);
+        }
+        continue;
+      }
       if (!ALLOWED_FONT_FAMILY.test(rhs)) {
         offenders.push(`${path}: fontFamily: ${rhs.split('\n')[0].trim()}`);
       }
@@ -262,29 +303,49 @@ test('no-serif fence: nothing resolves to a serif and no face is bundled', async
       // and GEORGIA_CAP_RATIO are frozen size arithmetic, not a face.
       for (const quoted of source.matchAll(/'([^']*)'|"([^"]*)"/g)) {
         const value = quoted[1] ?? quoted[2];
-        if (SERIF_FAMILY.test(value)) offenders.push(`${path}: quoted serif family ${quoted[0]}`);
+        if (!SERIF_FAMILY.test(value)) continue;
+        const allowance = QUOTED_SERIF_ALLOWANCE.get(path);
+        // The registration's require path names the file; everything else
+        // must be the exact allowed family literal for that file.
+        const isAllowed =
+          allowance !== undefined &&
+          (quoted[0] === allowance ||
+            (path === 'App.tsx' && value === './assets/fonts/PlayfairDisplay-Bold.ttf'));
+        if (!isAllowed) offenders.push(`${path}: quoted serif family ${quoted[0]}`);
       }
     }
-    assert.doesNotMatch(source, /\.(ttf|otf)\b/, `${path} must not reference a font file`);
+    // Font-file references: only the registration may name the one file.
+    if (path !== 'App.tsx') {
+      assert.doesNotMatch(source, /\.(ttf|otf)\b/, `${path} must not reference a font file`);
+    }
   }
   assert.deepEqual(offenders, []);
+  assert.equal(
+    heroSites,
+    1,
+    `fonts.displayHero must be named by exactly ONE style — the hero title — not ${heroSites}`
+  );
 
   // --- half four: the asset tree and the loader ----------------------------
   const assets = await readdir(join(repoRoot, 'assets'), { withFileTypes: true, recursive: true });
   assert.deepEqual(
     assets.filter((e) => e.isFile() && /\.(ttf|otf|woff2?)$/i.test(e.name)).map((e) => e.name),
-    [],
-    'no font file may be bundled — assets/fonts/ is gone and stays gone',
+    ['PlayfairDisplay-Bold.ttf'],
+    'exactly one font file may be bundled — the recovered hero face',
   );
 
   const app = stripComments(await read('App.tsx'));
-  assert.doesNotMatch(app, /expo-font/, 'App.tsx must not import expo-font');
-  assert.doesNotMatch(app, /useFonts/, 'App.tsx must not register faces');
-  assert.doesNotMatch(app, /fontsResolved/, 'the font half of the launch gate is gone');
-  // The gate's OTHER responsibility is untouched: it still holds for the
-  // session, and children still mount underneath from the first frame.
-  assert.match(app, /sessionReady=\{!loading\}/);
-  assert.match(app, /<View style=\{styles\.root\}>\s*\{children\}/);
+  assert.match(app, /import \{ useFonts \} from 'expo-font';/);
+  assert.match(
+    app,
+    /useFonts\(\{\s*'PlayfairDisplay-Bold': require\('\.\/assets\/fonts\/PlayfairDisplay-Bold\.ttf'\),\s*\}\)/,
+    'the loader registers exactly the one recovered face'
+  );
+  // The pre-retirement gate, restored: children wait for the face, the
+  // launch handover is coupled to it, and a load error releases the gate.
+  assert.match(app, /const fontsResolved = fontsLoaded \|\| fontLoadError != null;/);
+  assert.match(app, /\{fontsResolved \? children : null\}/);
+  assert.match(app, /sessionReady=\{!loading && fontsResolved\}/);
 });
 
 // ---------------------------------------------------------------------------

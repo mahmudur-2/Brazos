@@ -983,7 +983,10 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   // TYPE — one set of metrics, both themes. The retired light-only settings
   // (39/45 headline, 22 section title, 25/29 promo, 16/8 subtitle) must not
   // return as *Dark forks.
-  assert.match(home, /headline: \{ marginTop: 30, fontFamily: fonts\.display,/);
+  // The hero's FACE is the one serif role (D5 third note — see the
+  // themeTokens one-serif fence, which owns that boundary); its geometry is
+  // parity's, shared by both themes.
+  assert.match(home, /headline: \{ marginTop: 30, fontFamily: fonts\.displayHero,/);
   assert.doesNotMatch(home, /headlineDark|heroSubtitleDark|sectionTitleDark/);
   assert.match(home, /heroSubtitle: \{ maxWidth: '73%', marginTop: 10, fontSize: 14,/);
   assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.forest \}/);

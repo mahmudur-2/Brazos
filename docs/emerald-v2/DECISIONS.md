@@ -96,6 +96,29 @@ something this change guessed at. tests/themeTokens.test.mjs's Playfair fence
 is INVERTED, not deleted — it now fails if a serif family name or a bundled
 `.ttf` returns.
 
+**Partially reversed 2026-08-22 (operator decision) — one role returns to
+Playfair.** The customer Home hero title ("Take a task off your plate.") —
+that one role and nothing else — sets in Playfair Display again. The Bold
+static and the OFL license are recovered BYTE-IDENTICAL from the
+pre-retirement commit's parent (`fd00e1a`, hash-verified against the
+historical blobs; nothing downloaded); the ExtraBold static stays in history
+because no role names it. Registration is the pre-retirement arrangement
+restored: App.tsx's `LaunchGate` resolves the face with expo-font's
+`useFonts`, holds the themed tree and the launch handover until it resolves,
+and releases on a load error (the hero then degrades to the system sans).
+The face rides a new role-scoped token, `fonts.displayHero` (lib/theme.ts),
+named by exactly one style — the hero headline, which drops its `fontWeight`
+because a bundled static makes the weight inert on iOS (the bundling era's
+own convention; the retirement-era style's '600' has no 600 static in
+history, and Bold is the recovered face nearest it). Size, leading and
+tracking are untouched — the hero keeps the studio-driven metrics the parity
+pass unified. Every other heading, the worker hero included, stays on the
+system sans. tests/themeTokens.test.mjs's no-serif fence is NARROWED, not
+retired: it permits `fonts.displayHero` in that one file exactly once,
+requires the resolved token, the single bundled `.ttf` and the restored
+loader, and still fails on any other serif anywhere — proven red by adding
+the face to a second role before landing.
+
 ### D6. `Chip` extended with variants instead of a parallel `Pill` component
 **Fork:** the brief listed "Pill" as a foundational component, but `Chip`
 already does that job.

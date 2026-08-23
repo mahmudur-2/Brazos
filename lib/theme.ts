@@ -226,27 +226,34 @@ export const radius = {
  * The heading voice used for Emerald headlines (Home's "Take a task off your
  * plate.", section titles, the hero CTA).
  *
- * NOTHING IS BUNDLED AND NOTHING IS A SERIF. No font file ships with this app
- * — `assets/fonts/` does not exist and App.tsx registers no faces — and
- * `display` resolves to the platform's own system sans, the same family body
- * copy uses. Operator decision of 2026-08-22 (docs/emerald-v2/DECISIONS.md
- * D5's second dated note): it reversed that morning's Playfair Display
- * bundling in full AND retired the platform serif (Georgia on iOS, `serif`
- * elsewhere) that had predated it. LaunchScreen's wordmark dropped its own
- * copy of that serif in the same commit, so the two still can't drift.
+ * ONE SERIF ROLE, EVERYTHING ELSE THE SYSTEM SANS. `display` resolves to the
+ * platform's own system sans, the same family body copy uses — the
+ * 2026-08-22 serif retirement (docs/emerald-v2/DECISIONS.md D5's second
+ * dated note) stands for every role that names it. Later the same day the
+ * operator PARTIALLY reversed it (D5's third dated note): the customer Home
+ * hero title — that one role, nothing else — returns to Playfair Display.
+ * `displayHero` carries that face: the Bold static recovered byte-identical
+ * from the pre-retirement commit (assets/fonts/, with its OFL license),
+ * registered by App.tsx's LaunchGate exactly the way the pre-retirement code
+ * registered it. With a real file bundled iOS stops selecting a face from
+ * `fontWeight`, so the hero style names the family and carries no weight —
+ * the same convention the bundling era used.
  *
  * `display` is kept as a NAMED ROLE rather than deleted: the screens reach the
  * heading voice through it, so it stays the single lever if that voice is ever
- * repointed again. This surface mirrors ui/tokens.ts `fonts`, whose docblock
- * carries the full reasoning; tests/emeraldFences.test.mjs holds the two in
- * sync and tests/themeTokens.test.mjs fences the no-serif, no-.ttf state.
+ * repointed again. tests/themeTokens.test.mjs fences this state: exactly one
+ * screen style may name `displayHero`, and any other serif — quoted, tokened
+ * or bundled — stays red.
  *
- * With no file bundled, `fontWeight` is load-bearing again on iOS — it is how
- * the heading roles below get their weight. Removing one renders that heading
- * at normal.
+ * With no file bundled for the SANS roles, `fontWeight` is load-bearing on
+ * iOS — it is how the heading roles below get their weight. Removing one
+ * renders that heading at normal.
  */
 export const fonts = {
   display: undefined as TextStyle['fontFamily'],
+  /** The customer Home hero title's face — the ONE serif role (D5, third
+   *  dated note). Everything else stays on `display`'s system sans. */
+  displayHero: 'PlayfairDisplay-Bold' as TextStyle['fontFamily'],
 } as const;
 
 export const typography = {

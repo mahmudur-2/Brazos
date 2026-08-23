@@ -962,10 +962,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // computed from the artwork at the call site (`headlineColumn`) and the size
   // is the studio's live value, both applied to BOTH themes since the parity
   // pass (2026-08-22) retired light's 39/45/'73%' Heritage composition.
+  //
+  // THE ONE SERIF ROLE (D5, third dated note, 2026-08-22): the operator
+  // partially reversed the serif retirement for exactly this title. It names
+  // `fonts.displayHero` — the recovered PlayfairDisplay-Bold static — and
+  // carries NO fontWeight: with a real file bundled, iOS stops selecting a
+  // face from the weight, so the family name IS the weight (the bundling
+  // era's own convention; the pre-retirement style's '600' has no 600 static
+  // in history to honour, and Bold is the recovered face nearest it). Size
+  // and spacing are untouched. Every other title on this screen stays on
+  // `fonts.display`'s system sans.
   headline: {
     marginTop: 30,
-    fontFamily: fonts.display,
-    fontWeight: '600',
+    fontFamily: fonts.displayHero,
     letterSpacing: -0.3,
     color: colors.ink,
   },
