@@ -45,6 +45,7 @@ const meter = await import('../lib/audioMeter.ts');
 const ticks = await import('../lib/messageTicks.ts');
 const webRoute = await import('../lib/webRoute.ts');
 const inbox = await import('../lib/inboxFilters.ts');
+const menus = await import('../lib/chatMenus.ts');
 const translate = await import('../lib/translateRules.ts');
 
 test('[static] the composer is three zones, and every glyph is bare', () => {
@@ -601,6 +602,107 @@ test('[executed] every pill has its OWN empty state, and each one is true', () =
   assert.equal(inbox.emptyStateFor('archived').title, 'Nothing archived yet');
   assert.equal(inbox.emptyStateFor('requests').title, 'No requests yet');
   assert.equal(inbox.emptyStateFor('support').title, 'Support coming soon');
+});
+
+test('[executed] one slot, so opening either menu closes the other', () => {
+  // The defect this encodes: the header dropdown and the composer drop-up each
+  // had their own boolean, and a device walk photographed both panels open at
+  // once. Two booleans have four states and one of them is illegal; one value
+  // naming the open menu has three states and all of them are legal.
+  const { nextMenu, isMenuOpen } = menus;
+
+  // Opening from rest.
+  assert.equal(nextMenu(null, 'header'), 'header');
+  assert.equal(nextMenu(null, 'composer'), 'composer');
+
+  // THE INVARIANT: B opening IS A closing, in one assignment.
+  assert.equal(nextMenu('header', 'composer'), 'composer');
+  assert.equal(nextMenu('composer', 'header'), 'header');
+
+  // The control that opens a menu dismisses it.
+  assert.equal(nextMenu('header', 'header'), null);
+  assert.equal(nextMenu('composer', 'composer'), null);
+
+  // `null` is every dismissal that is not a tap on a trigger: the outside tap,
+  // the keyboard appearing, navigating away, and choosing an item.
+  assert.equal(nextMenu('header', null), null);
+  assert.equal(nextMenu('composer', null), null);
+  assert.equal(nextMenu(null, null), null);
+
+  // There is no reachable value in which two menus are open, because the
+  // carrier cannot express one. Exhaustive over the whole transition table.
+  for (const current of [null, 'header', 'composer']) {
+    for (const requested of [null, 'header', 'composer']) {
+      const result = nextMenu(current, requested);
+      assert.ok(
+        result === null || result === 'header' || result === 'composer',
+        `nextMenu(${current}, ${requested}) left the slot holding ${result}`,
+      );
+      const openCount = ['header', 'composer'].filter((m) => isMenuOpen(result, m)).length;
+      assert.ok(openCount <= 1, `nextMenu(${current}, ${requested}) reports ${openCount} menus open`);
+    }
+  }
+});
+
+test('[static] both chat menus read the one owner, and nothing keeps a private copy', () => {
+  const chat = stripComments(read('screens/ChatScreen.tsx'));
+  const composer = stripComments(read(COMPOSER));
+
+  // The owner lives on the screen, and it is the shared transition rather than
+  // a second copy of the rule.
+  assert.match(chat, /import \{ nextMenu, type ChatMenu \} from '\.\.\/lib\/chatMenus';/);
+  assert.match(chat, /const \[openMenu, setOpenMenu\] = useState<ChatMenu \| null>\(null\)/);
+  assert.match(chat, /setOpenMenu\(\(current\) => nextMenu\(current, menu\)\)/);
+
+  // The two booleans are GONE, not merely unused.
+  assert.doesNotMatch(chat, /headerMenuOpen/, 'the header kept its own boolean');
+  assert.doesNotMatch(composer, /const \[menuOpen/, 'the composer kept its own boolean');
+  assert.doesNotMatch(composer, /setMenuOpen/, 'the composer kept its own setter');
+  assert.match(composer, /menuOpen: boolean;/, 'the composer takes the open state as a prop');
+  assert.match(composer, /onToggleMenu: \(\) => void;/);
+  assert.match(composer, /onCloseMenu: \(\) => void;/);
+
+  // Both DropMenu instances read the same value and close through the same
+  // function — the two halves of "one owner".
+  assert.match(chat, /visible=\{openMenu === 'header'\}/);
+  assert.match(chat, /menuOpen=\{openMenu === 'composer'\}/);
+  assert.match(chat, /onClose=\{closeMenus\}/);
+  assert.match(chat, /onCloseMenu=\{closeMenus\}/);
+  assert.match(composer, /onClose=\{onCloseMenu\}/, 'the drop-up closes through the owner');
+  assert.match(composer, /onPress=\{onToggleMenu\}/, 'the \\[ + \\] asks the owner');
+
+  // THE OUTSIDE TAP. It is DropMenu's own backdrop, and it dismisses — this is
+  // where "tap outside closes" actually lives, for both menus at once.
+  assert.match(
+    stripComments(read(DROPMENU)),
+    /<Pressable\s+style=\{\[styles\.backdrop[^]*?onPress=\{onClose\}/,
+    'the backdrop must dismiss the menu',
+  );
+
+  // THE DISMISSALS THAT ARE NOT TAPS, and the teardown that clears on unmount.
+  assert.match(chat, /Keyboard\.addListener\('keyboardDidShow', closeMenus\)/);
+  assert.match(chat, /navigation\.addListener\('blur', closeMenus\)/);
+  assert.match(
+    chat,
+    /return \(\) => \{\s*onKeyboard\.remove\(\);\s*onBlur\(\);\s*\}/,
+    'both subscriptions must be removed on unmount',
+  );
+
+  // WHY NEITHER BACKDROP SWALLOWS THE OTHER TRIGGER'S TAP, which is a layout
+  // fact rather than a handler: the composer's backdrop opens UPWARD 900pt,
+  // but it lives inside `keyboardClip`, which clips, so it cannot reach the
+  // header's dots. The header's opens DOWNWARD over the composer, but the clip
+  // is a LATER sibling and paints above it, so the [ + ] stays hit-testable.
+  // Remove either property and one menu starts eating the other's opening tap.
+  assert.match(
+    chat,
+    /keyboardClip: \{\s*flex: 1,\s*overflow: 'hidden',\s*\}/,
+    "the clip is what keeps the composer's backdrop off the header",
+  );
+  assert.ok(
+    chat.indexOf('styles.headerMenuAnchor') < chat.indexOf('styles.keyboardClip'),
+    'the header must render BEFORE the clip, or its backdrop would cover the [ + ]',
+  );
 });
 
 test('[static] the filter pills measure themselves, not their scroller', () => {

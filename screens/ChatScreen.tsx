@@ -4,6 +4,7 @@ import {
   Animated,
   FlatList,
   Image,
+  Keyboard,
   Pressable,
   StyleSheet,
   Text,
@@ -25,6 +26,7 @@ import { ChatBubble } from '../components/ChatBubble';
 import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DropMenu, type DropMenuItem } from '../components/DropMenu';
+import { nextMenu, type ChatMenu } from '../lib/chatMenus';
 import { TranslationSheet } from '../components/TranslationSheet';
 import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
@@ -153,7 +155,35 @@ export function ChatScreen() {
   // Profile pictures open in the same viewer but without the share sheet, so
   // they're tracked separately from ordinary chat photos.
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
-  const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  // THE SINGLE OPEN-MENU OWNER. One value naming which anchored menu is open,
+  // replacing the boolean here and the second one that used to live inside
+  // ChatComposer. Two booleans have a fourth state — both open — and a device
+  // walk found it on screen; one slot cannot hold two answers. See
+  // lib/chatMenus.ts.
+  const [openMenu, setOpenMenu] = useState<ChatMenu | null>(null);
+  const toggleMenu = useCallback(
+    (menu: ChatMenu) => setOpenMenu((current) => nextMenu(current, menu)),
+    [],
+  );
+  const closeMenus = useCallback(() => setOpenMenu(null), []);
+
+  // The three dismissals that are NOT a tap on the menu. An anchored panel is
+  // positioned against a control, so anything that moves the layout out from
+  // under it — or takes the user somewhere else — has to close it rather than
+  // leave it floating over a screen it no longer belongs to. The outside tap
+  // is DropMenu's own backdrop and arrives through `onClose`.
+  //
+  // Both subscriptions are removed on unmount, which is also what clears the
+  // menu: the value lives in this component, so leaving the screen cannot
+  // leave a menu open behind it.
+  useEffect(() => {
+    const onKeyboard = Keyboard.addListener('keyboardDidShow', closeMenus);
+    const onBlur = navigation.addListener('blur', closeMenus);
+    return () => {
+      onKeyboard.remove();
+      onBlur();
+    };
+  }, [closeMenus, navigation]);
   // The translation sheet's own state. `null` while a request is in flight —
   // the sheet reads that as "loading" and renders nothing else.
   const [translateOpen, setTranslateOpen] = useState(false);
@@ -1201,19 +1231,19 @@ export function ChatScreen() {
             counterparty && !isSelfConversation ? (
               <View style={styles.headerMenuAnchor}>
                 <Pressable
-                  onPress={() => setHeaderMenuOpen((open) => !open)}
+                  onPress={() => toggleMenu('header')}
                   hitSlop={10}
                   accessibilityRole="button"
                   accessibilityLabel="More"
                   accessibilityHint={`Actions for ${counterparty.full_name ?? 'this person'}`}
-                  accessibilityState={{ expanded: headerMenuOpen }}
+                  accessibilityState={{ expanded: openMenu === 'header' }}
                   style={({ pressed }) => [styles.headerDots, pressed && styles.headerDotsPressed]}
                 >
                   <Ionicons name="ellipsis-horizontal" size={22} color={colors.gold} />
                 </Pressable>
                 <DropMenu
-                  visible={headerMenuOpen}
-                  onClose={() => setHeaderMenuOpen(false)}
+                  visible={openMenu === 'header'}
+                  onClose={closeMenus}
                   items={headerMenuItems}
                   direction="down"
                   align="right"
@@ -1480,6 +1510,12 @@ export function ChatScreen() {
                 onStopRecording={handleStopRecording}
                 onSendVoice={handleSendVoice}
                 onDiscardVoice={recorder.discard}
+                // The [ + ] drop-up reads the one owner rather than a boolean
+                // of its own, so opening it closes the header's dropdown in
+                // the same assignment.
+                menuOpen={openMenu === 'composer'}
+                onToggleMenu={() => toggleMenu('composer')}
+                onCloseMenu={closeMenus}
                 // Whether the RESOLVED send target is job-scoped, not which
                 // route opened the screen: chat media is stored under
                 // `{jobId}/{userId}/…` and the pair thread has no job id to key

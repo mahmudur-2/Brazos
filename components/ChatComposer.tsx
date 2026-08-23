@@ -109,6 +109,19 @@ type ChatComposerProps = {
    */
   onShareLiveLocation?: () => void;
   onPickDocument?: () => void;
+  /**
+   * THE [ + ] MENU IS CONTROLLED, and deliberately owns none of its own state.
+   *
+   * It used to hold a `menuOpen` boolean here while the chat header held a
+   * second one for its overflow dropdown. Two booleans have a state that says
+   * both menus are open, and a device walk found exactly that on screen. The
+   * single owner is `openMenu` in screens/ChatScreen.tsx (lib/chatMenus.ts);
+   * this component reads it and asks for changes, so "B opening closes A" is
+   * one assignment there rather than two handlers here remembering each other.
+   */
+  menuOpen: boolean;
+  onToggleMenu: () => void;
+  onCloseMenu: () => void;
 };
 
 /** Dictation APPENDS; a search field replaces. Someone half-way through a
@@ -139,6 +152,9 @@ export function ChatComposer({
   allowAttachments = true,
   onShareLiveLocation,
   onPickDocument,
+  menuOpen,
+  onToggleMenu,
+  onCloseMenu,
 }: ChatComposerProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -155,8 +171,6 @@ export function ChatComposer({
   const isRecording = recorderPhase === 'recording';
   const isPreviewing = recorderPhase === 'preview';
   const busy = isArming || isRecording;
-
-  const [menuOpen, setMenuOpen] = useState(false);
 
   // --- dictation -----------------------------------------------------------
   // False until the boundary affirms on-device recognition on THIS binary;
@@ -310,7 +324,7 @@ export function ChatComposer({
     <View style={styles.anchor}>
       <DropMenu
         visible={menuOpen}
-        onClose={() => setMenuOpen(false)}
+        onClose={onCloseMenu}
         items={menuItems}
         direction="up"
         align="left"
@@ -324,7 +338,7 @@ export function ChatComposer({
             can. */}
         {!isRecording && menuItems.length > 0 && (
           <Pressable
-            onPress={() => setMenuOpen((open) => !open)}
+            onPress={onToggleMenu}
             style={styles.iconBtn}
             hitSlop={6}
             disabled={busy}
