@@ -265,9 +265,11 @@ test('[static] B2 · the no-photo state is the category-glyph tile, never stock 
 test('[static] the Map screen structure holds: no header card, sheet-filtered, compact bottom row', async () => {
   // 2026-08-22 restructure, each half pinned:
   const map = stripComments(await read('screens/MapScreen.tsx'));
-  // 1. The "MAP DISCOVERY / Open jobs on the map" card is gone — the map
-  //    fills from under the title to the bottom row — and the tier legend
-  //    that rode in it went with it.
+  // 1. The "MAP DISCOVERY / Open jobs on the map" card is gone — and since
+  //    2026-08-23 the map does not merely fill BETWEEN the title and the
+  //    bottom row, it fills the whole screen behind both (the layering half
+  //    is emeraldFences' map(1) fence). The tier legend that rode in the
+  //    card went with it.
   assert.doesNotMatch(map, /MAP DISCOVERY|Open jobs on the map|HOTSPOT_TIERS/);
   // 2. The header's right control opens the distance sheet (it no longer
   //    navigates) and carries the active distance as a label when a radius
@@ -282,15 +284,17 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, c
   assert.match(map, /<DistanceChips value=\{radius \?\? null\} onChange=\{selectRadius\} \/>/);
   assert.match(map, /clampDistanceFilterMiles\(radius - 1\)/);
   assert.match(map, /clampDistanceFilterMiles\(radius \+ 1\)/);
-  // 4. The bottom row is one compact bar on the page ground — count left,
-  //    View list right — never the old card slab.
+  // 4. The bottom row is one compact row — count left, View list right —
+  //    never the old card slab. 2026-08-22 took it from a CARD to a band on
+  //    the page ground; 2026-08-23 took the band away too, so the ground it
+  //    now carries is a translucent one and the tiles run under it.
   assert.match(map, /styles\.footerBar/);
   assert.match(map, /styles\.footerCount/);
   assert.doesNotMatch(map, /NEAR YOU|mapCard|cardEyebrow/);
   assert.match(
     map,
-    /footerBar: \{[^}]*backgroundColor: colors\.background/s,
-    'the bottom row sits on the page ground, not a surface slab'
+    /footerBar: \{[^}]*backgroundColor: withAlpha\(colors\.background, 0\.82\)/s,
+    'the bottom row floats on the map — the opaque page-ground band is retired too'
   );
 });
 

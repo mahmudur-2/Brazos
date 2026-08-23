@@ -1848,3 +1848,71 @@ test('home(9) fence: nothing on the customer Home stack links to Map', () => {
     'the worker bar still draws Map'
   );
 });
+
+// ---------------------------------------------------------------------------
+// THE MAP SCREEN'S CHROME FLOATS — 2026-08-23, operator instruction.
+//
+// The screen had been three stacked panels: an opaque header slab, the map,
+// an opaque bottom band. Two of those are gone. The map is the GROUND, filling
+// the screen absolutely, and the title and the count row ride on it as inset,
+// rounded, translucent capsules.
+//
+// WHY IT NEEDS A FENCE. This is the third pass over this screen's chrome
+// (2026-08-22 removed the header CARD and the footer CARD; this one removes
+// the slabs those left behind), and each pass has been a reduction that a
+// later run could plausibly read as a missing background and "fix". The two
+// properties that must not silently revert are the LAYERING (the map behind
+// both) and the TRANSLUCENCY (no opaque ground behind either).
+// ---------------------------------------------------------------------------
+test('map(1) fence: the map is the ground and the chrome floats on it, translucent', () => {
+  const map = stripComments(read('screens/MapScreen.tsx'));
+  const flat = flatten(read('screens/MapScreen.tsx'));
+
+  // THE LAYERING. The map is absolutely positioned — not a `flex: 1` panel
+  // between two rows — so its bounds extend behind the header, behind the
+  // bottom row and under the status bar. The retired wrapper must not return.
+  assert.match(
+    flat,
+    /mapLayer: \{ \.\.\.StyleSheet\.absoluteFillObject,/,
+    'the map must fill the screen absolutely, or the chrome is not floating over anything'
+  );
+  assert.doesNotMatch(flat, /mapWrap/, 'the flex-panel map wrapper is retired');
+  // The map is rendered from the ground layer, and the chrome layer sits over
+  // it without swallowing the pans and taps the map needs.
+  assert.match(flat, /<View style=\{styles\.mapLayer\}> <HotspotMap/);
+  assert.match(
+    flat,
+    /<SafeAreaView style=\{styles\.safe\} edges=\{\['top'\]\} pointerEvents="box-none">/,
+    'the chrome layer must be box-none or the map stops panning'
+  );
+  assert.match(flat, /<View style=\{styles\.mapSpacer\} pointerEvents="none" \/>/);
+
+  // NO OPAQUE GROUND BEHIND EITHER ELEMENT. Both capsules take the page
+  // ground through withAlpha, and neither may name a flat palette fill.
+  for (const [key, label] of [['headerWrap', 'the header'], ['footerBar', 'the bottom row']]) {
+    const style = new RegExp(`${key}: \{([^}]*)\}`).exec(flat.replace(/\{ width: 0, height: 3 \}/g, ''));
+    assert.ok(style, `${label} must keep a plain, readable style object`);
+    assert.match(
+      style[1],
+      /backgroundColor: withAlpha\(colors\.background, 0\.82\)/,
+      `${label} must let the tiles through — an opaque fill is a slab`
+    );
+    assert.match(
+      style[1],
+      /marginHorizontal: spacing\.md/,
+      `${label} must be INSET, or it is a full-width band however transparent it is`
+    );
+    assert.match(style[1], /borderRadius: radius\.xl/, `${label} must be a capsule, not an edge-to-edge strip`);
+    assert.match(style[1], /borderWidth: 1, borderColor: colors\.border/, `${label} needs its hairline over busy tiles`);
+  }
+  // The chrome layer itself paints nothing: every pixel is the map or a capsule.
+  assert.match(flat, /safe: \{ flex: 1, backgroundColor: 'transparent',? \}/);
+  // And the screen still has ONE opaque ground, under the map — not behind
+  // the chrome — so no frame paints the platform's white before tiles land.
+  assert.match(flat, /root: \{ flex: 1, backgroundColor: colors\.background,? \}/);
+
+  // ANTI-VACUITY: the elements this fence is about are still the ones on the
+  // screen, under the copy the dispatch named.
+  assert.match(map, /title="Find Jobs Near You"/);
+  assert.match(map, /\{visibleJobCount\} open \{visibleJobCount === 1 \? 'job' : 'jobs'\}/);
+});

@@ -41,6 +41,7 @@ import {
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 
@@ -204,77 +205,12 @@ export function MapScreen() {
   }
 
   return (
-    <SafeAreaView
-      style={styles.safe}
-      edges={['top']}
-    >
-      {/* 4D-4: chrome and tiles resolve together — the MapView follows the
-          in-app theme (HotspotMap.native userInterfaceStyle), so palette-
-          driven chrome no longer exposes light-map-on-dark-chrome gaps. */}
-      <View style={styles.headerWrap}>
-        <ScreenHeader
-          title="Find Jobs Near You"
-          titleSize={26}
-          // Same Ionicons family and outline weight as the tab bar's own Map
-          // pin, so the two read as the same icon set rather than two styles.
-          titleIcon={
-            <Ionicons name="location-outline" size={22} color={colors.primary} />
-          }
-          // Worker-only, for the same §F reason the old "See all jobs"
-          // control was: the distance filter is worker discovery state, and
-          // customer mode has no radius to set. Perspective from ModeContext,
-          // never a passed prop.
-          //
-          // 2026-08-22: this slot is the FILTER now — it opens the distance
-          // sheet below, and when a radius is applied the control widens to
-          // carry its label so the active distance is readable from the
-          // header. The list intent it used to duplicate lives on in the
-          // bottom row's "View list".
-          right={
-            mode === 'worker' ? (
-              <Pressable
-                onPress={() => setFilterOpen(true)}
-                hitSlop={10}
-                style={({ pressed }) => [
-                  styles.squircle,
-                  radius != null && styles.squircleLabeled,
-                  pressed && styles.squirclePressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel={
-                  radius != null
-                    ? `Distance filter, within ${radius} miles`
-                    : 'Distance filter, any distance'
-                }
-              >
-                <Ionicons name="options-outline" size={20} color={accent} />
-                {radius != null ? (
-                  <Text style={styles.squircleLabel}>{`${radius} mi`}</Text>
-                ) : null}
-              </Pressable>
-            ) : null
-          }
-        />
-      </View>
-
-      {/* 2026-08-22: the "MAP DISCOVERY / Open jobs on the map" header card
-          is GONE on operator instruction — the map fills from directly under
-          the title to directly above the bottom row. The distance controls
-          it carried moved into the header filter sheet below; the customer
-          tier legend rode in the card and went with it. */}
-
-      {error ? (
-        // Retryable, not just announced — the map without hotspot data is a
-        // dead end otherwise (state-coverage audit, 2026-08-10).
-        <View style={[styles.errorRow, { backgroundColor: colors.dangerBg }]}>
-          <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
-          <Pressable onPress={refresh} hitSlop={8} accessibilityRole="button">
-            <Text style={styles.errorRetry}>Try again</Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      <View style={styles.mapWrap}>
+    <View style={styles.root}>
+      {/* 2026-08-23 — THE MAP IS THE GROUND, not a panel between two bands.
+          It fills the whole screen absolutely: under the status bar, under
+          the floating header capsule, under the floating bottom row. The
+          chrome rides ON it, and the tiles are continuous behind both. */}
+      <View style={styles.mapLayer}>
         <HotspotMap
           cells={cells}
           loading={loading}
@@ -288,203 +224,308 @@ export function MapScreen() {
         />
       </View>
 
-      {/* The bottom row, reduced 2026-08-22 from the "NEAR YOU" footer card
-          to ONE compact bar on the page ground — count left, "View list →"
-          right, no solid slab behind it. (The only map mockup on disk,
-          Discover_Map_Dark.png, is a rejected word-named render and draws
-          the very slab this removes; with no numbered master for this
-          screen, the dispatch's instruction governs, and the row sits in a
-          minimal bar rather than overlaying tiles so its text never fights
-          the map for contrast.) The count is still the sum of the cells
-          actually in view — never a placeholder, absent while loading. */}
-      {!loading && !error ? (
-        <View style={styles.footerBar}>
-          <Text style={styles.footerCount} numberOfLines={1}>
-            {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
-          </Text>
-          {isWorker ? (
-            <Pressable
-              onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
-              hitSlop={8}
-              style={({ pressed }) => [styles.listLink, pressed && styles.squirclePressed]}
-              accessibilityRole="button"
-              accessibilityLabel="View the list of open jobs"
-            >
-              <Text style={styles.listLinkText}>View list</Text>
-              <Ionicons name="arrow-forward" size={16} color={accent} />
+      {/* `box-none`: this layer LAYS OUT the chrome over the map and never
+          takes a touch of its own — only the capsules and the sheets inside
+          it do. Without it the whole screen would be a transparent lid and
+          the map would stop panning. */}
+      <SafeAreaView style={styles.safe} edges={['top']} pointerEvents="box-none">
+        {/* 4D-4: chrome and tiles resolve together — the MapView follows the
+            in-app theme (HotspotMap.native userInterfaceStyle), so palette-
+            driven chrome no longer exposes light-map-on-dark-chrome gaps. */}
+        <View style={styles.headerWrap}>
+          <ScreenHeader
+            title="Find Jobs Near You"
+            titleSize={26}
+            // Same Ionicons family and outline weight as the tab bar's own Map
+            // pin, so the two read as the same icon set rather than two styles.
+            titleIcon={
+              <Ionicons name="location-outline" size={22} color={colors.primary} />
+            }
+            // Worker-only, for the same §F reason the old "See all jobs"
+            // control was: the distance filter is worker discovery state, and
+            // customer mode has no radius to set. Perspective from ModeContext,
+            // never a passed prop.
+            //
+            // 2026-08-22: this slot is the FILTER now — it opens the distance
+            // sheet below, and when a radius is applied the control widens to
+            // carry its label so the active distance is readable from the
+            // header. The list intent it used to duplicate lives on in the
+            // bottom row's "View list".
+            right={
+              mode === 'worker' ? (
+                <Pressable
+                  onPress={() => setFilterOpen(true)}
+                  hitSlop={10}
+                  style={({ pressed }) => [
+                    styles.squircle,
+                    radius != null && styles.squircleLabeled,
+                    pressed && styles.squirclePressed,
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    radius != null
+                      ? `Distance filter, within ${radius} miles`
+                      : 'Distance filter, any distance'
+                  }
+                >
+                  <Ionicons name="options-outline" size={20} color={accent} />
+                  {radius != null ? (
+                    <Text style={styles.squircleLabel}>{`${radius} mi`}</Text>
+                  ) : null}
+                </Pressable>
+              ) : null
+            }
+          />
+        </View>
+
+        {/* 2026-08-22: the "MAP DISCOVERY / Open jobs on the map" header card
+            is GONE on operator instruction — the map fills from directly under
+            the title to directly above the bottom row. The distance controls
+            it carried moved into the header filter sheet below; the customer
+            tier legend rode in the card and went with it. */}
+
+        {error ? (
+          // Retryable, not just announced — the map without hotspot data is a
+          // dead end otherwise (state-coverage audit, 2026-08-10).
+          <View style={[styles.errorRow, { backgroundColor: colors.dangerBg }]}>
+            <Text style={[styles.error, { color: colors.danger }]}>{error}</Text>
+            <Pressable onPress={refresh} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.errorRetry}>Try again</Text>
             </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+          </View>
+        ) : null}
 
-      {selected && (
-        <View style={styles.sheet}>
-          {/* Keep the hotspot detail card consistent with the light map UI. */}
-          <Card>
-            <View style={styles.sheetHeader}>
-              <View style={styles.sheetTitleWrap}>
-                <View
-                  style={[
-                    styles.sheetDot,
-                    {
-                      backgroundColor:
-                        tierForCount(selected.job_count)?.stroke ?? colors.border,
-                    },
-                  ]}
-                />
-                <Text style={[styles.sheetTitle, { color: colors.text }]}>
-                  {selected.job_count} open {selected.job_count === 1 ? 'job' : 'jobs'}
-                </Text>
-              </View>
-              <Pressable onPress={() => setSelected(null)} hitSlop={8}>
-                <Ionicons name="close" size={20} color={colors.textMuted} />
-              </Pressable>
-            </View>
+        {/* The map is BEHIND this layer, not inside it (see `mapLayer`): what
+            sits here is the space it shows through — a flexing, inert gap that
+            pushes the bottom row to the foot of the screen and takes no touch
+            of its own, so a tap between the two capsules reaches the tiles. */}
+        <View style={styles.mapSpacer} pointerEvents="none" />
 
-            <Text style={[styles.sheetCategories, { color: colors.textMuted }]}>
-              {summarizeCategories(selected.categories, JOB_CATEGORY_LABELS)}
+        {/* The bottom row: reduced 2026-08-22 from the "NEAR YOU" footer card
+            to a compact bar on the page ground, and 2026-08-23 from that bar
+            to a FLOATING capsule — count left, "View list →" right, tiles
+            running underneath. (The only map mockup on disk,
+            Discover_Map_Dark.png, is a rejected word-named render and draws
+            the solid slab both passes have now removed; with no numbered
+            master for this screen, the dispatch's instruction governs.) The
+            contrast question the 2026-08-22 note answered by NOT overlaying
+            tiles is answered here by the capsule's own translucent ground —
+            see `footerBar`. The count is still the sum of the cells actually
+            in view — never a placeholder, absent while loading. */}
+        {!loading && !error ? (
+          <View style={styles.footerBar}>
+            <Text style={styles.footerCount} numberOfLines={1}>
+              {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
             </Text>
-
-            <Button
-              title={`View ${selected.job_count} ${
-                selected.job_count === 1 ? 'job' : 'jobs'
-              }`}
-              onPress={() => {
-                navigation.navigate('CellJobs', {
-                  ilat: selected.ilat,
-                  ilng: selected.ilng,
-                  count: selected.job_count,
-                });
-                setSelected(null);
-              }}
-              style={styles.sheetBtn}
-            />
-          </Card>
-        </View>
-      )}
-
-      {/* The distance filter sheet (2026-08-22) — the presets as the SAME
-          DistanceChips row the results list draws, plus the custom stepper:
-          1–50 whole miles, each tap applied immediately. From Any, the first
-          tap in either direction turns the dial on at 10 mi; the value then
-          steps by one. Session-only state — see lib/discoveryFilterStorage. */}
-      <Sheet
-        visible={filterOpen}
-        onClose={() => setFilterOpen(false)}
-        title="Distance"
-      >
-        {radius !== undefined ? (
-          <View style={styles.filterSheetBody}>
-            <DistanceChips value={radius ?? null} onChange={selectRadius} />
-            <View style={styles.stepperRow}>
-              <Text style={styles.stepperLabel}>Custom</Text>
-              <View style={styles.stepper}>
-                <Pressable
-                  onPress={() =>
-                    selectRadius(
-                      radius == null ? 10 : clampDistanceFilterMiles(radius - 1)
-                    )
-                  }
-                  hitSlop={8}
-                  style={({ pressed }) => [
-                    styles.stepperButton,
-                    pressed && styles.squirclePressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="One mile closer"
-                >
-                  <Ionicons name="remove" size={20} color={accent} />
-                </Pressable>
-                <Text style={styles.stepperValue} numberOfLines={1}>
-                  {distanceChipLabel(radius ?? null)}
-                </Text>
-                <Pressable
-                  onPress={() =>
-                    selectRadius(
-                      radius == null ? 10 : clampDistanceFilterMiles(radius + 1)
-                    )
-                  }
-                  hitSlop={8}
-                  style={({ pressed }) => [
-                    styles.stepperButton,
-                    pressed && styles.squirclePressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="One mile farther"
-                >
-                  <Ionicons name="add" size={20} color={accent} />
-                </Pressable>
-              </View>
-            </View>
-            {radiusUnavailable ? (
-              <Text style={styles.radiusNote}>
-                Location is off — showing all areas.
-              </Text>
+            {isWorker ? (
+              <Pressable
+                onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
+                hitSlop={8}
+                style={({ pressed }) => [styles.listLink, pressed && styles.squirclePressed]}
+                accessibilityRole="button"
+                accessibilityLabel="View the list of open jobs"
+              >
+                <Text style={styles.listLinkText}>View list</Text>
+                <Ionicons name="arrow-forward" size={16} color={accent} />
+              </Pressable>
             ) : null}
           </View>
         ) : null}
-      </Sheet>
 
-      {/* Worker discovery: the tapped pin's jobs as photo-first cards. Cards
-          open the market job detail inside this same Map stack. */}
-      <Sheet
-        visible={activePin !== null}
-        onClose={() => setActivePin(null)}
-        title={
-          activePin
-            ? `${activePin.count} open ${activePin.count === 1 ? 'job' : 'jobs'} here`
-            : undefined
-        }
-      >
-        {pinError ? (
-          <View style={styles.pinSheetState}>
-            <Text style={styles.pinSheetError}>{pinError}</Text>
-            <Button
-              title="Close"
-              variant="secondary"
-              onPress={() => setActivePin(null)}
-            />
-          </View>
-        ) : pinJobs === null ? (
-          <View style={styles.pinSheetList}>
-            {[0, 1, 2].map((i) => (
-              <WorkerJobCardSkeleton key={i} />
-            ))}
-          </View>
-        ) : pinJobs.length === 0 ? (
-          <View style={styles.pinSheetState}>
-            <Text style={styles.pinSheetEmpty}>
-              These jobs just closed or were taken down — pull the map's data
-              again in a moment.
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.pinSheetList}>
-            {pinJobs.map((job) => (
-              <WorkerJobCard
-                key={job.id}
-                job={job}
-                bidCount={sheetBidCounts[job.id]}
-                variant="full"
-                distanceMiles={job.distance_miles ?? null}
-                onPress={() => openJobFromSheet(job)}
+        {selected && (
+          <View style={styles.sheet}>
+            {/* Keep the hotspot detail card consistent with the light map UI. */}
+            <Card>
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetTitleWrap}>
+                  <View
+                    style={[
+                      styles.sheetDot,
+                      {
+                        backgroundColor:
+                          tierForCount(selected.job_count)?.stroke ?? colors.border,
+                      },
+                    ]}
+                  />
+                  <Text style={[styles.sheetTitle, { color: colors.text }]}>
+                    {selected.job_count} open {selected.job_count === 1 ? 'job' : 'jobs'}
+                  </Text>
+                </View>
+                <Pressable onPress={() => setSelected(null)} hitSlop={8}>
+                  <Ionicons name="close" size={20} color={colors.textMuted} />
+                </Pressable>
+              </View>
+
+              <Text style={[styles.sheetCategories, { color: colors.textMuted }]}>
+                {summarizeCategories(selected.categories, JOB_CATEGORY_LABELS)}
+              </Text>
+
+              <Button
+                title={`View ${selected.job_count} ${
+                  selected.job_count === 1 ? 'job' : 'jobs'
+                }`}
+                onPress={() => {
+                  navigation.navigate('CellJobs', {
+                    ilat: selected.ilat,
+                    ilng: selected.ilng,
+                    count: selected.job_count,
+                  });
+                  setSelected(null);
+                }}
+                style={styles.sheetBtn}
               />
-            ))}
+            </Card>
           </View>
         )}
-      </Sheet>
-    </SafeAreaView>
+
+        {/* The distance filter sheet (2026-08-22) — the presets as the SAME
+            DistanceChips row the results list draws, plus the custom stepper:
+            1–50 whole miles, each tap applied immediately. From Any, the first
+            tap in either direction turns the dial on at 10 mi; the value then
+            steps by one. Session-only state — see lib/discoveryFilterStorage. */}
+        <Sheet
+          visible={filterOpen}
+          onClose={() => setFilterOpen(false)}
+          title="Distance"
+        >
+          {radius !== undefined ? (
+            <View style={styles.filterSheetBody}>
+              <DistanceChips value={radius ?? null} onChange={selectRadius} />
+              <View style={styles.stepperRow}>
+                <Text style={styles.stepperLabel}>Custom</Text>
+                <View style={styles.stepper}>
+                  <Pressable
+                    onPress={() =>
+                      selectRadius(
+                        radius == null ? 10 : clampDistanceFilterMiles(radius - 1)
+                      )
+                    }
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.stepperButton,
+                      pressed && styles.squirclePressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="One mile closer"
+                  >
+                    <Ionicons name="remove" size={20} color={accent} />
+                  </Pressable>
+                  <Text style={styles.stepperValue} numberOfLines={1}>
+                    {distanceChipLabel(radius ?? null)}
+                  </Text>
+                  <Pressable
+                    onPress={() =>
+                      selectRadius(
+                        radius == null ? 10 : clampDistanceFilterMiles(radius + 1)
+                      )
+                    }
+                    hitSlop={8}
+                    style={({ pressed }) => [
+                      styles.stepperButton,
+                      pressed && styles.squirclePressed,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityLabel="One mile farther"
+                  >
+                    <Ionicons name="add" size={20} color={accent} />
+                  </Pressable>
+                </View>
+              </View>
+              {radiusUnavailable ? (
+                <Text style={styles.radiusNote}>
+                  Location is off — showing all areas.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </Sheet>
+
+        {/* Worker discovery: the tapped pin's jobs as photo-first cards. Cards
+            open the market job detail inside this same Map stack. */}
+        <Sheet
+          visible={activePin !== null}
+          onClose={() => setActivePin(null)}
+          title={
+            activePin
+              ? `${activePin.count} open ${activePin.count === 1 ? 'job' : 'jobs'} here`
+              : undefined
+          }
+        >
+          {pinError ? (
+            <View style={styles.pinSheetState}>
+              <Text style={styles.pinSheetError}>{pinError}</Text>
+              <Button
+                title="Close"
+                variant="secondary"
+                onPress={() => setActivePin(null)}
+              />
+            </View>
+          ) : pinJobs === null ? (
+            <View style={styles.pinSheetList}>
+              {[0, 1, 2].map((i) => (
+                <WorkerJobCardSkeleton key={i} />
+              ))}
+            </View>
+          ) : pinJobs.length === 0 ? (
+            <View style={styles.pinSheetState}>
+              <Text style={styles.pinSheetEmpty}>
+                These jobs just closed or were taken down — pull the map's data
+                again in a moment.
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.pinSheetList}>
+              {pinJobs.map((job) => (
+                <WorkerJobCard
+                  key={job.id}
+                  job={job}
+                  bidCount={sheetBidCounts[job.id]}
+                  variant="full"
+                  distanceMiles={job.distance_miles ?? null}
+                  onPress={() => openJobFromSheet(job)}
+                />
+              ))}
+            </View>
+          )}
+        </Sheet>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  safe: {
+  // The ground under the map itself: what shows for the frames before the
+  // tiles resolve, and behind the translucent capsules. It was `mapWrap`'s
+  // before the map became the ground layer.
+  root: {
     flex: 1,
     backgroundColor: colors.background,
   },
+  // The chrome layer paints NOTHING. Every pixel of colour on this screen is
+  // either the map or one of the two capsules below.
+  safe: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  // 2026-08-23 — THE HEADER FLOATS. It used to be an opaque `background`
+  // slab with the map beginning underneath it; the map now runs full-bleed
+  // and the title and filter control ride on it inside an inset, rounded,
+  // TRANSLUCENT capsule. Tiles stay visible through it, which is the point —
+  // an opaque band here is a second screen stacked on the first.
+  //
+  // THE ALPHA IS A LEGIBILITY FLOOR, not a taste value. A 26pt display title
+  // over live tiles has no guaranteed contrast against anything, so the
+  // capsule carries enough of the page ground to hold the type in both
+  // palettes; the hairline is what keeps it from reading as a smudge over a
+  // busy tile. Same treatment, same numbers, on the bottom row.
   headerWrap: {
-    backgroundColor: colors.background,
+    marginHorizontal: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: withAlpha(colors.background, 0.82),
+    overflow: 'hidden',
   },
   // Master 33's gold-outline squircle control, at the header's right.
   squircle: {
@@ -511,16 +552,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.gold,
   },
-  // The compact bottom row (2026-08-22): the page ground, no card slab.
+  // The compact bottom row: 2026-08-22 reduced it from a footer CARD to a
+  // band on the page ground; 2026-08-23 takes the band away too. It is the
+  // header's capsule at the other end of the screen — same inset, same
+  // radius, same hairline, same translucency — floating clear of the nav
+  // pill rather than sitting in a slab of its own.
   footerBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
     minHeight: 44,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.xs,
-    backgroundColor: colors.background,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: withAlpha(colors.background, 0.82),
   },
   footerCount: {
     flexShrink: 1,
@@ -580,10 +630,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.ink,
   },
-  mapWrap: {
-    flex: 1,
-    backgroundColor: colors.background,
+  // THE GROUND LAYER. Absolute rather than `flex: 1` so the tiles run behind
+  // the header capsule, behind the bottom row and under the status bar —
+  // the whole screen is the map, and the chrome is on top of it.
+  mapLayer: {
+    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
+  },
+  // The inert gap the map shows through, between the two capsules.
+  mapSpacer: {
+    flex: 1,
   },
   sheet: {
     position: 'absolute',
