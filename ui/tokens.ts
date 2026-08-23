@@ -248,16 +248,20 @@ export const radius = {
 /**
  * §I names Inter. NOTHING IS BUNDLED AND NOTHING IS A SERIF.
  *
- * No font file ships with this app: `assets/fonts/` does not exist, App.tsx
- * registers no faces, and there is no `useFonts` anywhere. Every role below
- * resolves to the platform's own system sans — the same family body copy has
- * always used.
+ * No font file is REGISTERED by this app: App.tsx names no face and there is
+ * no `useFonts` anywhere. (`assets/fonts/PlayfairDisplay-Bold.ttf` is still on
+ * disk — recovered 2026-08-22, orphaned again 2026-08-23 — but nothing
+ * requires it, so nothing bundles it.) Every role below resolves to the
+ * platform's own system sans, the same family body copy has always used.
  *
- * Two decisions arrived at that, both on 2026-08-22 and both deliberate
- * (docs/emerald-v2/DECISIONS.md D5 carries them in order). The first bundled
- * Playfair Display for the three large heading roles. The second reversed it
- * in full AND retired the platform serif (Georgia on iOS, `serif` elsewhere)
- * that had predated it, so the whole app now sets in one voice.
+ * FOUR decisions arrived at that. The first three were all 2026-08-22
+ * (docs/emerald-v2/DECISIONS.md D5 carries them in order): bundle Playfair
+ * Display for the three large heading roles; reverse that in full AND retire
+ * the platform serif (Georgia on iOS) that had predated it; then re-bundle
+ * Playfair for the customer Home hero title alone. The fourth, on 2026-08-23,
+ * keeps that ONE serif role and moves it to the platform's Georgia — so the
+ * app is back to shipping no font file at all. That role lives on
+ * `lib/theme.ts`'s `fonts.displayHero`; every role below stays sans.
  *
  * `display` survives as a NAMED ROLE, not as a different face: roughly sixty
  * screen styles reach the heading voice through `fonts.display`, and keeping

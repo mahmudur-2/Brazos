@@ -963,18 +963,26 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // is the studio's live value, both applied to BOTH themes since the parity
   // pass (2026-08-22) retired light's 39/45/'73%' Heritage composition.
   //
-  // THE ONE SERIF ROLE (D5, third dated note, 2026-08-22): the operator
-  // partially reversed the serif retirement for exactly this title. It names
-  // `fonts.displayHero` — the recovered PlayfairDisplay-Bold static — and
-  // carries NO fontWeight: with a real file bundled, iOS stops selecting a
-  // face from the weight, so the family name IS the weight (the bundling
-  // era's own convention; the pre-retirement style's '600' has no 600 static
-  // in history to honour, and Bold is the recovered face nearest it). Size
-  // and spacing are untouched. Every other title on this screen stays on
-  // `fonts.display`'s system sans.
+  // THE ONE SERIF ROLE — and since 2026-08-23 it is the PLATFORM's serif.
+  // `fonts.displayHero` resolved to a bundled PlayfairDisplay-Bold static for
+  // one day; it now resolves to 'Georgia', which ships with iOS. Nothing else
+  // on this screen is a serif, and nothing else in the app names this token.
+  //
+  // fontWeight IS BACK, AND IT IS LOAD-BEARING. A bundled static made the
+  // family name the weight and any `fontWeight` inert; a platform face is the
+  // opposite — iOS picks the cut from the weight, so without one this renders
+  // at Georgia regular. '700' is what the Bold static was.
+  //
+  // SIZE AND SPACING ARE UNTOUCHED, and did not need to move: the column
+  // fence in tests/emeraldFences.test.mjs has always priced this headline in
+  // GEORGIA's metrics (7.00pt of ink per point of size — see the ladder at
+  // the top of this file), so the studio's 33pt already fits the column the
+  // hero artwork leaves. The face changing is that fence becoming accurate,
+  // not that fence coming under strain.
   headline: {
     marginTop: 30,
     fontFamily: fonts.displayHero,
+    fontWeight: '700',
     letterSpacing: -0.3,
     color: colors.ink,
   },

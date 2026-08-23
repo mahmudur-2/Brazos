@@ -4,7 +4,6 @@ import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { setAudioModeAsync } from 'expo-audio';
-import { useFonts } from 'expo-font';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
 import { usePushNotifications } from './hooks/usePushNotifications';
@@ -131,15 +130,12 @@ function RootNavigator() {
  * catching a frame of the Welcome screen, and what means there is no blank
  * frame in the handover.
  *
- * 2026-08-22: this gate briefly had a SECOND condition — expo-font resolving
- * the bundled Playfair heading faces — lost it when the serif retirement
- * deleted every face, and holds it AGAIN since the operator's partial
- * reversal later that day (docs/emerald-v2/DECISIONS.md D5, third dated
- * note): exactly one face ships now, the customer Home hero title's
- * PlayfairDisplay-Bold, and the gate is restored the way the pre-retirement
- * code had it so no frame can paint that title in a fallback face. `error`
- * releases the gate too: a failed load degrades the hero to the system sans
- * rather than holding the app on the launch layer forever.
+ * 2026-08-23: THE GATE IS BACK TO ONE CONDITION — the session. It carried a
+ * second for one day (expo-font resolving the bundled Playfair static the
+ * customer Home hero title was set in) so no frame could paint that title in
+ * a fallback face. The hero now sets in the PLATFORM's Georgia, which ships
+ * with iOS and cannot arrive late, so there is nothing left to hold the layer
+ * for and no load failure to release it on.
  *
  * It renders once per process. Signing out later returns to Welcome without
  * replaying it; a cold reload in Expo Go is a new process, so it plays again.
@@ -148,18 +144,13 @@ function LaunchGate({ children }: PropsWithChildren) {
   const { loading } = useAuth();
   const [complete, setComplete] = useState(false);
 
-  const [fontsLoaded, fontLoadError] = useFonts({
-    'PlayfairDisplay-Bold': require('./assets/fonts/PlayfairDisplay-Bold.ttf'),
-  });
-  const fontsResolved = fontsLoaded || fontLoadError != null;
-
   return (
     <LaunchCompleteContext.Provider value={complete}>
       <View style={styles.root}>
-        {fontsResolved ? children : null}
+        {children}
         {complete ? null : (
           <LaunchScreen
-            sessionReady={!loading && fontsResolved}
+            sessionReady={!loading}
             onFinish={() => setComplete(true)}
           />
         )}

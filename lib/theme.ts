@@ -231,13 +231,22 @@ export const radius = {
  * 2026-08-22 serif retirement (docs/emerald-v2/DECISIONS.md D5's second
  * dated note) stands for every role that names it. Later the same day the
  * operator PARTIALLY reversed it (D5's third dated note): the customer Home
- * hero title — that one role, nothing else — returns to Playfair Display.
- * `displayHero` carries that face: the Bold static recovered byte-identical
- * from the pre-retirement commit (assets/fonts/, with its OFL license),
- * registered by App.tsx's LaunchGate exactly the way the pre-retirement code
- * registered it. With a real file bundled iOS stops selecting a face from
- * `fontWeight`, so the hero style names the family and carries no weight —
- * the same convention the bundling era used.
+ * hero title — that one role, nothing else — took a serif back.
+ *
+ * 2026-08-23 CHANGES THE FACE, NOT THE ROLE. That title was set in a bundled
+ * PlayfairDisplay-Bold static; it is now the PLATFORM's Georgia. One role
+ * still, and the same lever — but no font file is registered any more, so
+ * App.tsx's launch gate no longer waits on `expo-font`, and a face that ships
+ * with iOS cannot arrive late enough to paint a frame in a fallback.
+ * `assets/fonts/PlayfairDisplay-Bold.ttf` and its OFL license stay on disk,
+ * required by nothing and bundled by nothing; the themeTokens fence pins
+ * them there.
+ *
+ * CONSEQUENCE FOR WEIGHT, INVERTED. A bundled static made `fontWeight` inert
+ * on iOS — the family name WAS the weight. A platform face does not: iOS
+ * picks the cut from `fontWeight` again, so the hero style carries an
+ * explicit one ('700', the weight the Bold static shipped). Drop it and the
+ * hero renders at Georgia regular.
  *
  * `display` is kept as a NAMED ROLE rather than deleted: the screens reach the
  * heading voice through it, so it stays the single lever if that voice is ever
@@ -245,15 +254,17 @@ export const radius = {
  * screen style may name `displayHero`, and any other serif — quoted, tokened
  * or bundled — stays red.
  *
- * With no file bundled for the SANS roles, `fontWeight` is load-bearing on
- * iOS — it is how the heading roles below get their weight. Removing one
- * renders that heading at normal.
+ * With no file bundled ANYWHERE now, `fontWeight` is load-bearing on iOS —
+ * it is how the heading roles below get their weight, and since 2026-08-23
+ * how the hero role gets its weight too. Removing one renders that heading
+ * at normal.
  */
 export const fonts = {
   display: undefined as TextStyle['fontFamily'],
-  /** The customer Home hero title's face — the ONE serif role (D5, third
-   *  dated note). Everything else stays on `display`'s system sans. */
-  displayHero: 'PlayfairDisplay-Bold' as TextStyle['fontFamily'],
+  /** The customer Home hero title's face — the ONE serif role. Everything
+   *  else stays on `display`'s system sans. Nothing bundles this: 'Georgia'
+   *  is the platform face, so the naming style owes it a `fontWeight`. */
+  displayHero: 'Georgia' as TextStyle['fontFamily'],
 } as const;
 
 export const typography = {
