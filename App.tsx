@@ -15,6 +15,7 @@ import { LaunchCompleteContext } from './lib/launchContext';
 import { AppErrorBoundary } from './components/AppErrorBoundary';
 import { ModeTransitionProvider } from './components/ModeTransitionOverlay';
 import { ModeProvider } from './modes';
+import { MotionRoot } from './lib/motion120';
 import { ModeShell } from './navigation/ModeShell';
 import { AuthFlow } from './screens/AuthFlow';
 import { OnboardingFlow } from './screens/OnboardingFlow';
@@ -241,22 +242,30 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <AuthProvider>
-        <LaunchGate>
-          {/* Theme resolution sits INSIDE the launch gate deliberately (4D-4):
-              the provider reads the stored preference before the themed tree
-              first paints, holding a neutral loader for that beat — and the
-              locked launch layer, which renders from the first frame, covers
-              that gate, so a cold start in dark mode never flashes light.
-              Everything that repaints on a palette change lives below this
-              line; the launch layer itself is locked and light by design. */}
-          <ThemeProvider>
-            <ThemedNavigation />
-          </ThemeProvider>
-        </LaunchGate>
-      </AuthProvider>
-    </SafeAreaProvider>
+    // The motion boundary's root. On a binary that has react-native-gesture-
+    // handler this is its GestureHandlerRootView, which the package requires
+    // above EVERYTHING before any recogniser works; on a binary without it —
+    // which is every build today — it is a Fragment, so the tree below is
+    // byte-for-byte the same shape either way. See lib/motion120/vendor.ts for
+    // why the load is lazy and caught rather than a static import.
+    <MotionRoot>
+      <SafeAreaProvider>
+        <AuthProvider>
+          <LaunchGate>
+            {/* Theme resolution sits INSIDE the launch gate deliberately (4D-4):
+                the provider reads the stored preference before the themed tree
+                first paints, holding a neutral loader for that beat — and the
+                locked launch layer, which renders from the first frame, covers
+                that gate, so a cold start in dark mode never flashes light.
+                Everything that repaints on a palette change lives below this
+                line; the launch layer itself is locked and light by design. */}
+            <ThemeProvider>
+              <ThemedNavigation />
+            </ThemeProvider>
+          </LaunchGate>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </MotionRoot>
   );
 }
 
