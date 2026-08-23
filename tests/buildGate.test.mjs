@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -189,4 +189,61 @@ test('evaluateGate treats inherited-member profile names as unknown', () => {
   const verdict = evaluateGate({ EAS_BUILD_PROFILE: 'toString', ...stagingEnv() });
   assert.equal(verdict.ok, false);
   assert.match(verdict.problems[0], /unknown profile/);
+});
+
+// The `share` build profile: a standalone binary a registered tester installs
+// from a link — no dev client and no Metro, so `developmentClient` must be
+// ABSENT rather than false, because EAS reads whether the key is present, not
+// what it is set to. The channel is `internal` and deliberately not `preview`:
+// `testflight` owns `preview`, and a shared channel would let a TestFlight
+// update land on a tester build and a tester update land on TestFlight.
+test('the share profile is a standalone staging build on its own channel', () => {
+  const configPath = fileURLToPath(new URL('../eas.json', import.meta.url));
+  const text = readFileSync(configPath, 'utf8');
+  const eas = JSON.parse(text);
+  const share = eas.build.share;
+
+  assert.ok(share, 'eas.json declares a share build profile');
+  assert.equal(share.distribution, 'internal');
+  assert.equal(share.autoIncrement, true);
+  assert.equal(
+    Object.prototype.hasOwnProperty.call(share, 'developmentClient'),
+    false,
+    'developmentClient must be absent, not false'
+  );
+
+  // The env block is the development profile's, copied verbatim: same staging
+  // project, same anon key, so a tester build can never reach production.
+  assert.equal(share.env.SUPABASE_URL, urlFor(STAGING));
+  assert.deepEqual(share.env, eas.build.development.env);
+  assert.equal(text.includes(PRODUCTION), false, 'no production ref in eas.json');
+
+  // No two build profiles may share an update channel.
+  assert.equal(share.channel, 'internal');
+  const channels = Object.values(eas.build)
+    .map((profile) => profile.channel)
+    .filter((channel) => channel !== undefined);
+  assert.equal(new Set(channels).size, channels.length);
+
+  // Everything share does not touch, pinned by shape.
+  assert.deepEqual(Object.keys(eas.build).sort(), [
+    'development',
+    'production',
+    'share',
+    'testflight',
+  ]);
+  assert.equal(eas.build.development.developmentClient, true);
+  assert.equal(eas.build.development.distribution, 'internal');
+  assert.equal(eas.build.development.channel, undefined);
+  assert.deepEqual(eas.build.testflight, {
+    channel: 'preview',
+    environment: 'preview',
+    autoIncrement: true,
+  });
+  assert.deepEqual(eas.build.production, {
+    channel: 'production',
+    environment: 'production',
+  });
+  assert.equal(eas.cli.appVersionSource, 'remote');
+  assert.deepEqual(Object.keys(eas.submit), ['testflight']);
 });

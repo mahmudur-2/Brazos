@@ -12,6 +12,15 @@
         "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6a3VteGNqdGJxb3NlbHpwdGlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODIxMzIsImV4cCI6MjEwMTg1ODEzMn0.2GONU_abrVoH4a4-k6IzfsBkgCU8hbJ0-nf9jXV204Q"
       }
     },
+    "share": {
+      "distribution": "internal",
+      "channel": "internal",
+      "autoIncrement": true,
+      "env": {
+        "SUPABASE_URL": "https://zzkumxcjtbqoselzptig.supabase.co",
+        "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6a3VteGNqdGJxb3NlbHpwdGlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODIxMzIsImV4cCI6MjEwMTg1ODEzMn0.2GONU_abrVoH4a4-k6IzfsBkgCU8hbJ0-nf9jXV204Q"
+      }
+    },
     "testflight": {
       "channel": "preview",
       "environment": "preview",
