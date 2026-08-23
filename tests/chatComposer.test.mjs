@@ -45,6 +45,7 @@ const meter = await import('../lib/audioMeter.ts');
 const ticks = await import('../lib/messageTicks.ts');
 const webRoute = await import('../lib/webRoute.ts');
 const inbox = await import('../lib/inboxFilters.ts');
+const translate = await import('../lib/translateRules.ts');
 
 test('[static] the composer is three zones, and every glyph is bare', () => {
   const flat = flatten(read(COMPOSER));
@@ -635,6 +636,170 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
   assert.match(screen, /const rowActionHint = canSwipe\(\)/);
   assert.match(screen, /'Press and hold for mute, block, report and more'/);
   assert.match(screen, /accessibilityHint=\{item\.isSelf \? undefined : rowActionHint\}/);
+});
+
+// ---------------------------------------------------------------------------
+// TRANSLATION — a complete UI in front of an UNDEPLOYED function.
+// ---------------------------------------------------------------------------
+
+test('[executed] the client refuses locally what the server would refuse remotely', () => {
+  // Nothing to send: refused without a round trip.
+  assert.deepEqual(translate.prepareBatch([]), { ok: false, reason: 'empty' });
+  assert.deepEqual(translate.prepareBatch(['   ', '']), { ok: false, reason: 'empty' });
+
+  // The cap is counted across the WHOLE batch. Capping per item would let a
+  // 200-message conversation through one item at a time — the same money
+  // spent and none of the bound.
+  const long = 'x'.repeat(translate.TRANSLATE_CHAR_CAP + 1);
+  assert.deepEqual(translate.prepareBatch([long]), { ok: false, reason: 'too-long' });
+  assert.deepEqual(
+    translate.prepareBatch(['y'.repeat(1200), 'z'.repeat(1200)]),
+    { ok: false, reason: 'too-long' }
+  );
+  assert.equal(translate.TRANSLATE_CHAR_CAP, 2000);
+
+  // A legal batch comes back trimmed, with the empties dropped and the order
+  // kept — the sheet pairs results to inputs by position.
+  assert.deepEqual(translate.prepareBatch(['  hola  ', '', 'que tal']), {
+    ok: true,
+    texts: ['hola', 'que tal'],
+  });
+});
+
+test('[executed] a half-built response is a failure, never a rendered undefined', () => {
+  // Shape-checked rather than cast: this is data crossing a network boundary.
+  for (const bad of [
+    null,
+    undefined,
+    {},
+    { items: null },
+    { items: [] },
+    { items: [{ source: 'a' }] },
+    { items: [{ translated: 'b' }] },
+    { items: [{ source: 1, translated: 'b' }] },
+    { items: [{ source: 'a', translated: 'b' }, { source: 'c' }] },
+  ]) {
+    assert.deepEqual(
+      translate.parseTranslateResponse(bad),
+      { ok: false, reason: 'failed' },
+      `${JSON.stringify(bad)} must not parse as a translation`
+    );
+  }
+
+  // A good one keeps both halves, so the sheet can show the original beside
+  // the translation.
+  assert.deepEqual(
+    translate.parseTranslateResponse({
+      detectedLanguage: 'es',
+      items: [{ source: 'hola', translated: 'hello' }],
+    }),
+    { ok: true, detectedLanguage: 'es', items: [{ source: 'hola', translated: 'hello' }] }
+  );
+  // A missing or empty detection is NULL, never a guess — the sheet then
+  // shows no language label at all rather than a confident wrong one.
+  assert.equal(
+    translate.parseTranslateResponse({ items: [{ source: 'a', translated: 'b' }] }).detectedLanguage,
+    null
+  );
+  assert.equal(
+    translate.parseTranslateResponse({ detectedLanguage: '', items: [{ source: 'a', translated: 'b' }] })
+      .detectedLanguage,
+    null
+  );
+});
+
+test('[executed] the device language is a bare subtag, and never throws', () => {
+  const language = translate.deviceLanguage();
+  assert.match(language, /^[a-z]{2,3}$/, 'the region is dropped on purpose');
+  // The fallback is a fallback, not a crash: a device that cannot answer is
+  // not a reason to fail a translation someone asked for.
+  assert.equal(typeof translate.deviceLanguage('pt'), 'string');
+});
+
+test('[executed] every failure has a message, and none of them is vendor text', () => {
+  for (const reason of ['unavailable', 'too-long', 'empty', 'failed']) {
+    const message = translate.translateFailureMessage(reason);
+    assert.ok(message.length > 0, `${reason} needs a message`);
+    // Closed set: nothing from Azure, the function, or the network can cross
+    // this boundary as prose, which is the lib/errorMessage contract.
+    assert.doesNotMatch(message, /azure|translator|http|status|token|key/i);
+  }
+});
+
+test('[static] the sheet renders from a result and owns none of the fetching', () => {
+  const sheet = stripComments(read('components/TranslationSheet.tsx'));
+
+  // PRESENTATION ONLY — which is how it is testable at all, given the
+  // function behind it cannot answer.
+  assert.doesNotMatch(sheet, /supabase|functions\.invoke|translateTexts/);
+  assert.match(sheet, /from '\.\.\/lib\/translateRules'/, 'the sheet reads the RULES, not the caller');
+  assert.match(sheet, /result: TranslateResult \| null;/);
+  assert.match(sheet, /\{result === null \? \(/, 'null is the loading state');
+  assert.match(sheet, /\) : result\.ok \? \(/);
+  assert.match(sheet, /translateFailureMessage\(result\.reason\)/);
+
+  // The DETECTED language, and only when the service detected one. There is
+  // no client-side language guessing anywhere in this path.
+  assert.match(sheet, /\{result\.detectedLanguage \? \(/);
+  assert.match(sheet, /Detected \{result\.detectedLanguage\.toUpperCase\(\)\}/);
+
+  // The original stays visible: a translation that replaces what someone
+  // actually wrote removes the ability to check it.
+  assert.match(sheet, /\{item\.original\}|\{item\.source\}/);
+
+  // COPY renders only when a handler exists — nothing in this project can
+  // write the clipboard yet, so today it does not render.
+  assert.match(sheet, /\{onCopy \? \(/);
+  assert.match(sheet, /onCopy\?: \(text: string\) => void;/);
+});
+
+test('[static] the translate entries are flagged, text-only, and batch the conversation', () => {
+  const chat = stripComments(read(CHAT));
+
+  assert.match(chat, /import \{ TRANSLATION \} from '\.\.\/lib\/featureFlags';/);
+  // Behind the flag AND requiring content: there is nothing to translate in a
+  // photo or a voice note.
+  assert.match(chat, /\.\.\.\(TRANSLATION && menuTarget\.content/);
+  assert.match(chat, /label: 'Translate This Message'/);
+  assert.match(chat, /label: 'Translate Conversation'/);
+  // ONE request with N strings, not N requests — one rate-limit decision on
+  // the server rather than N.
+  assert.match(chat, /void runTranslation\(\s*messages/);
+  assert.match(chat, /\.filter\(\(m\) => !m\.unsent_at && !!m\.content\)/);
+  // The sheet's loading state is a real state, not a spinner bolted on.
+  assert.match(chat, /setTranslateResult\(null\);\s*setTranslateOpen\(true\);/);
+});
+
+test('[static] the edge function is a DRAFT and says so where nobody can miss it', () => {
+  const fn = read('supabase/functions/translate/index.ts');
+  const header = fn.slice(0, 2000);
+
+  assert.match(header, /D R A F T/);
+  assert.match(header, /N O T\s+D E P L O Y E D/);
+  assert.match(header, /S E C U R I T Y\s+R E V I E W\s+P E N D I N G/);
+
+  // THE BLOCKING ITEM is named as blocking, not buried.
+  assert.match(fn, /RATE LIMITING IS NOT IMPLEMENTED, and this is the blocking item/);
+  // The platform's JWT verification is the real gate, and the in-function
+  // check must not be mistaken for one.
+  assert.match(fn, /--no-verify-jwt/);
+  assert.match(fn, /it reads the header, it does not validate a signature/);
+  // Input is bounded three ways, and characters are counted in CODE POINTS so
+  // astral text cannot cost double what it counts.
+  assert.match(fn, /const CHAR_CAP = 2000;/);
+  assert.match(fn, /const MAX_ITEMS = 50;/);
+  assert.match(fn, /const MAX_ITEM_CHARS = 1000;/);
+  assert.match(fn, /return \[\.\.\.text\]\.length;/);
+  // No vendor text ever reaches the caller, and the body is not logged either.
+  assert.doesNotMatch(fn, /await upstream\.text\(\)/);
+  assert.match(fn, /console\.error\('\[translate\] upstream status', upstream\.status\)/);
+  // The secrets are read from the environment and never returned or named.
+  assert.match(fn, /Deno\.env\.get\('AZURE_TRANSLATOR_KEY'\)/);
+  assert.match(fn, /Deno\.env\.get\('AZURE_TRANSLATOR_REGION'\)/);
+
+  // tsconfig excludes supabase/functions, so a Deno file cannot break verify.
+  const tsconfig = JSON.parse(read('tsconfig.json'));
+  assert.ok(tsconfig.exclude.includes('supabase/functions'));
 });
 
 test('[static] the quick-reply row and its templates are gone from the whole tree', () => {

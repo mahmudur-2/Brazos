@@ -25,6 +25,7 @@ import { ChatBubble } from '../components/ChatBubble';
 import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DropMenu, type DropMenuItem } from '../components/DropMenu';
+import { TranslationSheet } from '../components/TranslationSheet';
 import { OfferCard } from '../components/OfferCard';
 import { PhotoViewer } from '../components/PhotoViewer';
 
@@ -61,7 +62,9 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
+import { TRANSLATION } from '../lib/featureFlags';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
+import { deviceLanguage, translateTexts, type TranslateResult } from '../lib/translate';
 import {
   EMPTY_RELATION,
   fetchRelation,
@@ -151,6 +154,10 @@ export function ChatScreen() {
   // they're tracked separately from ordinary chat photos.
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
+  // The translation sheet's own state. `null` while a request is in flight —
+  // the sheet reads that as "loading" and renders nothing else.
+  const [translateOpen, setTranslateOpen] = useState(false);
+  const [translateResult, setTranslateResult] = useState<TranslateResult | null>(null);
   // Whether this customer has already saved this worker. `null` while the read
   // is in flight, so the menu row never claims either state before it knows.
   const [savedWorker, setSavedWorker] = useState<boolean | null>(null);
@@ -606,6 +613,27 @@ export function ChatScreen() {
     if (user && counterpartyId) setRelation(await fetchRelation(user.id, counterpartyId));
   }
 
+  /**
+   * TRANSLATE, one message or the whole conversation.
+   *
+   * The two entries differ only in what they pass: one string, or every
+   * message this conversation currently has text for. Batching is deliberate
+   * — "Translate Conversation" is ONE request with N strings, which is one
+   * rate-limit decision on the server rather than N.
+   *
+   * The target is the DEVICE's language. It is read here rather than inside
+   * lib/translate so that module stays free of platform APIs and testable.
+   *
+   * Everything below is dark: the entry points are behind TRANSLATION, and
+   * the Edge Function is a DRAFT that has never been deployed. Every call
+   * would resolve `unavailable`, which is exactly what the sheet says.
+   */
+  async function runTranslation(texts: string[]) {
+    setTranslateResult(null);
+    setTranslateOpen(true);
+    setTranslateResult(await translateTexts(texts, deviceLanguage()));
+  }
+
   async function handleShareProfile() {
     if (!counterpartyId) return;
     const result = await shareProfileLink(counterpartyId, counterparty?.full_name);
@@ -943,6 +971,39 @@ export function ChatScreen() {
             setReplyTo(target);
           },
         },
+        // TRANSLATE — two entries, because "this message" and "this
+        // conversation" are different amounts of text and different amounts
+        // of money, and a user should choose rather than discover. Both are
+        // behind TRANSLATION: the Edge Function is a DRAFT and has never been
+        // deployed, so every call would resolve `unavailable`.
+        // Text only — there is nothing to translate in a photo or a voice note.
+        ...(TRANSLATION && menuTarget.content
+          ? [
+              {
+                key: 'translate-message',
+                label: 'Translate This Message',
+                icon: 'language-outline' as const,
+                onPress: () => {
+                  const text = menuTarget.content ?? '';
+                  setMenuTarget(null);
+                  void runTranslation([text]);
+                },
+              },
+              {
+                key: 'translate-conversation',
+                label: 'Translate Conversation',
+                icon: 'chatbubbles-outline' as const,
+                onPress: () => {
+                  setMenuTarget(null);
+                  void runTranslation(
+                    messages
+                      .filter((m) => !m.unsent_at && !!m.content)
+                      .map((m) => m.content as string)
+                  );
+                },
+              },
+            ]
+          : []),
         // Own messages only, and only inside the 15-minute window — see
         // canUnsend() in lib/messages.ts. The RPC re-checks both server-side
         // regardless of what this menu offers.
@@ -1457,6 +1518,12 @@ export function ChatScreen() {
         title="Message"
         items={messageMenuItems}
         onClose={() => setMenuTarget(null)}
+      />
+
+      <TranslationSheet
+        visible={translateOpen}
+        onClose={() => setTranslateOpen(false)}
+        result={translateResult}
       />
 
       <AmountPrompt
