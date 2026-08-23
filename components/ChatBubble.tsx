@@ -1,6 +1,8 @@
 import { Pressable, Image, StyleSheet, Text, View } from 'react-native';
 import { AvatarPressable } from './AvatarPressable';
+import { MessageTicks } from './MessageTicks';
 import { VoiceNote } from './VoiceNote';
+import { tickStateFor, type MessageDelivery } from '../lib/messageTicks';
 import {
   radius,
   shadows,
@@ -17,6 +19,12 @@ import type { Reaction } from '../lib/reactions';
 type ChatBubbleProps = {
   message: Message;
   isOwn: boolean;
+  /**
+   * What became of this message, when that is known. Absent — which is every
+   * message today — resolves to `sent`, the one state the current schema can
+   * prove. See lib/messageTicks.ts and the read-model verdicts in HANDOFF.md.
+   */
+  delivery?: MessageDelivery;
   senderName?: string | null;
   senderAvatarUrl?: string | null;
   reactions?: Reaction[];
@@ -33,6 +41,7 @@ type ChatBubbleProps = {
 export function ChatBubble({
   message,
   isOwn,
+  delivery,
   senderName,
   senderAvatarUrl,
   reactions = [],
@@ -132,9 +141,15 @@ export function ChatBubble({
               ) : null}
             </>
           )}
-          <Text style={[styles.time, isOwn && !isUnsent && styles.timeOwn]}>
-            {formatClockTime(message.created_at)}
-          </Text>
+          {/* The time, and — on your own message only — what became of it.
+              A tick on someone else's bubble would be claiming to know what
+              YOU did with THEIR message. */}
+          <View style={styles.metaRow}>
+            <Text style={[styles.time, isOwn && !isUnsent && styles.timeOwn]}>
+              {formatClockTime(message.created_at)}
+            </Text>
+            {isOwn && !isUnsent ? <MessageTicks state={tickStateFor(delivery ?? {})} /> : null}
+          </View>
         </View>
 
         {reactions.length > 0 && (
@@ -276,6 +291,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 14,
     fontStyle: 'italic',
     color: colors.textSubtle,
+  },
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
   },
   time: {
     fontSize: 11,

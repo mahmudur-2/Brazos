@@ -105,12 +105,55 @@ export const DELETE_CHAT = false as boolean;
 /**
  * Rewinding your OWN read position so a thread returns to the unread state.
  *
- * WAITS ON: an existing, client-callable path that can move a read position
- * BACKWARD. See the C10 read-model verdict in HANDOFF.md: the current
- * mark-read path is monotonic and one-way, so this stays dark until a
- * schema-side RPC accepts an explicit position.
+ * WAITS ON: a client-callable path that can move a read position BACKWARD on
+ * BOTH thread kinds. The verdict, measured against the repo's own migrations
+ * on 2026-08-23:
+ *
+ *   job threads     ALREADY REWINDABLE. message_reads_update_own
+ *                   (supabase/phase9_messages_inbox.sql) is
+ *                   `using (user_id = auth.uid())` with a matching check and
+ *                   no constraint on the VALUE, so a client may write an
+ *                   earlier last_read_at — which is exactly a rewind.
+ *   direct threads  NOT REWINDABLE. `direct_threads` has no INSERT or UPDATE
+ *                   policy at all by deliberate design, and the only writer,
+ *                   mark_direct_thread_read(), hard-codes `now()`
+ *                   (supabase/phase36_direct_offer_threads.sql).
+ *
+ * Half again, and flagged for the same reason: an inbox where Mark as Unread
+ * works on some rows and silently does nothing on others is worse than one
+ * where it is not offered. What the schema needs is a mark_direct_thread_read
+ * sibling that accepts an explicit timestamp, or an RPC that owns both
+ * surfaces so the client stops writing message_reads directly.
  */
 export const MARK_UNREAD = false as boolean;
+
+/**
+ * The GOLD (read) ticks on an own message.
+ *
+ * WAITS ON: a client-readable counterparty read position for JOB threads.
+ * The verdict, measured against the repo's own migrations on 2026-08-23 and
+ * carried in full by HANDOFF.md:
+ *
+ *   direct threads  ALREADY READABLE. `direct_threads` carries both parties'
+ *                   read columns on the row, and direct_threads_select_party
+ *                   (supabase/phase36_direct_offer_threads.sql) lets either
+ *                   participant SELECT that whole row — the other person's
+ *                   `user_a_read_at` / `user_b_read_at` included.
+ *   job threads     NOT READABLE. `message_reads` is per-user, and
+ *                   message_reads_select_own (supabase/phase9_messages_inbox.sql)
+ *                   is `using (user_id = auth.uid())` — a user can read only
+ *                   their OWN row.
+ *
+ * SO IT IS HALF-WIRED, WHICH IS WHY IT IS FLAGGED RATHER THAN SHIPPED. One
+ * conversation folds a pair's job threads AND their direct thread together
+ * (see `targets` in screens/ChatScreen.tsx), so wiring only the readable half
+ * would make the SAME conversation show gold on some bubbles and never on
+ * others — an absent tick would mean "not read yet" on one message and
+ * "unknowable here" on the next. What the schema needs is one of: a
+ * party-scoped select policy on message_reads, or a security-definer function
+ * returning the other party's last_read_at for a job the caller is party to.
+ */
+export const READ_TICKS = false as boolean;
 
 /**
  * The second (delivered) tick on an own message.
@@ -120,7 +163,9 @@ export const MARK_UNREAD = false as boolean;
  * distinguishes "the insert succeeded" from "the other device has it", and a
  * tick that means the former while looking like the latter is a lie. The tick
  * ELEMENT renders all three states and is unit-tested for all three; only the
- * live wiring waits.
+ * live wiring waits. This is the strictly harder half of [[READ_TICKS]]: read
+ * state at least EXISTS in the schema for one thread kind, and delivery
+ * exists for neither.
  */
 export const DELIVERED_TICKS = false as boolean;
 

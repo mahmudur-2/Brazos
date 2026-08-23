@@ -42,6 +42,7 @@ const RECORDER = 'hooks/useVoiceRecorder.ts';
 const CHAT = 'screens/ChatScreen.tsx';
 
 const meter = await import('../lib/audioMeter.ts');
+const ticks = await import('../lib/messageTicks.ts');
 
 test('[static] the composer is three zones, and every glyph is bare', () => {
   const flat = flatten(read(COMPOSER));
@@ -402,6 +403,81 @@ test('[static] the report sheet can block in the same breath, and says so when i
   assert.match(dialog, /if \(dismissTimer\.current\) clearTimeout\(dismissTimer\.current\);/);
   // The old fire-and-forget alert is gone.
   assert.doesNotMatch(dialog, /alertAsync\(\s*'Report sent'/);
+});
+
+// ---------------------------------------------------------------------------
+// THE DELIVERY TICKS — all three states drawn and tested, ONE of them wired.
+//
+// The element has to be able to draw all three long before two of them can be
+// produced from live data, or the day the schema lands is the day the UI gets
+// written under time pressure. The flags carry the verdicts; these carry the
+// behaviour.
+// ---------------------------------------------------------------------------
+
+test('[executed] the tick state is the strongest the evidence supports, never stronger', () => {
+  // SENT is the floor and the only state today's schema can prove.
+  assert.equal(ticks.tickStateFor({}), 'sent');
+  assert.equal(ticks.tickStateFor({ deliveredAt: null, readAt: null }), 'sent');
+  assert.equal(ticks.tickStateFor({ deliveredAt: undefined, readAt: undefined }), 'sent');
+
+  assert.equal(ticks.tickStateFor({ deliveredAt: '2026-08-23T10:00:00Z' }), 'delivered');
+  assert.equal(
+    ticks.tickStateFor({ deliveredAt: '2026-08-23T10:00:00Z', readAt: '2026-08-23T10:01:00Z' }),
+    'read'
+  );
+  // READ IMPLIES DELIVERED: a message someone opened reached their device by
+  // definition, so a gap in delivery plumbing must not silently downgrade a
+  // fact we actually know.
+  assert.equal(ticks.tickStateFor({ readAt: '2026-08-23T10:01:00Z' }), 'read');
+  // The reverse is NOT assumed.
+  assert.notEqual(ticks.tickStateFor({ deliveredAt: '2026-08-23T10:00:00Z' }), 'read');
+});
+
+test('[executed] the read watermark covers what it covers, and a missing one covers nothing', () => {
+  const at = '2026-08-23T12:00:00Z';
+  assert.equal(ticks.coveredByReadWatermark('2026-08-23T11:59:59Z', at), true);
+  assert.equal(ticks.coveredByReadWatermark(at, at), true, 'the boundary is inclusive');
+  assert.equal(ticks.coveredByReadWatermark('2026-08-23T12:00:01Z', at), false);
+  // A missing watermark reads as NOT READ, never as read — the direction that
+  // matters, because the other way round claims someone saw something.
+  assert.equal(ticks.coveredByReadWatermark(at, null), false);
+  assert.equal(ticks.coveredByReadWatermark(at, undefined), false);
+  assert.equal(ticks.coveredByReadWatermark(at, ''), false);
+});
+
+test('[static] the element draws all three states, own bubbles only, from palette tokens', () => {
+  const el = stripComments(read('components/MessageTicks.tsx'));
+  const bubble = stripComments(read('components/ChatBubble.tsx'));
+
+  // One tick for sent, two for the other two, gold for read.
+  assert.match(el, /const read = state === 'read';/);
+  assert.match(el, /const double = state !== 'sent';/);
+  assert.match(el, /const color = read \? colors\.gold : withAlpha\(colors\.onPrimary, 0\.75\);/);
+  // Palette tokens, not white literals: `onPrimary` at the same 0.75 the
+  // timestamp beside it uses IS what "white" means on a filled own-bubble.
+  assert.doesNotMatch(el, /#[0-9a-fA-F]{3,8}|'white'/, 'no colour literals in a tick');
+  // All three states are announced, so the mark is not sighted-only.
+  assert.match(el, /read \? 'Read' : state === 'delivered' \? 'Delivered' : 'Sent'/);
+
+  // OWN MESSAGES ONLY, and unsent messages carry no tick at all — there is
+  // nothing left to have delivered.
+  assert.match(bubble, /\{isOwn && !isUnsent \? <MessageTicks state=\{tickStateFor\(delivery \?\? \{\}\)\} \/> : null\}/);
+  // Absent delivery info resolves to `sent`, which is every message today.
+  assert.match(bubble, /delivery\?: MessageDelivery;/);
+});
+
+test('[static] the read-model verdicts are recorded where the next run will look', () => {
+  // The two flags this investigation produced must carry the EVIDENCE, not a
+  // shrug: the daytime schema run reads these to know what to build.
+  const flags = read('lib/featureFlags.ts');
+  assert.match(flags, /export const READ_TICKS = false as boolean;/);
+  // Read: readable on direct threads, not on job threads — both halves named
+  // with the migration that decides them.
+  assert.match(flags, /direct_threads_select_party/);
+  assert.match(flags, /message_reads_select_own/);
+  // Mark-as-unread: rewindable on job threads, not on direct threads.
+  assert.match(flags, /message_reads_update_own/);
+  assert.match(flags, /mark_direct_thread_read\(\), hard-codes `now\(\)`/);
 });
 
 test('[static] the quick-reply row and its templates are gone from the whole tree', () => {

@@ -308,13 +308,13 @@ test('[static] every feature flag is false and carries the dependency it waits o
   // nobody can ever safely flip, so the WAITS ON line is part of the flag.
   const source = read('lib/featureFlags.ts');
   const flags = [...source.matchAll(/export const (\w+) = (false|true) as boolean;/g)];
-  assert.equal(flags.length, 11, `the roster is eleven flags (saw ${flags.length})`);
+  assert.equal(flags.length, 12, `the roster is twelve flags (saw ${flags.length})`);
   assert.deepEqual(
     flags.map((f) => f[1]).sort(),
     [
       'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'DELIVERED_TICKS', 'DOCUMENTS',
-      'HIDDEN_CHATS', 'LIVE_LOCATION', 'MARK_UNREAD', 'MUTE', 'TIMED_BLOCK',
-      'TRANSLATION',
+      'HIDDEN_CHATS', 'LIVE_LOCATION', 'MARK_UNREAD', 'MUTE', 'READ_TICKS',
+      'TIMED_BLOCK', 'TRANSLATION',
     ],
     'the flag roster changed — say so in HANDOFF.md as well as here'
   );
