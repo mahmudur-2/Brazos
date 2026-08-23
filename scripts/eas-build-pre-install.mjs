@@ -50,12 +50,14 @@ import {
 /**
  * The one Supabase project each EAS BUILD PROFILE may build against. testflight
  * deliberately shares the production project — TestFlight binaries reach real
- * testers with real data — while development and preview stay on staging.
+ * testers with real data — while development, preview and share stay on staging.
+ * `share` is an ad hoc build for registered testers; its eas.json env already
+ * carries the staging URL and key, and it must never be pinned to production.
  * A profile absent from this map is refused outright.
  *
  * "preview" MEANS TWO DIFFERENT THINGS. Keys here are EAS_BUILD_PROFILE, i.e.
- * `eas.json`'s `build` block — which as of 2026-08-16 declares only
- * `development`, `testflight` and `production`. There is NO preview build
+ * `eas.json`'s `build` block — which as of 2026-08-23 declares only
+ * `development`, `share`, `testflight` and `production`. There is NO preview build
  * profile; the entry below is unreachable today and is kept only so adding one
  * cannot land unpinned. Separately, EAS *environments* are their own namespace,
  * and the environment named `preview` holds PRODUCTION credentials — it is what
@@ -67,6 +69,7 @@ import {
 export const EXPECTED_REF = Object.freeze({
   development: STAGING_REF,
   preview: STAGING_REF,
+  share: STAGING_REF,
   testflight: PRODUCTION_REF,
   production: PRODUCTION_REF,
 });

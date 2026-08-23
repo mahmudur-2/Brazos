@@ -165,12 +165,13 @@ test('a key in neither format fails closed — sb_secret_ never ships in a clien
   }
 });
 
-test('every profile in the expected-ref map is one of the four known profiles', () => {
+test('every profile in the expected-ref map is one of the five known profiles', () => {
   assert.deepEqual(
     Object.keys(EXPECTED_REF).sort(),
-    ['development', 'preview', 'production', 'testflight']
+    ['development', 'preview', 'production', 'share', 'testflight']
   );
   assert.equal(EXPECTED_REF.preview, STAGING);
+  assert.equal(EXPECTED_REF.share, STAGING);
   assert.equal(EXPECTED_REF.testflight, PRODUCTION);
 });
 
@@ -213,8 +214,10 @@ test('the share profile is a standalone staging build on its own channel', () =>
   );
 
   // The env block is the development profile's, copied verbatim: same staging
-  // project, same anon key, so a tester build can never reach production.
-  assert.equal(share.env.SUPABASE_URL, urlFor(STAGING));
+  // project, same anon key, so a tester build can never reach production. The
+  // URL is checked against the gate's own pin for `share`, so eas.json and
+  // scripts/eas-build-pre-install.mjs can never drift apart.
+  assert.equal(share.env.SUPABASE_URL, urlFor(EXPECTED_REF.share));
   assert.deepEqual(share.env, eas.build.development.env);
   assert.equal(text.includes(PRODUCTION), false, 'no production ref in eas.json');
 
