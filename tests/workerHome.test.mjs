@@ -61,6 +61,19 @@ test("the search field mirrors the locked 48's dispatch and sits above the toggl
   const card = screen.indexOf('styles.summaryCard');
   assert.ok(greeting > 0 && hero > greeting && search > hero && card > search,
     'the search field must sit between the hero block and the summary card');
+
+  // 2026-08-23 — THE FIELD IS OUTLINED, NOT A FLOATING CARD, and this screen
+  // keeps its own copy of the style, which is exactly why it was missed when
+  // the customer field was fixed. `colors.surface` + `shadows.card` is a white
+  // elevated card in light (#FFFFFF on a #F4F1E8 ground) and very nearly
+  // nothing in dark, because a #10261D shadow at 0.08 opacity over #02110D has
+  // no contrast to spend. That is two designs sharing one token, not one
+  // design in two palettes.
+  const field = /searchField: \{([^}]*)\}/.exec(screen)[1];
+  assert.match(field, /backgroundColor: 'transparent'/, 'the field must not carry a fill');
+  assert.doesNotMatch(field, /shadows\.card|elevation|shadowOpacity/, 'an outlined field does not float');
+  assert.match(field, /borderWidth: 1/);
+  assert.match(field, /borderColor: colors\.border/, 'the hairline is the palette border in both themes');
 });
 
 test('the category pills mirror customer Home and land on WorkerResults seeded', async () => {

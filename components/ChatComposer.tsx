@@ -455,7 +455,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // beneath it, that screen's own SafeAreaView should own the inset instead
     // of this component guessing at it.
     paddingBottom: spacing.sm,
-    backgroundColor: colors.surface,
+    // 2026-08-23 — NO BAND. This was `colors.surface`, which is #FFFFFF in
+    // light against a #F4F1E8 thread and #0A1813 in dark against a #02110D
+    // one: a full-width white bar under the composer in one theme and a step
+    // too small to see in the other. Same token, two different designs, which
+    // is the thing light-mode parity exists to catch.
+    //
+    // The band is not load-bearing. Everything in this row draws its own edge
+    // — the input is an outlined pill (colors.border), the recording pill is
+    // an emerald hairline on an emerald wash — so the row can sit on the
+    // thread ground and the recorder floats on it in BOTH themes.
+    backgroundColor: 'transparent',
   },
   iconBtn: {
     width: COMPOSER_CONTROL_SIZE,

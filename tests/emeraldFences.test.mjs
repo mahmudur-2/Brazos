@@ -991,11 +991,23 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   assert.match(home, /heroSubtitle: \{ maxWidth: '73%', marginTop: 10, fontSize: 14,/);
   assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.onForest \}/);
   // The remaining *Dark styles on the customer Home are colour-only.
+  //
+  // 2026-08-23: DEPTH joins layout in this list. A theme override that adds or
+  // removes a shadow is the same class of fault as one that moves a number —
+  // it makes light a different design rather than the same design in a second
+  // palette — and it is the fault the device walk found twice outside this
+  // screen (the worker Home search field, the composer's band). Neither could
+  // have been caught here, so the rule is written down where the pairs are.
   for (const dark of home.matchAll(/(\w+Dark): \{([^}]*)\}/g)) {
     assert.doesNotMatch(
       dark[2],
       /width|height|padding|margin|font|line|gap|radius|top:|right:|left:|bottom:|maxWidth|minHeight|borderWidth/,
       `${dark[1]} must carry colours only — layout is one set of numbers for both themes`
+    );
+    assert.doesNotMatch(
+      dark[2],
+      /shadow|elevation/,
+      `${dark[1]} changes DEPTH per theme — elevation is one set of numbers for both themes`
     );
   }
 

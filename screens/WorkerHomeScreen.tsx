@@ -631,6 +631,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // The locked 48's searchField/searchDivider, value for value — laid over
   // the shared SearchBar's own field so the mirror's geometry wins; the
   // input styling inside now rides SearchBar itself.
+  // 2026-08-23 — THE SAME OUTLINE THE CUSTOMER FIELD GOT, and it was missed
+  // here because this screen keeps its own copy of the style rather than
+  // sharing one. `colors.surface` plus `shadows.card` is a WHITE ELEVATED CARD
+  // in light and very nearly nothing in dark, since a #10261D shadow at 0.08
+  // opacity over a forest ground has almost no contrast to spend — so the two
+  // themes were not one design in two palettes, they were an outlined field
+  // and a floating card. Light is a RECOLOUR of dark, so the fill and the
+  // elevation go and the border carries the field in both:
+  //   fill    colors.surface -> transparent
+  //   depth   shadows.card removed. An outlined field does not float.
+  //   edge    colors.mint2 -> colors.border, the same warm hairline the
+  //           customer field reads against its own ground.
   searchField: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -639,9 +651,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.lg,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.mint2,
-    backgroundColor: colors.surface,
-    ...shadows.card,
+    borderColor: colors.border,
+    backgroundColor: 'transparent',
   },
   searchDivider: {
     width: 1,

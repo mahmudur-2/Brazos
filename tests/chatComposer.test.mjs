@@ -604,6 +604,41 @@ test('[executed] every pill has its OWN empty state, and each one is true', () =
   assert.equal(inbox.emptyStateFor('support').title, 'Support coming soon');
 });
 
+test('[static] the composer row sits on the thread, not on a band of its own', () => {
+  // The device walk: the voice-recording bar in light sat on a full-width
+  // WHITE band; dark appeared to have none. One token, `colors.surface`, doing
+  // two different things — #FFFFFF against a #F4F1E8 thread reads as a bar,
+  // #0A1813 against #02110D is a step too small to see. Light must be dark's
+  // palette, not dark's design plus a bar.
+  const composer = stripComments(read(COMPOSER));
+  const row = /\n  row: \{([^}]*)\}/.exec(composer);
+  assert.ok(row, 'the composer row style must exist');
+  assert.match(
+    row[1],
+    /backgroundColor: 'transparent'/,
+    'the row must show the thread ground, so the recorder floats in both themes',
+  );
+  assert.doesNotMatch(
+    row[1],
+    /backgroundColor: colors\.surface/,
+    'the band is what made light a different design',
+  );
+
+  // Removing the band is only safe because everything IN the row draws its own
+  // edge. If either of these loses its outline the field stops being findable
+  // on a groundless row, so they are pinned here with the removal.
+  assert.match(
+    /\n  input: \{([^}]*)\}/.exec(composer)[1],
+    /borderWidth: 1,[^]*borderColor: colors\.border/,
+    'the input must stay an outlined pill',
+  );
+  assert.match(
+    /recordingPill: \{([^}]*)\}/.exec(composer)[1],
+    /borderWidth: 1,\s*borderColor: withAlpha\(colors\.emerald/,
+    'the recording pill must stay an emerald hairline',
+  );
+});
+
 test('[executed] one slot, so opening either menu closes the other', () => {
   // The defect this encodes: the header dropdown and the composer drop-up each
   // had their own boolean, and a device walk photographed both panels open at
