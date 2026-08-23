@@ -43,18 +43,47 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-23 worklets-peer run (RUN B0)
+## Current state — after the 2026-08-23 share-profile run (RUN B1)
 
-Two commits, in order:
+One commit:
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`9e3de06`|a `share` build profile in `eas.json` — internal distribution, no dev client, its own `internal` update channel, `development`'s staging env copied verbatim — plus a fence in `tests/buildGate.test.mjs`|
+
+The offline suite stands at **926 pass / 0 fail / 0 skipped**, bare
+`npm run verify` exit 0 (from 925 at run start: +1, none retired). Branch and
+commit state are Git's to report, never this file's.
+
+### THE `share` PROFILE CANNOT BUILD YET — one operator decision
+
+`scripts/eas-build-pre-install.mjs` runs as the `eas-build-pre-install` npm
+hook on every EAS build, and it refuses outright any profile absent from its
+`EXPECTED_REF` map — which holds exactly `development`, `preview`,
+`testflight` and `production`. So `eas build --profile share` fails closed at
+pre-install with `unknown profile "share"`. That is the safe direction, and it
+is the gate working as designed, but the new profile is inert until it is
+pinned. The gate's own comment says the unreachable `preview` row is kept
+"only so adding one cannot land unpinned" — this is the case it was written
+for.
+
+The fix is two lines, and this run's scope did not include them: add
+`share: STAGING_REF` to `EXPECTED_REF`, and add `'share'` to the expected key
+list in `tests/buildGate.test.mjs`'s "every profile in the expected-ref map"
+test — an expected-constant update, not a fence weakening. Staging is the
+right pin: the profile's `env` block is `development`'s, byte for byte, and
+the new fence asserts the production ref appears nowhere in `eas.json`.
+Neither line was written, because pinning a build profile to a Supabase
+project is a control decision rather than a mechanical one.
+
+### The run before this one (RUN B0) — its two commits, carried forward
 
 | # | commit | what landed |
 |-|-|-|
 |C1|`b0fd37b`|`react-native-worklets` is DECLARED at 0.5.1, and `babel.config.js` stops naming a plugin the preset already adds|
 |C2|`15f6f4c`|a resolvability fence in `tests/motion120.test.mjs` — four tests that open the packages Run A's scan can only name|
 
-The offline suite stands at **925 pass / 0 fail / 0 skipped**, bare
-`npm run verify` exit 0 (from 921 at run start: +4, none retired). Branch and
-commit state are Git's to report, never this file's.
+The suite was 925/0 at the end of that run.
 
 ### THE DEVICE BUNDLE FAILURE WAS A STALE METRO CACHE — closed
 
@@ -406,7 +435,14 @@ so that is the name the product implies, not a domain any run could verify.
 Share Profile is LIVE and emits that URL. Confirm or register it, or change the
 constant, before anything ships to TestFlight. It is one line.
 
-### Device checks OWED for THIS run (operator, physical device)
+**5. PIN `share` IN THE BUILD GATE — two lines, see the section at the top of
+this file.** Until `EXPECTED_REF` in `scripts/eas-build-pre-install.mjs` names
+`share`, the profile added this run cannot build: the pre-install hook refuses
+it as an unknown profile. Decide the pin (staging is what the profile's env
+implies) and the same edit updates the expected key list in
+`tests/buildGate.test.mjs`.
+
+### Device checks OWED from RUN B0 (operator, physical device)
 
 None of this run's work has been seen on a device, and the four fast paths
 cannot be seen until the build. In rough order of risk:
