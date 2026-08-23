@@ -37,6 +37,8 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 
 const COMPOSER = 'components/ChatComposer.tsx';
 const DROPMENU = 'components/DropMenu.tsx';
+const DROPMENU_SHARED = 'components/DropMenu.shared.tsx';
+const DROPMENU_FAST = 'components/DropMenu.motion120.tsx';
 const METER = 'components/AudioMeterBars.tsx';
 const RECORDER = 'hooks/useVoiceRecorder.ts';
 const CHAT = 'screens/ChatScreen.tsx';
@@ -157,19 +159,36 @@ test('[static] the drop-up is the shared DropMenu, on the boundary timings', () 
   // ONE menu for the app — the composer's drop-up, the chat header's dropdown
   // and the inbox row's actions. Three of these written three times would be
   // three tempos.
-  assert.match(menu, /import \{ MENU_MOTION_MS, MENU_MOTION_OUT_MS \} from '\.\.\/lib\/motion120';/);
+  //
+  // 2026-08-23 — THE MENU SPLIT INTO TWO DRIVERS AND ONE BODY. DropMenu.tsx
+  // still holds the core-Animated fallback, DropMenu.motion120.tsx holds the
+  // worklet-spring fast path, and everything a user can NAME — items,
+  // backdrop, geometry, colours, dismissal — moved to DropMenu.shared.tsx so
+  // the two binaries cannot drift into two menus. These assertions moved with
+  // the code they describe; none of them was dropped.
+  const shared = stripComments(read(DROPMENU_SHARED));
+
+  assert.match(menu, /MENU_MOTION_MS,\s*MENU_MOTION_OUT_MS,/);
+  assert.match(menu, /from '\.\.\/lib\/motion120'/);
   assert.match(menu, /duration: reducedMotion \? 0 : visible \? MENU_MOTION_MS : MENU_MOTION_OUT_MS/);
   assert.match(menu, /useNativeDriver: USE_NATIVE_DRIVER/);
   // It grows FROM the anchor in both directions, so the origin of the motion
-  // is the button either way.
-  assert.match(menu, /const travel = direction === 'up' \? 8 : -8;/);
+  // is the button either way — and the travel is stated ONCE, in the shared
+  // module, so both drivers move the same distance.
+  assert.match(shared, /export const PANEL_TRAVEL = 8;/);
+  assert.match(
+    shared,
+    /return direction === 'up' \? PANEL_TRAVEL : -PANEL_TRAVEL;/,
+    'the direction rule belongs to both paths',
+  );
+  assert.match(menu, /const travel = panelTravelFor\(direction\);/);
   // Kept mounted through the exit, or every dismissal is a hard cut.
   assert.match(menu, /if \(finished && !visible\) setMounted\(false\);/);
   // Outside-tap dismissal exists and is announced.
-  assert.match(menu, /accessibilityLabel=\{closeLabel\}/);
+  assert.match(shared, /accessibilityLabel=\{closeLabel\}/);
   // Rows meet the touch floor by their DRAWN height — adjacent rows with
   // overlapping hitSlop would steal each other's taps.
-  assert.match(menu, /minHeight: 46,/);
+  assert.match(shared, /minHeight: 46,/);
 });
 
 // ---------------------------------------------------------------------------
@@ -786,11 +805,21 @@ test('[static] both chat menus read the one owner, and nothing keeps a private c
 
   // THE OUTSIDE TAP. It is DropMenu's own backdrop, and it dismisses — this is
   // where "tap outside closes" actually lives, for both menus at once.
+  // It lives in DropMenu.shared.tsx since the driver split, which is the point
+  // of that file: BOTH paths dismiss through the same backdrop rather than
+  // each growing one.
   assert.match(
-    stripComments(read(DROPMENU)),
+    stripComments(read(DROPMENU_SHARED)),
     /<Pressable\s+style=\{\[styles\.backdrop[^]*?onPress=\{onClose\}/,
     'the backdrop must dismiss the menu',
   );
+  for (const path of [DROPMENU, DROPMENU_FAST]) {
+    assert.match(
+      stripComments(read(path)),
+      /<DropMenuBackdrop direction=\{direction\} onClose=\{onClose\} closeLabel=\{closeLabel\} \/>/,
+      `${path} must mount the shared backdrop, not one of its own`,
+    );
+  }
 
   // THE DISMISSALS THAT ARE NOT TAPS, and the teardown that clears on unmount.
   assert.match(chat, /Keyboard\.addListener\('keyboardDidShow', closeMenus\)/);
@@ -903,13 +932,15 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
 
   // MUTE IS LIVE and always was — `mutes` has shipped since phase13. It is not
   // flagged, and flagging it would have hidden working behaviour.
-  assert.match(screen, /label: sheetTarget\.muted \? 'Unmute' : 'Mute'/);
+  // The labels now read a `target` because the action model became a function
+  // both mechanics call — see the swipe fence below. Same rule, one caller.
+  assert.match(screen, /label: target\.muted \? 'Unmute' : 'Mute'/);
   assert.doesNotMatch(screen, /\bMUTE\b/, 'the retired MUTE flag must not come back');
 
   // The PERMANENT block stays exactly where it lives today, in the first
   // sheet. The timed variant is a separate, flagged row so shipping it cannot
   // quietly change what the existing one does.
-  assert.match(screen, /key: 'block',\s*label: sheetTarget\.blocking \? 'Unblock' : 'Block'/);
+  assert.match(screen, /key: 'block',\s*label: target\.blocking \? 'Unblock' : 'Block'/);
   assert.match(screen, /if \(TIMED_BLOCK\) \{/);
   assert.match(screen, /key: 'block-timed'/);
 

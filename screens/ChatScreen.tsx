@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Animated,
   FlatList,
   Image,
   Keyboard,
@@ -35,7 +34,7 @@ import { ReactionPicker } from '../components/ReactionPicker';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversationChat } from '../hooks/useConversationChat';
-import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
+import { KeyboardRisingColumn } from '../components/KeyboardRisingColumn';
 import { useJob } from '../hooks/useJob';
 import { useReactions } from '../hooks/useReactions';
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder';
@@ -119,14 +118,6 @@ export function ChatScreen() {
   // emerald(3): the floating pill's real footprint. The Messages thread was on
   // the device pass's list.
   const navClearance = useFloatingNavClearance();
-  // The composer column's rise, as a NATIVE-DRIVEN transform rather than the
-  // KeyboardAvoidingView padding it replaces. See hooks/useKeyboardOffset.ts
-  // for why padding could not be made smooth: it is a layout property, so
-  // every frame of the keyboard's rise re-ran Yoga over the whole column —
-  // list, cells, reply chip, composer — on the JS thread, competing with the
-  // FlatList's own windowing. The clearance is passed in so the column lands
-  // ON the keyboard instead of a nav-pill's height above it.
-  const keyboardRise = useKeyboardOffset(navClearance);
   // Chat is nested in more than one tab's stack, so its nav/route types are
   // declared standalone (ChatRouteParamList) rather than tied to one parent
   // stack — it only needs goBack() and its own params.
@@ -1276,7 +1267,7 @@ export function ChatScreen() {
             appearing tends to trigger.
             The keyboardVerticalOffset note the padding version carried is void
             with it: there is no frame arithmetic left to get wrong. */}
-        <Animated.View
+        <KeyboardRisingColumn
           // emerald(3): the whole chat column clears the floating pill, not just
           // the composer — the bottom-most element here is the composer, the
           // locked notice or the blocked notice depending on state, and putting
@@ -1287,11 +1278,13 @@ export function ChatScreen() {
           // ...and the rise SUBTRACTS that clearance, because the keyboard
           // covers the pill completely once it is up. That dead band above the
           // keyboard is a bug the padding version always had.
-          style={[
-            styles.flex,
-            { paddingBottom: navClearance },
-            { transform: [{ translateY: Animated.multiply(keyboardRise, -1) }] },
-          ]}
+          //
+          // 2026-08-23: the transform and the clearance moved INTO this
+          // component so a reanimated build can track the keyboard's live
+          // height instead of imitating its curve. The fallback is the same
+          // native-driver rise this screen has had; see the component.
+          insetBelow={navClearance}
+          style={styles.flex}
         >
           {loading || (threadsLoading && targets.length === 0) ? (
             <View style={styles.center}>
@@ -1524,7 +1517,7 @@ export function ChatScreen() {
               />
             </>
           )}
-        </Animated.View>
+        </KeyboardRisingColumn>
       </View>
 
       <ReactionPicker

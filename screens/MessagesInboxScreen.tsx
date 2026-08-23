@@ -14,6 +14,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
+import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ReportDialog } from '../components/ReportDialog';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -394,32 +395,83 @@ export function MessagesInboxScreen() {
   // conversation that is no longer there.
   const sheetTarget = useMemo(() => resolveSheetTarget(rows, sheetUserId), [rows, sheetUserId]);
 
+  /**
+   * THE ONE ACTION MODEL, built from a live target.
+   *
+   * Both entry mechanics consume this: the long-press ActionSheet renders the
+   * whole list, and the swipe surface renders three of its entries as tiles.
+   * Neither writes a handler of its own — an action reachable one way and not
+   * the other, or behaving differently depending on how it was reached, is two
+   * apps rather than one with two mechanics.
+   */
+  const actionsFor = useCallback(
+    (target: SheetTarget): ActionSheetItem[] => [
+      {
+        key: 'mute',
+        label: target.muted ? 'Unmute' : 'Mute',
+        icon: target.muted ? 'notifications' : 'notifications-off-outline',
+        onPress: () => toggleMute(target),
+      },
+      {
+        key: 'block',
+        label: target.blocking ? 'Unblock' : 'Block',
+        icon: target.blocking ? 'lock-open-outline' : 'ban-outline',
+        destructive: !target.blocking,
+        onPress: () => toggleBlock(target),
+      },
+      {
+        key: 'report',
+        label: 'Report',
+        icon: 'flag-outline',
+        destructive: true,
+        onPress: () => {
+          setSheetUserId(null);
+          setReportTarget(target);
+        },
+      },
+    ],
+    // toggleMute/toggleBlock are declared below as plain functions and are
+    // stable for a render; the target carries everything else they read.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  /**
+   * THE SWIPE'S THREE TILES — Mute, Report, and a gold overflow that opens the
+   * very sheet a long press would have opened. Block is deliberately NOT a
+   * tile: it is the destructive one, it confirms, and a tile a thumb can reach
+   * by accident is the wrong place for it. It stays one tap away, inside More.
+   *
+   * Every tile's handler is taken from `actionsFor` by key, so there is no
+   * second implementation to drift.
+   */
+  const swipeActionsFor = useCallback(
+    (userId: string): SwipeAction[] => {
+      const target = resolveSheetTarget(rows, userId);
+      if (!target) return [];
+      const model = actionsFor(target);
+      const byKey = (key: string) => model.find((item) => item.key === key);
+      const mute = byKey('mute');
+      const report = byKey('report');
+      const tiles: SwipeAction[] = [];
+      if (mute) tiles.push({ ...mute });
+      if (report) tiles.push({ ...report });
+      tiles.push({
+        key: 'more',
+        label: 'More',
+        icon: 'ellipsis-horizontal',
+        tone: 'gold',
+        // The SAME sheet the long press opens, on the same live target.
+        onPress: () => setSheetUserId(userId),
+      });
+      return tiles;
+    },
+    [rows, actionsFor]
+  );
+
   const sheetItems: ActionSheetItem[] = sheetTarget
     ? [
-        {
-          key: 'mute',
-          label: sheetTarget.muted ? 'Unmute' : 'Mute',
-          icon: sheetTarget.muted ? 'notifications' : 'notifications-off-outline',
-          onPress: () => toggleMute(sheetTarget),
-        },
-        {
-          key: 'block',
-          label: sheetTarget.blocking ? 'Unblock' : 'Block',
-          icon: sheetTarget.blocking ? 'lock-open-outline' : 'ban-outline',
-          destructive: !sheetTarget.blocking,
-          onPress: () => toggleBlock(sheetTarget),
-        },
-        {
-          key: 'report',
-          label: 'Report',
-          icon: 'flag-outline',
-          destructive: true,
-          onPress: () => {
-            const target = sheetTarget;
-            setSheetUserId(null);
-            setReportTarget(target);
-          },
-        },
+        ...actionsFor(sheetTarget),
         // MORE renders only if it would have something in it. Every row it
         // holds is flag-gated and every flag is false, so today it does not
         // render at all — an empty second sheet behind a visible button is
@@ -508,6 +560,12 @@ export function MessagesInboxScreen() {
           data={visibleRows}
           keyExtractor={(item) => item.key}
           renderItem={({ item }) => (
+            // TWO MECHANICS, ONE ACTION MODEL. On a build with gesture-handler
+            // this reveals Mute / Report / More on a swipe left; on every build
+            // shipped so far it renders the row unwrapped and the long press
+            // below is the only entry. Both take their actions from
+            // `actionsFor`, so neither can offer something the other cannot.
+            <SwipeableRow actions={swipeActionsFor(item.otherId)} enabled={!item.isSelf}>
             <ConversationRow
               name={item.name}
               avatarUrl={item.avatarUrl}
@@ -535,6 +593,7 @@ export function MessagesInboxScreen() {
               }
               accessibilityHint={item.isSelf ? undefined : rowActionHint}
             />
+            </SwipeableRow>
           )}
           contentContainerStyle={
             visibleRows.length === 0

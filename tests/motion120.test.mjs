@@ -275,12 +275,48 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   // animated module. It cannot be tuned smooth, so it is gone from this
   // screen — replaced, not merely removed.
   assert.doesNotMatch(chat, /KeyboardAvoidingView/, 'the padding path must not come back to chat');
-  assert.match(chat, /const keyboardRise = useKeyboardOffset\(navClearance\);/);
-  assert.match(
+
+  // 2026-08-23 — THE RISE MOVED INTO A COMPONENT, because the seam had to. A
+  // `.motion120` sibling for the HOOK is impossible: the fallback yields a
+  // core `Animated.Value` and the fast path a reanimated shared value, and
+  // neither animated view can consume the other's, so a hook seam would hand
+  // the caller a value whose type depended on the binary. The swappable unit
+  // is therefore the animated view itself. The screen names the clearance and
+  // nothing else; the assertions below moved to the component that now owns
+  // the transform, and none was dropped.
+  assert.match(chat, /<KeyboardRisingColumn/);
+  assert.match(chat, /insetBelow=\{navClearance\}/);
+  assert.doesNotMatch(
     chat,
+    /useKeyboardOffset/,
+    'the screen must go through the component seam, not reach past it',
+  );
+
+  const column = stripComments(read('components/KeyboardRisingColumn.tsx'));
+  assert.match(column, /const keyboardRise = useKeyboardOffset\(insetBelow\);/);
+  assert.match(
+    column,
     /transform: \[\{ translateY: Animated\.multiply\(keyboardRise, -1\) \}\]/,
     'the column must rise on a transform — the one thing the native driver can carry'
   );
+  // The clearance is applied on the SAME view that rises, in both paths, or
+  // the two binaries lay out differently.
+  const fast = stripComments(read('components/KeyboardRisingColumn.motion120.tsx'));
+  for (const [path, source] of [['fallback', column], ['motion120', fast]]) {
+    assert.match(
+      source,
+      /\{ paddingBottom: insetBelow \}/,
+      `the ${path} path must carry the clearance on the rising view`,
+    );
+  }
+  // ONE rise arithmetic, shared. A column that stopped at a different height
+  // on one binary than the other is the drift the boundary exists to prevent.
+  assert.match(
+    stripComments(read('components/KeyboardRisingColumn.shared.tsx')),
+    /return Math\.max\(0, keyboardHeight - insetBelow\);/,
+  );
+  assert.match(fast, /riseFor\(keyboard\.height\.value, insetBelow\)/);
+  assert.match(fast, /useAnimatedKeyboard\(\)/, 'the fast path tracks the keyboard, it does not imitate it');
   // The clip is load-bearing: a transformed child draws outside its parent's
   // box, and this column is a LATER sibling than the header, so without it
   // the messages paint over the header as they rise.
@@ -296,7 +332,7 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   assert.match(hook, /duration: event\?\.duration && event\.duration > 0 \? event\.duration : KEYBOARD_FALLBACK_MS/);
   assert.match(hook, /Platform\.OS === 'ios' \? 'keyboardWillShow' : 'keyboardDidShow'/);
   assert.match(hook, /Platform\.OS === 'ios' \? 'keyboardWillHide' : 'keyboardDidHide'/);
-  assert.match(hook, /Math\.max\(0, event\.endCoordinates\.height - inset\.current\)/);
+  assert.match(hook, /riseFor\(event\.endCoordinates\.height, inset\.current\)/);
   // Listeners are removed. A keyboard listener that outlives its screen drives
   // an Animated.Value nothing is rendering.
   assert.match(hook, /show\.remove\(\);\s*hide\.remove\(\);/);
@@ -398,4 +434,255 @@ test('[static] every feature flag either gates something or says plainly that it
   // every flag look unguarded and still pass the loop above.
   assert.ok(gated >= 8, `most flags do gate something (saw ${gated})`);
   assert.equal(declared, 2, `exactly the two tick flags gate nothing today (saw ${declared})`);
+});
+
+// ===========================================================================
+// THE FAST-PATH SIBLINGS — 2026-08-23, once the natives were installed.
+//
+// Four surfaces gained a `.motion120` sibling. None is reachable on the
+// operator's current build: the packages are in package.json and node_modules
+// but NOT in the dev build, so both capabilities still resolve false and every
+// surface runs its fallback. That is the designed state, not a degraded one.
+//
+// What these tests can and cannot do. They cannot render a worklet — there is
+// no native module here and no renderer under `node --test`. What they CAN do
+// is exercise the CHOOSER with the vendor present and absent, which is the
+// decision the whole arrangement rests on, and hold each sibling to the same
+// contract as its fallback by reading both. A fast path that drifts from its
+// fallback fails here rather than on a device nobody has yet.
+// ===========================================================================
+
+/** Every fast path, with the fallback it must match and the capability it needs. */
+const SIBLINGS = [
+  {
+    name: 'DropMenu',
+    fallback: 'components/DropMenu.tsx',
+    fast: 'components/DropMenu.motion120.tsx',
+    shared: 'components/DropMenu.shared.tsx',
+    needs: 'reanimated',
+  },
+  {
+    name: 'SwipeableRow',
+    fallback: 'components/SwipeableRow.tsx',
+    fast: 'components/SwipeableRow.motion120.tsx',
+    shared: 'components/SwipeableRow.shared.tsx',
+    needs: 'gestures',
+  },
+  {
+    name: 'KeyboardRisingColumn',
+    fallback: 'components/KeyboardRisingColumn.tsx',
+    fast: 'components/KeyboardRisingColumn.motion120.tsx',
+    shared: 'components/KeyboardRisingColumn.shared.tsx',
+    needs: 'reanimated',
+  },
+];
+
+test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
+  // THE DECISION, run both ways, for each surface.
+  for (const { name, needs } of SIBLINGS) {
+    const present = { reanimated: true, gestures: true };
+    const absent = { reanimated: false, gestures: false };
+
+    assert.equal(
+      pure.resolveMotion120(present, needs, () => 'fast', 'fallback'),
+      'fast',
+      `${name} must take its fast path when ${needs} is present`
+    );
+    assert.equal(
+      pure.resolveMotion120(absent, needs, () => 'fast', 'fallback'),
+      'fallback',
+      `${name} must take its fallback when ${needs} is absent`
+    );
+    // GUARDED, not merely conditional: a sibling that throws on require — a
+    // half-present native module, a bad build — is a fast path this binary
+    // does not have, never a crash on the startup path.
+    assert.equal(
+      pure.resolveMotion120(
+        present,
+        needs,
+        () => {
+          throw new Error('native module missing');
+        },
+        'fallback'
+      ),
+      'fallback',
+      `${name} must survive a throwing sibling`
+    );
+    // And the loader is not called AT ALL without the capability, which is
+    // what keeps an unimportable module unimported.
+    let called = false;
+    pure.resolveMotion120(
+      absent,
+      needs,
+      () => {
+        called = true;
+        return 'fast';
+      },
+      'fallback'
+    );
+    assert.equal(called, false, `${name} must not even attempt the require without ${needs}`);
+  }
+});
+
+test('[static] each fast path is paired with a fallback, and neither owns the shared body', () => {
+  for (const { name, fallback, fast, shared, needs } of SIBLINGS) {
+    const fallbackSource = stripComments(read(fallback));
+    const fastSource = stripComments(read(fast));
+
+    // THE PAIRING. The fallback chooses, through the boundary, on the
+    // capability it actually needs, with a LITERAL require — Metro resolves
+    // requires at bundle time, so a path built from a string would not
+    // resolve at all.
+    assert.match(
+      fallbackSource,
+      /resolveMotion120</,
+      `${name}'s fallback must choose through the boundary`
+    );
+    assert.match(
+      fallbackSource,
+      new RegExp(`'${needs}'`),
+      `${name} must ask for the capability it actually needs`
+    );
+    assert.match(
+      fallbackSource,
+      /require\('\.\/[\w.]+\.motion120'\)/,
+      `${name} must write its require as a literal`
+    );
+
+    // ONLY the fast path names a vendor package. A fallback that imported one
+    // would take the app down on the startup path of a binary without it.
+    for (const pkg of VENDOR_PACKAGES) {
+      assert.ok(
+        !new RegExp(`from '${pkg}'`).test(fallbackSource),
+        `${name}'s fallback must not import ${pkg}`
+      );
+    }
+    assert.ok(
+      VENDOR_PACKAGES.some((pkg) => new RegExp(`from '${pkg}'`).test(fastSource)),
+      `${name}'s fast path exists to use a vendor package and does not`
+    );
+
+    // THE SHARED BODY. Everything a user can name lives in one file both
+    // paths import, so the two binaries cannot drift into two components.
+    const sharedImport = shared.replace('components/', './').replace('.tsx', '');
+    for (const [label, source] of [
+      ['fallback', fallbackSource],
+      ['fast', fastSource],
+    ]) {
+      assert.ok(
+        source.includes(`from '${sharedImport}'`),
+        `${name}'s ${label} must take its body from ${shared}`
+      );
+    }
+  }
+});
+
+test('[static] the DropMenu fast path matches its fallback where a user can tell', () => {
+  const fast = stripComments(read('components/DropMenu.motion120.tsx'));
+  const shared = stripComments(read('components/DropMenu.shared.tsx'));
+
+  // Same items, same backdrop, same dismissal — all from the shared module.
+  assert.match(fast, /<DropMenuItems items=\{items\} onClose=\{onClose\} \/>/);
+  assert.match(fast, /<DropMenuBackdrop direction=\{direction\} onClose=\{onClose\} closeLabel=\{closeLabel\} \/>/);
+  assert.match(fast, /accessibilityViewIsModal/);
+  // Same two guards, so an empty or closed menu renders nothing on both.
+  assert.match(fast, /if \(!visible \|\| items\.length === 0\) return null;/);
+  // Grows FROM the anchor, using the shared travel rather than its own.
+  assert.match(fast, /panelTravelFor\(direction\)/);
+  assert.match(shared, /export const PANEL_TRAVEL = 8;/);
+  assert.match(shared, /export const PANEL_SCALE_FROM = 0\.96;/);
+  // Exits faster than it enters, on the boundary's own constant — a dismissal
+  // that takes as long as an arrival reads as sluggish.
+  assert.match(fast, /withTiming\(0, \{ duration: MENU_MOTION_OUT_MS \}\)/);
+  // A real spring on the way in; that is the thing worth having worklets for.
+  assert.match(fast, /withSpring\(1, PANEL_SPRING\)/);
+  // Reduced motion still APPEARS, it just does not travel — the same
+  // concession the fallback makes, by the same rule.
+  assert.match(fast, /if \(reducedMotion\) \{/);
+  assert.match(fast, /progress\.value = visible \? 1 : 0;/);
+});
+
+test('[static] the swipe surface needs BOTH natives, which is what consumes canWorklet', () => {
+  // AUDIT F3. `canWorklet` was exported and read by nothing, which made it a
+  // claim rather than a check. The swipe row is where it belongs: a build with
+  // a recogniser but no worklets could swipe, and would swipe BADLY — a JS
+  // round trip per frame under exactly the load a list scroll produces —
+  // which is worse than not offering the mechanic.
+  const row = stripComments(read('components/SwipeableRow.tsx'));
+  assert.match(row, /import \{ canSwipe, canWorklet, resolveMotion120 \}/);
+  assert.match(
+    row,
+    /\{ gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\) \}/,
+    'the swipe needs a recogniser AND worklets; either false takes the fallback'
+  );
+
+  // Executed, every combination: neither native alone opens the fast path.
+  //
+  // The two predicates are read out of lib/motion120/index.tsx rather than
+  // imported — that module pulls in react-native and ./vendor, neither of
+  // which loads under plain `node --test`. So the test PINS what each one
+  // returns and then runs the AND over the pinned meaning; if either
+  // definition changes, the pin fails before the table can go stale.
+  const boundary = stripComments(read('lib/motion120/index.tsx'));
+  assert.match(boundary, /export function canSwipe\([^)]*\): boolean \{\s*return capability\.gestures;/);
+  assert.match(boundary, /export function canWorklet\([^)]*\): boolean \{\s*return capability\.reanimated;/);
+  const swipeReady = (capability) => capability.gestures && capability.reanimated;
+  assert.equal(swipeReady({ gestures: true, reanimated: true }), true);
+  assert.equal(swipeReady({ gestures: true, reanimated: false }), false, 'no worklets, no swipe');
+  assert.equal(swipeReady({ gestures: false, reanimated: true }), false, 'no recogniser, no swipe');
+  assert.equal(swipeReady({ gestures: false, reanimated: false }), false);
+
+  // The FALLBACK is the row itself — not a disabled swipe and not dead tiles.
+  // A capability-false device shows no affordance that does nothing.
+  assert.match(row, /function SwipeableRowFallback\(\{ children \}: SwipeableRowProps\) \{\s*return <>\{children\}<\/>;/);
+
+  // canWorklet is READ by app code now, not merely exported. This is the
+  // assertion that fails if it goes back to being decorative.
+  const consumers = [];
+  for (const dir of ['components', 'screens', 'hooks', 'ui', 'navigation', 'modes']) {
+    for (const entry of readdirSync(join(root, dir))) {
+      if (!/\.tsx?$/.test(entry)) continue;
+      if (/\bcanWorklet\b/.test(stripComments(read(`${dir}/${entry}`)))) {
+        consumers.push(`${dir}/${entry}`);
+      }
+    }
+  }
+  assert.ok(consumers.length > 0, 'canWorklet must be consumed or removed — it cannot just exist');
+});
+
+test('[static] the inbox swipe and its long press share ONE action model', () => {
+  // The rule canSwipe states: a swipe chooses the MECHANIC, never the action
+  // set. Both entries read `actionsFor`, so an action cannot exist on one and
+  // not the other, and no handler is written twice.
+  const screen = stripComments(read('screens/MessagesInboxScreen.tsx'));
+
+  assert.match(screen, /const actionsFor = useCallback\(/, 'the action model is built once');
+  assert.match(
+    screen,
+    /const sheetItems: ActionSheetItem\[\] = sheetTarget[\s\S]{0,40}\.\.\.actionsFor\(sheetTarget\),/,
+    'the long-press sheet renders the shared model'
+  );
+  assert.match(screen, /const model = actionsFor\(target\);/, 'the swipe reads the same model');
+  assert.match(
+    screen,
+    /<SwipeableRow actions=\{swipeActionsFor\(item\.otherId\)\} enabled=\{!item\.isSelf\}>/,
+    'every row offers the swipe, except a self-conversation with nobody to act on'
+  );
+
+  // The three tiles the dispatch named, and Block deliberately NOT among them:
+  // it is the destructive one, it confirms, and a tile a thumb reaches by
+  // accident is the wrong home for it. It stays one tap away, inside More.
+  assert.match(screen, /byKey\('mute'\)/);
+  assert.match(screen, /byKey\('report'\)/);
+  assert.doesNotMatch(screen, /byKey\('block'\)/, 'block is not a swipe tile');
+  assert.match(screen, /tone: 'gold'/, 'the overflow tile is the gold one');
+  assert.match(
+    screen,
+    /onPress: \(\) => setSheetUserId\(userId\)/,
+    'the More tile opens the very sheet the long press opens'
+  );
+
+  // Flag-gated rows still do not render, and the swipe inherits that because
+  // it renders entries of the same array rather than a list of its own.
+  assert.match(screen, /\.\.\.\(moreItems\.length > 0/);
 });

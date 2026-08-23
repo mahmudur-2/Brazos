@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Keyboard, Platform, type KeyboardEvent } from 'react-native';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { riseFor } from '../components/KeyboardRisingColumn.shared';
 
 /**
  * How far a bottom-anchored column must rise to sit on the keyboard, as an
@@ -71,9 +72,13 @@ export function useKeyboardOffset(insetBelow = 0): Animated.Value {
     };
 
     const show = Keyboard.addListener(SHOW_EVENT, (event) => {
-      // Never negative: on a device whose clearance exceeds the keyboard (a
-      // hardware keyboard's accessory bar, say) the column simply stays put.
-      drive(Math.max(0, event.endCoordinates.height - inset.current), event);
+      // `riseFor` rather than the arithmetic inline: the reanimated sibling
+      // computes the same rise on the UI thread, and a column that stopped at
+      // a different height on one binary than the other would be the exact
+      // drift the motion boundary exists to prevent. One function, both
+      // drivers. It is also where "never negative" is stated — on a device
+      // whose clearance exceeds the keyboard the column simply stays put.
+      drive(riseFor(event.endCoordinates.height, inset.current), event);
     });
     const hide = Keyboard.addListener(HIDE_EVENT, (event) => drive(0, event));
 

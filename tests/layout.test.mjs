@@ -256,9 +256,16 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
       /useFloatingNavClearance\(\)/,
       `${path} must take its bottom clearance from the shared hook`
     );
-    assert.match(
-      source,
-      /paddingBottom: navClearance/,
+    // Applied directly, OR handed to the shared rising column that applies it
+    // — 2026-08-23, when chat's keyboard rise moved into
+    // components/KeyboardRisingColumn.tsx so a reanimated build could track
+    // the keyboard instead of imitating its curve. Delegating must not lose
+    // the clearance, so the assertion below the loop checks the component
+    // still puts it on the view that rises. Nothing here got weaker: a
+    // surface that does neither still fails.
+    assert.ok(
+      /paddingBottom: navClearance/.test(source) ||
+        /insetBelow=\{navClearance\}/.test(source),
       `${path} must apply the clearance to whatever sits last above the pill`
     );
     // The double count cannot come back HERE either: a clearance that has
@@ -267,6 +274,22 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
       source,
       /paddingBottom: [\w.]+ \+ navClearance/,
       `${path} adds to the clearance — that is the pinned-footer double count (home(7))`
+    );
+  }
+
+  // DELEGATION MUST NOT LOSE IT. The one surface that hands its clearance to a
+  // component instead of applying it inline is chat, and both of that
+  // component's driver paths have to put the padding on the view that rises —
+  // otherwise the column would rise correctly and still sit a nav-pill's
+  // height too low, which is the dead band this whole rule exists to close.
+  for (const path of [
+    'components/KeyboardRisingColumn.tsx',
+    'components/KeyboardRisingColumn.motion120.tsx',
+  ]) {
+    assert.match(
+      await read(path),
+      /\{ paddingBottom: insetBelow \}/,
+      `${path} must apply the clearance it was handed`
     );
   }
 });
