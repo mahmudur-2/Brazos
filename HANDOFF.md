@@ -43,51 +43,99 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-23 share-pin run (RUN B2)
+## Current state — after the 2026-08-23 app-icon run (RUN B3)
 
 One commit:
 
 | # | commit | what landed |
 |-|-|-|
-|C1|`79b1ac8`|`share: STAGING_REF` in `scripts/eas-build-pre-install.mjs`'s `EXPECTED_REF`, plus the expected-key and pin assertions in `tests/buildGate.test.mjs`|
+|C1|`c69cd8d`|`app.json`'s `expo.icon` points at `assets/brand/app-icon-flat.png`; the file is committed; `tests/pwa.test.mjs` fences its measured size and total opacity|
 
 The offline suite stands at **926 pass / 0 fail / 0 skipped**, bare
 `npm run verify` exit 0 — unchanged from 926 at run start, because the new
-assertions went into two existing tests rather than adding cases. Branch and
-commit state are Git's to report, never this file's.
+assertions joined an existing test rather than adding cases. Each one was
+mutation-checked: flipping the expected size, the corner alpha, the opacity
+sweep or the `expo.icon` constant each turns `tests/pwa.test.mjs` red, so
+none of the four is a passing no-op. Branch and commit state are Git's to
+report, never this file's.
 
-### THE `share` PROFILE CAN BUILD NOW — the operator decision is taken
+### THE iOS APP ICON IS THE FLAT EXPORT — measured before it was mounted
 
-The blocker the previous run logged here is closed. `share` is pinned to
-**staging**, through the `STAGING_REF` constant `scripts/supabase-ref.mjs`
-exports — never a copied ref literal, and the gate file still holds no bare
-project ref of its own. The decision was the operator's, not the run's:
-`share` is an ad hoc build for registered testers, its `eas.json` `env` block
-is `development`'s byte for byte, and it must never be pinned to production.
+`expo.icon` moved off `./assets/icon.png` onto the operator's
+`./assets/brand/app-icon-flat.png`. Measured from the file's own bytes
+BEFORE any edit, because Apple rejects an icon carrying any transparency and
+a bad one costs a build:
 
-`eas.json`'s `share.env.SUPABASE_URL` and the gate's `EXPECTED_REF.share` now
-name the same project, and the share fence asserts that URL against
-`EXPECTED_REF.share` rather than against `development`'s pin — so the two
-files cannot drift apart without a red test. Without that binding the gate
-would be decorative for exactly this profile.
-
-Nothing else moved: the unreachable `preview` row, every other profile's pin
-and the fail-closed behaviour are untouched.
-
-Measured by spawning `scripts/eas-build-pre-install.mjs` as a real process
-from a directory holding no dotenv file, which is how EAS runs it:
-
-| probe | result |
+| property | measured |
 |-|-|
-|`share` + the staging URL|exit 0 — `gate: OK — "share" builds against zzkumxcjtbqoselzptig`|
-|`share` + a foreign project ref|exit 1, naming both the ref found and the ref expected|
-|an unlisted profile (`nightly`)|exit 1 — `unknown profile "nightly"`, still failing closed|
+|dimensions|1024 x 1024|
+|PNG colour type|6 (RGBA), 8-bit, non-interlaced, no `tRNS`|
+|corner alpha|255 at all four corners|
+|alpha across the whole image|minimum 255; 0 of 1048576 samples below opaque|
+|corner RGB|`(2,60,45)` `(1,45,35)` `(1,49,39)` `(2,41,30)` — brand green, squared|
 
-**Still unperformed:** no `eas build --profile share` has been run. The pin is
-proven by process spawn and by the suite, not by a real EAS build — only the
-operator can run one.
+**Colour type could not have answered the opacity question.** The file is
+RGBA, so an alpha channel EXISTS and is merely pinned at 255 everywhere —
+the exact trap the roster sweep in `tests/themeResolution.test.mjs`
+documents. The samples are read for real, through the shared `decode()` in
+`tests/pngGeometry.mjs`, so no second copy of the PNG filter loop entered
+the repo.
 
-### The run before this one (RUN B1) — its one commit, carried forward
+`app.json` has **no `ios.icon` key**; the top-level `icon` is the only one,
+and it is what changed. The Android adaptive icon, the notification icon and
+the splash are untouched — `expo.android.adaptiveIcon.foregroundImage` still
+names `./assets/icon.png`, which is why that file keeps its own 1024x1024
+assertion.
+
+### Two dispatch premises were wrong — corrected, not worked around
+
+**1. No roster row changed, and none should have.** The dispatch expected the
+new icon to join the `BAKED_ART` roster in `tests/themeResolution.test.mjs`.
+That roster is **mount-driven**: it scans `screens/`, `components/` and `ui/`
+for `require()` of a raster and asserts set equality against its own keys. An
+icon mounted by `app.json` never appears in that scan, so adding a row would
+have made the roster's added-or-removed assertion FAIL, not pass. The
+previous icon, `assets/icon.png`, was never on that roster either. The fence
+therefore lands in `tests/pwa.test.mjs`, which already owns every `app.json`
+icon assertion. Nothing was relaxed anywhere.
+
+**2. `app-icon-v2.png` is still mounted, deliberately.** The dispatch asked
+for confirmation that it is referenced by no config or source file. Half of
+that is true and half is not:
+
+- **No config references it** — `app.json`, `eas.json` and `package.json` are
+  clean, and `app.json` now names only the flat icon. This was already true
+  before the run; `app-icon-v2.png` was never the configured app icon.
+- **One source file mounts it live:** `screens/LaunchScreen.tsx:19` requires
+  it as `LAUNCH_MARK`, chosen over `BrandLogo`'s default for a measured
+  corner-radius difference (~18.7% vs ~21.5%). It keeps its `brand-mark`
+  roster row, and it stays cut-out at the corners, because the launch mark
+  and the app icon are different jobs. Removing it would have been a third
+  file, a visible UI change and a roster change — all outside this run.
+
+The remaining mentions are comments and `docs/` history:
+`components/BrandLogo.tsx:19` and seven files under `docs/`.
+
+### The run before this one (RUN B2) — its one commit, carried forward
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`79b1ac8`|`share: STAGING_REF` in `scripts/eas-build-pre-install.mjs`'s `EXPECTED_REF`, plus the expected-key and pin assertions in `tests/buildGate.test.mjs`|
+
+The `share` profile is pinned to **staging**, through the `STAGING_REF`
+constant `scripts/supabase-ref.mjs` exports — never a copied ref literal.
+`eas.json`'s `share.env.SUPABASE_URL` and the gate's `EXPECTED_REF.share`
+name the same project, and the share fence asserts that URL against
+`EXPECTED_REF.share` rather than against `development`'s pin, so the two
+files cannot drift apart without a red test. The decision was the operator's:
+`share` is an ad hoc build for registered testers and must never be pinned to
+production. The suite was 926/0 at the end of that run.
+
+**Still unperformed, and still owed:** no `eas build --profile share` has
+ever been run. The pin is proven by process spawn and by the suite, not by a
+real EAS build — only the operator can run one.
+
+### The run before that (RUN B1) — its one commit, carried forward
 
 | # | commit | what landed |
 |-|-|-|
@@ -95,7 +143,7 @@ operator can run one.
 
 The suite was 926/0 at the end of that run.
 
-### The run before that (RUN B0) — its two commits, carried forward
+### And RUN B0 — its two commits, carried forward
 
 | # | commit | what landed |
 |-|-|-|
