@@ -548,6 +548,51 @@ test('[static] a quoted bubble widens to fit its quote; an unquoted bubble is un
   assert.match(bubble, /\{messagePreviewText\(replyTo\)\}/);
 });
 
+test('[static+executed] the bubble cap resolves against the row, not against the bubble itself', () => {
+  const bubble = stripComments(read('components/ChatBubble.tsx'));
+
+  // THE CAP SITS ON THE WRAPPER. A percentage max resolves against the
+  // PARENT's inner width. `bubbleWrap` is a child of `row`, whose width is the
+  // list cell's — a real number. The BUBBLE's parent is bubbleWrap, which has
+  // no width of its own and shrink-wraps the bubble, so a cap there was 82% of
+  // the bubble's own measured width and every bubble painted at 82% of what it
+  // had just asked for.
+  const wrap = bubble.match(/bubbleWrap: \{([^}]*)\}/);
+  assert.ok(wrap, 'ChatBubble must still have a bubbleWrap style');
+  assert.match(wrap[1], /maxWidth: '82%'/, 'the cap belongs on the wrapper');
+  const box = bubble.match(/\n {2}bubble: \{([^}]*)\}/);
+  assert.ok(box, 'ChatBubble must still have a bubble style');
+  assert.doesNotMatch(
+    box[1],
+    /maxWidth/,
+    'a percentage cap under a shrink-wrapping parent is measured against itself'
+  );
+  // ...and the wrapper still has no width of its own, which is exactly WHY
+  // nothing below it may carry a percentage. If it ever gains one, this
+  // reasoning has to be redone rather than assumed.
+  assert.doesNotMatch(
+    wrap[1],
+    /(^|\s)(width|flex|flexBasis):/,
+    'bubbleWrap must stay width-less — it anchors the reaction badge and nothing more'
+  );
+
+  // WHY THE PHOTO WAS THE VISIBLE CASUALTY, in numbers taken from the source
+  // rather than restated. Text merely re-wrapped when the bubble was painted
+  // narrower than it measured; styles.image is a FIXED box and RN's default
+  // flexShrink is 0, so it could not follow the bubble in and spilled out past
+  // the fill instead.
+  const imageWidth = Number(bubble.match(/image: \{\s*width: (\d+),/)[1]);
+  assert.match(bubble, /paddingHorizontal: spacing\.md/, 'the bubble pads the photo with spacing.md');
+  const spacingBlock = read('ui/tokens.ts').match(/export const spacing = \{([^}]*)\}/)[1];
+  const md = Number(spacingBlock.match(/md: (\d+),/)[1]);
+  const measured = imageWidth + 2 * md;
+  const paintedByASelfReferentialCap = 0.82 * measured;
+  assert.ok(
+    measured - paintedByASelfReferentialCap > 30,
+    `a self-referential 82% cap clipped the photo bubble by ${(measured - paintedByASelfReferentialCap).toFixed(1)}pt — the overflow that read as two misaligned layers`
+  );
+});
+
 test('[static] the read-model verdicts are recorded where the next run will look', () => {
   // The two flags this investigation produced must carry the EVIDENCE, not a
   // shrug: the daytime schema run reads these to know what to build.

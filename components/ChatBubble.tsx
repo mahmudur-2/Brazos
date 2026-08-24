@@ -198,15 +198,36 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   rowWithReaction: {
     marginBottom: spacing.lg + spacing.xs,
   },
+  // THE 82% CAP BELONGS HERE, NOT ON THE BUBBLE — and moving it is the fix for
+  // the photo bubble that painted as two misaligned layers, not tidying.
+  //
+  // A percentage max resolves against the PARENT's inner width: Yoga's
+  // constrainMaxSizeForMode takes `ownerWidth`, and ownerWidth for a child is
+  // the parent's availableInnerWidth. This wrapper exists only so the
+  // absolutely-positioned reaction badge has something to hang off, so it has
+  // no width of its own — it shrink-wraps the bubble. `maxWidth: '82%'` on the
+  // bubble was therefore 82% of the BUBBLE'S OWN measured width: Yoga measures
+  // the wrapper once, lays it out at exactly that width, and re-runs the child
+  // against it, so every bubble was painted at 82% of the width it had just
+  // asked for.
+  //
+  // Text merely re-wrapped, which is why this read as a quote bug. The photo
+  // could not: styles.image is a FIXED 200pt box and RN's default flexShrink
+  // is 0. 200 + 2 * spacing.md measures 224, the bubble was then painted at
+  // 0.82 * 224 = 183, and the photo spilled 40pt out past the green — the
+  // bubble sitting up-and-left of its own image.
+  //
+  // Here the parent is `row`, whose width is the list cell's. That is what
+  // "82% of the row" always meant.
   bubbleWrap: {
     position: 'relative',
+    maxWidth: '82%',
   },
   bubble: {
     borderRadius: radius.lg,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     gap: spacing.xs,
-    maxWidth: '82%',
   },
   bubbleOwn: {
     backgroundColor: colors.primary,
