@@ -60,3 +60,61 @@ export function coveredByReadWatermark(
   if (!watermark) return false;
   return messageCreatedAt <= watermark;
 }
+
+/**
+ * THE COUNTERPARTY'S READ POSITION, per thread — the gold tick's whole source
+ * (phase77, S-4).
+ *
+ * ONE conversation folds a pair's job threads AND their direct thread together
+ * (see `targets` in screens/ChatScreen.tsx), so the assembly has to answer for
+ * both kinds or the SAME conversation shows gold on some bubbles and never on
+ * others — an absent tick meaning "not read yet" on one message and
+ * "unknowable here" on the next. That was the exact reason READ_TICKS shipped
+ * dark, and it is why this map has two halves rather than one.
+ *
+ *   job threads     the other party's `message_reads` row, readable since
+ *                   phase77's `message_reads_select_party`.
+ *   direct threads  the other party's read column on `direct_threads`, which
+ *                   `direct_threads_select_party` has always handed over.
+ */
+export type CounterpartyReadPositions = {
+  byJobId: Record<string, string | null | undefined>;
+  byDirectThreadId: Record<string, string | null | undefined>;
+};
+
+/** Which watermark governs this message, whichever thread kind it is in. */
+export function counterpartyReadAtFor(
+  message: { job_id: string | null; direct_thread_id: string | null },
+  positions: CounterpartyReadPositions
+): string | null {
+  const watermark = message.job_id
+    ? positions.byJobId[message.job_id]
+    : message.direct_thread_id
+      ? positions.byDirectThreadId[message.direct_thread_id]
+      : null;
+  return watermark ?? null;
+}
+
+/**
+ * What became of one of your own messages, from the evidence that exists.
+ *
+ * `readAt` is the counterparty's watermark ONLY when it actually covers this
+ * message — a watermark is per-conversation, and returning it unconditionally
+ * would gold-tick every message in a thread the moment the other person opened
+ * any of it.
+ *
+ * `deliveredAt` IS DELIBERATELY NEVER SET. Nothing in the schema distinguishes
+ * "the insert succeeded" from "their device has it" (DELIVERED_TICKS in
+ * lib/featureFlags.ts), and a tick that means the first while looking like the
+ * second is a lie. When a real per-recipient delivered_at exists, this is the
+ * function that grows the field — not the insert path.
+ */
+export function deliveryFor(
+  message: { job_id: string | null; direct_thread_id: string | null; created_at: string },
+  positions: CounterpartyReadPositions
+): MessageDelivery {
+  const watermark = counterpartyReadAtFor(message, positions);
+  return {
+    readAt: coveredByReadWatermark(message.created_at, watermark) ? watermark : null,
+  };
+}

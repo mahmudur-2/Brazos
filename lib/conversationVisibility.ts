@@ -73,12 +73,19 @@ export function clearedBy(
   return instant <= mark;
 }
 
-/** A thread's messages, minus the ones this user has cleared. */
+/**
+ * The messages still in this user's copy of a conversation.
+ *
+ * THE STATE IS RESOLVED PER MESSAGE, not passed once, because ONE conversation
+ * is several threads folded into a single chronological timeline (ChatScreen's
+ * `targets`) and each thread carries its own watermark. Clearing a pair's
+ * direct thread must not empty the job thread interleaved with it.
+ */
 export function visibleMessages<T extends { created_at: string }>(
   messages: readonly T[],
-  state: ClearWatermark | null | undefined
+  stateFor: (message: T) => ClearWatermark | null | undefined
 ): T[] {
-  return messages.filter((message) => !clearedBy(message.created_at, state));
+  return messages.filter((message) => !clearedBy(message.created_at, stateFor(message)));
 }
 
 /**

@@ -807,11 +807,17 @@ test('[static] every feature flag either gates something or says plainly that it
   // ChatBubble calls `tickStateFor(delivery ?? {})` and no caller passes
   // `delivery`, so every own message draws one tick whatever the flags say.
   //
-  // Both are still false and still blocked on schema that does not exist, so
-  // the fix is not to wire them — wiring READ_TICKS today would light gold on
-  // a pair's direct-thread bubbles and never on their job-thread ones, in the
-  // SAME conversation, which is worse than not offering it. The fix is that
-  // the table stops implying a switch it does not have.
+  // READ_TICKS IS NO LONGER ONE OF THEM. phase77's message_reads_select_party
+  // supplied the half that was missing — the counterparty's read position on a
+  // JOB thread — and RUN W1 built the assembly in screens/ChatScreen.tsx, so
+  // the flag now guards something and its NO GUARD SITE paragraph came out
+  // with the wiring, which is exactly what this fence demands in that
+  // direction.
+  //
+  // DELIVERED_TICKS is the one that remains, and it is the strictly harder
+  // half: nothing in the schema distinguishes "the insert succeeded" from "the
+  // other device has it", so there is no honest source to wire it to and it
+  // stays false permanently rather than being faked from an insert.
   //
   // This fence keeps that honest in BOTH directions: a flag with a guard site
   // is fine, a flag without one must SAY it has none, and the day the wiring
@@ -863,8 +869,12 @@ test('[static] every feature flag either gates something or says plainly that it
 
   // The sweep must be measuring both halves; an empty `sources` would make
   // every flag look unguarded and still pass the loop above.
-  assert.ok(gated >= 8, `most flags do gate something (saw ${gated})`);
-  assert.equal(declared, 2, `exactly the two tick flags gate nothing today (saw ${declared})`);
+  assert.ok(gated >= 10, `most flags do gate something (saw ${gated})`);
+  assert.equal(
+    declared,
+    1,
+    `DELIVERED_TICKS is the only flag left with nothing to gate (saw ${declared})`
+  );
 });
 
 // ===========================================================================

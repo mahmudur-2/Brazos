@@ -134,46 +134,40 @@ export const MARK_UNREAD = false as boolean;
 /**
  * The GOLD (read) ticks on an own message.
  *
- * WAITS ON: a client-readable counterparty read position for JOB threads.
- * The verdict, measured against the repo's own migrations on 2026-08-23 and
- * carried in full by HANDOFF.md:
+ * WAITS ON: nothing. phase77 supplied the missing half and W1 built the
+ * wiring; this flag is now an ordinary switch over a complete feature.
  *
- *   direct threads  ALREADY READABLE. `direct_threads` carries both parties'
- *                   read columns on the row, and direct_threads_select_party
+ * WHAT WAS MISSING, and what closed it:
+ *
+ *   direct threads  ALREADY READABLE, and always were. `direct_threads`
+ *                   carries both parties' read columns on the row, and
+ *                   direct_threads_select_party
  *                   (supabase/phase36_direct_offer_threads.sql) lets either
- *                   participant SELECT that whole row — the other person's
- *                   `user_a_read_at` / `user_b_read_at` included.
- *   job threads     NOT READABLE. `message_reads` is per-user, and
- *                   message_reads_select_own (supabase/phase9_messages_inbox.sql)
- *                   is `using (user_id = auth.uid())` — a user can read only
- *                   their OWN row.
+ *                   participant SELECT that whole row.
+ *   job threads     NOT READABLE until phase77. message_reads_select_own
+ *                   (supabase/phase9_messages_inbox.sql) is
+ *                   `using (user_id = auth.uid())`, so a user could read only
+ *                   their OWN row. `message_reads_select_party`
+ *                   (supabase/phase77_conversation_features.sql) adds exactly
+ *                   one row to that: the OTHER party's, on a job the caller is
+ *                   already in. Chosen over a definer RPC because a policy
+ *                   keeps ONE tick pipeline for both thread kinds — an RPC
+ *                   cannot ride realtime, so job ticks would poll and lag
+ *                   their direct siblings inside the same conversation.
  *
- * SO IT IS HALF-WIRED, WHICH IS WHY IT IS FLAGGED RATHER THAN SHIPPED. One
- * conversation folds a pair's job threads AND their direct thread together
- * (see `targets` in screens/ChatScreen.tsx), so wiring only the readable half
- * would make the SAME conversation show gold on some bubbles and never on
- * others — an absent tick would mean "not read yet" on one message and
- * "unknowable here" on the next. What the schema needs is one of: a
- * party-scoped select policy on message_reads, or a security-definer function
- * returning the other party's last_read_at for a job the caller is party to.
+ * WHY BOTH HALVES HAD TO LAND TOGETHER. One conversation folds a pair's job
+ * threads AND their direct thread into a single timeline (see `targets` in
+ * screens/ChatScreen.tsx), so wiring only the readable half would have made
+ * the SAME conversation show gold on some bubbles and never on others — an
+ * absent tick meaning "not read yet" on one message and "unknowable here" on
+ * the next. That is why it shipped dark rather than half.
  *
- * NO GUARD SITE TODAY — and this line is the correction, because the rest of
- * this block implies one. Flipping this constant to `true` changes NOTHING on
- * screen. The only two files that name it, components/MessageTicks.tsx and
- * lib/messageTicks.ts, name it in prose; neither imports it. The bubble calls
- * `tickStateFor(delivery ?? {})` and no caller passes `delivery`, so every own
- * message renders one tick whatever this says.
- *
- * WHAT MUST BE BUILT, in order:
- *   1. the read source above, since there is none for job threads;
- *   2. screens/ChatScreen.tsx assembling a MessageDelivery per own message —
- *      `readAt` from the counterparty's watermark via coveredByReadWatermark();
- *   3. that assembly guarded by THIS flag, and passed to ChatBubble's existing
- *      `delivery` prop, which already accepts it.
- *
- * Step 3 is the one that turns this constant into a switch. Until it exists,
- * the honest description of this flag is that the element is built, the
- * derivation is built and tested, and the WIRING BETWEEN THEM IS NOT.
+ * THE GUARD SITE is screens/ChatScreen.tsx, and it guards the ASSEMBLY: with
+ * this false, no read position is fetched, no subscription is opened, and
+ * `delivery` is never passed — so ChatBubble falls back to
+ * `tickStateFor({})`, one tick, exactly what an unflipped build has always
+ * drawn. lib/messageTicks.ts holds the derivation; components/MessageTicks.tsx
+ * draws all three states and is unit-tested for each.
  */
 export const READ_TICKS = false as boolean;
 

@@ -1185,7 +1185,10 @@ test('[static] the sheet renders from a result and owns none of the fetching', (
 test('[static] the translate entries are flagged, text-only, and batch the conversation', () => {
   const chat = stripComments(read(CHAT));
 
-  assert.match(chat, /import \{ TRANSLATION \} from '\.\.\/lib\/featureFlags';/);
+  // W1 gave READ_TICKS its guard site in this same screen, so the two flags
+  // now arrive on one import line. TRANSLATION is still imported here and
+  // still gates the entries below.
+  assert.match(chat, /import \{ READ_TICKS, TRANSLATION \} from '\.\.\/lib\/featureFlags';/);
   // Behind the flag AND requiring content: there is nothing to translate in a
   // photo or a voice note.
   assert.match(chat, /\.\.\.\(TRANSLATION && menuTarget\.content/);

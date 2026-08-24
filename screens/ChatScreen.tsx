@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -49,12 +49,20 @@ import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import {
   ACTIVE_JOB_STATUSES,
+  fetchCounterpartyReadStates,
   fetchDirectThreadWith,
   fetchSharedJobs,
   markConversationRead,
   resolveOtherId,
+  visibleMessages,
   type SharedJob,
 } from '../lib/conversations';
+import { fetchMyConversationStates, indexConversationStates } from '../lib/conversationStates';
+import type { ConversationState } from '../lib/conversationVisibility';
+import {
+  deliveryFor,
+  type CounterpartyReadPositions,
+} from '../lib/messageTicks';
 import {
   resolveConversation,
   type ActiveJobCandidate,
@@ -64,8 +72,9 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
-import { TRANSLATION } from '../lib/featureFlags';
+import { READ_TICKS, TRANSLATION } from '../lib/featureFlags';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
+import { supabase } from '../lib/supabase';
 import { deviceLanguage, translateTexts, type TranslateResult } from '../lib/translate';
 import {
   EMPTY_RELATION,
@@ -268,6 +277,148 @@ export function ChatScreen() {
 
   const { messages, loading, error, addLocal } = useConversationChat(targets);
 
+  /** The `job:`/`direct:` key of the thread a message belongs to. */
+  const threadKeyOf = useCallback(
+    (message: Pick<Message, 'job_id' | 'direct_thread_id'>) =>
+      chatTargetKey(
+        message.job_id
+          ? { jobId: message.job_id }
+          : { directThreadId: message.direct_thread_id as string }
+      ),
+    []
+  );
+
+  /**
+   * THIS USER'S OWN CLEAR / DELETE WATERMARKS (phase77, S-2).
+   *
+   * Per THREAD, because one conversation is several threads folded together
+   * and clearing the pair's direct thread must not empty the job thread
+   * interleaved with it. Read once on entry; the watermark only moves when
+   * this user moves it, and they cannot do that from inside this screen.
+   */
+  const [stateByKey, setStateByKey] = useState<Record<string, ConversationState>>({});
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    fetchMyConversationStates(user.id).then(({ data, error: stateError }) => {
+      if (!active) return;
+      // A failed read is an empty index — every message visible, which is the
+      // behaviour of every build before phase77. It can never hide a message
+      // the user did not clear.
+      if (stateError) {
+        console.warn('[Chat] conversation-state read failed', stateError.message);
+        return;
+      }
+      setStateByKey(indexConversationStates(data));
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  /**
+   * The timeline as this user actually holds it. D7's one visibility rule,
+   * applied here and in the inbox from the same import — a message they
+   * cleared is out of the thread, and stays out until something newer arrives.
+   */
+  const visibleTimeline = useMemo(
+    () => visibleMessages(messages, (message) => stateByKey[threadKeyOf(message)]),
+    [messages, stateByKey, threadKeyOf]
+  );
+
+  /**
+   * THE GOLD TICK'S SOURCE — the counterparty's read position on every thread
+   * this conversation is made of (phase77, S-4).
+   *
+   *   job threads     their `message_reads` row, readable since phase77's
+   *                   message_reads_select_party.
+   *   direct threads  their read column on `direct_threads`, which
+   *                   direct_threads_select_party has always handed over.
+   *
+   * BOTH OR NEITHER. This conversation folds a pair's job threads AND their
+   * direct thread into one timeline, so wiring only the readable half would
+   * make the SAME conversation show gold on some bubbles and never on others —
+   * an absent tick meaning "not read yet" on one message and "unknowable here"
+   * on the next. That was exactly why READ_TICKS shipped dark.
+   */
+  const jobTargetIds = useMemo(
+    () => targets.map((t) => t.jobId).filter((id): id is string => !!id),
+    [targets]
+  );
+  const directTargetIds = useMemo(
+    () => targets.map((t) => t.directThreadId).filter((id): id is string => !!id),
+    [targets]
+  );
+  const [readPositions, setReadPositions] = useState<CounterpartyReadPositions>({
+    byJobId: {},
+    byDirectThreadId: {},
+  });
+
+  const refreshReadPositions = useCallback(async () => {
+    // THE GUARD SITE. With the flag off nothing is read, nothing is
+    // subscribed, and `delivery` is never assembled — an unflipped build shows
+    // exactly the single tick it shows today.
+    if (!READ_TICKS) return;
+    if (!user || !counterpartyId || counterpartyId === user.id) return;
+
+    const [jobReads, directRows] = await Promise.all([
+      fetchCounterpartyReadStates(counterpartyId, jobTargetIds),
+      Promise.all(directTargetIds.map((id) => fetchDirectThread(id))),
+    ]);
+
+    const byJobId: Record<string, string | null> = {};
+    for (const row of jobReads.data) byJobId[row.job_id] = row.last_read_at;
+
+    const byDirectThreadId: Record<string, string | null> = {};
+    for (const { data } of directRows) {
+      if (!data) continue;
+      // Whichever column is THEIRS. The row carries both, and taking the wrong
+      // one would show your own read position back to you as their tick.
+      byDirectThreadId[data.id] =
+        data.user_a === counterpartyId ? data.user_a_read_at : data.user_b_read_at;
+    }
+
+    setReadPositions({ byJobId, byDirectThreadId });
+  }, [user, counterpartyId, jobTargetIds, directTargetIds]);
+
+  useEffect(() => {
+    void refreshReadPositions();
+  }, [refreshReadPositions]);
+
+  // ONE SUBSCRIPTION FOR BOTH KINDS, which is the whole reason phase77 chose a
+  // policy over a definer RPC: an RPC cannot ride realtime, so job ticks would
+  // poll and lag their direct siblings inside the same folded conversation.
+  // Realtime respects RLS, so each table delivers only the rows these policies
+  // already let this user read.
+  //
+  // Topic uniqueness is the useOpenJobs mitigation: supabase.channel() dedupes
+  // by topic and removeChannel() tears down asynchronously, so every mount
+  // needs a string that has never existed before.
+  const instanceId = useId();
+  const runRef = useRef(0);
+  useEffect(() => {
+    if (!READ_TICKS) return;
+    if (!user || !counterpartyId || counterpartyId === user.id) return;
+
+    const channel = supabase
+      .channel(`chat:ticks:${instanceId}:${runRef.current++}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'message_reads' },
+        () => void refreshReadPositions()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'direct_threads' },
+        () => void refreshReadPositions()
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, counterpartyId, refreshReadPositions, instanceId]);
+
   // conversations.last_message_at IS the newest message in a job's thread, so
   // the canonical activity timestamp is read straight off the timeline that is
   // already loaded rather than fetched a second time.
@@ -461,11 +612,13 @@ export function ChatScreen() {
 
   // Messages by id, for resolving a reply's quoted original without a join —
   // the quoted message is always somewhere in this conversation.
+  // Off the VISIBLE timeline: a reply whose original this user cleared has no
+  // quote left to show, because in their copy the original is not there.
   const messagesById = useMemo(() => {
     const map: Record<string, Message> = {};
-    for (const m of messages) map[m.id] = m;
+    for (const m of visibleTimeline) map[m.id] = m;
     return map;
-  }, [messages]);
+  }, [visibleTimeline]);
 
   const jobTitles = useMemo(() => {
     const map: Record<string, string> = {};
@@ -487,7 +640,10 @@ export function ChatScreen() {
   const items = useMemo<TimelineItem[]>(() => {
     const list: TimelineItem[] = [];
     let context: string | null = null;
-    for (const message of messages) {
+    // The visible timeline, never the raw one: a cleared message is out of
+    // this user's copy, and a divider for a job whose messages are all gone
+    // would head an empty section.
+    for (const message of visibleTimeline) {
       const messageJobId = message.job_id ?? null;
       if (messageJobId !== context) {
         context = messageJobId;
@@ -502,7 +658,7 @@ export function ChatScreen() {
       list.push({ kind: 'message', key: message.id, message });
     }
     return list;
-  }, [messages, jobTitles]);
+  }, [visibleTimeline, jobTitles]);
 
   // A supplied jobId is ONLY an initial scroll target: the conversation opens
   // at that job's first chronological message rather than at the bottom.
@@ -1439,6 +1595,16 @@ export function ChatScreen() {
                   <ChatBubble
                     message={item}
                     isOwn={item.sender_id === user?.id}
+                    // THE FLAG GUARDS THE ASSEMBLY, not the element. Undefined
+                    // resolves to `sent` — one tick — which is exactly what an
+                    // unflipped build has always shown. Own messages only:
+                    // a tick on theirs would claim to know what YOU did with
+                    // THEIR message.
+                    delivery={
+                      READ_TICKS && item.sender_id === user?.id
+                        ? deliveryFor(item, readPositions)
+                        : undefined
+                    }
                     senderName={counterparty?.full_name}
                     senderAvatarUrl={counterparty?.avatar_url}
                     reactions={reactionsByMessage[item.id]}
