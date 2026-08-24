@@ -5,6 +5,11 @@ import {
   resolveOtherId,
   type Conversation,
 } from '../lib/conversations';
+import {
+  fetchMyConversationStates,
+  indexConversationStates,
+  type ConversationState,
+} from '../lib/conversationStates';
 import { fetchMyModerationLists } from '../lib/moderation';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
 import { fetchReactionsForMessages, type Reaction } from '../lib/reactions';
@@ -43,6 +48,12 @@ export function useConversations() {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [readMap, setReadMap] = useState<Record<string, string>>({});
+  // Per-user hidden / archived / cleared / deleted state, keyed by the SAME
+  // `job:`/`direct:` conversation key readMap's rows are keyed by. The phase77
+  // view deliberately does not filter these — hidden and archived rows must
+  // still be DELIVERED, to the Face-ID list and the Archived pill — so the
+  // client joins them exactly the way it already joins message_reads.
+  const [stateByKey, setStateByKey] = useState<Record<string, ConversationState>>({});
   const [profiles, setProfiles] = useState<Record<string, CounterpartyInfo>>({});
   const [lastMessageReactions, setLastMessageReactions] = useState<
     Record<string, Reaction[]>
@@ -72,17 +83,22 @@ export function useConversations() {
     }
     setError(null);
 
-    const [convRes, readRes] = await Promise.all([
+    const [convRes, readRes, stateRes] = await Promise.all([
       fetchConversations(user.id),
       fetchMyReadStates(user.id),
+      fetchMyConversationStates(user.id),
     ]);
 
-    const firstError = convRes.error || readRes.error;
+    const firstError = convRes.error || readRes.error || stateRes.error;
     if (firstError) setError(firstError.message);
 
     const reads: Record<string, string> = {};
     for (const r of readRes.data) reads[r.job_id] = r.last_read_at;
     setReadMap(reads);
+    // A FAILED state read is an empty index, which is exactly "no conversation
+    // has any state" — the behaviour of every build before phase77. It cannot
+    // hide a row, cannot clear a thread, and cannot silently archive anything.
+    setStateByKey(indexConversationStates(stateRes.data));
     setConversations(convRes.data);
 
     const otherIds = convRes.data.map((c) => resolveOtherId(c, user.id));
@@ -155,6 +171,7 @@ export function useConversations() {
   return {
     conversations,
     readMap,
+    stateByKey,
     profiles,
     lastMessageReactions,
     moderation,
