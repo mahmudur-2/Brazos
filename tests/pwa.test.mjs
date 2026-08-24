@@ -103,12 +103,13 @@ test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web 
   // than kept for safety, because on a three-byte pixel it would have been
   // stepping over the BLUE channel and calling it alpha.
   //
-  // Not on that roster: it scans screens/components/ui for `require` of a
-  // raster, and this icon is mounted by app.json, not by a require — adding
-  // it there would fail the roster's added-or-removed assertion. app.json's
-  // icon keys are fenced HERE, so its measurement is here too.
-  // assets/brand/app-icon-v2.png stays on that roster and stays cut-out: it
-  // is the LaunchScreen mark, which is a different job.
+  // ON that roster too, and the two fences do not overlap. It scans
+  // screens/components/ui for `require` of a raster, and this icon is mounted
+  // BOTH by app.json and by screens/LaunchScreen.tsx, so it appears there
+  // carrying bake 'opaque-brand'. The roster records what the file IS;
+  // app.json's icon keys are fenced HERE, so the size and opacity measurement
+  // is here too. assets/brand/app-icon-v2.png left that roster with its last
+  // mount.
   const appIcon = decode(join(root, 'assets/brand/app-icon-b-leaf.png'));
   assert.deepEqual([appIcon.width, appIcon.height], [1024, 1024]);
   assert.equal(

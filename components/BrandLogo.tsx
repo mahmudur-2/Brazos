@@ -15,12 +15,13 @@ import { authShadows } from '../lib/authTheme';
 //
 // Corner radius is baked into this file rather than applied via style
 // (~21.5% of width, measured from its alpha channel), which is measurably
-// more rounded than the canonical app icon export
-// (assets/brand/app-icon-v2.png, ~18.7%) — that file went through an extra
-// masking pass this one didn't. Left as the default here so Sign In/Create
-// Account, the only other callers, are untouched; LaunchScreen passes the
-// newer asset explicitly instead of this component's default changing under
-// it. See docs/emerald-v2/DECISIONS.md.
+// more rounded than the export it was measured against
+// (assets/brand/app-icon-v2.png, ~18.7% — the app icon and the launch mark
+// until 2026-08-24, now neither) — that file went through an extra masking
+// pass this one didn't. Left as the default here so Sign In/Create Account,
+// the only other callers, are untouched; LaunchScreen passes the shipped app
+// icon explicitly instead of this component's default changing under it. See
+// docs/emerald-v2/DECISIONS.md.
 const SOURCE = require('../assets/brand/brazos-b-leaf.png');
 
 type BrandLogoProps = {

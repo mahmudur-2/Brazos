@@ -12,11 +12,18 @@ import { useReducedMotion } from '../hooks/useReducedMotion';
 import { BrandLogo } from '../components/BrandLogo';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
-// The canonical app-icon export — see components/BrandLogo.tsx's SOURCE
-// comment for why the launch mark uses this instead of BrandLogo's own
-// default asset (a corner-radius mismatch measured against the atlas
-// reference: ~21.5% vs this file's ~18.7%).
-const LAUNCH_MARK = require('../assets/brand/app-icon-v2.png');
+// The shipped app icon. app.json's expo.icon and this mark are the same file,
+// so what iOS draws on the home screen is what the launch layer draws — which
+// is the whole reason the source is passed explicitly rather than left to
+// BrandLogo's default; see that component's SOURCE comment.
+//
+// It replaces assets/brand/app-icon-v2.png, whose ~18.7% corner radius was
+// baked into an alpha channel. This export has no alpha channel at all, so it
+// carries no baked radius and no transparent corners: a full-bleed opaque
+// square, which is what Apple requires of an icon and what iOS masks for
+// itself. Nothing here applies a radius in its place, so the mark reads as a
+// hard square on this layer. That is the operator-settled artwork.
+const LAUNCH_MARK = require('../assets/brand/app-icon-b-leaf.png');
 
 /**
  * The cold-launch timeline, in milliseconds from mount:

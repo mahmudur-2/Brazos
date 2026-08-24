@@ -465,11 +465,25 @@ const BAKED_ART = {
   'assets/brand/brazos_b_drape.png': { bake: 'transparent', gate: true },
   // Transparent: no background to leak, so no gate is owed.
   'assets/brand/brazos-b-leaf.png': { bake: 'transparent', gate: false },
-  // The app icon: a brand deep-green tile with a gold mark and transparent
-  // corners. It is the BRAND's own square, not a palette ground — an icon does
-  // not change colour with the theme on any platform — and it is mounted on
-  // LaunchScreen, which is locked.
-  'assets/brand/app-icon-v2.png': { bake: 'brand-mark', gate: false },
+  // The app icon, and now the LaunchScreen mark as well: one file for both, so
+  // the iOS home screen and the launch layer cannot drift apart. It is the
+  // BRAND's own square, not a palette ground — an icon does not change colour
+  // with the theme on any platform — so no gate is owed.
+  //
+  // Its bake is opaque-brand, measured: PNG colour type 2, no alpha channel at
+  // all, no tRNS chunk, 0 of 1048576 samples transparent. Size and opacity are
+  // fenced in tests/pwa.test.mjs, alongside app.json's icon keys; this roster
+  // records what the file IS.
+  //
+  // GONE, and this entry replaces it: assets/brand/app-icon-v2.png, recorded
+  // here as bake 'brand-mark' — a deep-green tile with a gold mark and
+  // transparent corners, 3.37% of its samples cut out. It was the LaunchScreen
+  // mark and nothing else required it, so it leaves this roster BECAUSE the
+  // added-or-removed assertion above demands exactly that of a raster the app
+  // stops mounting. The file stays on disk, unmodified and required by
+  // nothing, so the previous icon stays revertible. 'brand-mark' leaves the
+  // bake vocabulary with it — it was that one asset's word.
+  'assets/brand/app-icon-b-leaf.png': { bake: 'opaque-brand', gate: false },
   // The mode-transition sheets are opaque, but their bake is the BRAND deep
   // green with a gold mark — not either palette's ground. They read correctly
   // over a light app and a dark one, and the whole sheet (mark, label, handle,
@@ -613,9 +627,10 @@ test('[static] every roster bake claim is re-derived from the file, both ways', 
         `${asset} is claimed transparent but every alpha sample is 255 — the ground is still baked in`,
       );
       // A stray soft pixel is not a cut-out. The thinnest entry carrying real
-      // alpha on this roster is the trimmed hero at 2.05%, and the thinnest true
-      // cut-out is the app icon at 3.37%; the floor below sits under both and
-      // still excludes a token pixel or a rounded corner.
+      // alpha on this roster is the trimmed hero at 2.05%; the floor below sits
+      // under it and still excludes a token pixel or a rounded corner. This
+      // used to name the app icon's 3.37% as the thinnest true cut-out — that
+      // asset is opaque now and is measured in the branch above.
       assert.ok(
         alpha.transparentSamples > alpha.samples * 0.01,
         `${asset} is claimed transparent but only ${alpha.transparentSamples}/${alpha.samples} samples are cut out`,
@@ -623,9 +638,16 @@ test('[static] every roster bake claim is re-derived from the file, both ways', 
     }
   }
   // The sweep must actually be measuring both halves of the roster.
+  //
+  // The transparent floor moved 6 -> 5 when the app icon became an opaque
+  // export: six entries carried real alpha, five do now, and the sixth did not
+  // go missing — it moved to the opaque branch above, where it is measured
+  // just as strictly. The floor tracks the roster's composition. It is not a
+  // threshold lowered to let something through, and the assertion either side
+  // of it is unchanged.
   assert.ok(opaqueChecked >= 2, `the opaque half must stay measured (saw ${opaqueChecked})`);
   assert.ok(
-    transparentChecked >= 6,
+    transparentChecked >= 5,
     `the transparent half must stay measured (saw ${transparentChecked})`,
   );
 });
