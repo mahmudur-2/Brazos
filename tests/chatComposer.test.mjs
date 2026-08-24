@@ -595,16 +595,23 @@ test('[static+executed] the bubble cap resolves against the row, not against the
 
 test('[static] the read-model verdicts are recorded where the next run will look', () => {
   // The two flags this investigation produced must carry the EVIDENCE, not a
-  // shrug: the daytime schema run reads these to know what to build.
+  // shrug: the schema run read these to know what to build, and W1 flipped
+  // both once phase77 built it. The verdicts stay — a flag that HAS been
+  // flipped is still where a later reader looks to find out why it could be,
+  // and deleting the evidence would leave the flip unexplained.
   const flags = read('lib/featureFlags.ts');
-  assert.match(flags, /export const READ_TICKS = false as boolean;/);
-  // Read: readable on direct threads, not on job threads — both halves named
-  // with the migration that decides them.
+  assert.match(flags, /export const READ_TICKS = true as boolean;/);
+  assert.match(flags, /export const MARK_UNREAD = true as boolean;/);
+  // Read: was readable on direct threads, not on job threads — both halves
+  // named with the migration that decides them.
   assert.match(flags, /direct_threads_select_party/);
   assert.match(flags, /message_reads_select_own/);
-  // Mark-as-unread: rewindable on job threads, not on direct threads.
+  // Mark-as-unread: was rewindable on job threads, not on direct threads.
   assert.match(flags, /message_reads_update_own/);
   assert.match(flags, /mark_direct_thread_read\(\), hard-codes `now\(\)`/);
+  // And each one names what CLOSED it, not just what blocked it.
+  assert.match(flags, /message_reads_select_party/);
+  assert.match(flags, /set_direct_thread_read_at\(\)/);
 });
 
 // ---------------------------------------------------------------------------

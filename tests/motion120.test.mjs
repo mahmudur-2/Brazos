@@ -769,10 +769,12 @@ test("[static] riseFor opens with the 'worklet' directive, so the fast path may 
   );
 });
 
-test('[static] every feature flag is false and carries the dependency it waits on', () => {
+test('[static] every feature flag carries the dependency it waits on, and only the landed ones are live', () => {
   // M2's contract: the UI behind a flag is BUILT, and the flag is what keeps
   // it from being offered. A flag with no recorded dependency is a flag
-  // nobody can ever safely flip, so the WAITS ON line is part of the flag.
+  // nobody can ever safely flip, so the WAITS ON line is part of the flag —
+  // and it stays part of it after the flip, because a flag that HAS been
+  // flipped is still where a later reader looks to find out why it could be.
   const source = read('lib/featureFlags.ts');
   const flags = [...source.matchAll(/export const (\w+) = (false|true) as boolean;/g)];
   assert.equal(flags.length, 11, `the roster is eleven flags (saw ${flags.length})`);
@@ -791,8 +793,38 @@ test('[static] every feature flag is false and carries the dependency it waits o
   // nothing to wait on is a flag nobody can ever safely flip.
   assert.doesNotMatch(source, /export const MUTE\b/);
   assert.match(source, /NOT A FLAG — MUTE WAS RETIRED/);
+  // WHICH FLAGS ARE LIVE, named rather than counted. The seven that flipped on
+  // 2026-08-24 are exactly the ones supabase/phase77_conversation_features.sql
+  // supplied a dependency for, and RUN W1 wired every one of them on BOTH
+  // thread kinds. The four that remain each still have something real to wait
+  // on — an edge-function deploy for TRANSLATION, expo-location's background
+  // permission for LIVE_LOCATION, a picker for DOCUMENTS, and for
+  // DELIVERED_TICKS a delivery signal that does not exist in any schema yet.
+  //
+  // Pinning the ROSTER rather than asserting "all false" is what keeps this
+  // fence useful now that flipping is a thing that happens: an eighth flag
+  // going live without its dependency turns this red exactly as a premature
+  // flip used to.
+  const LIVE = [
+    'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS', 'MARK_UNREAD',
+    'READ_TICKS', 'TIMED_BLOCK',
+  ];
+  const DARK = ['DELIVERED_TICKS', 'DOCUMENTS', 'LIVE_LOCATION', 'TRANSLATION'];
+  assert.deepEqual(
+    [...LIVE, ...DARK].sort(),
+    flags.map((f) => f[1]).sort(),
+    'every flag must be listed as live or dark — say which in HANDOFF.md too'
+  );
+
   for (const [, name, value] of flags) {
-    assert.equal(value, 'false', `${name} is live — flip it here only once its dependency has landed`);
+    const expected = LIVE.includes(name) ? 'true' : 'false';
+    assert.equal(
+      value,
+      expected,
+      expected === 'false'
+        ? `${name} is live — flip it here only once its dependency has landed`
+        : `${name} is dark — its dependency landed, so it belongs at true`
+    );
     const doc = source.slice(0, source.indexOf(`export const ${name}`));
     const block = doc.slice(doc.lastIndexOf('/**'));
     assert.match(block, /WAITS ON:/, `${name} must record the table, column, policy, deploy or key it waits on`);
