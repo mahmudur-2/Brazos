@@ -60,52 +60,83 @@ test('web build is installable and receives hosted runtime configuration', async
 });
 
 test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web map', async () => {
-  const [nativeIcon, appleIcon, icon192, icon512, webMap, mapScreen, packageJson, appConfig] = await Promise.all([
-    readBinary('assets/icon.png'),
-    readBinary('public/apple-touch-icon.png'),
-    readBinary('public/icon-192.png'),
-    readBinary('public/icon-512.png'),
-    read('components/HotspotMap.web.tsx'),
-    read('screens/MapScreen.tsx'),
-    read('package.json'),
-    read('app.json'),
-  ]);
+  const [nativeIcon, appleIcon, icon192, icon512, appIconBytes, webMap, mapScreen, packageJson, appConfig] =
+    await Promise.all([
+      readBinary('assets/icon.png'),
+      readBinary('public/apple-touch-icon.png'),
+      readBinary('public/icon-192.png'),
+      readBinary('public/icon-512.png'),
+      readBinary('assets/brand/app-icon-b-leaf.png'),
+      read('components/HotspotMap.web.tsx'),
+      read('screens/MapScreen.tsx'),
+      read('package.json'),
+      read('app.json'),
+    ]);
 
   // Still 1024x1024, and still shipped — as the ANDROID adaptive foreground
-  // pinned below. It is no longer expo.icon; see the flat icon just after.
+  // pinned below. It is no longer expo.icon; see the b-leaf icon just after.
   assert.deepEqual([nativeIcon.readUInt32BE(16), nativeIcon.readUInt32BE(20)], [1024, 1024]);
   assert.deepEqual([appleIcon.readUInt32BE(16), appleIcon.readUInt32BE(20)], [180, 180]);
   assert.deepEqual([icon192.readUInt32BE(16), icon192.readUInt32BE(20)], [192, 192]);
   assert.deepEqual([icon512.readUInt32BE(16), icon512.readUInt32BE(20)], [512, 512]);
-  assert.equal(JSON.parse(appConfig).expo.icon, './assets/brand/app-icon-flat.png');
+  assert.equal(JSON.parse(appConfig).expo.icon, './assets/brand/app-icon-b-leaf.png');
   assert.equal(
     JSON.parse(appConfig).expo.android.adaptiveIcon.foregroundImage,
     './assets/icon.png'
   );
 
-  // B3 — THE APP ICON IS THE FLAT EXPORT, AND FLAT IS THE POINT.
+  // B4 — THE APP ICON IS THE B-LEAF EXPORT, AND TOTAL OPACITY IS STILL THE POINT.
   //
-  // expo.icon moved off assets/icon.png to assets/brand/app-icon-flat.png.
-  // Apple rejects an app icon that carries ANY transparency, so the two
-  // properties worth fencing are the ones a re-export silently loses: the
-  // 1024x1024 size, and total opacity.
+  // expo.icon moved off assets/brand/app-icon-flat.png to
+  // assets/brand/app-icon-b-leaf.png. Apple rejects an app icon that carries
+  // ANY transparency, so the two properties worth fencing are the ones a
+  // re-export silently loses: the 1024x1024 size, and total opacity.
   //
-  // Colour type cannot answer the second one. This file is RGBA (PNG colour
-  // type 6), so an alpha channel EXISTS and is merely pinned at 255 in all
-  // 1048576 samples — exactly the trap the roster sweep in
-  // tests/themeResolution.test.mjs documents. So the samples are read for
-  // real, through the shared decoder in ./pngGeometry.mjs rather than a
-  // second copy of the PNG filter loop.
+  // The flat export could only answer the second one by reading all 1048576
+  // alpha samples, because it was RGBA (PNG colour type 6): the channel
+  // EXISTED and was merely pinned at 255 — exactly the trap the roster sweep
+  // in tests/themeResolution.test.mjs documents. This file is colour type 2,
+  // so there is no alpha channel to sweep and the header settles the question
+  // outright. Pinning the colour type is STRICTLY STRONGER than the old
+  // sweep, not weaker: a re-export back to type 6 fails here now even if
+  // every sample it writes is opaque. The million-sample loop is gone rather
+  // than kept for safety, because on a three-byte pixel it would have been
+  // stepping over the BLUE channel and calling it alpha.
   //
-  // Not on that roster, deliberately: it scans screens/components/ui for
-  // `require` of a raster, and this icon is mounted by app.json, not by a
-  // require — adding it there would fail the roster's added-or-removed
-  // assertion. app.json's icon keys are fenced HERE, so its measurement is
-  // here too. assets/brand/app-icon-v2.png stays on that roster and stays
-  // cut-out: it is the LaunchScreen mark, which is a different job.
-  const appIcon = decode(join(root, 'assets/brand/app-icon-flat.png'));
+  // Not on that roster: it scans screens/components/ui for `require` of a
+  // raster, and this icon is mounted by app.json, not by a require — adding
+  // it there would fail the roster's added-or-removed assertion. app.json's
+  // icon keys are fenced HERE, so its measurement is here too.
+  // assets/brand/app-icon-v2.png stays on that roster and stays cut-out: it
+  // is the LaunchScreen mark, which is a different job.
+  const appIcon = decode(join(root, 'assets/brand/app-icon-b-leaf.png'));
   assert.deepEqual([appIcon.width, appIcon.height], [1024, 1024]);
-  // The corners are where a rounded export regresses, so each is named.
+  assert.equal(
+    appIcon.colourType,
+    2,
+    `app-icon-b-leaf.png is PNG colour type ${appIcon.colourType}; the shipped export is type 2, which has no alpha channel at all`
+  );
+  // The one hole a colour type leaves open: a PNG with no alpha channel can
+  // still declare a single colour fully transparent through a tRNS chunk.
+  // tRNS precedes IDAT, so the walk stops at the first IDAT — and that it
+  // REACHED one is asserted, so a walk that fell off the end cannot pass by
+  // finding nothing.
+  const preImageChunks = [];
+  for (let off = 8; off + 8 <= appIconBytes.length; ) {
+    const type = appIconBytes.toString('ascii', off + 4, off + 8);
+    preImageChunks.push(type);
+    if (type === 'IDAT') break;
+    off += 12 + appIconBytes.readUInt32BE(off);
+  }
+  assert.ok(preImageChunks.includes('IDAT'), 'the app icon chunk walk never reached IDAT');
+  assert.ok(
+    !preImageChunks.includes('tRNS'),
+    `app-icon-b-leaf.png declares transparency through tRNS (${preImageChunks.join(', ')}) — Apple rejects it`
+  );
+  // The corners are where a rounded export regresses, so each is still named.
+  // `at()` reads through the decoded pixel buffer, so this also proves the
+  // image decodes at its extremes, and it reports real alpha rather than a
+  // constant 255 the moment the file goes back to carrying a channel.
   for (const [corner, x, y] of [
     ['top-left', 0, 0],
     ['top-right', appIcon.width - 1, 0],
@@ -115,15 +146,9 @@ test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web 
     assert.equal(
       appIcon.at(x, y)[3],
       255,
-      `app-icon-flat.png: the ${corner} corner is not opaque — Apple rejects it`
+      `app-icon-b-leaf.png: the ${corner} corner is not opaque — Apple rejects it`
     );
   }
-  // ...and the flattening is total, not merely true at the four corners.
-  let softest = 255;
-  for (let i = appIcon.bpp - 1; i < appIcon.pixels.length; i += appIcon.bpp) {
-    if (appIcon.pixels[i] < softest) softest = appIcon.pixels[i];
-  }
-  assert.equal(softest, 255, `app-icon-flat.png carries alpha down to ${softest}`);
   assert.match(webMap, /new Map\(/);
   assert.match(webMap, /rastertiles\/voyager\/\{z\}\/\{x\}\/\{y\}@2x\.png/);
   assert.match(webMap, /tilePixelRatio: 2/);

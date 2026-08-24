@@ -7,7 +7,7 @@
       "policy": "fingerprint"
     },
     "orientation": "portrait",
-    "icon": "./assets/brand/app-icon-flat.png",
+    "icon": "./assets/brand/app-icon-b-leaf.png",
     "userInterfaceStyle": "automatic",
     "scheme": "brazos",
     "ios": {
