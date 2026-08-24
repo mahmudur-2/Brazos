@@ -248,14 +248,14 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   thumbFallback: {
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   // D2: one category tile everywhere — the deep-green surface under a gold
   // hairline, carrying a gold glyph. The saturated per-category fills are
   // unconverted Heritage colour and are retired in dark; light keeps them.
   thumbFallbackDark: {
     backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.line,
   },
   body: {
     flex: 1,

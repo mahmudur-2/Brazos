@@ -224,9 +224,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '800',
     color: colors.textMuted,
-    letterSpacing: 0.8,
+    letterSpacing: 1.4,
   },
-  sectionLabelDark: { color: colors.gold, letterSpacing: 1.4 },
+  sectionLabelDark: { color: colors.gold },
   chipWrap: {
     flexDirection: 'row',
     flexWrap: 'wrap',

@@ -621,3 +621,252 @@ test('[static] migrated files carry no raw hex or rgba() colour literals', async
     assert.equal(rgba, null, `${path}: raw rgb/rgba() literal crept back in`);
   }
 });
+
+// ---------------------------------------------------------------------------
+// THE PARITY FENCE — 2026-08-24, and it is home(19)'s rule let out of one
+// screen.
+//
+// THE OPERATOR'S STANDING PRODUCT RULE: between light and dark, ONLY colour
+// VALUES may differ. Font size, weight, letterSpacing, textTransform,
+// lineHeight, borderWidth, borderRadius, elevation, spacing and structure are
+// one set of numbers for both. Where they diverged, DARK was correct and light
+// adopted dark's value.
+//
+// home(19) already asserted exactly this — for screens/HomeScreen.tsx and
+// screens/WorkerHomeScreen.tsx, by scanning their `*Dark` style objects for
+// layout and depth. The rule was never a Home rule. The sweep that generalised
+// it found the fault in twenty-seven files, the widest being TextField's label:
+// light drew a 13pt/600 sentence-case label where dark drew an 11pt/800
+// uppercase eyebrow with wide tracking. That is a different label rather than
+// the same one in a second palette, and every form in the app renders it.
+//
+// WHAT IS FLAGGED IS AN ALLOW-LIST, not a deny-list, and that is deliberate.
+// The scan names the React Native style properties that are geometry, type or
+// depth; anything not on it is left alone. A deny-list ("everything that is not
+// a colour") fires on every object that merely happens to have keys — a
+// category-accent map, the auth backdrop's line/faint/gold triple — and a fence
+// that cries wolf is a fence somebody deletes.
+//
+// THREE SHAPES ARE READ, because the fault took three forms:
+//   1. a `*Dark` style object inside StyleSheet.create;
+//   2. `isDark && { ...inline... }` — an override light never gets;
+//   3. `isDark ? A : B` where both branches are style objects, inline or
+//      named — the two are diffed and a differing non-colour key is a fork.
+// Parsed with TypeScript, not matched with a regex: a nested shadowOffset and
+// a docblock that discusses borderWidth both defeat brace-counting.
+// ---------------------------------------------------------------------------
+
+/** Geometry, type and depth. A theme decision may not reach any of these. */
+const PALETTE_MAY_NOT_CHANGE = new Set([
+  // type
+  'fontSize', 'fontWeight', 'fontFamily', 'fontStyle', 'fontVariant',
+  'letterSpacing', 'lineHeight', 'textTransform', 'textAlign', 'textAlignVertical',
+  'textDecorationLine', 'includeFontPadding',
+  // borders — the WEIGHT and the SHAPE, never the colour
+  'borderWidth', 'borderTopWidth', 'borderBottomWidth', 'borderLeftWidth',
+  'borderRightWidth', 'borderStartWidth', 'borderEndWidth', 'borderStyle',
+  'borderRadius', 'borderTopLeftRadius', 'borderTopRightRadius',
+  'borderBottomLeftRadius', 'borderBottomRightRadius', 'borderCurve',
+  // depth — home(19) put this here: adding or removing a shadow per theme
+  // makes light a different design, not the same design in a second palette
+  'elevation', 'shadowOpacity', 'shadowRadius', 'shadowOffset',
+  'textShadowOffset', 'textShadowRadius', 'opacity',
+  // space
+  'padding', 'paddingTop', 'paddingBottom', 'paddingLeft', 'paddingRight',
+  'paddingHorizontal', 'paddingVertical', 'paddingStart', 'paddingEnd',
+  'margin', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight',
+  'marginHorizontal', 'marginVertical', 'marginStart', 'marginEnd',
+  'gap', 'rowGap', 'columnGap',
+  // box and structure
+  'width', 'height', 'minWidth', 'minHeight', 'maxWidth', 'maxHeight',
+  'flex', 'flexGrow', 'flexShrink', 'flexBasis', 'flexDirection', 'flexWrap',
+  'alignItems', 'alignSelf', 'alignContent', 'justifyContent',
+  'position', 'top', 'right', 'bottom', 'left', 'zIndex', 'overflow',
+  'transform', 'aspectRatio', 'display',
+]);
+
+const themeForkOffenders = (path, source, ts) => {
+  const sf = ts.createSourceFile(
+    path, source, ts.ScriptTarget.Latest, true,
+    path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  const offenders = [];
+  let overrides = 0;
+
+  const keysOf = (obj) => {
+    const m = new Map();
+    for (const p of obj.properties) {
+      if (!ts.isPropertyAssignment(p)) continue;
+      const k = ts.isIdentifier(p.name) || ts.isStringLiteral(p.name) ? p.name.text : null;
+      if (k) m.set(k, p.initializer.getText().replace(/\s+/g, ' '));
+    }
+    return m;
+  };
+
+  // Named style objects, so `isDark ? styles.aDark : styles.a` can be diffed.
+  const named = new Map();
+  const collect = (node) => {
+    if (
+      ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression) &&
+      node.expression.name.text === 'create' && node.arguments.length &&
+      ts.isObjectLiteralExpression(node.arguments[0])
+    ) {
+      for (const p of node.arguments[0].properties) {
+        if (!ts.isPropertyAssignment(p)) continue;
+        const k = ts.isIdentifier(p.name) ? p.name.text : null;
+        if (k && ts.isObjectLiteralExpression(p.initializer)) named.set(k, p.initializer);
+      }
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sf);
+
+  // 1. every `*Dark` style object is colour-only.
+  for (const [name, obj] of named) {
+    if (!/Dark$/.test(name)) continue;
+    overrides += 1;
+    for (const key of keysOf(obj).keys()) {
+      if (PALETTE_MAY_NOT_CHANGE.has(key)) offenders.push(path + ': ' + name + '.' + key + ' is dark-only');
+    }
+  }
+
+  const mentionsIsDark = (node) => {
+    let hit = false;
+    const walk = (n) => {
+      if (hit) return;
+      if (ts.isIdentifier(n) && n.text === 'isDark') hit = true;
+      else ts.forEachChild(n, walk);
+    };
+    walk(node);
+    return hit;
+  };
+  const asObject = (node) => {
+    if (ts.isObjectLiteralExpression(node)) return node;
+    const m = node.getText().match(/^styles\.(\w+)$/);
+    return m ? named.get(m[1]) ?? null : null;
+  };
+
+  const visit = (node) => {
+    // 2. `isDark && <object>` — an override the other theme never gets. Read
+    //    for `!isDark` too: a LIGHT-only override is the same fault mirrored,
+    //    and the tree has four of them (all colour-only today).
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken &&
+      mentionsIsDark(node.left)
+    ) {
+      const obj = asObject(node.right);
+      if (obj) {
+        overrides += 1;
+        const side = /!\s*isDark/.test(node.left.getText()) ? 'light' : 'dark';
+        for (const key of keysOf(obj).keys()) {
+          if (PALETTE_MAY_NOT_CHANGE.has(key)) {
+            offenders.push(path + ': a ' + side + '-only override sets ' + key);
+          }
+        }
+      }
+    }
+    // 3. `isDark ? A : B` — both sides styles; a differing non-colour key is a
+    //    fork, and a dark-only branch is one too.
+    if (ts.isConditionalExpression(node) && mentionsIsDark(node.condition)) {
+      const a = asObject(node.whenTrue);
+      const b = asObject(node.whenFalse);
+      if (a && b) {
+        overrides += 1;
+        const ka = keysOf(a);
+        const kb = keysOf(b);
+        for (const key of new Set([...ka.keys(), ...kb.keys()])) {
+          if (!PALETTE_MAY_NOT_CHANGE.has(key)) continue;
+          if (ka.get(key) !== kb.get(key)) offenders.push(path + ': the themes disagree on ' + key);
+        }
+      } else if (a && !b && node.whenFalse.kind === ts.SyntaxKind.NullKeyword) {
+        overrides += 1;
+        for (const key of keysOf(a).keys()) {
+          if (PALETTE_MAY_NOT_CHANGE.has(key)) offenders.push(path + ': a dark-only override sets ' + key);
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sf);
+  return { offenders, overrides };
+};
+
+test('[static] a theme decision may change a COLOUR and nothing else, tree-wide', async () => {
+  const ts = (await import('typescript')).default;
+  const files = await filesUnder(['screens', 'components', 'ui', 'hooks', 'navigation', 'modes']);
+  assert.ok(files.length > 100, 'the sweep must enumerate the tree (saw ' + files.length + ')');
+
+  const offenders = [];
+  let overrides = 0;
+  for (const path of files) {
+    const source = await read(path);
+    if (!source.includes('isDark') && !/\w+Dark:\s*\{/.test(source)) continue;
+    const result = themeForkOffenders(path, source, ts);
+    offenders.push(...result.offenders);
+    overrides += result.overrides;
+  }
+
+  // ANTI-VACUITY on the real tree: theme overrides are numerous by design, so a
+  // scanner that had gone blind would report "no offenders" about nothing.
+  assert.ok(
+    overrides > 100,
+    'the scan must be finding the tree’s theme overrides (saw ' + overrides + ')',
+  );
+  assert.deepEqual(
+    offenders,
+    [],
+    'a theme override changes something that is not a colour. Light is a palette translation of ' +
+      'dark, never a reinterpretation: move the value onto the shared style at DARK’s number, ' +
+      'and leave only the colour forked',
+  );
+});
+
+test('[static] the parity scan catches a planted fork — and does not invent one', async () => {
+  // ANTI-VACUITY as a fixture rather than a claim, planting one of each shape
+  // the real sweep found: a `*Dark` object with a ring light never drew, a
+  // dark-only inline override, and a named pair that disagrees on type size.
+  // The clean cases beside them must NOT be flagged — a colour-only override is
+  // the whole point of having two palettes, and an object that merely has keys
+  // (the auth backdrop's line/faint triple) is not a style at all.
+  const ts = (await import('typescript')).default;
+  const fixture = [
+    "import { StyleSheet } from 'react-native';",
+    'export function Broken({ isDark }) {',
+    '  const ring = isDark && { borderWidth: 2, borderColor: c.gold };',
+    '  const art = isDark ? { line: c.gold, faint: c.goldSoft } : { line: c.ink, faint: c.mint };',
+    '  const fill = isDark ? { backgroundColor: c.forest } : { backgroundColor: c.mint };',
+    '  return [ring, art, fill, isDark ? styles.tabDark : styles.tab];',
+    '}',
+    'const styles = StyleSheet.create({',
+    '  glyphDark: { backgroundColor: "transparent", borderWidth: 1, borderColor: c.gold },',
+    '  rowDark: { backgroundColor: c.forest, borderColor: c.gold },',
+    '  tab: { fontSize: 12, color: c.ink },',
+    '  tabDark: { fontSize: 16, color: c.gold },',
+    '});',
+  ].join('\n');
+
+  const planted = themeForkOffenders('components/Fixture.tsx', fixture, ts);
+  assert.ok(planted.overrides >= 4, 'every planted override must be seen (saw ' + planted.overrides + ')');
+  assert.deepEqual(
+    planted.offenders.sort(),
+    [
+      'components/Fixture.tsx: a dark-only override sets borderWidth',
+      'components/Fixture.tsx: glyphDark.borderWidth is dark-only',
+      'components/Fixture.tsx: tabDark.fontSize is dark-only',
+      'components/Fixture.tsx: the themes disagree on fontSize',
+    ],
+    'exactly the planted forks must be caught, and the colour-only ones left alone',
+  );
+
+  // And a file whose overrides are colour-only produces nothing at all.
+  const clean = [
+    "import { StyleSheet } from 'react-native';",
+    'export function Fine({ isDark }) { return isDark && styles.pillDark; }',
+    'const styles = StyleSheet.create({',
+    '  pill: { borderWidth: 1, borderRadius: 8, borderColor: c.line, backgroundColor: c.mint },',
+    '  pillDark: { borderColor: c.gold, backgroundColor: "transparent" },',
+    '});',
+  ].join('\n');
+  assert.deepEqual(themeForkOffenders('components/Clean.tsx', clean, ts).offenders, []);
+});

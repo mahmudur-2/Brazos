@@ -137,10 +137,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: colors.mint,
+      borderWidth: 1,
+      borderColor: colors.border,
     },
     rowGlyphDark: {
       backgroundColor: 'transparent',
-      borderWidth: 1,
       borderColor: colors.gold,
     },
     label: {

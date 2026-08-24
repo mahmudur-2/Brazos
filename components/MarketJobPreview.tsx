@@ -206,14 +206,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   // D2: one category tile everywhere — deep-green surface, gold hairline,
   // gold glyph. The saturated per-category fills are retired in dark; light
   // keeps them.
   iconCircleDark: {
     backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   postedAt: {
     fontSize: 12,

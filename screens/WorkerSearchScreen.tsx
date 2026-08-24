@@ -292,7 +292,13 @@ export function WorkerSearchScreen() {
                 style={({ pressed }) => [
                   styles.searchButton,
                   isDark && styles.searchButtonDark,
-                  pressed && (isDark ? styles.searchButtonPressedDark : styles.searchButtonPressed),
+                  // The pressed treatment is a base plus a colour override,
+                  // exactly like the resting one above it — not two
+                  // alternatives. As alternatives the dark branch silently
+                  // dropped the scale the light branch carried, and the light
+                  // branch dropped dark's dim.
+                  pressed && styles.searchButtonPressed,
+                  pressed && isDark && styles.searchButtonPressedDark,
                 ]}
                 accessibilityRole="button"
                 accessibilityLabel="Search workers"
@@ -724,20 +730,20 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.forest,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   searchButtonDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   searchButtonPressed: {
     backgroundColor: colors.emerald,
     transform: [{ scale: 0.97 }],
+    opacity: 0.72,
   },
   searchButtonPressedDark: {
     backgroundColor: 'transparent',
-    opacity: 0.72,
-    transform: [{ scale: 0.97 }],
   },
   controlPressed: {
     backgroundColor: colors.mint,
@@ -760,12 +766,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   serviceHint: {
     flexShrink: 1,
-    fontSize: 12,
+    fontSize: 14,
     color: colors.textMuted,
   },
   serviceHintDark: {
-    fontFamily: fonts.display,
-    fontSize: 14,
     color: colors.gold,
   },
   chipRow: {
@@ -1022,13 +1026,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderTopColor: colors.mint2,
   },
   resultActionText: {
-    fontSize: 14,
+    fontSize: 17,
     fontWeight: '700',
     color: colors.forest,
   },
   resultActionTextDark: {
-    fontFamily: fonts.display,
-    fontSize: 17,
     color: colors.gold,
   },
   resultActionIcon: {
@@ -1038,10 +1040,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   resultActionIconDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   }),

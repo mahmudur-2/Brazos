@@ -13,9 +13,18 @@ export function Avatar({ name, uri, size = 44 }: AvatarProps) {
   const styles = stylesFor(colors);
   const dimension = { width: size, height: size, borderRadius: size / 2 };
   // Prestige decision 8 — in dark every avatar wears the gold ring and the
-  // fallback speaks gold serif initials on the deep-green fill; light keeps
-  // its Heritage arrangement (primary fill, cream initials, no ring).
-  const ring = isDark ? { borderWidth: 1.5, borderColor: withAlpha(colors.gold, 0.75) } : null;
+  // fallback speaks gold initials on the deep-green fill; light keeps its
+  // Heritage arrangement of primary fill and cream initials.
+  //
+  // 2026-08-24: the ring is drawn in BOTH, at one weight. It was dark-only,
+  // which made an avatar a different SHAPE in light rather than the same shape
+  // in a second palette — and 1.5pt of border insets the image, so the two
+  // themes were cropping the photo differently too. Light rings in the
+  // palette's hairline; only the colour forks.
+  const ring = {
+    borderWidth: 1.5,
+    borderColor: isDark ? withAlpha(colors.gold, 0.75) : colors.border,
+  };
 
   if (uri) {
     return <Image source={{ uri }} style={[styles.image, dimension, ring]} />;

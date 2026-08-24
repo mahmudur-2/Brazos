@@ -1,7 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { formatStatus } from '../lib/jobStage';
 import {
-  fonts,
   radius,
   spacing,
   themedStyles,
@@ -61,18 +60,28 @@ export function StatusBadge({ status, label }: StatusBadgeProps) {
   const style = byStatus[status] ?? fallback;
   // The masters never draw a filled status pill on dark: masters 8, 16 and 17
   // outline it, and 35/36 outline it in the status's own green. So under dark
-  // the pill becomes line-work in its status colour, with the serif label
-  // decision 9 gives a status value; light keeps the Heritage tinted fill.
+  // the pill becomes line-work in its status colour; light keeps the Heritage
+  // tinted fill.
+  //
+  // 2026-08-24: the RING is now drawn in both, because the pill's geometry is
+  // not allowed to depend on the palette. Light's ring is its own fill colour,
+  // so the pill still READS as a tinted fill there — the ONLY thing that
+  // differs between the two themes is which colour each slot takes, which is
+  // the whole rule. The dark-only serif went with it: `fonts.display` resolves
+  // to `undefined` (themeTokens' one-serif fence pins that), so it never named
+  // a face — all it actually did was make the label a point larger in dark.
+  // 13 is dark's size and both now use it.
   return (
     <View
       style={[
         styles.badge,
-        isDark
-          ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: style.text }
-          : { backgroundColor: style.bg },
+        {
+          backgroundColor: isDark ? 'transparent' : style.bg,
+          borderColor: isDark ? style.text : style.bg,
+        },
       ]}
     >
-      <Text style={[styles.text, isDark && styles.textSerif, { color: style.text }]}>
+      <Text style={[styles.text, { color: style.text }]}>
         {label ?? formatStatus(status)}
       </Text>
     </View>
@@ -84,14 +93,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs,
     borderRadius: radius.pill,
+    borderWidth: 1,
     alignSelf: 'flex-start',
   },
   text: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  textSerif: {
-    fontFamily: fonts.display,
     fontSize: 13,
+    fontWeight: '700',
   },
 });

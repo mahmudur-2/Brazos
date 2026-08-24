@@ -139,9 +139,10 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.line,
   },
   glyphDark: {
-    borderWidth: 1,
     borderColor: withAlpha(colors.gold, 0.55),
   },
   copy: {

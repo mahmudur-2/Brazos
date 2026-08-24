@@ -258,10 +258,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     marginBottom: spacing.xs,
     backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   bucketGlyphDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   // Green eyebrows over serif figures — master 25's own pairing, and the

@@ -285,13 +285,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: 'transparent',
   },
   hireButtonText: {
-    fontSize: 13,
+    fontSize: 17,
     fontWeight: '800',
     color: colors.emerald,
   },
   hireButtonTextDark: {
-    fontFamily: fonts.display,
-    fontSize: 17,
     color: colors.gold,
   },
   // Master 22's gold leaf divider under the header. Two rules with the

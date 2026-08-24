@@ -318,9 +318,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   squircleDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   identity: {
@@ -378,11 +379,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   cardGlyphDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   rowGlyph: {
     width: 32,

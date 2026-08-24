@@ -576,9 +576,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   closeRingDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   subtitle: {

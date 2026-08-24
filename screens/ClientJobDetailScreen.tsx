@@ -1235,11 +1235,11 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   iconCircleDark: {
     backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   jobMetaRow: {
     flexDirection: 'row',
@@ -1271,9 +1271,9 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     ...typography.caption,
     color: colors.emerald,
     fontWeight: '800',
-    letterSpacing: 0.8,
+    letterSpacing: 1.4,
   },
-  valueLabelDark: { color: colors.gold, letterSpacing: 1.4 },
+  valueLabelDark: { color: colors.gold },
   // Masters 8, 16 and 17 all set the OWNER's own figure in cream, not green —
   // decision 6's emerald covers the marketplace-facing money (EST. PAY, feed
   // prices, Open/live/unread), which is what those examples all are.
@@ -1314,9 +1314,10 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   timingGlyphDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   timingCopy: {
@@ -1340,9 +1341,9 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     ...typography.caption,
     color: colors.emerald,
     fontWeight: '800',
-    letterSpacing: 0.9,
+    letterSpacing: 1.4,
   },
-  eyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
+  eyebrowDark: { color: colors.gold },
   scopeDescription: {
     ...typography.body,
     color: colors.ink,
@@ -1358,12 +1359,13 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     paddingVertical: spacing.sm,
     borderRadius: radius.pill,
     backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   // Masters 8 and 16 both draw the scope chip as a gold OUTLINE, not a sage
   // fill — master 16 keeps its label green, which is the tag vocabulary.
   scopeTagDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   scopeTagText: {
@@ -1445,13 +1447,13 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     padding: spacing.md,
     borderRadius: radius.lg,
     backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   // Master 17 draws this as an inner hairlined card on the card's own
   // surface, not a sage panel; light keeps the sage.
   workerRowDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   // Master 17's shield sits in a gold ring at the payment card's right.
   paymentShield: {
@@ -1575,10 +1577,11 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   emptyIconDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   emptyTitle: {

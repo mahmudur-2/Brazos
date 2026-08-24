@@ -31,16 +31,13 @@ export function TextField({
       <View style={styles.labelRow}>
         {/* Decision 8: a field label is a gold small-caps eyebrow. Masters 3,
             4, 23, 24 and 30 all draw them that way (master 29 draws its two
-            cream — B-9, settled by the decision). Light keeps the Heritage
-            ink label. */}
-        <Text
-          style={[
-            styles.label,
-            { color: palette.text },
-            isDark && styles.labelDark,
-            isDark && { color: palette.gold },
-          ]}
-        >
+            cream — B-9, settled by the decision).
+            2026-08-24: light draws the SAME eyebrow, in ink. It used to be a
+            13pt/600 sentence-case label — a different label, not the same one
+            in a second palette, and the widest instance of that fault in the
+            app since every form in it renders this component. The metrics are
+            dark's, per the parity rule; only the colour still forks. */}
+        <Text style={[styles.label, { color: isDark ? palette.gold : palette.text }]}>
           {label}
         </Text>
         {hint ? <Text style={[styles.hint, { color: palette.textMuted }]}>{hint}</Text> : null}
@@ -82,10 +79,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   label: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  labelDark: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.3,

@@ -620,20 +620,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.pill,
     backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   // Master 18 draws the identity card's category chips as gold OUTLINES with
   // cream labels; light keeps the Heritage sage-filled pair.
   chipDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   chipText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: colors.primary,
   },
-  chipTextDark: { fontSize: 14, color: colors.ink },
+  chipTextDark: { color: colors.ink },
   // Masters 5/18's saved control: one full-width hairlined card, its label
   // centred, with the bookmark at the trailing edge.
   savedCard: {

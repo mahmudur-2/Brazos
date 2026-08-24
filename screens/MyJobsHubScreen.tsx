@@ -568,10 +568,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   headerMarkDark: {
     backgroundColor: 'transparent',
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   headerCopy: {
@@ -628,9 +629,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     shadowRadius: 4,
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   tabSelectedDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   tabLabel: {
@@ -641,10 +643,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   tabLabelSelected: {
     color: colors.forest,
+    fontSize: 16,
   },
   tabLabelSelectedDark: {
-    fontFamily: fonts.display,
-    fontSize: 16,
     // emerald D6: the chosen segment's LABEL is gold, not just its hairline —
     // the same treatment every chip, pill and radio now carries.
     color: selectedInDark(colors).line,

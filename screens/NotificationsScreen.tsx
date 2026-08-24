@@ -225,13 +225,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
   // Master 26 sets "Mark all read" as gold serif; light keeps the emerald.
   markAll: {
-    fontSize: 13,
+    fontSize: 16,
     fontWeight: '800',
     color: colors.emerald,
   },
   markAllDark: {
-    fontFamily: fonts.display,
-    fontSize: 16,
     color: colors.gold,
   },
   rowGlyph: {
@@ -240,9 +238,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   rowGlyphDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   list: {

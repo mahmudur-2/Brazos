@@ -1585,10 +1585,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   stepEyebrow: {
     fontSize: 12,
     fontWeight: '800',
-    letterSpacing: 1,
+    letterSpacing: 1.4,
     color: colors.emerald,
   },
-  stepEyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
+  stepEyebrowDark: { color: colors.gold },
   // Decision 9: a display heading speaks the serif, in both themes — the same
   // treatment every converted screen's hero title already carries.
   stepTitle: {

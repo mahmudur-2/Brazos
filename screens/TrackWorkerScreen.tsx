@@ -301,9 +301,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   noticeGlyphDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   noticeText: {
@@ -331,7 +332,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     width: 30,
     height: 30,
     borderRadius: 15,
-    borderWidth: 2,
+    // 1pt in both themes. Dark overrode this to 1 while light kept 2, so the
+    // same dot was a different weight depending on the palette — and on a
+    // fixed-width disc that also moved the numeral inside it. Dark is correct.
+    borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
     alignItems: 'center',
@@ -342,7 +346,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.emerald,
   },
   timelineDotDoneDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
     backgroundColor: colors.forest,
   },
@@ -350,7 +353,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.forest,
   },
   timelineDotPendingDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
     backgroundColor: colors.background,
   },
@@ -416,9 +418,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '800',
     color: colors.textMuted,
-    letterSpacing: 0.8,
+    letterSpacing: 1.4,
   },
-  eyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
+  eyebrowDark: { color: colors.gold },
   paymentNote: {
     fontSize: 13,
     color: colors.textMuted,

@@ -402,7 +402,19 @@ test('[static] master 26: an EMERALD glyph inside a GOLD ring, not both gold', (
   // The ring is gold and constant — read or unread. The dot at the row's end
   // is what marks unread, which is why neither the ring nor the glyph carries
   // read state in dark.
-  assert.match(feed, /rowGlyphDark: \{\s*borderWidth: 1,\s*borderColor: colors\.gold,/);
+  //
+  // 2026-08-24: the ring's WEIGHT moved to the shared style and only its
+  // COLOUR still forks, so the two halves are asserted where each now lives.
+  // The claim this fence makes is unchanged — a 1pt gold ring in dark — and it
+  // got stronger, because the weight is now pinned for BOTH themes: light
+  // draws the same ring in the hairline token, which is the parity rule.
+  assert.match(feed, /rowGlyph: \{[^}]*borderWidth: 1,/, 'the ring is one weight in both themes');
+  assert.match(feed, /rowGlyphDark: \{\s*borderColor: colors\.gold,/, 'and gold in dark');
+  assert.doesNotMatch(
+    feed,
+    /rowGlyphDark: \{[^}]*borderWidth/,
+    'the ring\'s weight belongs to both themes — a dark-only borderWidth is the fork this closed'
+  );
   // The glyph inside it is emerald. Both being gold flattened the ring and its
   // contents into one shape.
   assert.match(

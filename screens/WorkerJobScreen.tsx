@@ -659,9 +659,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 11,
     fontWeight: '800',
     color: colors.textMuted,
-    letterSpacing: 0.8,
+    letterSpacing: 1.4,
   },
-  paymentEyebrowDark: { color: colors.gold, letterSpacing: 1.4 },
+  paymentEyebrowDark: { color: colors.gold },
   // Masters 6 and 7 set a large outlined shield-check against the payment
   // card's copy — decoration beside a claim the words already make.
   paymentShield: {
@@ -708,11 +708,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   iconCircleDark: {
     backgroundColor: colors.mint,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   jobHeaderText: {
     flex: 1,

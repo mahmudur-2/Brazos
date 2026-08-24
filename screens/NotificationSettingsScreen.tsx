@@ -386,9 +386,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   rowGlyphDark: {
-    borderWidth: 1,
     borderColor: colors.gold,
   },
   rowLabel: {

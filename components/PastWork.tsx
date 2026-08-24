@@ -306,17 +306,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.xs + 2,
     borderRadius: radius.pill,
+    // The ring's WEIGHT is on the shared style, not on the selected variants:
+    // those two are ALTERNATIVES, so a weight held by one of them is a weight
+    // the other theme never draws. An unselected tab rings in its own fill and
+    // so reads exactly as it did.
+    borderWidth: 1,
+    borderColor: colors.neutralBg,
     backgroundColor: colors.neutralBg,
   },
   tabActive: {
     backgroundColor: colors.primary,
+    borderColor: colors.border,
   },
   // emerald D6: in dark the chosen tab is a gold outline over the bare ground,
   // not a filled pill — one selection treatment app-wide. Light keeps the
   // Heritage filled pill.
   tabActiveDark: {
     backgroundColor: selectedInDark(colors).fill,
-    borderWidth: 1,
     borderColor: selectedInDark(colors).line,
   },
   tabText: {

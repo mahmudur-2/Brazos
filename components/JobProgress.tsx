@@ -33,12 +33,22 @@ export function JobProgress({
   // green disc inside a GOLD ring with a gold check, a pending node is a bare
   // grey ring around its numeral, and the connector behind a done node is
   // gold. Light keeps the Heritage filled dot.
-  const doneNode = isDark
-    ? { backgroundColor: palette.forest, borderWidth: 1, borderColor: palette.gold }
-    : { backgroundColor: palette.primary };
-  const pendingNode = isDark
-    ? { backgroundColor: 'transparent', borderWidth: 1, borderColor: palette.navInactive }
-    : { backgroundColor: palette.neutralBg };
+  //
+  // 2026-08-24: both nodes carry the 1pt ring in BOTH themes. It was dark-only,
+  // which made a step a different size in light — a border insets a fixed-width
+  // disc's content — and that is geometry forking on the palette rather than
+  // colour. Light rings each node in the node's own fill, so it still reads as
+  // the Heritage filled dot; only the colours differ, which is the rule.
+  const doneNode = {
+    borderWidth: 1,
+    backgroundColor: isDark ? palette.forest : palette.primary,
+    borderColor: isDark ? palette.gold : palette.primary,
+  };
+  const pendingNode = {
+    borderWidth: 1,
+    backgroundColor: isDark ? 'transparent' : palette.neutralBg,
+    borderColor: isDark ? palette.navInactive : palette.neutralBg,
+  };
   const checkColor = isDark ? palette.gold : palette.onPrimary;
   const doneLine = isDark ? palette.gold : palette.primary;
 
