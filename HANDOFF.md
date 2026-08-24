@@ -43,7 +43,190 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-24 next-binary run (RUN N1)
+## Current state — after the 2026-08-24 corners-and-keyboard run (RUN N2)
+
+One commit of the run's two work items. The keyboard item produced NO commit,
+deliberately — its cause is in vendor native code this run is fenced from,
+and the full diagnosis below is the deliverable:
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`da3a7f8`|the launch mark's squircle is applied at RENDER time — `BrandLogo` gains an optional `radius` prop clipped on the Image, `LaunchScreen` passes 18.7% of the rendered size, `tests/launchMark.test.mjs` fences the mechanism|
+|C2|—|**NO COMMIT, by the dispatch's own continue-path.** All four offered hypotheses eliminated in app source; the composer's 0.5–1.0s trail is `react-native-reanimated@4.1.7`'s iOS keyboard observer, whose fix is a native change / dependency move — both genuine stops|
+
+The offline suite stands at **934 pass / 0 fail / 0 skipped**, up from 932 at
+run start (C1's two fence tests), bare `npm run verify` exit 0 before any
+edit and again after the commit. The `BAKED_ART` roster and its
+transparent-floor constant (5) in `tests/themeResolution.test.mjs` are
+byte-unchanged; no asset reference moved; no image was opened. Branch and
+commit state are Git's to report, never this file's.
+
+### C1 — THE LAUNCH MARK HAS ITS CORNERS BACK, and the asset did not move
+
+RUN N1 recorded the consequence and asked for the decision; this dispatch
+made it: the mark keeps rendering `assets/brand/app-icon-b-leaf.png` (the
+shipped app icon — the one-file unification stands) and the rounding the old
+export baked into its alpha is applied at render time instead.
+
+**The dispatched primary route was rejected for a reason worth keeping.** The
+dispatch suggested `borderRadius` + `overflow: 'hidden'` via BrandLogo's
+`style` prop, which lands on its outer View. Confirmed from source that the
+View clips its child Image — but that same View carries `authShadows.logo`
+when `elevated` (LaunchScreen passes `elevated`), and on iOS
+`overflow: 'hidden'` sets `masksToBounds`, which clips a layer shadow off the
+same node. The corner fix would have silently deleted the launch mark's drop
+shadow. So the dispatch's CONTINUE-PATH was taken instead: `BrandLogo` gains
+an optional `radius` prop applied to the **Image itself** (`borderRadius` on
+an Image clips its own bitmap on both platforms); the outer View keeps the
+shadow, and the alpha-derived shadow follows the rounded silhouette exactly
+as it did when the corners were baked into the PNG. `radius` omitted — Sign
+In, Email Sign In, Create Account — nothing is applied and those render
+byte-identically to before the prop existed.
+
+**The value is a copy, not a choice:** `LAUNCH_MARK_RADIUS_RATIO = 0.187` in
+`screens/LaunchScreen.tsx`, one named module constant — 18.7% of the rendered
+width, app-icon-v2.png's measured baked radius as recorded in BrandLogo's
+SOURCE comment (that comment still carries it, unchanged). The call site
+passes `radius={authSizes.logoLaunch * LAUNCH_MARK_RADIUS_RATIO}` — derived
+from the same expression that sizes the mark, so it scales with it.
+
+**`tests/launchMark.test.mjs` pins the mechanism, and the planted fixture was
+executed:** with the `radius` prop removed from the call site, the suite goes
+red with "the LAUNCH_MARK BrandLogo call site no longer passes a radius — the
+mark renders square"; restored before committing. L1 parses the size
+expression OUT of the call site and requires the radius to be exactly it
+times the named ratio (an inlined number, a spacing token, or an asset
+repoint all fail); L2 requires the clip on the Image, the prop optional, and
+BrandLogo overflow-free — the masksToBounds trap, written down as a red test.
+
+### C2 — PHASE 0's ELIMINATION RECORD, all four against source
+
+The observed defect (iPhone 15 Pro, iOS 26.6.1): composer trails the keyboard
+by ~0.5–1.0s in BOTH directions. The dispatch offered four hypotheses:
+
+- **H1 — `insetBelow` unstable across the transition: ELIMINATED.**
+  `insetBelow` = `useFloatingNavClearance()` =
+  `bottomNavHeight(insets.bottom)` (`ui/primitives/BottomNav.tsx:261-264`,
+  `236-238`); its only dynamic input is the safe-area bottom inset, a device
+  constant the keyboard does not alter, assigned once
+  (`screens/ChatScreen.tsx:121`). And the shape is wrong: a stale captured
+  copy would change the rise's AMPLITUDE by at most the clearance delta
+  (≤34pt, corrected at next render) — it cannot delay the whole motion
+  symmetrically in both directions.
+- **H2 — a layout property animates during the transition: ELIMINATED.** The
+  rising view's own padding is the constant `COLUMN_BOTTOM_PADDING`
+  (`KeyboardRisingColumn.motion120.tsx:51`, `.shared.tsx:70`); the FlatList's
+  `contentContainerStyle` is static `{padding: spacing.lg, flexGrow: 1}`
+  (`ChatScreen.tsx:1429`, `1677-1680`); `keyboardClip` is static
+  `{flex: 1, overflow: 'hidden'}` (`1665-1668`); the column's passed style is
+  `{flex: 1}` (`1659-1660`); and the tab bar never hides on keyboard —
+  `bottomNavScreenOptions` sets no `tabBarHideOnKeyboard`
+  (`BottomNav.tsx:355-394`; the library default is false) — so the scene
+  container never resizes. No Yoga pass races the transform.
+- **H3 — a second keyboard subscription drives React state: ELIMINATED as
+  the visible movement.** The screen's one other subscription is
+  `keyboardDidShow → closeMenus` (`ChatScreen.tsx:172`), i.e.
+  `setOpenMenu(null)` (`:160`) — fires after the animation completes, bails
+  when no menu is open, and `openMenu` feeds only menu visibility (`:1268`,
+  `:1541`), no geometry the composer depends on. Repo-wide grep: no other
+  listener mounts in chat's subtree (`ChatComposer` has none; the only other
+  subscribers are WorkerSearchScreen and ReviewSection, not mounted here).
+- **H4 — something downstream of the fast path is what moves: ELIMINATED.**
+  The fast path's Animated.View IS the column the user sees;
+  `keyboardClip`'s stationary View wraps it directly
+  (`ChatScreen.tsx:1292-1320`), nothing between, no parent transform.
+
+### THE MECHANISM — the vendor observer reports late, and the worklet is a faithful function of it
+
+The chain of custody is clean on the app side:
+`useAnimatedKeyboard`'s native listener writes the shared value directly as a
+UI-thread worklet (`react-native-reanimated/src/hook/useAnimatedKeyboard.ts:38-42`),
+and the app's worklet transforms from it
+(`KeyboardRisingColumn.motion120.tsx:44-48`). So the composer moves exactly
+when the OBSERVER says the keyboard moved — and the installed observer,
+`react-native-reanimated@4.1.7`'s
+`apple/reanimated/apple/keyboardObserver/REAKeyboardEventObserver.mm`, says
+it late:
+
+1. **Continuous updates during a show/hide are CONDITIONAL** on finding the
+   keyboard's private view (`getKeyboardView`, lines 413-423: a walk of
+   `UITextEffectsWindow → UIInputSetContainerView → UIInputSetHostView`) AND
+   seeing a CAAnimation already on it at notification time
+   (`hasAnyAnimation` gate, lines 229-237). If that gate fails, the display
+   link stays paused: ZERO height updates while the keyboard animates.
+2. **The guaranteed updates are one-shot snaps at `keyboardDidShow` /
+   `keyboardDidHide`** (lines 306-318, 343-350) — notifications iOS posts
+   AFTER the keyboard finishes moving. That alone reproduces the observation:
+   keyboard animates (~0.5s real motion), composer holds, then arrives.
+3. **Even when the gate passes, tracking stops at ~52%:** the measuring view
+   animates for the NOTIFICATION duration (~0.25s, line 232) while each
+   tick's height is estimated against hardcoded 0.48s/0.496s curves (lines
+   128-149), so updates cease when the measuring animation ends
+   (lines 177-184) and the Did-event snap finishes the rest.
+4. **Interactive drag-to-dismiss** is a KVO on the private keyboard view,
+   attached only if the walk found it (lines 320-329) — dead in exactly the
+   case where (1) fails.
+
+Both sub-mechanisms put the composer's arrival at the Did notifications —
+after the keyboard — in both directions, which is the defect as observed. On
+iOS 26.6.1, far newer than this reanimated release, a private-class rename
+breaking `getKeyboardView`'s walk is the plausible trigger for the total-lag
+form. **Which sub-mechanism fires on this device is the one UNRESOLVED bit —
+it is not decidable from source. The single cheapest on-device observation
+that settles it: slowly drag the keyboard down from the thread.** If the
+composer follows the finger at all, the view walk works and the defect is
+the half-track-then-snap form (3); if it does not move until the keyboard is
+gone, the walk returns nil and it is the full-snap form (1)+(2).
+
+### Why NO app-side change shipped, and what the real fix is
+
+Every OTA-shippable "fix" would layer a `keyboardWillShow`-driven imitation
+over (or instead of) the tracker — exactly the second-animation-aimed-at-the-
+same-place this dispatch exists to remove, blind to which sub-mechanism it
+papers over, and it would surrender drag-to-dismiss even on OS versions where
+the tracker works. The fallback (`hooks/useKeyboardOffset.ts`) is already the
+best imitation available and is not the observed path. So: nothing shipped,
+per the dispatch's continue-path.
+
+**The correct fix lives in fenced territory, for the operator:**
+- `react-native-reanimated` upgraded (or patched) past `4.1.7` so
+  `REAKeyboardEventObserver` tracks the keyboard on current iOS — check its
+  changelog for keyboard-observer fixes newer than this release — **or** the
+  keyboard tracker replaced with `react-native-keyboard-controller`, which
+  ships its own maintained tracking. Either way: `package.json` +
+  `package-lock.json` + a new binary (`eas build`) — dependency and native
+  changes, operator-only under this contract.
+- Until then the defect is BINARY-BOUND, not JS-bound: no OTA update can
+  move it, because the observer is compiled native code.
+
+### What this run supersedes in the records below
+
+- **RUN N1's "the mark reads as a hard square … look at it on a device
+  before deciding whether the launch layer wants a radius of its own"** —
+  decided. The launch layer applies the old baked radius at render time as
+  of `da3a7f8`; the asset itself is still the full-bleed opaque square.
+- **RUN N1's device-check item 1** (confirm the hard-edged square) — replaced
+  by this run's device checks below.
+- **RUN W1 / RUN B4's framing that the fast path merely "has never been
+  observed"** — it now HAS been observed (iOS 26.6.1, CFBundleVersion 3
+  binary): it runs without crashing, and it trails per the mechanism above.
+
+### Device checks owed from THIS run (operator, physical device)
+
+1. **The launch mark's corners, over the air.** After the OTA carrying
+   `da3a7f8`: the mark on the launch layer reads as a squircle again — same
+   rounding it had before the b-leaf swap — and its drop shadow is still
+   there (the shadow was the reason for the continue-path). Sign In and
+   Create Account marks unchanged.
+2. **The keyboard discriminator, 10 seconds.** In a chat thread, dismiss the
+   keyboard with a slow interactive drag. Report only: did the composer
+   follow the finger at all? That one bit picks between the two vendor
+   sub-mechanisms above and sizes the reanimated upgrade decision.
+3. **After the operator moves the dependency** (upgrade or replacement, new
+   binary): composer rises/falls in the same frames as the keyboard, both
+   directions, including the drag.
+
+### The run before this one (RUN N1) — its two commits, carried forward
 
 Two commits of the three dispatched. C3 is BLOCKED AT A HOOK, and that block
 is the one thing this run hands back:
@@ -91,6 +274,11 @@ square where it used to read as a squircle. The dispatch settled the artwork
 and named the old one "the old rounded icon", so this was repointed and
 reported, not restyled. Look at it on a device before deciding whether the
 launch layer wants a radius of its own.
+
+**[SUPERSEDED 2026-08-24 — see RUN N2 at the top. The decision arrived:
+`da3a7f8` applies the old export's 18.7% radius at render time, on the same
+asset. The paragraph above stays as the accurate record of what was true
+when RUN N1 wrote it.]**
 
 **Where each half is delivered from.** `expo.icon` is read at build time, so
 C1 waits for a binary. C2 is a JavaScript surface — there is NO native splash
@@ -178,10 +366,9 @@ nothing about doctor's verdict, and the one failing check is C3 in full.
 
 ### Device checks owed from THIS run (operator, physical device)
 
-1. **The launch layer's mark, first thing.** It is a hard-edged opaque square
-   now, not a squircle — see the consequence paragraph above. This is the one
-   item that could want a follow-up decision, and it ships over the air, so it
-   arrives before the new binary does.
+1. **The launch layer's mark, first thing.** ~~It is a hard-edged opaque
+   square now, not a squircle~~ — SUPERSEDED by RUN N2's `da3a7f8`, which
+   rounds it at render time; check RUN N2's device list instead.
 2. **The home-screen icon, after the next binary only.** `expo.icon` is
    build-time; an OTA cannot move it. Confirm iOS masks the square the way it
    is supposed to and no white or transparent sliver shows at the corners.
