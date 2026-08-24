@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
@@ -1129,5 +1130,541 @@ test('[static] babel.config.js declares no reanimated or worklets plugin — the
     config,
     /'module:react-native-dotenv'/,
     'babel.config.js still owns the dotenv plugin — an empty plugin list would pass the check above'
+  );
+});
+
+// ===========================================================================
+// THE WORKLET-CALLABILITY FENCE — 2026-08-24, and it exists because a green
+// suite shipped a crash.
+//
+// The sibling-parity tests above hold each fast path to its fallback's
+// contract, and the resolvability fence proves the packages can be bundled.
+// Neither asks the question that took down CFBundleVersion 3: is every
+// function CALLED inside a worklet body callable on the UI runtime? riseFor
+// was not — imported into KeyboardRisingColumn.motion120's useAnimatedStyle
+// callback without a 'worklet' directive — and no test could see it, because
+// nothing here can render a worklet. The app aborted the moment ChatScreen
+// mounted, on the first binary whose motionCapability.reanimated resolved
+// true.
+//
+// So the property is checked STATICALLY, with the TypeScript parser the repo
+// already carries as a devDependency: extract every worklet body, walk every
+// call inside it, and classify the callee. Parsing, not pattern-matching —
+// a prose mention of a hook in a docblock parses to nothing, and a directive
+// hiding below another statement parses as the inert string it is.
+//
+// WORKLET BODIES are: function arguments (and function-valued properties of
+// an object-literal argument) to the vendor APIs in WORKLET_TAKING_APIS,
+// when that name is imported from a vendor package; callbacks on a
+// Gesture.X() builder chain named in GESTURE_WORKLET_METHODS; and any
+// function whose FIRST statement is the 'worklet' directive.
+//
+// A call inside one is fine if it is (a) a UI-runtime global on the explicit
+// allowlist below, (b) a vendor API on the explicit allowlist below, (c)
+// declared inside the worklet itself, or (d) a function that itself opens
+// with the 'worklet' directive — resolved through same-file declarations or
+// one hop through a relative import, by parsing the imported module. A call
+// the checker cannot classify CONFIDENTLY is never flagged — a false
+// positive teaches people to delete the fence — it is recorded by name and
+// pinned at zero, so a new unclassifiable call fails the suite and forces a
+// human look instead of vanishing.
+// ===========================================================================
+
+/** Vendor APIs whose function arguments run as worklets. Explicit and
+ *  closed: an API absent here contributes no worklet bodies, so new
+ *  reanimated usage extends this fence knowingly. The withX entries are for
+ *  their optional completion callbacks. */
+const WORKLET_TAKING_APIS = new Set([
+  'useAnimatedStyle',
+  'useDerivedValue',
+  'useAnimatedReaction',
+  'useAnimatedScrollHandler',
+  'useAnimatedGestureHandler',
+  'runOnUI',
+  'withTiming',
+  'withSpring',
+  'withDecay',
+]);
+
+/** Gesture-builder callbacks, workletized when reanimated is present.
+ *  Recognised only on a chain rooted at the `Gesture` object imported from
+ *  react-native-gesture-handler, so a lookalike method on any other object
+ *  cannot produce a false positive. */
+const GESTURE_WORKLET_METHODS = new Set([
+  'onBegin', 'onStart', 'onUpdate', 'onChange', 'onEnd', 'onFinalize',
+  'onTouchesDown', 'onTouchesMove', 'onTouchesUp', 'onTouchesCancelled',
+]);
+
+/** (a) UI-runtime globals — Hermes builtins that exist on the worklet
+ *  runtime. Explicit and closed: anything else is unresolved, not ignored. */
+const UI_RUNTIME_GLOBAL_OBJECTS = new Set([
+  'Math', 'Number', 'Object', 'JSON', 'Array', 'String', 'Boolean', 'Date',
+  'RegExp', 'Error', 'Map', 'Set', 'WeakMap', 'WeakSet', 'Promise', 'Symbol',
+  'Reflect', 'console', 'globalThis',
+]);
+const UI_RUNTIME_GLOBAL_FUNCTIONS = new Set([
+  'isNaN', 'isFinite', 'parseInt', 'parseFloat',
+  'String', 'Number', 'Boolean', 'Array',
+]);
+
+/** (b) vendor APIs callable from inside a worklet. Explicit and closed: a
+ *  vendor import called in a worklet that is not on this list counts as
+ *  unresolved rather than fine, so it cannot pass silently. */
+const UI_CALLABLE_VENDOR_APIS = new Set([
+  'withTiming', 'withSpring', 'withDecay', 'withDelay', 'withSequence',
+  'withRepeat', 'withClamp', 'cancelAnimation', 'interpolate',
+  'interpolateColor', 'clamp', 'runOnJS', 'scheduleOnRN', 'runOnUI',
+  'measure', 'scrollTo',
+]);
+
+const WORKLET_VENDOR_MODULES = new Set([...VENDOR_PACKAGES, 'react-native-worklets']);
+
+const scriptKindFor = (path) => (path.endsWith('.tsx') ? ts.ScriptKind.TSX : ts.ScriptKind.TS);
+
+const unwrapExpression = (node) => {
+  while (
+    ts.isParenthesizedExpression(node) ||
+    ts.isAsExpression(node) ||
+    ts.isNonNullExpression(node) ||
+    ts.isSatisfiesExpression(node)
+  ) {
+    node = node.expression;
+  }
+  return node;
+};
+
+const isFunctionNode = (node) =>
+  ts.isArrowFunction(node) || ts.isFunctionExpression(node) ||
+  ts.isFunctionDeclaration(node) || ts.isMethodDeclaration(node);
+
+/** True only when 'worklet' is the FIRST statement of a block body — the one
+ *  position in which it is a directive rather than an inert string. A concise
+ *  arrow has nowhere to carry one and is correctly false. */
+const hasWorkletDirective = (fn) => {
+  if (!fn.body || !ts.isBlock(fn.body)) return false;
+  const first = fn.body.statements[0];
+  return (
+    !!first && ts.isExpressionStatement(first) &&
+    ts.isStringLiteral(first.expression) && first.expression.text === 'worklet'
+  );
+};
+
+const bindingNames = (name, into) => {
+  if (ts.isIdentifier(name)) into.add(name.text);
+  else if (ts.isObjectBindingPattern(name) || ts.isArrayBindingPattern(name)) {
+    for (const element of name.elements) {
+      if (ts.isBindingElement(element)) bindingNames(element.name, into);
+    }
+  }
+};
+
+/** All directive verdicts over a candidate set: every candidate marked → a
+ *  worklet; none marked → not one; mixed or empty → no confident answer. */
+const directiveVerdict = (candidates) => {
+  if (!candidates || candidates.length === 0) return null;
+  const marked = candidates.filter((fn) => hasWorkletDirective(fn)).length;
+  if (marked === candidates.length) return true;
+  if (marked === 0) return false;
+  return null;
+};
+
+/** Function declarations (and function-valued consts) named `wanted` in a
+ *  parsed module — the resolver behind both same-file and imported calls. */
+const functionCandidatesIn = (sourceFile, wanted) => {
+  const candidates = [];
+  const collect = (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name?.text === wanted) candidates.push(node);
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === wanted && node.initializer) {
+      const init = unwrapExpression(node.initializer);
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) candidates.push(init);
+    }
+    ts.forEachChild(node, collect);
+  };
+  collect(sourceFile);
+  return candidates;
+};
+
+/**
+ * The checker. Parses one file, extracts its worklet bodies, and classifies
+ * every call inside them. `loadModule(fromPath, spec)` supplies imported
+ * relative modules as `{ path, source }` or null — injectable, so the
+ * anti-vacuity fixtures below can plant a defect without touching disk.
+ * Returns { bodies, violations, unresolved }.
+ */
+function checkWorkletCalls(filePath, source, loadModule) {
+  const sf = ts.createSourceFile(filePath, source, ts.ScriptTarget.Latest, true, scriptKindFor(filePath));
+
+  const imports = new Map();
+  const namespaceImports = new Map();
+  for (const stmt of sf.statements) {
+    if (!ts.isImportDeclaration(stmt) || !ts.isStringLiteral(stmt.moduleSpecifier)) continue;
+    const module = stmt.moduleSpecifier.text;
+    const clause = stmt.importClause;
+    if (!clause) continue;
+    if (clause.name) imports.set(clause.name.text, { module, imported: 'default' });
+    if (clause.namedBindings) {
+      if (ts.isNamedImports(clause.namedBindings)) {
+        for (const element of clause.namedBindings.elements) {
+          imports.set(element.name.text, { module, imported: (element.propertyName ?? element.name).text });
+        }
+      } else if (ts.isNamespaceImport(clause.namedBindings)) {
+        namespaceImports.set(clause.namedBindings.name.text, module);
+      }
+    }
+  }
+  const isVendorImport = (name) =>
+    imports.has(name) && WORKLET_VENDOR_MODULES.has(imports.get(name).module);
+
+  // Every named function in the file, all candidates kept: a name declared
+  // twice passes only if EVERY candidate carries the directive.
+  const fileFunctions = new Map();
+  const collectFunctions = (node) => {
+    if (ts.isFunctionDeclaration(node) && node.name) {
+      if (!fileFunctions.has(node.name.text)) fileFunctions.set(node.name.text, []);
+      fileFunctions.get(node.name.text).push(node);
+    }
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      const init = unwrapExpression(node.initializer);
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init)) {
+        if (!fileFunctions.has(node.name.text)) fileFunctions.set(node.name.text, []);
+        fileFunctions.get(node.name.text).push(init);
+      }
+    }
+    ts.forEachChild(node, collectFunctions);
+  };
+  collectFunctions(sf);
+
+  const chainRoot = (expr) => {
+    let node = unwrapExpression(expr);
+    while (
+      ts.isCallExpression(node) || ts.isPropertyAccessExpression(node) || ts.isElementAccessExpression(node)
+    ) {
+      node = unwrapExpression(node.expression);
+    }
+    return node;
+  };
+
+  const functionArgsOf = (call) => {
+    const found = [];
+    for (const arg of call.arguments ?? []) {
+      const value = unwrapExpression(arg);
+      if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) found.push(value);
+      else if (ts.isObjectLiteralExpression(value)) {
+        for (const prop of value.properties) {
+          if (ts.isPropertyAssignment(prop)) {
+            const inner = unwrapExpression(prop.initializer);
+            if (ts.isArrowFunction(inner) || ts.isFunctionExpression(inner)) found.push(inner);
+          } else if (ts.isMethodDeclaration(prop)) {
+            found.push(prop);
+          }
+        }
+      }
+    }
+    return found;
+  };
+
+  const bodies = new Set();
+  const findBodies = (node) => {
+    if (ts.isCallExpression(node)) {
+      const callee = unwrapExpression(node.expression);
+      if (ts.isIdentifier(callee) && WORKLET_TAKING_APIS.has(callee.text) && isVendorImport(callee.text)) {
+        for (const fn of functionArgsOf(node)) bodies.add(fn);
+      }
+      if (ts.isPropertyAccessExpression(callee) && GESTURE_WORKLET_METHODS.has(callee.name.text)) {
+        const root = chainRoot(callee.expression);
+        if (
+          ts.isIdentifier(root) && root.text === 'Gesture' &&
+          imports.get('Gesture')?.module === 'react-native-gesture-handler'
+        ) {
+          for (const fn of functionArgsOf(node)) bodies.add(fn);
+        }
+      }
+    }
+    if (isFunctionNode(node) && hasWorkletDirective(node)) bodies.add(node);
+    ts.forEachChild(node, findBodies);
+  };
+  findBodies(sf);
+
+  const violations = [];
+  const unresolved = [];
+
+  const importedDirectiveVerdict = (entry) => {
+    if (!entry.module.startsWith('.')) return null;
+    const target = loadModule(filePath, entry.module);
+    if (!target) return null;
+    const targetSf = ts.createSourceFile(
+      target.path, target.source, ts.ScriptTarget.Latest, true, scriptKindFor(target.path)
+    );
+    return directiveVerdict(functionCandidatesIn(targetSf, entry.imported));
+  };
+
+  for (const body of bodies) {
+    // Names declared inside this worklet: params, variables, functions and
+    // catch bindings — including inside nested plain functions, which run on
+    // the UI thread with it. A nested node that is itself a counted body is
+    // walked as its own worklet, not twice.
+    const locals = new Set();
+    const collectLocals = (node) => {
+      if (node !== body && bodies.has(node)) return;
+      if (isFunctionNode(node)) {
+        for (const parameter of node.parameters) bindingNames(parameter.name, locals);
+        if (node !== body && ts.isFunctionDeclaration(node) && node.name) locals.add(node.name.text);
+      }
+      if (ts.isVariableDeclaration(node)) bindingNames(node.name, locals);
+      if (ts.isCatchClause(node) && node.variableDeclaration) bindingNames(node.variableDeclaration.name, locals);
+      ts.forEachChild(node, collectLocals);
+    };
+    collectLocals(body);
+
+    const classifyCall = (call) => {
+      const isNew = ts.isNewExpression(call);
+      const callee = unwrapExpression(call.expression);
+
+      if (ts.isIdentifier(callee)) {
+        const name = callee.text;
+        if (locals.has(name)) return; // (c) declared inside the worklet
+        if (imports.has(name)) {
+          const entry = imports.get(name);
+          if (WORKLET_VENDOR_MODULES.has(entry.module)) {
+            if (UI_CALLABLE_VENDOR_APIS.has(name)) return; // (b)
+            unresolved.push(`${filePath}: '${name}' (from ${entry.module}) is not on the UI-callable vendor allowlist`);
+            return;
+          }
+          const verdict = importedDirectiveVerdict(entry);
+          if (verdict === true) return; // an imported worklet
+          if (verdict === false) {
+            violations.push(
+              `${filePath}: '${name}' (imported from '${entry.module}') is called inside a worklet body ` +
+                "but does not open with the 'worklet' directive"
+            );
+            return;
+          }
+          unresolved.push(`${filePath}: '${name}' (imported from '${entry.module}') could not be resolved to a declaration`);
+          return;
+        }
+        const inFile = directiveVerdict(fileFunctions.get(name));
+        if (inFile === true) return; // a same-file worklet
+        if (inFile === false) {
+          violations.push(
+            `${filePath}: '${name}' (declared in this file) is called inside a worklet body ` +
+              "but does not open with the 'worklet' directive"
+          );
+          return;
+        }
+        if (UI_RUNTIME_GLOBAL_FUNCTIONS.has(name)) return; // (a)
+        if (isNew && UI_RUNTIME_GLOBAL_OBJECTS.has(name)) return; // (a) new Date(), new Error(), ...
+        unresolved.push(`${filePath}: '${name}' could not be classified`);
+        return;
+      }
+
+      if (ts.isPropertyAccessExpression(callee)) {
+        const root = chainRoot(callee.expression);
+        if (ts.isIdentifier(root)) {
+          const rootName = root.text;
+          // A method on a value the worklet declared or was handed as a
+          // parameter: prototype methods travel with the value on any runtime.
+          if (locals.has(rootName)) return;
+          if (namespaceImports.has(rootName)) {
+            if (
+              WORKLET_VENDOR_MODULES.has(namespaceImports.get(rootName)) &&
+              UI_CALLABLE_VENDOR_APIS.has(callee.name.text)
+            ) {
+              return; // (b) e.g. Reanimated.withSpring via a namespace import
+            }
+            unresolved.push(`${filePath}: '${rootName}.${callee.name.text}' is not on the UI-callable vendor allowlist`);
+            return;
+          }
+          if (!imports.has(rootName) && !fileFunctions.has(rootName) && UI_RUNTIME_GLOBAL_OBJECTS.has(rootName)) {
+            return; // (a) e.g. Math.max — unshadowed global object
+          }
+          unresolved.push(`${filePath}: '${rootName}.${callee.name.text}' — receiver could not be classified`);
+          return;
+        }
+        if (
+          ts.isArrayLiteralExpression(root) || ts.isObjectLiteralExpression(root) ||
+          ts.isStringLiteral(root) || ts.isNoSubstitutionTemplateLiteral(root) ||
+          ts.isTemplateExpression(root) || ts.isNumericLiteral(root)
+        ) {
+          return; // (a) a literal owns its prototype methods on any runtime
+        }
+        unresolved.push(`${filePath}: a computed method call could not be classified`);
+        return;
+      }
+
+      if (ts.isCallExpression(callee)) {
+        const inner = unwrapExpression(callee.expression);
+        if (
+          ts.isIdentifier(inner) &&
+          (inner.text === 'runOnJS' || inner.text === 'scheduleOnRN') &&
+          isVendorImport(inner.text)
+        ) {
+          return; // (b) runOnJS(fn)(args) — the JS hop, not a UI-thread call of fn
+        }
+        unresolved.push(`${filePath}: a curried call could not be classified`);
+        return;
+      }
+
+      unresolved.push(`${filePath}: a call through ${ts.SyntaxKind[call.expression.kind]} could not be classified`);
+    };
+
+    const walkCalls = (node) => {
+      if (node !== body && bodies.has(node)) return;
+      if (ts.isCallExpression(node) || ts.isNewExpression(node)) classifyCall(node);
+      ts.forEachChild(node, walkCalls);
+    };
+    walkCalls(body);
+  }
+
+  return { bodies: bodies.size, violations, unresolved };
+}
+
+/** Disk-backed module loader for the real tree: Metro-style bare, .ts, .tsx
+ *  and index resolution, one relative hop from the importing file. */
+function loadRelativeModule(fromPath, spec) {
+  const base = join(dirname(fromPath), spec).replace(/\\/g, '/');
+  for (const candidate of [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`]) {
+    try {
+      return { path: candidate, source: read(candidate) };
+    } catch {
+      // not this shape — try the next
+    }
+  }
+  return null;
+}
+
+test('[static] the worklet-callability checker detects a planted violation — and does not invent one', () => {
+  // ANTI-VACUITY IS THE POINT OF THIS TEST. A checker that answers "no
+  // violations" over a fixture that CONTAINS one converts a live crash class
+  // into a green line, which is exactly how CFBundleVersion 3 shipped. So the
+  // defect is planted twice and must be found both times:
+  //   - plainRise: an imported function with no directive at all — riseFor's
+  //     defect, reconstructed;
+  //   - lateDirective: 'worklet' present but BELOW another statement, where
+  //     it is an inert string — position is part of the property.
+  // And the clean calls beside them must NOT be flagged, because a fence that
+  // cries wolf gets deleted: a directive-carrying import, a UI global, a
+  // local helper, and an allowlisted vendor API all classify as fine.
+  const fixtureShared = [
+    'export function plainRise(height) {',
+    '  return height * 2;',
+    '}',
+    'export function workletRise(height) {',
+    "  'worklet';",
+    '  return height * 2;',
+    '}',
+    'export function lateDirective(height) {',
+    '  const h = height;',
+    "  'worklet';",
+    '  return h;',
+    '}',
+  ].join('\n');
+  const fixture = [
+    "import { useAnimatedStyle, withSpring } from 'react-native-reanimated';",
+    "import { Gesture } from 'react-native-gesture-handler';",
+    "import { plainRise, workletRise, lateDirective } from './Fixture.shared';",
+    'export function Broken() {',
+    '  return useAnimatedStyle(() => ({ transform: [{ translateY: plainRise(1) }] }));',
+    '}',
+    'export function AlsoBroken() {',
+    '  return Gesture.Pan().onUpdate(() => { lateDirective(2); });',
+    '}',
+    'export function Fine() {',
+    '  return useAnimatedStyle(() => {',
+    '    const double = (value) => value * 2;',
+    '    return { opacity: double(workletRise(Math.max(0, withSpring(1)))) };',
+    '  });',
+    '}',
+  ].join('\n');
+  const loadFixtureModule = (fromPath, spec) =>
+    spec === './Fixture.shared' ? { path: 'components/Fixture.shared.tsx', source: fixtureShared } : null;
+
+  const result = checkWorkletCalls('components/Fixture.motion120.tsx', fixture, loadFixtureModule);
+  assert.equal(result.bodies, 3, 'three worklet bodies are planted: two hook callbacks and one gesture callback');
+  assert.equal(
+    result.violations.length,
+    2,
+    `exactly the two planted defects must be flagged (saw ${JSON.stringify(result.violations)})`
+  );
+  assert.match(result.violations[0], /'plainRise'/, 'the missing directive must be caught');
+  assert.match(result.violations[1], /'lateDirective'/, 'a directive below another statement must read as absent');
+  assert.deepEqual(result.unresolved, [], 'the clean calls must classify, not pile into unresolved');
+
+  // The unresolved channel is REAL: an identifier from nowhere is recorded by
+  // name — and still never flagged as a violation, because a checker that
+  // guesses produces false positives and false positives kill fences.
+  const murky = [
+    "import { useAnimatedStyle } from 'react-native-reanimated';",
+    'export function Murky() {',
+    '  return useAnimatedStyle(() => ({ width: mysteryFn(1) }));',
+    '}',
+  ].join('\n');
+  const murkyResult = checkWorkletCalls('components/Murky.motion120.tsx', murky, () => null);
+  assert.deepEqual(murkyResult.violations, [], 'an unclassifiable call is unresolved, never a violation');
+  assert.equal(murkyResult.unresolved.length, 1, 'the unclassifiable call must be counted');
+  assert.match(murkyResult.unresolved[0], /mysteryFn/, 'unresolved entries carry the name a human needs');
+});
+
+test('[static] every call inside every worklet body is worklet-callable', () => {
+  // THE REAL TREE, held to the property CFBundleVersion 3 lacked. The roster
+  // is pinned rather than discovered-and-trusted: a new fast path must enter
+  // this fence consciously, by failing this line and being added.
+  const fastPaths = appSources().filter((path) => FAST_PATH.test(path)).sort();
+  assert.deepEqual(
+    fastPaths,
+    [
+      'components/DropMenu.motion120.tsx',
+      'components/KeyboardRisingColumn.motion120.tsx',
+      'components/SwipeableRow.motion120.tsx',
+    ],
+    'the fast-path roster changed — bring the new sibling into this fence deliberately'
+  );
+
+  // Parse every app source that could hold a worklet body. The prefilter can
+  // only over-include (a prose mention parses to zero bodies); it cannot
+  // exclude a real one, which necessarily contains one of these names or the
+  // directive itself.
+  const couldHoldWorklets =
+    /'worklet'|useAnimatedStyle|useDerivedValue|useAnimatedReaction|useAnimatedScrollHandler|useAnimatedGestureHandler|runOnUI|Gesture\./;
+  const bodiesByFile = new Map();
+  const violations = [];
+  const unresolved = [];
+  for (const path of appSources()) {
+    const source = read(path);
+    if (!couldHoldWorklets.test(source)) continue;
+    const result = checkWorkletCalls(path, source, loadRelativeModule);
+    bodiesByFile.set(path, result.bodies);
+    violations.push(...result.violations);
+    unresolved.push(...result.unresolved);
+  }
+
+  // ANTI-VACUITY on the real tree: every fast path must yield at least one
+  // extracted worklet body, and riseFor's directive body must be seen where
+  // it lives — an extractor gone blind would report "no violations" about
+  // nothing at all.
+  for (const path of fastPaths) {
+    assert.ok(
+      (bodiesByFile.get(path) ?? 0) >= 1,
+      `${path} is a fast path with no extracted worklet body — the extractor is not seeing it`
+    );
+  }
+  assert.ok(
+    (bodiesByFile.get('components/KeyboardRisingColumn.shared.tsx') ?? 0) >= 1,
+    "riseFor's 'worklet' directive body must be extracted from the shared module"
+  );
+
+  assert.deepEqual(
+    violations,
+    [],
+    'a non-worklet function is called inside a worklet body — the class that SIGABRTed CFBundleVersion 3. ' +
+      "Add the 'worklet' directive at the SOURCE function; never inline a copy of its body"
+  );
+
+  // Pinned at ZERO unresolved. When a call the checker cannot classify
+  // appears, this fails by name and a human decides: extend an allowlist
+  // knowingly, resolve it properly, or record it here — never silence.
+  assert.deepEqual(
+    unresolved,
+    [],
+    'a call inside a worklet body could not be classified — decide what it is; do not let it pass unexamined'
   );
 });
