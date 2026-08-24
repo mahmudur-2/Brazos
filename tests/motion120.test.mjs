@@ -43,7 +43,11 @@ const pure = await import('../lib/motion120/types.ts');
 //      gesture handler, so the two binaries lay out identically.
 // ===========================================================================
 
-const VENDOR_PACKAGES = ['react-native-reanimated', 'react-native-gesture-handler'];
+const VENDOR_PACKAGES = [
+  'react-native-reanimated',
+  'react-native-gesture-handler',
+  'react-native-keyboard-controller',
+];
 /** The one impure module. */
 const BOUNDARY = 'lib/motion120/vendor.ts';
 /** Fast-path siblings, which use worklets/recognisers directly BY DESIGN and
@@ -62,22 +66,40 @@ function appSources() {
   return files;
 }
 
-test('[static] nothing outside the boundary and its fast paths loads either vendor package', () => {
-  const files = appSources();
-  assert.ok(files.length > 100, `the sweep must enumerate the app source (saw ${files.length})`);
-
-  // Import/require FORMS only: prose may name the packages (the boundary's own
-  // docblocks do, at length), but only these files may LOAD them.
+/**
+ * The exclusivity scan itself, over an INJECTED file list and reader.
+ *
+ * Extracted from the test below so the same code that guards the real tree can
+ * be run against a planted fixture — a fence nobody has ever seen bite is a
+ * claim, not a check. `readSource` supplies each file's text, so the fixture
+ * plants its violation in memory: nothing is written into the tree, and there
+ * is therefore no window in which a crashed run leaves a live vendor import
+ * behind for the next one to boot on.
+ */
+function vendorLoadOffenders(files, readSource) {
   const offenders = [];
   for (const path of files) {
     if (path === BOUNDARY || FAST_PATH.test(path)) continue;
-    const source = read(path);
+    const source = readSource(path);
     for (const pkg of VENDOR_PACKAGES) {
+      // Import/require FORMS only: prose may name the packages (the boundary's
+      // own docblocks do, at length), but only these files may LOAD them.
       const loads = new RegExp(`(?:from\\s+['"]|require\\(['"])${pkg}`);
       if (loads.test(source)) offenders.push(`${path}: loads ${pkg}`);
     }
   }
-  assert.deepEqual(offenders, [], 'only lib/motion120/vendor.ts and *.motion120 files may load the vendors');
+  return offenders;
+}
+
+test('[static] nothing outside the boundary and its fast paths loads any vendor package', () => {
+  const files = appSources();
+  assert.ok(files.length > 100, `the sweep must enumerate the app source (saw ${files.length})`);
+
+  assert.deepEqual(
+    vendorLoadOffenders(files, read),
+    [],
+    'only lib/motion120/vendor.ts and *.motion120 files may load the vendors'
+  );
 
   // ANTI-VACUITY: the scan must be finding the boundary itself, or it is
   // matching nothing anywhere and would pass with the packages loaded freely.
@@ -85,6 +107,69 @@ test('[static] nothing outside the boundary and its fast paths loads either vend
   for (const pkg of VENDOR_PACKAGES) {
     assert.match(boundary, new RegExp(`require\\('${pkg}'\\)`), `${BOUNDARY} must be the loader for ${pkg}`);
   }
+
+  // And the roster is pinned, so a fourth vendor cannot slip past the fence by
+  // simply never being added to it.
+  assert.deepEqual(
+    [...VENDOR_PACKAGES].sort(),
+    ['react-native-gesture-handler', 'react-native-keyboard-controller', 'react-native-reanimated'],
+    'a vendor package joined or left the boundary — bring it into this fence deliberately'
+  );
+});
+
+test('[static] the exclusivity scan catches a planted vendor import — and does not invent one', () => {
+  // THE FENCE, PROVEN TO BITE, and proven for the package that was added
+  // today: a static import of react-native-keyboard-controller anywhere on the
+  // startup path is precisely the crash RUN W1 root-caused, so a scan that
+  // silently stopped matching it would hand back the SIGABRT with a green
+  // suite. The plant is injected rather than written to disk — see
+  // vendorLoadOffenders — so there is nothing to restore afterwards.
+  const planted = new Map([
+    // A screen doing the forbidden thing, in the form a person would write it.
+    ['screens/ChatScreen.tsx', "import { KeyboardProvider } from 'react-native-keyboard-controller';\n"],
+    // The same package, in require form, in a hook.
+    ['hooks/useKeyboardOffset.ts', "const kc = require('react-native-keyboard-controller');\n"],
+    // ...and the two files that ARE allowed to, which must NOT be flagged: a
+    // fence that cries wolf is a fence someone deletes.
+    [BOUNDARY, "require('react-native-keyboard-controller');\n"],
+    [
+      'components/KeyboardRisingColumn.motion120.tsx',
+      "import { useReanimatedKeyboardAnimation } from 'react-native-keyboard-controller';\n",
+    ],
+    // Prose naming the package is not a load and must stay clean.
+    ['lib/motion120/types.ts', ' * react-native-keyboard-controller resolved AND registered.\n'],
+  ]);
+
+  const offenders = vendorLoadOffenders([...planted.keys()], (path) => planted.get(path));
+  assert.deepEqual(
+    offenders.sort(),
+    [
+      'hooks/useKeyboardOffset.ts: loads react-native-keyboard-controller',
+      'screens/ChatScreen.tsx: loads react-native-keyboard-controller',
+    ],
+    'exactly the two planted violations must be caught, and neither exempt file nor the prose flagged'
+  );
+
+  // The other two vendors are held to the same fence by the same code — plant
+  // one of each so a regex that only ever learned the new package fails here.
+  assert.deepEqual(
+    vendorLoadOffenders(['modes/ModeProvider.tsx', 'ui/tokens.ts'], (path) =>
+      path === 'ui/tokens.ts'
+        ? "import Animated from 'react-native-reanimated';\n"
+        : "import { Gesture } from 'react-native-gesture-handler';\n"
+    ).sort(),
+    [
+      'modes/ModeProvider.tsx: loads react-native-gesture-handler',
+      'ui/tokens.ts: loads react-native-reanimated',
+    ]
+  );
+
+  // And a clean file set produces nothing, so the scan is not simply
+  // returning every path it is handed.
+  assert.deepEqual(
+    vendorLoadOffenders(['App.tsx'], () => "import { MotionRoot } from './lib/motion120';\n"),
+    []
+  );
 });
 
 test('[static] the vendor loads are lazy, caught, and resolve to null', () => {
@@ -105,14 +190,81 @@ test('[static] the vendor loads are lazy, caught, and resolve to null', () => {
   // appear mid-session, and a per-frame try/catch during a gesture is a cost
   // for an answer that cannot change.
   assert.match(source, /export const motionCapability: MotionCapability = resolveCapability\(/);
+  // All three loaders reach the resolver. A loader written and then not wired
+  // in leaves its flag permanently false, which looks exactly like a binary
+  // without the native module and would never be noticed.
+  assert.match(
+    source,
+    /resolveCapability\(\{\s*loadReanimated,\s*loadGestureHandler,\s*loadKeyboardController,\s*\}\)/,
+    'every loader must be handed to the resolver'
+  );
 });
 
-test('[executed] a binary with neither native module resolves to no capability at all', () => {
+test('[static] the keyboard probe asks the native registry, not merely the bundler', () => {
+  // THE HOLE THIS CLOSES, and it is specific to react-native-keyboard-
+  // controller. The boundary's premise for the other two vendors is that a
+  // require throws without the native module, so catching it is an honest
+  // answer. This package is import-SAFE: its spec ends in
+  // `TurboModuleRegistry.get(...)` — the NULLABLE getter — and when the module
+  // is missing the binding substitutes a Proxy that throws on first property
+  // access. So the require SUCCEEDS on a binary that cannot run it, the
+  // capability would read true, KeyboardProvider would mount, and the app
+  // would die at render instead of at import: the same SIGABRT, one layer
+  // deeper than the boundary was built to catch it.
+  const source = stripComments(read(BOUNDARY));
+  assert.match(
+    source,
+    /if \(!TurboModuleRegistry\.get\(KEYBOARD_CONTROLLER_NATIVE_MODULE\)\) return null;/,
+    'the keyboard loader must confirm the native module is registered before requiring the package'
+  );
+  assert.match(
+    source,
+    /const KEYBOARD_CONTROLLER_NATIVE_MODULE = 'KeyboardController';/,
+    'the probed module name must be the one the package registers'
+  );
+  // The gate must come BEFORE the require, or it gates nothing: the module
+  // body that builds the throwing Proxy has already run by then.
+  const loader = source.match(/function loadKeyboardController\(\): unknown \{[\s\S]*?\n\}/);
+  assert.ok(loader, 'loadKeyboardController must exist as a named function');
+  assert.ok(
+    loader[0].indexOf('TurboModuleRegistry.get') < loader[0].indexOf("require('react-native-keyboard-controller')"),
+    'the registry check must run before the require, not after it'
+  );
+
+  // ANTI-VACUITY, read from the VENDOR rather than asserted about our own
+  // code: the extra probe is only necessary while the package uses the
+  // nullable getter. If a future version switches to getEnforcing the require
+  // starts throwing on its own and this fence should be simplified — so it
+  // fails here and a human decides, rather than rotting quietly.
+  const spec = readFileSync(
+    join(root, 'node_modules/react-native-keyboard-controller/src/specs/NativeKeyboardController.ts'),
+    'utf8'
+  );
+  assert.match(
+    spec,
+    /TurboModuleRegistry\.get</,
+    'react-native-keyboard-controller no longer uses the nullable TurboModule getter — re-derive whether ' +
+      'the registry probe in lib/motion120/vendor.ts is still the right shape before changing it'
+  );
+  assert.doesNotMatch(
+    spec,
+    /getEnforcing/,
+    'the package now throws on import without its native module; the registry probe may be redundant'
+  );
+  assert.match(
+    read('node_modules/react-native-keyboard-controller/src/bindings.native.ts'),
+    /new Proxy\(/,
+    'the throwing-Proxy fallback is the reason a successful require proves nothing here'
+  );
+});
+
+test('[executed] a binary with no native module resolves to no capability at all', () => {
   const capability = pure.resolveCapability({
     loadReanimated: () => null,
     loadGestureHandler: () => null,
+    loadKeyboardController: () => null,
   });
-  assert.deepEqual(capability, { reanimated: false, gestures: false });
+  assert.deepEqual(capability, { reanimated: false, gestures: false, keyboard: false });
 });
 
 test('[executed] a thrown load is absent, not unknown — and never counted as present', () => {
@@ -124,33 +276,46 @@ test('[executed] a thrown load is absent, not unknown — and never counted as p
     const capability = pure.resolveCapability({
       loadReanimated: () => bogus,
       loadGestureHandler: () => bogus,
+      loadKeyboardController: () => bogus,
     });
     assert.deepEqual(
       capability,
-      { reanimated: false, gestures: false },
+      { reanimated: false, gestures: false, keyboard: false },
       `a load returning ${JSON.stringify(bogus)} must not read as a capability`
     );
   }
 });
 
-test('[executed] both natives present turns both capabilities on, independently', () => {
-  assert.deepEqual(
-    pure.resolveCapability({ loadReanimated: () => ({}), loadGestureHandler: () => ({}) }),
-    { reanimated: true, gestures: true }
-  );
-  // Independently: one package can ship without the other, and a surface that
-  // needs worklets must not be enabled by a gesture recogniser being present.
-  assert.deepEqual(
-    pure.resolveCapability({ loadReanimated: () => ({}), loadGestureHandler: () => null }),
-    { reanimated: true, gestures: false }
-  );
-  assert.deepEqual(
-    pure.resolveCapability({ loadReanimated: () => null, loadGestureHandler: () => ({}) }),
-    { reanimated: false, gestures: true }
-  );
+test('[executed] a present native turns its capability on, and only its own', () => {
+  const probe = (reanimated, gestures, keyboard) => ({
+    loadReanimated: () => (reanimated ? {} : null),
+    loadGestureHandler: () => (gestures ? {} : null),
+    loadKeyboardController: () => (keyboard ? {} : null),
+  });
+
+  assert.deepEqual(pure.resolveCapability(probe(true, true, true)), {
+    reanimated: true,
+    gestures: true,
+    keyboard: true,
+  });
+
+  // INDEPENDENTLY, and each of the three checked on its own: any package can
+  // ship without the others, and a surface that needs worklets must not be
+  // enabled by a gesture recogniser — or by a keyboard listener — being
+  // present. Every flag is exercised as the ONLY true one, which is what
+  // catches a resolver that wired two keys to the same loader.
+  const only = { reanimated: false, gestures: false, keyboard: false };
+  assert.deepEqual(pure.resolveCapability(probe(true, false, false)), { ...only, reanimated: true });
+  assert.deepEqual(pure.resolveCapability(probe(false, true, false)), { ...only, gestures: true });
+  assert.deepEqual(pure.resolveCapability(probe(false, false, true)), { ...only, keyboard: true });
+
   // A module can legitimately be a function (a callable default export).
   assert.equal(
-    pure.resolveCapability({ loadReanimated: () => () => {}, loadGestureHandler: () => null }).reanimated,
+    pure.resolveCapability({
+      loadReanimated: () => () => {},
+      loadGestureHandler: () => null,
+      loadKeyboardController: () => null,
+    }).reanimated,
     true
   );
 });
@@ -158,8 +323,8 @@ test('[executed] both natives present turns both capabilities on, independently'
 test('[executed] the fast-path chooser returns the fallback whenever the fast path cannot run', () => {
   const FALLBACK = { name: 'fallback' };
   const FAST = { name: 'fast' };
-  const absent = { reanimated: false, gestures: false };
-  const present = { reanimated: true, gestures: true };
+  const absent = { reanimated: false, gestures: false, keyboard: false };
+  const present = { reanimated: true, gestures: true, keyboard: true };
 
   // Capability absent: the loader must not even be CALLED — requiring a
   // reanimated sibling on a binary without reanimated is the crash this
@@ -185,30 +350,67 @@ test('[executed] the fast-path chooser returns the fallback whenever the fast pa
   // still the fallback, so a typo degrades rather than renders undefined.
   assert.equal(pure.resolveMotion120(present, 'reanimated', () => null, FALLBACK), FALLBACK);
 
-  // The two capabilities are asked for separately.
+  // The three capabilities are asked for separately: each is checked while the
+  // OTHER TWO are true, so a chooser reading the wrong key cannot pass.
   assert.equal(
-    pure.resolveMotion120({ reanimated: true, gestures: false }, 'gestures', () => FAST, FALLBACK),
+    pure.resolveMotion120({ ...present, gestures: false }, 'gestures', () => FAST, FALLBACK),
     FALLBACK
   );
+  assert.equal(
+    pure.resolveMotion120({ ...present, reanimated: false }, 'reanimated', () => FAST, FALLBACK),
+    FALLBACK
+  );
+  assert.equal(
+    pure.resolveMotion120({ ...present, keyboard: false }, 'keyboard', () => FAST, FALLBACK),
+    FALLBACK
+  );
+  assert.equal(pure.resolveMotion120(present, 'keyboard', () => FAST, FALLBACK), FAST);
 });
 
-test('[static] MotionRoot is a Fragment without gesture-handler, and App wraps its tree in it', () => {
+test('[static] MotionRoot is a Fragment without its vendors, and App wraps its tree in it', () => {
   const boundaryIndex = stripComments(read('lib/motion120/index.tsx'));
   // A Fragment, NOT a host view: an extra view on one binary and not the
-  // other is a layout difference between two builds of the same screen.
+  // other is a layout difference between two builds of the same screen. Both
+  // roots take that branch, and each is asserted, because either one quietly
+  // rendering a <View> would reintroduce the difference on its own.
   assert.match(
     boundaryIndex,
-    /if \(!GestureHandlerRootView\) return createElement\(Fragment, null, children\);/,
+    /if \(!GestureHandlerRootView\) return createElement\(Fragment, null, tracked\);/,
     'the no-gesture-handler branch must add no host view to the tree'
   );
-  assert.match(boundaryIndex, /return createElement\(GestureHandlerRootView, \{ style: styles\.root \}, children\)/);
+  assert.match(boundaryIndex, /return createElement\(GestureHandlerRootView, \{ style: styles\.root \}, tracked\)/);
+  assert.match(
+    boundaryIndex,
+    /if \(!KeyboardProvider\) return createElement\(Fragment, null, children\);/,
+    'the no-keyboard-controller branch must add no host view to the tree'
+  );
+  assert.match(boundaryIndex, /return createElement\(KeyboardProvider, null, children\);/);
+
+  // THE PROVIDER IS NATIVE-BACKED, so it may only ever be reached through the
+  // boundary's null-able reference — never named as a component in a file that
+  // imports it statically. `tracked` is what carries it into MotionRoot, and
+  // MotionRoot is what App mounts, so one wrapper in App.tsx decides both.
+  assert.match(
+    boundaryIndex,
+    /const tracked = createElement\(KeyboardTrackingRoot, null, children\);/,
+    'keyboard tracking must ride inside MotionRoot, not be a second root App has to remember'
+  );
+  assert.match(
+    boundaryIndex,
+    /import \{ GestureHandlerRootView, KeyboardProvider, motionCapability \} from '\.\/vendor';/,
+    'both vendor components must come from the seam, which is the only module allowed to load them'
+  );
 
   const app = stripComments(read('App.tsx'));
   assert.match(app, /import \{ MotionRoot \} from '\.\/lib\/motion120';/);
   // Above EVERYTHING: gesture-handler requires its root view over the whole
-  // tree, so SafeAreaProvider (and therefore all of it) sits inside.
+  // tree, and keyboard-controller's provider has to be over every screen that
+  // can hold a text input, so SafeAreaProvider (and therefore all of it) sits
+  // inside.
   assert.match(app, /<MotionRoot>\s*<SafeAreaProvider>/);
   assert.match(app, /<\/SafeAreaProvider>\s*<\/MotionRoot>/);
+  // App must not have grown a vendor root of its own beside MotionRoot.
+  assert.doesNotMatch(app, /KeyboardProvider/, 'App.tsx must reach the provider only through MotionRoot');
 });
 
 // ---------------------------------------------------------------------------
@@ -330,8 +532,35 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
     stripComments(read('components/KeyboardRisingColumn.shared.tsx')),
     /return Math\.max\(0, keyboardHeight - insetBelow\);/,
   );
-  assert.match(fast, /riseFor\(keyboard\.height\.value, insetBelow\)/);
-  assert.match(fast, /useAnimatedKeyboard\(\)/, 'the fast path tracks the keyboard, it does not imitate it');
+  // THE DRIVER, and which package supplies it — changed 2026-08-24 and pinned
+  // here so it cannot drift back. reanimated's own `useAnimatedKeyboard` does
+  // not deliver per-frame values on this version (its native observer walks
+  // private UIKit classes to find the keyboard view, and when that walk fails
+  // the only signal left is a one-shot snap at keyboardDidShow/DidHide, which
+  // iOS posts after the keyboard has already stopped) and the Reanimated team
+  // deprecated it in 4.2.0. The frames now come from the package that exists
+  // to report them; reanimated keeps the style worklet.
+  assert.match(
+    fast,
+    /const keyboard = useReanimatedKeyboardAnimation\(\);/,
+    'the fast path tracks the keyboard, it does not imitate it'
+  );
+  assert.match(
+    fast,
+    /import \{ useReanimatedKeyboardAnimation \} from 'react-native-keyboard-controller';/
+  );
+  assert.doesNotMatch(
+    fast,
+    /useAnimatedKeyboard/,
+    "reanimated's keyboard hook is deprecated and does not report per-frame on this version"
+  );
+  // THE SIGN, undone exactly once. The vendor reports the keyboard as a
+  // NEGATIVE offset so its examples can feed it straight into a translateY;
+  // riseFor speaks in positive heights, like the fallback's
+  // endCoordinates.height. Getting this wrong does not fail to compile and
+  // does not throw — it drives the column the wrong way — so it is asserted.
+  assert.match(fast, /const keyboardHeight = -keyboard\.height\.value;/);
+  assert.match(fast, /translateY: -riseFor\(keyboardHeight, insetBelow\)/);
   // The clip is load-bearing: a transformed child draws outside its parent's
   // box, and this column is a LATER sibling than the header, so without it
   // the messages paint over the header as they rise.
@@ -351,6 +580,62 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   // Listeners are removed. A keyboard listener that outlives its screen drives
   // an Animated.Value nothing is rendering.
   assert.match(hook, /show\.remove\(\);\s*hide\.remove\(\);/);
+});
+
+test('[executed] the column takes the fast path only with BOTH vendors, and the fallback otherwise', () => {
+  // THE COLUMN IS THE ONE SIBLING THAT NEEDS TWO PACKAGES: keyboard-controller
+  // supplies the frames and reanimated runs the style off them. Either missing
+  // must route to the fallback — a binary with the keyboard package and no
+  // reanimated cannot execute the sibling's useAnimatedStyle at all, and one
+  // with reanimated and no keyboard package would mount a hook that reports
+  // nothing and leave the composer pinned at zero under a raised keyboard,
+  // which is worse than the fallback it replaced.
+  const column = stripComments(read('components/KeyboardRisingColumn.tsx'));
+  assert.match(
+    column,
+    /\{ \.\.\.motionCapability, keyboard: canTrackKeyboard\(\) && canWorklet\(\) \}/,
+    'the column must ask for both halves, through the boundary questions rather than the raw flags'
+  );
+  assert.match(column, /'keyboard',/, 'and choose on the key it just computed');
+  assert.match(
+    column,
+    /import \{ canTrackKeyboard, canWorklet, motionCapability, resolveMotion120 \} from '\.\.\/lib\/motion120';/
+  );
+  // The fallback stays the path taken and is NOT deleted: it is the
+  // implementation every build shipped so far runs.
+  assert.match(column, /const keyboardRise = useKeyboardOffset\(insetBelow\);/);
+
+  // THE DECISION ITSELF, run over all four combinations. `canTrackKeyboard()
+  // && canWorklet()` is modelled here exactly as the source writes it, and the
+  // fast path may be reached in ONE of the four.
+  const chooseFor = (keyboard, reanimated) =>
+    pure.resolveMotion120(
+      { reanimated, gestures: false, keyboard: keyboard && reanimated },
+      'keyboard',
+      () => 'fast',
+      'fallback'
+    );
+  assert.equal(chooseFor(true, true), 'fast', 'both vendors present: the column tracks the keyboard');
+  assert.equal(chooseFor(true, false), 'fallback', 'no reanimated: the style worklet could not run');
+  assert.equal(chooseFor(false, true), 'fallback', 'no keyboard package: the hook would report nothing');
+  assert.equal(chooseFor(false, false), 'fallback', 'the binary shipped today');
+
+  // AND THE GUARANTEE THE WHOLE BOUNDARY EXISTS FOR, stated as one line: a
+  // binary reporting no capability at all never even attempts the require.
+  let required = 0;
+  assert.equal(
+    pure.resolveMotion120(
+      { reanimated: false, gestures: false, keyboard: false },
+      'keyboard',
+      () => {
+        required += 1;
+        return 'fast';
+      },
+      'fallback'
+    ),
+    'fallback'
+  );
+  assert.equal(required, 0, 'a binary with no natives must not load the sibling that imports them');
 });
 
 test('[executed] the chat column counts the pill once at rest and the keyboard once risen', () => {
@@ -619,15 +904,15 @@ const SIBLINGS = [
     fallback: 'components/KeyboardRisingColumn.tsx',
     fast: 'components/KeyboardRisingColumn.motion120.tsx',
     shared: 'components/KeyboardRisingColumn.shared.tsx',
-    needs: 'reanimated',
+    needs: 'keyboard',
   },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
   // THE DECISION, run both ways, for each surface.
   for (const { name, needs } of SIBLINGS) {
-    const present = { reanimated: true, gestures: true };
-    const absent = { reanimated: false, gestures: false };
+    const present = { reanimated: true, gestures: true, keyboard: true };
+    const absent = { reanimated: false, gestures: false, keyboard: false };
 
     assert.equal(
       pure.resolveMotion120(present, needs, () => 'fast', 'fallback'),
@@ -755,12 +1040,27 @@ test('[static] the swipe surface needs BOTH natives, which is what consumes canW
   // round trip per frame under exactly the load a list scroll produces —
   // which is worse than not offering the mechanic.
   const row = stripComments(read('components/SwipeableRow.tsx'));
-  assert.match(row, /import \{ canSwipe, canWorklet, resolveMotion120 \}/);
+  // The two QUESTIONS must be imported, asserted by name rather than as an
+  // exact member list — the list grew a third entry when the boundary did, and
+  // pinning the whole line would make every future addition look like a
+  // regression here.
+  const rowImport = row.match(/import \{([^}]*)\} from '\.\.\/lib\/motion120';/);
+  assert.ok(rowImport, 'SwipeableRow must import from the boundary');
+  for (const name of ['canSwipe', 'canWorklet', 'resolveMotion120']) {
+    assert.ok(
+      rowImport[1].split(',').some((member) => member.trim() === name),
+      `SwipeableRow must import ${name} from the boundary`
+    );
+  }
   assert.match(
     row,
-    /\{ gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\) \}/,
+    /gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\)/,
     'the swipe needs a recogniser AND worklets; either false takes the fallback'
   );
+  // The capability it hands over is the REAL one with those two keys
+  // overridden — a swipe row inventing a value for a vendor it does not use
+  // would be a claim it has no basis for.
+  assert.match(row, /\{ \.\.\.motionCapability, gestures:/);
 
   // Executed, every combination: neither native alone opens the fast path.
   //

@@ -1,6 +1,6 @@
 import { Fragment, createElement, type PropsWithChildren, type ReactElement } from 'react';
 import { StyleSheet } from 'react-native';
-import { GestureHandlerRootView, motionCapability } from './vendor';
+import { GestureHandlerRootView, KeyboardProvider, motionCapability } from './vendor';
 import type { MotionCapability } from './types';
 
 /**
@@ -12,6 +12,26 @@ import type { MotionCapability } from './types';
 export { motionCapability };
 export { MENU_MOTION_MS, MENU_MOTION_OUT_MS, resolveMotion120 } from './types';
 export type { MotionCapability } from './types';
+
+/**
+ * Wraps the app in keyboard-controller's provider when this binary has it, and
+ * in a Fragment when it does not.
+ *
+ * A Fragment for the same reason `MotionRoot` uses one, stated below: the two
+ * binaries must lay out identically where the vendor is absent. This provider
+ * DOES add a host view of its own where it is present, because it is a native
+ * view that listens for keyboard frames — that is the whole feature, and it is
+ * a full-screen listener rather than a layout participant.
+ *
+ * It must sit above everything that can hold a text input, which is why it is
+ * mounted inside `MotionRoot` rather than at a screen: the hooks report
+ * nothing at all without it, and a provider mounted per-screen would restart
+ * its tracking on every navigation.
+ */
+export function KeyboardTrackingRoot({ children }: PropsWithChildren): ReactElement {
+  if (!KeyboardProvider) return createElement(Fragment, null, children);
+  return createElement(KeyboardProvider, null, children);
+}
 
 /**
  * Wraps the app in gesture-handler's root view when this binary has it, and
@@ -26,10 +46,17 @@ export type { MotionCapability } from './types';
  *
  * `createElement` rather than JSX for the vendor component because it is typed
  * as possibly-null and the null branch is the common one today.
+ *
+ * THE KEYBOARD PROVIDER RIDES INSIDE IT, so App.tsx keeps ONE root wrapper and
+ * the two vendors' presence is decided in one place instead of two. Nesting
+ * order is the packages' own: gesture-handler's root view has to be over
+ * EVERYTHING, so keyboard tracking goes under it, and both are over
+ * SafeAreaProvider and the navigator.
  */
 export function MotionRoot({ children }: PropsWithChildren): ReactElement {
-  if (!GestureHandlerRootView) return createElement(Fragment, null, children);
-  return createElement(GestureHandlerRootView, { style: styles.root }, children);
+  const tracked = createElement(KeyboardTrackingRoot, null, children);
+  if (!GestureHandlerRootView) return createElement(Fragment, null, tracked);
+  return createElement(GestureHandlerRootView, { style: styles.root }, tracked);
 }
 
 const styles = StyleSheet.create({
@@ -58,4 +85,23 @@ export function canSwipe(capability: MotionCapability = motionCapability): boole
  */
 export function canWorklet(capability: MotionCapability = motionCapability): boolean {
   return capability.reanimated;
+}
+
+/**
+ * True when a surface may be a FUNCTION of the keyboard's position rather than
+ * a second animation aimed at the same destination.
+ *
+ * The distinction is not a frame budget, it is a class of behaviour. The
+ * fallback listens for `keyboardWillShow`, reads the system's reported
+ * duration, and runs a matching curve: two animations started at the same
+ * moment with the same nominal length and a bezier approximating UIKit's
+ * private keyboard curve. That is smooth and it is still an imitation — and an
+ * INTERACTIVE dismissal, dragging the keyboard down with a finger, emits no
+ * event to imitate at all, so the fallback simply cannot follow it.
+ *
+ * A false here therefore costs drag-to-dismiss tracking, not the animation.
+ * Every consumer must still rise and fall correctly without it.
+ */
+export function canTrackKeyboard(capability: MotionCapability = motionCapability): boolean {
+  return capability.keyboard;
 }

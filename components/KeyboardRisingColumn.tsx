@@ -1,7 +1,7 @@
 import { type ComponentType } from 'react';
 import { Animated } from 'react-native';
 import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
-import { motionCapability, resolveMotion120 } from '../lib/motion120';
+import { canTrackKeyboard, canWorklet, motionCapability, resolveMotion120 } from '../lib/motion120';
 import {
   COLUMN_BOTTOM_PADDING,
   type KeyboardRisingColumnProps,
@@ -51,10 +51,20 @@ function KeyboardRisingColumnFallback({
  * Chosen ONCE, at module load. A capability cannot change while the app runs,
  * and the literal `require` is written here rather than passed as a string
  * because Metro resolves requires statically at bundle time.
+ *
+ * THE FAST PATH NEEDS TWO VENDORS and asks for both, the way SwipeableRow
+ * does: `canTrackKeyboard()` is what supplies the keyboard's live frame, and
+ * `canWorklet()` is what can run a style off it on the UI thread. Either one
+ * missing has to route here, to the fallback — a binary with the keyboard
+ * package and no reanimated could not run the sibling's `useAnimatedStyle` at
+ * all, and one with reanimated and no keyboard package would mount a hook that
+ * reports nothing and leave the composer pinned at zero while the keyboard
+ * covers it. The AND is written through the two questions rather than by
+ * reading the raw flags, so this line states WHY it needs each half.
  */
 const Impl = resolveMotion120<ComponentType<KeyboardRisingColumnProps>>(
-  motionCapability,
-  'reanimated',
+  { ...motionCapability, keyboard: canTrackKeyboard() && canWorklet() },
+  'keyboard',
   () =>
     require('./KeyboardRisingColumn.motion120')
       .KeyboardRisingColumn as ComponentType<KeyboardRisingColumnProps>,

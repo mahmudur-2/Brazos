@@ -1,5 +1,5 @@
 import { type ComponentType } from 'react';
-import { canSwipe, canWorklet, resolveMotion120 } from '../lib/motion120';
+import { canSwipe, canWorklet, motionCapability, resolveMotion120 } from '../lib/motion120';
 import type { SwipeableRowProps } from './SwipeableRow.shared';
 
 export type { SwipeAction, SwipeableRowProps } from './SwipeableRow.shared';
@@ -43,7 +43,11 @@ const Impl = resolveMotion120<ComponentType<SwipeableRowProps>>(
   // The AND of the boundary's two questions, expressed through them rather
   // than by reading the raw capability flags — so this file states WHY it
   // needs each half instead of restating the flags' names.
-  { gestures: canSwipe() && canWorklet(), reanimated: canWorklet() },
+  // `keyboard` is nothing to do with a swipe row and is passed through from
+  // the real capability rather than invented: `resolveMotion120` reads only
+  // the key it is given, and a hardcoded false here would be a claim about a
+  // vendor this file has no business having an opinion on.
+  { ...motionCapability, gestures: canSwipe() && canWorklet(), reanimated: canWorklet() },
   'gestures',
   () => require('./SwipeableRow.motion120').SwipeableRow as ComponentType<SwipeableRowProps>,
   SwipeableRowFallback

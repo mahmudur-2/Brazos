@@ -9,7 +9,7 @@
  */
 
 /**
- * What a binary can actually run. Both start false and only a successful,
+ * What a binary can actually run. All three start false and only a successful,
  * caught vendor load turns one on — a missing native module must read as
  * "cannot", never as "unknown, try anyway".
  */
@@ -27,6 +27,24 @@ export type MotionCapability = {
    * and every action reachable by a swipe must ALSO be reachable another way.
    */
   gestures: boolean;
+  /**
+   * react-native-keyboard-controller resolved AND its native module actually
+   * registered in this binary: the keyboard's own frame, per frame, on the UI
+   * thread — in both directions and through an interactive drag-to-dismiss,
+   * which emits no event for anyone to imitate. False means the core
+   * `Keyboard` events and a timing curve aimed at the same destination.
+   *
+   * THE SECOND HALF OF THAT SENTENCE IS LOAD-BEARING and this flag is the one
+   * place in the boundary where "the require resolved" is NOT the question.
+   * The other two vendors throw on import without their native module, so a
+   * caught require answers honestly for them. This one does not: its entry
+   * reads `TurboModuleRegistry.get('KeyboardController')` — the NULLABLE
+   * getter — and wraps the miss in a Proxy that throws on first property
+   * access, so the import succeeds on a binary that cannot run it and the
+   * crash arrives later, at render, inside the provider. `./vendor.ts`'s
+   * loader therefore asks the registry itself before it requires anything.
+   */
+  keyboard: boolean;
 };
 
 /** What a capability probe hands the resolver. Each loader returns the vendor
@@ -34,21 +52,29 @@ export type MotionCapability = {
 export type VendorProbe = {
   loadReanimated: () => unknown;
   loadGestureHandler: () => unknown;
+  loadKeyboardController: () => unknown;
 };
 
 /**
- * Turn two guarded loads into the capability pair.
+ * Turn three guarded loads into the capability set.
  *
  * A vendor counts as PRESENT only if its load returned a non-null object. A
  * package that is installed in node_modules but has no native module in the
  * binary throws on load; its loader catches and returns null, and this reads
  * that as absent — which is the correct answer, because the JavaScript being
  * resolvable is not the question.
+ *
+ * That last sentence is the whole contract, and `keyboard` is why it is
+ * phrased about the LOADER rather than about the require: a vendor whose
+ * import survives without its native module has to be probed some other way,
+ * and this resolver neither knows nor cares which way — it asks each loader
+ * and believes a null.
  */
 export function resolveCapability(probe: VendorProbe): MotionCapability {
   return {
     reanimated: isUsableModule(probe.loadReanimated()),
     gestures: isUsableModule(probe.loadGestureHandler()),
+    keyboard: isUsableModule(probe.loadKeyboardController()),
   };
 }
 
