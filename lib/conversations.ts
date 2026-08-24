@@ -69,6 +69,67 @@ export function conversationKey(c: Conversation): string {
   return c.job_id ? `job:${c.job_id}` : `direct:${c.direct_thread_id}`;
 }
 
+/** Only the fields a one-line preview reads. */
+export type PreviewableConversation = Pick<
+  Conversation,
+  | 'last_message_unsent_at'
+  | 'last_message_audio_url'
+  | 'last_message_image_url'
+  | 'last_message_content'
+>;
+
+/**
+ * The one line under a name in a conversation list.
+ *
+ * Same precedence as messagePreviewText(): an unsent message says so and
+ * carries no reactions, because there is nothing left to have reacted to.
+ *
+ * SHARED rather than copied. Two lists render conversations now — the inbox
+ * and the Face-ID-gated hidden list — and a preview that reads differently in
+ * one of them would be the P3-31 duplication in its most visible form.
+ */
+export function conversationPreviewText(
+  latest: PreviewableConversation,
+  reactionEmoji: readonly string[] = []
+): string {
+  if (latest.last_message_unsent_at) return 'This message was unsent';
+  const prefix = reactionEmoji.length > 0 ? `${reactionEmoji.join('')} ` : '';
+  if (latest.last_message_audio_url) return `${prefix}Voice message`;
+  if (latest.last_message_image_url) return `${prefix}Photo sent`;
+  return prefix + (latest.last_message_content || '…');
+}
+
+/** Only the fields the unread rule reads. */
+export type UnreadableConversation = Pick<
+  Conversation,
+  'job_id' | 'my_read_at' | 'last_message_sender_id' | 'last_message_at'
+>;
+
+/**
+ * Has this thread got activity the user has not seen?
+ *
+ * A direct thread keeps its read timestamp on the thread row itself (phase36),
+ * so it arrives on the conversation; a job thread's comes from the job-keyed
+ * message_reads map. YOUR OWN last message never counts: offer events and
+ * status cards are inserted with your id from screens you may never revisit,
+ * and lighting the inbox for your own action is noise, not news.
+ *
+ * MUTE IS NOT PART OF THIS RULE. It is a property of the person, not of the
+ * thread, and it is applied by the caller — the same reason the sheet resolves
+ * `muted` off the row rather than off the conversation.
+ */
+export function threadUnread(
+  thread: UnreadableConversation,
+  userId: string,
+  readMap: Record<string, string>
+): boolean {
+  const lastReadAt = thread.job_id ? readMap[thread.job_id] : thread.my_read_at;
+  return (
+    thread.last_message_sender_id !== userId &&
+    (!lastReadAt || new Date(thread.last_message_at) > new Date(lastReadAt))
+  );
+}
+
 /**
  * The other party in a conversation, from the current user's point of view.
  * If the job has no assigned worker (or otherwise no resolvable second party

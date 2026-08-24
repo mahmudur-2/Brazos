@@ -323,6 +323,10 @@ export type MyJobsStackNavigation = NativeStackNavigationProp<MyJobsStackParamLi
 // Screens stacked inside the Messages (inbox) tab.
 export type MessagesStackParamList = {
   MessagesInbox: undefined;
+  // Reached ONLY from the inbox's foot row, and only after
+  // expo-local-authentication has succeeded (phase77 HIDDEN_CHATS). No params:
+  // which conversations are hidden is read live, not carried through a route.
+  HiddenChats: undefined;
   Chat: ChatTargetParams;
   // "Hire Again" from a past conversation.
   PostJob:

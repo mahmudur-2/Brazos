@@ -1049,9 +1049,15 @@ test('[static] one action model, two entry mechanics, and no empty second sheet'
   // MORE renders only if it would have something in it — an empty second
   // sheet behind a visible button is the dead control this repo refuses.
   assert.match(screen, /\.\.\.\(moreItems\.length > 0/);
-  for (const flag of ['MARK_UNREAD', 'CLEAR_CHAT', 'HIDDEN_CHATS', 'ARCHIVE', 'DELETE_CHAT']) {
+  for (const flag of ['MARK_UNREAD', 'CLEAR_CHAT', 'ARCHIVE', 'DELETE_CHAT']) {
     assert.ok(screen.includes(`if (${flag}) {`), `More must carry a ${flag} row`);
   }
+  // HIDDEN_CHATS carries a SECOND condition, and that is the point (W1 D3):
+  // with no biometric or passcode enrolled the authentication prompt could
+  // never be shown, so the row is absent rather than offered and then failing.
+  assert.ok(screen.includes('if (HIDDEN_CHATS && deviceAuthReady) {'));
+  assert.match(screen, /LocalAuthentication\.hasHardwareAsync\(\)/);
+  assert.match(screen, /LocalAuthentication\.isEnrolledAsync\(\)/);
 
   // The MECHANIC is capability-chosen; the ACTIONS are not. An action
   // reachable by one mechanic and not the other would be two apps.

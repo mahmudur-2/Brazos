@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { ConversationRow } from '../components/ConversationRow';
 import { SwipeableRow, type SwipeAction } from '../components/SwipeableRow';
@@ -21,12 +22,26 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useConversations } from '../hooks/useConversations';
 import {
+  clearedBy,
   conversationKey,
+  conversationPreviewText,
+  conversationTarget,
   fetchActiveJobs,
   resolveOtherId,
+  threadUnread,
   type ActiveJob,
   type Conversation,
 } from '../lib/conversations';
+import {
+  BLOCK_DURATIONS,
+  foldConversationStates,
+  markConversationUnreadForAll,
+  setBlockUntil,
+  setConversationStateForAll,
+  blockExpiryFrom,
+  type BlockDuration,
+  type ConversationStatePatch,
+} from '../lib/conversationStates';
 import {
   groupThreadsByPerson,
   resolveActiveJob,
@@ -106,6 +121,7 @@ export function MessagesInboxScreen() {
   const {
     conversations,
     readMap,
+    stateByKey,
     profiles,
     lastMessageReactions,
     moderation,
@@ -121,8 +137,19 @@ export function MessagesInboxScreen() {
   // intent: the row read "Mute", the person was already muted, and tapping
   // unmuted them. The id cannot go stale; the row is re-read below.
   const [sheetUserId, setSheetUserId] = useState<string | null>(null);
-  const [moreTarget, setMoreTarget] = useState<SheetTarget | null>(null);
+  // THE SAME IDENTITY-NOT-SNAPSHOT RULE, now that More has live actions too.
+  // It held a copied row while every one of its entries was a no-op; the
+  // moment Archive/Unarchive and Hide/Unhide read state to choose their label
+  // AND their call, a stale copy could invert the user's intent exactly the
+  // way F2 did in the first sheet.
+  const [moreUserId, setMoreUserId] = useState<string | null>(null);
+  const [blockDurationUserId, setBlockDurationUserId] = useState<string | null>(null);
   const [reportTarget, setReportTarget] = useState<SheetTarget | null>(null);
+  // Whether this device can put a conversation behind an authentication prompt
+  // at all. Null while unknown, which renders as "no" — HIDDEN RATHER THAN
+  // OFFERED AND THEN FAILING (D3): with no biometric or passcode enrolled the
+  // hidden-chats entry and the "Mark as Hidden" row simply do not exist.
+  const [deviceAuthReady, setDeviceAuthReady] = useState(false);
   // Session-only, deliberately. Which slice of your own inbox you were last
   // looking at is not worth a stored preference, and restoring a filter that
   // hides most of your conversations is a confusing way to open a screen.
@@ -184,13 +211,35 @@ export function MessagesInboxScreen() {
     }, [refresh, loadPending, loadActiveJobs])
   );
 
+  // Asked ONCE, on mount: the answer is a property of the device, not of the
+  // session. A throw is the same answer as false — a platform where the module
+  // cannot even be probed is a platform that cannot hold a chat behind Face ID.
+  useEffect(() => {
+    let active = true;
+    async function probeDeviceAuth() {
+      try {
+        const [hasHardware, enrolled] = await Promise.all([
+          LocalAuthentication.hasHardwareAsync(),
+          LocalAuthentication.isEnrolledAsync(),
+        ]);
+        if (active) setDeviceAuthReady(hasHardware && enrolled);
+      } catch {
+        if (active) setDeviceAuthReady(false);
+      }
+    }
+    void probeDeviceAuth();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   async function onRefresh() {
     setRefreshing(true);
     await Promise.all([refresh(), loadActiveJobs()]);
     setRefreshing(false);
   }
 
-  const rows = useMemo(() => {
+  const allRows = useMemo(() => {
     if (!user) return [];
 
     // ONE row per person. A pair have exactly one conversation, ever — jobs
@@ -217,39 +266,49 @@ export function MessagesInboxScreen() {
       const isSelf = otherId === user.id;
       const isMuted = moderation.muted.has(otherId);
 
-      // The preview is the newest message across ALL of this person's
-      // threads, whichever one it happens to be in.
-      const latest = person.latest;
-      const reactions = lastMessageReactions[latest.last_message_id] ?? [];
-      const reactionPrefix =
-        reactions.length > 0 ? `${reactions.map((r) => r.emoji).join('')} ` : '';
-      const isImage = !!latest.last_message_image_url;
-      const isVoice = !!latest.last_message_audio_url;
-      const preview = latest.last_message_unsent_at
-        ? 'This message was unsent'
-        : reactionPrefix +
-          (isVoice
-            ? 'Voice message'
-            : isImage
-            ? 'Photo sent'
-            : latest.last_message_content || '…');
+      // THIS CONVERSATION'S OWN STATE (phase77), folded from the per-thread
+      // rows onto the one row that represents them. Every flag is ALL rather
+      // than ANY — see foldConversationStates() for why one archived job
+      // thread must not take the person's row out of the inbox.
+      const state = foldConversationStates(
+        person.threads.map((thread) => ({
+          key: conversationKey(thread),
+          lastMessageAt: thread.last_message_at,
+        })),
+        stateByKey
+      );
+
+      // The threads this user has not cleared. A cleared thread contributes no
+      // preview and no unread mark, because in this user's copy it has no
+      // messages left — the row showing a line the chat no longer contains is
+      // exactly the inconsistency the one visibility rule exists to prevent.
+      const liveThreads = person.threads.filter(
+        (thread) => !clearedBy(thread.last_message_at, stateByKey[conversationKey(thread)])
+      );
+      // The preview is the newest message across all of this person's
+      // still-visible threads, whichever one it happens to be in.
+      const latest = liveThreads.reduce<Conversation | null>(
+        (best, thread) =>
+          !best || thread.last_message_at > best.last_message_at ? thread : best,
+        null
+      );
+      const reactions = latest ? lastMessageReactions[latest.last_message_id] ?? [] : [];
+      // Everything cleared and nothing since falls through to the same ellipsis
+      // an empty message already renders as — no new vocabulary, and no claim
+      // about a message that is gone.
+      const preview = latest
+        ? conversationPreviewText(latest, reactions.map((r) => r.emoji))
+        : '…';
 
       // Unread and the waiting-offer badge are both folded across the whole
       // conversation: with one row per person, anything unanswered in ANY of
       // their threads has to surface on that row or nowhere.
-      const unreadInThread = (thread: Conversation) => {
-        // A direct thread keeps its read timestamp on the thread row itself
-        // (see phase36), so it comes back on the conversation instead of from
-        // the job-keyed message_reads map.
-        const lastReadAt = thread.job_id ? readMap[thread.job_id] : thread.my_read_at;
-        // Muted conversations still receive messages — they just don't raise
-        // the unread indicator (the only "badge" this app currently has).
-        return (
-          !isMuted &&
-          thread.last_message_sender_id !== user.id &&
-          (!lastReadAt || new Date(thread.last_message_at) > new Date(lastReadAt))
-        );
-      };
+      //
+      // Muted conversations still receive messages — they just don't raise the
+      // unread indicator (the only "badge" this app currently has), which is
+      // why mute is applied here rather than inside threadUnread().
+      const unreadInThread = (thread: Conversation) =>
+        !isMuted && threadUnread(thread, user.id, readMap);
       const awaitingInThread = (thread: Conversation) => {
         // One lookup for every kind of chain now — a marketplace bid keys as
         // `direct:<pair thread>` exactly like a direct offer (see loadPending).
@@ -274,9 +333,18 @@ export function MessagesInboxScreen() {
 
       return {
         key: `person:${otherId}`,
-        jobId: activeJob?.id ?? latest.job_id,
+        jobId: activeJob?.id ?? latest?.job_id ?? person.latest.job_id,
         otherId,
         isSelf,
+        // EVERY thread of the conversation, because every phase77 action
+        // applies to the whole of it — a job pair and a pair who have only
+        // ever had a direct thread reach the same six actions.
+        targets: person.threads.map(conversationTarget),
+        archived: state.archived,
+        hidden: state.hidden,
+        // D7's inbox reading: deleted AND quiet since. One newer message and
+        // this is false again, with nothing un-set anywhere.
+        deleted: state.deleted,
         // No active job means no job to name. A neutral placeholder here is
         // what produced "N conversations together" — the line stays empty
         // instead of saying something that isn't about anything.
@@ -285,10 +353,14 @@ export function MessagesInboxScreen() {
         rawName: baseName,
         avatarUrl: other?.avatar_url ?? null,
         preview,
-        lastMessageAt: latest.last_message_at,
-        unread: person.threads.some(unreadInThread),
+        lastMessageAt: (latest ?? person.latest).last_message_at,
+        // Only the threads still in this user's copy can be unread; a thread
+        // they cleared has nothing left to have missed.
+        unread: liveThreads.some(unreadInThread),
         muted: isMuted,
         blocking: moderation.blocking.has(otherId),
+        // Over ALL threads, cleared ones included: an offer waiting on this
+        // user is live whatever they did to their own copy of the thread.
         awaitingRequest: person.threads.some(awaitingInThread),
       };
     });
@@ -296,12 +368,35 @@ export function MessagesInboxScreen() {
     conversations,
     profiles,
     readMap,
+    stateByKey,
     lastMessageReactions,
     moderation,
     user,
     pendingByThread,
     activeJobs,
   ]);
+
+  /**
+   * THE INBOX, after phase77 takes two kinds of row out of it.
+   *
+   * DELETED-AND-QUIET rows are gone outright (D7): the conversation is not
+   * listed, not resolvable by the sheet, and not actionable — and it comes
+   * back on its own the moment a message newer than the watermark arrives.
+   *
+   * HIDDEN rows are gone from the LIST but not from the app; they are behind
+   * the device-authentication prompt the foot row opens. They are excluded
+   * before the pills rather than inside them, because hidden is a different
+   * axis from archived — a hidden conversation must not surface under
+   * Archived, or under Unread, either.
+   */
+  const rows = useMemo(
+    () => allRows.filter((row) => !row.deleted && !row.hidden),
+    [allRows]
+  );
+  const hiddenCount = useMemo(
+    () => allRows.filter((row) => !row.deleted && row.hidden).length,
+    [allRows]
+  );
 
   async function toggleBlock(target: SheetTarget) {
     if (!user) return;
@@ -342,32 +437,186 @@ export function MessagesInboxScreen() {
   }
 
   /**
-   * THE SECOND SHEET. Six rows, all of them flag-gated, none of them rendering
-   * today — each waits on a column or a policy lib/featureFlags.ts names.
+   * EVERY PHASE77 STATE CHANGE, THROUGH ONE DOOR.
+   *
+   * `setConversationStateForAll` reaches every thread the conversation is made
+   * of, so a pair with three job threads and a pair thread and a pair who have
+   * only ever had a direct thread both get the whole action. A handler that
+   * took `target.jobId` would work on the first and silently no-op on the
+   * second, which is the half-feature this run exists to prevent.
+   *
+   * The failure path is lib/errorMessage.ts's, exactly as toggleBlock's is: no
+   * database text reaches a user and no new error vocabulary is invented.
+   */
+  async function applyConversationState(
+    target: SheetTarget,
+    patch: ConversationStatePatch,
+    failureTitle: string
+  ) {
+    setMoreUserId(null);
+    const { error: stateError } = await setConversationStateForAll(target.targets, patch);
+    if (stateError) await alertAsync(failureTitle, userMessage(stateError));
+    await refresh();
+  }
+
+  /** Destructive rows confirm first — the shape toggleBlock already uses. */
+  async function confirmThen(
+    prompt: { title: string; message: string; confirmText: string },
+    run: () => Promise<void>
+  ) {
+    const ok = await confirmAsync({
+      title: prompt.title,
+      message: prompt.message,
+      confirmText: prompt.confirmText,
+      cancelText: 'Cancel',
+      destructive: true,
+    });
+    if (!ok) return;
+    await run();
+  }
+
+  async function markUnread(target: SheetTarget) {
+    if (!user) return;
+    setMoreUserId(null);
+    const { error: unreadError } = await markConversationUnreadForAll(
+      target.targets,
+      user.id
+    );
+    if (unreadError) await alertAsync('Could not mark as unread', userMessage(unreadError));
+    await refresh();
+  }
+
+  /**
+   * A TIMED BLOCK. Two taps and a confirm: the duration sheet, then the
+   * ordinary destructive confirmation.
+   *
+   * The expiry is computed here as `now + interval` and sent as an absolute
+   * instant, which is what set_block takes. The PERMANENT block is untouched
+   * and stays in the first sheet on the existing `blocks` insert.
+   */
+  async function blockFor(target: SheetTarget, duration: BlockDuration) {
+    setBlockDurationUserId(null);
+    await confirmThen(
+      {
+        title: `Block ${target.name} for ${duration.label}?`,
+        message:
+          "You won't be able to message each other until it lapses. You can unblock sooner.",
+        confirmText: 'Block',
+      },
+      async () => {
+        const { error: blockError } = await setBlockUntil(
+          target.userId,
+          blockExpiryFrom(Date.now(), duration.ms)
+        );
+        if (blockError) await alertAsync('Could not block', userMessage(blockError));
+        await refresh();
+      }
+    );
+  }
+
+  /**
+   * THE SECOND SHEET. Six rows, each gated by the flag that owns it, each with
+   * a real handler behind it — a flipped flag over a no-op row is the dead
+   * control lib/featureFlags.ts exists to prevent.
    *
    * The permanent block is deliberately NOT here: it is in the first sheet,
-   * where it already was. TIMED_BLOCK is the variant that needs an expiry
+   * where it already was. TIMED_BLOCK is the variant that needed an expiry
    * column, and it is a different row precisely so shipping it cannot quietly
    * change what the existing one does.
+   *
+   * FOUR OF THE SIX READ STATE TO CHOOSE THEIR LABEL, so they are built from
+   * the LIVE target rather than a copy — the same rule the first sheet's Mute
+   * and Block follow, for the same reason (F2): a label and the call it makes
+   * must be the same fact.
    */
-  const moreItems: ActionSheetItem[] = [];
-  if (TIMED_BLOCK) {
-    moreItems.push({ key: 'block-timed', label: 'Block for a while', icon: 'time-outline', destructive: true, onPress: () => {} });
-  }
-  if (MARK_UNREAD) {
-    moreItems.push({ key: 'mark-unread', label: 'Mark as Unread', icon: 'mail-unread-outline', onPress: () => {} });
-  }
-  if (CLEAR_CHAT) {
-    moreItems.push({ key: 'clear-chat', label: 'Clear Chat', icon: 'trash-bin-outline', destructive: true, onPress: () => {} });
-  }
-  if (HIDDEN_CHATS) {
-    moreItems.push({ key: 'hide', label: 'Mark as Hidden 🔒', icon: 'lock-closed-outline', onPress: () => {} });
-  }
-  if (ARCHIVE) {
-    moreItems.push({ key: 'archive', label: 'Archive', icon: 'archive-outline', onPress: () => {} });
-  }
-  if (DELETE_CHAT) {
-    moreItems.push({ key: 'delete-chat', label: 'Delete Chat', icon: 'close-circle-outline', destructive: true, onPress: () => {} });
+  function moreItemsFor(target: SheetTarget | null): ActionSheetItem[] {
+    if (!target) return [];
+    const items: ActionSheetItem[] = [];
+    if (TIMED_BLOCK) {
+      items.push({
+        key: 'block-timed',
+        label: 'Block for a while',
+        icon: 'time-outline',
+        destructive: true,
+        onPress: () => {
+          setMoreUserId(null);
+          setBlockDurationUserId(target.userId);
+        },
+      });
+    }
+    if (MARK_UNREAD) {
+      items.push({
+        key: 'mark-unread',
+        label: 'Mark as Unread',
+        icon: 'mail-unread-outline',
+        onPress: () => markUnread(target),
+      });
+    }
+    if (CLEAR_CHAT) {
+      items.push({
+        key: 'clear-chat',
+        label: 'Clear Chat',
+        icon: 'trash-bin-outline',
+        destructive: true,
+        onPress: () =>
+          confirmThen(
+            {
+              title: `Clear this chat with ${target.name}?`,
+              message:
+                'The messages leave your copy of the conversation. Their copy is untouched, and new messages still arrive here.',
+              confirmText: 'Clear',
+            },
+            () => applyConversationState(target, { clear: true }, 'Could not clear chat')
+          ),
+      });
+    }
+    // D3 — the row does not exist on a device with nothing enrolled, because
+    // the prompt that guards the list could never be shown.
+    if (HIDDEN_CHATS && deviceAuthReady) {
+      items.push({
+        key: 'hide',
+        label: target.hidden ? 'Unhide' : 'Mark as Hidden 🔒',
+        icon: target.hidden ? 'lock-open-outline' : 'lock-closed-outline',
+        onPress: () =>
+          applyConversationState(
+            target,
+            { hidden: !target.hidden },
+            target.hidden ? 'Could not unhide' : 'Could not hide'
+          ),
+      });
+    }
+    if (ARCHIVE) {
+      items.push({
+        key: 'archive',
+        label: target.archived ? 'Unarchive' : 'Archive',
+        icon: target.archived ? 'file-tray-outline' : 'archive-outline',
+        onPress: () =>
+          applyConversationState(
+            target,
+            { archived: !target.archived },
+            target.archived ? 'Could not unarchive' : 'Could not archive'
+          ),
+      });
+    }
+    if (DELETE_CHAT) {
+      items.push({
+        key: 'delete-chat',
+        label: 'Delete Chat',
+        icon: 'close-circle-outline',
+        destructive: true,
+        onPress: () =>
+          confirmThen(
+            {
+              title: `Delete this chat with ${target.name}?`,
+              message:
+                'It leaves your inbox and its messages leave your copy. Their copy is untouched, and the conversation returns if they write again.',
+              confirmText: 'Delete',
+            },
+            () => applyConversationState(target, { delete: true }, 'Could not delete chat')
+          ),
+      });
+    }
+    return items;
   }
 
   /**
@@ -394,6 +643,15 @@ export function MessagesInboxScreen() {
   // has gone resolves to null, which closes the sheet rather than acting on a
   // conversation that is no longer there.
   const sheetTarget = useMemo(() => resolveSheetTarget(rows, sheetUserId), [rows, sheetUserId]);
+  // Both later sheets resolve the same way and for the same reason. A row that
+  // has GONE — deleted from another device, or archived out of this list —
+  // resolves to null, which closes the sheet rather than acting on a
+  // conversation that is no longer there.
+  const moreTarget = useMemo(() => resolveSheetTarget(rows, moreUserId), [rows, moreUserId]);
+  const blockDurationTarget = useMemo(
+    () => resolveSheetTarget(rows, blockDurationUserId),
+    [rows, blockDurationUserId]
+  );
 
   /**
    * THE ONE ACTION MODEL, built from a live target.
@@ -469,13 +727,20 @@ export function MessagesInboxScreen() {
     [rows, actionsFor]
   );
 
+  // The rows the second sheet would hold RIGHT NOW: for the sheet that is open
+  // if one is, and otherwise for the first sheet's target, which is what
+  // decides whether the "More" row appears at all.
+  const moreItems: ActionSheetItem[] = moreItemsFor(moreTarget ?? sheetTarget);
+
   const sheetItems: ActionSheetItem[] = sheetTarget
     ? [
         ...actionsFor(sheetTarget),
-        // MORE renders only if it would have something in it. Every row it
-        // holds is flag-gated and every flag is false, so today it does not
-        // render at all — an empty second sheet behind a visible button is
-        // exactly the dead control this repo refuses to ship.
+        // MORE renders only if it would have something in it. Before phase77
+        // every row it holds was flag-gated and every flag was false, so it did
+        // not render at all — an empty second sheet behind a visible button is
+        // exactly the dead control this repo refuses to ship. The condition
+        // stays for the same reason: HIDDEN_CHATS drops out on a device with
+        // nothing enrolled, so this can still legitimately be empty.
         ...(moreItems.length > 0
           ? [
               {
@@ -485,12 +750,22 @@ export function MessagesInboxScreen() {
                 onPress: () => {
                   const target = sheetTarget;
                   setSheetUserId(null);
-                  setMoreTarget(target);
+                  setMoreUserId(target.userId);
                 },
               },
             ]
           : []),
       ]
+    : [];
+
+  /** The timed block's three durations, each one tap from its confirmation. */
+  const blockDurationItems: ActionSheetItem[] = blockDurationTarget
+    ? BLOCK_DURATIONS.map((duration) => ({
+        key: duration.key,
+        label: duration.label,
+        icon: 'time-outline' as const,
+        onPress: () => blockFor(blockDurationTarget, duration),
+      }))
     : [];
 
   // The pill's slice of the list, and the ONLY thing the pills change. They
@@ -504,6 +779,43 @@ export function MessagesInboxScreen() {
   const rowActionHint = canSwipe()
     ? 'Swipe left for mute, report and more'
     : 'Press and hold for mute, block, report and more';
+
+  /**
+   * THE HIDDEN CHATS ENTRY — one row at the foot of the list, and ONLY when
+   * there is something behind it.
+   *
+   * DELIBERATELY NOT A SIXTH PILL. A pill sits in the chrome permanently and
+   * announces that hidden conversations exist whether or not any do; a foot
+   * row that appears only when the list has something in it says nothing about
+   * a user who has hidden nothing. It is also gated on the device being able
+   * to ASK — with no biometric or passcode enrolled the prompt could never be
+   * shown, so the entry is absent rather than offered and then failing (D3).
+   *
+   * It rides the main list only. Under a pill the list is a slice, and an
+   * unrelated lock row under "Archived" is noise.
+   */
+  const showHiddenChatsRow =
+    HIDDEN_CHATS && deviceAuthReady && hiddenCount > 0 && filter === 'all';
+
+  /**
+   * A FAILED OR CANCELLED PROMPT DOES NOTHING AND SAYS NOTHING (D2).
+   *
+   * There is no error to surface: cancelling is a decision, not a fault, and a
+   * message either way would confirm to whoever is holding the phone that
+   * there is something here to get into.
+   */
+  async function openHiddenChats() {
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Unlock hidden chats',
+        cancelLabel: 'Cancel',
+      });
+      if (!result.success) return;
+    } catch {
+      return;
+    }
+    navigation.navigate('HiddenChats');
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -611,6 +923,20 @@ export function MessagesInboxScreen() {
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
           }
           showsVerticalScrollIndicator={false}
+          ListFooterComponent={
+            showHiddenChatsRow ? (
+              <Pressable
+                onPress={openHiddenChats}
+                style={({ pressed }) => [styles.hiddenRow, pressed && styles.pillPressed]}
+                accessibilityRole="button"
+                accessibilityLabel="Hidden Chats"
+                accessibilityHint="Unlocks with Face ID, Touch ID or your passcode"
+              >
+                <Ionicons name="lock-closed-outline" size={16} color={colors.textMuted} />
+                <Text style={styles.hiddenRowLabel}>Hidden Chats</Text>
+              </Pressable>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.empty}>
               <View style={styles.emptyIcon}>
@@ -638,7 +964,15 @@ export function MessagesInboxScreen() {
         title={moreTarget?.name}
         subtitle="More actions"
         items={moreItems}
-        onClose={() => setMoreTarget(null)}
+        onClose={() => setMoreUserId(null)}
+      />
+
+      <ActionSheet
+        visible={!!blockDurationTarget}
+        title={blockDurationTarget?.name}
+        subtitle="Block for how long?"
+        items={blockDurationItems}
+        onClose={() => setBlockDurationUserId(null)}
       />
 
       {user && reportTarget && (
@@ -704,6 +1038,29 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   pillPressed: {
     opacity: 0.7,
+  },
+  // The foot row. Quiet by construction: a hairline capsule in the muted text
+  // colour, the same restraint the resting filter pill uses. It is a way back
+  // into something, not an announcement that something is there.
+  hiddenRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    marginTop: spacing.lg,
+    marginBottom: spacing.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    // 44pt minimum touch target.
+    minHeight: 44,
+  },
+  hiddenRowLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
   pillLabel: {
     fontSize: 13,

@@ -1,3 +1,8 @@
+// `import type`, never a value import: this module is imported and EXECUTED by
+// the tests, and lib/messages.ts pulls in the Supabase client, which Node's
+// resolver cannot load from a test at all. A type-only import is erased.
+import type { ChatTarget } from './messages';
+
 /**
  * The inbox's filter pills — which rows each one shows, and what it says when
  * it shows none.
@@ -17,6 +22,11 @@ export type InboxFilter = 'all' | 'unread' | 'archived' | 'requests' | 'support'
 export type FilterableRow = {
   unread: boolean;
   awaitingRequest: boolean;
+  /**
+   * Archived out of the main inbox (phase77 ARCHIVE). True only when EVERY
+   * thread of the conversation is archived — see foldConversationStates().
+   */
+  archived: boolean;
 };
 
 export const INBOX_FILTERS: { key: InboxFilter; label: string }[] = [
@@ -40,25 +50,32 @@ export const INBOX_FILTERS: { key: InboxFilter; label: string }[] = [
  *             filtering by it is live behaviour rather than invented data,
  *             and the empty state below still covers the case where nobody
  *             is waiting on you.
- *   archived  ALWAYS EMPTY, and honestly so: there is no per-participant
- *             archived flag in the schema, so nothing can be archived. The
- *             pill ships anyway because it is the one place a user would
- *             look to find out — and it says exactly that.
+ *   archived  LIVE since phase77 gave conversation_states an archived flag.
+ *             It was an honest empty state for as long as there was no column
+ *             to read; there is one now, so the pill filters on it and the
+ *             empty line below is true of the state rather than of the schema.
  *   support   ALWAYS EMPTY. There is no support conversation, agent, or
  *             routing in this product yet.
+ *
+ * ARCHIVED ROWS ARE OUT OF EVERY OTHER PILL, not merely out of `all`. The
+ * point of archiving is that the conversation stops appearing in the list you
+ * scroll; a row that vanished from All and then resurfaced under Unread would
+ * have been filed nowhere.
  */
 export function filterRows<T extends FilterableRow>(rows: T[], filter: InboxFilter): T[] {
+  const live = rows.filter((row) => !row.archived);
   switch (filter) {
     case 'unread':
-      return rows.filter((row) => row.unread);
+      return live.filter((row) => row.unread);
     case 'requests':
-      return rows.filter((row) => row.awaitingRequest);
+      return live.filter((row) => row.awaitingRequest);
     case 'archived':
+      return rows.filter((row) => row.archived);
     case 'support':
       return [];
     case 'all':
     default:
-      return rows;
+      return live;
   }
 }
 
@@ -67,11 +84,13 @@ export type InboxEmptyState = { title: string; body: string };
 /**
  * What an empty list says, per pill.
  *
- * Each one is true of the state it describes and claims nothing else. In
- * particular "Nothing archived yet" is not a lie about a feature that does not
- * exist — nothing IS archived — and "Support coming soon" is the only line
- * here that promises anything, which is why it is the only one that says so
- * plainly rather than implying a filter came up empty.
+ * Each one is true of the state it describes and claims nothing else. Since
+ * phase77 "Nothing archived yet" describes an empty FILTER rather than an
+ * absent feature — the line did not have to change when the column arrived,
+ * because it was written about the state and not about the schema. "Support
+ * coming soon" is still the only line here that promises anything, which is
+ * why it is the only one that says so plainly rather than implying a filter
+ * came up empty.
  */
 export function emptyStateFor(filter: InboxFilter): InboxEmptyState {
   switch (filter) {
@@ -103,6 +122,17 @@ export type SheetTargetRow = {
   jobId: string | null;
   blocking: boolean;
   muted: boolean;
+  /**
+   * EVERY thread this one conversation is made of — their job threads and
+   * their pair thread alike. The phase77 actions all apply to the whole
+   * conversation, because the row IS the whole conversation; an action that
+   * reached only the job threads would silently no-op on a pair who have never
+   * shared a job, which is the half-feature this run exists to prevent.
+   */
+  targets: ChatTarget[];
+  /** Folded from those threads — see foldConversationStates(). */
+  archived: boolean;
+  hidden: boolean;
 };
 
 export type ResolvedSheetTarget = {
@@ -111,6 +141,9 @@ export type ResolvedSheetTarget = {
   jobId: string | null;
   blocking: boolean;
   muted: boolean;
+  targets: ChatTarget[];
+  archived: boolean;
+  hidden: boolean;
 };
 
 /**
@@ -146,6 +179,9 @@ export function resolveSheetTarget<T extends SheetTargetRow>(
     jobId: row.jobId,
     blocking: row.blocking,
     muted: row.muted,
+    targets: row.targets,
+    archived: row.archived,
+    hidden: row.hidden,
   };
 }
 
