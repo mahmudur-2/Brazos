@@ -1334,6 +1334,55 @@ test('[static] Copy renders only where it works, and says so when it fails', () 
   assert.match(chat, /alertAsync\('Could not copy'/);
 });
 
+test('[static] Copy is IN the message long-press menu, not merely available to the screen', () => {
+  // THE DEFECT THIS PINS, observed on device on a binary that HAS
+  // expo-clipboard: long-pressing a message offered React and Reply and no
+  // Copy. Nothing was failing silently — `messageMenuItems` had never been
+  // given a Copy entry. The clipboard boundary landed wired to the translation
+  // sheet's button, and every assertion written for it pinned THAT control, so
+  // the suite stayed green while the menu stayed wrong.
+  //
+  // Which is the lesson worth keeping: "the helper exists and is guarded" is a
+  // different claim from "the user can reach it here". This test makes the
+  // second one, against the item list itself.
+  const chat = stripComments(read('screens/ChatScreen.tsx'));
+
+  const list = chat.match(/const messageMenuItems: ActionSheetItem\[\] = menuTarget([\s\S]*?)\n {4}: \[\];/);
+  assert.ok(list, 'the message menu must still be one derived list — find it before changing this fence');
+  const items = list[1];
+
+  // ANTI-VACUITY: the extraction must actually be holding the menu, or every
+  // assertion below is about an empty string.
+  for (const known of ["key: 'reply'", "label: 'Reply'", "key: 'unsend'"]) {
+    assert.ok(items.includes(known), `the extracted menu is not the real one — ${known} is missing`);
+  }
+
+  // THE ITEM, inside that list.
+  assert.match(items, /key: 'copy',/, 'long-press offers no Copy — the defect this test exists for');
+  assert.match(items, /label: 'Copy',/);
+
+  // GATED ON BOTH QUESTIONS, in the list rather than in the handler: an item
+  // rendered and then found unusable is the dead control the boundary's whole
+  // `canCopy()` rule exists to prevent, and a Copy on a voice note has nothing
+  // to write.
+  assert.match(
+    items,
+    /\.\.\.\(canCopy\(\) && menuTarget\.content/,
+    'Copy must be gated on a clipboard AND on there being text — never rendered unconditionally'
+  );
+
+  // It copies the message it was opened on, closes the menu first, and routes
+  // its failure through the SHARED reporter rather than a second copy of the
+  // same rule (P3-31).
+  assert.match(items, /void copyOrExplain\(text, 'message'\);/);
+  assert.match(
+    chat,
+    /async function copyOrExplain\(text: string, subject: 'translation' \| 'message'\)/,
+    'both copy affordances must share one implementation of "say so when it did not land"'
+  );
+  assert.match(chat, /await copyOrExplain\(text, 'translation'\);/);
+});
+
 test('[executed] a translation that arrives after the sheet closed is dropped', () => {
   // AUDIT F5, as a sequence rather than a shape. `runTranslation` awaits the
   // fetch, so the sheet can be closed — or a SECOND translation started on

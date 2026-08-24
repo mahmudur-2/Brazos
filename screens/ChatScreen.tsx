@@ -678,13 +678,24 @@ export function ChatScreen() {
     setTranslateResult(null);
   }
 
-  async function handleCopyTranslation(text: string) {
-    // The control only renders when `canCopy()`, so reaching here without a
-    // clipboard means the native call itself refused — say so rather than
-    // letting the user believe the text is on their clipboard.
+  /**
+   * Copy, and say so when it does not land.
+   *
+   * ONE implementation for both copy affordances — the translation sheet's
+   * button and the message menu's item — because the rule they share is the
+   * one that matters. The control only renders when `canCopy()`, so reaching
+   * here without a clipboard means the native call itself refused, and silence
+   * would leave the user believing the text is on their clipboard when it is
+   * not. `subject` only names what failed; it does not change the rule.
+   */
+  async function copyOrExplain(text: string, subject: 'translation' | 'message') {
     if (!(await copyText(text))) {
-      await alertAsync('Could not copy', 'The translation could not be copied on this device.');
+      await alertAsync('Could not copy', `The ${subject} could not be copied on this device.`);
     }
+  }
+
+  async function handleCopyTranslation(text: string) {
+    await copyOrExplain(text, 'translation');
   }
 
   async function handleShareProfile() {
@@ -1024,6 +1035,31 @@ export function ChatScreen() {
             setReplyTo(target);
           },
         },
+        // COPY — added 2026-08-24, and it was never here before: the clipboard
+        // boundary landed wired to the translation sheet's Copy button only,
+        // and this list was not extended with it. Nothing was failing silently
+        // on device; the item simply did not exist.
+        //
+        // Two gates, and they are different questions. `canCopy()` is the
+        // never-a-dead-control rule the sheet already follows — a Copy that
+        // cannot copy is worse than no Copy, because the user believes the
+        // text is on their clipboard and pastes something else. `content` is
+        // the same gate the TRANSLATE entries below use: a photo or a voice
+        // note has no text to put anywhere.
+        ...(canCopy() && menuTarget.content
+          ? [
+              {
+                key: 'copy',
+                label: 'Copy',
+                icon: 'copy-outline' as const,
+                onPress: () => {
+                  const text = menuTarget.content ?? '';
+                  setMenuTarget(null);
+                  void copyOrExplain(text, 'message');
+                },
+              },
+            ]
+          : []),
         // TRANSLATE — two entries, because "this message" and "this
         // conversation" are different amounts of text and different amounts
         // of money, and a user should choose rather than discover. Both are
