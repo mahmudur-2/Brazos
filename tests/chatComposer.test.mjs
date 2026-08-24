@@ -497,6 +497,57 @@ test('[static] the element draws all three states, own bubbles only, from palett
   assert.match(bubble, /delivery\?: MessageDelivery;/);
 });
 
+test('[static] a quoted bubble widens to fit its quote; an unquoted bubble is untouched', () => {
+  const bubble = stripComments(read('components/ChatBubble.tsx'));
+
+  // THE QUOTE STRIP MUST CONTRIBUTE INTRINSIC WIDTH. Written as `flex: 1` the
+  // body resolved to flexBasis 0, and Yoga measures a fit-content row from the
+  // sum of its children's flex BASES — so the strip measured to its rail, its
+  // gaps and the thumbnail, the bubble sized to the MESSAGE text instead, and
+  // the quote was truncated into the remainder: "HE…" over a "Hello sir" that
+  // wrapped onto two lines.
+  const quoteBody = bubble.match(/quoteBody: \{([^}]*)\}/);
+  assert.ok(quoteBody, 'ChatBubble must still have a quoteBody style');
+  assert.match(
+    quoteBody[1],
+    /flexBasis: 'auto'/,
+    'the quote body needs a content-sized basis or the bubble cannot widen to fit it'
+  );
+  assert.doesNotMatch(
+    quoteBody[1],
+    /flex: 1/,
+    'shorthand `flex: 1` is flexBasis 0 — the zero contribution this fixed'
+  );
+  // Grow and shrink are both load-bearing and both stay: grow holds the
+  // thumbnail on the row's right edge when the quote is shorter than the
+  // message, shrink is what lets numberOfLines={1} ellipsize past the cap.
+  assert.match(quoteBody[1], /flexGrow: 1/, 'the thumbnail must stay right-aligned');
+  assert.match(quoteBody[1], /flexShrink: 1/, 'an over-long quote must shrink, not overflow');
+
+  // THE UNQUOTED PATH IS UNCHANGED. The strip is the only thing that widens a
+  // bubble, and it renders only when there IS a quote — so a bubble without
+  // one measures exactly as it did before.
+  assert.match(bubble, /\{replyTo && \(/, 'the quote strip is conditional on replyTo');
+  const bubbleStyle = bubble.match(/\n {2}bubble: \{([^}]*)\}/);
+  assert.ok(bubbleStyle, 'ChatBubble must still have a bubble style');
+  assert.doesNotMatch(
+    bubbleStyle[1],
+    /minWidth|replyTo/,
+    'the bubble box itself must not grow a quote-conditional width'
+  );
+
+  // The visual design the widening serves is NOT what changed: one accent
+  // rail, one line of name, one line of preview, still through the shared
+  // preview helper.
+  assert.match(bubble, /styles\.quoteBar, isOwn \? styles\.quoteBarOwn : styles\.quoteBarOther/);
+  assert.equal(
+    (bubble.match(/numberOfLines=\{1\}/g) ?? []).length,
+    2,
+    'the quote keeps exactly two one-line texts: the name and the preview'
+  );
+  assert.match(bubble, /\{messagePreviewText\(replyTo\)\}/);
+});
+
 test('[static] the read-model verdicts are recorded where the next run will look', () => {
   // The two flags this investigation produced must carry the EVIDENCE, not a
   // shrug: the daytime schema run reads these to know what to build.

@@ -255,8 +255,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   quoteBarOther: {
     backgroundColor: colors.primary,
   },
+  // THE BASIS IS WHAT MAKES THE BUBBLE WIDEN. Written as `flex: 1` this
+  // resolved to flexBasis 0, and a zero basis is a zero CONTRIBUTION: Yoga
+  // measures a fit-content row from the sum of its children's flex bases
+  // (resolveFlexibleLength, where `availableInnerMainDim = flexLine.
+  // sizeConsumed` for a row that cannot grow), so the quote strip measured to
+  // its rail, its two gaps and the thumbnail and nothing else. The bubble then
+  // sized to the MESSAGE text and the quote was truncated into whatever was
+  // left over — a "Hello sir" bubble with "HE…" quoted above it, instead of a
+  // bubble widened to fit the quote the way WhatsApp does.
+  //
+  // Grow and shrink are both still wanted and both still here. Grow keeps the
+  // thumbnail on the row's right edge when the quote is shorter than the
+  // message; shrink is what lets numberOfLines={1} ellipsize once the quote is
+  // longer than the bubble's max width. Only the BASIS changed, so a bubble
+  // carrying no quote never reaches this style at all.
   quoteBody: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 'auto',
     gap: 1,
   },
   quoteName: {
