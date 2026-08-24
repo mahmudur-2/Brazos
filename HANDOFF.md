@@ -43,7 +43,153 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-24 worklet-boundary run (RUN W1)
+## Current state — after the 2026-08-24 next-binary run (RUN N1)
+
+Two commits of the three dispatched. C3 is BLOCKED AT A HOOK, and that block
+is the one thing this run hands back:
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`13aab59`|`app.json`'s `expo.icon` points at `assets/brand/app-icon-b-leaf.png`; the asset is committed; `tests/pwa.test.mjs` moves its pin to the new filename and fences colour type 2, no `tRNS`, 1024x1024|
+|C2|`b3adab3`|`screens/LaunchScreen.tsx`'s `LAUNCH_MARK` is that same file, so the launch layer and the iOS home screen draw one asset; the `BAKED_ART` roster swaps its entry accordingly|
+|C3|—|**BLOCKED.** `npx expo install --fix` is refused by `.claude/hooks/guard.ps1` as `GUARD-DEPS dependency-mutation`, and no permitted command form exists. Three patch bumps still owed — see operator step 6|
+
+The offline suite stands at **932 pass / 0 fail / 0 skipped**, bare
+`npm run verify` exit 0 before the first edit and after each commit —
+unchanged from run start, because both commits changed assertions inside
+existing tests rather than adding tests. Branch and commit state are Git's to
+report, never this file's.
+
+### THE APP ICON AND THE LAUNCH MARK ARE ONE FILE NOW
+
+`expo.icon` moved off `./assets/brand/app-icon-flat.png` onto the operator's
+`./assets/brand/app-icon-b-leaf.png`, and `screens/LaunchScreen.tsx` mounts
+that same file as `LAUNCH_MARK`. Probed from its own bytes BEFORE any edit —
+the image was never opened as an image, only walked as bytes:
+
+| property | measured |
+|-|-|
+|dimensions|1024 x 1024|
+|PNG colour type|2 (RGB), 8-bit, non-interlaced|
+|chunks|`IHDR`, `IDAT`, `IEND` — no `tRNS`|
+|alpha channel|**none exists**|
+|fully-transparent samples|0 of 1048576|
+|file size|1,225,679 bytes|
+
+All three probe assertions passed, so the run continued. Nothing was cropped,
+resized or recoloured; the file is committed byte for byte as supplied.
+
+**This file is the opposite bake from the one it replaced, and that is the one
+visible consequence worth knowing about.** `app-icon-flat.png` was RGBA with
+an alpha channel merely held at 255 everywhere; `app-icon-v2.png` baked a
+~18.7% corner radius INTO its alpha channel. The new export has no alpha
+channel at all, so it has no baked radius and no transparent corners. On the
+iOS home screen that is exactly right — Apple requires a full-bleed opaque
+square and masks it itself. On the LAUNCH LAYER there is no such mask and
+nothing applies a radius in its place, so the mark now reads as a hard-edged
+square where it used to read as a squircle. The dispatch settled the artwork
+and named the old one "the old rounded icon", so this was repointed and
+reported, not restyled. Look at it on a device before deciding whether the
+launch layer wants a radius of its own.
+
+**Where each half is delivered from.** `expo.icon` is read at build time, so
+C1 waits for a binary. C2 is a JavaScript surface — there is NO native splash
+anywhere in this project: `app.json` carries no `splash` key, `expo.plugins`
+has no expo-splash-screen block, `package.json` has no expo-splash-screen
+dependency, and the only `splash` token in the whole non-`docs/` tree is one
+prose line in this file. The branded launch is `screens/LaunchScreen.tsx`, a
+React layer rendered over the whole app, so C2 ships over the air with a JS
+bundle and its asset.
+
+**The fences moved with the file, both in the direction of strictness.**
+`tests/pwa.test.mjs` kept naming a specific file rather than a pattern, but
+its measurement changed shape because the file did. The old sweep read all
+1048576 alpha samples by indexing the last byte of each pixel — on a
+three-byte pixel that byte is BLUE, so the loop could not be carried over; it
+would have been silently measuring the wrong channel. In its place the colour
+type is pinned at 2, which forbids the alpha channel from existing at all and
+so fails a re-export back to type 6 even when every sample it writes is
+opaque, plus a chunk walk that rejects `tRNS` — the one way a PNG with no
+alpha channel can still declare transparency. That walk asserts it reached
+`IDAT`, so it cannot pass by scanning nothing. The four named corner reads
+stay.
+
+`tests/themeResolution.test.mjs`'s `BAKED_ART` roster swapped
+`app-icon-v2.png` for `app-icon-b-leaf.png`, because the roster is
+mount-driven and its added-or-removed assertion demands exactly that of a
+raster the app stops mounting — nothing else required v2. The new entry is
+bake `opaque-brand`, re-derived from the file by the sweep that already runs,
+and ungated for the reason v2 was: an icon is the brand's own square, not a
+palette ground. That moved one entry from the transparent half of the sweep to
+the opaque half, so the transparent floor moved **6 -> 5**. The assertions
+either side of it are untouched — only the constant tracking how many entries
+carry real alpha changed, and the entry it stopped counting is now counted
+just as strictly by the opaque branch. Nothing was loosened to let anything
+through. The bake vocabulary loses `brand-mark` with v2; it was that one
+asset's word.
+
+**Both previous icons stay on disk, unmodified and required by nothing**, so
+either is revertible: `app-icon-flat.png` and `app-icon-v2.png`.
+
+**Deliberately unchanged, and each for a CLAUDE.md reason, not an oversight:**
+`expo.android.adaptiveIcon.foregroundImage` still names `./assets/icon.png`,
+because Android is deferred entirely and an opaque full-bleed square is the
+wrong shape for an adaptive foreground anyway; `expo.web.favicon` still names
+`./assets/favicon.png`, because the web surface is frozen. There is no
+`ios.icon` key — the top-level `icon` is the only one, and none was added,
+since Expo derives the iOS icon from it.
+
+### C3 IS BLOCKED AT THE GUARD, and there is no permitted command form
+
+`.claude/hooks/guard.ps1` refused `npx expo install --fix` as
+`GUARD-DEPS dependency-mutation` on the first attempt. Its rule was then read
+(read-only, with the file tools) rather than probed for a gap, and the block
+is categorical, not a quirk of the flags used:
+
+- lines 401–403 deny `npx expo install` outright, whatever flags follow;
+- lines 378–392 deny `npm install|i|ci|uninstall|update|add|remove` and the
+  `yarn`/`pnpm`/`bun` equivalents as whole tokens.
+
+So every route that would actually install the three patch levels is denied.
+**It was not worked around.** Hand-editing the three version strings in
+`package.json` was available and was NOT done: it installs nothing, so it
+would leave `node_modules` and the lockfile disagreeing with the manifest
+while accomplishing precisely what the guard exists to prevent. CLAUDE.md's
+contract makes a hook collision a STOP and makes bypassing the deny matrix
+require explicit authorisation, so C3 is handed back intact as operator
+step 6, with the exact command to run.
+
+`npx expo-doctor` is NOT blocked and was run twice, before any edit and again
+after C2: **17 of 18 checks passed both times**, failing only "Check that
+packages match versions required by installed Expo SDK" with exactly the three
+patch mismatches the dispatch named and nothing else. So the icon work changed
+nothing about doctor's verdict, and the one failing check is C3 in full.
+
+### What this run supersedes in the records below
+
+- **RUN B3's "THE iOS APP ICON IS THE FLAT EXPORT"** — `expo.icon` is the
+  B-leaf export now. That section keeps its measurements, which were true of
+  the file it measured, and carries its own superseded note.
+- **RUN B3's premise 1**, that no roster row changed "and none should have".
+  It was right for an icon mounted only by `app.json`; it stopped being right
+  the moment `LaunchScreen` required the same file. The roster row exists now.
+- **RUN B3's premise 2**, that `app-icon-v2.png` is still mounted
+  deliberately. It is mounted by nothing as of C2.
+
+### Device checks owed from THIS run (operator, physical device)
+
+1. **The launch layer's mark, first thing.** It is a hard-edged opaque square
+   now, not a squircle — see the consequence paragraph above. This is the one
+   item that could want a follow-up decision, and it ships over the air, so it
+   arrives before the new binary does.
+2. **The home-screen icon, after the next binary only.** `expo.icon` is
+   build-time; an OTA cannot move it. Confirm iOS masks the square the way it
+   is supposed to and no white or transparent sliver shows at the corners.
+3. **Both auth callers of `BrandLogo` are untouched** and should look
+   identical — Sign In and Create Account still take the component's default
+   `brazos-b-leaf.png`. Only `LaunchScreen` passes an override.
+
+### The run before this one (RUN W1) — its two commits, carried forward
 
 Two code commits, in dispatch order; C2 produced no commit and that is a
 result, not a gap:
@@ -54,10 +200,9 @@ result, not a gap:
 |C2|—|the sweep of the same class across all three fast paths found NOTHING further — evidence below, held permanently by C3|
 |C3|`4e70f97`|a static worklet-callability fence: every worklet body extracted with the TypeScript parser, every call inside classified, anti-vacuity executed|
 
-The offline suite stands at **932 pass / 0 fail / 0 skipped**, bare
-`npm run verify` exit 0 after every commit, up from 929 at run start: C1's
-directive-position test plus C3's two fence tests. Branch and commit state
-are Git's to report, never this file's.
+The offline suite stood at **932 pass / 0 fail / 0 skipped** at the end of
+that run, bare `npm run verify` exit 0 after every commit, up from 929 at its
+start: C1's directive-position test plus C3's two fence tests.
 
 ### THE CFBUNDLEVERSION 3 CRASH — riseFor was not a worklet
 
