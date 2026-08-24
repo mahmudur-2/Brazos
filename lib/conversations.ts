@@ -36,6 +36,27 @@ export type Conversation = {
   my_read_at: string | null;
 };
 
+// ---------------------------------------------------------------------------
+// THE CLEAR / DELETE WATERMARK (phase77, S-2).
+//
+// D7's ONE visibility helper, re-exported here so the two surfaces that read
+// it — the inbox deciding whether a row is still in the list, and the chat
+// timeline deciding which messages are still in the thread — share one import
+// as well as one implementation.
+//
+// THE RULE ITSELF lives in lib/conversationVisibility.ts, which imports
+// nothing, so a test can RUN the comparison rather than read it: a module that
+// imports `./supabase` cannot be loaded by `node --test` at all. There is
+// exactly one `<=` in this app comparing an instant to `cleared_before`, and
+// it is over there. A second copy is the P3-31 bug the arrangement prevents.
+// ---------------------------------------------------------------------------
+export {
+  clearedBy,
+  conversationHiddenByDelete,
+  visibleMessages,
+  type ClearWatermark,
+} from './conversationVisibility';
+
 /** The chat target a conversation row opens. */
 export function conversationTarget(c: Conversation): ChatTarget {
   return c.job_id
@@ -163,6 +184,32 @@ export async function fetchMyReadStates(userId: string) {
     .from('message_reads')
     .select('job_id, last_read_at')
     .eq('user_id', userId);
+
+  return { data: (data ?? []) as ReadState[], error };
+}
+
+/**
+ * The OTHER party's read position on the given job threads — the gold tick's
+ * source for a job conversation (phase77 READ_TICKS).
+ *
+ * Readable since phase77's `message_reads_select_party`, which is scoped to
+ * exactly one row: the row belonging to the other party of a job the caller is
+ * already in. It is the same table and the same shape `fetchMyReadStates()`
+ * reads, deliberately — one tick pipeline for both thread kinds, rather than
+ * an RPC for job threads that could never ride realtime beside its direct
+ * sibling.
+ *
+ * An empty `jobIds` short-circuits: PostgREST renders `in.()` for an empty
+ * list, which is a syntax error rather than an empty result.
+ */
+export async function fetchCounterpartyReadStates(otherId: string, jobIds: string[]) {
+  if (jobIds.length === 0) return { data: [] as ReadState[], error: null };
+
+  const { data, error } = await supabase
+    .from('message_reads')
+    .select('job_id, last_read_at')
+    .eq('user_id', otherId)
+    .in('job_id', jobIds);
 
   return { data: (data ?? []) as ReadState[], error };
 }
