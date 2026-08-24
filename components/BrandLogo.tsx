@@ -32,6 +32,18 @@ type BrandLogoProps = {
   style?: StyleProp<ViewStyle>;
   /** Overrides the default mark — see the SOURCE comment above. */
   source?: ImageSourcePropType;
+  /**
+   * Corner radius in points, for a source whose rounding is NOT baked into
+   * its alpha channel (the shipped app icon is a full-bleed opaque square).
+   * Applied to the Image itself, never as overflow on the outer View: that
+   * View carries the elevated drop shadow, and on iOS `overflow: 'hidden'`
+   * (masksToBounds) would clip the shadow off the same node. The Image clips
+   * its own bitmap, and the alpha-derived shadow then follows the rounded
+   * silhouette exactly as it does for the baked-alpha default mark. Omitted —
+   * every pre-existing caller — nothing is applied and the render is
+   * unchanged.
+   */
+  radius?: number;
 };
 
 /**
@@ -39,7 +51,7 @@ type BrandLogoProps = {
  * same aspect ratio with the same accessibility label, and so swapping the
  * asset later is a one-line change.
  */
-export function BrandLogo({ size, elevated = false, style, source }: BrandLogoProps) {
+export function BrandLogo({ size, elevated = false, style, source, radius }: BrandLogoProps) {
   return (
     <View
       style={[
@@ -50,7 +62,7 @@ export function BrandLogo({ size, elevated = false, style, source }: BrandLogoPr
     >
       <Image
         source={source ?? SOURCE}
-        style={styles.image}
+        style={[styles.image, radius != null && { borderRadius: radius }]}
         // The mark must never be stretched or cropped — 'contain' keeps its
         // 1:1 ratio whatever the container rounds to.
         resizeMode="contain"

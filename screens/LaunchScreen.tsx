@@ -21,9 +21,15 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
 // baked into an alpha channel. This export has no alpha channel at all, so it
 // carries no baked radius and no transparent corners: a full-bleed opaque
 // square, which is what Apple requires of an icon and what iOS masks for
-// itself. Nothing here applies a radius in its place, so the mark reads as a
-// hard square on this layer. That is the operator-settled artwork.
+// itself. On the home screen iOS applies its own mask; on this layer nothing
+// does, so the rounding the old export baked in is applied at render time
+// instead — the ratio below, handed to BrandLogo as `radius` — and the asset
+// itself stays the operator-settled full-bleed square.
 const LAUNCH_MARK = require('../assets/brand/app-icon-b-leaf.png');
+
+// 18.7% of width — app-icon-v2.png's baked alpha radius, the rounding this
+// mark rendered with until 2026-08-24, per BrandLogo's SOURCE comment.
+const LAUNCH_MARK_RADIUS_RATIO = 0.187;
 
 /**
  * The cold-launch timeline, in milliseconds from mount:
@@ -208,7 +214,12 @@ export function LaunchScreen({ sessionReady, onFinish }: LaunchScreenProps) {
 
       <View style={styles.center}>
         <Animated.View style={logoStyle}>
-          <BrandLogo size={authSizes.logoLaunch} elevated source={LAUNCH_MARK} />
+          <BrandLogo
+            size={authSizes.logoLaunch}
+            elevated
+            source={LAUNCH_MARK}
+            radius={authSizes.logoLaunch * LAUNCH_MARK_RADIUS_RATIO}
+          />
         </Animated.View>
 
         <Animated.Text
