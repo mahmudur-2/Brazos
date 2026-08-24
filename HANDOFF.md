@@ -43,9 +43,71 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-23 chat-rendering run (RUN B4)
+## Current state — after the 2026-08-23 share-profile environment run (RUN B5)
 
-Three commits, in dispatch order:
+One commit:
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`109aca4`|the `share` build profile declares `"environment": "development"`, and the share fence pins that key with the reason attached|
+
+The offline suite stands at **929 pass / 0 fail / 0 skipped**, bare
+`npm run verify` exit 0, unchanged from run start — the new assertion lives
+inside the existing share test, so the count does not move. Branch and commit
+state are Git's to report, never this file's.
+
+### THE PRODUCTION CREDENTIALS CAME FROM EAS'S SERVERS, NOT FROM eas.json
+
+`eas build --profile share --platform ios` failed at the pre-install gate:
+
+```
+BUILD GATE FAILED: env:SUPABASE_URL resolves to <production ref>, expected <staging ref>;
+env:SUPABASE_KEY resolves to <production ref>, expected <staging ref>
+```
+
+This is the gate doing exactly its job, and the diagnosis is the whole point of
+the run: **`share.env` in eas.json held the staging values the whole time.** The
+production values were injected over the top of them.
+
+A build job takes its environment from `build.<profile>.environment`. An absent
+key is not "no environment" — EAS applies a default one, and that environment's
+server-side variables OVERRIDE the profile's own `env` block. `share` declared
+none, so it inherited one carrying production credentials, and a tester binary
+would have shipped pointed at production had the gate not refused it.
+
+`share` is now pinned to the `development` environment. The operator ran
+`eas env:list --environment development` and it holds no variables at all, so
+there is nothing to override eas.json's staging values with. `development`,
+`testflight`, `production`, `cli` and `submit` are byte-unchanged; the
+production ref appears nowhere in eas.json, which the fence itself asserts on
+the raw file text.
+
+**Environment names on this account do not describe their contents.**
+`testflight` declares environment `preview`, and the build gate pins
+`testflight` to the PRODUCTION ref — so `preview` is the production-valued
+environment here. Do not reason about any of these names by what they sound
+like; read the gate's `EXPECTED_REF` map.
+
+### The fence this run added
+
+`tests/buildGate.test.mjs`, "the share profile is a standalone staging build on
+its own channel", gains `assert.equal(share.environment, 'development', …)`
+with the causal reason in the assertion message, so the key cannot be dropped
+again without a red suite explaining why it matters.
+
+**The dispatch expected two tests to go red and neither did — this was checked,
+not assumed.** The edit was applied first and both named tests run before any
+test was touched; both passed unchanged. The share fence pins share by NAMED
+keys (`distribution`, `autoIncrement`, `channel`, the `env` block, and
+`developmentClient` asserted ABSENT) plus `Object.keys(eas.build)` — it never
+enumerated share's own key set, so a new key could not break it. And
+`tests/pwa.test.mjs`, "TestFlight and EAS Update configuration remains
+present", reads eas.json only for `testflight.channel` and
+`testflight.autoIncrement`; it never touches `share`. No relaxation was
+therefore needed anywhere, and none was made. Those two are the only files in
+the repository that read eas.json besides the gate script itself.
+
+### The run before this one (RUN B4) — its three commits, carried forward
 
 | # | commit | what landed |
 |-|-|-|
@@ -143,7 +205,7 @@ has never been observed. Both paths now take the same constant and the same
 arithmetic, which is what makes the reasoning transferable, but it is
 reasoning — see the device checks below.
 
-### Fences changed this run, and why
+### Fences changed in RUN B4, and why
 
 Two fences asserted the arithmetic that turned out to be the bug. Both were
 inverted rather than relaxed, and both now reject the old form outright:
@@ -574,7 +636,7 @@ installed, so every item here needs the BUILD and nothing else.**
 ### The queued operator steps
 
 **1. ONE NEW EAS DEV BUILD.** This is now the only thing standing between the
-tree and every dormant path above. `npm run verify` is green at 926/0; run it
+tree and every dormant path above. `npm run verify` is green at 929/0; run it
 again after the build before layering anything on it.
 
 **The one thing to watch on that build:** RUN B0 removed
@@ -609,10 +671,15 @@ so that is the name the product implies, not a domain any run could verify.
 Share Profile is LIVE and emits that URL. Confirm or register it, or change the
 constant, before anything ships to TestFlight. It is one line.
 
-**5. PIN `share` IN THE BUILD GATE — DONE in RUN B2 (`79b1ac8`).** No operator
-action remains here: `EXPECTED_REF` names `share` and pins it to `STAGING_REF`,
-so `eas build --profile share` now clears the pre-install hook. What is still
-unperformed is the build itself — see step 1.
+**5. PIN `share` IN THE BUILD GATE — DONE in RUN B2 (`79b1ac8`), and the gate
+then EARNED ITS KEEP.** `EXPECTED_REF` names `share` and pins it to
+`STAGING_REF`. The claim once written here — that `eas build --profile share`
+would therefore clear the pre-install hook — was WRONG, and the attempt proved
+it: the gate refused the build because EAS injected production credentials from
+a defaulted environment. RUN B5 (`109aca4`) fixed the cause by pinning
+`share.environment` to `development`. No operator action remains here either,
+but the build is what confirms it — see step 1, and re-read the RUN B5 section
+above before touching any `environment` value in eas.json.
 
 ### Device checks OWED from RUN B4 (operator, physical device)
 
