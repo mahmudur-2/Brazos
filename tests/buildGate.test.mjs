@@ -221,6 +221,19 @@ test('the share profile is a standalone staging build on its own channel', () =>
   assert.deepEqual(share.env, eas.build.development.env);
   assert.equal(text.includes(PRODUCTION), false, 'no production ref in eas.json');
 
+  // An env block alone does not decide what a build reads. EAS resolves the
+  // profile's `environment` first and lets that environment's server-side
+  // variables override the env block above; when the key is ABSENT it does not
+  // mean "no environment", it means EAS picks a default one. That is how a
+  // tester build of `share` came up holding production credentials. It is
+  // pinned to `development` because that environment holds no server-side
+  // variables, so eas.json's own staging values are what survive.
+  assert.equal(
+    share.environment,
+    'development',
+    'share must pin an EAS environment: an absent one lets EAS inject server-side variables that override eas.json, which is exactly how production credentials reached a tester build'
+  );
+
   // No two build profiles may share an update channel.
   assert.equal(share.channel, 'internal');
   const channels = Object.values(eas.build)

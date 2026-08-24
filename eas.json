@@ -15,6 +15,7 @@
     "share": {
       "distribution": "internal",
       "channel": "internal",
+      "environment": "development",
       "autoIncrement": true,
       "env": {
         "SUPABASE_URL": "https://zzkumxcjtbqoselzptig.supabase.co",
