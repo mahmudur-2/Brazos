@@ -459,6 +459,30 @@ test('[executed] the chat column counts the pill once at rest and the keyboard o
   assert.equal(riseFor(40, 104), 0);
 });
 
+test("[static] riseFor opens with the 'worklet' directive, so the fast path may call it", () => {
+  // THE CFBUNDLEVERSION 3 CRASH, pinned where it lived. The motion120 sibling
+  // calls riseFor synchronously inside its useAnimatedStyle callback — a
+  // worklet, running on the UI runtime, where an imported function without a
+  // 'worklet' directive does not exist. The call threw, reanimated does not
+  // catch a throw from a style worklet, and the app aborted the moment
+  // ChatScreen mounted on the first binary whose motionCapability.reanimated
+  // resolved true. The JS-thread caller (useKeyboardOffset) is indifferent:
+  // a worklet is still an ordinary callable over there.
+  //
+  // POSITION IS THE ASSERTION. A directive is only a directive at the top of
+  // the body; 'worklet' below another statement is an inert string and the
+  // crash comes back. So the match runs from the function's opening brace to
+  // the directive with only whitespace permitted between them (comments are
+  // stripped before matching, and comments above a directive are legal
+  // anyway).
+  const shared = stripComments(read('components/KeyboardRisingColumn.shared.tsx'));
+  assert.match(
+    shared,
+    /export function riseFor\(keyboardHeight: number, insetBelow: number\): number \{\s*'worklet';/,
+    "riseFor's FIRST statement must be the 'worklet' directive — the UI runtime calls it every frame the keyboard moves"
+  );
+});
+
 test('[static] every feature flag is false and carries the dependency it waits on', () => {
   // M2's contract: the UI behind a flag is BUILT, and the flag is what keeps
   // it from being offered. A flag with no recorded dependency is a flag

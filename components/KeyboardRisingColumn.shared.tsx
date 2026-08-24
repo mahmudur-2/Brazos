@@ -74,7 +74,15 @@ export const COLUMN_BOTTOM_PADDING = PINNED_FOOTER_BOTTOM_PADDING;
  *  (a hardware keyboard's accessory bar, say) the column simply stays put.
  *
  *  Stated here so BOTH drivers compute the same number — the arithmetic is
- *  the part a user can perceive, and it must not exist twice. */
+ *  the part a user can perceive, and it must not exist twice.
+ *
+ *  'worklet', and it MUST be the first statement. The motion120 sibling calls
+ *  this synchronously inside its useAnimatedStyle callback — on the UI
+ *  runtime, where an imported function without the directive does not exist:
+ *  the call throws, reanimated does not catch it, and the app aborts the
+ *  moment ChatScreen mounts. The directive costs the JS thread nothing;
+ *  useKeyboardOffset keeps calling this as an ordinary function. */
 export function riseFor(keyboardHeight: number, insetBelow: number): number {
+  'worklet';
   return Math.max(0, keyboardHeight - insetBelow);
 }
