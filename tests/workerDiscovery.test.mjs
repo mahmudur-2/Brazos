@@ -277,24 +277,39 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, c
   assert.match(map, /onPress=\{\(\) => setFilterOpen\(true\)\}/);
   assert.match(map, /radius != null && styles\.squircleLabeled/);
   assert.match(map, /\{`\$\{radius\} mi`\}/);
-  // 3. The sheet is the existing Sheet primitive holding the SAME preset
-  //    chips plus the custom stepper, each tap clamped to the 1–50 range and
-  //    applied immediately through the one selectRadius path.
-  assert.match(map, /<Sheet\s+visible=\{filterOpen\}/);
-  assert.match(map, /<DistanceChips value=\{radius \?\? null\} onChange=\{selectRadius\} \/>/);
-  assert.match(map, /clampDistanceFilterMiles\(radius - 1\)/);
-  assert.match(map, /clampDistanceFilterMiles\(radius \+ 1\)/);
-  // 4. The bottom row is one compact row — count left, View list right —
-  //    never the old card slab. 2026-08-22 took it from a CARD to a band on
-  //    the page ground; 2026-08-23 took the band away too, so the ground it
-  //    now carries is a translucent one and the tiles run under it.
+  // 3. The sheet is still the existing Sheet primitive, and since 2026-08-24
+  //    it holds BUDGET and DISTANCE as sliders instead of the chip row and the
+  //    stepper. Zero is the "any" sentinel on both, converted at this boundary
+  //    so neither lib ever receives a zero it does not define — a budget floor
+  //    of nothing is null, and DISTANCE_FILTER_MIN is one mile, not none.
+  assert.match(map, /<Sheet visible=\{filterOpen\}/);
+  assert.match(map, /<FilterSlider[\s\S]{0,400}?label="Minimum budget"/);
+  assert.match(map, /<FilterSlider[\s\S]{0,400}?label="Distance"/);
+  assert.match(map, /minBudgetCents: cents === 0 \? null : cents/);
+  assert.match(map, /selectRadius\(miles === 0 \? null : miles\)/);
+  // Money is formatted in exactly one place, and the map is not a second one.
+  assert.match(map, /formatBudget\(cents\)/);
+  assert.doesNotMatch(map, /toFixed\(2\)|\$\$\{/, 'money is formatted through formatBudget only');
+  // 4. The bottom row is the count and "View list", plus the radius subtitle
+  //    and ONE resting card since 2026-08-24. Never the old card slab, and
+  //    never a second list: "View list" already opens the real one.
   assert.match(map, /styles\.footerBar/);
   assert.match(map, /styles\.footerCount/);
+  assert.match(map, /styles\.footerSubtitle/);
+  assert.match(map, /<MapRestingJob/);
+  assert.match(map, /`Near you · Within \$\{radius\} \$\{radius === 1 \? 'mile' : 'miles'\}`/);
   assert.doesNotMatch(map, /NEAR YOU|mapCard|cardEyebrow/);
+  // ONE card, not a feed. A `.map(` over jobs inside the footer would be the
+  // in-sheet list the dispatch put out of scope.
+  assert.match(
+    stripComments(await read('screens/MapScreen.tsx')),
+    /applyJobFilters\(jobs, filters\)\[0\] \?\? null/,
+    'the resting slot takes the first match, not a list of them'
+  );
   assert.match(
     map,
-    /footerBar: \{[^}]*backgroundColor: withAlpha\(colors\.background, 0\.82\)/s,
-    'the bottom row floats on the map — the opaque page-ground band is retired too'
+    /footerBar: \{[^}]*backgroundColor: withAlpha\(colors\.background, 0\.72\)/s,
+    'the bottom row floats on the map at its own re-derived floor — the opaque band stays retired'
   );
 });
 
@@ -304,14 +319,30 @@ test('[static] B3 · both discovery surfaces render the shared chips and persist
     read('screens/MapScreen.tsx'),
     read('components/DistanceChips.tsx'),
   ]);
+  // THE INVARIANT IS THE STORAGE PATH, NOT THE WIDGET — restated 2026-08-24,
+  // when the map's distance control became a slider and the results list kept
+  // its chips. What B3 exists to prevent is two filter vocabularies or two
+  // places a radius is written; it was never that both surfaces had to draw
+  // the same widget. So the persistence half is asserted for BOTH, and the
+  // chips are asserted where they still are.
   for (const screen of [results, map]) {
-    assert.match(screen, /<DistanceChips/);
     assert.match(screen, /readDistanceFilter\(userId\)/);
     assert.match(screen, /writeDistanceFilter\(userId, next\)/);
   }
-  // One chip control, one filter vocabulary.
+  assert.match(results, /<DistanceChips/, 'the results list still draws the shared chip row');
+  assert.match(map, /<FilterSlider/, 'the map draws the sheet slider');
+  assert.doesNotMatch(
+    map,
+    /DISTANCE_FILTER_OPTIONS|distanceFilterStorageKey/,
+    'the map may not reach around the storage module or restate the preset list'
+  );
+  // One chip control, one filter vocabulary. Both controls read the SAME
+  // bounds and the SAME label function, so a radius set by dragging is a
+  // radius the chips can show.
   assert.match(chips, /DISTANCE_FILTER_OPTIONS/);
   assert.match(chips, /distanceChipLabel/);
+  assert.match(map, /distanceChipLabel/);
+  assert.match(map, /max=\{DISTANCE_FILTER_MAX\}/);
 });
 
 // ---------------------------------------------------------------------------

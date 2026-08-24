@@ -906,6 +906,13 @@ const SIBLINGS = [
     shared: 'components/KeyboardRisingColumn.shared.tsx',
     needs: 'keyboard',
   },
+  {
+    name: 'FilterSlider',
+    fallback: 'components/FilterSlider.tsx',
+    fast: 'components/FilterSlider.motion120.tsx',
+    shared: 'components/FilterSlider.shared.tsx',
+    needs: 'gestures',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -1913,6 +1920,7 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
     fastPaths,
     [
       'components/DropMenu.motion120.tsx',
+      'components/FilterSlider.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',
     ],
@@ -1967,4 +1975,166 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
     [],
     'a call inside a worklet body could not be classified — decide what it is; do not let it pass unexamined'
   );
+});
+
+// ---------------------------------------------------------------------------
+// THE FILTER SLIDER — 2026-08-24. Built, not installed.
+//
+// No slider dependency is in package.json and none may be added, so the map's
+// filter sheet assembles one from react-native-gesture-handler (the drag) and
+// react-native-reanimated (the per-frame follow). Both are native packages, so
+// the drag is a `.motion120` sibling and the binary the operator carries — with
+// neither native module — runs the stepper instead.
+//
+// WHAT THIS PINS THAT THE GENERIC SIBLING FENCES ABOVE DO NOT: that the two
+// paths cannot land on different values. A slider whose drag snaps to a
+// different set of positions than its stepper is two controls wearing one
+// name, and the arithmetic that prevents it is shared exactly the way riseFor
+// is — one function, both drivers, with the 'worklet' directive first so the
+// UI runtime can call it.
+// ---------------------------------------------------------------------------
+
+test("[static] the slider's arithmetic is shared, and opens with the 'worklet' directive", () => {
+  const shared = stripComments(read('components/FilterSlider.shared.tsx'));
+
+  // POSITION IS THE ASSERTION, as it is for riseFor: a directive below another
+  // statement is an inert string, the UI runtime cannot see the function, and
+  // the call throws inside a gesture callback reanimated does not catch.
+  for (const fn of [
+    /export function fractionForValue\(value: number, min: number, max: number\): number \{\s*'worklet';/,
+    /export function valueForFraction\(\s*fraction: number,\s*min: number,\s*max: number,\s*step: number\s*\): number \{\s*'worklet';/,
+  ]) {
+    assert.match(shared, fn, "both slider worklets must open with the directive");
+  }
+
+  // BOTH PATHS TAKE THE ARITHMETIC FROM HERE. Neither may inline its own copy:
+  // that is precisely how a drag and a stepper come to disagree.
+  const fallback = stripComments(read('components/FilterSlider.tsx'));
+  const fast = stripComments(read('components/FilterSlider.motion120.tsx'));
+  for (const [label, source] of [['fallback', fallback], ['motion120', fast]]) {
+    assert.match(source, /valueForFraction/, `${label} must snap through the shared function`);
+    assert.match(source, /fractionForValue/, `${label} must place the handle through the shared function`);
+    assert.ok(
+      source.includes("from './FilterSlider.shared'"),
+      `${label} must take its contract from the shared module`
+    );
+  }
+  // ...and one stylesheet, so the two binaries draw one slider rather than two.
+  assert.match(fast, /import \{ stylesFor \} from '\.\/FilterSlider';/);
+  assert.match(fast, /styles\.track/);
+  assert.match(fallback, /export const stylesFor = themedStyles/);
+
+  // THE FALLBACK IS A REAL CONTROL, not a rail that cannot be dragged. Without
+  // a recogniser there is nothing to drag, and a track that looks draggable and
+  // is not is worse than a stepper that works.
+  assert.match(fallback, /accessibilityRole="adjustable"/);
+  assert.match(fallback, /accessibilityLabel=\{`Decrease \$\{label\}`\}/);
+  assert.match(fallback, /accessibilityLabel=\{`Increase \$\{label\}`\}/);
+  assert.doesNotMatch(fallback, /Gesture|GestureDetector/, 'the fallback may not name a recogniser');
+  // Both paths announce themselves as one adjustable control with the same
+  // value, so the two binaries are one control to a screen reader too.
+  assert.match(fast, /accessibilityRole="adjustable"/);
+  for (const source of [fallback, fast]) {
+    assert.match(source, /accessibilityValue=\{\{ min, max, now: value, text: formatValue\(value\) \}\}/);
+  }
+});
+
+test('[executed] the drag and the stepper snap to the SAME set of values', () => {
+  // The shared arithmetic, executed rather than read. It is a .tsx file with no
+  // JSX in it, so type-stripping is enough to run it — the same trick
+  // themeTokens uses for the token layer.
+  const fractionForValue = (value, min, max) => {
+    if (max <= min) return 0;
+    return Math.min(1, Math.max(0, (value - min) / (max - min)));
+  };
+  const valueForFraction = (fraction, min, max, step) => {
+    const clamped = Math.min(1, Math.max(0, fraction));
+    const raw = min + clamped * (max - min);
+    const stepped = min + Math.round((raw - min) / step) * step;
+    return Math.min(max, Math.max(min, stepped));
+  };
+
+  // THE MODEL IS PINNED TO THE SOURCE FIRST, so this cannot drift into a story
+  // about code. Both bodies are matched term for term.
+  const shared = stripComments(read('components/FilterSlider.shared.tsx'));
+  assert.match(shared, /if \(max <= min\) return 0;\s*return Math\.min\(1, Math\.max\(0, \(value - min\) \/ \(max - min\)\)\);/);
+  assert.match(shared, /const clamped = Math\.min\(1, Math\.max\(0, fraction\)\);/);
+  assert.match(shared, /const raw = min \+ clamped \* \(max - min\);/);
+  assert.match(shared, /const stepped = min \+ Math\.round\(\(raw - min\) \/ step\) \* step;/);
+  assert.match(shared, /return Math\.min\(max, Math\.max\(min, stepped\)\);/);
+
+  // THE DISTANCE SLIDER: 0..50 in whole miles, where 0 is the map's "any"
+  // sentinel. Every legal value is reachable from a position, and every
+  // position resolves to a legal value.
+  for (const miles of [0, 1, 5, 10, 25, 49, 50]) {
+    assert.equal(
+      valueForFraction(fractionForValue(miles, 0, 50), 0, 50, 1),
+      miles,
+      `${miles} mi must survive the round trip`
+    );
+  }
+  // A drag between two steps lands on the nearer one, never between them.
+  assert.equal(valueForFraction(0.101, 0, 50, 1), 5);
+  assert.equal(valueForFraction(0.109, 0, 50, 1), 5);
+  assert.equal(valueForFraction(0.111, 0, 50, 1), 6);
+  // And a finger past either end of the rail is clamped, not extrapolated.
+  assert.equal(valueForFraction(-4, 0, 50, 1), 0);
+  assert.equal(valueForFraction(9, 0, 50, 1), 50);
+  assert.equal(fractionForValue(-10, 0, 50), 0);
+  assert.equal(fractionForValue(9999, 0, 50), 1);
+
+  // THE BUDGET SLIDER: $0..$250 in $25 steps, integer cents throughout. A
+  // fractional cent would be a money bug, so every reachable value is checked
+  // for integrality rather than only for range.
+  const MAX = 25_000;
+  const STEP = 2_500;
+  const reachable = new Set();
+  for (let i = 0; i <= 200; i += 1) {
+    const cents = valueForFraction(i / 200, 0, MAX, STEP);
+    assert.ok(Number.isInteger(cents), `${cents} is not integer cents`);
+    assert.ok(cents >= 0 && cents <= MAX, `${cents} is outside the control's bounds`);
+    reachable.add(cents);
+  }
+  assert.deepEqual(
+    [...reachable].sort((a, b) => a - b),
+    [0, 2500, 5000, 7500, 10000, 12500, 15000, 17500, 20000, 22500, 25000],
+    'the drag may reach exactly the eleven stops the stepper does — no more, no fewer'
+  );
+  // The stepper walks that same ladder one step at a time and cannot leave it.
+  let value = 0;
+  const walked = [value];
+  while (value < MAX) {
+    value = valueForFraction(fractionForValue(value + STEP, 0, MAX), 0, MAX, STEP);
+    walked.push(value);
+  }
+  assert.deepEqual(walked, [...reachable].sort((a, b) => a - b));
+
+  // A degenerate range answers 0 rather than dividing by zero — a slider whose
+  // bounds collapsed must render at the start, not NaN.
+  assert.equal(fractionForValue(5, 10, 10), 0);
+});
+
+test('[static] the slider needs BOTH natives, and the map is its only caller', () => {
+  const fallback = stripComments(read('components/FilterSlider.tsx'));
+  // A recogniser with no worklets would drag through a JS round trip per
+  // frame, under exactly the load a modal sheet's first paint produces — worse
+  // than the stepper. SwipeableRow's precedent, same shape.
+  assert.match(
+    fallback,
+    /\{ \.\.\.motionCapability, gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\) \}/
+  );
+  assert.match(fallback, /'gestures',/);
+  assert.match(fallback, /require\('\.\/FilterSlider\.motion120'\)/);
+
+  // The drag hands the value back through runOnJS — the UI thread computes it,
+  // the JS thread owns it. Without that hop `onChange` would be called on the
+  // wrong runtime and React would never see it.
+  const fast = stripComments(read('components/FilterSlider.motion120.tsx'));
+  assert.match(fast, /runOnJS\(onChange\)\(valueForFraction\(fraction\.value, min, max, step\)\)/);
+  assert.match(fast, /Gesture\.Pan\(\)/);
+  assert.match(fast, /<GestureDetector gesture=\{pan\}>/);
+  // The track's width is measured, not assumed: a slider that hardcodes its
+  // own width is wrong on every device it was not measured on.
+  assert.match(fast, /trackWidth\.value = event\.nativeEvent\.layout\.width;/);
+  assert.match(fast, /if \(trackWidth\.value <= 0\) return;/);
 });

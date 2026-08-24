@@ -1913,13 +1913,28 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
 
   // NO OPAQUE GROUND BEHIND EITHER ELEMENT. Both capsules take the page
   // ground through withAlpha, and neither may name a flat palette fill.
-  for (const [key, label] of [['headerWrap', 'the header'], ['footerBar', 'the bottom row']]) {
+  //
+  // 2026-08-24 — TWO ALPHAS NOW, RE-DERIVED, not one lowered. The number was
+  // never a taste value: 0.82 was what a 26pt display title needed with
+  // nothing between it and an arbitrary tile. The header's title is gone,
+  // replaced by a SearchBar, and every child of that capsule now brings its
+  // own opaque field — so no type touches the header's ground and it can be
+  // glass. The bottom row still sets its count, its subtitle and "View list"
+  // directly on its own ground, in SMALLER type than the title the old floor
+  // was derived for, so it keeps a real floor and only comes down as far as
+  // that allows. The header being MORE transparent than the bottom row is the
+  // fence, not an accident: if they ever converge, one of them is wrong.
+  const GLASS = [
+    ['headerWrap', 'the header', '0\\.55'],
+    ['footerBar', 'the bottom row', '0\\.72'],
+  ];
+  for (const [key, label, alpha] of GLASS) {
     const style = new RegExp(`${key}: \{([^}]*)\}`).exec(flat.replace(/\{ width: 0, height: 3 \}/g, ''));
     assert.ok(style, `${label} must keep a plain, readable style object`);
     assert.match(
       style[1],
-      /backgroundColor: withAlpha\(colors\.background, 0\.82\)/,
-      `${label} must let the tiles through — an opaque fill is a slab`
+      new RegExp(`backgroundColor: withAlpha\\(colors\\.background, ${alpha}\\)`),
+      `${label} must let the tiles through at its own derived floor — an opaque fill is a slab`
     );
     assert.match(
       style[1],
@@ -1929,6 +1944,18 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
     assert.match(style[1], /borderRadius: radius\.xl/, `${label} must be a capsule, not an edge-to-edge strip`);
     assert.match(style[1], /borderWidth: 1, borderColor: colors\.border/, `${label} needs its hairline over busy tiles`);
   }
+  // THE ORDERING, as arithmetic rather than as two independent constants: the
+  // capsule that still carries bare type must be the less transparent of the
+  // two, whatever either number becomes.
+  const alphaOf = (key) =>
+    Number(
+      new RegExp(`${key}: \{[^}]*backgroundColor: withAlpha\\(colors\\.background, ([0-9.]+)\\)`)
+        .exec(flat)[1]
+    );
+  assert.ok(
+    alphaOf('footerBar') > alphaOf('headerWrap'),
+    'the row that sets type on its own ground must back it more heavily than the row that does not'
+  );
   // The chrome layer itself paints nothing: every pixel is the map or a capsule.
   assert.match(flat, /safe: \{ flex: 1, backgroundColor: 'transparent',? \}/);
   // And the screen still has ONE opaque ground, under the map — not behind
@@ -1936,7 +1963,14 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
   assert.match(flat, /root: \{ flex: 1, backgroundColor: colors\.background,? \}/);
 
   // ANTI-VACUITY: the elements this fence is about are still the ones on the
-  // screen, under the copy the dispatch named.
-  assert.match(map, /title="Find Jobs Near You"/);
+  // screen. The 26pt "Find Jobs Near You" display title is GONE as of
+  // 2026-08-24 — it named the screen the user had already chosen to be on, and
+  // it was the single largest thing the header capsule had to hold legible
+  // over live tiles. The shared SearchBar is what the capsule carries now, and
+  // its absence is asserted so the title cannot drift back and quietly put the
+  // header's alpha back under a contrast obligation it no longer has.
+  assert.doesNotMatch(map, /Find Jobs Near You/, 'the display title is retired, not hidden');
+  assert.match(map, /<SearchBar/, 'the header capsule carries the shared search field');
+  assert.match(map, /placeholder="Find nearby jobs"/);
   assert.match(map, /\{visibleJobCount\} open \{visibleJobCount === 1 \? 'job' : 'jobs'\}/);
 });

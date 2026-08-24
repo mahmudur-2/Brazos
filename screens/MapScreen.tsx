@@ -5,15 +5,17 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
+import { Chip } from '../components/Chip';
+import { FilterSlider } from '../components/FilterSlider';
 import { HotspotMap } from '../components/HotspotMap';
-import { ScreenHeader } from '../components/ScreenHeader';
-import { DistanceChips } from '../components/DistanceChips';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
+import { SearchBar } from '../ui/primitives/SearchBar';
 import { Sheet } from '../ui/primitives/Sheet';
 import { useAuth } from '../hooks/useAuth';
+import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useHotspots } from '../hooks/useHotspots';
 import { useOfferCounts } from '../hooks/useOfferCounts';
-import { JOB_CATEGORY_LABELS, type OpenJob } from '../lib/jobs';
+import { JOB_CATEGORY_LABELS, formatBudget, type OpenJob } from '../lib/jobs';
 import {
   cellsWithinMiles,
   fetchJobsWithinRadius,
@@ -25,10 +27,19 @@ import {
 } from '../lib/hotspots';
 import { clusterPoints, type ClusterPin } from '../lib/mapClustering';
 import {
-  clampDistanceFilterMiles,
+  DISTANCE_FILTER_MAX,
+  NEARBY_RADIUS_MILES,
   distanceChipLabel,
   type DistanceFilterMiles,
 } from '../lib/discoveryFilter';
+import {
+  BUDGET_FILTER_MAX_CENTS,
+  BUDGET_FILTER_STEP_CENTS,
+  DEFAULT_JOB_FILTERS,
+  applyJobFilters,
+  localDateKey,
+  type JobFilterModel,
+} from '../lib/jobFilters';
 import { readDistanceFilter, writeDistanceFilter } from '../lib/discoveryFilterStorage';
 import { userMessage } from '../lib/errorMessage';
 import { useMode } from '../modes';
@@ -47,6 +58,48 @@ import {
 
 /** Matches HotspotMap.native's DEFAULT_REGION span — the pre-interaction zoom. */
 const INITIAL_LAT_DELTA = 0.08;
+
+/**
+ * The map's search field height.
+ *
+ * COPIED, not chosen: the customer Home draws the same SearchBar at
+ * `DEFAULT_HOME_DESIGN_SETTINGS.searchHeight` (65, lib/homeDesignStudio.tsx),
+ * and the map's is a step under it — the field here rides in a floating
+ * capsule over live tiles rather than anchoring a hero, so it should read as
+ * the smaller relative of the same control. Still well clear of
+ * `controls.minTouchTarget`.
+ */
+const MAP_SEARCH_HEIGHT = 56;
+
+/**
+ * ONE open job, at rest in the bottom capsule.
+ *
+ * A CHILD COMPONENT so `useOpenJobs` is mounted only in worker mode — the hook
+ * opens a realtime channel and fetches the whole open feed, and a customer
+ * viewing the map has no use for either. Hooks cannot be called conditionally;
+ * a component can be rendered conditionally.
+ *
+ * It reads the SAME feed and the SAME filter model the results list does, so
+ * the card the map rests on is the card that list would put first. Nothing is
+ * fetched twice under a second set of rules.
+ */
+function MapRestingJob({
+  filters,
+  onOpen,
+}: {
+  filters: JobFilterModel;
+  onOpen: (job: OpenJob) => void;
+}) {
+  const { jobs, loading } = useOpenJobs();
+  const job = useMemo(() => applyJobFilters(jobs, filters)[0] ?? null, [jobs, filters]);
+
+  if (loading) return <WorkerJobCardSkeleton />;
+  // Nothing matching is not an error and not an empty state worth a paragraph
+  // inside floating chrome — the count above already says how many jobs the
+  // map is showing, and "View list" is one tap away.
+  if (!job) return null;
+  return <WorkerJobCard job={job} variant="compact" onPress={() => onOpen(job)} />;
+}
 
 export function MapScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -77,8 +130,18 @@ export function MapScreen() {
   // WorkerResults through lib/discoveryFilterStorage's in-memory session
   // store. undefined = still reading.
   const [radius, setRadius] = useState<DistanceFilterMiles | null | undefined>(undefined);
-  // The header filter sheet (2026-08-22): presets + the custom stepper.
+  // The header filter sheet (2026-08-22): the budget and distance sliders.
   const [filterOpen, setFilterOpen] = useState(false);
+  // The search pill's own text. It is a DISPATCH field, not a live filter:
+  // the map draws hotspot cells, which carry counts and categories and no
+  // text to match against, so a query resolves on the list surface that
+  // actually holds jobs — the same one "View list" opens.
+  const [query, setQuery] = useState('');
+  // The chip row's state, expressed in the app's ONE job-filter vocabulary
+  // (lib/jobFilters.ts) rather than a second one owned by this screen. Only
+  // the chips the map offers are ever set here; the rest stay at their
+  // defaults so the model means the same thing it means on the results list.
+  const [jobFilters, setJobFilters] = useState<JobFilterModel>(DEFAULT_JOB_FILTERS);
 
   const userId = user?.id ?? null;
   useEffect(() => {
@@ -101,6 +164,46 @@ export function MapScreen() {
   function selectRadius(next: DistanceFilterMiles | null) {
     setRadius(next);
     if (userId) writeDistanceFilter(userId, next);
+  }
+
+  /**
+   * The search pill's submit.
+   *
+   * It hands the query to WorkerResults — the surface "View list" already
+   * opens — rather than growing a second results view inside the map. Worker
+   * only, for the same §F reason the distance control beside it is: the map is
+   * a worker surface (home(9) removed every customer affordance into it), and
+   * customer mode has no jobs feed for a query to land on. SearchBar treats an
+   * absent onSubmit as "search-as-you-type", so the field simply does not
+   * dispatch there rather than dispatching somewhere wrong.
+   */
+  function submitSearch() {
+    // Gated HERE as well as at the call site. WorkerResults is not registered
+    // on the customer Home stack, so dispatching it from customer mode is a
+    // runtime throw, and a guard that lives only in the JSX is a guard one
+    // refactor away from being dropped.
+    if (!isWorker) return;
+    const trimmed = query.trim();
+    if (!trimmed) return;
+    navigateAcrossTabs('Home', 'WorkerResults', { mode: 'search', query: trimmed });
+  }
+
+  // The chips, as toggles over the two things the map can actually answer.
+  const todayKey = localDateKey(new Date());
+  const todayOn = jobFilters.scheduledOn != null;
+  const nearbyOn = radius === NEARBY_RADIUS_MILES;
+
+  function toggleToday() {
+    setJobFilters((prev) => ({ ...prev, scheduledOn: prev.scheduledOn == null ? todayKey : null }));
+  }
+
+  // Nearby is not a filter of its own — it is the EXISTING radius set to the
+  // app's standing "nearby" promise, written through the same storage path the
+  // sheet and the results list use. One distance filter, one persistence
+  // module; a second "nearby" boolean would be exactly the parallel vocabulary
+  // the chip row is forbidden to create.
+  function toggleNearby() {
+    selectRadius(nearbyOn ? null : NEARBY_RADIUS_MILES);
   }
 
   // A chosen radius is only applicable with a real position to measure from.
@@ -195,8 +298,16 @@ export function MapScreen() {
     };
   }, [activePin, cellById, userLoc]);
 
+  // The chip row narrows the pin sheet too, through the same model — a filter
+  // the user set on the chrome that then did not apply to the jobs the chrome
+  // opened would be two answers to one question.
+  const visiblePinJobs = useMemo(
+    () => (pinJobs === null ? null : applyJobFilters(pinJobs, jobFilters)),
+    [pinJobs, jobFilters]
+  );
+
   const sheetBidCounts = useOfferCounts(
-    useMemo(() => (pinJobs ?? []).map((job) => job.id), [pinJobs])
+    useMemo(() => (visiblePinJobs ?? []).map((job) => job.id), [visiblePinJobs])
   );
 
   function openJobFromSheet(job: OpenJob) {
@@ -232,51 +343,92 @@ export function MapScreen() {
         {/* 4D-4: chrome and tiles resolve together — the MapView follows the
             in-app theme (HotspotMap.native userInterfaceStyle), so palette-
             driven chrome no longer exposes light-map-on-dark-chrome gaps. */}
+        {/* 2026-08-24 — THE CAPSULE HOLDS A FIELD, not a title. The 26pt
+            "Find Jobs Near You" display heading is gone: it named the screen
+            the user had already chosen to be on, and it was the single largest
+            thing the capsule had to keep legible over live tiles. The shared
+            SearchBar takes its place, so the capsule's own ground stops being
+            a type backing (see `headerWrap` for what that let the alpha do).
+            The distance control keeps its place at the right, inside the same
+            capsule, with its behaviour unchanged. */}
         <View style={styles.headerWrap}>
-          <ScreenHeader
-            title="Find Jobs Near You"
-            titleSize={26}
-            // Same Ionicons family and outline weight as the tab bar's own Map
-            // pin, so the two read as the same icon set rather than two styles.
-            titleIcon={
-              <Ionicons name="location-outline" size={22} color={colors.primary} />
-            }
-            // Worker-only, for the same §F reason the old "See all jobs"
-            // control was: the distance filter is worker discovery state, and
-            // customer mode has no radius to set. Perspective from ModeContext,
-            // never a passed prop.
-            //
-            // 2026-08-22: this slot is the FILTER now — it opens the distance
-            // sheet below, and when a radius is applied the control widens to
-            // carry its label so the active distance is readable from the
-            // header. The list intent it used to duplicate lives on in the
-            // bottom row's "View list".
-            right={
-              mode === 'worker' ? (
-                <Pressable
-                  onPress={() => setFilterOpen(true)}
-                  hitSlop={10}
-                  style={({ pressed }) => [
-                    styles.squircle,
-                    radius != null && styles.squircleLabeled,
-                    pressed && styles.squirclePressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel={
-                    radius != null
-                      ? `Distance filter, within ${radius} miles`
-                      : 'Distance filter, any distance'
-                  }
-                >
-                  <Ionicons name="options-outline" size={20} color={accent} />
-                  {radius != null ? (
-                    <Text style={styles.squircleLabel}>{`${radius} mi`}</Text>
-                  ) : null}
-                </Pressable>
-              ) : null
-            }
-          />
+          <View style={styles.searchRow}>
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              onSubmit={isWorker ? submitSearch : undefined}
+              placeholder="Find nearby jobs"
+              autoCapitalize="sentences"
+              autoCorrect
+              style={styles.searchField}
+              accessibilityLabel="Find nearby jobs"
+            />
+            {/* Worker-only, for the same §F reason the old "See all jobs"
+                control was: the distance filter is worker discovery state, and
+                customer mode has no radius to set. Perspective from
+                ModeContext, never a passed prop.
+                It opens the filter sheet below, and when a radius is applied
+                it widens to carry its label so the active distance is readable
+                without opening anything. */}
+            {isWorker ? (
+              <Pressable
+                onPress={() => setFilterOpen(true)}
+                hitSlop={10}
+                style={({ pressed }) => [
+                  styles.squircle,
+                  radius != null && styles.squircleLabeled,
+                  pressed && styles.squirclePressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  radius != null
+                    ? `Distance filter, within ${radius} miles`
+                    : 'Distance filter, any distance'
+                }
+              >
+                <Ionicons name="options-outline" size={20} color={accent} />
+                {radius != null ? (
+                  <Text style={styles.squircleLabel}>{`${radius} mi`}</Text>
+                ) : null}
+              </Pressable>
+            ) : null}
+          </View>
         </View>
+
+        {/* THE CHIP ROW, under the capsule and floating on the tiles like it.
+            Each chip carries its own opaque pill and hairline (the Chip
+            primitive), so nothing here depends on the capsule's ground.
+            Two chips, not three. HOURLY IS ABSENT AND THAT IS DELIBERATE:
+            `jobs` has no hourly-versus-fixed column. The only `price_unit`
+            in the schema is on `worker_services` (phase53) — a worker's own
+            service listing, not a posted job — so an Hourly chip here could
+            only be inferred from a price shape, which would be inventing
+            marketplace data about somebody's job. It ships when the column
+            does. */}
+        {isWorker ? (
+          <View style={styles.chipRow}>
+            <Chip
+              label="Today"
+              variant="filter"
+              selected={todayOn}
+              onPress={toggleToday}
+              accessibilityLabel={
+                todayOn ? 'Showing jobs scheduled for today' : 'Show only jobs scheduled for today'
+              }
+            />
+            <Chip
+              label="Nearby"
+              variant="filter"
+              selected={nearbyOn}
+              onPress={toggleNearby}
+              accessibilityLabel={
+                nearbyOn
+                  ? `Showing jobs within ${NEARBY_RADIUS_MILES} miles`
+                  : `Show only jobs within ${NEARBY_RADIUS_MILES} miles`
+              }
+            />
+          </View>
+        ) : null}
 
         {/* 2026-08-22: the "MAP DISCOVERY / Open jobs on the map" header card
             is GONE on operator instruction — the map fills from directly under
@@ -314,20 +466,42 @@ export function MapScreen() {
             in view — never a placeholder, absent while loading. */}
         {!loading && !error ? (
           <View style={styles.footerBar}>
-            <Text style={styles.footerCount} numberOfLines={1}>
-              {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
-            </Text>
+            <View style={styles.footerTopRow}>
+              <Text style={styles.footerCount} numberOfLines={1}>
+                {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
+              </Text>
+              {isWorker ? (
+                <Pressable
+                  onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
+                  hitSlop={8}
+                  style={({ pressed }) => [styles.listLink, pressed && styles.squirclePressed]}
+                  accessibilityRole="button"
+                  accessibilityLabel="View the list of open jobs"
+                >
+                  <Text style={styles.listLinkText}>View list</Text>
+                  <Ionicons name="arrow-forward" size={16} color={accent} />
+                </Pressable>
+              ) : null}
+            </View>
             {isWorker ? (
-              <Pressable
-                onPress={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
-                hitSlop={8}
-                style={({ pressed }) => [styles.listLink, pressed && styles.squirclePressed]}
-                accessibilityRole="button"
-                accessibilityLabel="View the list of open jobs"
-              >
-                <Text style={styles.listLinkText}>View list</Text>
-                <Ionicons name="arrow-forward" size={16} color={accent} />
-              </Pressable>
+              <>
+                {/* The subtitle states the radius the count was taken under,
+                    so "N open jobs" is never read as "N in the world". It says
+                    what is TRUE: with no radius the reach is the map's, not a
+                    number nobody set. */}
+                <Text style={styles.footerSubtitle} numberOfLines={1}>
+                  {radius != null
+                    ? `Near you · Within ${radius} ${radius === 1 ? 'mile' : 'miles'}`
+                    : 'Near you · Any distance'}
+                </Text>
+                {/* ONE card, at rest. Not a list: "View list" already opens
+                    the real one, and a second scrollable feed inside the map's
+                    chrome would be a second results screen. */}
+                <MapRestingJob
+                  filters={jobFilters}
+                  onOpen={(job) => navigation.navigate('JobDetail', { job })}
+                />
+              </>
             ) : null}
           </View>
         ) : null}
@@ -378,64 +552,55 @@ export function MapScreen() {
           </View>
         )}
 
-        {/* The distance filter sheet (2026-08-22) — the presets as the SAME
-            DistanceChips row the results list draws, plus the custom stepper:
-            1–50 whole miles, each tap applied immediately. From Any, the first
-            tap in either direction turns the dial on at 10 mi; the value then
-            steps by one. Session-only state — see lib/discoveryFilterStorage. */}
-        <Sheet
-          visible={filterOpen}
-          onClose={() => setFilterOpen(false)}
-          title="Distance"
-        >
+        {/* THE FILTER SHEET — budget and distance as sliders since 2026-08-24,
+            where the distance half was a chip row plus a stepper.
+
+            NOTE WHAT DID NOT CHANGE. components/DistanceChips.tsx is
+            byte-untouched: it is shared with WorkerResults, whose contract is
+            fenced, and the map getting a slider is not a reason for that list
+            to lose its chips. Both controls still write through
+            readDistanceFilter / writeDistanceFilter — one filter vocabulary,
+            one persistence module — so a radius set by dragging here is the
+            same radius the chips there show.
+
+            ZERO IS "ANY" ON BOTH SLIDERS, and it is a control sentinel rather
+            than a value: DISTANCE_FILTER_MIN is 1 mile and a budget floor of
+            nothing is null, so both are converted at this boundary and neither
+            lib ever sees a zero it does not define. */}
+        <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="Filters">
           {radius !== undefined ? (
             <View style={styles.filterSheetBody}>
-              <DistanceChips value={radius ?? null} onChange={selectRadius} />
-              <View style={styles.stepperRow}>
-                <Text style={styles.stepperLabel}>Custom</Text>
-                <View style={styles.stepper}>
-                  <Pressable
-                    onPress={() =>
-                      selectRadius(
-                        radius == null ? 10 : clampDistanceFilterMiles(radius - 1)
-                      )
-                    }
-                    hitSlop={8}
-                    style={({ pressed }) => [
-                      styles.stepperButton,
-                      pressed && styles.squirclePressed,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="One mile closer"
-                  >
-                    <Ionicons name="remove" size={20} color={accent} />
-                  </Pressable>
-                  <Text style={styles.stepperValue} numberOfLines={1}>
-                    {distanceChipLabel(radius ?? null)}
-                  </Text>
-                  <Pressable
-                    onPress={() =>
-                      selectRadius(
-                        radius == null ? 10 : clampDistanceFilterMiles(radius + 1)
-                      )
-                    }
-                    hitSlop={8}
-                    style={({ pressed }) => [
-                      styles.stepperButton,
-                      pressed && styles.squirclePressed,
-                    ]}
-                    accessibilityRole="button"
-                    accessibilityLabel="One mile farther"
-                  >
-                    <Ionicons name="add" size={20} color={accent} />
-                  </Pressable>
-                </View>
-              </View>
-              {radiusUnavailable ? (
-                <Text style={styles.radiusNote}>
-                  Location is off — showing all areas.
-                </Text>
-              ) : null}
+              <FilterSlider
+                label="Minimum budget"
+                min={0}
+                max={BUDGET_FILTER_MAX_CENTS}
+                step={BUDGET_FILTER_STEP_CENTS}
+                value={jobFilters.minBudgetCents ?? 0}
+                onChange={(cents) =>
+                  setJobFilters((prev) => ({
+                    ...prev,
+                    minBudgetCents: cents === 0 ? null : cents,
+                  }))
+                }
+                // formatBudget, not a local money format — money is integer
+                // cents and it is formatted in exactly one place.
+                formatValue={(cents) => (cents === 0 ? 'Any budget' : `${formatBudget(cents)}+`)}
+                accessibilityLabel="Minimum budget"
+                footnote="Jobs with no budget set are always shown."
+              />
+              <FilterSlider
+                label="Distance"
+                min={0}
+                max={DISTANCE_FILTER_MAX}
+                step={1}
+                value={radius ?? 0}
+                onChange={(miles) => selectRadius(miles === 0 ? null : miles)}
+                formatValue={(miles) => distanceChipLabel(miles === 0 ? null : miles)}
+                accessibilityLabel="Distance"
+                footnote={
+                  radiusUnavailable ? 'Location is off — showing all areas.' : undefined
+                }
+              />
             </View>
           ) : null}
         </Sheet>
@@ -460,13 +625,13 @@ export function MapScreen() {
                 onPress={() => setActivePin(null)}
               />
             </View>
-          ) : pinJobs === null ? (
+          ) : visiblePinJobs === null ? (
             <View style={styles.pinSheetList}>
               {[0, 1, 2].map((i) => (
                 <WorkerJobCardSkeleton key={i} />
               ))}
             </View>
-          ) : pinJobs.length === 0 ? (
+          ) : visiblePinJobs.length === 0 ? (
             <View style={styles.pinSheetState}>
               <Text style={styles.pinSheetEmpty}>
                 These jobs just closed or were taken down — pull the map's data
@@ -475,7 +640,7 @@ export function MapScreen() {
             </View>
           ) : (
             <View style={styles.pinSheetList}>
-              {pinJobs.map((job) => (
+              {visiblePinJobs.map((job) => (
                 <WorkerJobCard
                   key={job.id}
                   job={job}
@@ -514,18 +679,53 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // TRANSLUCENT capsule. Tiles stay visible through it, which is the point —
   // an opaque band here is a second screen stacked on the first.
   //
-  // THE ALPHA IS A LEGIBILITY FLOOR, not a taste value. A 26pt display title
-  // over live tiles has no guaranteed contrast against anything, so the
-  // capsule carries enough of the page ground to hold the type in both
-  // palettes; the hairline is what keeps it from reading as a smudge over a
-  // busy tile. Same treatment, same numbers, on the bottom row.
+  // THE ALPHA IS A LEGIBILITY FLOOR, not a taste value — and 2026-08-24
+  // RE-DERIVED it rather than lowering it, because what the capsule has to
+  // keep legible changed.
+  //
+  // It was 0.82 because a 26pt display title sat DIRECTLY on this ground, with
+  // nothing but the ground between the type and whatever tile was underneath.
+  // Arbitrary tiles have no guaranteed contrast against anything, so the
+  // capsule had to be very nearly the page.
+  //
+  // That title is gone. Every child of this capsule now draws its OWN opaque
+  // field: the SearchBar's pill is `colors.surface` with a hairline, and the
+  // distance control is the same pair. No glyph, no character of text touches
+  // this ground any more. Its remaining jobs are to group the two controls and
+  // to keep its own hairline readable over a busy tile — neither of which is a
+  // contrast problem — so it can be what the operator asked for and read as
+  // glass. 0.55 still carries over half the page ground, which is what keeps
+  // the group from dissolving into the map at a glance.
+  //
+  // THE BOTTOM ROW DID NOT GET THIS NUMBER, and the difference is the point:
+  // it still sets type on its own ground. See `footerBar`.
   headerWrap: {
     marginHorizontal: spacing.md,
     borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
-    backgroundColor: withAlpha(colors.background, 0.82),
+    backgroundColor: withAlpha(colors.background, 0.55),
     overflow: 'hidden',
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    padding: spacing.sm,
+  },
+  searchField: {
+    flex: 1,
+    minHeight: MAP_SEARCH_HEIGHT,
+  },
+  // The chips float on the tiles beside the capsule rather than inside it —
+  // each is its own pill with its own fill and hairline, so the row needs no
+  // ground of its own and adds none.
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginTop: spacing.sm,
   },
   // Master 33's gold-outline squircle control, at the header's right.
   squircle: {
@@ -557,20 +757,44 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // header's capsule at the other end of the screen — same inset, same
   // radius, same hairline, same translucency — floating clear of the nav
   // pill rather than sitting in a slab of its own.
+  //
+  // ITS ALPHA IS ITS OWN, and lower than 0.82 but higher than the header's.
+  // The count and "View list" still sit directly on this ground, and the
+  // subtitle joined them — bare type over live tiles, exactly the problem 0.82
+  // was picked for. It is SMALLER type than the title that number was derived
+  // for (17pt and 16pt against 26pt), which needs at least as much backing,
+  // not less, so the floor could not simply follow the header's down.
+  //
+  // 0.72 is what it can afford: the ground is still the dominant contributor
+  // to what sits behind the type, so the worst case a tile can produce is a
+  // bounded shift toward its own luminance rather than a takeover — a bright
+  // road label under light's near-black ink, or a bright POI under dark's
+  // cream. The hairline is doing the rest, in both palettes.
+  //
+  // The resting card below is not part of that calculation: WorkerJobCard
+  // brings its own opaque surface, like the header's controls do.
   footerBar: {
+    gap: spacing.sm,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: withAlpha(colors.background, 0.72),
+  },
+  footerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.md,
     minHeight: 44,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: withAlpha(colors.background, 0.82),
+  },
+  footerSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
   },
   footerCount: {
     flexShrink: 1,

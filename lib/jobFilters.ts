@@ -18,18 +18,73 @@ export type JobFilterModel = {
    *  Jobs with NO stated budget are kept — "no budget set" is an open
    *  negotiation, not a low one. */
   minBudgetCents: number | null;
+  /**
+   * Only jobs the client scheduled for this calendar day. A 'YYYY-MM-DD' key;
+   * null = every date.
+   *
+   * A KEY RATHER THAN A BOOLEAN, deliberately: `jobs.scheduled_date` is a
+   * plain `date` and phase49 chose it precisely so a job's day is not about
+   * any viewer's timezone. "Today" is therefore a question only the caller can
+   * answer, and answering it here would mean reading a clock inside a pure
+   * function — which is both untestable and the wrong place to decide whose
+   * midnight counts. `localDateKey()` below is what a screen calls.
+   *
+   * A job with NO date does not pass. This is the mirror of the budget rule
+   * above and the difference is deliberate: an absent budget is an open
+   * negotiation, so it survives every floor, while an absent date is not a
+   * claim about today and cannot be shown as one.
+   */
+  scheduledOn: string | null;
   sort: JobSort;
 };
 
 export const DEFAULT_JOB_FILTERS: JobFilterModel = {
   categories: new Set<JobCategory>(),
   minBudgetCents: null,
+  scheduledOn: null,
   sort: 'newest',
 };
 
+/**
+ * How far a budget-floor CONTROL may reach, and the granularity it moves in.
+ *
+ * The filter itself has no maximum — `minBudgetCents` is a floor and any
+ * integer is a legal one. These are the bounds a slider or a preset row is
+ * allowed to offer, and they live here rather than on a screen so the map's
+ * slider and the results sheet's presets cannot come to mean different things.
+ *
+ * $250 in $25 steps is one step past the top preset the results sheet already
+ * offers ($100), which is the range a worker filtering a local jobs feed
+ * actually reasons about. It is three orders of magnitude below
+ * `MONEY_CEILING_CENTS` (lib/validation.ts), so no control built on it can
+ * produce a figure the database would refuse — the ceiling stays the
+ * enforcement, this is just a control that never approaches it.
+ */
+export const BUDGET_FILTER_MAX_CENTS = 25_000;
+export const BUDGET_FILTER_STEP_CENTS = 2_500;
+
+/**
+ * A Date as the 'YYYY-MM-DD' key `scheduled_date` is stored in, in the
+ * caller's LOCAL calendar.
+ *
+ * Not `toISOString().slice(0, 10)`, which is UTC: for anyone west of Greenwich
+ * that answers "tomorrow" for most of the evening, so a Today filter would
+ * start hiding today's jobs after dinner.
+ */
+export function localDateKey(when: Date): string {
+  const month = String(when.getMonth() + 1).padStart(2, '0');
+  const day = String(when.getDate()).padStart(2, '0');
+  return `${when.getFullYear()}-${month}-${day}`;
+}
+
 /** True when the model would change nothing — drives the filter badge. */
 export function isDefaultJobFilters(model: JobFilterModel): boolean {
-  return model.categories.size === 0 && model.minBudgetCents == null && model.sort === 'newest';
+  return (
+    model.categories.size === 0 &&
+    model.minBudgetCents == null &&
+    model.scheduledOn == null &&
+    model.sort === 'newest'
+  );
 }
 
 /** How many non-default controls are active — the header badge count. */
@@ -37,6 +92,7 @@ export function activeJobFilterCount(model: JobFilterModel): number {
   let count = 0;
   if (model.categories.size > 0) count++;
   if (model.minBudgetCents != null) count++;
+  if (model.scheduledOn != null) count++;
   if (model.sort !== 'newest') count++;
   return count;
 }
@@ -63,6 +119,11 @@ export function applyJobFilters<T extends OpenJob>(
       // No stated budget passes every floor — see the model comment.
       if (ceiling != null && ceiling < model.minBudgetCents) return false;
     }
+    // An absent date is not a claim about today, so it does not pass. Compared
+    // as a plain string because both sides are 'YYYY-MM-DD' calendar keys and
+    // parsing either into a Date would reintroduce the timezone this column
+    // exists to avoid.
+    if (model.scheduledOn != null && job.scheduled_date !== model.scheduledOn) return false;
     return true;
   });
 

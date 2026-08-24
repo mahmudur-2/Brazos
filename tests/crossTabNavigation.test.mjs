@@ -607,7 +607,17 @@ test('every cross-tab target reachable from Customer Home resolves in the custom
   assert.ok(checked >= 7, `expected the sweep to reach every cross-tab call; saw ${checked}`);
   const map = stripComments(await read('screens/MapScreen.tsx'));
   const mapCalls = [...map.matchAll(/navigateAcrossTabs\(\s*'Home'\s*,\s*'WorkerResults'/g)];
-  assert.equal(mapCalls.length, 1, "Map offers the worker list once — the bottom row's View list");
+  // 2026-08-24: TWO, and both are the same intent reaching the same surface —
+  // the bottom row's "View list" (mode: 'all') and the header search pill's
+  // submit (mode: 'search'). The map draws hotspot cells, which carry counts
+  // and categories and no text, so a query has to resolve where the jobs are;
+  // building a second results view inside the map is what this count exists to
+  // notice. Each is checked for its worker gate below.
+  assert.equal(
+    mapCalls.length,
+    2,
+    "Map reaches the worker list twice — the bottom row's View list and the search pill"
+  );
   for (const call of mapCalls) {
     assert.match(
       map.slice(Math.max(0, call.index - 500), call.index),

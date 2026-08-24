@@ -214,7 +214,28 @@ test('the shared Map tab offers the worker job list only in worker mode', () => 
   // there is no customer equivalent of "all open jobs".
   const map = read('screens/MapScreen.tsx');
   assert.match(map, /const \{ mode \} = useMode\(\)/);
-  assert.match(map, /right=\{\s*mode === 'worker' \? \(/);
+  // 2026-08-24: the gate is asserted, not the slot it used to live in. The
+  // 26pt title and its ScreenHeader `right=` prop are gone — the capsule holds
+  // a SearchBar now — so the fence pins the DERIVATION and every control that
+  // hangs off it, which is what it was ever about. There is exactly one
+  // derivation, so a control can be gated or not gated and nothing in between.
+  assert.match(map, /const isWorker = mode === 'worker';/);
+  assert.equal(
+    [...map.matchAll(/mode === 'worker'/g)].length,
+    1,
+    'the mode question is asked once and read from `isWorker` everywhere else'
+  );
+  for (const gated of [
+    // The distance control, in the header capsule beside the search field.
+    /\{isWorker \? \(\s*<Pressable\s*\n\s*onPress=\{\(\) => setFilterOpen\(true\)\}/,
+    // The filter chip row under it.
+    /\{isWorker \? \(\s*<View style=\{styles\.chipRow\}>/,
+    // The search pill's dispatch, gated at the handler AND at the call site.
+    /onSubmit=\{isWorker \? submitSearch : undefined\}/,
+    /function submitSearch\(\) \{[\s\S]{0,400}?if \(!isWorker\) return;/,
+  ]) {
+    assert.match(map, gated, 'a worker-only Map control is not behind the mode gate');
+  }
   // Perspective from ModeContext, never a hand-passed prop (CLAUDE.md §V2).
   assert.doesNotMatch(map, /mode[=:]\s*\{?['"](customer|worker)['"]/);
 });

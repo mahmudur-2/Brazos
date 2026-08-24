@@ -413,7 +413,12 @@ test('T4: the explicit initial route and declaration order agree — on WorkerHo
 test('T5: WorkerResults mode:all is reachable from View all and from the Map header', async () => {
   assert.match(code, /navigation\.navigate\('WorkerResults', \{ mode: 'all' \}\)/);
   const map = stripComments(await read('screens/MapScreen.tsx'));
-  assert.match(map, /mode === 'worker' \?/);
+  // The gate is `isWorker`, derived once from useMode(). It was written inline
+  // as `mode === 'worker' ?` until 2026-08-24, when the header's ScreenHeader
+  // and its `right=` slot were replaced by the search capsule; the mode
+  // question did not move, only the expression that reads it.
+  assert.match(map, /const isWorker = mode === 'worker';/);
+  assert.match(map, /\{isWorker \? \(/);
   assert.match(map, /navigateAcrossTabs\('Home', 'WorkerResults', \{ mode: 'all' \}\)/);
 });
 
