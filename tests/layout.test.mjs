@@ -256,13 +256,13 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
       /useFloatingNavClearance\(\)/,
       `${path} must take its bottom clearance from the shared hook`
     );
-    // Applied directly, OR handed to the shared rising column that applies it
-    // — 2026-08-23, when chat's keyboard rise moved into
-    // components/KeyboardRisingColumn.tsx so a reanimated build could track
-    // the keyboard instead of imitating its curve. Delegating must not lose
-    // the clearance, so the assertion below the loop checks the component
-    // still puts it on the view that rises. Nothing here got weaker: a
-    // surface that does neither still fails.
+    // Applied directly, OR handed to the shared rising column — 2026-08-23,
+    // when chat's keyboard rise moved into components/KeyboardRisingColumn.tsx
+    // so a reanimated build could track the keyboard instead of imitating its
+    // curve. What the column DOES with it is the block below the loop, and the
+    // answer changed: chat's bottom element is pinned, so the clearance is the
+    // rise's subtrahend rather than padding. Nothing here got weaker — a
+    // surface that neither applies it nor hands it over still fails.
     assert.ok(
       /paddingBottom: navClearance/.test(source) ||
         /insetBelow=\{navClearance\}/.test(source),
@@ -277,21 +277,51 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
     );
   }
 
-  // DELEGATION MUST NOT LOSE IT. The one surface that hands its clearance to a
-  // component instead of applying it inline is chat, and both of that
-  // component's driver paths have to put the padding on the view that rises —
-  // otherwise the column would rise correctly and still sit a nav-pill's
-  // height too low, which is the dead band this whole rule exists to close.
+  // CHAT SPENDS ITS CLEARANCE ON THE RISE, NOT ON PADDING — corrected 2026-08-23.
+  //
+  // This block used to require the opposite, and requiring it was the chat
+  // double count. Chat's bottom element is PINNED, not scrolling: the composer
+  // (or the locked / blocked notice) never travels under the pill, and the bar
+  // sits in normal flow beneath the scene, so the scene already ends at the
+  // pill's top edge — the very reasoning the pinned-footer test below states.
+  // Applying the whole footprint again inside the column held the composer a
+  // pill's height clear of a pill that was no longer there, in BOTH states:
+  // at rest above the pill, and risen above the keyboard, because `riseFor`
+  // had already subtracted the clearance.
+  //
+  // So the clearance is still read, still handed over, and still subtracted
+  // from the rise — the loop above requires all of that, unchanged. What the
+  // column applies below itself is a pinned element's own breathing room.
+  // Nothing here got weaker: a path that re-applied the footprint, or that
+  // applied no padding at all, now fails.
   for (const path of [
     'components/KeyboardRisingColumn.tsx',
     'components/KeyboardRisingColumn.motion120.tsx',
   ]) {
+    const source = await read(path);
     assert.match(
-      await read(path),
-      /\{ paddingBottom: insetBelow \}/,
-      `${path} must apply the clearance it was handed`
+      source,
+      /\{ paddingBottom: COLUMN_BOTTOM_PADDING \}/,
+      `${path} must apply the pinned-column padding on the view that rises`
+    );
+    assert.doesNotMatch(
+      source,
+      /paddingBottom: insetBelow/,
+      `${path} re-reserves the pill's footprint — that is the chat clearance double count`
     );
   }
+
+  // ONE VALUE, ONE PLACE, so the two binaries cannot land differently — and
+  // DERIVED from the quantity home(7) already defined for a pinned composer
+  // rather than being a fresh number.
+  const shared = await read('components/KeyboardRisingColumn.shared.tsx');
+  assert.match(
+    shared,
+    /export const COLUMN_BOTTOM_PADDING = PINNED_FOOTER_BOTTOM_PADDING;/,
+    'the column padding must be home(7)s pinned-footer padding, not a new literal'
+  );
+  // The rise arithmetic did NOT move: insetBelow is still the subtrahend.
+  assert.match(shared, /return Math\.max\(0, keyboardHeight - insetBelow\);/);
 });
 
 test('a PINNED footer takes its own padding, never the scroll clearance', async () => {

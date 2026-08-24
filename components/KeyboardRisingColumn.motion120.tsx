@@ -1,5 +1,9 @@
 import Animated, { useAnimatedKeyboard, useAnimatedStyle } from 'react-native-reanimated';
-import { riseFor, type KeyboardRisingColumnProps } from './KeyboardRisingColumn.shared';
+import {
+  COLUMN_BOTTOM_PADDING,
+  riseFor,
+  type KeyboardRisingColumnProps,
+} from './KeyboardRisingColumn.shared';
 
 /**
  * KEYBOARD TRACKING'S FAST PATH — the column follows the keyboard itself
@@ -28,7 +32,9 @@ import { riseFor, type KeyboardRisingColumnProps } from './KeyboardRisingColumn.
  *
  * The rise arithmetic is `riseFor` from the shared module — the same function
  * the fallback drives its `Animated.Value` with, so the two paths cannot stop
- * one at a different height than the other.
+ * one at a different height than the other. The padding below the column comes
+ * from the same module for the same reason, and it is NOT `insetBelow`: see
+ * COLUMN_BOTTOM_PADDING for the double count that was.
  */
 export function KeyboardRisingColumn({
   insetBelow,
@@ -42,7 +48,7 @@ export function KeyboardRisingColumn({
   }));
 
   return (
-    <Animated.View style={[style, { paddingBottom: insetBelow }, rise]}>
+    <Animated.View style={[style, { paddingBottom: COLUMN_BOTTOM_PADDING }, rise]}>
       {children}
     </Animated.View>
   );

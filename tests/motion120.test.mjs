@@ -300,14 +300,27 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
     /transform: \[\{ translateY: Animated\.multiply\(keyboardRise, -1\) \}\]/,
     'the column must rise on a transform — the one thing the native driver can carry'
   );
-  // The clearance is applied on the SAME view that rises, in both paths, or
-  // the two binaries lay out differently.
+  // ONE padding, on the SAME view that rises, in both paths, or the two
+  // binaries lay out differently.
+  //
+  // It is COLUMN_BOTTOM_PADDING and NOT `insetBelow` — corrected 2026-08-23.
+  // Re-applying the clearance the caller handed over counted the floating
+  // pill twice: the bar sits in normal flow, so the scene already ends at the
+  // pill's top edge, and `riseFor` has already spent the clearance on the
+  // rise. That padding held the composer a pill's height above the pill at
+  // rest and the same distance above the keyboard risen — one cause, both
+  // dead bands.
   const fast = stripComments(read('components/KeyboardRisingColumn.motion120.tsx'));
   for (const [path, source] of [['fallback', column], ['motion120', fast]]) {
     assert.match(
       source,
-      /\{ paddingBottom: insetBelow \}/,
-      `the ${path} path must carry the clearance on the rising view`,
+      /\{ paddingBottom: COLUMN_BOTTOM_PADDING \}/,
+      `the ${path} path must carry the shared pinned-column padding on the rising view`,
+    );
+    assert.doesNotMatch(
+      source,
+      /paddingBottom: insetBelow/,
+      `the ${path} path re-reserves the pill's footprint — the chat clearance double count`,
     );
   }
   // ONE rise arithmetic, shared. A column that stopped at a different height
@@ -337,6 +350,113 @@ test('[static] the chat composer rises on a native-driven transform, not on padd
   // Listeners are removed. A keyboard listener that outlives its screen drives
   // an Animated.Value nothing is rendering.
   assert.match(hook, /show\.remove\(\);\s*hide\.remove\(\);/);
+});
+
+test('[executed] the chat column counts the pill once at rest and the keyboard once risen', () => {
+  // THE CHAT CLEARANCE DOUBLE COUNT, closed 2026-08-23, as arithmetic.
+  //
+  // Every number here is READ from the source, and every step is tied to a
+  // line that has to keep saying what the model assumes it says — otherwise
+  // this is a story about code rather than a fence on it.
+  const tokens = read('ui/tokens.ts');
+  const navHeight = Number(tokens.match(/const FLOATING_NAV_HEIGHT = (\d+);/)[1]);
+  const navGap = Number(tokens.match(/const FLOATING_NAV_GAP = (\d+);/)[1]);
+  const bottomNav = read('ui/primitives/BottomNav.tsx');
+
+  // (1) The pill is in NORMAL FLOW. This is the premise the whole double count
+  //     turned on: BottomTabView lays the scene container out as a flex:1
+  //     sibling above the bar, so the scene already ends at the pill's top
+  //     edge. If the bar is ever absolutely positioned, this test is wrong and
+  //     must be redone rather than adjusted.
+  assert.match(
+    bottomNav.replace(/\/\//g, ' ').replace(/\s+/g, ' '),
+    /nothing here is absolutely positioned/,
+    'the bar must still declare itself in-flow where the next reader will look'
+  );
+  const tabBarStyle = stripComments(bottomNav).match(/tabBarStyle: \{([\s\S]*?)\n {4}\},/);
+  assert.ok(tabBarStyle, 'bottomNavScreenOptions must still declare a tabBarStyle');
+  assert.doesNotMatch(
+    tabBarStyle[1],
+    /position:/,
+    'an absolutely positioned pill would stop reserving the scene space this model relies on'
+  );
+  assert.match(
+    bottomNav,
+    /return TAB_BAR_CONTENT_HEIGHT \+ Math\.max\(insetBottom, TAB_BAR_FLOAT_MARGIN\);/,
+    'bottomNavHeight is the pill footprint this model uses'
+  );
+  assert.match(bottomNav, /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/);
+
+  // (2) The column's two inputs, both from the shared module, so the fallback
+  //     and the reanimated path cannot land differently.
+  const shared = stripComments(read('components/KeyboardRisingColumn.shared.tsx'));
+  assert.match(shared, /return Math\.max\(0, keyboardHeight - insetBelow\);/);
+  assert.match(shared, /export const COLUMN_BOTTOM_PADDING = PINNED_FOOTER_BOTTOM_PADDING;/);
+  for (const path of [
+    'components/KeyboardRisingColumn.tsx',
+    'components/KeyboardRisingColumn.motion120.tsx',
+  ]) {
+    assert.match(stripComments(read(path)), /\{ paddingBottom: COLUMN_BOTTOM_PADDING \}/, path);
+  }
+
+  const riseFor = (keyboardHeight, insetBelow) => Math.max(0, keyboardHeight - insetBelow);
+  const columnPadding = navGap;
+
+  // A notched iPhone, where the double count was worst, and one where the
+  // float margin rather than the inset wins.
+  for (const insetBottom of [34, 0]) {
+    const screenH = 852;
+    const keyboard = 336;
+    const navClearance = navHeight + Math.max(insetBottom, navGap);
+    // The scene the column lives in ALREADY stops at the pill's top edge.
+    const sceneBottom = screenH - navClearance;
+
+    // AT REST. The column fills the scene; its padding is all that sits below
+    // the composer.
+    const restingBottom = sceneBottom - columnPadding - riseFor(0, navClearance);
+    assert.equal(
+      screenH - restingBottom,
+      navClearance + columnPadding,
+      `inset ${insetBottom}: the pill must be reserved exactly once — by the scene`
+    );
+    assert.equal(
+      sceneBottom - restingBottom,
+      columnPadding,
+      `inset ${insetBottom}: the composer keeps a pinned element's breathing room and nothing more`
+    );
+    // The defect this replaced, stated so it cannot come back unnoticed: the
+    // old padding reserved the footprint a second time.
+    assert.equal(
+      screenH - (sceneBottom - navClearance),
+      2 * navClearance,
+      `inset ${insetBottom}: paddingBottom: insetBelow counted the pill twice`
+    );
+
+    // RISEN. The keyboard covers the pill completely, so the pill drops out of
+    // the arithmetic entirely and only the keyboard is counted.
+    const risenBottom = sceneBottom - columnPadding - riseFor(keyboard, navClearance);
+    assert.equal(
+      screenH - risenBottom,
+      keyboard + columnPadding,
+      `inset ${insetBottom}: the composer must sit on the keyboard, counting it once`
+    );
+    assert.equal(
+      screenH - keyboard - risenBottom,
+      columnPadding,
+      `inset ${insetBottom}: the same breathing room above the keyboard as above the pill`
+    );
+    // ...and the old dead band was exactly a pill's footprint, in this state
+    // too — one cause, both symptoms.
+    assert.equal(
+      screenH - keyboard - (sceneBottom - navClearance - riseFor(keyboard, navClearance)),
+      navClearance,
+      `inset ${insetBottom}: the risen dead band was the same quantity as the resting one`
+    );
+  }
+
+  // A hardware keyboard whose accessory bar is shorter than the clearance must
+  // not drive the column DOWN. riseFor clamps at zero.
+  assert.equal(riseFor(40, 104), 0);
 });
 
 test('[static] every feature flag is false and carries the dependency it waits on', () => {

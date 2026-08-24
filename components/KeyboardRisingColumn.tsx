@@ -2,7 +2,10 @@ import { type ComponentType } from 'react';
 import { Animated } from 'react-native';
 import { useKeyboardOffset } from '../hooks/useKeyboardOffset';
 import { motionCapability, resolveMotion120 } from '../lib/motion120';
-import type { KeyboardRisingColumnProps } from './KeyboardRisingColumn.shared';
+import {
+  COLUMN_BOTTOM_PADDING,
+  type KeyboardRisingColumnProps,
+} from './KeyboardRisingColumn.shared';
 
 export type { KeyboardRisingColumnProps } from './KeyboardRisingColumn.shared';
 
@@ -19,8 +22,10 @@ export type { KeyboardRisingColumnProps } from './KeyboardRisingColumn.shared';
  * improvement on something that already works, which is the only kind of fast
  * path worth having behind a capability flag.
  *
- * The clearance is applied as `paddingBottom` on the same view that rises, in
- * both paths, so the two lay out identically.
+ * The padding below the column is COLUMN_BOTTOM_PADDING from the shared module
+ * — one value, applied on the same view that rises in both paths, so the two
+ * lay out identically. It is NOT `insetBelow`: see that constant's docblock for
+ * the double count that was.
  */
 function KeyboardRisingColumnFallback({
   insetBelow,
@@ -33,7 +38,7 @@ function KeyboardRisingColumnFallback({
     <Animated.View
       style={[
         style,
-        { paddingBottom: insetBelow },
+        { paddingBottom: COLUMN_BOTTOM_PADDING },
         { transform: [{ translateY: Animated.multiply(keyboardRise, -1) }] },
       ]}
     >
