@@ -1582,6 +1582,78 @@ const MIGRATIONS = [
         checkRlsPosture()],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 77. The conversation-features schema: conversation_states
+    // (hidden / archived / clear-delete watermark), the expiry-aware
+    // is_blocked_between over blocks.expires_at with set_block() as the one
+    // expiry writer, counterparty read visibility on message_reads plus its
+    // realtime entry, set_direct_thread_read_at() for MARK_UNREAD, message
+    // document columns + the recreated conversations view + the private
+    // chat-documents bucket, and live_location_shares with its three RPCs.
+    //
+    // What a publishable-key probe CANNOT see is carried by the sentinel,
+    // which installs only after the migration's proof matrix and self-check
+    // passed inside the same transaction: the amended function BODY (the
+    // expiry term), every policy (the message_reads party policy, the two
+    // storage policies, the live-location expiry-scoped SELECT), the two
+    // realtime publication entries, the partial unique keys, and every
+    // grant/revoke. The probes below assert what IS visible:
+    //   * the three messages.document_* columns and the two new view columns,
+    //     on surfaces anon can already resolve (phase75 keeps that SELECT);
+    //   * blocks.expires_at, same reasoning (anon reads zero rows);
+    //   * both new tables stay SEALED to anon — classifyRevokedResponse
+    //     distinguishes the denial from a missing table, so an absent table
+    //     reads as broken, never as secured;
+    //   * every new RPC exists (each is revoked from anon, so the expected
+    //     answer is a permission denial, which still proves existence — only
+    //     PGRST202 counts as missing);
+    //   * is_blocked_between and mark_direct_thread_read still resolve with
+    //     their exact pre-phase77 signatures, which is what the in-place
+    //     replacement (and the sibling that deliberately did NOT replace)
+    //     could have broken.
+    // -----------------------------------------------------------------------
+    file: 'phase77_conversation_features.sql',
+    sentinel: ['rpc phase77_conversation_features_enabled()', () =>
+      checkRpc('phase77_conversation_features_enabled', {})],
+    checks: [
+      ['blocks.expires_at', () => checkColumn('blocks', 'expires_at')],
+      ['messages.document_url', () => checkColumn('messages', 'document_url')],
+      ['messages.document_name', () => checkColumn('messages', 'document_name')],
+      ['messages.document_size_bytes', () =>
+        checkColumn('messages', 'document_size_bytes')],
+      ['conversations.last_message_document_url', () =>
+        checkColumn('conversations', 'last_message_document_url')],
+      ['conversations.last_message_document_name', () =>
+        checkColumn('conversations', 'last_message_document_name')],
+      ['conversation_states not readable by anon', () =>
+        checkColumnRevoked('conversation_states', 'user_id')],
+      ['live_location_shares not readable by anon', () =>
+        checkColumnRevoked('live_location_shares', 'id')],
+      ['rpc set_block()', () => checkRpc('set_block', { p_blocked: ZERO_UUID })],
+      ['rpc set_conversation_state()', () =>
+        checkRpc('set_conversation_state', { p_job_id: ZERO_UUID })],
+      ['rpc set_direct_thread_read_at()', () =>
+        checkRpc('set_direct_thread_read_at', {
+          p_thread_id: ZERO_UUID,
+          p_read_at: null,
+        })],
+      ['rpc start_live_location()', () =>
+        checkRpc('start_live_location', {
+          p_lat: 0,
+          p_lng: 0,
+          p_expires_at: '2026-01-01T00:00:00Z',
+        })],
+      ['rpc update_live_location()', () =>
+        checkRpc('update_live_location', { p_lat: 0, p_lng: 0 })],
+      ['rpc stop_live_location()', () =>
+        checkRpc('stop_live_location', { p_job_id: ZERO_UUID })],
+      ['rpc is_blocked_between() still resolves after phase77', () =>
+        checkRpc('is_blocked_between', { a: ZERO_UUID, b: ZERO_UUID })],
+      ['rpc mark_direct_thread_read() still resolves after phase77', () =>
+        checkRpc('mark_direct_thread_read', { p_thread_id: ZERO_UUID })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
