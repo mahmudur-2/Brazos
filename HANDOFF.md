@@ -43,21 +43,128 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-23 app-icon run (RUN B3)
+## Current state — after the 2026-08-23 chat-rendering run (RUN B4)
 
-One commit:
+Three commits, in dispatch order:
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`d749690`|the quoted-reply strip's body takes a content-sized flex basis, so a bubble carrying a quote widens to fit it|
+|C2|`f44d31e`|the bubble's 82% cap moved onto `bubbleWrap`, so it is measured against the row instead of against the bubble itself|
+|C3|`2da74bf`|the rising chat column reserves the floating pill ONCE — the padding is home(7)'s pinned-footer quantity, not the clearance|
+
+The offline suite stands at **929 pass / 0 fail / 0 skipped**, bare
+`npm run verify` exit 0, up from 926 at run start: three new tests, one per
+item. Each was mutation-checked against the exact property it guards —
+restoring `flex: 1` on the quote body, moving the cap back onto the bubble,
+restoring `paddingBottom: insetBelow`, and replacing the derived padding with
+a bare literal each turn the suite red. Branch and commit state are Git's to
+report, never this file's.
+
+### THE QUOTE BUG AND THE PHOTO BUG WERE TWO CAUSES, NOT ONE — and neither was where the symptom pointed
+
+Both are width-measurement faults in `components/ChatBubble.tsx`, and both
+were settled against the Yoga source shipped in
+`node_modules/react-native/ReactCommon/yoga/`, not from the symptom.
+
+**C1 — the quote strip contributed no width.** `quoteBody` was `flex: 1`,
+which is flexBasis 0. Yoga measures a fit-content row from the sum of its
+children's flex BASES: in `resolveFlexibleLength` a row that cannot grow gets
+`availableInnerMainDim = flexLine.sizeConsumed`, so a zero basis is a zero
+contribution. The strip measured to its accent rail, two gaps and the
+thumbnail — about 51pt — the bubble sized to the MESSAGE text instead, and
+the quote was truncated into the remainder. `flexGrow`/`flexShrink` are both
+still there and both load-bearing; only the basis changed.
+
+**C2 — the 82% cap was self-referential, and that is the photo bubble's root
+cause.** A percentage max resolves against the PARENT's inner width:
+`constrainMaxSizeForMode` takes `ownerWidth`, and ownerWidth for a child is
+the parent's `availableInnerWidth`. The bubble's parent was `bubbleWrap`, the
+wrapper that exists only to anchor the absolutely-positioned reaction badge —
+it has no width of its own and shrink-wraps the bubble. Yoga measures the
+wrapper once, lays it out at exactly that width with `SizingMode::StretchFit`
+(CalculateLayout.cpp line 710), then re-runs the child against it, so **every
+bubble was painted at 82% of the width it had just asked for.**
+
+Text merely re-wrapped, which is why this had been read as a quote bug all
+along. The photo could not follow the bubble in: `styles.image` is a fixed
+200pt box and RN's default `flexShrink` is 0. 200 + 2 × `spacing.md` measures
+224, the bubble was painted at 183, and the photo spilled 40pt out past the
+fill — the green sitting up-and-left of its own image, exactly as reported.
+
+**What discriminated between the surviving explanations: arithmetic from the
+real tokens.** Read row-relative, the cap resolves to 0.82 × 321 = 263 on a
+393pt phone against a photo bubble's 224, and it cannot clip anything on any
+current iPhone (it would need a screen narrower than 345pt). Read
+self-referentially it clips by 40pt on every device. Only one of those
+produces the observed overflow. The fence pins that number. Ruled out on the
+same evidence, and recorded so they are not re-investigated: `resizeMode`
+(RN's default is `cover`, verified in `Image.ios.js` line 142 — a non-square
+source is centre-cropped inside a fixed box and cannot change layout); the
+reaction badge (renders only with reactions, is a LATER sibling so it paints
+on top, and sits at `bottom: -10`); and any shadow layer (`shadows.card`
+appears on the badge alone).
+
+### THE CHAT CLEARANCE DOUBLE COUNT IS CLOSED — it was home(7)'s, arriving late
+
+Open item 9 is resolved. **Where it actually was:**
+`{ paddingBottom: insetBelow }` on the rising view, in both driver paths.
+
+The pill is not absolutely positioned. `bottomNavScreenOptions` leaves the bar
+in normal layout flow and floats it with margins — its own comment says
+"nothing here is absolutely positioned" — and
+`@react-navigation/bottom-tabs@7.18.3` takes the bar out of flow ONLY when it
+is hidden (`BottomTabBar.tsx`: `position: isTabBarHidden ? 'absolute' :
+undefined`), while `BottomTabView` lays the scene container out as a `flex: 1`
+sibling above it. So a chat scene already ends at the pill's top edge, and
+reserving the footprint again inside the column reserved it twice.
+
+That is precisely what home(7) found under every pinned Continue / Publish job
+/ Cash out button, and `PINNED_FOOTER_BOTTOM_PADDING` is the answer it already
+wrote — its docblock names a COMPOSER as well as a footer. Chat's was the one
+that got away, because its clearance had been delegated into the component and
+travelled as a prop rather than sitting in a stylesheet.
+
+It also explains why the band measured the same in both states: at rest the
+composer sat a pill's height above the pill, and risen, `riseFor` had already
+subtracted the clearance correctly while the padding held the column that same
+distance above the keyboard. One cause, both symptoms.
+
+**The fix is SHARED, not fallback-only.** `COLUMN_BOTTOM_PADDING` lives in
+`components/KeyboardRisingColumn.shared.tsx` and derives from
+`PINNED_FOOTER_BOTTOM_PADDING`; both drivers read that one value, and
+`riseFor` is untouched. The two states are symmetric by construction — the
+padding does not change with the rise, and the rise lands the column's bottom
+on the keyboard.
+
+**STILL UNVERIFIED ON THE FAST PATH.** The reanimated binary does not exist
+yet, so the `useAnimatedKeyboard` path was reasoned about from source only and
+has never been observed. Both paths now take the same constant and the same
+arithmetic, which is what makes the reasoning transferable, but it is
+reasoning — see the device checks below.
+
+### Fences changed this run, and why
+
+Two fences asserted the arithmetic that turned out to be the bug. Both were
+inverted rather than relaxed, and both now reject the old form outright:
+
+- `tests/layout.test.mjs`, "DELEGATION MUST NOT LOSE IT" — required
+  `{ paddingBottom: insetBelow }` in both driver paths. It now requires
+  `COLUMN_BOTTOM_PADDING`, rejects `paddingBottom: insetBelow`, and pins the
+  constant as DERIVED from the pinned-footer padding rather than a fresh
+  literal. A path that applies no padding at all fails too.
+- `tests/motion120.test.mjs` carried the same requirement; same inversion.
+
+Nothing that fences the transform-based rise, the shared `riseFor` arithmetic,
+or the requirement that the clearance reach the last element above the pill was
+touched — ChatScreen still reads the hook and still hands it over, because that
+is what makes the RISE correct.
+
+### The run before this one (RUN B3) — its one commit, carried forward
 
 | # | commit | what landed |
 |-|-|-|
 |C1|`c69cd8d`|`app.json`'s `expo.icon` points at `assets/brand/app-icon-flat.png`; the file is committed; `tests/pwa.test.mjs` fences its measured size and total opacity|
-
-The offline suite stands at **926 pass / 0 fail / 0 skipped**, bare
-`npm run verify` exit 0 — unchanged from 926 at run start, because the new
-assertions joined an existing test rather than adding cases. Each one was
-mutation-checked: flipping the expected size, the corner alpha, the opacity
-sweep or the `expo.icon` constant each turns `tests/pwa.test.mjs` red, so
-none of the four is a passing no-op. Branch and commit state are Git's to
-report, never this file's.
 
 ### THE iOS APP ICON IS THE FLAT EXPORT — measured before it was mounted
 
@@ -507,6 +614,35 @@ action remains here: `EXPECTED_REF` names `share` and pins it to `STAGING_REF`,
 so `eas build --profile share` now clears the pre-install hook. What is still
 unperformed is the build itself — see step 1.
 
+### Device checks OWED from RUN B4 (operator, physical device)
+
+All three of this run's items are layout, and none of them can be seen
+offline. In order of what is least certain:
+
+1. **The composer's resting and risen positions.** Open a job thread with the
+   keyboard down: the composer should sit a `floatingNavGap` (12pt) above the
+   pill, not a hand's width. Raise the keyboard: the same 12pt above the
+   keyboard, no dead band. This is the one item with a REASONED-ONLY half —
+   see 2.
+2. **The same two positions on the REANIMATED path, after the next build.**
+   Never observed. The fast path was reasoned about from source; it now takes
+   the same `COLUMN_BOTTOM_PADDING` and the same `riseFor` as the fallback, so
+   if the fallback is right the fast path should be too — but that is an
+   inference, and a drag-to-dismiss is the case where the two paths behave
+   most differently.
+3. **A photo message.** One bubble, one fill: the green should enclose the
+   photo on all four sides with the timestamp inside it. Check a received
+   photo as well as a sent one — the received side has the least room.
+4. **A reply quote on a short message.** Send "Hello sir" quoting something
+   longer: the bubble should widen to fit the quote up to its cap, the quote
+   should read as a truncated line rather than two characters, and "Hello sir"
+   should stay on one line. Then quote something very long and confirm it
+   still ellipsizes at one line rather than overflowing.
+5. **Bubbles with no quote and no photo, both themes.** C2 changed where the
+   82% cap is measured, so every bubble in the app is now capped against the
+   row rather than against itself. Long messages should be WIDER than before —
+   confirm that reads correctly and nothing runs under the avatar.
+
 ### Device checks OWED from RUN B0 (operator, physical device)
 
 None of this run's work has been seen on a device, and the four fast paths
@@ -666,12 +802,14 @@ bar's composition, which it describes wrongly as six slots), and C4
    half is still outstanding and is worth its own pass.
 8. **Section (e) of the run report** lists eleven items the emerald pass logged
    and did not fix, each with its reason.
-9. **`screens/ChatScreen.tsx`'s clearance double count** — still open, and it
-   MOVED in RUN A. The clearance now travels as `insetBelow` into
-   `components/KeyboardRisingColumn`, which applies it as `paddingBottom` on
-   the view that rises; both driver paths do, and `tests/layout.test.mjs`
-   asserts both. So the item is unchanged in substance and the place to fix it
-   is the component, not the screen.
+9. **The chat clearance double count — CLOSED in RUN B4 (`2da74bf`).** It was
+   `{ paddingBottom: insetBelow }` on the rising view, in both driver paths:
+   the tab bar sits in normal flow, so the scene already ends at the pill's
+   top edge and the column reserved the footprint a second time. RUN A's
+   guess that "the place to fix it is the component" was right; what it did
+   not know was that the answer already existed as home(7)'s
+   `PINNED_FOOTER_BOTTOM_PADDING`. Full account in the section above. What
+   remains is a device check on the reanimated path, which has never run.
 10. **The D2 inversion is missing from the run report's §(d) reversal list.**
     Named in the report's Verification section and in this file, and fenced by
     `tests/emeraldFences.test.mjs` F6 — but §(d) itself is where a future run
