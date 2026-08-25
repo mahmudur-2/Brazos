@@ -359,3 +359,240 @@ test('[executed] the size label is honest about an unknown size', async () => {
   assert.equal(formatDocumentSize(-1), '');
   assert.equal(formatDocumentSize(Number.NaN), '');
 });
+
+test('[executed] the glyph is read off the filename, never off a mime type', async () => {
+  const { documentIconFor } = await messagesModule;
+
+  // A picked asset's mimeType is OPTIONAL and is not stored on the row at
+  // all, so the name is the only thing that answers for a message loaded from
+  // the database as well as for one just picked.
+  assert.equal(documentIconFor('Quote.pdf'), 'document-text-outline');
+  assert.equal(documentIconFor('notes.DOCX'), 'document-text-outline');
+  assert.equal(documentIconFor('budget.xlsx'), 'grid-outline');
+  assert.equal(documentIconFor('deck.key'), 'easel-outline');
+  assert.equal(documentIconFor('site.heic'), 'image-outline');
+  assert.equal(documentIconFor('walkthrough.mov'), 'film-outline');
+  assert.equal(documentIconFor('bundle.zip'), 'archive-outline');
+
+  // Unrecognised, unnamed and extension-less all take the generic glyph — it
+  // is a hint about what is inside, never a claim, because the file is not
+  // opened to draw its own bubble.
+  assert.equal(documentIconFor('thing.qqq'), 'document-outline');
+  assert.equal(documentIconFor('no-extension-at-all'), 'document-outline');
+  assert.equal(documentIconFor(''), 'document-outline');
+  assert.equal(documentIconFor(null), 'document-outline');
+  assert.equal(documentIconFor(undefined), 'document-outline');
+});
+
+// ---------------------------------------------------------------------------
+// 5 — THE BUBBLE DRAWS FROM METADATA, AND THE SCREEN OWNS THE DOWNLOAD
+// ---------------------------------------------------------------------------
+
+test('[static] the document bubble renders before anything is downloaded', async () => {
+  const bubble = stripComments(await read('components/ChatBubble.tsx'));
+
+  // Every one of the three facts on the row, and NOTHING that fetches.
+  assert.match(bubble, /message\.document_url \? \(/, 'the branch keys off the reference');
+  assert.match(bubble, /documentIconFor\(message\.document_name\)/);
+  assert.match(bubble, /\{message\.document_name \|\| 'Document'\}/);
+  assert.match(bubble, /formatDocumentSize\(message\.document_size_bytes\)/);
+
+  // The bubble may not reach the network to paint itself. A document has no
+  // thumbnail and no duration, which is exactly why the name and the size are
+  // stored beside the reference.
+  assert.doesNotMatch(bubble, /\bfetch\(/, 'the bubble must never fetch');
+  assert.doesNotMatch(bubble, /resolveChatMediaUrl/, 'signing is not this component job');
+
+  // ALONGSIDE the audio branch, not instead of it, and not restructured
+  // around it: a message may carry either and the component still renders in
+  // one pass.
+  assert.ok(
+    bubble.indexOf('message.audio_url ?') < bubble.indexOf('message.document_url ?'),
+    'the document branch sits after the audio branch, matching its structure'
+  );
+  assert.ok(
+    bubble.indexOf('message.document_url ?') < bubble.indexOf('message.content ?'),
+    'and before the text branch, so a caption still reads under the file'
+  );
+
+  // Tapping is the ONLY thing that downloads, and an absent handler leaves a
+  // bubble that renders and simply is not pressable rather than a dead tap.
+  assert.match(bubble, /onPress=\{onPressDocument \? \(\) => onPressDocument\(message\) : undefined\}/);
+  assert.match(bubble, /disabled=\{!onPressDocument\}/);
+  // The long-press must still reach the sheet — the same forwarding the image
+  // branch needs, for the same reason: this inner Pressable claims the touch.
+  assert.match(
+    bubble.slice(bubble.indexOf('message.document_url ?')),
+    /onLongPress=\{onLongPress\}/
+  );
+  // 44pt by the DRAWN box.
+  assert.match(bubble, /minHeight: 44,/);
+});
+
+test('[static] the document bubble takes every colour from the palette', async () => {
+  const bubble = stripComments(await read('components/ChatBubble.tsx'));
+  const documentStyles = bubble.slice(bubble.indexOf('  document: {'));
+  assert.ok(documentStyles.length > 0, 'the document styles must exist');
+  assert.equal(
+    documentStyles.match(/#[0-9a-fA-F]{3,8}\b/),
+    null,
+    'no raw hex in the document bubble'
+  );
+  assert.equal(documentStyles.match(/\brgba?\(/), null, 'no raw rgb/rgba in the document bubble');
+});
+
+test('[static] the send path is the resolved target, either thread kind', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // THE ONE SEND PATH ON THIS SCREEN THAT DOES NOT REQUIRE A JOB. Photo and
+  // voice both guard on `!sendJobId` because their buckets authorise on a job;
+  // a document's does not.
+  assert.match(chat, /const threadId = sendJobId \?\? sendDirectThreadId;/);
+  assert.match(chat, /if \(!user \|\| !sendTarget \|\| !threadId\) return;/);
+  assert.match(chat, /uploadChatDocument\(\s*threadId,/);
+  // The other two are untouched and still job-only.
+  assert.match(chat, /uploadChatAudio\(\s*sendJobId,/);
+  assert.match(chat, /uploadChatPhoto\(\s*sendJobId,/);
+
+  // The picker is the installed native one, and nothing about it enters
+  // package.json from here.
+  assert.match(chat, /import \* as DocumentPicker from 'expo-document-picker';/);
+  assert.match(chat, /DocumentPicker\.getDocumentAsync\(\{/);
+  assert.match(chat, /copyToCacheDirectory: true,/, 'the returned uri must be readable by fetch');
+  assert.match(chat, /multiple: false,/, 'one attachment per message');
+
+  // The three columns are all written — a name read but never stored is a
+  // bubble that renders "Document" forever.
+  assert.match(chat, /documentUrl: url,/);
+  assert.match(chat, /documentName: asset\.name,/);
+  // An absent size stays absent rather than becoming a zero the bubble labels.
+  assert.match(chat, /documentSizeBytes: asset\.size \?\? null,/);
+
+  // Both props are wired, or the flag would produce a dead row.
+  assert.match(chat, /onPickDocument=\{pickDocument\}/);
+  assert.match(chat, /onPressDocument=\{openDocument\}/);
+  // Opening uses the already-signed URL; the bucket is never made public.
+  assert.match(chat, /await Linking\.openURL\(url\);/);
+  assert.match(chat, /Could not open document/, 'a refusal is said, not swallowed');
+});
+
+test('[static] DOCUMENTS is flipped, and its docblock records what shipped', async () => {
+  const flags = await read('lib/featureFlags.ts');
+  assert.match(flags, /export const DOCUMENTS = true as boolean;/);
+
+  const block = flags.slice(
+    flags.lastIndexOf('/**', flags.indexOf('export const DOCUMENTS')),
+    flags.indexOf('export const DOCUMENTS')
+  );
+  // The table's own rule: a flipped flag still records what it waited on and
+  // what closed it, because this file is where a later reader looks to find
+  // out why it could be.
+  assert.match(block, /WAITS ON: nothing since 2026-08-25\./);
+  assert.match(block, /phase77/);
+  assert.doesNotMatch(block, /documents have neither/, 'the stale dependency line must be gone');
+  // The two facts a later run most needs from this block.
+  assert.match(block, /BOTH THREAD KINDS/);
+  assert.match(block, /unsend_message\(\)/, 'the honest residue is recorded, not hidden');
+
+  // DELIVERED_TICKS is not touched by this run.
+  assert.match(flags, /export const DELIVERED_TICKS = false as boolean;/);
+});
+
+// ---------------------------------------------------------------------------
+// 6 — THE INBOX PREVIEW
+// ---------------------------------------------------------------------------
+
+test('[executed] an inbox row names the document, ahead of the voice branch', async () => {
+  // conversationPreviewText lives in lib/conversations.ts, which imports the
+  // supabase client — so it is loaded the same way lib/messages.ts is, with
+  // that import stubbed and the re-export inlined. Nothing below touches it.
+  const visibility = stripTypeScriptTypes(
+    await read('lib/conversationVisibility.ts'),
+    { mode: 'strip' }
+  );
+  const conversationsJs = stripTypeScriptTypes(await read('lib/conversations.ts'), { mode: 'strip' })
+    .replace(/import \{ supabase \} from '\.\/supabase';/, 'const supabase = null;')
+    .replace(/export \{[\s\S]*?\} from '\.\/conversationVisibility';/, visibility);
+  const { conversationPreviewText } = await import(toDataUrl(conversationsJs));
+
+  const row = (fields) => ({
+    last_message_unsent_at: null,
+    last_message_document_url: null,
+    last_message_document_name: null,
+    last_message_audio_url: null,
+    last_message_image_url: null,
+    last_message_content: '',
+    ...fields,
+  });
+
+  assert.equal(
+    conversationPreviewText(row({ last_message_document_url: 's', last_message_document_name: 'Invoice.pdf' })),
+    'Invoice.pdf'
+  );
+  assert.equal(
+    conversationPreviewText(row({ last_message_document_url: 's', last_message_document_name: null })),
+    'Document'
+  );
+  // AHEAD OF VOICE, matching messagePreviewText() exactly — an inbox row
+  // reading "Voice message" over a thread whose newest bubble is a PDF is the
+  // drift the shared implementation exists to prevent.
+  assert.equal(
+    conversationPreviewText(
+      row({ last_message_document_url: 's', last_message_document_name: 'a.pdf', last_message_audio_url: 'b' })
+    ),
+    'a.pdf'
+  );
+  // Reactions still prefix it, like every other kind.
+  assert.equal(
+    conversationPreviewText(
+      row({ last_message_document_url: 's', last_message_document_name: 'a.pdf' }),
+      ['\u{1F44D}']
+    ),
+    '\u{1F44D} a.pdf'
+  );
+  // Unsent still wins outright, and carries no reactions.
+  assert.equal(
+    conversationPreviewText(
+      row({ last_message_document_url: 's', last_message_document_name: 'a.pdf', last_message_unsent_at: 'x' }),
+      ['\u{1F44D}']
+    ),
+    'This message was unsent'
+  );
+  // Nothing above changed.
+  assert.equal(conversationPreviewText(row({ last_message_audio_url: 'b' })), 'Voice message');
+  assert.equal(conversationPreviewText(row({ last_message_image_url: 'c' })), 'Photo sent');
+  assert.equal(conversationPreviewText(row({ last_message_content: 'hi' })), 'hi');
+});
+
+test('[static] both document columns ride the projection, and nowhere else changed', async () => {
+  const conversations = stripComments(await read('lib/conversations.ts'));
+
+  // The view carries both in BOTH union branches (phase77), so the type, the
+  // projection and the Previewable pick all name both — projections.test.mjs
+  // then proves the list and the type are the same set.
+  for (const column of ['last_message_document_url', 'last_message_document_name']) {
+    assert.match(conversations, new RegExp(`${column}: string \\| null;`), `the type carries ${column}`);
+    assert.match(conversations, new RegExp(`, ${column},`), `the projection selects ${column}`);
+    assert.match(conversations, new RegExp(`\\| '${column}'`), `Previewable picks ${column}`);
+  }
+  // Added exactly where last_message_audio_url is named and nowhere else: the
+  // two travel together through the type, the projection and the pick.
+  assert.equal(
+    (conversations.match(/last_message_audio_url/g) ?? []).length,
+    (conversations.match(/last_message_document_url/g) ?? []).length,
+    'the document URL is named exactly as often as the audio URL'
+  );
+});
+
+test('[static] the migration this run wired is the one that is applied', async () => {
+  const sql = await read('supabase/phase77_conversation_features.sql');
+  // The client contract, read back off the authority. A column renamed here
+  // and not there is a runtime failure with no build-time signal, because
+  // there are no generated database types in this repo.
+  assert.match(sql, /add column if not exists document_url text,/);
+  assert.match(sql, /add column if not exists document_name text,/);
+  assert.match(sql, /add column if not exists document_size_bytes integer;/);
+  assert.match(sql, /values \('chat-documents', 'chat-documents', false\)/);
+  assert.match(sql, /m\.document_url as last_message_document_url,/);
+  assert.match(sql, /m\.document_name as last_message_document_name,/);
+});

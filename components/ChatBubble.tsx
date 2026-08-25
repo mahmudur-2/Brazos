@@ -1,4 +1,5 @@
 import { Pressable, Image, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { MessageTicks } from './MessageTicks';
 import { VoiceNote } from './VoiceNote';
@@ -13,7 +14,12 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { formatClockTime } from '../lib/time';
-import { messagePreviewText, type Message } from '../lib/messages';
+import {
+  documentIconFor,
+  formatDocumentSize,
+  messagePreviewText,
+  type Message,
+} from '../lib/messages';
 import type { Reaction } from '../lib/reactions';
 
 type ChatBubbleProps = {
@@ -30,6 +36,13 @@ type ChatBubbleProps = {
   reactions?: Reaction[];
   onLongPress?: () => void;
   onPressImage?: (url: string) => void;
+  /**
+   * Open the document attachment. The bubble draws itself from the row's
+   * metadata and never fetches the file, so this is the ONLY thing that
+   * downloads one — absent, the bubble still renders and is simply not
+   * pressable.
+   */
+  onPressDocument?: (message: Message) => void;
   /** The quoted message, already resolved from the loaded thread. */
   replyTo?: Message | null;
   /** Display name for the quoted message's sender. */
@@ -47,6 +60,7 @@ export function ChatBubble({
   reactions = [],
   onLongPress,
   onPressImage,
+  onPressDocument,
   replyTo,
   replyToName,
   onLongPressAvatar,
@@ -135,6 +149,52 @@ export function ChatBubble({
                   durationMs={message.audio_duration_ms}
                   isOwn={isOwn}
                 />
+              ) : null}
+              {/* THE DOCUMENT ROW DRAWS FROM METADATA ALONE — the filename,
+                  the byte count and an extension-appropriate glyph, all off
+                  the message row, with nothing downloaded to paint it. A
+                  photo has a thumbnail and a voice note has a duration; a
+                  document has neither, and fetching each one to render its
+                  own bubble would pull every attachment in a thread on open,
+                  over a bucket that hands back signed URLs.
+
+                  onLongPress is forwarded here for the same reason the image
+                  branch forwards it: this inner Pressable claims the touch,
+                  and without it a long-press on a document would never reach
+                  the reaction/reply sheet. */}
+              {message.document_url ? (
+                <Pressable
+                  onPress={onPressDocument ? () => onPressDocument(message) : undefined}
+                  onLongPress={onLongPress}
+                  delayLongPress={350}
+                  disabled={!onPressDocument}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Document, ${message.document_name ?? 'unnamed'}`}
+                  accessibilityHint="Opens the file"
+                  style={[styles.document, isOwn ? styles.documentOwn : styles.documentOther]}
+                >
+                  <Ionicons
+                    name={documentIconFor(message.document_name)}
+                    size={22}
+                    color={isOwn ? colors.onPrimary : colors.primary}
+                  />
+                  <View style={styles.documentBody}>
+                    {/* The head of a long name is the useful half — a middle
+                        ellipsis is not available here, and truncating the
+                        tail keeps the words someone recognises. */}
+                    <Text
+                      style={[styles.documentName, isOwn && styles.documentNameOwn]}
+                      numberOfLines={2}
+                    >
+                      {message.document_name || 'Document'}
+                    </Text>
+                    {formatDocumentSize(message.document_size_bytes) ? (
+                      <Text style={[styles.documentMeta, isOwn && styles.documentMetaOwn]}>
+                        {formatDocumentSize(message.document_size_bytes)}
+                      </Text>
+                    ) : null}
+                  </View>
+                </Pressable>
               ) : null}
               {message.content ? (
                 <Text style={[styles.text, isOwn && styles.textOwn]}>{message.content}</Text>
@@ -323,6 +383,54 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     height: 200,
     borderRadius: radius.md,
     backgroundColor: colors.border,
+  },
+  // A ROW, NOT A FIXED BOX. styles.image above is a 200pt square and RN's
+  // default flexShrink is 0, which is exactly what made the photo bubble
+  // spill past its own fill — see the note on bubbleWrap. A document has no
+  // intrinsic size at all, so it takes the bubble's width and its name wraps
+  // to two lines inside it rather than forcing the bubble wider than the 82%
+  // cap.
+  document: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    // The 44pt touch floor, met by the DRAWN box: this row is the whole
+    // target, and the bubble around it is not pressable for this purpose.
+    minHeight: 44,
+  },
+  // The same two washes the quote strip uses, for the same reason: a panel
+  // INSIDE a bubble has to separate from the fill it sits on in both
+  // directions — a translucent cream on the own bubble's solid primary, the
+  // soft primary tint on the other side's surface.
+  documentOwn: {
+    backgroundColor: withAlpha(colors.onPrimary, 0.16),
+  },
+  documentOther: {
+    backgroundColor: colors.primarySoft,
+  },
+  documentBody: {
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 'auto',
+    gap: 1,
+  },
+  documentName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  documentNameOwn: {
+    color: colors.onPrimary,
+  },
+  documentMeta: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  documentMetaOwn: {
+    color: withAlpha(colors.onPrimary, 0.8),
   },
   text: {
     fontSize: 15,

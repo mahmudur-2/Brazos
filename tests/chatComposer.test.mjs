@@ -141,10 +141,56 @@ test('[static] the attachment gate survived the redesign, and the flags need the
 
   // FLAG **AND** HANDLER. The flag alone is not enough: a flipped flag with
   // no wired action would be exactly the dead row featureFlags.ts exists to
-  // prevent.
+  // prevent. Both flags are TRUE since 2026-08-25 and this rule is what still
+  // makes them safe — it is a structural property of the menu, not a
+  // consequence of the flags being off.
   assert.match(source, /if \(LIVE_LOCATION && onShareLiveLocation\) \{/);
   assert.match(source, /if \(DOCUMENTS && onPickDocument\) \{/);
   assert.match(source, /import \{ DOCUMENTS, LIVE_LOCATION \} from '\.\.\/lib\/featureFlags';/);
+});
+
+test('[static] the attachment gate SPLIT: Document and Live location are not behind it', () => {
+  const source = stripComments(read(COMPOSER));
+
+  // THE GATE COVERS THREE ROWS, NOT FIVE — and this is the assertion that
+  // stops a later edit from "tidying" the menu by putting every entry behind
+  // one condition. chat-photos and chat-audio authorise on a JOB, so those
+  // three go on a pair thread. phase77's chat_documents_* policies take a job
+  // id OR a direct thread id in folder one, and all three live-location RPCs
+  // take the same either-or pair, so those two work on BOTH thread kinds.
+  // Folding them into `allowAttachments` would hide two working features on
+  // every direct thread.
+  const gated = [...source.matchAll(/if \(allowAttachments[^)]*\) \{/g)];
+  assert.equal(gated.length, 3, 'exactly three menu rows are gated on allowAttachments');
+
+  // Named, so the count above cannot be satisfied by the wrong three.
+  for (const key of ['camera', 'photos', 'voice']) {
+    const at = source.indexOf(`key: '${key}'`);
+    assert.ok(at > -1, `the ${key} row must exist`);
+    const preceding = source.slice(0, at);
+    assert.match(
+      preceding.slice(preceding.lastIndexOf('if (')),
+      /^if \(allowAttachments/,
+      `${key} must be gated on allowAttachments`,
+    );
+  }
+  for (const [key, flag] of [['document', 'DOCUMENTS'], ['location', 'LIVE_LOCATION']]) {
+    const at = source.indexOf(`key: '${key}'`);
+    assert.ok(at > -1, `the ${key} row must exist`);
+    const preceding = source.slice(0, at);
+    const guard = preceding.slice(preceding.lastIndexOf('if ('));
+    assert.match(guard, new RegExp(`^if \\(${flag} && on`), `${key} is gated by its flag`);
+    assert.doesNotMatch(guard, /allowAttachments/, `${key} must NOT be gated on allowAttachments`);
+  }
+
+  // And the prop's own contract says so, so the next reader is not left to
+  // infer the narrowing from the call sites. Read UNSTRIPPED: the contract is
+  // the docblock, which is exactly what stripComments() removes.
+  assert.match(
+    read(COMPOSER),
+    /Whether CAMERA, PHOTOS and VOICE MESSAGE are possible/,
+    'the prop must document that it is narrower than its name reads',
+  );
 });
 
 test('[static] the drop-up is the shared DropMenu, on the boundary timings', () => {

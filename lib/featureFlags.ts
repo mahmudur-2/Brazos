@@ -49,11 +49,39 @@ export const LIVE_LOCATION = false as boolean;
 /**
  * Attaching a document (PDF, docx, spreadsheet) to a message.
  *
- * WAITS ON: expo-document-picker installed, and a storage bucket plus the
- * message-attachment column that names it. Photos and video already have
- * both; documents have neither.
+ * WAITS ON: nothing since 2026-08-25. It waited on expo-document-picker being
+ * installed and on a storage bucket plus the message columns that name it —
+ * photos and video had both, documents had neither. The picker is in
+ * package.json and native in the current build; phase77 added the
+ * `chat-documents` bucket at the LIVE private posture (party-scoped read,
+ * own-folder insert, both gates) and the three columns the bubble draws from,
+ * `document_url`, `document_name` and `document_size_bytes`.
+ *
+ * THE BUBBLE NEVER DOWNLOADS THE FILE TO DRAW ITSELF. That is what the second
+ * and third columns are for: the name, a human byte size and an
+ * extension-appropriate glyph all come off the row, so opening a thread costs
+ * no attachment traffic and tapping one costs exactly one. The URL is a
+ * private `storage://chat-documents/…` reference exchanged for a short-lived
+ * signed URL at display time, the phase29 posture the photo and voice paths
+ * already follow.
+ *
+ * IT IS THE FIRST ATTACHMENT KIND THAT WORKS ON BOTH THREAD KINDS, and that
+ * is the one thing to know before touching the composer. Camera, Photos and
+ * Voice Message are gated by `allowAttachments` because chat-photos and
+ * chat-audio authorise on a JOB, so a pair thread has no path to key an
+ * upload on. chat_documents_read_party and chat_documents_insert_party each
+ * carry a second branch on `direct_threads`, so this row is gated by THIS FLAG
+ * AND ITS HANDLER and by nothing else. The chat-photos / chat-audio gap is
+ * pre-existing, reported by phase77, and deliberately parked — closing it is a
+ * policy change, not a client one.
+ *
+ * ONE HONEST RESIDUE, recorded because a later reader will find it: phase70's
+ * unsend_message() wipes content, image_url, audio_url and audio_duration_ms,
+ * and predates these three columns, so an unsent document row keeps its name
+ * and its object. Nothing DISPLAYS them — every surface checks `unsent_at`
+ * first — but the wipe is not yet complete, and completing it is a migration.
  */
-export const DOCUMENTS = false as boolean;
+export const DOCUMENTS = true as boolean;
 
 // NOT A FLAG — MUTE WAS RETIRED FROM THIS TABLE ON 2026-08-23, before it ever
 // gated anything, because it had no unmet dependency to record and this table

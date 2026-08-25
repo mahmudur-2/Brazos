@@ -4,6 +4,7 @@ import {
   FlatList,
   Image,
   Keyboard,
+  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -17,6 +18,7 @@ import {
   type RouteProp,
 } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { ActionSheet, type ActionSheetItem } from '../components/ActionSheet';
 import { AmountPrompt } from '../components/AmountPrompt';
@@ -109,7 +111,7 @@ import {
 import { useThreadOffers } from '../hooks/useJobOffers';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { removeReaction, setReaction } from '../lib/reactions';
-import { uploadChatAudio, uploadChatPhoto } from '../lib/storage';
+import { uploadChatAudio, uploadChatDocument, uploadChatPhoto } from '../lib/storage';
 import type { ChatRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
@@ -1382,6 +1384,99 @@ export function ChatScreen() {
     }
   }
 
+  /**
+   * A DOCUMENT GOES TO THE THREAD, EITHER KIND — and this is the one send path
+   * on this screen that does not require `sendJobId`.
+   *
+   * Photo and voice cannot: chat-photos and chat-audio authorise their inserts
+   * against a JOB, so the pair thread has nowhere to key a path, which is what
+   * `allowAttachments` has always meant. phase77's chat_documents_* policies
+   * carry a second branch on `direct_threads`, so folder one may be either id
+   * and the Document row renders on both thread kinds. The guard behind the
+   * control agrees with the control: the resolved target, whichever kind it
+   * is.
+   */
+  async function sendDocument(asset: DocumentPicker.DocumentPickerAsset) {
+    const threadId = sendJobId ?? sendDirectThreadId;
+    if (!user || !sendTarget || !threadId) return;
+    setSending(true);
+    const { url, error: uploadError } = await uploadChatDocument(
+      threadId,
+      user.id,
+      asset.uri,
+      asset.name,
+      asset.mimeType
+    );
+    if (uploadError || !url) {
+      setSending(false);
+      await alertAsync(
+        'Could not send document',
+        userMessage(
+          uploadError,
+          'Upload failed. The chat-documents storage bucket may still need setting up.'
+        )
+      );
+      return;
+    }
+
+    const { data, error } = await sendMessage({
+      target: sendTarget,
+      senderId: user.id,
+      content: '',
+      documentUrl: url,
+      // The name and the size are what let the bubble draw before anything is
+      // downloaded. `size` is optional on a picked asset, and an absent one
+      // stays absent rather than becoming a zero the bubble would label.
+      documentName: asset.name,
+      documentSizeBytes: asset.size ?? null,
+    });
+    setSending(false);
+
+    if (error) {
+      await reportSendFailure('Could not send document', error);
+      return;
+    }
+    if (data) addLocal(data);
+  }
+
+  async function pickDocument() {
+    // No permission request: the system document browser is a presented picker
+    // that hands back only what the user chose, so there is no prompt to make
+    // and nothing to explain in advance. copyToCacheDirectory is what makes
+    // the returned uri readable by fetch() a moment later.
+    const result = await DocumentPicker.getDocumentAsync({
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    if (!result.canceled && result.assets?.[0]) {
+      await sendDocument(result.assets[0]);
+    }
+  }
+
+  /**
+   * Open a document attachment. `document_url` arrives here already exchanged
+   * for a short-lived signed URL (resolveMessageMedia), so the system opener
+   * is handed a real link and the private bucket is never made public to serve
+   * it.
+   *
+   * A refusal is SAID rather than swallowed: the likeliest cause is a signature
+   * that has outlived the thread being left open, and silence would read as a
+   * dead bubble.
+   */
+  async function openDocument(message: Message) {
+    const url = message.document_url;
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
+    } catch (err) {
+      console.warn('[Chat] document open failed', err);
+      await alertAsync(
+        'Could not open document',
+        'This link may have expired. Leave the conversation and come back, then try again.'
+      );
+    }
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       {/* THE HEADER LAYER. `zIndex` is load-bearing: the overflow menu
@@ -1612,6 +1707,7 @@ export function ChatScreen() {
                     // placeholder.
                     onLongPress={item.unsent_at ? undefined : () => setMenuTarget(item)}
                     onPressImage={setViewerUri}
+                    onPressDocument={openDocument}
                     replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
                     replyToName={
                       item.reply_to_id
@@ -1747,7 +1843,15 @@ export function ChatScreen() {
                 // route opened the screen: chat media is stored under
                 // `{jobId}/{userId}/…` and the pair thread has no job id to key
                 // a path on.
+                //
+                // CAMERA, PHOTOS AND VOICE ONLY. Document is deliberately NOT
+                // behind this: phase77's chat_documents_* policies take a job
+                // id OR a direct thread id in folder one, so it works on both
+                // thread kinds and hiding it here would hide a working
+                // feature on every pair thread. The chat-photos / chat-audio
+                // gap is real and parked; it is not closed from the client.
                 allowAttachments={!!sendJobId}
+                onPickDocument={pickDocument}
               />
             </>
           )}

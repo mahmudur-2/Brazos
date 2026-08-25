@@ -262,6 +262,72 @@ export function messagePreviewText(message: Message): string {
 }
 
 /**
+ * The Ionicon a document bubble draws, from its FILENAME alone.
+ *
+ * Read off the name rather than the mime type on purpose: the mime type is
+ * optional on a picked asset (`DocumentPickerAsset.mimeType?`), is absent
+ * often enough on iOS to matter, and is not stored on the message row at all
+ * — the extension is on the name the row does carry, so this answers for a
+ * message loaded from the database exactly as it does for one just picked.
+ *
+ * Anything unrecognised gets the generic document glyph. It is a hint about
+ * what is inside, never a claim: the file is not opened to draw its own
+ * bubble, which is the whole reason the name and the size are stored beside
+ * the reference.
+ */
+export type DocumentIconName =
+  | 'document-text-outline'
+  | 'image-outline'
+  | 'film-outline'
+  | 'musical-notes-outline'
+  | 'grid-outline'
+  | 'easel-outline'
+  | 'archive-outline'
+  | 'document-outline';
+
+const DOCUMENT_ICONS: Record<string, DocumentIconName> = {
+  pdf: 'document-text-outline',
+  doc: 'document-text-outline',
+  docx: 'document-text-outline',
+  rtf: 'document-text-outline',
+  txt: 'document-text-outline',
+  md: 'document-text-outline',
+  pages: 'document-text-outline',
+  png: 'image-outline',
+  jpg: 'image-outline',
+  jpeg: 'image-outline',
+  gif: 'image-outline',
+  heic: 'image-outline',
+  webp: 'image-outline',
+  mp4: 'film-outline',
+  mov: 'film-outline',
+  m4v: 'film-outline',
+  mp3: 'musical-notes-outline',
+  m4a: 'musical-notes-outline',
+  wav: 'musical-notes-outline',
+  csv: 'grid-outline',
+  xls: 'grid-outline',
+  xlsx: 'grid-outline',
+  numbers: 'grid-outline',
+  ppt: 'easel-outline',
+  pptx: 'easel-outline',
+  key: 'easel-outline',
+  zip: 'archive-outline',
+  rar: 'archive-outline',
+  gz: 'archive-outline',
+  '7z': 'archive-outline',
+};
+
+export function documentIconFor(fileName: string | null | undefined): DocumentIconName {
+  if (!fileName) return 'document-outline';
+  const extension = fileName.split('.').pop()?.toLowerCase() ?? '';
+  // A name with no dot at all reports itself as its own extension; that is
+  // not one, so it takes the generic glyph like anything else unrecognised.
+  if (!extension || extension === fileName.toLowerCase()) return 'document-outline';
+  return DOCUMENT_ICONS[extension] ?? 'document-outline';
+}
+
+/**
  * "18 KB" / "2.4 MB" for a document's byte count — the label beside a
  * filename, and the sibling of formatClipDuration() below: the one piece of
  * metadata that lets a bubble say how big the download is before anyone taps

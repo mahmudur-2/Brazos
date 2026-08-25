@@ -414,12 +414,18 @@ test('attachments follow the resolved target, so the pair thread has none', asyn
 
 test('every send goes to the resolved target, and only there', async () => {
   const chat = stripComments(await read('screens/ChatScreen.tsx'));
-  // THREE send paths (text, photo, voice), one target between them. It was
-  // four until 2026-08-23: the quick-reply send went with the row.
+  // FOUR send paths (text, photo, voice, document), one target between them.
+  // It was four until 2026-08-23 when the quick-reply send went with its row,
+  // three until 2026-08-25 when DOCUMENTS shipped. The COUNT is bookkeeping;
+  // the property is that no send path names anything but the resolved target,
+  // so a conversation can never show one job while a message sent from it
+  // lands in another. Document is the one path whose target may be a pair
+  // thread — that is about which BUCKET authorises it, not about which target
+  // it sends to, and it reads the same `sendTarget` as the other three.
   assert.equal(
     (chat.match(/target: sendTarget,/g) ?? []).length,
-    3,
-    'all three send paths must use the resolved target'
+    4,
+    'all four send paths must use the resolved target'
   );
   // Read state is cleared across the WHOLE conversation, or the inbox row it
   // folds into would stay lit with nothing left to open.

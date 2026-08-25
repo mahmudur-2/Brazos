@@ -557,15 +557,21 @@ test('[static] the chat timeline is the CLEARED timeline, and the send target is
 // C5 — the flip, and what it is allowed to mean.
 // ---------------------------------------------------------------------------
 
-test('[static] each of the seven live flags gates a real affordance, in a real file', () => {
+test('[static] each live flag gates a real affordance, in a real file', () => {
   // THE ACCEPTANCE GATE, stated as a test. A flipped flag whose guarded row
   // does nothing is worse than an unflipped one, so each flag is followed from
   // its constant to the file that imports it to the call that runs.
+  //
+  // Seven on 2026-08-24 (RUN W1), an eighth on 2026-08-25 when DOCUMENTS
+  // shipped — and DOCUMENTS is the first entry here whose guard site is the
+  // COMPOSER rather than the inbox or the chat screen, because the row it
+  // gates lives in the [ + ] menu.
   const flags = read('lib/featureFlags.ts');
   const screen = stripComments(read(INBOX));
   const chat = stripComments(read(CHAT));
+  const composer = stripComments(read('components/ChatComposer.tsx'));
 
-  const SEVEN = {
+  const LIVE = {
     TIMED_BLOCK: [screen, /setBlockUntil\(/],
     MARK_UNREAD: [screen, /markConversationUnreadForAll\(/],
     CLEAR_CHAT: [screen, /\{ clear: true \}/],
@@ -573,9 +579,10 @@ test('[static] each of the seven live flags gates a real affordance, in a real f
     ARCHIVE: [screen, /archived: !target\.archived/],
     DELETE_CHAT: [screen, /\{ delete: true \}/],
     READ_TICKS: [chat, /deliveryFor\(item, readPositions\)/],
+    DOCUMENTS: [composer, /onPress: onPickDocument,/],
   };
 
-  for (const [name, [source, call]] of Object.entries(SEVEN)) {
+  for (const [name, [source, call]] of Object.entries(LIVE)) {
     assert.match(
       flags,
       new RegExp(`export const ${name} = true as boolean;`),
@@ -585,10 +592,15 @@ test('[static] each of the seven live flags gates a real affordance, in a real f
     assert.match(source, call, `${name} must gate a call that actually does something`);
   }
 
-  // And the four that stay dark stay dark. DELIVERED_TICKS especially: there
+  // The handler behind the row has to reach something too, or the flag would
+  // gate a prop nobody passes — the dead-row failure one level up.
+  assert.match(chat, /onPickDocument=\{pickDocument\}/);
+  assert.match(chat, /DocumentPicker\.getDocumentAsync\(/);
+
+  // And the ones that stay dark stay dark. DELIVERED_TICKS especially: there
   // is no honest delivery signal in any schema here, so it is not "not done
   // yet", it is refused.
-  for (const name of ['DELIVERED_TICKS', 'DOCUMENTS', 'LIVE_LOCATION', 'TRANSLATION']) {
+  for (const name of ['DELIVERED_TICKS', 'LIVE_LOCATION', 'TRANSLATION']) {
     assert.match(flags, new RegExp(`export const ${name} = false as boolean;`));
   }
 });

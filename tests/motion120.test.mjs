@@ -793,23 +793,26 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   // nothing to wait on is a flag nobody can ever safely flip.
   assert.doesNotMatch(source, /export const MUTE\b/);
   assert.match(source, /NOT A FLAG — MUTE WAS RETIRED/);
-  // WHICH FLAGS ARE LIVE, named rather than counted. The seven that flipped on
-  // 2026-08-24 are exactly the ones supabase/phase77_conversation_features.sql
-  // supplied a dependency for, and RUN W1 wired every one of them on BOTH
-  // thread kinds. The four that remain each still have something real to wait
-  // on — an edge-function deploy for TRANSLATION, expo-location's background
-  // permission for LIVE_LOCATION, a picker for DOCUMENTS, and for
-  // DELIVERED_TICKS a delivery signal that does not exist in any schema yet.
+  // WHICH FLAGS ARE LIVE, named rather than counted. Seven flipped on
+  // 2026-08-24 — exactly the ones supabase/phase77_conversation_features.sql
+  // supplied a dependency for, wired by RUN W1 on BOTH thread kinds. DOCUMENTS
+  // joined them on 2026-08-25 (RUN W2): its two halves were expo-document-
+  // picker, which is in package.json and native in the current build, and
+  // phase77's `chat-documents` bucket plus the three message columns.
+  //
+  // The rest each still have something real to wait on — an edge-function
+  // deploy for TRANSLATION, and for DELIVERED_TICKS a per-recipient delivery
+  // signal that does not exist in any schema here and is refused rather than
+  // pending.
   //
   // Pinning the ROSTER rather than asserting "all false" is what keeps this
-  // fence useful now that flipping is a thing that happens: an eighth flag
-  // going live without its dependency turns this red exactly as a premature
-  // flip used to.
+  // fence useful now that flipping is a thing that happens: a flag going live
+  // without its dependency turns this red exactly as a premature flip used to.
   const LIVE = [
-    'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'HIDDEN_CHATS', 'MARK_UNREAD',
-    'READ_TICKS', 'TIMED_BLOCK',
+    'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'DOCUMENTS', 'HIDDEN_CHATS',
+    'MARK_UNREAD', 'READ_TICKS', 'TIMED_BLOCK',
   ];
-  const DARK = ['DELIVERED_TICKS', 'DOCUMENTS', 'LIVE_LOCATION', 'TRANSLATION'];
+  const DARK = ['DELIVERED_TICKS', 'LIVE_LOCATION', 'TRANSLATION'];
   assert.deepEqual(
     [...LIVE, ...DARK].sort(),
     flags.map((f) => f[1]).sort(),

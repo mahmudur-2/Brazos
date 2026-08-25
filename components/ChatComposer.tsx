@@ -95,17 +95,34 @@ type ChatComposerProps = {
    */
   showCameraAndMic?: boolean;
   /**
-   * Whether photo and voice attachments are possible in this thread at all.
-   * Chat media is stored under `{jobId}/{userId}/…` and its storage policies
-   * authorise on that job, so a direct thread (phase36 — a conversation with
-   * no job) has no path to key an upload on. Text and offer cards work there;
-   * attachments are hidden rather than offered and then failing.
+   * Whether CAMERA, PHOTOS and VOICE MESSAGE are possible in this thread —
+   * and only those three. Their media is stored under `{jobId}/{userId}/…`
+   * and the chat-photos / chat-audio policies authorise on that JOB, so a
+   * direct thread (phase36 — a conversation with no job) has no path to key
+   * an upload on. Text and offer cards work there; those three are hidden
+   * rather than offered and then failing.
+   *
+   * THE NAME IS NOW NARROWER THAN IT READS, deliberately, and this is the one
+   * thing to understand before adding a fourth entry to the menu below. It is
+   * NOT "can this thread take an attachment at all" — Document can, on both
+   * thread kinds, because phase77's chat_documents_* policies accept a job id
+   * OR a direct thread id in folder one. Widening this prop to cover the
+   * document row would have hidden a working feature on every direct thread;
+   * widening the chat-photos / chat-audio policies to match is the other
+   * direction, and that gap is deliberately parked rather than quietly closed
+   * from the client.
    */
   allowAttachments?: boolean;
   /**
    * Flagged entries. Each renders only when its flag is true AND its handler
    * exists — so flipping a flag without wiring the action still cannot
    * produce a row that does nothing. See lib/featureFlags.ts.
+   *
+   * NEITHER IS GATED BY `allowAttachments`, and both are gated by their flag
+   * and their handler and by nothing else: a live share writes no file at all
+   * (it is a row in `live_location_shares`, reached through three RPCs that
+   * each take a job id or a direct thread id), and a document's bucket
+   * authorises both thread kinds. Both render on a direct thread.
    */
   onShareLiveLocation?: () => void;
   onPickDocument?: () => void;
@@ -344,7 +361,12 @@ export function ChatComposer({
             disabled={busy}
             accessibilityRole="button"
             accessibilityLabel="Attach"
-            accessibilityHint="Camera, photos, or a voice message"
+            // Read off the menu that will actually open rather than a fixed
+            // sentence: on a direct thread the first three entries are absent
+            // and Document and Live location are not, so a hardcoded
+            // "Camera, photos, or a voice message" would announce three rows
+            // nobody is about to be shown.
+            accessibilityHint={menuItems.map((item) => item.label).join(', ')}
             accessibilityState={{ expanded: menuOpen }}
           >
             <Ionicons name="add" size={ICON_GLYPH_SIZE + 4} color={colors.ink} />

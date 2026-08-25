@@ -25,6 +25,17 @@ export type Conversation = {
   /** Voice note (phase16). Null until that migration runs, which the inbox
    *  preview tolerates — it just falls through to the text/photo cases. */
   last_message_audio_url: string | null;
+  /**
+   * Document attachment (phase77, S-6). Both branches of the view carry these,
+   * so a document previews on a job thread and a pair thread alike.
+   *
+   * The URL is the raw `storage://chat-documents/…` reference and is NEVER
+   * signed here — the inbox only asks whether a document is there, and
+   * signing one URL per row on every inbox load would be N round trips to
+   * render a list nobody has tapped. The NAME is the preview.
+   */
+  last_message_document_url: string | null;
+  last_message_document_name: string | null;
   /** Unsend (phase25). Set if the last message in the thread was unsent —
    *  the inbox preview checks this before falling back to the text/photo/
    *  voice cases, same precedence as messagePreviewText(). */
@@ -73,6 +84,8 @@ export function conversationKey(c: Conversation): string {
 export type PreviewableConversation = Pick<
   Conversation,
   | 'last_message_unsent_at'
+  | 'last_message_document_url'
+  | 'last_message_document_name'
   | 'last_message_audio_url'
   | 'last_message_image_url'
   | 'last_message_content'
@@ -94,6 +107,15 @@ export function conversationPreviewText(
 ): string {
   if (latest.last_message_unsent_at) return 'This message was unsent';
   const prefix = reactionEmoji.length > 0 ? `${reactionEmoji.join('')} ` : '';
+  // AHEAD OF VOICE, the same order messagePreviewText() uses and for the same
+  // reason: one insert writes every attachment kind, so whichever branch comes
+  // first decides what this row says, and the document is the one that has a
+  // NAME to say. The two must not diverge — an inbox row reading "Voice
+  // message" over a thread whose newest bubble is a PDF is the drift this
+  // shared implementation exists to prevent.
+  if (latest.last_message_document_url) {
+    return prefix + (latest.last_message_document_name || 'Document');
+  }
   if (latest.last_message_audio_url) return `${prefix}Voice message`;
   if (latest.last_message_image_url) return `${prefix}Photo sent`;
   return prefix + (latest.last_message_content || '…');
@@ -150,7 +172,7 @@ export function resolveOtherId(
 // Never `select('*')`: the view is ours today, but a widened view must not
 // silently start shipping new columns to every inbox load.
 const CONVERSATION_COLUMNS =
-  'job_id, direct_thread_id, job_title, client_id, assigned_worker_id, last_message_id, last_message_sender_id, last_message_content, last_message_image_url, last_message_audio_url, last_message_unsent_at, last_message_at, my_read_at';
+  'job_id, direct_thread_id, job_title, client_id, assigned_worker_id, last_message_id, last_message_sender_id, last_message_content, last_message_image_url, last_message_audio_url, last_message_document_url, last_message_document_name, last_message_unsent_at, last_message_at, my_read_at';
 
 /** All of the user's conversations (threads with >=1 message), newest first. */
 export async function fetchConversations(userId: string) {
