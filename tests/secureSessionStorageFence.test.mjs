@@ -26,9 +26,10 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 //
 // SCOPE, decided in HANDOFF 2026-08-22: `lib/supabase.web.ts` and every
 // `*.web.ts(x)` are the frozen web surface with its own AsyncStorage client,
-// and `scripts/home-shots.mjs` seeds a fabricated web session for a host that
-// does not exist — both are web-only and OUTSIDE this native fence by design,
-// so the walk skips web modules and never enters scripts/.
+// and `scripts/shots.mjs` (which `scripts/home-shots.mjs` now forwards to)
+// seeds a fabricated web session for a host that does not exist — both are
+// web-only and OUTSIDE this native fence by design, so the walk skips web
+// modules and never enters scripts/.
 // ===========================================================================
 
 const SOURCE_DIRS = [

@@ -205,11 +205,17 @@ cleanup. Report exceptions, not routine operations, and rewrite `HANDOFF.md`
 at the end of every run.
 
 
-## Home screenshots
+## Screenshots
 
-`node scripts/home-shots.mjs` writes Customer Home and Worker Home, dark and
-light, at 393x852 CSS px into `.shots/` (gitignored). Add `--build` to force a
-fresh `expo export` first; without it the export under `.shots/web` is reused.
+`node scripts/shots.mjs` writes every registered target — Home and the
+Post-a-Job flow, dark and light — at 393x852 CSS px into `.shots/` (gitignored).
+Each target is a registry entry naming its mode, colour scheme, an optional
+navigation recipe, and the text that proves the surface arrived; adding a screen
+is a registry entry, not a new script. `--build` forces a fresh `expo export`
+first; without it the export under `.shots/web` is reused. `--only <substring>`
+captures a subset and `--list` prints the registry.
+`node scripts/home-shots.mjs` is the Home entry point and forwards to it.
+
 The harness supplies its own `__BRAZOS_CONFIG__` for a project that does not
 exist and answers every non-local request itself, so it needs no credentials and
 reaches no database. It is a comparison aid for `docs/mockups/`, not a check

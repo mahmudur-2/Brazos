@@ -64,5 +64,5 @@ start.ps1
 /ios
 /android
 
-# shot(0) screenshot harness output (scripts/home-shots.mjs)
+# screenshot harness output (scripts/shots.mjs)
 .shots/

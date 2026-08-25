@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // home(20) — MEASURING A RENDER AGAINST MASTER 44 INSTEAD OF LOOKING AT IT.
 //
-// `node scripts/home-shots.mjs` produces the picture. This reads two pictures
+// `node scripts/shots.mjs --only home` produces the picture (and so does its
+// Home entry point, `node scripts/home-shots.mjs`). This reads two pictures
 // and produces NUMBERS: where every outlined control and every band of ink
 // actually sits, in points, in both, and how far apart they are.
 //

@@ -51,7 +51,7 @@ runs the same check in CI.
 | Domain and data logic | `lib/`, `hooks/`, `modes/` |
 | Navigation trees and route types | `navigation/`, `lib/navigation.ts` |
 | Tests (fences included) | `tests/` |
-| Repo tooling and harnesses | `scripts/` (e.g. `home-shots.mjs` screenshot harness, `verify-schema.mjs`) |
+| Repo tooling and harnesses | `scripts/` (e.g. `shots.mjs` screenshot harness, `verify-schema.mjs`) |
 | Dev-only tools and launchers | `dev-tools/` |
 | Database migrations | `supabase/` |
 | Documentation | `docs/` — see `docs/README.md` for the index |
