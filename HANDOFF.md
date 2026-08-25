@@ -43,7 +43,158 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 document-open fix (RUN F1)
+## Current state — after the 2026-08-25 screenshot registry (RUN H1)
+
+RUN H1 built a capability and took one measurement. It changed **no app code
+and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
+`hooks/`, `navigation/` or `modes/` was touched. Two commits, then this file.
+Nothing was pushed; no database was contacted; no SQL was executed; no
+dependency was added; no image file was opened.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`bbe4409`|`scripts/shots.mjs` — the TARGETS registry, ten new Post-a-Job targets, and every reference updated|
+|C2|(this file)|the handoff|
+
+**`npm run verify` was run bare and unpiped before any edit and again after the
+commit, exit 0 each time: 1061 pass, 0 fail, 0 skipped, 0 todo, unchanged
+throughout.** No test was deleted, disabled, skipped or made conditional. Only
+a comment changed inside a test file.
+
+### THE HARNESS WAS ALREADY RED AT HEAD — this is the finding that mattered
+
+`node scripts/home-shots.mjs` does not work at `9a3e59a`. It exports fine and
+then times out waiting for Home, because the app parks on **"The Terms of
+Service check didn't load."** The legal gate **fails closed** (F-013,
+`hooks/useLegalGate.ts`) and the harness's comment still describes the
+fail-open path it was written against: it answered `legal_acceptances` with a
+deliberate 503 so `fetchLegalStatus()` would return `'unknown'`, which the gate
+used to let through and now blocks on. Nobody had run it since the decision
+landed; the `.shots/` PNGs on disk were from 2026-08-22.
+
+The harness now PASSES the gate, with `TERMS_VERSION` and `PRIVACY_VERSION`
+**read out of `lib/legal/index.ts` at run time** rather than restated. That is
+deliberate: restating them is what the original author declined to do, for the
+right reason, and reading them means bumping a document cannot silently blind
+the harness again, while a rename fails loudly on the next run instead of
+quietly answering with a stale version.
+
+### The registry, and how a future run adds a target
+
+`scripts/shots.mjs` holds `TARGETS`. **Adding a surface is appending an entry —
+nothing else in the file changes:**
+
+```js
+{ name: 'postjob-review-dark',   // the PNG basename under .shots/
+  mode: 'customer',              // which tree is seeded
+  colorScheme: 'dark',
+  recipe: TO_REVIEW,             // optional; ordered steps to reach it
+  wait: 'Review and publish' }   // the text that PROVES it arrived
+```
+
+Recipe steps are declarative: `{ press: 'Accessible Name' }`,
+`{ pressText: 'Visible text' }`, `{ fill: 'placeholder', text }`,
+`{ expect: 'Visible text' }`. `wait` is checked after the recipe and before the
+shutter, so a target that never arrives **fails loudly instead of
+photographing the wrong screen**. `--only <substring>` captures a subset;
+`--list` prints the registry.
+
+Fourteen targets: the four Home ones, plus Post-a-Job **media, location,
+review, the Edit Budget dialog open over review, and the publish success
+screen**, each in dark and light. The flow is driven for real from Customer
+Home through the `[+]` — **no screen, component, hook or navigator was modified
+to make anything reachable.**
+
+### The byte-identity gate — PASSED, all four
+
+The four Home PNGs from `scripts/shots.mjs` are **byte-identical** to what
+`scripts/home-shots.mjs` produces at HEAD, once the legal fixture unblocks it
+(it produces nothing at all without one). Same export, same run conditions:
+
+| target | sha256 (old script and new, identical) |
+|-|-|
+|`customer-home-dark`|`6993510e8d8e7419eb58d142a387ed7647fe4badcc953812d8159f841b9b07c9`|
+|`customer-home-light`|`316261d18cc3d040c45c03663a25aa05daac5cc63d283e9cd15019ac4ca7687a`|
+|`worker-home-dark`|`55217894a95e813bcbbe1c900e0b35dd78464d80ef304eb5f26f1cb9fdee0fec`|
+|`worker-home-light`|`c3440666c11ea4ac72c28823ac745ed53b241bb7abadeb08f0607da69cb24005`|
+
+**The harness has a small pre-existing jitter, and it is NOT the registry's.**
+Two consecutive runs of the OLD script disagree with each other: 54 px on
+`customer-home-dark` and 5–6 px on the worker pair, max channel delta 1–3 out
+of 255. Thirteen of the fourteen targets — including every Post-a-Job one —
+are byte-stable across two consecutive full runs. The one that wanders is
+`worker-home-light`: **9 px of 334,836 (0.003%), max delta 6**, at x175–177,
+y439–464. That is the top and bottom **corner arc of a cream `#DDD6C4` rounded
+element on white** — border-radius antialiasing, not motion. Reduced motion is
+already on, animations are already disabled at the shutter, and fonts are
+already settled; there is no animation left to stop. Settling it would mean
+Chromium rasterizer flags, which would change *every* pixel of *every* target
+and break comparison against the `docs/mockups/` masters. It was left alone
+deliberately.
+
+### The two fixtures, and why neither invents marketplace data
+
+* **The legal gate** — above. An acceptance record for the synthetic harness
+  account, not marketplace content.
+* **The `create_job` echo.** The publish card renders the row the RPC returns,
+  so an empty answer photographs a card with no title, category or area. The
+  stub hands back the row the call just asked to insert — what
+  `INSERT … RETURNING` does. Its id and `created_at` are **fixed, not
+  generated**: a clock in the harness would make two runs differ.
+
+Every list the app asks for still comes back **empty**, and every screen still
+draws its honest empty state. The flow's typed inputs are pinned in the file.
+The description reuses the title verbatim because `lib/validation.ts` sets a
+20-character floor that gates Continue and no description was specified;
+restating the title adds no fact that was not already pinned.
+
+### C3 — THE PUBLISH-SCREEN TINT DOES NOT REPRODUCE ON WEB
+
+Sampled at identical coordinates across three dark renders. The web harness
+resolves the device's *correct* values to within **2/255 on all four points**,
+which is what makes the null result meaningful rather than a blunt instrument:
+
+| point | publish | media | review | device: publish vs others |
+|-|-|-|-|-|
+|Home glyph in the nav pill|`#5EAD80`|`#5FAE81`|`#5FAE81`|`#73AB84` vs `#5DAF81`|
+|gold `[+]`|`#D4A24C`|`#D4A24C`|`#D4A24C`|`#CCA45C` vs `#D4A24D`|
+|nav ground|`#0A1813`|`#0A1813`|`#0A1813`|`#0E1714` vs `#091813`|
+|page ground|`#02110D`|`#02110D`|`#02110D`|`#07100D` vs `#02110E`|
+
+On device those four pairs lose **30.1%, 13.8%, 37.4% and 36.2%** of their HSV
+saturation on the publish screen. On web the same four points lose **0%, 0%, 0%
+and 0%** — the gold, the nav ground and the page ground are *the same bytes*,
+and the Home glyph differs by 1/255 per channel, which is one antialiased
+glyph edge and well inside the 6/255 jitter measured above.
+
+**VERDICT: the web render does not reproduce the shift. It is iOS-only
+compositing.** The subtree was not bisected and nothing was fixed — per the
+dispatch, a null result closes the question for this run.
+
+One measurement trap for whoever picks this up: **sample the page ground in the
+left or right margin, not the middle.** At x=3 the page ground is `#02110D` on
+all three renders, but at y≥700 the *review* render reads `#0A1813` there —
+that is the pinned footer only the last step carries, not a tint.
+
+### What a later run is most likely to undo
+
+**Deleting `scripts/home-shots.mjs` because it is "just a shim".** It is named
+by `CLAUDE.md` and by a dozen handoff and audit records. Forwarding keeps the
+documented command and every one of those records true; deleting it would
+either break them or mean rewriting history to cite a file that did not exist
+when they were written.
+
+**Restating the legal versions as literals in the harness** to "simplify" the
+read of `lib/legal/index.ts`. That reintroduces exactly the staleness that made
+the harness blind, and the next document bump would silently park every target
+on the error screen again.
+
+**"Fixing" the escape assertion back to a ref literal.** It is now an
+allow-list — the only host any request may address is the fake one. That is
+strictly stronger than looking for one hard-coded ref, and it is why no real
+project ref is spelled anywhere in the file.
+
+## The run before it — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -104,7 +255,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## The run before it — the 2026-08-25 conversation-features run (RUN W2)
+## Two runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
