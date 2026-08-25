@@ -256,7 +256,6 @@ export function PostJobScreen() {
   const [confirmOfferCents, setConfirmOfferCents] = useState<number | null>(null);
 
   const successScale = useRef(new Animated.Value(0.4)).current;
-  const successOpacity = useRef(new Animated.Value(0)).current;
   const reducedMotion = useReducedMotion();
   // Render-state disabling is useful feedback, but the ref is the actual
   // guard against two fast taps entering an async write before React paints.
@@ -294,12 +293,11 @@ export function PostJobScreen() {
         if (isFreshPost && draftUserId) void clearPostJobDraft(draftUserId);
       }
       successScale.stopAnimation();
-      successOpacity.stopAnimation();
     };
     // isFreshPost is derived once from route params and never changes across
     // this screen's life, so it is safe to read without being a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [successOpacity, successScale]);
+  }, [successScale]);
 
   // Restore an in-progress fresh-post draft so it survives an app kill
   // (Phase 4 DoD). Skipped for edit (its source of truth is the saved job)
@@ -481,24 +479,32 @@ export function PostJobScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editJobId]);
 
+  /**
+   * D0 — THE SUCCESS SURFACE IS NOT FADED IN, AND MUST NOT BE.
+   *
+   * This used to raise the whole overlay through an animated `opacity`, which
+   * is a GROUP opacity: iOS composites the entire subtree offscreen and blends
+   * it over the still-mounted form beneath. Every colour on the surface goes
+   * through that blend, which is why the publish screen painted a different
+   * green from steps 1-3 — including the bottom nav, one component that cannot
+   * legitimately resolve two greens. The overlay's own `backgroundColor` was
+   * never the fault: it is the opaque `background` token (it WAS
+   * `rgba(244,241,232,0.97)` once, and fa88118 already replaced that).
+   *
+   * So the surface renders at full opacity from its first frame and the
+   * entrance motion lives on the MARK instead, where it composites nothing but
+   * itself.
+   */
   function playSuccess() {
     successScale.setValue(reducedMotion ? 1 : 0.4);
-    successOpacity.setValue(reducedMotion ? 1 : 0);
     setShowSuccess(true);
     if (reducedMotion) return;
-    Animated.parallel([
-      Animated.spring(successScale, {
-        toValue: 1,
-        friction: 6,
-        tension: 80,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }),
-      Animated.timing(successOpacity, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: USE_NATIVE_DRIVER,
-      }),
-    ]).start();
+    Animated.spring(successScale, {
+      toValue: 1,
+      friction: 6,
+      tension: 80,
+      useNativeDriver: USE_NATIVE_DRIVER,
+    }).start();
   }
 
   function leaveAfterSuccess(viewMyJobs: boolean) {
@@ -1411,10 +1417,9 @@ export function PostJobScreen() {
       )}
 
       {showSuccess && (
-        <Animated.View
-          style={[styles.successOverlay, { opacity: successOpacity }]}
-          accessibilityViewIsModal
-        >
+        /* D0: a plain View. An animated `opacity` here group-composites the
+           whole surface over the form — see playSuccess(). */
+        <View style={styles.successOverlay} accessibilityViewIsModal>
           {!isEditing && !isHiring ? (
             /* Screen 16 (JobPublished) — the SuccessScreen template, configured
                rather than reimplemented. The body explains what happens next
@@ -1531,7 +1536,7 @@ export function PostJobScreen() {
               </View>
             </ScrollView>
           )}
-        </Animated.View>
+        </View>
       )}
 
       <PhotoViewer
@@ -1889,6 +1894,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     borderRadius: radius.lg,
   },
+  // D0 — OPAQUE GROUND, AND NO OPACITY ON THIS NODE. Both halves matter and
+  // they fail the same way: the form stays mounted underneath, so a
+  // translucent ground OR an animated group opacity lets it into the blend and
+  // every colour on the surface shifts off its token. `background` is a
+  // 6-digit hex in both palettes; the opacity binding is gone — see
+  // playSuccess().
   successOverlay: {
     position: 'absolute',
     top: 0,
