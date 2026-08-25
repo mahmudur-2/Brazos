@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -317,4 +318,156 @@ test('D2 · the header new props are optional and leave every other caller untou
 
   // The muted state is a token, never an opacity dim.
   assert.ok(!/opacity:/.test(code), 'a disabled link is muted by colour, not faded');
+});
+
+// ---------------------------------------------------------------------------
+// D7-D10 — STEP 2, MEDIA.
+//
+// The advisory leads with what it is warning about; there is ONE remove
+// control and it lives inside the tile it removes; a clip renders as a real
+// tile with a frame from the clip itself and its own length; and the sixty
+// seconds the picker enforces is said out loud beside the counter.
+//
+// WHY NOT VACUOUS: the duration formatter is EXTRACTED FROM THE COMPONENT AND
+// RUN (the lib/jobs formatBudget pattern conversion.test.mjs already uses), so
+// what is asserted is the string a user sees, including the null it must
+// return when there is no real duration to show.
+// ---------------------------------------------------------------------------
+
+/** The real clipDurationLabel, lifted out of the primitive and executed. */
+const clipDurationLabel = await (async () => {
+  const source = read('ui/primitives/MediaUploader.tsx');
+  const at = source.indexOf('export function clipDurationLabel');
+  assert.notEqual(at, -1, 'MediaUploader must export clipDurationLabel');
+  const end = source.indexOf('\n}', at);
+  assert.ok(end > at, 'clipDurationLabel must close');
+  const js = stripTypeScriptTypes(source.slice(at, end + 2), { mode: 'strip' });
+  const url =
+    'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+  return (await import(url)).clipDurationLabel;
+})();
+
+test('D7 · the media advisory leads with the warning, on its own bold line', () => {
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+
+  // The two lines, verbatim and in order.
+  assert.match(
+    flat,
+    /<Text style=\{\[styles\.infoHeading, isDark && styles\.infoTextDark\]\}> Avoid Sensitive Information: <\/Text> <Text style=\{\[styles\.infoText, isDark && styles\.infoTextDark\]\}> faces, documents, license plates, address, or anything private <\/Text>/,
+    'the heading and the list are two separate lines, in that order'
+  );
+  // The heading is bold; the list is not.
+  assert.match(flat, /infoHeading: \{[^}]*fontWeight: '800',/);
+  assert.doesNotMatch(/infoText: \{([^}]*)\}/.exec(flat)?.[1] ?? '', /fontWeight/);
+  // The sentence it replaced is gone rather than left beside it.
+  assert.ok(!flat.includes('Media appears with your'), 'the old advisory sentence is retired');
+});
+
+test('D8 · one remove control, inside the tile, on both kinds of media', () => {
+  const source = read('ui/primitives/MediaUploader.tsx');
+  const flat = flatten(source);
+
+  // ONE control: it is rendered as a sibling of the photo/video branch, not
+  // once inside each arm, so photo and video cannot diverge.
+  assert.equal(
+    (flat.match(/accessibilityLabel=\{`Remove \$\{kind\} \$\{index \+ 1\}`\}/g) ?? []).length,
+    1,
+    'there is exactly one remove control and both kinds render it'
+  );
+
+  // INSIDE the tile. A negative offset is the defect: the tile clips to its
+  // own bounds, so the control was cut on a photo and floating beside a clip.
+  const remove = /remove: \{([^}]*)\}/.exec(flat);
+  assert.ok(remove, 'the remove control must keep a flat style object');
+  assert.match(remove[1], /top: spacing\.xs \+ 2, right: spacing\.xs \+ 2,/);
+  assert.doesNotMatch(remove[1], /-\s*\d/, 'no negative offset may push it back outside the tile');
+  assert.doesNotMatch(
+    remove[1],
+    /backgroundColor/,
+    'the fill is the shared media chrome, applied at the call site — not a second colour here'
+  );
+
+  // A translucent dark circle with a white glyph, and both colours are
+  // theme-CONSTANT so the control is identical in either palette.
+  assert.match(flat, /scrim: \{ backgroundColor: withAlpha\(palette\.mediaChrome, 0\.62\) \}/);
+  assert.match(flat, /style=\{\[styles\.remove, chrome\.scrim\]\}/);
+  assert.match(flat, /<Ionicons name="close" size=\{14\} color=\{palette\.white\} \/>/);
+  assert.match(remove[1], /borderRadius: radius\.pill,/, 'a circle');
+
+  // And the tile itself still clips, which is what made the old offset a bug.
+  assert.match(flat, /tile: \{[^}]*overflow: 'hidden',/);
+});
+
+test('D9 · a clip renders as a real tile — its own frame, a play mark, its real length', () => {
+  const flat = flatten(read('ui/primitives/MediaUploader.tsx'));
+
+  // The poster is the clip, through the same package and the same seek the
+  // published-job video already uses. No new dependency, no placeholder card.
+  assert.match(flat, /import \{ useVideoPlayer, VideoView \} from 'expo-video';/);
+  assert.match(flat, /instance\.currentTime = 0\.5;/);
+  assert.match(flat, /<VideoView player=\{player\} style=\{styles\.videoPoster\}/);
+  assert.match(flat, /contentFit="cover"/);
+  assert.ok(!flat.includes('Clip {index + 1}'), 'the placeholder card is retired');
+  assert.match(
+    flatten(read('components/JobVideo.tsx')),
+    /p\.currentTime = 0\.5;/,
+    'the seek matches the published-job poster it is modelled on'
+  );
+
+  // A centred play mark…
+  assert.match(flat, /<View style=\{styles\.videoCentre\} pointerEvents="none"> <Ionicons name="play-circle"/);
+  assert.match(flat, /videoCentre: \{[^}]*alignItems: 'center', justifyContent: 'center',/);
+
+  // …and the length, bottom-right, in the same dark chrome as the remove
+  // control, rendered ONLY when there is a real one.
+  assert.match(flat, /const duration = clipDurationLabel\(durationMs\);/);
+  assert.match(flat, /\{duration \? \( <View style=\{\[styles\.durationBadge, chrome\.scrim\]\}/);
+  assert.match(flat, /durationBadge: \{[^}]*right: spacing\.xs, bottom: spacing\.xs,/);
+
+  // The duration comes from the PICKER ASSET and nowhere else.
+  assert.match(flat, /if \(asset\.duration != null\) durationsRef\.current\.set\(url, asset\.duration\);/);
+  assert.match(flat, /durationMs=\{durationsRef\.current\.get\(url\) \?\? null\}/);
+  // Removing a tile forgets its duration, so a later URL cannot inherit it.
+  assert.match(flat, /durationsRef\.current\.delete\(url\);/);
+});
+
+test('D9 · [executed] the clip length is real or absent — never invented', () => {
+  // iOS writes m:ss on a thumbnail, zero-padded, from milliseconds.
+  assert.equal(clipDurationLabel(42_000), '0:42');
+  assert.equal(clipDurationLabel(9_000), '0:09');
+  assert.equal(clipDurationLabel(60_000), '1:00');
+  assert.equal(clipDurationLabel(61_400), '1:01');
+  assert.equal(clipDurationLabel(3_600_000), '60:00');
+  // Sub-second rounding still reads as a real second, never "0:00".
+  assert.equal(clipDurationLabel(1_400), '0:01');
+
+  // NO DURATION IS NO BADGE. A restored draft's clip never went through a
+  // picker in this session, so there is nothing honest to print.
+  for (const absent of [null, undefined, 0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.equal(clipDurationLabel(absent), null, `${String(absent)} must produce no badge`);
+  }
+});
+
+test('D10 · the cap pill reads from the cap the picker is actually given', () => {
+  const flat = flatten(read('ui/primitives/MediaUploader.tsx'));
+  const screen = flatten(read('screens/PostJobScreen.tsx'));
+
+  // Beside the counter, on the video control only, with a clock glyph.
+  assert.match(
+    flat,
+    /\{kind === 'video' && videoMaxDurationSec \? \( <View style=\{\[styles\.capPill, isDark && styles\.capPillDark\]\}> <Ionicons name="time-outline" size=\{12\}/
+  );
+  assert.match(flat, /Up to \{videoMaxDurationSec\} sec/);
+  // ANTI-VACUITY: that prop is the SAME number handed to the picker, so the
+  // pill cannot promise a minute the control does not enforce.
+  assert.match(flat, /videoMaxDuration: kind === 'video' \? videoMaxDurationSec : undefined,/);
+  assert.match(screen, /videoMaxDurationSec=\{MAX_VIDEO_DURATION_MS \/ 1000\}/);
+  assert.match(screen, /const MAX_VIDEO_DURATION_MS = 60_000;/);
+
+  // The paragraph under the tile stays — the pill is a glance, it is the
+  // explanation.
+  assert.match(
+    screen,
+    /Up to \{MAX_VIDEO_DURATION_MS \/ 1000\} seconds\. A short clip explains an awkward job faster than a paragraph\./
+  );
 });

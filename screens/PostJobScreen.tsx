@@ -1027,14 +1027,22 @@ export function PostJobScreen() {
             <View style={styles.stepFields}>
               {/* The privacy notice read forest-on-mint: one deep green on
                   another. Its body takes the cream ink in dark. */}
+              {/* D7 — the warning leads, on its own line, and the list of
+                  what it means follows. One sentence carrying both read as
+                  advice about media in general; the heading is what makes it
+                  read as a rule about THIS upload. */}
               <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="shield-checkmark-outline" size={20} color={colors.emerald} />
                 </View>
-                <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-                  Media appears with your {isHiring ? 'request' : 'job'} so workers can
-                  understand the task. Avoid faces, documents, or anything private.
-                </Text>
+                <View style={styles.infoBody}>
+                  <Text style={[styles.infoHeading, isDark && styles.infoTextDark]}>
+                    Avoid Sensitive Information:
+                  </Text>
+                  <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
+                    faces, documents, license plates, address, or anything private
+                  </Text>
+                </View>
               </View>
 
               {/* The one canonical MediaUploader primitive (§O never-duplicate
@@ -1815,6 +1823,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
+  },
+  // D7 — the heading and the list are two lines in one column, so the card
+  // still reads as one block while the warning owns its own line.
+  infoBody: {
+    flex: 1,
+    gap: 2,
+  },
+  infoHeading: {
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: '800',
+    color: colors.forest,
   },
   infoText: {
     flex: 1,
