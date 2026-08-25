@@ -43,7 +43,68 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 conversation-features run (RUN W2)
+## Current state — after the 2026-08-25 document-open fix (RUN F1)
+
+RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
+this file. Nothing was pushed; no database was contacted; no SQL was executed;
+no dependency was added; no migration was written; no image was opened.
+
+**THE DEFECT.** Tapping a document bubble left the app and opened Safari on the
+Supabase signed URL — putting the project ref in the address bar and in the
+browser's history, and leaving the file in a browser tab instead of in the OS.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`2e65edc`|`shareDocument()` in `lib/sharing.ts` — download, then hand the OS the LOCAL file|
+|C2|`cde6cd9`|the screen calls it; `Linking.openURL` is gone; the tapped bubble spins|
+
+**`npm run verify` was run bare and unpiped before any edit and again at every
+commit, exit 0 each time: 1046 -> 1057 -> 1061 pass, 0 fail, 0 skipped, 0
+todo.** No test was deleted, disabled, skipped or made conditional.
+
+### The one thing a later run is most likely to undo
+
+**THE PRESS HANDLER IS NOT IN THE BUBBLE.** `openDocument()` lives on
+`screens/ChatScreen.tsx`, and that is where `Linking.openURL(url)` sat — the
+bubble only ever raised `onPressDocument`. The fence in
+`tests/chatDocuments.test.mjs` therefore walks BOTH files, and the assertion it
+replaced was one that positively REQUIRED `await Linking.openURL(url)`. A later
+edit that "simplifies" the download back into a link restores the defect and
+now fails.
+
+`Linking.openURL` is absent from the entire source tree. The only `Linking`
+left anywhere is `openSettings()`, a different call, in
+`components/HotspotMap.native.tsx` and `hooks/useSetupPermissions.ts`.
+
+### Decisions worth not re-litigating
+
+* **The staged filename comes from `document_name`, never from the URL.**
+  Documents are stored at `<threadId>/<uid>/<ts>.<ext>`, so the URL's last
+  segment is a TIMESTAMP — staging under it would show "1756089421.pdf" in the
+  share sheet and in whatever app received the file.
+* **A document's extension is kept; a photo's is coerced.** `fileNameFor()`
+  forces `.jpg` because a photo with no inferable UTI loses "Save to Photos".
+  Applying that to a `.pptx` hands Keynote a file it refuses. Fallback order is
+  the stored name, then the URL's extension, then `.bin`.
+* **No `mimeType` and no `UTI` are passed for a document.** iOS infers the type
+  from the extension the name preserved. A guessed MIME for an arbitrary
+  document is how a `.numbers` file ends up offering the wrong targets.
+* **There is deliberately NO "share the link instead" fallback.** `sharePhoto`
+  keeps one for devices with no share sheet; a document may not have one,
+  because falling back to the link IS this defect. An unavailable sheet is an
+  honest failure instead.
+* **`openingDocumentId` is an id, not a boolean** — only the tapped bubble
+  spins, and it clears BEFORE the alert can block, so a dismissed dialog cannot
+  leave a bubble spinning forever.
+
+### What this run found and did NOT fix
+
+**A signed URL that expires while a thread is left open still fails.** It now
+fails through the honest error path rather than opening a browser, but nothing
+refreshes it — the user is told, and re-entering the thread re-signs. Building
+a refresh mechanism was out of scope and is unclaimed.
+
+## The run before it — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
@@ -64,8 +125,8 @@ still waits on an edge-function deploy and a key; DELIVERED_TICKS is untouched
 and stays a REFUSAL rather than a pending item — nothing in any schema here
 distinguishes "the insert succeeded" from "their device has it".
 
-**The offline suite stands at 1046 pass / 0 fail / 0 skipped**, from 1008 at run
-start. `npm run verify` was run bare and unpiped before any edit and again at
+**The offline suite stood at 1046 pass / 0 fail / 0 skipped at the end of RUN
+W2**, from 1008 at that run's start (RUN F1 above carries the current figure). `npm run verify` was run bare and unpiped before any edit and again at
 every commit, exit 0 each time: 1008 -> 1018 -> 1027 -> 1038 -> 1042 -> 1046. No
 test was deleted, disabled, skipped or made conditional. No image was opened.
 
