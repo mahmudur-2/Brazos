@@ -596,3 +596,268 @@ test('[static] the migration this run wired is the one that is applied', async (
   assert.match(sql, /m\.document_url as last_message_document_url,/);
   assert.match(sql, /m\.document_name as last_message_document_name,/);
 });
+
+// ---------------------------------------------------------------------------
+// 8 — A DOCUMENT OPENS IN THE OS, NEVER IN SAFARI (device defect, 2026-08-25)
+//
+// Tapping a document bubble handed `Linking.openURL` the signed URL. That left
+// the app, opened Safari, and put the Supabase project ref in the address bar
+// and in the browser's history. shareDocument() replaces it with the download-
+// then-share dance sharePhoto has always used, so the remote URL never reaches
+// a browser and the file arrives in the OS.
+//
+// lib/sharing.ts EXECUTED against recording stubs. The properties that matter
+// here are ARGUMENTS — which name the file is staged under, and what
+// shareAsync is handed — so static regex would prove none of them.
+// ---------------------------------------------------------------------------
+
+const sharingCalls = () => ({ shareAsync: [], downloads: [], deleted: [], rnShare: [], dirs: [] });
+
+const sharingModule = (async () => {
+  const js = stripTypeScriptTypes(await read('lib/sharing.ts'), { mode: 'strip' });
+  const stubbed = js
+    .replace(
+      /import \{ Platform, Share \} from 'react-native';/,
+      // Getters, not snapshots: `node --test` caches a data: module by URL, so
+      // every case shares one instance and must read the knobs at call time.
+      `const Platform = { get OS() { return globalThis.__platform; } };
+       const Share = { share: async (a) => { globalThis.__calls.rnShare.push(a); } };`
+    )
+    .replace(
+      /import \* as Sharing from 'expo-sharing';/,
+      `const Sharing = {
+         isAvailableAsync: async () => globalThis.__sheetAvailable,
+         shareAsync: async (uri, options) => { globalThis.__calls.shareAsync.push({ uri, options }); },
+       };`
+    )
+    .replace(
+      /import \{ Directory, File, Paths \} from 'expo-file-system';/,
+      `const Paths = { cache: 'file:///cache' };
+       class Directory {
+         constructor(base, name) { this.uri = base + '/' + name; this.exists = true; }
+         create() { globalThis.__calls.dirs.push(this.uri); }
+       }
+       class File {
+         constructor(dir, name) {
+           this.name = name;
+           this.uri = dir.uri + '/' + name;
+           this.exists = globalThis.__staged.has(name);
+         }
+         delete() { globalThis.__calls.deleted.push(this.name); }
+         static async downloadFileAsync(url, destination) {
+           globalThis.__calls.downloads.push({ url, name: destination.name });
+           if (globalThis.__downloadError) throw globalThis.__downloadError;
+           return { uri: destination.uri };
+         }
+       }`
+    )
+    .replace(
+      /import \{ profileUrl \} from '\.\/appLinks';/,
+      `const profileUrl = (id) => 'https://brazos.invalid/profile/' + id;`
+    );
+
+  // If any import survived the stubbing the module would reach for a real
+  // native package; fail loudly rather than importing one.
+  assert.doesNotMatch(stubbed, /^\s*import /m, 'every import into lib/sharing.ts must be stubbed');
+  return import(toDataUrl(stubbed));
+})();
+
+/** Runs one case against fresh recorders. `staged` names files already sitting
+ *  in the share cache, which is what exercises the delete-before-redownload
+ *  guard. */
+const withSharing = async (
+  run,
+  { platform = 'ios', sheet = true, staged = [], downloadError = null } = {}
+) => {
+  const mod = await sharingModule;
+  const calls = sharingCalls();
+  globalThis.__calls = calls;
+  globalThis.__platform = platform;
+  globalThis.__sheetAvailable = sheet;
+  globalThis.__staged = new Set(staged);
+  globalThis.__downloadError = downloadError;
+  const result = await run(mod);
+  return { result, calls };
+};
+
+const SIGNED =
+  'https://avkighs.invalid/storage/v1/object/sign/chat-documents/thread-1/u1/1756089421.pdf?token=abc';
+
+test('[executed] the staged name is document_name, not the URL timestamp', async () => {
+  const { result, calls } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'));
+
+  assert.deepEqual(result, { ok: true });
+  assert.equal(calls.downloads.length, 1, 'exactly one download');
+  // THE WHOLE POINT: what the share sheet and the receiving app show.
+  assert.equal(calls.downloads[0].name, 'Kitchen_quote.pdf');
+  assert.doesNotMatch(
+    calls.downloads[0].name,
+    /1756089421/,
+    'the URL timestamp must not become the name'
+  );
+  // Sanitised the way fileNameFor sanitises a photo name — same character rule.
+  assert.doesNotMatch(calls.downloads[0].name, /[^a-zA-Z0-9._-]/);
+  // The signed URL is still what gets FETCHED; only the name differs.
+  assert.equal(calls.downloads[0].url, SIGNED);
+});
+
+test('[executed] a non-image extension survives — a .pptx is not coerced to .jpg', async () => {
+  for (const [name, expected] of [
+    ['Deck.pptx', 'Deck.pptx'],
+    ['Q3 budget.xlsx', 'Q3_budget.xlsx'],
+    ['plans.numbers', 'plans.numbers'],
+    ['report.final.docx', 'report.final.docx'],
+    ['bundle.zip', 'bundle.zip'],
+  ]) {
+    const { calls } = await withSharing((m) => m.shareDocument(SIGNED, name));
+    assert.equal(calls.downloads[0].name, expected, `${name} keeps its own extension`);
+    assert.doesNotMatch(
+      calls.downloads[0].name,
+      /\.jpg$/,
+      'the photo coercion must not reach a document'
+    );
+  }
+});
+
+test('[executed] a missing or extensionless name falls back to the URL, then to .bin', async () => {
+  // Missing entirely -> the URL's own extension.
+  for (const missing of [null, undefined, '', '   ']) {
+    const { calls } = await withSharing((m) => m.shareDocument(SIGNED, missing));
+    assert.equal(calls.downloads[0].name, 'document.pdf');
+  }
+  // Present but carrying no extension -> the name is kept, the URL lends one.
+  const { calls: noExt } = await withSharing((m) => m.shareDocument(SIGNED, 'Scope of work'));
+  assert.equal(noExt.downloads[0].name, 'Scope_of_work.pdf');
+
+  // Neither has one -> .bin, because iOS can infer no type without an extension.
+  const bare =
+    'https://avkighs.invalid/storage/v1/object/sign/chat-documents/t/u/1756089421?token=abc';
+  const { calls: none } = await withSharing((m) => m.shareDocument(bare, 'Scope of work'));
+  assert.equal(none.downloads[0].name, 'Scope_of_work.bin');
+  const { calls: neither } = await withSharing((m) => m.shareDocument(bare, null));
+  assert.equal(neither.downloads[0].name, 'document.bin');
+});
+
+test('[executed] shareAsync is handed a LOCAL uri and never an https one', async () => {
+  const { calls } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'));
+
+  assert.equal(calls.shareAsync.length, 1);
+  const { uri, options } = calls.shareAsync[0];
+  // THE FENCE THE DEFECT NEEDED. A remote URL here is Safari again.
+  assert.ok(uri.startsWith('file://'), `expected a file uri, got ${uri}`);
+  assert.doesNotMatch(uri, /^https?:/);
+  assert.doesNotMatch(uri, /avkighs/, 'the project ref must not reach the sheet');
+  assert.match(uri, /\/share-cache\/Kitchen_quote\.pdf$/, 'staged in the existing share cache');
+
+  // D3 — no guessed type. iOS reads the extension the name preserved.
+  assert.equal('mimeType' in options, false, 'a guessed MIME offers the wrong targets');
+  assert.equal('UTI' in options, false);
+  assert.deepEqual(options, { dialogTitle: 'Open document' });
+
+  // The remote URL reaches NOTHING that could open a browser.
+  assert.equal(calls.rnShare.length, 0, 'the link is never handed to RN Share');
+});
+
+test('[executed] an already-staged copy is dropped before the re-download', async () => {
+  const { calls } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'), {
+    staged: ['Kitchen_quote.pdf'],
+  });
+  // Downloading over an existing file throws, so opening the same document
+  // twice in one session depends on this.
+  assert.deepEqual(calls.deleted, ['Kitchen_quote.pdf']);
+  assert.equal(calls.downloads.length, 1);
+});
+
+test('[executed] a failed download is a message, never a silent dead bubble', async () => {
+  const { result, calls } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'), {
+    // What an expired signature looks like from here. This run surfaces it and
+    // does not refresh the URL — no refresh mechanism exists.
+    downloadError: new Error('Request failed with status 400'),
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.message, 'Request failed with status 400');
+  assert.equal(calls.shareAsync.length, 0, 'nothing is shared when nothing downloaded');
+});
+
+test('[executed] no share sheet is an honest failure, NOT a fallback to the link', async () => {
+  const { result, calls } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'), {
+    sheet: false,
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.message, /device/i);
+  // sharePhoto falls back to sharing the link here. A document may not:
+  // handing the signed URL to Share is the defect this replaces.
+  assert.equal(calls.rnShare.length, 0);
+  assert.equal(calls.downloads.length, 0);
+});
+
+test('[executed] dismissing the sheet is a cancellation, and surfaces nothing', async () => {
+  // iOS resolves shareAsync when the user dismisses rather than throwing, so
+  // the stub's plain resolve IS the dismissal — the native counterpart of the
+  // web AbortError case, and it must not read as a failure.
+  const { result } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'));
+  assert.deepEqual(result, { ok: true });
+});
+
+test('[executed] web gets the Web Share API, or an honest refusal — never a no-op', async () => {
+  const { result, calls } = await withSharing((m) => m.shareDocument(SIGNED, 'Kitchen quote.pdf'), {
+    platform: 'web',
+  });
+  // node exposes a `navigator` with no share(), which is the browser case that
+  // has no Web Share API. expo-file-system's web build stubs downloading, so
+  // there is nothing to stage and the user is told rather than left waiting.
+  assert.equal(result.ok, false);
+  assert.match(result.message, /browser/i);
+  assert.equal(calls.downloads.length, 0);
+
+  // And the present-API branch exists rather than being assumed.
+  const source = stripComments(await read('lib/sharing.ts'));
+  const documentBranch = source.slice(source.indexOf('export async function shareDocument'));
+  assert.match(documentBranch, /if \(nav\?\.share\) \{\s*await nav\.share\(\{ url \}\);/);
+  assert.match(
+    documentBranch,
+    /if \(err instanceof Error && err\.name === 'AbortError'\) return \{ ok: true \};/
+  );
+});
+
+test('[executed] sharePhoto is untouched — still coerces to .jpg, still sends its UTI', async () => {
+  const { result, calls } = await withSharing((m) =>
+    m.sharePhoto(
+      'https://avkighs.invalid/storage/v1/object/sign/chat-photos/t/u/1756089421?token=abc'
+    )
+  );
+
+  assert.deepEqual(result, { ok: true });
+  // The photo path's own rule, unchanged by the extraction of stageForSharing.
+  assert.match(calls.downloads[0].name, /\.jpg$/);
+  assert.equal(calls.shareAsync[0].options.mimeType, 'image/jpeg');
+  assert.equal(calls.shareAsync[0].options.UTI, 'public.image');
+  assert.equal(calls.shareAsync[0].options.dialogTitle, 'Share photo');
+  // Including the link fallback a document deliberately does not get.
+  const { calls: noSheet } = await withSharing(
+    (m) => m.sharePhoto('https://avkighs.invalid/p/1.jpg'),
+    { sheet: false }
+  );
+  assert.equal(noSheet.rnShare.length, 1, 'sharePhoto keeps its link fallback');
+});
+
+test('[static] both share paths stage through ONE helper, and it is not duplicated', async () => {
+  const sharing = stripComments(await read('lib/sharing.ts'));
+  assert.equal(
+    (sharing.match(/File\.downloadFileAsync\(/g) ?? []).length,
+    1,
+    'one download implementation, shared'
+  );
+  assert.equal((sharing.match(/new Directory\(Paths\.cache, SHARE_DIR_NAME\)/g) ?? []).length, 1);
+  assert.match(
+    sharing,
+    /async function stageForSharing\(url: string, fileName: string\): Promise<string>/
+  );
+  // The sanitising character rule is one definition too — the document namer
+  // reuses fileNameFor's rather than carrying a second copy that could drift.
+  assert.equal(
+    (sharing.match(/\[\^a-zA-Z0-9\._-\]/g) ?? []).length,
+    1,
+    'one character rule, shared by both namers'
+  );
+});
