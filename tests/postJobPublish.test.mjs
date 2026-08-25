@@ -1055,10 +1055,19 @@ test('gate · the payment-holding mechanism is protection, never escrow', () => 
   }
 });
 
-test('gate · the asset staged for a later run is referenced by nothing', () => {
+// RUN H2 IS THE LATER RUN. This gate used to assert the opposite of what it
+// asserts now — that hero_armchair_customer_light.png was staged on disk and
+// mounted by NOTHING — and it was right to, for as long as the file was an
+// unused asset sitting in the tree. H2 mounts it as light's hero, so the gate
+// is INVERTED rather than deleted: the condition it was holding open has been
+// met, and what protects the asset from here is that it stays mounted in
+// exactly one place, behind a palette test. Deleting it would leave the file
+// with no fence at all, which is the one outcome the original was written to
+// prevent.
+test('gate · the staged light hero has landed: one mount, gated, on customer Home', () => {
   const staged = 'hero_armchair_customer_light';
   const dirs = ['components', 'screens', 'ui', 'lib', 'hooks', 'navigation', 'modes'];
-  const offenders = [];
+  const referencing = [];
   const walk = (dir) => {
     for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
       const next = join(dir, entry.name);
@@ -1067,9 +1076,28 @@ test('gate · the asset staged for a later run is referenced by nothing', () => 
         continue;
       }
       if (!/\.(ts|tsx)$/.test(entry.name)) continue;
-      if (readFileSync(join(root, next), 'utf8').includes(staged)) offenders.push(next);
+      if (readFileSync(join(root, next), 'utf8').includes(staged)) referencing.push(next);
     }
   };
   for (const dir of dirs) walk(dir);
-  assert.deepEqual(offenders, [], `${staged}.png is staged for a LATER run and must be mounted by nothing`);
+  assert.deepEqual(
+    referencing.map((p) => p.replace(/\\/g, '/')),
+    ['screens/HomeScreen.tsx'],
+    `${staged}.png is light's customer-Home hero and belongs to that screen alone`
+  );
+
+  // Mounted behind a palette test, and mounted ONCE. It is a light composition:
+  // dropping it onto the dark ground is the mirror of the fault that put the
+  // dark hero's own gate back on.
+  const home = readFileSync(join(root, 'screens/HomeScreen.tsx'), 'utf8');
+  assert.equal(
+    home.split(`${staged}.png`).length - 1,
+    1,
+    'the light hero must be required exactly once'
+  );
+  assert.match(
+    home.replace(/\s+/g, ' '),
+    /source=\{isDark \? PRESTIGE_HERO_ART : PRESTIGE_HERO_ART_LIGHT\}/,
+    'the light hero must resolve per palette, never unconditionally'
+  );
 });

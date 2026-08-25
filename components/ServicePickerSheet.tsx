@@ -116,7 +116,7 @@ export function ServicePickerSheet({
                 accessibilityLabel={service.label}
               >
                 <View style={styles.rowIcon}>
-                  <Ionicons name={service.icon} size={19} color={colors.forest} />
+                  <Ionicons name={service.icon} size={19} color={colors.emerald} />
                 </View>
                 <Text style={styles.rowLabel} numberOfLines={2}>
                   {service.label}
@@ -196,6 +196,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
+  // RUN H2 — THE ROWS BECOME CARDS. They were bare text on the sheet's own
+  // ground: no fill, no edge, and nothing but a 56pt minimum saying where one
+  // row ended and the next began.
+  //
+  // THE FILL IS THE PAGE GROUND, NOT `surface`. A card in this app is `surface`
+  // over `background` (components/Card.tsx), but this row sits ON a `surface`
+  // sheet — so `surface` here would be a card painted its own backdrop's colour,
+  // invisible in both themes. The relationship is what makes a card read, so it
+  // is inverted rather than copied, and the hairline is Card's own `border`
+  // token (which in dark is the Prestige dim-gold, not a neutral grey).
+  //
+  // TYPE AND RHYTHM ARE UNTOUCHED: no size, weight, family, gap, padding or
+  // minHeight moved. The only box change is the 1pt hairline itself.
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -204,10 +217,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   rowPressed: {
     backgroundColor: colors.mint,
   },
+  // The tile was `mint` with no edge — #E5F1EC on white is nearly nothing in
+  // light, and in dark #0E1F18 on the #0A1813 sheet is nearly nothing squared.
+  // The mint2 ring is what makes the tile a tile in both. The glyph moves from
+  // `forest` to `emerald` — the BRIGHTER green in each palette (#0D6B52 over
+  // #064C3B in light, #5FAE81 in dark), which is also the hue the category
+  // chips on Home already draw their icons in.
   rowIcon: {
     width: 40,
     height: 40,
@@ -215,6 +237,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.mint,
+    borderWidth: 1,
+    borderColor: colors.mint2,
   },
   rowLabel: {
     flex: 1,

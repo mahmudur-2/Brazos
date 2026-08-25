@@ -55,21 +55,43 @@ const GOLD_FILL_ALLOWLIST = new Set(['components/ModeTransitionOverlay.tsx']);
  * 2026-08-23 EXTENDS THE SAME REVERSAL TO LIGHT, on operator instruction:
  * light was still painting the inverse (forest fill, gold ring), which made
  * one control two designs. The base style now carries the gold tile, so the
- * exception set names BOTH keys. This widens the reversal by exactly the one
- * style the operator named and by nothing else — it is not a relaxation of
- * the rule's shape.
+ * exception set names BOTH keys.
+ *
+ * RUN H2 TAKES THAT BACK TO ONE KEY, and the set SHRINKS rather than being
+ * left generous. The structure pass gives light its own fill — the light
+ * Post-a-job pill's green — so `createButton` no longer fills with gold at
+ * all, and `createButtonDark` is once again the only gold-filled control in
+ * the tree. The entry is deleted rather than kept: the deepEqual below treats
+ * a stale exception as a failure precisely because it would sit open for a
+ * future gold fill nobody reviewed.
  *
  * Recorded as file-AND-style-key, deliberately NOT as a file entry in
- * GOLD_FILL_ALLOWLIST above: a THIRD gold fill introduced in
- * ui/primitives/BottomNav.tsx is still an offender, and either of these is
- * still an offender if it moves to another file. Every other control in the
- * tree, in both themes, is still forbidden to fill with gold — and the
- * deepEqual below means a key that stops matching is a hard failure rather
- * than a hole left standing.
+ * GOLD_FILL_ALLOWLIST above: a SECOND gold fill introduced in
+ * ui/primitives/BottomNav.tsx is still an offender, and this one is still an
+ * offender if it moves to another file. Every other control in the tree, in
+ * both themes, is still forbidden to fill with gold — and the deepEqual below
+ * means a key that stops matching is a hard failure rather than a hole left
+ * standing.
+ */
+/**
+ * RUN H2's second and last exception — the unread dot, on operator decision.
+ *
+ * It is not a control. Decision 3's rule is about CONTROLS: gold draws
+ * eyebrows, hairlines, icons, rings, and no button fills with it. A 9pt unread
+ * marker is an INDICATOR — the same category as the measurement-bar fill
+ * excepted below, which is data rather than something anyone can press — and
+ * it fills with gold in DARK only; light wears the reference coral.
+ *
+ * WHY IT MOVED AT ALL. It filled with `emerald`, which is this palette's
+ * live-state hue: prices, Open, active nav, live. An unread marker in the
+ * live-state colour is one more status light rather than a thing addressed to
+ * you, and the masters' own note for that hue lists "unread" alongside all of
+ * them. Gold is the Prestige set's attention metal and is not otherwise a fill,
+ * which is exactly why this needs recording here rather than passing quietly.
  */
 const GOLD_FILL_EXCEPTIONS = new Set([
-  'ui/primitives/BottomNav.tsx::createButton',
   'ui/primitives/BottomNav.tsx::createButtonDark',
+  'components/ConversationRow.tsx::dot',
 ]);
 
 /**

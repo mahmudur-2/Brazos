@@ -700,8 +700,9 @@ test('home(3) fence: -1 tracking on the serif headings, and only there', () => {
 // CATCHES: the layer being moved inside the ScrollView (where it would travel
 // with the page — the one thing a fixed atmosphere must not do); one home
 // getting it and the other not; the scroller's own ground being restored on
-// top of it; and the gate being dropped, which would drop an opaque 1080x2335
-// dark room onto the light palette.
+// top of it; and the gate being dropped, which would drop an opaque 1290x2796
+// dark room onto the light palette. (1080x2335 stood here and in the
+// component's docblock until RUN H2 measured the file: see HomeAtmosphere.tsx.)
 // ---------------------------------------------------------------------------
 test('home(4) fence: the atmosphere sits behind both homes and never scrolls', () => {
   const layer = stripComments(read('components/HomeAtmosphere.tsx'));
@@ -1011,12 +1012,14 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
     );
   }
 
-  // ARTWORK — one box, one fill rule, and since 2026-08-23 one FILE. The
-  // per-theme artwork was the last thing the parity pass left forked on this
-  // slot, and it could not be closed by unifying numbers because the
-  // difference was never numeric — two different pictures. Both themes now
-  // mount the room-baked scene.
-  assert.match(home, /source=\{PRESTIGE_HERO_ART\}/);
+  // ARTWORK — one box and one fill rule. 2026-08-23 made it one FILE as well;
+  // RUN H2 takes that half back, because the single file it unified onto is a
+  // dark room and light was rendering it as a black rectangle. The SOURCE is
+  // per-palette again; the box, the fill rule and the ink column are not, and
+  // the three assertions that follow are what keep that line drawn. (The
+  // per-theme fill rule is what the parity pass was really about, and it is
+  // still forbidden — see `resizeMode={isDark` below.)
+  assert.match(home, /source=\{isDark \? PRESTIGE_HERO_ART : PRESTIGE_HERO_ART_LIGHT\}/);
   assert.doesNotMatch(home, /HOME_HERO_ART/, "light's retired hero must not come back");
   assert.match(home, /source=\{isDark \? PRESTIGE_B_DRAPE : POST_MARK\}/);
   assert.match(home, /resizeMode="cover"/);
@@ -1031,16 +1034,31 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   // THE MODE SWITCH — one 1pt ring, per-theme ring colours.
   assert.match(/modeSwitch: \{([^}]*)\}/.exec(home)[1], /borderWidth: 1, borderColor: colors\.gold/);
 
-  // THE [ + ] — one pill-ratio geometry, and since 2026-08-23 one set of
-  // COLOURS too: the gold tile with the forest ring that home(8) had given
-  // dark alone. Light's forest-fill-and-gold-ring inverse is retired, so the
-  // parity this fence exists for now covers the control completely.
+  // THE [ + ] — one pill-ratio GEOMETRY, which is what this fence is for. The
+  // 2026-08-23 unification of its COLOURS is reversed by RUN H2 (dark keeps the
+  // gold tile; light fills with the light Post-a-job pill's green), so what is
+  // asserted here is the half that never moved: one size, one ring WEIGHT, one
+  // radius, one depth — with the fill and the ring COLOUR free to differ, the
+  // way every other themed control in the tree is. home(8)'s own fence owns the
+  // colours; duplicating them here is what let the two records drift apart.
   assert.doesNotMatch(bar, /CREATE_BUTTON_LIGHT_SIZE|CREATE_BUTTON_LIGHT_RAISE/);
+  const barFlat = flatten(read('ui/primitives/BottomNav.tsx'));
+  const shared = /createButton: \{([^}]*)\}/.exec(barFlat);
+  assert.ok(shared, 'the control must keep a shared style');
   assert.match(
-    flatten(read('ui/primitives/BottomNav.tsx')),
-    /backgroundColor: colors\.gold, borderWidth: 1, borderColor: colors\.forest,/,
-    'the control is one gold tile with one forest ring, in both themes'
+    shared[1],
+    /borderRadius: radius\.lg, borderWidth: 1,/,
+    'the ring weight and the radius are one set of numbers for both themes'
   );
+  for (const key of ['createButtonDark', 'createButtonLight']) {
+    const branch = new RegExp(`${key}: \\{([^}]*)\\}`).exec(barFlat);
+    assert.ok(branch, `${key} must exist — the control forks on colour, per theme`);
+    assert.doesNotMatch(
+      branch[1],
+      /width|height|padding|margin|radius|borderWidth|shadow|elevation|transform/,
+      `${key} must carry colours only — geometry and depth are shared`
+    );
+  }
 
   // WORKER HOME — same contract: its *Dark styles are colour-only and the
   // hero column/artwork are one geometry.
@@ -1416,17 +1434,45 @@ test('home(14) fence: the dark hero fills its slot and bleeds to the screen edge
   );
 
   // Parity 2026-08-22: one fill rule. The hero slot fills and crops in both
-  // themes; the isDark fork must not come back.
-  // 2026-08-23: and ONE FILE. The per-theme fork is gone from the source
-  // expression — light's Heritage cut-out is retired — so what this pins is
-  // the absence of the fork, not its shape.
-  const heroImage = /<Image source=\{PRESTIGE_HERO_ART\}([^>]*)>/.exec(flat);
-  assert.ok(heroImage, 'the hero mounts ONE file, unconditionally, in both themes');
+  // themes.
+  //
+  // RUN H2 — THE FILE FORKS AGAIN AND THE GEOMETRY STILL DOES NOT, and that
+  // distinction is the whole point of this block. 2026-08-23 unified the slot
+  // onto the dark scene for both palettes; the scene is a dark room, so light
+  // rendered a black rectangle. The mount is per-theme once more. What must NOT
+  // come back is a per-theme fill rule, a per-theme box, or a second geometry
+  // constant — so the fill rule is asserted on the ternary itself, and the ink
+  // boundary below is re-derived from BOTH files against the ONE shared
+  // constant.
+  const heroImage =
+    /<Image source=\{isDark \? PRESTIGE_HERO_ART : PRESTIGE_HERO_ART_LIGHT\}([^>]*)>/.exec(flat);
+  assert.ok(heroImage, 'the hero mounts one file per palette, from a single isDark ternary');
   assert.match(heroImage[1], /resizeMode="cover"/, 'the slot fills in both themes');
+  assert.doesNotMatch(
+    heroImage[1],
+    /isDark/,
+    'the FILE is the only thing that forks — the fill rule and the box stay shared'
+  );
   assert.doesNotMatch(
     flat,
     /HOME_HERO_ART|customer-home-chair/,
     'the light-geometry hero must not be referenced anywhere on this screen again'
+  );
+
+  // The light scene has to put its ink where the dark one does, because the
+  // headline column is measured off HERO_ART_INK_LEFT and there is only one of
+  // those. If a future light export moves the chair, this fails here rather
+  // than silently running the headline under the artwork on light devices only.
+  const measuredInkLight = structuredLeftFraction(
+    join(root, 'assets/prestige/hero_armchair_customer_light.png'),
+    0.53,
+    0.75,
+  );
+  assert.ok(
+    Math.abs(declaredInk - measuredInkLight) < 0.03,
+    `the light hero's ink starts at ${measuredInkLight.toFixed(3)} of its box where the shared ` +
+      `HERO_ART_INK_LEFT says ${declaredInk}. One column serves both themes, so the two scenes ` +
+      'have to agree on where the artwork begins'
   );
 });
 
@@ -1696,21 +1742,81 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
     'gold',
     'a gold ring on a gold fill is not a ring; it must be a dark token'
   );
-  assert.match(
-    flat,
-    /color=\{colors\.forest\}/,
-    'the glyph must be dark content on the gold fill — gold on gold is invisible'
+  // RUN H2 — THE COLOURS FORK PER THEME AGAIN AND THE GEOMETRY DOES NOT, which
+  // is the split the parity pass was actually protecting. What these
+  // assertions pin is unchanged in KIND: the glyph is legible against its own
+  // tile in both themes, the ring is never the fill's own colour, and no hue
+  // is written as a hex at the call site. Only the values moved.
+  const glyphColour =
+    /<Ionicons name="add" size=\{glyph\} color=\{isDark \? colors\.(\w+) : colors\.(\w+)\} \/>/.exec(flat);
+  assert.ok(
+    glyphColour,
+    'the glyph must read its colour per theme, off the resolved palette — a hex here would be a ' +
+      'new colour, which neither the Prestige pass nor the structure pass introduces'
   );
-  // 2026-08-23: LIGHT ADOPTS THE SAME COLOURS. The reversal home(8) made for
-  // dark alone now covers both themes, so the BASE style carries the gold
-  // tile and the forest ring, and the glyph is a single palette read rather
-  // than a ternary. The assertion below is what stops light drifting back to
-  // its old forest-fill-and-gold-ring inverse.
-  assert.match(flat, /backgroundColor: colors\.gold, borderWidth: 1, borderColor: colors\.forest,/);
+  const [, darkGlyph, lightGlyph] = glyphColour;
+  assert.notEqual(
+    darkGlyph,
+    'gold',
+    'the dark glyph must be dark content on the gold fill — gold on gold is invisible'
+  );
+
+  // LIGHT NO LONGER SHARES THE TILE. It fills with the light Post-a-job pill's
+  // green and rings a slate glyph one shade deeper; the fill and the glyph may
+  // never be the same token, which is the light half of "gold on gold is not a
+  // ring".
+  const lightBody =
+    /createButtonLight: \{ backgroundColor: colors\.(\w+), borderColor: colors\.(\w+),/.exec(flat);
+  assert.ok(lightBody, 'the light control must declare its own fill and ring, both from the palette');
+  const [, lightFill, lightRing] = lightBody;
+  assert.notEqual(lightFill, 'gold', 'the gold fill is the DARK reversal and must not spread to light');
+  assert.notEqual(lightFill, lightGlyph, 'a glyph the colour of its own tile is invisible');
+  assert.notEqual(lightRing, lightFill, 'a ring the colour of its own fill is not a ring');
+
+  // The shared style is the part that really is shared. A fill or a ring
+  // reappearing on it would silently paint BOTH themes again.
+  const base = /createButton: \{ borderRadius: radius\.lg, borderWidth: 1,([^}]*)\}/.exec(flat);
+  assert.ok(base, 'the shared style must keep the geometry it never forked on');
+  assert.doesNotMatch(
+    base[1],
+    /backgroundColor:|borderColor:/,
+    'fill and ring are per-theme now; declaring either on the shared style paints both'
+  );
   assert.doesNotMatch(
     flat,
     /backgroundColor: colors\.forest, borderWidth: 1, borderColor: colors\.gold,/,
     'the retired light treatment must not return beside the shared one'
+  );
+
+  // THE DEPTH. The black drop shadow is replaced by a gold glow built from the
+  // SHARED glow shape, with its strength in one named constant so the operator
+  // can tune it without touching the style.
+  //
+  // IT IS DECLARED ONCE, ON THE SHARED STYLE, and that is load-bearing rather
+  // than tidy: tests/themeTokens.test.mjs forbids a theme decision from
+  // reaching depth at all, so a glow in the dark branch and a drop shadow in
+  // the light one would be two designs rather than one design in two palettes.
+  // It still resolves per theme without a ternary, because `colors` inside the
+  // factory IS the resolved palette.
+  assert.match(
+    base[1],
+    /\.\.\.glow\.halo\(withAlpha\(colors\.gold, CREATE_BUTTON_GLOW_ALPHA\)\)/,
+    'the control lifts with a gold glow built from the shared glow shape'
+  );
+  const glowAlpha = constantOf(bar, 'CREATE_BUTTON_GLOW_ALPHA');
+  assert.ok(
+    glowAlpha > 0 && glowAlpha < 1,
+    `the glow alpha must be a real fraction (saw ${glowAlpha})`
+  );
+  assert.doesNotMatch(
+    flat,
+    /createButton(?:Dark|Light)?: \{[^}]*shadowColor: colors\.black/,
+    'a black drop shadow under this tile reads as a hole on the Prestige ground'
+  );
+  assert.doesNotMatch(
+    flat,
+    /create(?:Button|Slot)[^:]*: \{[^}]*overflow:/,
+    'iOS cancels a shadow on a node that clips — the glow and any clipping must not share a node'
   );
 
   // THE CONSTRAINT. The pill's height and the clearance are functions of the
@@ -1973,4 +2079,171 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
   assert.match(map, /<SearchBar/, 'the header capsule carries the shared search field');
   assert.match(map, /placeholder="Find nearby jobs"/);
   assert.match(map, /\{visibleJobCount\} open \{visibleJobCount === 1 \? 'job' : 'jobs'\}/);
+});
+
+// ---------------------------------------------------------------------------
+// RUN H2 — THE HOME STRUCTURE PASS.
+//
+// CATCHES, in the order the run made the changes:
+//   - the atmosphere docblock drifting off the file it describes AGAIN. It had
+//     claimed 1080x2335 with a 3.7/20.1 vignette; the file is 1290x2796 and its
+//     centre reads 21.86, while the numbers it carried turned out to be the
+//     HERO's. A prose measurement nobody re-derives goes stale silently, so the
+//     two are tied together here.
+//   - the greeting name losing its light accent, or dark's gold moving.
+//   - the Post-a-job pill's rings re-merging: light's gold outline vanishing,
+//     or dark's ring coming back.
+//   - "Nearby" and "Inbox" reverting, or the Messages ROUTE KEY being renamed
+//     along with its label — which would be a navigation change disguised as a
+//     copy change.
+//   - the unread marker returning to the live-state green, or the offline dot
+//     to `danger`.
+//   - the all-services rows losing the fill and hairline that make them cards,
+//     or the type and rhythm moving, which this commit promised not to touch.
+// ---------------------------------------------------------------------------
+test('RUN H2 fence: the atmosphere docblock is re-derived from the file it mounts', () => {
+  const layer = read('components/HomeAtmosphere.tsx');
+  const img = decode(join(root, 'assets/prestige/home-atmosphere-dark.png'));
+
+  // The dimensions the prose claims must be the dimensions the file has, and
+  // EVERY raster-scale size it names must be that one — a second, different
+  // WxH is the stale-number failure wearing a new hat. Scoped to widths of
+  // 1000 and up so the docblock can still name the 393x852 viewport the
+  // harness renders at, which is a screen and not this raster.
+  const sizes = [...layer.matchAll(/(\d{4,5})x(\d{3,5})/g)];
+  assert.ok(sizes.length > 0, 'the docblock must state the raster it describes');
+  for (const hit of sizes) {
+    assert.equal(
+      `${hit[1]}x${hit[2]}`,
+      `${img.width}x${img.height}`,
+      `the atmosphere docblock mentions ${hit[0]}, which is not this file — re-measure it, do ` +
+        'not carry the old numbers forward'
+    );
+  }
+  // And it is still the opaque RGB raster the roster records, which is WHY the
+  // component may never render it under the light palette.
+  assert.equal(img.colourType, 2, 'the atmosphere must stay RGB with no alpha channel');
+});
+
+test('RUN H2 fence: the greeting name and the Post-a-job pill', () => {
+  const home = flatten(read('screens/HomeScreen.tsx'));
+
+  // The name is accented in BOTH themes now — a light branch, not a removed
+  // gate. Dark's gold is untouched.
+  assert.match(
+    home,
+    /isDark \? styles\.greetingName : styles\.greetingNameLight/,
+    'the greeting name must resolve per theme, not be coloured only in dark'
+  );
+  assert.match(home, /greetingName: \{ color: colors\.gold \}/, "dark's gold name is untouched");
+  assert.match(
+    home,
+    /greetingNameLight: \{ color: colors\.postPillGreen \}/,
+    "light's name is the light Post-a-job pill's own green"
+  );
+
+  // THE PILL. Light gains a gold outline; dark loses its outline entirely and
+  // takes light's green as its fill. Text and geometry are untouched, and the
+  // ring is dropped by COLOUR so the 1pt border never moves the content box in
+  // one theme only.
+  const pill = /heroButton: \{([^}]*)\}/.exec(home);
+  assert.ok(pill, 'the Post-a-job pill must keep a shared style');
+  assert.match(pill[1], /borderWidth: 1,/, 'the ring WEIGHT is one number for both themes');
+  assert.match(pill[1], /borderColor: colors\.gold,/, 'light rings the pill in gold');
+  assert.match(pill[1], /minHeight: 48,/, 'the pill geometry is untouched');
+  assert.match(
+    home,
+    /heroButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent' \}/,
+    "dark fills with light's green and shows no ring"
+  );
+  assert.doesNotMatch(
+    home,
+    /heroButtonDark: \{[^}]*borderWidth/,
+    'a per-theme borderWidth moves the content box in one theme only — drop the ring by colour'
+  );
+  // Untouched, and asserted so a later edit cannot quietly take it.
+  assert.match(
+    home,
+    /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.onForest \}/
+  );
+});
+
+test('RUN H2 fence: the renamed sections, the unread marker and the offline dot', () => {
+  const home = flatten(read('screens/HomeScreen.tsx'));
+  assert.match(home, /<Text style=\{styles\.sectionTitle\}>Nearby<\/Text>/);
+  assert.doesNotMatch(home, /Live Nearby<\/Text>/, '"Live Nearby" is retired copy');
+  // The live INDICATOR stays — the word went because the pulse already says it.
+  assert.match(home, /<View style=\{styles\.liveDot\} \/>/);
+
+  const bar = flatten(read('ui/primitives/BottomNav.tsx'));
+  assert.match(
+    bar,
+    /\{ key: 'Messages', label: 'Inbox', icons: \['chatbubble-ellipses', 'chatbubble-ellipses-outline'\] \}/,
+    'the tab is labelled Inbox and drawn as a three-dot bubble'
+  );
+  // THE KEY IS THE ROUTE. Renaming it would break every cross-tab jump and
+  // notification route that resolves against it.
+  assert.match(
+    bar,
+    /CUSTOMER_BAR_TABS: BottomNavTabKey\[\] = \['Home', 'Discover', 'Messages', 'Profile'\]/
+  );
+  assert.match(
+    bar,
+    /WORKER_BAR_TABS: BottomNavTabKey\[\] = \['Home', 'Map', 'MyJobs', 'Messages', 'Profile'\]/
+  );
+
+  // The unread marker: gold in dark, the reference coral in light. Never the
+  // live-state green it used to wear.
+  const row = flatten(read('components/ConversationRow.tsx'));
+  assert.match(row, /dot: \{ width: 9, height: 9, borderRadius: 5, backgroundColor: colors\.gold, \}/);
+  assert.match(row, /dotLight: \{ backgroundColor: colors\.referenceCoral \}/);
+  assert.match(row, /<View style=\{\[styles\.dot, !isDark && styles\.dotLight\]\} \/>/);
+  assert.doesNotMatch(
+    row,
+    /dot: \{[^}]*colors\.emerald/,
+    'emerald is the live-state hue — an unread marker in it reads as one more status light'
+  );
+
+  // The coral is one value in both palettes, and it is the reference's own —
+  // docs/mockups/'s manifest measures #D54C2C as the master set's only UI red.
+  assert.match(read('ui/tokens.ts'), /referenceCoral: '#D54C2C'/);
+});
+
+test('RUN H2 fence: the all-services rows are cards, and the type did not move', () => {
+  const sheet = flatten(read('components/ServicePickerSheet.tsx'));
+
+  const row = /row: \{([^}]*)\}/.exec(sheet);
+  assert.ok(row, 'the sheet must keep a row style');
+  assert.match(row[1], /backgroundColor: colors\.background,/, 'the row gains a card fill');
+  assert.match(row[1], /borderWidth: 1, borderColor: colors\.border,/, 'and a hairline');
+  // The fill has to be the page ground, NOT `surface`: the row sits ON a
+  // `surface` sheet, so `surface` would be a card painted its backdrop's colour.
+  assert.doesNotMatch(
+    row[1],
+    /backgroundColor: colors\.surface/,
+    'a surface row on a surface sheet is invisible in both themes'
+  );
+
+  const tile = /rowIcon: \{([^}]*)\}/.exec(sheet);
+  assert.ok(tile, 'the sheet must keep an icon tile');
+  assert.match(tile[1], /borderWidth: 1, borderColor: colors\.mint2,/, 'the tile gains its edge');
+  assert.match(
+    sheet,
+    /<Ionicons name=\{service\.icon\} size=\{19\} color=\{colors\.emerald\} \/>/,
+    'the glyph is the brighter green in each palette'
+  );
+
+  // TYPE AND RHYTHM ARE UNTOUCHED — this commit promised no size, weight,
+  // family or spacing change anywhere on this surface.
+  assert.match(sheet, /rowLabel: \{ flex: 1, fontSize: 15, fontWeight: '600', color: colors\.text, \}/);
+  assert.match(
+    sheet,
+    /title: \{ fontFamily: fonts\.display, fontSize: 22, fontWeight: '700', color: colors\.ink, \}/
+  );
+  assert.match(sheet, /subtitle: \{ fontSize: 13, color: colors\.textMuted, \}/);
+  assert.match(
+    row[1],
+    /gap: spacing\.md, minHeight: 56, paddingHorizontal: spacing\.sm, paddingVertical: spacing\.sm,/
+  );
+  assert.match(tile[1], /width: 40, height: 40,/);
 });

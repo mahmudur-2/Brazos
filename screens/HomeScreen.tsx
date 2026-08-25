@@ -86,7 +86,24 @@ const POST_MARK = require('../assets/brand/brazos_b_drape.png');
 // chose the composition over the resolution a second time, for the second
 // palette — and the fix is the same one: re-export the scene larger into
 // this same path.
+//
+// RUN H2 REVERSES THE "BOTH THEMES" HALF, and only that half. The scene above
+// is a DARK room: with the isDark gate gone it was painting a black rectangle
+// onto the ivory ground on a light device. The operator supplied a light
+// composition of the same scene, so the slot is per-theme again and both files
+// are `gate: true` on the BAKED_ART roster once more. The gate moved back with
+// the fact, exactly as it moved off with it.
 const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png');
+// The LIGHT half of that pair, measured rather than assumed to mirror the dark
+// one (RUN H2): 400x351 RGBA like its counterpart, but a different BAKE. The
+// dark file is 97.93% fully opaque with a hard 2.05% strip trimmed off its
+// bottom edge and 35 partial samples in the whole frame; this one ramps —
+// every alpha bucket populated, 22.43% of it partially transparent, 1.43% cut
+// to zero, all four corners empty — while its interior stays 98.73% solid
+// inside a 42px inset. That is a FEATHERED EDGE on a solid scene, which is
+// neither of the two bakes the roster knew, so it carries its own word there
+// ('baked-feathered') rather than being rounded to the nearer one.
+const PRESTIGE_HERO_ART_LIGHT = require('../assets/prestige/hero_armchair_customer_light.png');
 const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 const PREVIEW_COUNT = 4;
 
@@ -448,26 +465,22 @@ export function HomeScreen() {
         >
           <View style={styles.intro}>
             <Image
-              // 2026-08-23 — ONE FILE, BOTH THEMES, and the last fork on this
-              // slot closes. Light had been mounting the Heritage cut-out
-              // (assets/brand/customer-home-chair.png: a stem-less leaf
-              // rosette in a narrow-footed urn, with a whole four-legged chair
-              // standing on nothing) while dark mounted the room-baked scene
-              // master 44 is actually drawn from. Two different PICTURES under
-              // one box, one geometry and one fill rule — which is a fork the
-              // parity pass could not close by unifying numbers, because the
-              // difference was never numeric. The operator resolved it onto
-              // the baked scene.
+              // 2026-08-23 unified this slot onto ONE file for both themes.
+              // RUN H2 SPLITS IT AGAIN, because the file it unified onto is a
+              // dark room: with no palette test in front of it, a light device
+              // got a black rectangle where the hero belongs. That is not a
+              // taste disagreement with the unification — it is the specific
+              // failure the BAKED_ART gate exists to catch, and the gate had
+              // been taken off this entry when the mount lost its isDark.
               //
-              // NO isDark HERE ANY MORE, deliberately: that is exactly why
-              // this asset is no longer `gate: true` on the BAKED_ART roster
-              // in tests/themeResolution.test.mjs. The gate scan requires a
-              // palette test in front of every gated mount, and it is right to
-              // — but the decision it was guarding ("assets/prestige is a
-              // dark-only composition") is the decision that just changed for
-              // this one file. The gate moved with the fact rather than the
-              // fact being hidden from the gate.
-              source={PRESTIGE_HERO_ART}
+              // BOTH HALVES ARE GATED AGAIN, and the ternary below is what
+              // satisfies the roster's gate scan for both names at once: it
+              // requires a palette test within 240 characters before every use
+              // of a gated asset, and `isDark` is right here. The geometry, the
+              // box and the fill rule are untouched and stay shared — the fork
+              // that reopens is the FILE, which is the one thing that really is
+              // per-palette.
+              source={isDark ? PRESTIGE_HERO_ART : PRESTIGE_HERO_ART_LIGHT}
               style={styles.homeHeroArt}
               // home(14): the hero is a SLOT, and a slot fills. `cover`
               // scales whatever is dropped in until both dimensions are
@@ -487,10 +500,16 @@ export function HomeScreen() {
                     {firstName ? ',' : ''}
                   </Text>
                   {firstName ? (
-                    // Master 44: the name line carries the gold; light keeps
-                    // the Heritage slate.
+                    // Master 44: the name line carries the gold in dark. RUN H2
+                    // gives LIGHT its own accent rather than leaving the name at
+                    // the slate the greeting itself uses — a light branch, not a
+                    // removed gate: dark's gold is untouched, and the name is
+                    // now accented in both themes instead of only one.
                     <Text
-                      style={[styles.greeting, isDark && styles.greetingName]}
+                      style={[
+                        styles.greeting,
+                        isDark ? styles.greetingName : styles.greetingNameLight,
+                      ]}
                       numberOfLines={1}
                     >
                       {firstName}
@@ -667,7 +686,10 @@ export function HomeScreen() {
                   <Animated.View style={[styles.liveDotHalo, livePulseStyle]} />
                   <View style={styles.liveDot} />
                 </View>
-                <Text style={styles.sectionTitle}>Live Nearby</Text>
+                {/* RUN H2: "Live Nearby" -> "Nearby". The live INDICATOR beside
+                    it is untouched — the pulse still says "live", so the word
+                    was saying it twice. */}
+                <Text style={styles.sectionTitle}>Nearby</Text>
               </View>
               <Pressable
                 onPress={browseOpenJobs}
@@ -916,6 +938,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   greetingBlock: { flexShrink: 1, gap: 2 },
   greeting: { fontSize: 18, fontWeight: '500', color: colors.homeSlate },
   greetingName: { color: colors.gold },
+  // RUN H2 — LIGHT's accent for the same line. It is the light Post-a-job
+  // pill's own green, so the greeting and the screen's one conversion control
+  // agree on a single accent hue instead of the name simply going unaccented.
+  // Colour only: `greeting` above still carries every number.
+  greetingNameLight: { color: colors.postPillGreen },
   // Parity 2026-08-22: the ring is ONE point in both themes (home(17)'s
   // weight, which light now inherits); only the ring's colour is per-theme.
   modeSwitch: {
@@ -1234,17 +1261,30 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // exactly as `forest` is dark's, `mint2` is the ring in both, and `onForest`
   // is the content on a green fill in both (its docblock in lib/theme.ts says
   // so). Nothing here moved, grew or gained a shadow.
+  //
+  // RUN H2 SEPARATES THE TWO RINGS, and only the rings. LIGHT's mint2 hairline
+  // did almost nothing against its own green fill, so it becomes GOLD — the
+  // pill is the screen's one conversion control and now reads as one. DARK
+  // loses its ring altogether and takes light's green as its fill, which makes
+  // the two themes one pill in two grounds rather than two designs.
+  //
+  // THE RING IS DROPPED BY COLOUR, NOT BY WIDTH. `borderWidth` stays 1 on the
+  // shared style: RN lays a border inside the box, so zeroing it in one theme
+  // would move the content box by a point in that theme only — a GEOMETRY fork,
+  // which tests/themeTokens.test.mjs forbids and which is exactly the class of
+  // drift that rule exists for. 'transparent' removes the ring and moves
+  // nothing; the screen already uses it the same way on `scrollOverAtmosphere`.
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.mint2,
+    borderColor: colors.gold,
     backgroundColor: colors.emerald,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
-  heroButtonDark: { backgroundColor: colors.forest, borderColor: colors.mint2 },
+  heroButtonDark: { backgroundColor: colors.postPillGreen, borderColor: 'transparent' },
   heroButtonPressed: { opacity: 0.9 },
   heroButtonText: { fontFamily: fonts.display, fontSize: 24, fontWeight: '700', color: colors.onForest },
   heroButtonTextDark: { color: colors.onForest },

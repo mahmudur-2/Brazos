@@ -421,7 +421,15 @@ export function WorkerHomeScreen() {
                   />
                 </View>
                 <View style={styles.statusDotRow}>
-                  <PulseDot color={accepting ? colors.emerald : colors.danger} />
+                  {/* RUN H2 — the OFFLINE dot goes to the reference coral, and
+                      this is a restoration rather than a new colour. Master 43
+                      draws this exact dot in #D54C2C, the whole master set's
+                      only UI red; it was rendering as `danger`, which is a
+                      terracotta in light and a different red in dark, so the
+                      one dot the reference specifies was the one drawn in two
+                      colours, neither of them the measured one. The ONLINE
+                      branch keeps `emerald` — the live-state hue, unchanged. */}
+                  <PulseDot color={accepting ? colors.emerald : colors.referenceCoral} />
                   {/* Master 43 spells the consequence out rather than
                       abbreviating it; the PNG is the authority over the
                       earlier two-word draft. Same accepting_work fact. */}

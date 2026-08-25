@@ -81,7 +81,12 @@ export const BOTTOM_NAV_TABS: {
   // Map keeps: emerald D1 names the search glyph explicitly, and searching is
   // what the destination underneath (WorkerSearchScreen) actually does.
   { key: 'Discover', label: 'Discover', icons: ['search', 'search-outline'] },
-  { key: 'Messages', label: 'Messages', icons: ['chatbubbles', 'chatbubbles-outline'] },
+  // RUN H2 — LABEL and GLYPH only. The KEY stays 'Messages': it is the route
+  // name both trees register and every cross-tab jump and notification route
+  // resolves against, so renaming it would be a navigation change wearing a
+  // copy change's clothes. The glyph becomes the three-dot bubble — a message
+  // with something in it, rather than two empty bubbles.
+  { key: 'Messages', label: 'Inbox', icons: ['chatbubble-ellipses', 'chatbubble-ellipses-outline'] },
   { key: 'Profile', label: 'Profile', icons: ['person', 'person-outline'] },
 ];
 
@@ -471,6 +476,22 @@ const CREATE_BUTTON_PILL_RATIO = 0.857;
 /** The glyph inside it, as a share of the control — 32 on 52, as it shipped. */
 const CREATE_GLYPH_RATIO = 0.615;
 
+/**
+ * RUN H2 — OPERATOR DIAL #1: how strong the dark control's gold glow is.
+ *
+ * It REPLACES a black drop shadow (opacity 0.28, radius 8, offset 0/3) that
+ * read as a hole punched under the tile on the near-black Prestige ground. The
+ * alpha below is the only thing that sets the glow's strength: `glow.halo`
+ * pins shadowOpacity at 1 on native precisely so the caller's alpha is the one
+ * dilution, and the shape's radius is the shared 12.
+ *
+ * SHIPPED CONSERVATIVE at 0.25, and it is meant to be tuned live with Fast
+ * Refresh rather than argued about here. Useful range 0.12 to 0.45: below 0.12
+ * the halo stops being visible against #02110D at all, and above ~0.45 it
+ * stops reading as depth and starts reading as a second gold ring.
+ */
+const CREATE_BUTTON_GLOW_ALPHA = 0.25;
+
 export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -482,6 +503,15 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   // 2026-08-23 FINISHES THE JOB: light's own COLOURS go too. Both themes now
   // draw the gold tile with the forest ring and the forest glyph, which is why
   // the glyph below is a single palette read rather than a theme ternary.
+  //
+  // RUN H2 GIVES THE COLOURS BACK PER THEME — the GEOMETRY stays shared, which
+  // is the half the parity pass was actually about. Dark keeps its gold tile
+  // and takes light's green for the glyph and light's slate for the ring;
+  // light fills with that same green and draws the slate glyph inside a ring
+  // one shade deeper. All three hues are the LIGHT palette's, in both themes,
+  // which is why they arrive as `colors.postPillGreen` / `greetingSlate` /
+  // `greetingSlateDeep` — one value on both sides of the palette (ui/tokens.ts
+  // `homeConstants`) rather than a hex written here or a cross-palette reach.
   const size = Math.round(TAB_BAR_CONTENT_HEIGHT * CREATE_BUTTON_PILL_RATIO);
   // The control CENTRES in the pill. The slot packs to flex-end with
   // TAB_BOTTOM_GAP beneath it, so lifting by half the slack minus that gap
@@ -504,7 +534,12 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         onPress={onPress}
         style={({ pressed }) => [
           styles.createButton,
-          isDark && styles.createButtonDark,
+          // A TERNARY, not a dark-only override, because the two themes no
+          // longer share a fill or a depth: layering a gold glow on top of a
+          // black drop shadow would leave both declared, and on web the two
+          // resolve through different properties, so "the later one wins" is
+          // not a thing that can be relied on. One branch, one depth.
+          isDark ? styles.createButtonDark : styles.createButtonLight,
           { width: size, height: size },
           pressed && styles.createButtonPressed,
           lift(pressed),
@@ -513,7 +548,11 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         accessibilityLabel="Create"
         accessibilityHint="Post a job, hire someone again, or open your jobs"
       >
-        <Ionicons name="add" size={glyph} color={colors.forest} />
+        <Ionicons
+          name="add"
+          size={glyph}
+          color={isDark ? colors.postPillGreen : colors.greetingSlate}
+        />
       </Pressable>
     </View>
   );
@@ -601,40 +640,60 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   createButton: {
     // Width/height are supplied at render — one pill-ratio size for both
     // themes since the parity pass (home(18)'s arithmetic).
+    //
+    // RUN H2 EMPTIES THIS STYLE OF FILL AND RING — those fork per theme now
+    // and live in the two branches below. THE DEPTH DOES NOT FORK, and that is
+    // deliberate: a theme override that adds, removes or reshapes a shadow
+    // makes light a different design rather than the same design in a second
+    // palette, which is the rule tests/themeTokens.test.mjs enforces tree-wide.
+    // So the glow is declared ONCE, here, and it is already per-theme without a
+    // ternary — `colors` is the RESOLVED palette (this factory runs once per
+    // palette), so dark draws #D4A24C and light draws #C8A15B from the same
+    // line.
     borderRadius: radius.lg,
-    // home(8) IS NOW BOTH THEMES (2026-08-23). Dark had been the ONE control
-    // decision 3 was reversed for — filled palette gold, dark content — while
-    // light kept the inverse, a forest fill ringed in gold. Two treatments for
-    // one control is exactly what the parity pass exists to end, so light
-    // adopts dark's: same gold tile, same forest ring, same forest glyph.
-    // `createButtonDark` below now restates this pair rather than overriding
-    // it; it stays because the render site's shape is not this commit's to
-    // change and the fence names it by key.
-    backgroundColor: colors.gold,
     borderWidth: 1,
-    borderColor: colors.forest,
     alignItems: 'center',
     justifyContent: 'center',
     // home(18): the lift is supplied at render, per theme — see CenterCreateButton.
-    // The button's own depth. It is an OPAQUE fill, so this elevation cannot
-    // trigger the transparent-background Android rendering bug the bar's own
-    // elevation:0 exists to avoid — and the bar's style is untouched.
-    shadowColor: colors.black,
-    shadowOpacity: 0.28,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 6,
+    //
+    // A GOLD GLOW, REPLACING THE BLACK DROP SHADOW this control used to carry
+    // (opacity 0.28, radius 8, offset 0/3). On the #02110D Prestige ground a
+    // black shadow under a gold tile reads as a hole punched in the bar rather
+    // than as lift. `glow.halo` is the shared shape from ui/tokens.ts and the
+    // colour arrives already pushed through withAlpha, which on native is the
+    // ONLY dilution — the shape pins shadowOpacity at 1 for exactly that
+    // reason. Strength is CREATE_BUTTON_GLOW_ALPHA above.
+    //
+    // NOTHING HERE MAY EVER CLIP. On iOS `overflow: 'hidden'` cancels a shadow
+    // on the SAME node, so this node and `createSlot` both stay unclipped; if a
+    // future clip is needed it goes on a child.
+    ...glow.halo(withAlpha(colors.gold, CREATE_BUTTON_GLOW_ALPHA)),
   },
-  // home(8): filled palette gold with dark content. NO LONGER DARK-ONLY — the
-  // base style above carries the same pair since 2026-08-23, so this is a
-  // restatement, not an override. The box model is unchanged either way —
-  // RN borders are inside the width.
-  // home(18): the ring becomes the DARK content colour the glyph already uses.
-  // Gold on gold is not a ring; this is the one master 44 would show if it drew
-  // this control at all, and it introduces no colour the screen does not have.
+  // home(8): filled palette gold with dark content. The FILL is the operator
+  // reversal of decision 3's "no gold fills", and it survives RUN H2 untouched
+  // — dark is still the gold tile. The box model is unchanged either way: RN
+  // borders are inside the width.
+  //
+  // home(18) made the ring the dark content colour, because gold on gold is not
+  // a ring. RUN H2 keeps that principle and changes the value: the ring is
+  // light's greeting slate and the glyph is light's pill green, so the ring is
+  // still not the fill's own colour and the glyph is still dark content on gold.
+  //
+  // The DEPTH is on the shared style above, not here — see the note there.
+  // These two branches differ in COLOUR and in nothing else, which is what
+  // makes them a palette translation rather than two designs.
   createButtonDark: {
     backgroundColor: colors.gold,
-    borderColor: colors.forest,
+    borderColor: colors.greetingSlate,
+  },
+  // RUN H2: light stops sharing dark's tile. It fills with the light Post-a-job
+  // pill's own green, draws the slate glyph, and rings that glyph in one shade
+  // deeper so the outline reads against it. Still an OPAQUE fill, so the shared
+  // elevation cannot trigger the transparent-background Android rendering bug
+  // the bar's own elevation:0 exists to avoid.
+  createButtonLight: {
+    backgroundColor: colors.postPillGreen,
+    borderColor: colors.greetingSlateDeep,
   },
   // home(18): the transform moved to the call site with the lift, so the pressed
   // state cannot fall out of step with the resting one.

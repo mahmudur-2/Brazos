@@ -1,5 +1,5 @@
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
-import { brand, dark as emeraldDark, withAlpha as alpha } from '../ui/tokens';
+import { brand, dark as emeraldDark, constantAccents, withAlpha as alpha } from '../ui/tokens';
 
 // lib/theme.ts is the standard import surface for screens (CLAUDE.md): the
 // §I helpers below are re-exported here so no screen ever needs to import
@@ -56,6 +56,16 @@ export const colors = {
   // Rating-star gold. Kept as an explicit token (not tied to status/primary)
   // since gold stars are a near-universal convention independent of theme.
   star: '#F59E0B',
+
+  // --- Theme-constant accents (RUN H2) ------------------------------------
+  // postPillGreen, greetingSlate, greetingSlateDeep, referenceCoral — ONE
+  // value in both palettes, by operator decision. Spread
+  // from ui/tokens.ts's `constantAccents` (where the reasoning lives) into this
+  // palette AND into `darkColors` below, which is the same arrangement `star`,
+  // `black`, `white` and `mediaChrome` already have: a role that does not
+  // change with the theme is declared identically on both sides rather than
+  // being reached for across palettes at a call site.
+  ...constantAccents,
 
   // --- Emerald Trust palette (atlas :root) -------------------------------
   // Spread from ui/tokens.ts's `brand` rather than restated: forest, emerald,
@@ -155,6 +165,10 @@ export const darkColors: ColorPalette = {
   onPrimary: '#F1EDE1',
   onForest: emeraldDark.onForest,
   star: '#F59E0B',
+  // RUN H2's cross-theme trio, restated here from the SAME source object the
+  // light palette spreads — so dark cannot drift to a second value for a role
+  // whose whole definition is "the light one, in both themes".
+  ...constantAccents,
 
   // Brand hues in dark come from the ONE authoritative dark palette
   // (ui/tokens.ts `dark`, the Emerald Prestige v2 set — pixel-derived from

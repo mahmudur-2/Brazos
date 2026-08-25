@@ -271,7 +271,16 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
   assert.match(code, /adjustsFontSizeToFit\s*minimumFontScale=\{0\.87\}/);
   // The dot row: the shared PulseDot, green when available, red when not —
   // both palette reads — and PulseDot itself honours reduced motion.
-  assert.match(code, /<PulseDot color=\{accepting \? colors\.emerald : colors\.danger\} \/>/);
+  //
+  // RUN H2 moved the OFFLINE half from `danger` to `referenceCoral`. It is the
+  // same assertion with the recorded value updated, not a relaxed one: master
+  // 43 draws this dot in #D54C2C — the master set's only UI red — and `danger`
+  // was rendering it as a terracotta in light and a different red in dark. Both
+  // branches are still palette reads and neither may be a hex here.
+  assert.match(
+    code,
+    /<PulseDot color=\{accepting \? colors\.emerald : colors\.referenceCoral\} \/>/
+  );
   const pulseDot = stripComments(await read('components/PulseDot.tsx'));
   assert.match(pulseDot, /useReducedMotion\(\)/);
   assert.match(pulseDot, /if \(reducedMotion\) \{\s*pulse\.setValue\(0\);\s*return;/);

@@ -72,7 +72,11 @@ const themeModule = (async () => {
     )
     .replace(
       /import \{[^}]*\} from '\.\.\/ui\/tokens';/,
-      'const { brand, dark: emeraldDark, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      // RUN H2 added `constantAccents` to what lib/theme.ts takes from the token
+      // module. The destructure here has to name everything that import names,
+      // or the executed module throws a ReferenceError at first use rather than
+      // failing an assertion — so the stub is widened, never the assertions.
+      'const { brand, dark: emeraldDark, constantAccents, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');

@@ -109,7 +109,7 @@ export function ConversationRow({
                 color={colors.textSubtle}
               />
             )}
-            {unread && <View style={styles.dot} />}
+            {unread && <View style={[styles.dot, !isDark && styles.dotLight]} />}
           </View>
         </View>
       </View>
@@ -166,12 +166,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Master 34 marks unread with a green dot; the count badge it also draws
   // needs a per-thread unread COUNT, which useConversations does not carry.
+  //
+  // RUN H2 TAKES IT OFF THE GREEN. `emerald` is the app's LIVE-state hue —
+  // money, Open, active nav — so an unread marker in it read as one more live
+  // badge rather than as something addressed to you. Dark wears gold, the
+  // Prestige set's own attention metal; light wears the reference coral. Two
+  // colours, one role, and the geometry above is untouched.
   dot: {
     width: 9,
     height: 9,
     borderRadius: 5,
-    backgroundColor: colors.emerald,
+    backgroundColor: colors.gold,
   },
+  dotLight: { backgroundColor: colors.referenceCoral },
   unreadCard: {
     backgroundColor: colors.primarySoft,
   },

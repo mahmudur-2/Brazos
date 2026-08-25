@@ -434,7 +434,41 @@ const BAKED_ART = {
   // home-atmosphere-dark.png stay gated, so the dark-only decision is intact
   // everywhere it is still true — this is one asset leaving the set by a
   // decision, not the set being emptied to make a mount pass.
-  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-trimmed', gate: false },
+  //
+  // RUN H2 — THE GATE GOES BACK ON, and the decision moves back with it. The
+  // ungating above was sound only while BOTH palettes mounted this one scene.
+  // They no longer do: the scene is a dark room, an ungated mount painted a
+  // black rectangle onto the ivory ground on a light device, and the operator
+  // supplied a light composition to sit opposite it. So this is the dark half
+  // of a per-theme pair again — which is what `gate` has always meant — and
+  // screens/HomeScreen.tsx mounts it behind an isDark ternary once more. The
+  // bake is untouched: still the same 400x351 'baked-trimmed' file, byte for
+  // byte, and still measured by the sweep below.
+  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-trimmed', gate: true },
+  // The LIGHT half of that pair, installed by the operator and MEASURED here
+  // rather than assumed to mirror the dark one — it is not the same bake.
+  //
+  // 400x351 RGBA, like its counterpart, and there the resemblance stops. The
+  // dark file is a hard trim: 2.05% of it cut clean to zero, 35 partial samples
+  // in the entire frame, and an interior with none at all. This one RAMPS.
+  // Every one of the sixteen alpha buckets is populated; 79.22% sits at
+  // 240-255, 22.43% of the frame is partially transparent, 1.43% reaches zero,
+  // all four corners are empty, and 13.03% of it is below half opacity — yet
+  // inside a 42px inset the interior is 98.73% fully opaque. A wide soft EDGE
+  // around a solid scene.
+  //
+  // That is neither of the two bakes this roster knew, and the precedent for
+  // that case is directly above: 'baked-trimmed' was coined rather than
+  // rounding a trimmed file to 'transparent' or to a full bake. The same
+  // reasoning gives this one its own word. Calling it 'transparent' would let a
+  // real re-cut through unnoticed — a cut-out on this roster runs 38% to 73%
+  // empty, not 1.43% — and calling it 'baked-trimmed' would erase the very
+  // difference between the two files, which is the whole reason two exist.
+  //
+  // Gated, and for the same reason its counterpart is: it is one half of a
+  // per-theme pair. Mounting a light composition under the dark palette is the
+  // mirror of the fault that put the gate back on.
+  'assets/prestige/hero_armchair_customer_light.png': { bake: 'baked-feathered', gate: true },
   'assets/prestige/brazos_b_drape.png': { bake: 'transparent', gate: true },
   'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
@@ -543,7 +577,14 @@ function alphaProfile(bytes, asset) {
   if (colourType !== 6 && colourType !== 4) {
     // No alpha channel exists at all: the ground is baked in, whatever it is.
     assert.ok([0, 2, 3].includes(colourType), `${asset}: unknown PNG colour type ${colourType}`);
-    return { colourType, hasAlphaChannel: false, minAlpha: 255, transparentSamples: 0, samples };
+    return {
+      colourType,
+      hasAlphaChannel: false,
+      minAlpha: 255,
+      transparentSamples: 0,
+      partialSamples: 0,
+      samples,
+    };
   }
   assert.equal(depth, 8, `${asset}: only 8-bit PNGs are on this roster`);
   assert.equal(interlace, 0, `${asset}: only non-interlaced PNGs are on this roster`);
@@ -591,12 +632,18 @@ function alphaProfile(bytes, asset) {
 
   let minAlpha = 255;
   let transparentSamples = 0;
+  // RUN H2 — the THIRD population, and the one that tells a hard trim apart
+  // from a feathered edge. Both files reach alpha 0 over a similar share of
+  // their frame, so `transparentSamples` alone cannot separate them; what
+  // separates them is how much of the raster sits BETWEEN the two extremes.
+  let partialSamples = 0;
   for (let i = bpp - 1; i < img.length; i += bpp) {
     const a = img[i];
     if (a < minAlpha) minAlpha = a;
     if (a === 0) transparentSamples += 1;
+    else if (a < 255) partialSamples += 1;
   }
-  return { colourType, hasAlphaChannel: true, minAlpha, transparentSamples, samples };
+  return { colourType, hasAlphaChannel: true, minAlpha, transparentSamples, partialSamples, samples };
 }
 
 test('[static] every roster bake claim is re-derived from the file, both ways', async () => {
@@ -645,9 +692,12 @@ test('[static] every roster bake claim is re-derived from the file, both ways', 
   // just as strictly. The floor tracks the roster's composition. It is not a
   // threshold lowered to let something through, and the assertion either side
   // of it is unchanged.
+  // RUN H2: 5 -> 6 as the light hero joined the roster. The floor tracks the
+  // roster's composition and rises with it; it is never lowered to let
+  // something through.
   assert.ok(opaqueChecked >= 2, `the opaque half must stay measured (saw ${opaqueChecked})`);
   assert.ok(
-    transparentChecked >= 5,
+    transparentChecked >= 6,
     `the transparent half must stay measured (saw ${transparentChecked})`,
   );
 });
@@ -665,9 +715,20 @@ test('[static] each hero raster is the bake the roster records', async () => {
   // cannot sit on an arbitrary ground (it brings its own). The mount has to
   // agree with the file, and the roster is where that agreement is written
   // down.
+  //
+  // RUN H2 adds the LIGHT hero as a fourth, and with it the third bake word.
+  // The two customer heroes are 400x351 RGBA files that both reach alpha 0 over
+  // a small share of their frame, so the trimmed branch alone would accept
+  // either — which would let the light file be installed over the dark one, or
+  // a re-cut of either pass unnoticed. What actually separates them is the
+  // partial-alpha population: a hard trim has almost none (35 samples, 0.02%),
+  // a feathered edge is built out of it (31488 samples, 22.43%). Both branches
+  // below now pin that from BOTH sides, so neither file can drift into the
+  // other's word.
   let checked = 0;
   for (const asset of [
     'assets/prestige/hero_armchair_customer.png',
+    'assets/prestige/hero_armchair_customer_light.png',
     'assets/prestige/hero_toolbox_worker.png',
     'assets/prestige/brazos_b_drape.png',
   ]) {
@@ -699,6 +760,31 @@ test('[static] each hero raster is the bake the roster records', async () => {
         `${asset}: ${alpha.transparentSamples}/${alpha.samples} samples are cut away — a trim is ` +
           'neither a full bake nor a cut-out, and this file has become one of them',
       );
+      // A TRIM IS A HARD EDGE. The strip is cut, not faded: 35 samples of the
+      // whole 140400 sit between the extremes. Anything approaching the
+      // feathered file's 22% below would mean this is no longer a trim.
+      assert.ok(
+        alpha.partialSamples < alpha.samples * 0.01,
+        `${asset}: ${alpha.partialSamples}/${alpha.samples} samples are partially transparent — ` +
+          'a trim cuts, it does not fade; this file has been feathered',
+      );
+    } else if (recorded === 'baked-feathered') {
+      // RUN H2's third answer — a solid scene with a wide soft edge. It is
+      // pinned on all four counts that distinguish it from the trim above: it
+      // carries alpha, that alpha reaches zero, only a little of the frame is
+      // cut clean away, and a lot of it is neither cut nor solid.
+      assert.equal(alpha.colourType, 6, `${asset} is recorded feathered but is not RGBA`);
+      assert.equal(alpha.minAlpha, 0, `${asset} is recorded feathered but never reaches alpha 0`);
+      assert.ok(
+        alpha.transparentSamples > 0 && alpha.transparentSamples < alpha.samples * 0.3,
+        `${asset}: ${alpha.transparentSamples}/${alpha.samples} samples are cut away — a feathered ` +
+          'edge is not a cut-out, and this file has become one',
+      );
+      assert.ok(
+        alpha.partialSamples > alpha.samples * 0.05,
+        `${asset}: only ${alpha.partialSamples}/${alpha.samples} samples are partially ` +
+          'transparent — the feathered edge is what this word records, and it has gone',
+      );
     } else {
       assert.equal(recorded, 'opaque-dark', `${asset}: unknown bake "${recorded}" on the roster`);
       assert.equal(
@@ -713,7 +799,7 @@ test('[static] each hero raster is the bake the roster records', async () => {
       );
     }
   }
-  assert.equal(checked, 3, 'all three hero rasters must stay measured');
+  assert.equal(checked, 4, 'all four hero rasters must stay measured');
 });
 
 test('[static] a theme-specific asset is mounted only behind an isDark decision', async () => {

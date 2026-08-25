@@ -470,10 +470,86 @@ export const categoryAccents = {
   other: { bg: '#6B7280', icon: '#FFFFFF' }, // neutral gray fallback
 } as const;
 
+// ---------------------------------------------------------------------------
+// Theme-constant accents (RUN H2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Four hues the structure pass fixes to ONE value across both palettes.
+ *
+ * Three of them the operator drew OUT of the light palette and asked for in
+ * BOTH: the centre [ + ] and the greeting paint with light's own green and
+ * slate whether the device is light or dark. The fourth is the reference's
+ * one UI red, which the offline dot wears in both themes and the unread badge
+ * wears in light.
+ *
+ * WHY THEY ARE TOKENS AND NOT LITERALS AT THE CALL SITE. Reaching a light
+ * value while rendering dark has exactly two wrong shapes: a raw hex in a
+ * screen (banned outright — CLAUDE.md "Design system and navigation", and
+ * fenced by tests/themeResolution.test.mjs's literal scan over six
+ * directories), or a call site that imports the light palette and indexes it
+ * beside the resolved one, which makes every such site its own small
+ * definition of "the light green". Naming them once here leaves one place for
+ * either value to move.
+ *
+ * DELIBERATELY THEME-CONSTANT, and deliberately NOT part of
+ * `colors`/`ColorToken` — the same construction, and the same reasoning, as
+ * `categoryAccents` above. A dark counterpart is not merely unneeded here, it
+ * would be WRONG: the whole point of these four is that dark renders the same
+ * value light does. Folding them into `colors` would oblige `dark` to restate
+ * them (the `satisfies` clause), and a second entry is a second thing to drift.
+ * lib/theme.ts spreads this object into both of its palettes instead, exactly
+ * as `star`, `black`, `white` and `mediaChrome` already carry one value in
+ * both — so screens read them off the resolved palette like any other role.
+ *
+ * `greetingSlate` restates the hex light's `homeSlate` carries rather than
+ * importing it, because lib/theme.ts imports THIS file and not the reverse.
+ * That is the same arrangement `homeModeRing` already has beside `homeSlate`
+ * over there, and for the same stated reason: two roles, two tokens, so one
+ * can move without dragging the other.
+ */
+export const constantAccents = {
+  /** The light Post-a-job pill's green. It is light `emerald`, referenced
+   *  rather than restated so there is still one definition of the hue. Fills
+   *  the light [ + ] and the DARK Post-a-job pill; draws the dark [ + ]'s
+   *  glyph and the light greeting name. */
+  postPillGreen: brand.emerald,
+  /** The light greeting grey — the value light's `homeSlate` carries. Rings
+   *  the dark [ + ] and draws the light [ + ]'s glyph. */
+  greetingSlate: '#526477',
+  /** One shade darker than `greetingSlate` — the light [ + ]'s outline, which
+   *  has to read as a ring against a glyph of the slate itself. Derived, not
+   *  sampled: every channel of `greetingSlate` at 80% (82,100,119 ->
+   *  66,80,95). An OPERATOR DIAL — see CREATE_BUTTON_* in
+   *  ui/primitives/BottomNav.tsx. */
+  greetingSlateDeep: '#42505F',
+  /**
+   * THE REFERENCE CORAL — the unread badge in light, and the worker's offline
+   * dot in both themes.
+   *
+   * It is not invented and it is not `danger`. docs/mockups/'s manifest
+   * measures it off the master set and records it as the set's ONE UI red:
+   * "appears ONCE as UI: the offline dot on 43", where master 43 is Worker
+   * Home. So the offline dot is not being GIVEN a coral — it is being returned
+   * to the one the reference draws it in, which today renders as `danger`
+   * (#A8432B in light, #D8604B in dark), a terracotta in one theme and a
+   * different red in the other.
+   *
+   * IDENTIFIED, NOT CHOSEN. Every hex in the tracked tree and in
+   * design-reference/ was swept for a warm red-orange that is light and
+   * saturated; this is the only one that is a UI colour rather than a surface
+   * tint (#F3DCD2, #F5E7E4, #E9CAC5), a category identity (#C56A2E "moving"),
+   * a map heat value (#DC2626), or a palette `danger`. design-reference/'s
+   * light set contains no coral at all.
+   */
+  referenceCoral: '#D54C2C',
+} as const;
+
 export const tokens = {
   colors,
   brand,
   categoryAccents,
+  constantAccents,
   spacing,
   layout,
   radius,
