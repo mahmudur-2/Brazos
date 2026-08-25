@@ -15,6 +15,40 @@ type TextFieldProps = {
   palette?: ColorPalette;
 } & TextInputProps;
 
+/**
+ * THE field label, on its own.
+ *
+ * Decision 8: a field label is a gold small-caps eyebrow. Masters 3, 4, 23, 24
+ * and 30 all draw them that way (master 29 draws its two cream — B-9, settled
+ * by the decision).
+ * 2026-08-24: light draws the SAME eyebrow, in ink. It used to be a 13pt/600
+ * sentence-case label — a different label, not the same one in a second
+ * palette, and the widest instance of that fault in the app since every form in
+ * it renders this component. The metrics are dark's, per the parity rule; only
+ * the colour still forks.
+ *
+ * Exported because a form can contain a labelled control that is NOT a text
+ * input — the posting wizard's budget DISPLAY pill is the first — and a second
+ * hand-rolled copy of this treatment beside a real one is exactly how a form's
+ * labels come to disagree. `TextField` renders this same component, so there is
+ * one definition of the label and not two.
+ */
+export function FieldLabel({
+  children,
+  palette: paletteProp,
+}: {
+  children: string;
+  palette?: ColorPalette;
+}) {
+  const { palette: colors, isDark } = useThemeColors();
+  const palette = paletteProp ?? colors;
+  return (
+    <Text style={[styles.label, { color: isDark ? palette.gold : palette.text }]}>
+      {children}
+    </Text>
+  );
+}
+
 export function TextField({
   label,
   error,
@@ -29,17 +63,7 @@ export function TextField({
   return (
     <View style={styles.container}>
       <View style={styles.labelRow}>
-        {/* Decision 8: a field label is a gold small-caps eyebrow. Masters 3,
-            4, 23, 24 and 30 all draw them that way (master 29 draws its two
-            cream — B-9, settled by the decision).
-            2026-08-24: light draws the SAME eyebrow, in ink. It used to be a
-            13pt/600 sentence-case label — a different label, not the same one
-            in a second palette, and the widest instance of that fault in the
-            app since every form in it renders this component. The metrics are
-            dark's, per the parity rule; only the colour still forks. */}
-        <Text style={[styles.label, { color: isDark ? palette.gold : palette.text }]}>
-          {label}
-        </Text>
+        <FieldLabel palette={palette}>{label}</FieldLabel>
         {hint ? <Text style={[styles.hint, { color: palette.textMuted }]}>{hint}</Text> : null}
       </View>
       <TextInput

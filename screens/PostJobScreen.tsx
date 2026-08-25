@@ -23,10 +23,11 @@ import type { ImagePickerAsset } from 'expo-image-picker';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { EditBudgetDialog } from '../components/EditBudgetDialog';
 import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { TextField } from '../components/TextField';
+import { FieldLabel, TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
@@ -135,6 +136,25 @@ function upcomingDates(): { iso: string; label: string }[] {
           : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
     return { iso: toLocalIsoDate(d), label };
   });
+}
+
+/**
+ * D18 — the summary card's MEDIA row.
+ *
+ * Each side pluralises on its own count, so "1 photo • 2 videos" is as
+ * possible as "3 photos • 1 video". A kind with nothing attached is OMITTED
+ * rather than written as a zero: "0 videos" is noise on a review screen, and
+ * reading it as a fact about the posting takes a beat longer than reading the
+ * photos it actually has. Nothing at all reads as "None", which is the
+ * accurate answer and not a placeholder.
+ *
+ * "video", never "clip" — one word for one thing, everywhere in the flow.
+ */
+function mediaSummary(photoCount: number, videoCount: number): string {
+  const parts: string[] = [];
+  if (photoCount > 0) parts.push(`${photoCount} ${photoCount === 1 ? 'photo' : 'photos'}`);
+  if (videoCount > 0) parts.push(`${videoCount} ${videoCount === 1 ? 'video' : 'videos'}`);
+  return parts.length > 0 ? parts.join(' • ') : 'None';
 }
 
 const POST_STEPS = [
@@ -247,9 +267,11 @@ export function PostJobScreen() {
   const [step, setStep] = useState(0);
   // §3.4 photo nudge — dismissal is part of the draft, never a global setting.
   const [photoNudgeDismissed, setPhotoNudgeDismissed] = useState(false);
-  // Focus state for the two budget fields, so the typical-range guidance can
-  // step aside while an amount is actually being typed (§3.2).
-  const [budgetFocused, setBudgetFocused] = useState(false);
+  // D13 — the budget editor's open state, and the successor to the old
+  // per-field focus flag: the typical-range guidance still steps aside while
+  // an amount is actually being typed (§3.2), it is just one editor doing the
+  // typing now instead of two inline fields.
+  const [editingBudget, setEditingBudget] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   // The amount an offer is about to be sent at, held while the confirmation
   // is open. Null means nothing is pending.
@@ -692,9 +714,8 @@ export function PostJobScreen() {
       return;
     }
 
-    // Hire mode negotiates a single amount; fresh posts and edits carry the
-    // MIN/MAX range (screen 15).
-    const budgetMinCents = dollarsToCents(budgetMin);
+    // Hire mode negotiates a single amount; a posting carries a maximum, or
+    // nothing at all.
     const budgetMaxCents = dollarsToCents(budgetMax);
     let budgetCents: number | null = dollarsToCents(budget);
     if (isHiring) {
@@ -712,16 +733,12 @@ export function PostJobScreen() {
         return;
       }
       budgetCents = amountCents;
-    } else {
-      if (Number.isNaN(budgetMinCents) || Number.isNaN(budgetMaxCents)) {
-        await alertAsync('Invalid budget', 'Budget amounts must be positive dollar amounts.');
-        return;
-      }
-      if (budgetMinCents != null && budgetMaxCents != null && budgetMinCents > budgetMaxCents) {
-        await alertAsync('Check your budget range', 'The minimum cannot be more than the maximum.');
-        return;
-      }
+    } else if (Number.isNaN(budgetMaxCents)) {
+      await alertAsync('Invalid budget', 'Budget amounts must be positive dollar amounts.');
+      return;
     }
+    // There is no range to cross-check any more: with one figure, "the
+    // minimum cannot be more than the maximum" has nothing to compare.
 
     // Sending an offer puts a real, priced commitment in front of a specific
     // person, so it gets a confirmation naming the amount and the recipient
@@ -741,7 +758,11 @@ export function PostJobScreen() {
       category,
       location: location.trim(),
       budgetCents: null,
-      budgetMinCents,
+      // D16 — THIS SCREEN NO LONGER WRITES A MINIMUM. The field is gone, so
+      // there is no minimum to write and null is the honest value. The column
+      // stays, every other reader of it stays, and nothing is migrated: this
+      // is one writer declining to write, not a schema change.
+      budgetMinCents: null,
       budgetMaxCents,
       scheduledDate,
       arrivalStartHour,
@@ -855,25 +876,27 @@ export function PostJobScreen() {
         ? 'Check the details below. You can still go back without losing your work.'
         : currentStep.subtitle;
   const reviewBudgetCents = dollarsToCents(budget);
-  const reviewMinCents = dollarsToCents(budgetMin);
   const reviewMaxCents = dollarsToCents(budgetMax);
-  const validMin =
-    reviewMinCents != null && !Number.isNaN(reviewMinCents) ? reviewMinCents : null;
   const validMax =
     reviewMaxCents != null && !Number.isNaN(reviewMaxCents) ? reviewMaxCents : null;
   const reviewBudget = isHiring
     ? reviewBudgetCents != null && !Number.isNaN(reviewBudgetCents)
       ? formatBudget(reviewBudgetCents)
       : 'Required before sending'
-    : validMin != null || validMax != null
+    : validMax != null
       ? budgetRangeLabel({
           budget_cents: null,
-          budget_min_cents: validMin,
+          // D16: this screen writes no minimum, so the label it derives must
+          // not claim one either.
+          budget_min_cents: null,
           budget_max_cents: validMax,
         })
       : // Master 35 is the poster's own view of an unset-budget job and it
         // reads "No budget set" — the same string `formatBudget` returns.
         'No budget set';
+  // D13 — what the display pill shows. The SAME resolved cents the summary
+  // row reads, so the pill and the row can never disagree about the amount.
+  const maxBudgetDisplay = validMax != null ? formatBudget(validMax) : 'No maximum';
   const reviewTiming =
     arrivalWindowLabel({
       scheduled_date: scheduledDate,
@@ -888,7 +911,7 @@ export function PostJobScreen() {
   const descNeeded = isFreshPost ? descriptionCharsNeeded(description) : 0;
   const guidanceLines = isFreshPost ? priceGuidanceLines(category) : null;
   const bothBudgetsEmpty = !budgetMin.trim() && !budgetMax.trim();
-  const showPriceGuidance = !!guidanceLines && (bothBudgetsEmpty || !budgetFocused);
+  const showPriceGuidance = !!guidanceLines && (bothBudgetsEmpty || !editingBudget);
   const showPhotoNudge =
     isFreshPost && step === 1 && photos.length === 0 && !photoNudgeDismissed;
 
@@ -1150,13 +1173,20 @@ export function PostJobScreen() {
                 </Pressable>
               </View>
 
-              <View style={styles.infoCard}>
+              {/* D11 — THIS CARD WAS UNREADABLE IN DARK, and the cause was
+                  the missing half of the treatment its sibling on step 2
+                  already had: `infoText` is `forest`, a deep green, and
+                  `infoCard` is `mint`, a near-black green. One deep green on
+                  another. The dark ink and border overrides are the same two
+                  the media advisory carries; this card simply never got
+                  them. */}
+              <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
                 <View style={styles.infoIcon}>
-                  <Ionicons name="location-outline" size={20} color={colors.emerald} />
+                  <Ionicons name="information-circle-outline" size={20} color={colors.emerald} />
                 </View>
-                <Text style={styles.infoText}>
-                  Your listing shows the area you enter. When a map point is available,
-                  its precise coordinates stay in protected job-location data.
+                <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
+                  Shows approximate area, exact coordinates stay hidden until job is
+                  confirmed by both parties.
                 </Text>
               </View>
 
@@ -1165,15 +1195,26 @@ export function PostJobScreen() {
                   surface), so hire mode keeps the plain location step. */}
               {!isHiring && (
                 <>
-                  <TextField
-                    palette={emeraldColors}
-                    label="Service address (private, optional)"
-                    value={address}
-                    onChangeText={setAddress}
-                    placeholder="e.g. 2410 Emmons Ave, Apt 3B"
-                    autoCapitalize="words"
-                    hint="Never shown while workers browse. Only you — and the worker you hire — can see it."
-                  />
+                  {/* D12 — THE CAPTION CAME OUT OF THE LABEL ROW. TextField
+                      lays a `hint` beside the label, which works for a two-
+                      word character count and not for a sentence: this label
+                      is the longest in the app and the sentence ran off the
+                      right edge on top of it. Below the field it is a plain
+                      caption with the whole width, and the label owns its
+                      row alone. */}
+                  <View style={styles.field}>
+                    <TextField
+                      palette={emeraldColors}
+                      label="Service address (private, optional)"
+                      value={address}
+                      onChangeText={setAddress}
+                      placeholder="e.g. 2410 Emmons Ave, Apt 3B"
+                      autoCapitalize="words"
+                    />
+                    <Text style={styles.fieldHint}>
+                      Never shown until you hire — can see after job is accepted.
+                    </Text>
+                  </View>
 
                   <View style={styles.field}>
                     <Text style={styles.fieldLabel}>Which day?</Text>
@@ -1259,35 +1300,33 @@ export function PostJobScreen() {
                       <Text style={styles.guidanceNote}>{guidanceLines[1]}</Text>
                     </View>
                   ) : null}
-                  <View style={styles.budgetRow}>
-                    <View style={styles.budgetField}>
-                      <TextField
-                        palette={emeraldColors}
-                        label="Min budget ($)"
-                        value={budgetMin}
-                        onChangeText={setBudgetMin}
-                        placeholder="e.g. 40"
-                        keyboardType="numeric"
-                        onFocus={() => setBudgetFocused(true)}
-                        onBlur={() => setBudgetFocused(false)}
-                      />
-                    </View>
-                    <View style={styles.budgetField}>
-                      <TextField
-                        palette={emeraldColors}
-                        label="Max budget ($)"
-                        value={budgetMax}
-                        onChangeText={setBudgetMax}
-                        placeholder="e.g. 60"
-                        keyboardType="numeric"
-                        onFocus={() => setBudgetFocused(true)}
-                        onBlur={() => setBudgetFocused(false)}
-                      />
-                    </View>
+                  {/* D13/D14 — ONE AMOUNT, SHOWN NOT TYPED. The min field is
+                      gone; what is left is a DISPLAY of the maximum, in the
+                      same left-aligned label treatment Title and Description
+                      carry on step 1. The pill itself is inert — it is not a
+                      text input and it is not a touch target. The pencil is
+                      the only thing here that can be pressed, and it opens
+                      the one editor. No slider, no track, no second pill. */}
+                  <FieldLabel palette={emeraldColors}>Max budget</FieldLabel>
+                  <View style={styles.budgetPill}>
+                    <Text style={styles.budgetPillValue} numberOfLines={1}>
+                      {maxBudgetDisplay}
+                    </Text>
+                    <Pressable
+                      onPress={() => setEditingBudget(true)}
+                      hitSlop={12}
+                      style={styles.budgetPencil}
+                      accessibilityRole="button"
+                      accessibilityLabel="Edit budget"
+                    >
+                      <Ionicons name="pencil" size={18} color={colors.emerald} />
+                    </Pressable>
                   </View>
+                  {/* D15a — the sentence about ranges was true of two fields
+                      and is false of one, so it is deleted rather than
+                      reworded. */}
                   <Text style={styles.fieldHint}>
-                    Both optional — leave them blank if you want workers to propose a
-                    price. A range helps workers bid inside what you expect.
+                    Optional — leave blank if you want workers to propose a price.
                   </Text>
                 </View>
               )}
@@ -1332,8 +1371,7 @@ export function PostJobScreen() {
                   <View style={styles.reviewText}>
                     <Text style={styles.reviewLabel}>Media</Text>
                     <Text style={styles.reviewValue}>
-                      {photos.length} {photos.length === 1 ? 'photo' : 'photos'} ·{' '}
-                      {videos.length} {videos.length === 1 ? 'clip' : 'clips'}
+                      {mediaSummary(photos.length, videos.length)}
                     </Text>
                   </View>
                 </View>
@@ -1352,7 +1390,11 @@ export function PostJobScreen() {
                   </View>
                 )}
 
-                {!isHiring && address.trim() ? (
+                {/* D17 — the row stays whether or not an address was given.
+                    On a REVIEW screen a missing private address is a fact
+                    worth reading, and a row that appears and disappears
+                    reshuffles the card between visits. */}
+                {!isHiring && (
                   <View style={styles.reviewRow}>
                     <View style={styles.reviewIcon}>
                       <Ionicons name="lock-closed-outline" size={18} color={colors.emerald} />
@@ -1360,11 +1402,11 @@ export function PostJobScreen() {
                     <View style={styles.reviewText}>
                       <Text style={styles.reviewLabel}>Address (private)</Text>
                       <Text style={styles.reviewValue} numberOfLines={2}>
-                        {address.trim()}
+                        {address.trim() || 'Not added'}
                       </Text>
                     </View>
                   </View>
-                ) : null}
+                )}
 
                 <View style={styles.reviewRow}>
                   <View style={styles.reviewIcon}>
@@ -1563,6 +1605,21 @@ export function PostJobScreen() {
         visible={!!viewerUri}
         uri={viewerUri}
         onClose={() => setViewerUri(null)}
+      />
+
+      {/* D15 — the one budget editor. Cancel discards, Save writes and
+          closes, and an empty field saves as "no maximum" rather than
+          refusing. The ceiling refuses in writing inside the dialog, before
+          anything reaches createJob. */}
+      <EditBudgetDialog
+        visible={editingBudget}
+        value={budgetMax}
+        palette={emeraldColors}
+        onSave={(next) => {
+          setBudgetMax(next);
+          setEditingBudget(false);
+        }}
+        onCancel={() => setEditingBudget(false)}
       />
 
       <ConfirmDialog
@@ -1769,12 +1826,35 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.forest,
   },
   nudgeTextDark: { color: colors.ink },
-  budgetRow: {
+  // D13/D14 — A DISPLAY, NOT A CONTROL. The pill is a View with a Text in it:
+  // no Pressable wraps it, no TextInput sits in it, and there is no slider or
+  // track anywhere near it. Its ONE touch target is the pencil, which is why
+  // the pencil is the only Pressable in the block.
+  budgetPill: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: spacing.md,
+    minHeight: 50,
+    paddingLeft: spacing.md + 2,
+    paddingRight: spacing.sm,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.surface,
   },
-  budgetField: {
+  budgetPillValue: {
     flex: 1,
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.ink,
+  },
+  // >= 44pt, because it is the only way into the editor (CLAUDE.md).
+  budgetPencil: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   chipRow: {
     flexDirection: 'row',

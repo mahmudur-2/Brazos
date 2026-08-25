@@ -204,7 +204,11 @@ test('§3.2 · guidance shows only for a seeded category while the budget is emp
   const screen = await read('screens/PostJobScreen.tsx');
 
   assert.match(screen, /const guidanceLines = isFreshPost \? priceGuidanceLines\(category\) : null;/);
-  assert.match(screen, /\(bothBudgetsEmpty \|\| !budgetFocused\)/);
+  // RUN P1 RENAMED THE SECOND TERM, not the rule. The min/max pair became one
+  // display pill with a single editor behind a pencil, so "an amount is being
+  // typed" is now "the budget editor is open" — `editingBudget` — rather than
+  // either inline field holding focus. Same predicate, same two branches.
+  assert.match(screen, /\(bothBudgetsEmpty \|\| !editingBudget\)/);
 });
 
 // ---------------------------------------------------------------------------

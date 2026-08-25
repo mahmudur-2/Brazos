@@ -471,3 +471,277 @@ test('D10 · the cap pill reads from the cap the picker is actually given', () =
     /Up to \{MAX_VIDEO_DURATION_MS \/ 1000\} seconds\. A short clip explains an awkward job faster than a paragraph\./
   );
 });
+
+// ---------------------------------------------------------------------------
+// D11-D18 — STEP 3 (LOCATION) AND STEP 4 (REVIEW).
+//
+// The area card says what it protects and can actually be read; the address
+// caption is out of the label row; the budget is one displayed figure with one
+// way to change it; and the summary keeps all six of its rows.
+//
+// WHY NOT VACUOUS: the readability claim in D11 is checked as the SPECIFIC
+// pair of overrides that were missing — the card's own token and its text's
+// token are parsed and compared, so "readable" is a resolved contrast between
+// two palette entries rather than an eyeball. And the MEDIA row's wording is
+// extracted from the screen and RUN over every count combination that matters.
+// ---------------------------------------------------------------------------
+
+/** The real mediaSummary, lifted out of the screen and executed. */
+const mediaSummary = await (async () => {
+  const source = read('screens/PostJobScreen.tsx');
+  const at = source.indexOf('function mediaSummary');
+  assert.notEqual(at, -1, 'the screen must declare mediaSummary');
+  const end = source.indexOf('\n}', at);
+  assert.ok(end > at, 'mediaSummary must close');
+  const js = stripTypeScriptTypes('export ' + source.slice(at, end + 2), { mode: 'strip' });
+  const url =
+    'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+  return (await import(url)).mediaSummary;
+})();
+
+test('D11 · the area card says what it protects, and is legible in dark', () => {
+  const screen = read('screens/PostJobScreen.tsx');
+  const flat = flatten(screen);
+
+  // The copy, verbatim, with the "i" glyph in the existing icon slot.
+  assert.match(
+    flat,
+    /<Ionicons name="information-circle-outline" size=\{20\} color=\{colors\.emerald\} \/>/
+  );
+  assert.match(
+    flat,
+    /Shows approximate area, exact coordinates stay hidden until job is confirmed by both parties\./
+  );
+  assert.ok(
+    !flat.includes('protected job-location data'),
+    'the sentence it replaced is retired, not left beside it'
+  );
+
+  // THE READABILITY FAULT, NAMED. Both info cards must carry the dark
+  // overrides — the area card was the one missing them, which left deep-green
+  // text (`forest`) on a near-black-green card (`mint`).
+  assert.equal(
+    (flat.match(/\[styles\.infoCard, isDark && styles\.infoCardDark\]/g) ?? []).length,
+    2,
+    'both info cards take the dark card treatment'
+  );
+  assert.equal(
+    (flat.match(/\[styles\.infoText, isDark && styles\.infoTextDark\]/g) ?? []).length,
+    2,
+    'both info cards take the dark ink — this is the fix, not a repaint'
+  );
+
+  // ANTI-VACUITY: the two tokens the fault was made of really are one deep
+  // green on another, and the override really is the cream ink.
+  const tokens = read('ui/tokens.ts');
+  const forest = tokenValue(tokens, 'export const dark = {', 'forest');
+  const mint = tokenValue(tokens, 'export const dark = {', 'mint');
+  const ink = tokenValue(tokens, 'export const dark = {', 'ink');
+  const luminance = (hex) => {
+    const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  assert.ok(
+    Math.abs(luminance(forest) - luminance(mint)) < 24,
+    `dark forest ${forest} on dark mint ${mint} is the near-invisible pair this fixes`
+  );
+  assert.ok(
+    luminance(ink) - luminance(mint) > 150,
+    `dark ink ${ink} on dark mint ${mint} is the pair that reads`
+  );
+});
+
+test('D12 · the address caption is below the field, and the label owns its row', () => {
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+
+  const at = flat.indexOf('label="Service address (private, optional)"');
+  assert.notEqual(at, -1, 'the private-address field must still be here');
+  const field = flat.slice(at, at + 400);
+
+  // No hint on the field — a hint is laid out BESIDE the label, and this is
+  // the longest label in the app.
+  assert.doesNotMatch(field, /hint=/, 'the sentence must not go back into the label row');
+  // The caption is a plain line under the field, verbatim.
+  assert.match(
+    field,
+    /<Text style=\{styles\.fieldHint\}> Never shown until you hire — can see after job is accepted\. <\/Text>/
+  );
+  assert.ok(
+    !flat.includes('Never shown while workers browse'),
+    'the old sentence is replaced, not duplicated'
+  );
+});
+
+test('D13/D14 · the budget pill displays, the pencil edits, and nothing else is a control', () => {
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+
+  const at = flat.indexOf('<FieldLabel palette={emeraldColors}>Max budget</FieldLabel>');
+  assert.notEqual(at, -1, 'the maximum carries the shared field label, left-aligned');
+  const end = flat.indexOf('Optional — leave blank', at);
+  assert.notEqual(end, -1, 'the helper must follow the pill');
+  const block = flat.slice(at, end);
+
+  // THE PILL IS NOT A TOUCH TARGET. Exactly one Pressable in the block, and
+  // it is the pencil.
+  assert.equal(
+    (block.match(/<Pressable/g) ?? []).length,
+    1,
+    'the pill itself must not be pressable — the pencil is the only touch target'
+  );
+  assert.match(block, /<View style=\{styles\.budgetPill\}> <Text style=\{styles\.budgetPillValue\}/);
+  assert.match(block, /accessibilityLabel="Edit budget"/);
+  assert.match(block, /onPress=\{\(\) => setEditingBudget\(true\)\}/);
+  assert.match(block, /<Ionicons name="pencil"/);
+
+  // AND IT IS NOT A TEXT INPUT.
+  assert.ok(!block.includes('<TextField'), 'the pill is a display, not a field');
+  assert.ok(!block.includes('onChangeText'), 'nothing in the pill accepts typing');
+
+  // D13 — the minimum is gone entirely, field and label. (The `budgetMin`
+  // STATE survives, and must: the draft record and edit mode both carry it,
+  // and D16 is about not WRITING it, not about corrupting a saved draft.
+  // What has to be gone is any way to enter one.)
+  assert.ok(!flat.includes('Min budget'), 'the MIN BUDGET field and label are removed');
+  assert.ok(!flat.includes('budgetRow'), 'the two-field row is gone with it');
+  assert.ok(!block.includes('budgetMin'), 'the review step offers no minimum to edit');
+
+  // D14 — no slider, no track, no second edit affordance.
+  for (const banned of ['Slider', 'FilterSlider', 'Edit Amount', 'budgetTrack']) {
+    assert.ok(!flat.includes(banned), `${banned} must not appear — the pencil is the one edit path`);
+  }
+
+  // D15a — the range sentence is deleted, not reworded.
+  assert.match(flat, /Optional — leave blank if you want workers to propose a price\./);
+  assert.ok(!flat.includes('A range helps workers bid'), 'the range sentence is gone');
+
+  // The label treatment is the SHARED one, so it cannot drift from Title and
+  // Description on step 1.
+  const field = read('components/TextField.tsx');
+  assert.match(field, /export function FieldLabel\(\{/);
+  assert.match(field, /<FieldLabel palette=\{palette\}>\{label\}<\/FieldLabel>/);
+});
+
+test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses over-ceiling in writing', () => {
+  const dialog = read('components/EditBudgetDialog.tsx');
+  const flat = flatten(dialog);
+  const confirm = flatten(read('components/ConfirmDialog.tsx'));
+
+  // ConfirmDialog's structure: the same Modal, scrim, centred wrap, xl sheet.
+  for (const shared of [
+    /<Modal visible=\{visible\} transparent animationType="fade"/,
+    /backdrop: \{ flex: 1,/,
+    /centerWrap: \{ flex: 1, justifyContent: 'center', paddingHorizontal: spacing\.lg, \}/,
+    /borderRadius: radius\.xl,/,
+  ]) {
+    assert.match(flat, shared, 'the dialog must keep ConfirmDialog\'s structure');
+    assert.match(confirm, shared, 'and that structure must still be what ConfirmDialog has');
+  }
+
+  // …but an EMERALD, TRANSLUCENT panel where ConfirmDialog has an opaque one.
+  assert.match(confirm, /backgroundColor: palette\.surface, borderColor: palette\.border/);
+  assert.match(flat, /backgroundColor: withAlpha\(colors\.forest, 0\.92\)/);
+  assert.match(flat, /borderColor: withAlpha\(colors\.emerald, 0\.55\)/);
+
+  // THE SCRIM IS DEEPENED THROUGH THE SHARED HELPER, never a new number.
+  assert.match(flat, /backgroundColor: scrimInDark\(colors\.ink\)/);
+  assert.match(flat, /backdropDark: \{ backgroundColor: scrimInDark\(colors\.background\) \}/);
+  assert.match(
+    read('lib/theme.ts'),
+    /export const SCRIM_DARK_ALPHA = 0\.55;/,
+    'the alpha stays the one value lib/theme pins'
+  );
+
+  // L1 — flat fills only. No blur, no gradient, no library.
+  for (const banned of ['BlurView', 'blur', 'Gradient', 'gradient', 'Svg']) {
+    assert.ok(!flat.includes(banned), `${banned} must not appear — every fill here is flat`);
+  }
+
+  // The contents, verbatim.
+  assert.match(flat, />Edit Budget<\/Text>/);
+  assert.match(flat, /Set the maximum amount workers can bid up to\./);
+  assert.match(flat, /keyboardType="numeric"/);
+  assert.match(flat, /returnKeyType="done"/);
+  assert.match(flat, /onSubmitEditing=\{handleSave\}/, 'the Done key IS Save, not a second outcome');
+  assert.match(flat, /<Button title="Save" palette=\{palette\} onPress=\{handleSave\} \/>/);
+  assert.match(flat, /<Button title="Cancel" variant="secondary"/);
+
+  // THE CEILING, COMPOSED FROM THE SHARED RULES and refusing before any RPC.
+  assert.match(flat, /import \{ validateOfferAmount \} from '\.\/OfferComposer';/);
+  assert.match(flat, /import \{ moneyCeilingError \} from '\.\.\/lib\/validation';/);
+  assert.match(flat, /if \(!text\.trim\(\)\) return null;/, 'empty is legal and means no maximum');
+  assert.match(flat, /return moneyCeilingError\(dollarsToCents\(text\)\);/);
+  assert.match(flat, /if \(found\) \{ setProblem\(found\); return; \}/, 'a refusal blocks the save');
+  assert.match(flat, /error=\{problem\}/, 'and it is stated in writing on the field');
+  // No RPC of any kind lives in this dialog — it hands text back and closes.
+  assert.ok(!flat.includes('supabase'), 'the dialog contacts nothing');
+  assert.ok(!flat.includes('createJob'), 'the dialog writes nothing');
+
+  // Cancel discards: the next open re-seeds from the live value.
+  assert.match(flat, /useEffect\(\(\) => \{ if \(!visible\) return; setDraft\(value\); setProblem\(null\); \}/);
+
+  // The screen wires it: Save writes and closes, Cancel only closes.
+  const screen = flatten(read('screens/PostJobScreen.tsx'));
+  assert.match(screen, /onSave=\{\(next\) => \{ setBudgetMax\(next\); setEditingBudget\(false\); \}\}/);
+  assert.match(screen, /onCancel=\{\(\) => setEditingBudget\(false\)\}/);
+});
+
+test('D16 · this screen writes no minimum, and nothing else about the column moved', () => {
+  const screen = read('screens/PostJobScreen.tsx');
+  const flat = flatten(screen);
+
+  assert.match(flat, /budgetCents: null, .*budgetMinCents: null, budgetMaxCents,/);
+  // The summary label must not claim a minimum either.
+  assert.match(flat, /budget_min_cents: null, budget_max_cents: validMax,/);
+
+  // NOT A SCHEMA CHANGE. No migration was written and the column's other
+  // readers are untouched — lib/jobs still carries it end to end.
+  const jobs = read('lib/jobs.ts');
+  assert.match(jobs, /budget_min_cents/, 'the column stays in the data layer');
+  assert.match(jobs, /moneyCeilingError\(input\.budgetMinCents\)/, 'and keeps its ceiling check');
+  // The draft still round-trips it, so an in-progress draft is not corrupted.
+  assert.match(read('lib/postJobDraft.ts'), /budgetMin/);
+  assert.match(flat, /setBudgetMin\(draft\.budgetMin\)/);
+});
+
+test('D17/D18 · the summary keeps all six rows, and the media row counts honestly', () => {
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+
+  const at = flat.indexOf('<Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>');
+  assert.notEqual(at, -1, 'the summary card must still be here');
+  const end = flat.indexOf('<View style={styles.publishNotice}>', at);
+  assert.notEqual(end, -1, 'the summary card must close before the publish notice');
+  const card = flat.slice(at, end);
+
+  const rows = [...card.matchAll(/<Text style=\{styles\.reviewLabel\}>([^<]+)<\/Text>/g)].map(
+    (match) => match[1]
+  );
+  assert.deepEqual(rows, [
+    'Category',
+    'Area',
+    'Media',
+    'Timing',
+    'Address (private)',
+    '{isHiring ? \'Offer\' : \'Budget\'}',
+  ]);
+
+  // The private-address row no longer disappears when it is empty — a
+  // missing address is a fact a review screen should state.
+  assert.match(card, /\{address\.trim\(\) \|\| 'Not added'\}/);
+  assert.match(card, /\{mediaSummary\(photos\.length, videos\.length\)\}/);
+});
+
+test('D18 · [executed] the media row pluralises each side and omits an empty one', () => {
+  assert.equal(mediaSummary(3, 1), '3 photos • 1 video');
+  assert.equal(mediaSummary(1, 2), '1 photo • 2 videos');
+  assert.equal(mediaSummary(1, 1), '1 photo • 1 video');
+  assert.equal(mediaSummary(10, 0), '10 photos');
+  assert.equal(mediaSummary(0, 1), '1 video');
+  assert.equal(mediaSummary(0, 0), 'None');
+  // "video", never "clip" — one word for one thing across the flow.
+  for (const [photos, videos] of [[0, 1], [2, 3], [1, 1]]) {
+    assert.doesNotMatch(mediaSummary(photos, videos), /clip/);
+  }
+  // A zero is never printed as a zero.
+  assert.doesNotMatch(mediaSummary(4, 0), /\b0\b/);
+  assert.doesNotMatch(mediaSummary(0, 4), /\b0\b/);
+});
