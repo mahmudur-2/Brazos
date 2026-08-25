@@ -5,6 +5,7 @@ const BUCKET = 'job-photos';
 const AVATAR_BUCKET = 'avatars';
 const CHAT_BUCKET = 'chat-photos';
 const CHAT_AUDIO_BUCKET = 'chat-audio';
+const CHAT_DOCUMENT_BUCKET = 'chat-documents';
 const STORAGE_REFERENCE_PREFIX = 'storage://';
 const CHAT_SIGNED_URL_TTL_SECONDS = 6 * 60 * 60;
 
@@ -41,7 +42,7 @@ function pathFromStorageValue(bucket: string, value: string): string | null {
  * private does not strand messages sent before phase29.
  */
 export async function resolveChatMediaUrl(
-  bucket: 'chat-photos' | 'chat-audio',
+  bucket: 'chat-photos' | 'chat-audio' | 'chat-documents',
   value: string | null
 ): Promise<string | null> {
   if (!value) return null;
@@ -172,6 +173,70 @@ export async function uploadChatAudio(
   } catch (e) {
     return { url: null, error: e as Error };
   }
+}
+
+/**
+ * Upload a picked document to the private chat-documents bucket and return a
+ * stable storage:// reference. The exact sibling of uploadChatAudio above —
+ * same fetch-to-ArrayBuffer, same reference-not-URL return, same private
+ * posture — with one deliberate difference in what `threadId` may be.
+ *
+ * THE FIRST PATH SEGMENT IS EITHER KIND OF THREAD. chat-photos and chat-audio
+ * authorise their inserts against a JOB only, so a direct thread has no path
+ * to key an upload on and the composer hides those entries there.
+ * phase77's chat_documents_insert_party carries a second branch on
+ * `direct_threads`, so a document's folder one may be a job id OR a direct
+ * thread id, and documents ship on both thread kinds. That gap in the other
+ * two buckets is pre-existing, reported by phase77 and deliberately not
+ * widened here.
+ *
+ * THE PICKED FILENAME NEVER REACHES THE PATH. The object is `<ts>.<ext>` and
+ * the name the user sees is carried on the message row (`document_name`), so
+ * nothing a file manager can be made to produce — a slash, a traversal, a
+ * 300-character name — can shape a storage key. The extension is the only
+ * thing read out of it, and only after it passes the same allow-list shape
+ * the audio path uses.
+ */
+export async function uploadChatDocument(
+  threadId: string,
+  userId: string,
+  fileUri: string,
+  fileName: string,
+  mimeType?: string | null
+): Promise<{ url: string | null; error: Error | null }> {
+  try {
+    const response = await fetch(fileUri);
+    const arrayBuffer = await response.arrayBuffer();
+    const path = `${threadId}/${userId}/${Date.now()}.${documentExtension(fileName, fileUri)}`;
+
+    const { error } = await supabase.storage
+      .from(CHAT_DOCUMENT_BUCKET)
+      .upload(path, arrayBuffer, {
+        contentType: mimeType || 'application/octet-stream',
+        upsert: true,
+      });
+    if (error) return { url: null, error };
+
+    return { url: storageReference(CHAT_DOCUMENT_BUCKET, path), error: null };
+  } catch (e) {
+    return { url: null, error: e as Error };
+  }
+}
+
+/**
+ * The extension to store a document under: the picked NAME's, then the local
+ * URI's, then `bin`. Allow-listed to letters and digits so the value can only
+ * ever be a path-safe suffix — an eight-character ceiling, because `numbers`
+ * and `pages` are real extensions and `m4a`'s five would refuse them.
+ */
+function documentExtension(fileName: string, fileUri: string): string {
+  for (const source of [fileName, fileUri.split('?')[0]]) {
+    const candidate = (source.split('.').pop() ?? '').toLowerCase();
+    if (candidate && candidate !== source.toLowerCase() && /^[a-z0-9]{1,8}$/.test(candidate)) {
+      return candidate;
+    }
+  }
+  return 'bin';
 }
 
 /**

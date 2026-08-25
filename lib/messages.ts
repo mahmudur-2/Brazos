@@ -38,6 +38,20 @@ export type Message = {
    *  created before that migration ran. */
   audio_url: string | null;
   audio_duration_ms: number | null;
+  /**
+   * Document attachment (phase77). `document_url` is the private
+   * `storage://chat-documents/…` reference, exchanged for a signed URL by
+   * resolveMessageMedia() exactly as image_url and audio_url are.
+   *
+   * THE OTHER TWO ARE WHAT LETS THE BUBBLE DRAW BEFORE DOWNLOADING ANYTHING.
+   * A document has no thumbnail and no waveform, so the name and the byte
+   * count are the whole preview — the same role audio_duration_ms plays for a
+   * voice note. Fetching the file to render its own bubble would download
+   * every attachment in a thread on open.
+   */
+  document_url: string | null;
+  document_name: string | null;
+  document_size_bytes: number | null;
   /** Quoted reply target (phase18). The quoted message is resolved from the
    *  already-loaded thread rather than joined — it's always in the same one. */
   reply_to_id: string | null;
@@ -105,15 +119,21 @@ export async function unsendMessage(messageId: string) {
 // control is its own literal, unrelated to these.
 
 const MESSAGE_COLUMNS =
-  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
+  'id, job_id, direct_thread_id, sender_id, content, image_url, audio_url, audio_duration_ms, document_url, document_name, document_size_bytes, reply_to_id, job_request_id, job_offer_id, request_event, request_amount_cents, unsent_at, created_at';
 
 /** Replace stored private-media references with short-lived display URLs. */
 export async function resolveMessageMedia(message: Message): Promise<Message> {
-  const [imageUrl, audioUrl] = await Promise.all([
+  const [imageUrl, audioUrl, documentUrl] = await Promise.all([
     resolveChatMediaUrl('chat-photos', message.image_url),
     resolveChatMediaUrl('chat-audio', message.audio_url),
+    resolveChatMediaUrl('chat-documents', message.document_url),
   ]);
-  return { ...message, image_url: imageUrl, audio_url: audioUrl };
+  return {
+    ...message,
+    image_url: imageUrl,
+    audio_url: audioUrl,
+    document_url: documentUrl,
+  };
 }
 
 /** All messages in one conversation, oldest first. */
@@ -141,6 +161,11 @@ export type NewMessageInput = {
   imageUrl?: string | null;
   audioUrl?: string | null;
   audioDurationMs?: number | null;
+  /** The `storage://chat-documents/…` reference, plus the two facts the
+   *  bubble draws from before it downloads anything (phase77). */
+  documentUrl?: string | null;
+  documentName?: string | null;
+  documentSizeBytes?: number | null;
   /** Id of the message being quoted, for a WhatsApp-style reply. */
   replyToId?: string | null;
 };
@@ -189,7 +214,7 @@ export function isMessagingLockedError(
 export const MESSAGING_LOCKED_MESSAGE =
   'You can send messages once this job is confirmed. Until then, use the offer actions above to agree on a price.';
 
-/** Send a text, photo, and/or voice message, optionally quoting another. */
+/** Send a text, photo, voice or document message, optionally quoting another. */
 export async function sendMessage(input: NewMessageInput) {
   const { data, error } = await supabase
     .from('messages')
@@ -201,6 +226,9 @@ export async function sendMessage(input: NewMessageInput) {
       image_url: input.imageUrl ?? null,
       audio_url: input.audioUrl ?? null,
       audio_duration_ms: input.audioDurationMs ?? null,
+      document_url: input.documentUrl ?? null,
+      document_name: input.documentName ?? null,
+      document_size_bytes: input.documentSizeBytes ?? null,
       reply_to_id: input.replyToId ?? null,
     })
     .select()
@@ -219,9 +247,43 @@ export async function sendMessage(input: NewMessageInput) {
 export function messagePreviewText(message: Message): string {
   if (message.unsent_at) return 'This message was unsent';
   if (message.job_request_id) return 'Job request';
+  // AHEAD OF AUDIO, and the order is the point rather than a preference. One
+  // insert writes every attachment kind, so nothing at this layer stops a row
+  // carrying two of them; whichever branch comes first decides what a quote
+  // chip and an inbox row say. A document is the more specific fact — it has a
+  // NAME, and naming it is strictly more useful than "Voice message" — so it
+  // is asked about first. The filename is the user's own text and is shown as
+  // they wrote it; a document that somehow has no name still previews as
+  // something rather than falling through to an empty ellipsis.
+  if (message.document_url) return message.document_name || 'Document';
   if (message.audio_url) return 'Voice message';
   if (message.image_url) return message.content || 'Photo';
   return message.content || '…';
+}
+
+/**
+ * "18 KB" / "2.4 MB" for a document's byte count — the label beside a
+ * filename, and the sibling of formatClipDuration() below: the one piece of
+ * metadata that lets a bubble say how big the download is before anyone taps
+ * it.
+ *
+ * KB IS 1024 BYTES HERE, matching what both mobile operating systems show a
+ * user for the same file. An unknown or negative size is an empty string, not
+ * "0 B" — the bubble drops the label rather than claiming an empty file.
+ */
+export function formatDocumentSize(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit += 1;
+  }
+  // One decimal below ten, none above: "9.4 MB" is worth the character and
+  // "247.3 MB" is not.
+  return `${value < 10 ? value.toFixed(1) : Math.round(value)} ${units[unit]}`;
 }
 
 /** "0:07" / "1:23" for a clip length in milliseconds. */
