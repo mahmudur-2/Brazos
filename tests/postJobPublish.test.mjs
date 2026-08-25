@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
@@ -977,4 +977,99 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
     /\{mark \?\? \( <View style=\{\[styles\.glyph, isDark && styles\.glyphDark\]\}>/,
     'the mark REPLACES the default glyph rather than joining it'
   );
+});
+
+// ---------------------------------------------------------------------------
+// THE RUN'S OWN LIMITS.
+//
+// Everything above is about what the flow does. This last section is about
+// what building it was NOT allowed to do — no new dependency, no database, no
+// production reference, no escrow, and no reaching for the asset staged for a
+// later run. Each is cheap to check and expensive to discover later.
+// ---------------------------------------------------------------------------
+
+/** Every file this run created or reshaped. */
+const TOUCHED = [
+  'components/EditBudgetDialog.tsx',
+  'components/ScreenHeader.tsx',
+  'components/SuccessMark.motion120.tsx',
+  'components/SuccessMark.shared.tsx',
+  'components/SuccessMark.tsx',
+  'components/TextField.tsx',
+  'screens/PostJobScreen.tsx',
+  'ui/primitives/MediaUploader.tsx',
+  'ui/templates/SuccessScreen.tsx',
+];
+
+test('gate · nothing this run added reaches for a package the app does not have', () => {
+  const manifest = JSON.parse(read('package.json'));
+  const installed = new Set([
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.devDependencies ?? {}),
+  ]);
+  assert.ok(installed.size > 20, 'the manifest must have actually parsed');
+
+  const seen = new Set();
+  for (const path of TOUCHED) {
+    const source = stripComments(read(path));
+    for (const match of source.matchAll(/(?:from|require\()\s*'([^']+)'/g)) {
+      const specifier = match[1];
+      if (specifier.startsWith('.')) continue;
+      // Scoped packages keep two segments; everything else keeps one.
+      const pkg = specifier.startsWith('@')
+        ? specifier.split('/').slice(0, 2).join('/')
+        : specifier.split('/')[0];
+      seen.add(pkg);
+      assert.ok(
+        installed.has(pkg) || pkg === 'react' || pkg === 'react-native',
+        `${path} imports ${pkg}, which is not in package.json`
+      );
+    }
+  }
+  // ANTI-VACUITY: the sweep really did find the imports it is checking.
+  assert.ok(seen.has('expo-video'), 'the clip poster\'s package must be among the imports checked');
+  assert.ok(seen.has('react-native-reanimated'), 'the fast path\'s vendor must be too');
+});
+
+test('gate · none of it contacts a database, and production is named nowhere', () => {
+  for (const path of TOUCHED) {
+    const source = stripComments(read(path));
+    assert.ok(!source.includes('supabase'), `${path} must not reach the client`);
+    assert.ok(!source.includes('.rpc('), `${path} must not call an RPC`);
+    assert.ok(
+      !source.includes('avkighsiufeefyycbebf'),
+      `${path} must never name the production project`
+    );
+  }
+  // And the flow's one writer still goes through the data layer it always did.
+  assert.match(read('screens/PostJobScreen.tsx'), /await createJob\(user\.id, jobInput\)/);
+});
+
+test('gate · the payment-holding mechanism is protection, never escrow', () => {
+  for (const path of TOUCHED) {
+    assert.equal(
+      /escrow/i.test(read(path)),
+      false,
+      `${path} must say "held in protection" — escrow is a claim BRAZOS does not make`
+    );
+  }
+});
+
+test('gate · the asset staged for a later run is referenced by nothing', () => {
+  const staged = 'hero_armchair_customer_light';
+  const dirs = ['components', 'screens', 'ui', 'lib', 'hooks', 'navigation', 'modes'];
+  const offenders = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(join(root, dir), { withFileTypes: true })) {
+      const next = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(next);
+        continue;
+      }
+      if (!/\.(ts|tsx)$/.test(entry.name)) continue;
+      if (readFileSync(join(root, next), 'utf8').includes(staged)) offenders.push(next);
+    }
+  };
+  for (const dir of dirs) walk(dir);
+  assert.deepEqual(offenders, [], `${staged}.png is staged for a LATER run and must be mounted by nothing`);
 });
