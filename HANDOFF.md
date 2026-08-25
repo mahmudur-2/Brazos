@@ -43,7 +43,276 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 screenshot registry (RUN H1)
+## Current state — after the 2026-08-25 Home structure pass (RUN H2)
+
+RUN H2 changed the customer Home surface, the nav primitive it shares with
+every screen, and the two records that had drifted off the files they
+describe. One code commit, then this file. **Nothing was pushed**; no database
+was contacted; no SQL was executed; no dependency was added; no image file was
+opened — every measurement below came from a scripted decode, and every
+acceptance item from a pixel probe.
+
+| # | commit | what landed |
+|-|-|-|
+|C1–C5|`ec4ae73`|the light hero, the atmosphere docblock, the centre [ + ], the greeting and pill, the copy/badge/sheet — and the fences for all of it|
+|C6|(this file)|the handoff|
+
+`npm run verify` was run bare and unpiped before any edit and again after the
+commit, exit 0 each time. **Baseline 1061 pass / 0 fail; after 1065 pass / 0
+fail**, the four new tests being this run's own fences. No test was deleted,
+disabled, skipped or made conditional.
+
+### THE LIGHT HERO WAS A BLACK RECTANGLE, and the gate had been taken off
+
+`screens/HomeScreen.tsx` mounted `hero_armchair_customer.png` with no `isDark`
+in front of it, because 2026-08-23 unified both palettes onto that one file.
+It is a dark room. On a light device the hero slot was a black rectangle on
+the ivory ground — the exact failure the BAKED_ART gate exists to catch, and
+the gate had been removed from that entry when the mount lost its palette test.
+
+The operator supplied a light composition. The mount is a ternary again, both
+entries are `gate: true` once more, and the FILE is the only thing that forks:
+the box, the fill rule and the ink column stay shared, and the fence now
+asserts that in those words rather than asserting "one file, unconditionally".
+
+### EVERY MEASUREMENT THIS RUN TOOK
+
+All from `.audit-scratch/measure.mjs` and `alpha-hist.mjs` — the same PNG walk
+`tests/themeResolution.test.mjs` uses, extended to return pixels. Rec.601 luma
+throughout; corner boxes are 10% of each dimension, the centre box the same
+size centred.
+
+**`assets/prestige/hero_armchair_customer_light.png`** — NEW, 153690 bytes.
+400x351, PNG colour type 6 (RGBA), 8-bit, non-interlaced, no tRNS.
+minAlpha 0. 2004 samples (1.43%) at alpha 0; 31488 (22.43%) partial;
+106908 (76.15%) opaque. All four corners alpha 0. Every one of the sixteen
+alpha buckets is populated — 79.22% sits at 240–255, 13.03% below half — yet
+inside a 42px inset the interior is 98.73% fully opaque. Frame luma mean
+201.20.
+
+**`assets/prestige/hero_armchair_customer.png`** — unchanged, re-measured for
+the comparison. Same 400x351 RGBA. 2881 (2.05%) at alpha 0, **35 (0.02%)
+partial**, 137484 (97.93%) opaque; interior partials: zero. Corner/centre luma
+4.66 / 20.12.
+
+**`assets/prestige/home-atmosphere-dark.png`** — unchanged on disk, 3333006
+bytes. **1290x2796** (aspect 0.46137), PNG colour type 2 (RGB), no alpha
+channel, no tRNS — still `opaque-dark`, verified rather than assumed. Corner
+boxes 129x280: 4.51 / 4.64 / 3.12 / 5.53, mean **4.45**; centre **21.86**; lift
+**4.91x**. Side gutters (outer 5% of columns, 65px each) L 8.88 / R 7.67, mean
+8.27. Frame luma mean 11.23, min 0.70, max 53.13.
+
+**What the atmosphere docblock had claimed: 1080x2335, corners 3.7, centre
+20.1, a 5.5x lift, gutters 9.8, aspect 0.4625.** Not one of those is this file.
+The centre figure it carried, 20.1, is the HERO's 20.12 — the docblock was
+describing a different picture. The numbers are recorded here because the
+docblock may no longer restate them: a stale WxH sitting in that docblock is
+the specific thing that went wrong, and a new fence now fails on any
+raster-scale size named there that is not the file's own.
+
+### THE ROSTER — two entries changed, and a third bake word coined
+
+`assets/prestige/hero_armchair_customer.png` — `gate: false` -> **`gate: true`**.
+Bake untouched (`baked-trimmed`, same file byte for byte). The ungating was
+sound only while both palettes mounted this one scene; they no longer do, so
+it is the dark half of a per-theme pair again, which is what `gate` has always
+meant.
+
+`assets/prestige/hero_armchair_customer_light.png` — **NEW**, bake
+**`baked-feathered`**, `gate: true`. It is not a copy of the dark entry, because
+it is not the same bake. The dark file is a hard trim; this one is a wide soft
+edge around a solid interior. Calling it `transparent` would let a real re-cut
+through unnoticed — a cut-out on this roster runs 38% to 73% empty, not 1.43%
+— and calling it `baked-trimmed` would erase the one difference that makes two
+files necessary. The precedent is `baked-trimmed` itself, coined for exactly
+this reason.
+
+The re-derivation tests were STRENGTHENED, not adjusted to fit. `alphaProfile`
+now returns a third population, `partialSamples`, because the two customer
+heroes cannot be told apart by `transparentSamples` alone. `baked-trimmed` must
+now have **under 1%** partial alpha and `baked-feathered` **over 5%**, so
+neither file can drift into the other's word. The hero sweep went from three
+assets to four (`checked` 3 -> 4) and the transparent-half floor from 5 to 6,
+tracking the roster's composition upward. A new assertion re-derives the LIGHT
+hero's ink boundary against the same shared `HERO_ART_INK_LEFT` the dark one is
+measured against — one headline column serves both themes, and it passes, so
+the two scenes agree on where the artwork begins.
+
+### THE NEW THEME-CONSTANT TOKENS
+
+Four hues fixed to ONE value in both palettes. Defined in `ui/tokens.ts` as
+`constantAccents` — a standalone `as const` export outside `colors`/`ColorToken`,
+the construction and the reasoning `categoryAccents` already uses — and spread
+into BOTH of `lib/theme.ts`'s palettes, exactly as `star`, `black`, `white` and
+`mediaChrome` are. Call sites therefore read them off the resolved palette like
+any other role: no hex at a call site, and no reaching across palettes.
+
+|token|value|what it is for|
+|-|-|-|
+|`postPillGreen`|light `emerald` (`#0D6B52`), referenced not restated|the light [ + ]'s fill, the DARK pill's fill, the dark [ + ]'s glyph, the light greeting name|
+|`greetingSlate`|`#526477` — the value light's `homeSlate` carries|the dark [ + ]'s ring, the light [ + ]'s glyph|
+|`greetingSlateDeep`|`#42505F`|the light [ + ]'s outline — **operator dial**|
+|`referenceCoral`|`#D54C2C`|the unread badge in light, the worker's offline dot in both themes|
+
+`greetingSlate` restates its hex rather than importing `homeSlate`, because
+`lib/theme.ts` imports `ui/tokens.ts` and not the reverse. That is the same
+arrangement `homeModeRing` already has beside `homeSlate`, for the same reason.
+
+**The coral was identified, not chosen.** Every hex in the tracked tree and in
+`design-reference/` was swept for a warm red-orange that is light and saturated.
+`#D54C2C` is the only one that is a UI colour rather than a surface tint
+(`#F3DCD2`, `#F5E7E4`, `#E9CAC5`), a category identity (`#C56A2E`), a map heat
+value (`#DC2626`) or a palette `danger`. The manifest names it directly:
+"appears ONCE as UI: the offline dot on 43". `design-reference/`'s light set
+contains no coral at all. So the offline dot was not GIVEN a coral — it was
+returned to the one the reference draws it in, from a `danger` that was
+rendering as terracotta in light and a different red in dark.
+
+### THE TWO OPERATOR DIALS
+
+Both ship conservative and are meant to be tuned live with Fast Refresh.
+
+|dial|file:line|shipped|useful range|
+|-|-|-|-|
+|the dark [ + ]'s gold glow|`ui/primitives/BottomNav.tsx:493` (`CREATE_BUTTON_GLOW_ALPHA`)|`0.25`|0.12–0.45. Below 0.12 the halo stops being visible against `#02110D`; above ~0.45 it reads as a second gold ring rather than as depth.|
+|the light [ + ]'s outline darkness|`ui/tokens.ts:525` (`greetingSlateDeep`)|`#42505F`|`#4A5A6B` (~10% darker than the glyph) to `#333E4A` (~35%). Shipped is every channel of `greetingSlate` at 80%.|
+
+The glow's alpha is the ONLY thing that sets its strength: `glow.halo` pins
+`shadowOpacity` at 1 on native so the caller's alpha is the one dilution.
+
+### THE DEPTH DOES NOT FORK, and that is why the glow is on the shared style
+
+The dispatch asked dark to replace its black drop shadow with a gold glow.
+Declaring a glow in the dark branch and leaving the drop shadow in the light one
+would have made light a different design rather than the same design in a second
+palette — which `tests/themeTokens.test.mjs` forbids tree-wide, listing
+`elevation`, `shadowOpacity`, `shadowRadius` and `shadowOffset` among the
+properties a theme decision may not reach. It caught the first attempt.
+
+The resolution needed no exception: the glow is declared ONCE on the shared
+`createButton`, and it is already per-theme without a ternary, because `colors`
+inside `themedStyles` IS the resolved palette — dark draws `#D4A24C`, light
+draws `#C8A15B`, from the same line. Fill and ring fork; depth and geometry do
+not. Neither the control nor its slot carries `overflow`, which is load-bearing:
+on iOS `overflow: 'hidden'` cancels a shadow on the same node, and a fence now
+holds that open.
+
+### THE POST-A-JOB PILL LOSES ITS RING BY COLOUR, NOT BY WIDTH
+
+Dark's ring is `'transparent'` and `borderWidth: 1` stays on the shared style.
+RN lays a border inside the box, so zeroing the width in one theme would move
+the content box by a point in that theme only — a geometry fork wearing a
+colour change's clothes. `screens/HomeScreen.tsx` already used `'transparent'`
+this way on `scrollOverAtmosphere`.
+
+### FENCES: five files updated, one gate inverted, none weakened
+
+Every fence kept its logic and moved its recorded values.
+
+- **`home(8)` / `home(19)`** (`tests/emeraldFences.test.mjs`) — the [ + ]. Still
+  forbid an invisible glyph, a ring the colour of its own fill, a fill or ring
+  on the shared style, a re-derived footprint and a clipping node. `home(19)`
+  stopped duplicating `home(8)`'s COLOUR assertions and now pins only the
+  geometry it exists for — duplicating them is what let two records drift apart.
+- **`home(14)`** — the hero. `source={PRESTIGE_HERO_ART}` -> the ternary, plus a
+  new assertion that the fill rule and box do NOT fork, plus the light file's
+  ink boundary.
+- **`goldOnForest`** — the gold-fill exception set SHRANK by one and gained one.
+  `BottomNav.tsx::createButton` was deleted because light no longer fills with
+  gold and the set's own `deepEqual` treats a stale entry as a hole standing
+  open. `ConversationRow.tsx::dot` was added: an indicator, not a control, in
+  the same category as the measurement-bar exception.
+- **`themeTokens`** — the executed-module stub was widened to name
+  `constantAccents`, because it hardcodes what `lib/theme.ts` destructures and
+  would otherwise throw a ReferenceError instead of failing an assertion.
+- **`workerHome`** — the pulse-dot value moved from `danger` to `referenceCoral`.
+  Both branches are still palette reads.
+- **`postJobPublish`'s staged-asset gate was INVERTED, not deleted.** It asserted
+  that `hero_armchair_customer_light.png` was referenced by nothing, "staged for
+  a LATER run". H2 is that run. Deleting it would have left the asset with no
+  fence at all — the one outcome the original was written to prevent — so it now
+  asserts the opposite: referenced by `screens/HomeScreen.tsx` alone, required
+  exactly once, behind the palette ternary.
+
+**Four new fences** cover the atmosphere docblock's re-derivation, the greeting
+and pill, the renamed sections with the unread marker and offline dot, and the
+all-services rows including the type and rhythm this pass promised not to move.
+
+### THE ACCEPTANCE RENDER — fresh, and proven fresh
+
+`node scripts/shots.mjs --build --only home`, run AFTER `ec4ae73`. The
+existing `.shots/` PNGs were from 14:02, before this run's edits; a reused
+export would have rendered the app as it was before them.
+
+|file|modified|
+|-|-|
+|`.shots/customer-home-dark.png`|2026-08-25 15:07:30 -0400|
+|`.shots/customer-home-light.png`|2026-08-25 15:07:32 -0400|
+|`.shots/worker-home-dark.png`|2026-08-25 15:07:35 -0400|
+|`.shots/worker-home-light.png`|2026-08-25 15:07:38 -0400|
+
+Commit `ec4ae73` is `2026-08-25T15:06:29-04:00`. Every render post-dates it.
+
+**Image files were never opened.** The evidence guard blocks image reads and the
+dispatch forbade opening one to judge appearance, so every item below was
+confirmed by scripted pixel analysis (`.audit-scratch/inspect-shot.mjs`,
+`region-census.mjs`, `ink-extent.mjs`) — which is stricter than looking, because
+it reports exact hexes at exact coordinates.
+
+|acceptance item|evidence|
+|-|-|
+|light hero is the armchair, not a black rectangle|hero band (y 0–307) mean luma **225.6**, right half 220.9; darkest 12x12 block 53.2 — the chair's own ink. A black rectangle would sit near 0 across a large area.|
+|dark [ + ]|glyph (195,803) = **`#0D6B52`**; tile = **`#D4A24C`** (72.7% of the control); perimeter ring = **`#526477`**, 112px|
+|light [ + ]|glyph (195,803) = **`#526477`**; tile = **`#0D6B52`** (72.7%); perimeter ring = **`#42505F`**, 112px|
+|greeting name|same text box (22,39)–(109,52) in both: dark **275px gold, 0px green**; light **151px `#0D6B52`**|
+|pill outline|light: **`#C8A15B`** one pixel above the fill, 271px along the top edge. dark: the card's own **`#0A1813`** there, and no gold anywhere on that edge|
+|"Nearby"|heading ink run **68px** beside its 10px live dot. "Live Nearby" at the same size measures about 128.|
+|"Inbox"|renamed tab's label measures **27px**; the eight-character "Discover" beside it measures 41, and "Messages" is also eight characters|
+|worker offline dot|**`#D54C2C`**, 62px, box (36,482)–(43,490) in `worker-home-light.png`|
+
+**Confirmed from the committed style value rather than from pixels: the gold
+glow alone.** It is a 12px halo at alpha 0.25 and is below what 393x852 at
+deviceScaleFactor 1 resolves — the exception the dispatch names.
+
+### What was SKIPPED, and why
+
+- **The atmosphere raster swap.** The dispatch allowed for a 314 KB re-export
+  being present in the working tree. It was not — `git status` at run start
+  carried only the two `.claude/` hook files and the light hero. The docblock
+  correction was done against the CURRENT file, which is the part that had to
+  land either way. **If the operator installs the re-export, the docblock, the
+  roster entry and the new docblock fence all have to be re-derived from it.**
+- Nothing else. C1 through C6 all landed.
+
+### Guard friction — three fires, all routed, none worked around
+
+- `GUARD-CLAUDEDIR` on `ls .claude/ … 2>/dev/null` — the `>` in the redirect,
+  not the read. Re-issued through the file tools.
+- The evidence guard on a command naming its own authorization variable.
+  Dropped from the command; never revisited.
+- The evidence guard blocks **image reads** and **subagents** for this run.
+  Both were honoured: every measurement and every acceptance item came from
+  scripted decoding, and the run was single-threaded throughout.
+
+`Write` is confined to the project directory, so probe scripts went to
+`.audit-scratch/` — the repo's own gitignored per-run scratch — rather than a
+system temp path.
+
+### What a later run is most likely to undo
+
+**Re-unifying the hero onto one file.** It has now been forked, unified and
+forked again, and the record of WHY is in the roster comment and in
+`screens/HomeScreen.tsx` above the require. The scene is a dark room; light
+needs its own composition or a black rectangle comes back. If a future run
+wants one file, the file has to work on both grounds — that is the test, not
+tidiness.
+
+**Putting the fill or the ring back on the shared `createButton` style**, which
+would silently paint both themes, or moving the glow into the dark branch,
+which the tree-wide depth rule forbids.
+
+
+## The run before it — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -194,7 +463,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## The run before it — after the 2026-08-25 document-open fix (RUN F1)
+## Two runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -255,7 +524,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Two runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Three runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
