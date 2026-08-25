@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useMode } from '../modes';
+import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
 import { useThemeColors } from '../lib/theme';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
@@ -62,10 +63,39 @@ import { WorkerRoot } from './WorkerRoot';
  * in light the gap stops being pure white and becomes the same warm ivory the
  * scene above it already uses, which is a seam removed rather than a colour
  * introduced.
+ *
+ * RUN H3 (C3) — AND THE GROUND FOLLOWS THE SCREEN, because `background` is not
+ * every screen's page colour. On the light customer Home render this View was
+ * painting #F4F1E8 through the bar row while the page above it painted
+ * #FAF5F1, so a band ran the full width under the pill — y 770..851 at
+ * 393x852, the pill's 12pt side margins and the 12pt gap beneath it. This View
+ * is the ONE node that paints that region; the DOM chain under a point in the
+ * band has exactly one painted ancestor between the tab navigator's own
+ * SafeAreaProviderCompat and the document body, and it is this one.
+ *
+ * WHAT IT WAS PAINTING WAS NOT WRONG. `background` IS the page ground for
+ * twenty-seven of the thirty screens — the same render of WORKER Home shows
+ * one continuous ground straight through the bar row and no band at all. The
+ * three screens that paint `homeBackground` (customer Home, JobDetail,
+ * WorkerResults) are the outliers, and a screen cannot paint below itself
+ * because bottom-tabs lays the scene and the bar out as siblings. So the fix
+ * is not a different constant here — that would MOVE the band onto the other
+ * twenty-seven — but a ground the focused screen names for itself. See
+ * lib/shellGround.tsx for why it is focus-scoped and why it carries a token
+ * name rather than a colour.
+ *
+ * In DARK this resolves to no change whatever: `homeBackground` and
+ * `background` are the same #02110D there, so that bar row was already
+ * painting the page ground.
  */
 export function ModeShell() {
   const { mode, treeMode, ready, armResolution } = useMode();
   const { palette } = useThemeColors();
+  // Declared by whichever screen is focused; null until one does, and null
+  // again the moment it blurs — so a screen that says nothing leaves this
+  // exactly where it has always been.
+  const { ground, setGround } = useShellGroundState();
+  const treeGround = ground ? palette[ground] : palette.background;
 
   // Resolution starts here rather than when the session appears, because this
   // component mounts only after auth + legal + setup have all resolved — and
@@ -90,10 +120,15 @@ export function ModeShell() {
     return <View style={[styles.tree, { backgroundColor: palette.background }]} />;
   }
 
+  // The provider sits OUTSIDE the painted View on purpose: the View is the
+  // consumer of what the trees inside it declare, and nesting it the other way
+  // would need a second node to read the value it had just set.
   return (
-    <View style={[styles.tree, { backgroundColor: palette.background }]}>
-      {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
-    </View>
+    <ShellGroundProvider value={setGround}>
+      <View style={[styles.tree, { backgroundColor: treeGround }]}>
+        {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
+      </View>
+    </ShellGroundProvider>
   );
 }
 

@@ -29,6 +29,7 @@ import {
   type OpenJob,
 } from '../lib/jobs';
 import { geocodeQuery } from '../lib/reverseGeocode';
+import { useShellGround } from '../lib/shellGround';
 import type {
   WorkerHomeStackNavigation,
   WorkerHomeStackParamList,
@@ -74,6 +75,11 @@ type GeoState = 'loading' | 'ready' | 'denied' | 'unavailable';
  */
 export function WorkerResultsScreen() {
   const { palette: colors, isDark } = useThemeColors();
+  // RUN H3 (C3): this screen's page ground is `homeBackground` too, so it
+  // declares it for the mode shell exactly as customer Home and JobDetail do —
+  // otherwise the pill's margins paint `background` and the band comes back.
+  // See lib/shellGround.tsx.
+  useShellGround('homeBackground');
   // Forest glyphs vanish on a dark surface under palette v2; masters 12/13
   // draw these accents gold.
   const accent = isDark ? colors.gold : colors.forest;

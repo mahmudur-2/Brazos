@@ -37,6 +37,7 @@ import { greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
+import { useShellGround } from '../lib/shellGround';
 import {
   fonts,
   radius,
@@ -326,6 +327,14 @@ export function HomeScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { width: screenWidth } = useWindowDimensions();
+
+  // RUN H3 (C3): this screen's page ground is `homeBackground`, not the
+  // palette's `background`, and the floating nav pill's margins are painted by
+  // the mode shell rather than by anything here. Declaring the ground is how
+  // the region outside the pill stops being a band of a different ivory. It is
+  // the SAME key `safe`/`scroll`/`content` paint with below — one ground per
+  // page, named once for the shell and once for the styles that use it.
+  useShellGround('homeBackground');
 
   // home(2): the drape's box and the headline column it clears, both derived
   // from one fraction of the screen so they can never drift apart.

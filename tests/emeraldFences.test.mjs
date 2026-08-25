@@ -394,12 +394,24 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
   // THE GROUND. One View on the single parent of both trees, resolved from the
   // palette so a theme change repaints it. Without it the pill's float gap
   // falls through to the iOS root view and the white band comes back in dark.
+  //
+  // RUN H3 MADE THE VALUE A VARIABLE, and this fence follows it: the ground is
+  // whatever the focused screen declared, falling back to `palette.background`.
+  // The CLAIM is untouched — this View must still PAINT — and the fallback is
+  // asserted separately below so "declares nothing" can never mean "paints
+  // nothing".
   const shell = flatten(read('navigation/ModeShell.tsx'));
   assert.match(
     shell,
-    /<View style=\{\[styles\.tree, \{ backgroundColor: palette\.background \}\]\}>/,
+    /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}\]\}>/,
     'ModeShell must PAINT the ground behind the bar row — emerald D2 added this ' +
       'paint rather than removing one, and deleting it restores the white band'
+  );
+  assert.match(
+    shell,
+    /const treeGround = ground \? palette\[ground\] : palette\.background;/,
+    'the ground must still resolve off the palette, and must fall back to ' +
+      'palette.background when no screen has declared one'
   );
   assert.match(
     shell,

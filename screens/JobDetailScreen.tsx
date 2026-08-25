@@ -76,6 +76,7 @@ import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchClientJobStatsCounted } from '../lib/clientStats';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
+import { useShellGround } from '../lib/shellGround';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
 import {
@@ -111,6 +112,11 @@ function payoutEstimateLabel(job: OpenJob): string | null {
 export function JobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN H3 (C3): the same declaration customer Home makes, and for the same
+  // reason — this screen's page ground is `homeBackground`, so without it the
+  // mode shell paints `background` in the floating pill's margins and a band
+  // of a second ivory runs under the bar. See lib/shellGround.tsx.
+  useShellGround('homeBackground');
   // emerald(3): the floating pill's real footprint.
   const navClearance = useFloatingNavClearance();
   // The shared meta-glyph rule (prestige 3c, WorkerJobCard): gold in dark,

@@ -29,6 +29,71 @@ test('main tab screens do not reserve redundant gaps above the safe tab bar', as
   assert.match(bottomNav, /paddingBottom: 0/);
 });
 
+// ---------------------------------------------------------------------------
+// RUN H3 (C3) — THE GROUND OUTSIDE THE PILL IS THE PAGE'S, NOT A SECOND IVORY.
+//
+// MEASURED: on the light customer Home render the pill's 12pt side margins and
+// the 12pt gap under it (y 770..851 at 393x852) painted #F4F1E8 while the page
+// above painted #FAF5F1 — a band across the full width. On the WORKER Home
+// render, whose page ground IS `background`, the same rows are one continuous
+// colour and there is no band. So the defect was never the shell's paint; it
+// was a screen whose page ground the shell could not know.
+//
+// CATCHES: a screen that introduces its own ground token and forgets to tell
+// the shell — which is the exact shape of the original defect, and the only
+// way it can come back.
+// ---------------------------------------------------------------------------
+test('a screen with its own page ground declares it to the shell (RUN H3)', async () => {
+  const hook = await read('lib/shellGround.tsx');
+
+  // FOCUS-SCOPED, and it RELEASES. React Navigation keeps a blurred screen
+  // mounted, so a mount-scoped ground would latch on the first Home render and
+  // paint every later screen's bar row wrong — the same band, relocated.
+  assert.match(hook, /useFocusEffect\(/, 'the ground must be scoped to focus, not to mount');
+  assert.match(
+    hook,
+    /return \(\) => setGround\(null\);/,
+    'blur must release the ground, or the next screen inherits this one'
+  );
+  // A palette KEY, never a colour: the shell resolves it, so light and dark
+  // cannot disagree and CLAUDE.md's literal ban cannot be routed around here.
+  assert.match(hook, /export type ShellGroundToken = keyof ColorPalette;/);
+  // CODE only — the docblock quotes the measured hexes on purpose, because the
+  // numbers are the evidence for why this exists.
+  const codeOf = (source) => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.doesNotMatch(codeOf(hook), /#[0-9A-Fa-f]{6}\b/, 'the hook carries token names, never hexes');
+
+  // EVERY screen that paints a ground token of its own must declare that SAME
+  // token. Derived from the sources rather than listed, so a fourth such screen
+  // is caught the day it is written.
+  const screens = dir('screens').filter((name) => name.endsWith('.tsx'));
+  const declared = [];
+  for (const name of screens) {
+    const source = await read(`screens/${name}`);
+    const grounds = new Set(
+      [...source.matchAll(/backgroundColor: colors\.(\w*[Bb]ackground)\b/g)]
+        .map((hit) => hit[1])
+        .filter((token) => token !== 'background')
+    );
+    for (const token of grounds) {
+      declared.push(`${name}:${token}`);
+      assert.match(
+        source,
+        new RegExp(`useShellGround\\('${token}'\\)`),
+        `screens/${name} paints ${token} as a page ground but never declares it — the ` +
+          "floating pill's margins will paint palette.background and a band comes back"
+      );
+    }
+  }
+  // The three that exist today, so a screen losing its ground is also a failure
+  // rather than one fewer thing to check.
+  assert.deepEqual(declared.sort(), [
+    'HomeScreen.tsx:homeBackground',
+    'JobDetailScreen.tsx:homeBackground',
+    'WorkerResultsScreen.tsx:homeBackground',
+  ]);
+});
+
 test('the bar row paints nothing but the pill (emerald D2)', async () => {
   // The dark device pass photographed a white band around the floating pill.
   // Nothing of ours was painting it: the pill floats by margins in normal
@@ -44,7 +109,23 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
 
   // One ground, resolved from the palette, wrapping BOTH trees — so a theme
   // change repaints it and neither mode can be left transparent.
-  assert.match(shell, /<View style=\{\[styles\.tree, \{ backgroundColor: palette\.background \}\]\}>/);
+  //
+  // RUN H3 (C3) MADE THE VALUE A VARIABLE. emerald D2 fixed the bar row falling
+  // through to the iOS root view; it did not make the ground the right COLOUR
+  // on a screen whose page is not `palette.background`, and on light customer
+  // Home that showed as a full-width band of #F4F1E8 under a #FAF5F1 page. The
+  // ground is now whatever the focused screen declares. The claim here is
+  // unchanged — ONE painted View, resolved from the palette, wrapping both
+  // trees — and the fallback is pinned so "no screen declared one" still
+  // paints.
+  assert.match(shell, /<View style=\{\[styles\.tree, \{ backgroundColor: treeGround \}\]\}>/);
+  assert.match(shell, /const treeGround = ground \? palette\[ground\] : palette\.background;/);
+  // Exactly one painted tree View — a second would be a second ground.
+  assert.equal(
+    (shell.match(/styles\.tree, \{ backgroundColor: treeGround \}/g) ?? []).length,
+    1,
+    'the tree ground must be painted once'
+  );
   assert.match(
     shell,
     /\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
