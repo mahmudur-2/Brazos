@@ -58,6 +58,13 @@ export type LiveLocationState = {
   sharing: boolean;
   /** True while a start or stop is in flight, so a control can disable. */
   busy: boolean;
+  /**
+   * The instant the lists above were derived against — the local expiry
+   * clock's current tick. Handed out so a card's countdown moves on the SAME
+   * `now` that decides whether the card exists: two clocks would let a card
+   * read "under a minute" for a share this hook has already dropped.
+   */
+  now: number;
   start: (durationMs: number) => Promise<ErrorLike>;
   stop: () => Promise<ErrorLike>;
   refresh: () => Promise<void>;
@@ -288,5 +295,5 @@ export function useLiveLocation(
     return null;
   }, [refresh, stopWatching]);
 
-  return { theirs, mine, sharing: !!mine, busy, start, stop, refresh };
+  return { theirs, mine, sharing: !!mine, busy, now, start, stop, refresh };
 }

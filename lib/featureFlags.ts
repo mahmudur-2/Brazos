@@ -37,14 +37,47 @@
 /**
  * Sharing a live position into a thread while a job is underway.
  *
- * WAITS ON: a location-sharing table (a per-thread row carrying the sharer,
- * the coordinates, a heartbeat and an expiry) plus RLS restricting reads to
- * the thread's two participants, AND expo-location's background permission
- * with expo-task-manager installed. The chat composer's drop-up already
- * carries the entry; the SEND path and the bubble are out of scope until the
- * schema exists.
+ * WAITS ON: nothing since 2026-08-25. It waited on a location-sharing table —
+ * a per-thread row carrying the sharer, the coordinates, a heartbeat and an
+ * expiry — plus RLS restricting reads to the thread's two participants, AND
+ * expo-location's BACKGROUND permission with expo-task-manager installed.
+ * phase77's `live_location_shares` closed the first half outright.
+ *
+ * THE SECOND HALF WAS NOT SATISFIED. IT WAS REFUSED, and that is the one thing
+ * to read before "fixing" the suspended-app case. Background location is the
+ * most invasive permission iOS asks for, and this feature would be asking for
+ * it in order to keep broadcasting a position while the app is not on screen —
+ * which is the opposite of what makes a bounded, consensual share safe. So it
+ * ships FOREGROUND ONLY: requestForegroundPermissionsAsync and
+ * watchPositionAsync, no TaskManager task, no "Always" prompt. A share whose
+ * updates stop because iOS suspended the app is an ACCEPTED outcome, because
+ * the counterparty's honest upper bound is always the `expires_at` they
+ * already hold and nothing can extend it. expo-task-manager stays in
+ * package.json for its other users; this feature never touches it, and
+ * tests/liveLocation.test.mjs sweeps both files to keep it that way.
+ *
+ * A SHARE IS NOT A MESSAGE. `live_location_shares` has no row in `messages`,
+ * so starting or stopping one inserts nothing into the thread: it renders as
+ * a card while it is live and is gone when it ends. Writing a "started
+ * sharing" message would have made an ephemeral fact permanent in a transcript
+ * both people keep.
+ *
+ * AND AN ENDED SHARE DELIVERS NO EVENT, which is where a later run is most
+ * likely to go wrong. stop_live_location() sets `expires_at = now()`, and the
+ * updated row immediately fails the SELECT policy's expiry term, so realtime
+ * DROPS it — an expiry is the same shape, since no UPDATE happens at all. The
+ * counterparty's card is therefore cleared by a REFETCH ON FOCUS and a LOCAL
+ * CLOCK, never by waiting; the subscription exists only to make a moving pin
+ * move. Waiting for an event leaves a stale pin on screen indefinitely.
+ *
+ * THE GUARD SITE is screens/ChatScreen.tsx and it guards the ASSEMBLY, the
+ * READ_TICKS arrangement: with this false nothing is read, nothing is
+ * subscribed, no watcher can start and the two cards have no share to render.
+ * Like [[DOCUMENTS]], the composer row is gated by this flag and its handler
+ * and NOT by `allowAttachments` — all three RPCs take a job id or a direct
+ * thread id, so a share works on both thread kinds.
  */
-export const LIVE_LOCATION = false as boolean;
+export const LIVE_LOCATION = true as boolean;
 
 /**
  * Attaching a document (PDF, docx, spreadsheet) to a message.

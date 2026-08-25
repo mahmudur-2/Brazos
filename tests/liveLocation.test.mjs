@@ -427,6 +427,158 @@ test('[static] a share is not a message: nothing here writes to messages', async
   assert.match(sql, /grant select on table public\.live_location_shares to authenticated;/);
 });
 
+// ---------------------------------------------------------------------------
+// 6 — THE SURFACE: the picker, the two cards, and the flag
+// ---------------------------------------------------------------------------
+
+test('[static] the duration picker offers exactly the three the layer defines', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // BUILT FROM THE LIST, not restated. A hand-written sheet is how a fourth
+  // option appears in the UI without the clamp in lib/liveLocation.ts ever
+  // hearing about it.
+  assert.match(chat, /SHARE_DURATIONS\.map\(\(duration\) => \(\{/);
+  assert.match(chat, /key: duration\.key,/);
+  assert.match(chat, /label: duration\.label,/);
+  assert.match(chat, /void beginShare\(duration\.ms\);/);
+  assert.doesNotMatch(chat, /'15 minutes'/, 'the labels live in the layer, not the screen');
+  assert.doesNotMatch(chat, /'8 hours'/);
+
+  // THE DURATION IS ASKED FOR BEFORE ANYTHING STARTS. The menu row opens the
+  // sheet; only a choice in the sheet reaches start().
+  assert.match(chat, /setDurationPickerOpen\(true\)/);
+  assert.match(chat, /visible=\{durationPickerOpen\}/);
+  assert.match(chat, /title="Share live location"/);
+  // And the sheet says what it will do, including that it can be stopped.
+  assert.match(chat, /will see where you are until it ends\. You can stop it at any time\./);
+
+  // Offered only while no share of this user's is already running: the bar IS
+  // the control at that point, and a second entry that silently restarts a
+  // live share is how a window quietly gets extended.
+  assert.match(
+    chat,
+    /liveLocation\.sharing \? undefined : \(\) => setDurationPickerOpen\(true\)/
+  );
+});
+
+test('[static] the two cards are D5 shapes, and neither is behind the composer state', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+  const card = stripComments(await read('components/LiveLocationCard.tsx'));
+
+  // THEIR share is a card with their position and the time left; YOURS is a
+  // bar saying you are broadcasting, with the one control that ends it.
+  assert.match(chat, /liveLocation\.theirs\.map\(\(share\) => \(/);
+  assert.match(chat, /<LiveLocationCard/);
+  assert.match(chat, /liveLocation\.mine \? \(/);
+  assert.match(chat, /<LiveLocationBar/);
+  assert.match(chat, /onStop=\{endShare\}/);
+
+  // ONE CLOCK. The countdown ticks on the same `now` that decides whether the
+  // card exists — two clocks would let a card read "under a minute" for a
+  // share the owner has already dropped.
+  assert.equal((chat.match(/now=\{liveLocation\.now\}/g) ?? []).length, 2);
+
+  // OUTSIDE the blocked / locked / composer branch: those decide whether this
+  // user may WRITE, and a share that already exists is a fact the policy
+  // handed over.
+  assert.ok(
+    chat.indexOf('liveLocation.theirs.map') < chat.indexOf('{isBlocked ? ('),
+    'the cards render before the blocked/locked/composer branch'
+  );
+
+  // Nothing is inserted into the timeline, so a share leaves no history.
+  assert.doesNotMatch(card, /sendMessage/);
+  assert.doesNotMatch(card, /kind: 'message'/);
+
+  // NO "ENDED" STATE, in either element. An expired share is hidden from
+  // everyone by the SELECT policy, so ended means ABSENT — the owner stops
+  // passing a share and the element unmounts.
+  assert.doesNotMatch(card, /'Ended'|Sharing ended|no longer sharing/i);
+  // The countdown is empty rather than "0m" at the boundary, and the elements
+  // simply drop the label.
+  assert.match(card, /\{remaining \? \(/);
+  assert.match(card, /remaining \? ` · \$\{remaining\} left` : ''/);
+
+  // A card takes every colour from the palette.
+  assert.equal(card.match(/#[0-9a-fA-F]{3,8}\b/), null, 'no raw hex');
+  assert.equal(card.match(/\brgba?\(/), null, 'no raw rgb/rgba');
+});
+
+test('[static] there is no map, and the substitution says every fact a map would have', async () => {
+  const card = stripComments(await read('components/LiveLocationCard.tsx'));
+
+  // react-native-maps IS a dependency, but the repo reaches it through one
+  // `.native.tsx` / `.web.tsx` / `.d.ts` triple, because a bare import goes
+  // into the web bundle and there is no metro alias. The `.web.tsx` half is a
+  // FROZEN surface (CLAUDE.md), so this card carries the facts instead of the
+  // picture — and it must not quietly acquire the import later either.
+  assert.doesNotMatch(card, /react-native-maps/, 'a bare map import breaks the web bundle');
+  assert.doesNotMatch(card, /MapView|Marker/);
+
+  // The three facts, all present.
+  assert.match(card, /reverseGeocodeArea\(lat, lng\)/, 'the area label, from the existing lib');
+  assert.match(card, /function formatCoordinates\(/, 'the coordinates');
+  assert.match(card, /formatTimeRemaining\(share\.expires_at, now\)/, 'the time remaining');
+
+  // The geocode is keyed on ~110 m of movement, not on every heartbeat: a
+  // share beating every fifteen seconds must not spend a network round trip
+  // re-deriving the same neighbourhood name.
+  assert.match(card, /lat\.toFixed\(3\)/);
+  assert.match(card, /\}, \[key\]\);/, 'the effect keys on the rounded pair');
+  // ...and it is cancelled on unmount, so a late answer cannot set state on a
+  // card whose share has ended.
+  assert.match(card, /if \(active\) setLabel\(resolved\);/);
+
+  // No new dependency entered package.json for any of this.
+  const pkg = JSON.parse(await read('package.json'));
+  for (const name of Object.keys(pkg.dependencies)) {
+    assert.ok(
+      !/leaflet|mapbox|maplibre|google-maps/.test(name),
+      `an unexpected map dependency appeared: ${name}`
+    );
+  }
+  assert.equal(pkg.dependencies['expo-document-picker'], '~14.0.8', 'the picker was already here');
+  assert.equal(pkg.dependencies['expo-location'], '~19.0.8', 'expo-location was already here');
+});
+
+test('[static] LIVE_LOCATION is flipped, and its docblock records the refusal', async () => {
+  const flags = await read('lib/featureFlags.ts');
+  assert.match(flags, /export const LIVE_LOCATION = true as boolean;/);
+
+  const block = flags.slice(
+    flags.lastIndexOf('/**', flags.indexOf('export const LIVE_LOCATION')),
+    flags.indexOf('export const LIVE_LOCATION')
+  );
+  assert.match(block, /WAITS ON: nothing since 2026-08-25\./);
+  // THE HALF THAT WAS REFUSED RATHER THAN SATISFIED. The old block named
+  // background permission plus expo-task-manager as a dependency; this run did
+  // not install its way past that, it declined it — and a flag table that
+  // recorded "waits on nothing" without saying so would leave the next run to
+  // "finish" the job by asking for Always.
+  assert.match(block, /REFUSED/);
+  assert.match(block, /FOREGROUND ONLY/);
+  assert.match(block, /ACCEPTED outcome/);
+  assert.doesNotMatch(
+    block,
+    /WAITS ON: a location-sharing table/,
+    'the stale dependency line must be gone'
+  );
+  // The delivery caveat that shapes the whole hook.
+  assert.match(block, /DELIVERS NO EVENT/);
+
+  // The guard site guards the ASSEMBLY, the READ_TICKS arrangement.
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+  assert.match(chat, /import \{ LIVE_LOCATION, READ_TICKS, TRANSLATION \} from '\.\.\/lib\/featureFlags';/);
+  assert.match(chat, /LIVE_LOCATION && !isSelfConversation/);
+  // The hook does nothing at all when it is not enabled.
+  const hook = stripComments(await read(HOOK));
+  assert.match(hook, /if \(!enabled \|\| !current\) return;/, 'no subscription when dark');
+  assert.match(hook, /if \(!enabled \|\| !current\) \{\s*setShares\(\[\]\);/, 'no read when dark');
+
+  // DELIVERED_TICKS is still not touched by this run.
+  assert.match(flags, /export const DELIVERED_TICKS = false as boolean;/);
+});
+
 test('[static] the layer takes a ChatTarget, so both thread kinds are one path', async () => {
   const lib = stripComments(await read(LIB));
   // The same either-or shape sendMessage() already takes, so there is one

@@ -580,6 +580,7 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
     DELETE_CHAT: [screen, /\{ delete: true \}/],
     READ_TICKS: [chat, /deliveryFor\(item, readPositions\)/],
     DOCUMENTS: [composer, /onPress: onPickDocument,/],
+    LIVE_LOCATION: [composer, /onPress: onShareLiveLocation,/],
   };
 
   for (const [name, [source, call]] of Object.entries(LIVE)) {
@@ -592,15 +593,17 @@ test('[static] each live flag gates a real affordance, in a real file', () => {
     assert.match(source, call, `${name} must gate a call that actually does something`);
   }
 
-  // The handler behind the row has to reach something too, or the flag would
+  // The handler behind each row has to reach something too, or the flag would
   // gate a prop nobody passes — the dead-row failure one level up.
   assert.match(chat, /onPickDocument=\{pickDocument\}/);
   assert.match(chat, /DocumentPicker\.getDocumentAsync\(/);
+  assert.match(chat, /onShareLiveLocation=\{/);
+  assert.match(chat, /liveLocation\.start\(durationMs\)/);
 
-  // And the ones that stay dark stay dark. DELIVERED_TICKS especially: there
-  // is no honest delivery signal in any schema here, so it is not "not done
-  // yet", it is refused.
-  for (const name of ['DELIVERED_TICKS', 'LIVE_LOCATION', 'TRANSLATION']) {
+  // And the two that stay dark stay dark. DELIVERED_TICKS especially: there is
+  // no honest delivery signal in any schema here, so it is not "not done yet",
+  // it is refused.
+  for (const name of ['DELIVERED_TICKS', 'TRANSLATION']) {
     assert.match(flags, new RegExp(`export const ${name} = false as boolean;`));
   }
 });

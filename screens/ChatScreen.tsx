@@ -27,6 +27,7 @@ import { ChatBubble } from '../components/ChatBubble';
 import { ChatComposer } from '../components/ChatComposer';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { DropMenu, type DropMenuItem } from '../components/DropMenu';
+import { LiveLocationBar, LiveLocationCard } from '../components/LiveLocationCard';
 import { nextMenu, type ChatMenu } from '../lib/chatMenus';
 import { canCopy, copyText } from '../lib/clipboard';
 import { TranslationSheet } from '../components/TranslationSheet';
@@ -74,7 +75,9 @@ import {
   otherParticipant,
   type DirectThread,
 } from '../lib/directThreads';
-import { READ_TICKS, TRANSLATION } from '../lib/featureFlags';
+import { LIVE_LOCATION, READ_TICKS, TRANSLATION } from '../lib/featureFlags';
+import { SHARE_DURATIONS } from '../lib/liveLocation';
+import { useLiveLocation } from '../hooks/useLiveLocation';
 import { chatTargetKey, type ChatTarget } from '../lib/messages';
 import { supabase } from '../lib/supabase';
 import { deviceLanguage, translateTexts, type TranslateResult } from '../lib/translate';
@@ -611,6 +614,60 @@ export function ChatScreen() {
   // job), or a job with no resolvable second party at all (no one assigned) —
   // either way there's no one else to message. No quick templates in that case.
   const isSelfConversation = !!user && counterpartyId === user.id;
+
+  /**
+   * LIVE LOCATION — the flag guards the ASSEMBLY, not the element, exactly as
+   * READ_TICKS does above: with it false nothing is read, nothing is
+   * subscribed, no watcher can start, and the two cards below have no share to
+   * render, so an unflipped build behaves exactly as every build before it.
+   *
+   * Scoped to the RESOLVED send target, the same answer everything free-form
+   * reads — a share belongs to the conversation a message would land in, and
+   * both thread kinds carry one because all three RPCs take either id. A
+   * conversation with yourself gets none: there is nobody to share with.
+   */
+  const liveLocation = useLiveLocation(
+    sendTarget,
+    user?.id,
+    LIVE_LOCATION && !isSelfConversation
+  );
+  const [durationPickerOpen, setDurationPickerOpen] = useState(false);
+
+  /**
+   * THE DURATION IS ASKED FOR, NEVER ASSUMED. Broadcasting a position is the
+   * most consequential thing this composer can do, and how long it lasts is
+   * the whole of what makes it consensual — so it is a decision taken before
+   * anything starts, not a default with a way to change it afterwards. Three
+   * choices, because eight hours is the server's own hard cap and anything
+   * finer would be a picker rather than a decision.
+   */
+  const durationItems: ActionSheetItem[] = SHARE_DURATIONS.map((duration) => ({
+    key: duration.key,
+    label: duration.label,
+    icon: 'time-outline' as const,
+    onPress: () => {
+      setDurationPickerOpen(false);
+      void beginShare(duration.ms);
+    },
+  }));
+
+  async function beginShare(durationMs: number) {
+    const error = await liveLocation.start(durationMs);
+    if (!error) return;
+    // D9 — phase77's RPCs raise sentences already written for a user
+    // ('Location sharing is not available', 'Sharing must end in the future,
+    // at most 8 hours from now'), and userMessage() hands those through
+    // unchanged. Nothing parallel is invented here.
+    await alertAsync(
+      'Could not share location',
+      userMessage(error, 'Your location could not be read. Check that location services are on.')
+    );
+  }
+
+  async function endShare() {
+    const error = await liveLocation.stop();
+    if (error) await alertAsync('Could not stop sharing', userMessage(error));
+  }
 
   // Messages by id, for resolving a reply's quoted original without a join —
   // the quoted message is always somewhere in this conversation.
@@ -1755,6 +1812,38 @@ export function ChatScreen() {
             />
           )}
 
+          {/* THE LIVE-SHARE CARDS SIT BELOW THE TIMELINE AND ABOVE EVERYTHING
+              ELSE IN THIS COLUMN, and that placement is the "persistent" in
+              "a persistent card in the thread": a share is a running state,
+              not an event, so it must not scroll away with the messages it is
+              not part of. Nothing is inserted into the timeline itself —
+              `live_location_shares` has no row in `messages`, and writing one
+              would make an ephemeral fact permanent in a transcript both
+              people keep.
+
+              OUTSIDE the blocked / locked / composer branch on purpose. Those
+              three decide whether this user may WRITE; a share that already
+              exists is a fact the policy handed over, and hiding it behind a
+              composer state would be a second rule the server does not have.
+              There is still no way to START one from a thread with no
+              composer, because the entry lives in the [ + ] menu. */}
+          {liveLocation.theirs.map((share) => (
+            <LiveLocationCard
+              key={share.id}
+              share={share}
+              sharerName={counterparty?.full_name}
+              now={liveLocation.now}
+            />
+          ))}
+          {liveLocation.mine ? (
+            <LiveLocationBar
+              share={liveLocation.mine}
+              now={liveLocation.now}
+              busy={liveLocation.busy}
+              onStop={endShare}
+            />
+          ) : null}
+
           {isBlocked ? (
             <View style={styles.blockedNotice}>
               <Ionicons name="ban-outline" size={18} color={colors.danger} />
@@ -1852,6 +1941,18 @@ export function ChatScreen() {
                 // gap is real and parked; it is not closed from the client.
                 allowAttachments={!!sendJobId}
                 onPickDocument={pickDocument}
+                // Also not behind `allowAttachments`, and for a stronger
+                // reason than the document row: a share writes no file at
+                // all. It is a row in `live_location_shares`, reached through
+                // three RPCs that each take a job id or a direct thread id,
+                // so there is no bucket and no path for a pair thread to
+                // lack. Offered only while no share of this user's is already
+                // running — the bar above IS the control at that point, and a
+                // second entry that silently restarts a live share is how a
+                // window quietly gets extended.
+                onShareLiveLocation={
+                  liveLocation.sharing ? undefined : () => setDurationPickerOpen(true)
+                }
               />
             </>
           )}
@@ -1885,6 +1986,14 @@ export function ChatScreen() {
         title="Message"
         items={messageMenuItems}
         onClose={() => setMenuTarget(null)}
+      />
+
+      <ActionSheet
+        visible={durationPickerOpen}
+        title="Share live location"
+        subtitle={`${counterparty?.full_name ?? 'They'} will see where you are until it ends. You can stop it at any time.`}
+        items={durationItems}
+        onClose={() => setDurationPickerOpen(false)}
       />
 
       <TranslationSheet
