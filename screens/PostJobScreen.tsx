@@ -27,6 +27,7 @@ import { EditBudgetDialog } from '../components/EditBudgetDialog';
 import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { SuccessMark } from '../components/SuccessMark';
 import { FieldLabel, TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -1489,9 +1490,15 @@ export function PostJobScreen() {
                workers respond, and right now there are none. */
             <SuccessScreen
               title="Your job is live."
-              body="Workers browsing BRAZOS can now see it. Bids appear on your job as workers respond — there are none yet — and you choose who gets it."
+              body="Workers can now see your job. Bids appear as workers respond, and you choose who gets it."
+              // D23-D26 — the mark, and the only thing on this surface that
+              // moves. It animates once on entry and then holds; a build
+              // without worklets, and anyone who has asked for reduced
+              // motion, gets the same artwork standing still.
+              mark={<SuccessMark accessibilityLabel="Your job is published" />}
               details={
-                publishedJob ? (
+                <View style={styles.publishDetails}>
+                {publishedJob ? (
                   <View style={styles.reviewCard}>
                     <Text style={styles.reviewEyebrow}>PUBLISHED</Text>
                     <Text style={styles.reviewTitle} numberOfLines={2}>
@@ -1542,7 +1549,9 @@ export function PostJobScreen() {
 
                     <View style={styles.reviewRow}>
                       <View style={styles.reviewIcon}>
-                        <Ionicons name="wallet-outline" size={18} color={colors.emerald} />
+                        {/* D19 — a wallet is where money is kept; this row is
+                            an amount. The glyph says amount. */}
+                        <Text style={styles.reviewIconGlyph}>$</Text>
                       </View>
                       <View style={styles.reviewText}>
                         <Text style={styles.reviewLabel}>Budget</Text>
@@ -1555,12 +1564,34 @@ export function PostJobScreen() {
                       </View>
                     </View>
                   </View>
-                ) : undefined
+                ) : null}
+
+                {/* D22 — VERIFIED BEFORE IT WAS WRITTEN. phase20 enqueues
+                    'bid_received' to the job's owner from notify_on_bid(), a
+                    trigger on `bids`, which phase47's projection writes on
+                    every marketplace offer chain's root; and
+                    notification_prefs.bids is `not null default true`. Both
+                    halves are live, so this card promises something the app
+                    actually does. */}
+                <View style={[styles.bidsCard, isDark && styles.bidsCardDark]}>
+                  <Ionicons name="notifications-outline" size={20} color={colors.emerald} />
+                  <View style={styles.bidsCardText}>
+                    <Text style={[styles.bidsCardTitle, isDark && styles.bidsCardTitleDark]}>
+                      Expect the first bids soon
+                    </Text>
+                    <Text style={styles.bidsCardBody}>
+                      You&apos;ll be notified when a worker bids on this job.
+                    </Text>
+                  </View>
+                </View>
+                </View>
               }
               actions={[
                 { label: 'View job and bids', onPress: leaveToPublishedJob },
                 {
-                  label: 'Keep browsing',
+                  // D21 — the label says where it goes; the action is
+                  // unchanged.
+                  label: 'Back to Home',
                   onPress: () => leaveAfterSuccess(false),
                   variant: 'secondary',
                 },
@@ -1966,9 +1997,52 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  // D19 — the amount's own sign, sized and weighted to sit where a 18pt glyph
+  // sat. A Text, not an Ionicon: there is no dollar glyph in the set that
+  // reads as a currency mark rather than a badge.
+  reviewIconGlyph: {
+    fontSize: 19,
+    lineHeight: 22,
+    fontWeight: '800',
+    color: colors.emerald,
+  },
   reviewText: {
     flex: 1,
     gap: 2,
+  },
+  // The publish surface's two cards, stacked with the template's own rhythm.
+  publishDetails: {
+    width: '100%',
+    gap: spacing.md,
+  },
+  // D22 — what happens next, and it is a thing the app really does: phase20's
+  // `bid_received` fires to the job's owner and `notification_prefs.bids`
+  // defaults to true.
+  bidsCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.md,
+    padding: spacing.lg,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.mint2,
+    backgroundColor: colors.mint,
+  },
+  bidsCardDark: { borderColor: colors.border },
+  bidsCardText: {
+    flex: 1,
+    gap: 2,
+  },
+  bidsCardTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.forest,
+  },
+  bidsCardTitleDark: { color: colors.ink },
+  bidsCardBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
   },
   reviewLabel: {
     fontSize: 11,

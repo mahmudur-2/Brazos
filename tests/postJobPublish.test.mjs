@@ -745,3 +745,236 @@ test('D18 · [executed] the media row pluralises each side and omits an empty on
   assert.doesNotMatch(mediaSummary(4, 0), /\b0\b/);
   assert.doesNotMatch(mediaSummary(0, 4), /\b0\b/);
 });
+
+// ---------------------------------------------------------------------------
+// D19-D26 — THE PUBLISH SCREEN.
+//
+// The copy, the glyph, the label, the card that promises a notification, and
+// the mark that animates once and then holds still.
+//
+// WHY NOT VACUOUS: the notification card's claim is checked against the
+// MIGRATIONS, end to end — the trigger that enqueues it, the projection that
+// fires that trigger, and the preference default that lets it through. If any
+// link were missing the card would be a promise the app does not keep, and
+// this fence would say which link.
+// ---------------------------------------------------------------------------
+
+test('D19-D21 · the publish copy, the amount glyph, and where the second action goes', () => {
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+  const publish = publishBranch(read('screens/PostJobScreen.tsx'));
+
+  // D20 — verbatim.
+  assert.match(
+    flat,
+    /body="Workers can now see your job\. Bids appear as workers respond, and you choose who gets it\."/
+  );
+  assert.ok(
+    !flat.includes('Workers browsing BRAZOS can now see it'),
+    'the body it replaced is retired'
+  );
+
+  // D19 — the BUDGET row's glyph is the amount's own sign, and the wallet is
+  // gone from THIS card. (Step 4's summary keeps its own glyph: D19 is scoped
+  // to the publish screen.)
+  assert.match(publish, /<Text style=\{styles\.reviewIconGlyph\}>\$<\/Text>/);
+  assert.ok(
+    !publish.includes('wallet-outline'),
+    'the wallet glyph is gone from the publish screen\'s budget row'
+  );
+  assert.match(flat, /reviewIconGlyph: \{[^}]*color: colors\.emerald,/);
+
+  // D21 — new label, same handler and same destination.
+  assert.match(publish, /label: 'Back to Home',/);
+  assert.match(publish, /onPress: \(\) => leaveAfterSuccess\(false\),/);
+  assert.ok(!publish.includes('Keep browsing'), 'the old label is replaced, not kept beside it');
+});
+
+test('D22 · the bids card is on the screen because the schema actually backs it', () => {
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+
+  assert.match(flat, /Expect the first bids soon/);
+  assert.match(flat, /You&apos;ll be notified when a worker bids on this job\./);
+
+  // LINK 1 — the preference defaults to on, so a fresh account receives it.
+  const phase20 = read('supabase/phase20_push_notifications.sql');
+  assert.match(
+    phase20,
+    /\n {2}bids boolean not null default true,/,
+    'notification_prefs.bids must default to true'
+  );
+
+  // LINK 2 — a bid enqueues 'bid_received' to the JOB'S OWNER, on the 'bids'
+  // channel, from a trigger that really is installed.
+  assert.match(
+    flatten(phase20),
+    /perform public\.enqueue_notification\( v_job\.client_id, new\.worker_id, 'bids', 'bid_received',/
+  );
+  assert.match(
+    flatten(phase20),
+    /create trigger bids_notify after insert on public\.bids for each row execute function public\.notify_on_bid\(\);/
+  );
+
+  // LINK 3 — `bids` is written for every marketplace offer chain, so that
+  // trigger fires on the real write path (job_offers), not a dead legacy one.
+  const phase47 = flatten(read('supabase/phase47_bids_projection_trigger.sql'));
+  assert.match(phase47, /insert into public\.bids \(id, job_id, worker_id, amount_cents, message, status, created_at\)/);
+  assert.match(phase47, /create trigger job_offers_mirror_bids/);
+
+  // The three links above all predate this card — it was written BECAUSE they
+  // were verified, not alongside a new migration to make them true.
+});
+
+test('D23 · the mark is a bigger check on a filled disc, ringed, haloed and sparkled', () => {
+  const shared = read('components/SuccessMark.shared.tsx');
+  const still = read('components/SuccessMark.tsx');
+  const flatShared = flatten(shared);
+
+  // BIGGER THAN WHAT IT REPLACED. The template's glyph is a 44pt icon in an
+  // 88pt disc; both numbers are read from the template rather than restated.
+  const template = read('ui/templates/SuccessScreen.tsx');
+  const templateGlyph = Number(/size=\{(\d+)\} color=\{isDark \? colors\.emerald/.exec(template)?.[1]);
+  const templateDisc = Number(/glyph: \{\s*width: (\d+),/.exec(template)?.[1]);
+  const check = Number(/export const MARK_CHECK = (\d+);/.exec(shared)?.[1]);
+  const disc = Number(/export const MARK_DISC = (\d+);/.exec(shared)?.[1]);
+  assert.ok(templateGlyph > 0 && templateDisc > 0, 'the template must still declare its own mark');
+  assert.ok(check > templateGlyph, `the check grew: ${check} > ${templateGlyph}`);
+  assert.ok(disc > templateDisc, `the disc grew: ${disc} > ${templateDisc}`);
+
+  // A FILLED disc, in the one solid conversion fill, with cream on it.
+  assert.match(flatShared, /disc: \{[^}]*backgroundColor: colors\.forest,/);
+  assert.match(flatten(still), /<Ionicons name="checkmark" size=\{MARK_CHECK\} color=\{colors\.onForest\} \/>/);
+
+  // CONCENTRIC RING BORDERS behind it — borders, not fills, and two of them
+  // stepping outward.
+  assert.match(flatShared, /export const MARK_RINGS = \[(\d+), (\d+)\] as const;/);
+  const rings = /MARK_RINGS = \[(\d+), (\d+)\]/.exec(flatShared);
+  assert.ok(rings, 'the ring diameters must stay readable constants');
+  assert.ok(
+    Number(rings[1]) > disc && Number(rings[2]) > Number(rings[1]),
+    'the rings step outward from the disc'
+  );
+  const ring = /ring: \{([^}]*)\}/.exec(flatShared);
+  assert.ok(ring, 'the ring must keep a flat style');
+  assert.match(ring[1], /borderWidth: 1,/);
+  assert.doesNotMatch(ring[1], /backgroundColor/, 'a ring is line-work, never a fill');
+
+  // A SHADOW HALO, from the token shape rather than a hand-rolled shadow.
+  assert.match(flatShared, /discGlow: glow\.halo\(withAlpha\(colors\.emerald, 0\.55\)\)/);
+
+  // SPARKLES, from the icon set that is already installed.
+  assert.match(flatShared, /export const MARK_SPARKLES = \[/);
+  assert.ok(
+    (flatShared.match(/\{ key: '/g) ?? []).length >= 3,
+    'a few sparkles, not one'
+  );
+  assert.match(flatten(still), /<Ionicons key=\{sparkle\.key\} name="sparkles"/);
+
+  // L1 — FLAT FILLS ONLY. No gradient, blur or SVG anywhere in the trio.
+  for (const path of [
+    'components/SuccessMark.shared.tsx',
+    'components/SuccessMark.tsx',
+    'components/SuccessMark.motion120.tsx',
+  ]) {
+    const source = stripComments(read(path));
+    for (const banned of ['Gradient', 'BlurView', 'react-native-svg', '<Svg']) {
+      assert.ok(!source.includes(banned), `${path} must not reach for ${banned}`);
+    }
+    // L2 — and no raw colour literals either.
+    assert.equal(source.match(/#[0-9a-fA-F]{3,8}\b/), null, `${path}: a raw hex crept in`);
+    assert.equal(source.match(/rgba?\(/), null, `${path}: a raw rgba() crept in`);
+
+    // L4 — no node carries a shadow AND a clip: on iOS overflow:'hidden' sets
+    // masksToBounds and takes the halo off the same layer.
+    for (const match of source.matchAll(/\w+: \{([^}]*)\}/g)) {
+      const body = match[1];
+      const clips = /overflow: 'hidden'/.test(body);
+      const shadowed = /shadow|elevation|glow\.halo/.test(body);
+      assert.ok(!(clips && shadowed), `${path}: a node carries both a clip and a shadow`);
+    }
+  }
+});
+
+test('D24 · the entrance runs once, for about a second, and then holds', () => {
+  const fast = stripComments(read('components/SuccessMark.motion120.tsx'));
+  const flat = flatten(read('components/SuccessMark.shared.tsx'));
+
+  // ONE animation. Not one per piece — one shared progress every piece reads,
+  // which is what makes "once" structural rather than a promise.
+  assert.equal(
+    (fast.match(/withTiming\(/g) ?? []).length,
+    1,
+    'there is exactly one animation on this surface'
+  );
+  assert.match(fast, /progress\.value = withTiming\(1, \{ duration: MARK_ENTRANCE_MS \}\);/);
+
+  // Roughly a second.
+  const ms = Number(/export const MARK_ENTRANCE_MS = (\d+);/.exec(flat)?.[1]);
+  assert.ok(ms >= 700 && ms <= 1300, `the entrance is about a second, saw ${ms}ms`);
+
+  // NOTHING THAT KEEPS RUNNING.
+  for (const banned of ['withRepeat', 'withSequence', 'withDecay', 'withSpring', 'setInterval', 'reverse', 'Infinity', '-1']) {
+    assert.ok(!fast.includes(banned), `${banned} would keep the mark moving — it must not appear`);
+  }
+  // It is kicked once, on mount, and never re-kicked by a changing dependency.
+  assert.match(fast, /\}, \[progress\]\);/, 'the effect depends only on the stable shared value');
+
+  // IT ENDS ON THE STILL FRAME. Every interpolation clamps, so at progress 1
+  // nothing has run past the value the still artwork draws.
+  const interpolations = [...fast.matchAll(/interpolate\([^;]*?\)/g)];
+  assert.ok(interpolations.length >= 4, 'the pieces really are functions of the progress');
+  for (const [expression] of interpolations) {
+    assert.match(expression, /'clamp'/, `an interpolation may not extrapolate: ${expression}`);
+  }
+});
+
+test('D25/D26 · the boundary holds, and reduced motion gets the still artwork', () => {
+  const fallback = read('components/SuccessMark.tsx');
+  const flatFallback = flatten(fallback);
+  const fast = read('components/SuccessMark.motion120.tsx');
+
+  // D25 — the chooser, on the capability it actually needs, with a literal
+  // require. (motion120.test.mjs holds the tree-wide exclusivity scan; this
+  // pins THIS sibling's half of it.)
+  assert.match(flatFallback, /resolveMotion120<ComponentType<SuccessMarkProps>>\( motionCapability, 'reanimated',/);
+  assert.match(flatFallback, /require\('\.\/SuccessMark\.motion120'\)/);
+  assert.ok(
+    !stripComments(fallback).includes("from 'react-native-reanimated'"),
+    'the fallback must never import the vendor — that is the crash the boundary exists for'
+  );
+  assert.match(fast, /from 'react-native-reanimated'/);
+  // Both take the artwork from the shared module, so the two cannot drift.
+  for (const [label, source] of [['fallback', fallback], ['fast', fast]]) {
+    assert.ok(
+      source.includes("from './SuccessMark.shared'"),
+      `the ${label} must draw the shared artwork`
+    );
+  }
+
+  // D26 — REDUCED MOTION NEVER GETS A DEGRADED ANIMATION, it gets the same
+  // artwork standing still. And `null` — the hook's "not read yet" — does not
+  // animate either, which is that hook's own stated contract.
+  assert.match(
+    flatFallback,
+    /const reducedMotion = useReducedMotion\(\); if \(reducedMotion !== false \|\| !canWorklet\(\)\) return <SuccessMarkStill \{\.\.\.props\} \/>;/,
+    'only an explicit false may animate'
+  );
+  assert.match(
+    read('hooks/useReducedMotion.ts'),
+    /export function useReducedMotion\(\): boolean \| null \{/,
+    'the hook really can answer null, which is why the check is !== false'
+  );
+
+  // The still path is the FULL artwork — every ring and every sparkle — not a
+  // reduced one.
+  assert.match(flatFallback, /\{MARK_RINGS\.map\(\(size, index\) =>/);
+  assert.match(flatFallback, /\{MARK_SPARKLES\.map\(\(sparkle\) =>/);
+
+  // And the screen mounts the mark through the template's slot.
+  const screen = flatten(read('screens/PostJobScreen.tsx'));
+  assert.match(screen, /mark=\{<SuccessMark accessibilityLabel="Your job is published" \/>\}/);
+  assert.match(
+    flatten(read('ui/templates/SuccessScreen.tsx')),
+    /\{mark \?\? \( <View style=\{\[styles\.glyph, isDark && styles\.glyphDark\]\}>/,
+    'the mark REPLACES the default glyph rather than joining it'
+  );
+});

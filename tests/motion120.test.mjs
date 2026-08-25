@@ -955,6 +955,16 @@ const SIBLINGS = [
     shared: 'components/FilterSlider.shared.tsx',
     needs: 'gestures',
   },
+  {
+    // RUN P1 — the published-job mark's entrance. The only sibling here that
+    // needs worklets ALONE: there is no gesture in it, just a one-second
+    // entrance, so a recogniser would buy it nothing.
+    name: 'SuccessMark',
+    fallback: 'components/SuccessMark.tsx',
+    fast: 'components/SuccessMark.motion120.tsx',
+    shared: 'components/SuccessMark.shared.tsx',
+    needs: 'reanimated',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -1964,6 +1974,7 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       'components/DropMenu.motion120.tsx',
       'components/FilterSlider.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
+      'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',
     ],
     'the fast-path roster changed — bring the new sibling into this fence deliberately'

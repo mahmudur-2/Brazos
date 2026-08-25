@@ -59,10 +59,15 @@ test('Post Job is a guarded four-step presentation over the existing form state'
   assert.match(postJob, /data: loc, error: locationError/);
   // Screen 16 (Phase 4): the publish success is the SuccessScreen template
   // with the atlas actions — "View job and bids" straight to the published
-  // job's own detail, "Keep browsing" home. The old "View my jobs"/"Back to
-  // home" pair was this assertion's previous target.
+  // job's own detail, and the secondary action home. The old "View my jobs"/
+  // "Back to home" pair was this assertion's previous target.
+  //
+  // RUN P1 RELABELLED THE SECOND ONE. "Keep browsing" said what you would be
+  // doing; "Back to Home" says where it lands, which is what the button
+  // actually does. Same handler, same destination — only the label moved.
   assert.match(postJob, /'View job and bids'/i);
-  assert.match(postJob, /'Keep browsing'/i);
+  assert.match(postJob, /label: 'Back to Home',/);
+  assert.match(postJob, /onPress: \(\) => leaveAfterSuccess\(false\),/);
   assert.match(postJob, /<SuccessScreen/);
   assert.doesNotMatch(postJob, /successTimeoutRef|setTimeout\(/);
 });

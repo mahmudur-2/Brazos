@@ -39,6 +39,15 @@ type SuccessScreenProps = {
   title: string;
   body?: string;
   icon?: IoniconName;
+  /**
+   * Replaces the default glyph disc with artwork of the caller's own — the
+   * published-job mark is the first. Omitted, the template draws the glyph
+   * exactly as it always has, so every existing caller is untouched.
+   *
+   * It takes the glyph's PLACE rather than sitting beside it: two marks at
+   * the top of a success screen is two claims about what just happened.
+   */
+  mark?: ReactNode;
   /** A receipt, a summary card — anything between the copy and the actions. */
   details?: ReactNode;
   actions: readonly SuccessAction[];
@@ -49,6 +58,7 @@ export function SuccessScreen({
   title,
   body,
   icon = 'checkmark-circle',
+  mark,
   details,
   actions,
   insideTabs = true,
@@ -69,9 +79,11 @@ export function SuccessScreen({
             disc — two dark greens, so in dark the mark all but vanished. It
             keeps the disc and gains the masters' gold ring, with the glyph in
             the live-state emerald (the "green check circle" of 15/19/40). */}
-        <View style={[styles.glyph, isDark && styles.glyphDark]}>
-          <Ionicons name={icon} size={44} color={isDark ? colors.emerald : colors.forest} />
-        </View>
+        {mark ?? (
+          <View style={[styles.glyph, isDark && styles.glyphDark]}>
+            <Ionicons name={icon} size={44} color={isDark ? colors.emerald : colors.forest} />
+          </View>
+        )}
 
         <View style={styles.copy}>
           <Text style={styles.title}>{title}</Text>
