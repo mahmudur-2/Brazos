@@ -149,3 +149,172 @@ test('D0 · the publish surface and the bottom nav resolve ONE green, and it is 
     'the publish branch may resolve exactly one green token, and it is emerald'
   );
 });
+
+// ---------------------------------------------------------------------------
+// D1-D6 — THE NAVIGATION MODEL.
+//
+// Steps 1-3 have no footer buttons at all. Their Back and Continue are the
+// header's two links, the title stays centred and put across all four steps,
+// and the last step's forward action is a single pinned Publish pill.
+//
+// WHY NOT VACUOUS: the four-row link table is RE-DERIVED here from the real
+// POST_STEPS labels parsed out of the screen, then compared against the table
+// the design specifies. Renaming a step, reordering the list, or changing the
+// derivation fails with the row that moved — the table is not restated as
+// four hardcoded strings that could quietly stop describing the screen.
+// ---------------------------------------------------------------------------
+
+/** The wizard's step labels, in order, parsed from the screen's own list. */
+function stepLabels(screen) {
+  const at = screen.indexOf('const POST_STEPS = [');
+  assert.notEqual(at, -1, 'the wizard must still declare POST_STEPS');
+  const end = screen.indexOf('] as const;', at);
+  assert.notEqual(end, -1, 'POST_STEPS must close');
+  const labels = [...screen.slice(at, end).matchAll(/label: '([^']+)'/g)].map((m) => m[1]);
+  assert.equal(labels.length, 4, `the wizard is four steps, saw ${labels.length}`);
+  return labels;
+}
+
+test('D1-D4 · the header owns navigation, and its two links are the neighbouring steps', () => {
+  const screen = read('screens/PostJobScreen.tsx');
+  const flat = flatten(screen);
+  const labels = stepLabels(screen);
+
+  // The derivation, asserted as source…
+  assert.match(
+    flat,
+    /const backLabel = step === 0 \? 'Home' : POST_STEPS\[step - 1\]\.label;/,
+    'the left link is the previous step, or the exit for the first one'
+  );
+  assert.match(
+    flat,
+    /const advanceLabel = isLastStep \? undefined : POST_STEPS\[step \+ 1\]\.label;/,
+    'the right link is the next step, and the last step has none'
+  );
+
+  // …then RUN it against the real labels and check the resulting table.
+  const table = labels.map((_, step) => [
+    step === 0 ? 'Home' : labels[step - 1],
+    step === labels.length - 1 ? undefined : labels[step + 1],
+  ]);
+  assert.deepEqual(table, [
+    ['Home', 'Media'],
+    ['Describe', 'Location'],
+    ['Media', 'Review'],
+    ['Location', undefined],
+  ]);
+
+  // The header is wired to all of it, and the title is centred rather than
+  // sitting beside the back control.
+  assert.match(flat, /backLabel=\{backLabel\}/);
+  assert.match(flat, /rightLabel=\{advanceLabel\}/);
+  assert.match(flat, /onPressRight=\{handleContinue\}/);
+  assert.match(flat, /rightDisabled=\{advanceDisabled\}/);
+  assert.match(flat, /centerTitle/);
+  // The title itself never changes across the steps — one expression, no step
+  // term in it.
+  assert.match(
+    flat,
+    /title=\{isEditing \? 'Edit Job' : isHiring \? 'Send an Offer' : 'Post a Job'\}/,
+    'the header title is the flow, not the step'
+  );
+});
+
+test('D2/D4 · no step but the last renders a footer button, and its footer holds one', () => {
+  const flat = flatten(read('screens/PostJobScreen.tsx'));
+
+  // The footer exists only under the last-step gate.
+  const at = flat.indexOf('<View style={styles.footer}>');
+  assert.notEqual(at, -1, 'the pinned footer must still be a bare styles.footer View');
+  assert.match(
+    flat.slice(Math.max(0, at - 40), at),
+    /\{isLastStep && \( $/,
+    'the footer must be gated on the last step — steps 1-3 carry none'
+  );
+
+  // And it holds exactly one control.
+  const close = flat.indexOf('</View> )}', at);
+  assert.notEqual(close, -1, 'the gated footer must close');
+  const footer = flat.slice(at, close);
+  assert.equal(
+    (footer.match(/<Button/g) ?? []).length,
+    1,
+    'the last step commits with ONE full-width control, not a Back/Publish pair'
+  );
+  assert.ok(!footer.includes('Continue'), 'Continue is a header link now, not a button');
+  assert.ok(!footer.includes('footerBack'), 'the Back button and its style are gone');
+  assert.match(
+    footer,
+    /title=\{isEditing \? 'Save changes' : isHiring \? 'Send request' : 'Publish'\}/
+  );
+
+  // A pill, not a rounded rectangle.
+  assert.match(
+    flat,
+    /footerPrimary: \{ flex: 1, borderRadius: radius\.pill, \}/,
+    'the Publish control is a pill'
+  );
+});
+
+test('D5 · the last step scroller clears its own footer, from the shared constant', () => {
+  const screen = read('screens/PostJobScreen.tsx');
+  const flat = flatten(screen);
+
+  assert.match(
+    flat,
+    /contentContainerStyle=\{\[styles\.content, isLastStep && styles\.contentWithFooter\]\}/,
+    'the clearance applies on the step that HAS a footer, and only there'
+  );
+  assert.match(
+    flat,
+    /contentWithFooter: \{ paddingBottom: spacing\.xl \+ PINNED_FOOTER_BOTTOM_PADDING, \}/,
+    'the clearance is the content padding plus the SAME constant the footer applies'
+  );
+  // ANTI-VACUITY: that constant is imported here and is the shared one.
+  assert.match(screen, /PINNED_FOOTER_BOTTOM_PADDING \} from '\.\.\/ui\/primitives'/);
+  assert.match(
+    read('ui/primitives/BottomNav.tsx'),
+    /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/
+  );
+});
+
+test('D6 · dropping the footers kept the exit guard and the draft autosave', () => {
+  const code = stripComments(read('screens/PostJobScreen.tsx'));
+
+  // Header back, Android back and the iOS edge gesture still all mean "one
+  // step back" while the wizard is mid-flow, and a write in flight still
+  // cannot be removed from the stack.
+  assert.match(code, /usePreventRemove\(submitting \|\| \(step > 0 && !showSuccess\), \(\) => \{/);
+  assert.match(code, /if \(!submitting\) setStep\(\(current\) => Math\.max\(0, current - 1\)\);/);
+  // The header's own left link routes through the same handler.
+  assert.match(code, /onBack=\{handleBack\}/);
+  // And the autosave effect still writes every field the draft carries.
+  assert.match(code, /void savePostJobDraft\(draftUserId, \{/);
+  assert.match(code, /if \(!isFreshPost \|\| !draftReady \|\| !draftUserId\) return;/);
+});
+
+test('D2 · the header new props are optional and leave every other caller untouched', () => {
+  const header = read('components/ScreenHeader.tsx');
+  const code = stripComments(header);
+
+  for (const prop of ['backLabel?: string;', 'rightLabel?: string;', 'centerTitle?: boolean;']) {
+    assert.ok(code.includes(prop), `${prop} must be optional`);
+  }
+  assert.match(code, /rightDisabled = false,/, 'a caller that passes nothing gets an enabled default');
+  assert.match(code, /centerTitle = false,/, 'a caller that passes nothing keeps the left-aligned title');
+
+  // The default branch is the arrangement the chat header depends on:
+  // leading between the back control and the title block.
+  assert.match(flatten(header), /\{backControl\} \{leading\} \{onPressTitle \?/);
+
+  // Both links are ONE treatment — the same colour the bare back chevron
+  // already resolved, so the header cannot grow a second link vocabulary.
+  assert.match(code, /const backColor = isDark \? palette\.gold : palette\.text;/);
+  const linkColors = [
+    ...code.matchAll(/color: (?:rightDisabled \? palette\.textSubtle : )?backColor/g),
+  ];
+  assert.ok(linkColors.length >= 2, 'both edge links paint from backColor');
+
+  // The muted state is a token, never an opacity dim.
+  assert.ok(!/opacity:/.test(code), 'a disabled link is muted by colour, not faded');
+});

@@ -892,11 +892,33 @@ export function PostJobScreen() {
   const showPhotoNudge =
     isFreshPost && step === 1 && photos.length === 0 && !photoNudgeDismissed;
 
+  // D1-D4 — NAVIGATION LIVES IN THE HEADER NOW, derived from the step list so
+  // the two links can never name a step the wizard does not have. Leaving the
+  // first step exits the flow, so its left link names where that lands;
+  // everywhere else the two links are simply the neighbouring steps. The last
+  // step has no right link at all — its forward action is Publish, which is a
+  // commitment and belongs on a pinned button, not on a chevron.
+  const isLastStep = step === POST_STEPS.length - 1;
+  const backLabel = step === 0 ? 'Home' : POST_STEPS[step - 1].label;
+  const advanceLabel = isLastStep ? undefined : POST_STEPS[step + 1].label;
+  // D3 — THE FLOOR'S RULE, WRITTEN ONCE. This is the expression the Continue
+  // button carried before the footers came off steps 1-3: the description
+  // floor gates the Describe step only, and an upload in flight gates every
+  // step. The header link and the Publish button both read it, so the two
+  // controls cannot drift into two rules (P3-31).
+  const advanceDisabled =
+    uploadingPhoto || uploadingVideo || (step === 0 && descNeeded > 0);
+
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScreenHeader
         title={isEditing ? 'Edit Job' : isHiring ? 'Send an Offer' : 'Post a Job'}
         onBack={handleBack}
+        backLabel={backLabel}
+        rightLabel={advanceLabel}
+        onPressRight={handleContinue}
+        rightDisabled={advanceDisabled}
+        centerTitle
         palette={emeraldColors}
       />
 
@@ -910,7 +932,7 @@ export function PostJobScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, isLastStep && styles.contentWithFooter]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -1381,38 +1403,28 @@ export function PostJobScreen() {
           </View>
         ) : null}
 
+        {/* D2/D4 — ONE footer, on the last step only. Steps 1-3 carry no
+            footer button at all: their Back and Continue are the header's two
+            links, so a step that is only navigation has no pinned chrome to
+            hold. The last step is not navigation — it commits — and a
+            commitment gets a full-width button. */}
+        {isLastStep && (
         <View style={styles.footer}>
-          {step > 0 && (
-            <Button
-              title="Back"
-              variant="secondary"
-              palette={emeraldColors}
-              onPress={handleBack}
-              disabled={submitting}
-              style={styles.footerBack}
-            />
-          )}
           <Button
             // "Send request", not "Hire": the worker still has to agree.
-            title={
-              step < POST_STEPS.length - 1
-                ? 'Continue'
-                : isEditing
-                  ? 'Save changes'
-                  : isHiring
-                    ? 'Send request'
-                    : 'Publish job'
-            }
-            onPress={step < POST_STEPS.length - 1 ? handleContinue : handleSubmit}
+            title={isEditing ? 'Save changes' : isHiring ? 'Send request' : 'Publish'}
+            onPress={handleSubmit}
             palette={emeraldColors}
             loading={submitting}
-            // The description floor (§3.3) disables Continue on the Describe
-            // step only, alongside its written count above. The photo nudge
-            // deliberately has no place in this expression.
-            disabled={uploadingPhoto || uploadingVideo || (step === 0 && descNeeded > 0)}
+            // The same one rule the header's advance link reads — see
+            // `advanceDisabled`. On this step the floor term is already
+            // false, so what is left is "no upload in flight". The photo
+            // nudge deliberately has no place in it.
+            disabled={advanceDisabled}
             style={styles.footerPrimary}
           />
         </View>
+        )}
       </KeyboardAvoidingView>
       )}
 
@@ -1583,6 +1595,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
     gap: spacing.xl,
+  },
+  // D5 — THE LAST STEP'S SCROLLER CLEARS ITS OWN FOOTER. Only the last step
+  // has one, and the summary card is the tallest thing on the screen: without
+  // this the card's final row ends flush against the footer's top edge and
+  // reads as clipped. It is `content`'s own bottom padding plus the footer's
+  // breathing room — the SAME constant the footer applies, so the gap above
+  // the button and the gap below the card are one number, not two.
+  contentWithFooter: {
+    paddingBottom: spacing.xl + PINNED_FOOTER_BOTTOM_PADDING,
   },
   stepIntro: {
     gap: spacing.sm,
@@ -1886,13 +1907,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderTopColor: colors.mint2,
     backgroundColor: colors.surface,
   },
-  footerBack: {
-    minWidth: 104,
-    borderRadius: radius.lg,
-  },
+  // D4 — one full-width pill. There is no second footer control any more, so
+  // there is no `footerBack` beside it to leave room for.
   footerPrimary: {
     flex: 1,
-    borderRadius: radius.lg,
+    borderRadius: radius.pill,
   },
   // D0 — OPAQUE GROUND, AND NO OPACITY ON THIS NODE. Both halves matter and
   // they fail the same way: the form stays mounted underneath, so a

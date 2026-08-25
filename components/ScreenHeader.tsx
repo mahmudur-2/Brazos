@@ -23,7 +23,40 @@ type ScreenHeaderProps = {
   leading?: ReactNode;
   /** Bumps the title's own size. Defaults to the standard 24. */
   titleSize?: number;
+  /**
+   * Turns the bare back chevron into a LABELLED link — "‹ Home", "‹ Media" —
+   * in the same treatment the chevron already carries. Requires `onBack`;
+   * without it the header renders the chevron alone, exactly as before.
+   */
+  backLabel?: string;
+  /**
+   * The mirror of `backLabel` at the far edge: a labelled link with a trailing
+   * chevron, for a header that OWNS a flow's forward step instead of leaving
+   * it to a footer button. Muted and inert while `rightDisabled`.
+   *
+   * Distinct from `right`, which takes arbitrary content and is what every
+   * pre-existing caller uses; a header may carry either, and passing neither
+   * leaves that edge empty as it always was.
+   */
+  rightLabel?: string;
+  onPressRight?: () => void;
+  rightDisabled?: boolean;
+  /**
+   * Centres the title between the two edges rather than letting it sit next
+   * to the back control. For a header whose two edges are both navigation:
+   * the title has to stay put across the steps or it reads as a fifth control
+   * shuffling around.
+   */
+  centerTitle?: boolean;
 };
+
+/**
+ * How much room the centred title leaves for the edge links on either side.
+ * The title truncates into it rather than sliding off centre, which is the
+ * whole point of centring it — a title that recentres itself around a longer
+ * link is exactly the wandering this avoids.
+ */
+const CENTERED_TITLE_INSET = spacing.xxl * 3;
 
 export function ScreenHeader({
   title,
@@ -35,6 +68,11 @@ export function ScreenHeader({
   titleIcon,
   leading,
   titleSize,
+  backLabel,
+  rightLabel,
+  onPressRight,
+  rightDisabled = false,
+  centerTitle = false,
 }: ScreenHeaderProps) {
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
@@ -78,13 +116,73 @@ export function ScreenHeader({
     </>
   );
 
+  // The bare chevron and the labelled link are ONE control in two lengths —
+  // same press, same colour, same hit slop — so a flow that labels its back
+  // step cannot drift into a second back treatment.
+  const backControl = onBack ? (
+    <Pressable
+      onPress={onBack}
+      hitSlop={10}
+      style={backLabel ? styles.link : styles.back}
+      accessibilityRole={backLabel ? 'button' : undefined}
+      accessibilityLabel={backLabel ? `Back to ${backLabel}` : undefined}
+    >
+      <Ionicons name="chevron-back" size={backLabel ? 20 : 26} color={backColor} />
+      {backLabel ? (
+        <Text style={[styles.linkLabel, { color: backColor }]} numberOfLines={1}>
+          {backLabel}
+        </Text>
+      ) : null}
+    </Pressable>
+  ) : null;
+
+  // Disabled is a MUTED link, never a hidden one: the step you cannot reach
+  // yet has to stay visible or the header loses a control between renders.
+  const rightControl =
+    rightLabel && onPressRight ? (
+      <Pressable
+        onPress={onPressRight}
+        disabled={rightDisabled}
+        hitSlop={10}
+        style={styles.link}
+        accessibilityRole="button"
+        accessibilityLabel={`Continue to ${rightLabel}`}
+        accessibilityState={{ disabled: rightDisabled }}
+      >
+        <Text
+          style={[
+            styles.linkLabel,
+            { color: rightDisabled ? palette.textSubtle : backColor },
+          ]}
+          numberOfLines={1}
+        >
+          {rightLabel}
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={rightDisabled ? palette.textSubtle : backColor}
+        />
+      </Pressable>
+    ) : null;
+
+  if (centerTitle) {
+    return (
+      <View style={[styles.container, styles.containerCentered]}>
+        {/* First, so both edge slots paint above it — a long title truncates
+            into its inset instead of covering a link. */}
+        <View style={styles.centerTitles} pointerEvents="none">
+          {titles}
+        </View>
+        <View style={styles.edge}>{backControl}</View>
+        <View style={[styles.edge, styles.edgeEnd]}>{rightControl}</View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {onBack ? (
-        <Pressable onPress={onBack} hitSlop={10} style={styles.back}>
-          <Ionicons name="chevron-back" size={26} color={backColor} />
-        </Pressable>
-      ) : null}
+      {backControl}
 
       {leading}
 
@@ -109,8 +207,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
   },
+  containerCentered: {
+    justifyContent: 'space-between',
+  },
   back: {
     marginLeft: -spacing.xs,
+  },
+  // Both edge links. >= 44pt tall because they are the ONLY way through the
+  // flow once the footer buttons are gone (CLAUDE.md's touch floor).
+  link: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minHeight: 44,
+  },
+  linkLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  edge: {
+    flexShrink: 1,
+  },
+  edgeEnd: {
+    alignItems: 'flex-end',
+  },
+  centerTitles: {
+    position: 'absolute',
+    left: CENTERED_TITLE_INSET,
+    right: CENTERED_TITLE_INSET,
+    top: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   titles: {
     flex: 1,

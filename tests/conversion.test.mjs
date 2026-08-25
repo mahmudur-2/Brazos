@@ -144,8 +144,25 @@ test('§3.3 · the floor is 20 trimmed characters — 19 fails, 20 passes', asyn
 test('§3.3 · the advance control is disabled by the floor, with the written count [static]', async () => {
   const screen = await read('screens/PostJobScreen.tsx');
 
-  // The footer button's disabled expression carries the floor…
-  assert.match(screen, /disabled=\{uploadingPhoto \|\| uploadingVideo \|\| \(step === 0 && descNeeded > 0\)\}/);
+  // RUN P1 MOVED THE ADVANCE CONTROL. Steps 1-3 no longer carry a Continue
+  // button — the header's right link is the advance control now — so the
+  // floor's expression is a named const both remaining controls read rather
+  // than a `disabled=` attribute on one footer button. The RULE is unchanged
+  // and is asserted verbatim; what moved is where it is written.
+  assert.match(
+    screen,
+    /const advanceDisabled =\s*uploadingPhoto \|\| uploadingVideo \|\| \(step === 0 && descNeeded > 0\);/
+  );
+  // The header's advance link carries it…
+  assert.match(screen, /rightDisabled=\{advanceDisabled\}/);
+  // …and so does the last step's Publish button, from the same const — one
+  // rule, never two copies (P3-31).
+  assert.match(screen, /disabled=\{advanceDisabled\}/);
+  assert.equal(
+    (stripComments(screen).match(/uploadingPhoto \|\| uploadingVideo/g) ?? []).length,
+    1,
+    'the floor/upload rule must exist exactly once in this screen'
+  );
   // …and the count is written next to the field, never a raw error.
   assert.match(screen, /more \{descNeeded === 1 \? 'character' : 'characters'\} needed/);
 });
@@ -162,9 +179,11 @@ test('§3.4 · the nudge renders, dismisses per-draft, and never blocks advancin
   assert.match(screen, /setPhotoNudgeDismissed\(true\)/, 'the nudge is dismissible');
 
   // The advance control's disabled expression must not mention the nudge or
-  // the photo count — advancing with zero photos stays possible.
-  const disabledExpr = screen.match(/disabled=\{uploadingPhoto[^}]*\}/)?.[0] ?? '';
-  assert.ok(disabledExpr.length > 0, 'the footer disabled expression exists');
+  // the photo count — advancing with zero photos stays possible. RUN P1: that
+  // expression is now the named const the header link and the Publish button
+  // share, not a footer button's attribute.
+  const disabledExpr = screen.match(/const advanceDisabled =[^;]*;/)?.[0] ?? '';
+  assert.ok(disabledExpr.length > 0, 'the advance-disabled expression exists');
   assert.ok(!disabledExpr.includes('photoNudge'), 'nudge state cannot gate advancing');
   assert.ok(!disabledExpr.includes('photos.length'), 'photo count cannot gate advancing');
 
