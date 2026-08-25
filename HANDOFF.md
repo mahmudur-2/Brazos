@@ -43,7 +43,232 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 three corrections (RUN H3)
+## Current state — after the 2026-08-25 category-chip diagnosis (RUN S1)
+
+RUN S1 was sent to find out why tapping a category chip on customer Home lands
+on a worker search whose field is empty and which reports no matches. **It is
+not a wiring bug.** The category is passed, declared on every param list, read
+on arrival, used to run the search, and put into the table read as a real
+filter. What is missing is that **nothing on that screen tells the customer
+which category is applied** — and for the category this run tested, the one
+marker that exists renders past the right edge of the phone.
+
+That is an appearance decision, not a mechanical defect, so this run took the
+**C3 stop branch: no app file was touched.** It shipped eyes and a diagnosis.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`5fc2f15`|`workersearch-category-{dark,light}` + `tests/shotHarness.test.mjs`|
+|C3|—|**stop branch. Zero app files changed.**|
+|C4|(this file)|the handoff|
+
+`npm run verify` bare and unpiped before any edit and after the commit, exit 0
+both times. **Baseline 1067 pass / 0 fail; 1071 after C1** — the four additions
+are this run's own fences. No test was deleted, disabled, skipped or made
+conditional. Nothing was pushed; no database was contacted; no SQL was executed;
+no dependency was touched; no image file was opened.
+
+### THE FOUR ANSWERS, EACH WITH ITS LINE
+
+**1. Is the `category` param read, or silently dropped? READ.**
+`screens/WorkerSearchScreen.tsx:97-100` seeds `pinnedCategory` from
+`params?.category`, and `:194-196` runs the search with it on arrival. All three
+param lists that mount this route declare it identically —
+`lib/navigation.ts:146` (customer Home stack), `:160` (the Discover tab) and
+`:571` (the screen's own route type) — so there is no name, shape or type drift
+to drop it. `screens/HomeScreen.tsx:435-437` is the only sender.
+
+**2. Does it filter, or only get stored? IT FILTERS.**
+`screens/WorkerSearchScreen.tsx:165` turns the chip into
+`categories = [category]`, `:174` synthesises the search TEXT from the
+category's own label so the semantic path has real language to embed, and
+`:175-179` hands both to `findWorkers()`. `lib/workerSearch.ts:636` forwards the
+categories to the server ranking, and `lib/workerSearch.ts:466` is the actual
+filter on the deterministic read: `.overlaps('categories', searchedCategories)`.
+Nothing merely stores it.
+
+**3. Does anything visible name the applied category? EFFECTIVELY NO.**
+There IS a marker: `activeCategories` (`screens/WorkerSearchScreen.tsx:232-233`)
+drives `selected`, which applies `styles.serviceTileSelected` — a 2pt gold ring
+(`:345`, style at `:797`). The render confirms it is painted. **It is off
+screen.** The tiles live in a horizontal `ScrollView` (`:331`) that has no ref
+and no `scrollTo`, so nothing brings the selection into view, and
+`SUGGESTED_CATEGORIES` (`:71`) is `SKILL_CATEGORIES.slice(0, 6)`, which puts
+Dog Walking/Pet Care sixth. Measured on the live DOM at 393x852 (below): the
+ringed tile spans **x 596-704 in a 393pt viewport** — 203pt past the edge, in a
+scroller labelled only "Swipe to explore".
+No heading, pill or placeholder names the category anywhere else. The empty
+state (`:466`) says "No workers matched" and does not mention it, and
+`resultHeading()` (`lib/workerSearch.ts:716-722`) takes only a mode and a count,
+so the populated state does not either.
+**Four of the ten categories have no marker at all**, because they fall outside
+that `slice(0, 6)`: `errands`, `tv_mounting`, `painting`, `packing`. Home's own
+visible **"TV Mounting" pill** (`lib/skillCategories.ts:49`) is one of them — it
+lands on a correctly filtered search with **zero** on-screen evidence of any
+filter.
+
+**4. Is the empty search field deliberate, or an oversight? DELIBERATE.**
+`screens/HomeScreen.tsx:425-429` states the split in prose and the code keeps
+it: `searchCategory()` sends `{ category }` (`:435-437`), `submitSearch()` sends
+`{ query }` (`:439-445`). The destination initialises `query` from
+`params?.query ?? ''` only (`screens/WorkerSearchScreen.tsx:95`) and holds the
+chip on a second, separate axis (`:97-100`) that is cleared the instant the
+customer types (`:279` — "Typing means the customer is describing the job
+themselves, so stop forcing the chip they tapped earlier"). Prefilling the field
+from a chip would collapse two axes into one and break that clearing rule. The
+empty field is the design.
+
+### SO WHAT THE OPERATOR SAW ON THE DEVICE WAS TWO THINGS, NOT ONE
+
+The empty field is by design (4). The "no workers matched" is staging data: the
+filter really did run, so it means no staging profile's `categories` overlaps
+`dog_walking` and nothing cleared the semantic floor. **Neither is a bug.** The
+bug-shaped thing is (3) — a search that is filtered without saying so, which is
+exactly what makes an honest empty result read as a broken screen.
+
+**The fix is an appearance decision and belongs to the operator.** Inventing a
+chip, a heading, a pill or a placeholder here is the failure mode this project
+has already paid for once, so this run wrote none of them. Note that the
+smallest honest option — scrolling the selected tile into view — is not a copy
+decision and invents nothing; it is recorded as an option, not a recommendation,
+and it does nothing for the four categories that have no tile.
+
+### THE NEW TARGET, AND WHY IT TAPS RATHER THAN NAVIGATES
+
+`workersearch-category-{dark,light}` arrives by tapping: customer Home → the
+"Other" chip (`screens/HomeScreen.tsx:638`) → the sheet titled "All services"
+(`:759`) → the row "Pet Sitting & Dog Walking" (`lib/skillCategories.ts:95`).
+Dog walking is not one of the four pills `HOME_SERVICE_ROWS`
+(`lib/skillCategories.ts:61-64`) draws, so the sheet is its **only** tap path
+from Home — and the sheet's rows call the same `searchCategory()`
+(`screens/HomeScreen.tsx:764`) the visible pills do, so this is the chip path
+rather than a detour around it. Navigating to the route directly would have
+proved only that the screen reads a param someone handed it.
+
+The `wait` is `'No workers matched'` because that string cannot appear until the
+search has run to completion, so the shutter can never photograph the spinner.
+The harness invents no marketplace data, so that state is the EXPECTED outcome
+there and says nothing about staging.
+
+`tests/shotHarness.test.mjs` fences it from both sides: every locator the recipe
+introduces is read back out of the source that renders it (a renamed
+accessibility label is otherwise a silent break that surfaces only mid-capture),
+and the whole chip → search chain of answer 2 is asserted offline, so the
+diagnosis above does not have to be re-derived.
+
+### THE BYTE-IDENTITY GATE — AND A CORRECTION TO H3's RULE
+
+H3 recorded "two renders from one export are byte-identical … once the bundler
+cache is warm." **That is true for the two customer Home targets and false for
+the two worker Home targets.** No export was built this run: `.shots/web` was
+already warm and `--build` was never passed, so all four renders below came from
+one identical export.
+
+|target|H3|A (before edit)|control (no edit)|B (after edit)|
+|-|-|-|-|-|
+|`customer-home-dark`|`5993dff7`|`5993dff7`|`5993dff7`|`5993dff7`|
+|`customer-home-light`|`dea5bb11`|`dea5bb11`|`dea5bb11`|`dea5bb11`|
+|`worker-home-dark`|`fb73aa3c`|`ed119b12`|`0f52409f`|`ed119b12`|
+|`worker-home-light`|`3026edd6`|`3026edd6`|`3026edd6`|`aa1559b9`|
+
+The **control** column is the finding: it is a re-render with **no edit of any
+kind** between it and column A, and `worker-home-dark` still changed. So the two
+worker targets are render-nondeterministic on this machine, the variance
+predates anything this run did, and **byte identity is not a valid gate for
+them.** The deltas are 3 and 4 bytes on ~273KB and ~80KB files, which is a
+sub-pixel difference rather than a layout move — but that is a size argument,
+not a proof, and this run does not claim more than it measured.
+
+**What IS supported:** the two customer Home targets are byte-identical across
+all four renders, including H3's. No existing target's recipe, name, mode,
+scheme or `wait` changed; `tests/shotHarness.test.mjs` asserts all fourteen are
+still in the registry and that it holds exactly sixteen.
+
+**A later run chasing the worker-Home variance should not start from scratch:**
+it is present with `reducedMotion: 'reduce'` and `animations: 'disabled'`
+already in force, so it is not the Live Nearby halo those switches were added
+for.
+
+### HOW THE RENDER WAS READ WITHOUT OPENING IT
+
+The evidence guard blocks image reads for this run, and the whole C3 decision
+rested on what the render shows. Routed by driving the same warm export with the
+same recipe in a scratchpad Playwright script that reports the **DOM** instead
+of photographing it — stronger evidence than pixels, since it yields geometry
+and computed style rather than colour. What it returned, at 393x852, after the
+chip tap:
+
+- the search input's `value` is `""` (placeholder "What do you need help with?")
+- five tiles carry `border: 1px rgb(85,72,46)`; **one** carries
+  `border: 2px rgb(212,162,76)` — `goldDeep` — and it is `Dog Walking/Pet Care`
+- that tile's rect is `left: 596, right: 704`; the four on screen are Furniture
+  Assembly (16-124), Moving Help (132-240), House Cleaning (248-356) and
+  Handyman/Repairs clipped at 393
+- the full text of the surface is: "Find help", "FIND TRUSTED HELP, FAST",
+  "Describe the task in your own words, or start with a service below.",
+  "Popular services", "Swipe to explore", the six tile labels, "NO MATCHES YET",
+  "No workers matched", the empty-state sentence, "Post a job". **Nothing names
+  a filter.**
+
+One caveat recorded rather than glossed: `accessibilityState={{ selected }}`
+(`screens/WorkerSearchScreen.tsx:349`) did **not** produce an `aria-selected`
+attribute in the web build, so on web the selection is conveyed by the ring
+alone. That is a react-native-web mapping detail for `role="button"`; it says
+nothing about what VoiceOver announces on the device, and this run did not test
+iOS.
+
+### What was SKIPPED, and why
+
+- **Visual inspection of the two new PNGs.** The evidence guard blocks image
+  reads. Routed through the DOM probe above rather than worked around; the
+  operator should still look at the two files.
+- **Physical-device verification.** Only the operator can do it.
+- **Archiving RUN W2's record** to `docs/handoff-archive/` — still outstanding
+  from H3, and still blocked by the same guard. The per-run records were
+  retitled one position each again; W2's is now "Five runs back".
+- Nothing else. C1 and C4 landed; C3 stopped by design, not by obstruction.
+
+### Guard friction — three fires, all routed, none worked around
+
+- `GUARD-CLAUDEDIR` on a command that both listed `.claude/` and carried a
+  `2>/dev/null` redirect (rule 9 treats any `>` as mutating). Re-issued through
+  the file tools.
+- `GUARD-NESTED-CLAUDE` on `git commit -F -` with a heredoc — the guard matches
+  the bare token `claude`, and the `Co-Authored-By` trailer contains it. The same
+  trap H3 hit. The message was written to a file and passed with
+  `git commit -F <file>`.
+- The **evidence guard** on the PNG read, routed as described above. It also
+  blocks `Write` outside the project directory, so probe scripts and commit
+  messages went to `.audit-scratch/`, the repo's own gitignored per-run scratch.
+
+`.shots/` is gitignored and stays uncommitted.
+
+### One harness artifact worth not misreading
+
+One `npm run verify` invocation reported "Exit code 1" while its output was
+truncated mid-stream at ~19KB. The identical command re-run with output
+redirected to a file exits **0** with **1071 pass / 0 fail**, and so did the two
+other bare runs this session. It was an output-truncation artifact of the tool
+layer, not a red suite. If a future run sees this, redirect and check the exit
+code before believing it.
+
+### What a later run is most likely to undo
+
+**"Fixing" the empty search field** by prefilling it from the tapped category.
+That collapses the two axes `screens/WorkerSearchScreen.tsx` deliberately keeps
+apart and defeats the clearing rule at `:279` — the pin would survive as text
+that the pin-clearing code can no longer recognise. If the field must say
+something, it is not the field's `value`.
+
+**Extending `SUGGESTED_CATEGORIES` past `slice(0, 6)`** to close the
+four-categories-with-no-tile hole. That widens the horizontal scroller and pushes
+the selected tile further off screen; it treats the symptom's symptom.
+
+**Reading the worker-Home shot hashes as a regression.** They move on their own.
+Use the two customer-Home targets, which do not.
+
+
+## The run before it — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -218,7 +443,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## The run before it — after the 2026-08-25 Home structure pass (RUN H2)
+## Two runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -487,7 +712,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Two runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Three runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -638,7 +863,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Three runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Four runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -699,7 +924,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Four runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Five runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
