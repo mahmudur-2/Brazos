@@ -8,12 +8,25 @@
  * is worse than no row — it teaches a user the feature exists and then breaks
  * their trust the first time they use it.
  *
- * SEVEN OF THESE WENT LIVE ON 2026-08-24, when
- * supabase/phase77_conversation_features.sql landed on staging and RUN W1
- * wired what it declared: TIMED_BLOCK, MARK_UNREAD, CLEAR_CHAT, HIDDEN_CHATS,
- * ARCHIVE, DELETE_CHAT and READ_TICKS. Each one's block below now records what
- * it waited on and what closed it, because a flag that has been flipped is
- * still the place a later reader looks to find out why it could be.
+ * NINE OF THESE ARE LIVE, and phase77 is why all nine could be.
+ *
+ *   2026-08-24, RUN W1   supabase/phase77_conversation_features.sql landed on
+ *                        staging and W1 wired what it declared: TIMED_BLOCK,
+ *                        MARK_UNREAD, CLEAR_CHAT, HIDDEN_CHATS, ARCHIVE,
+ *                        DELETE_CHAT and READ_TICKS.
+ *   2026-08-25, RUN W2   the two features of that same migration W1 left:
+ *                        DOCUMENTS and LIVE_LOCATION.
+ *
+ * Each one's block below records what it waited on and what closed it, because
+ * a flag that has been flipped is still the place a later reader looks to find
+ * out why it could be — and in LIVE_LOCATION's case, why half of its recorded
+ * dependency was REFUSED rather than met.
+ *
+ * TWO REMAIN DARK, and they are dark for different reasons. TRANSLATION waits
+ * on a deploy and a key, which is an ordinary pending dependency. DELIVERED_
+ * TICKS waits on a per-recipient delivery signal that exists in no schema
+ * here, and it is a REFUSAL: an insert returning a row is not delivery, and a
+ * tick that means the first while looking like the second is a lie.
  *
  * WHAT A FLAG WAITS ON is written beside it, in the same vocabulary the schema
  * run uses: a table, a column, a policy, a deploy, or a key. Flipping one is a

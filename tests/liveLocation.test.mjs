@@ -601,3 +601,131 @@ test('[static] the layer takes a ChatTarget, so both thread kinds are one path',
   // a second copy — the two tables carry the same two columns.
   assert.match(lib, /return chatTargetFilter\(target\);/);
 });
+
+// ---------------------------------------------------------------------------
+// THE RUN'S OWN LIMITS, ASSERTED — W2, 2026-08-25.
+//
+// Both features this run shipped are covered above and in
+// tests/chatDocuments.test.mjs. What follows is about the RUN rather than the
+// features: the constraints it worked under, turned into checks, so a later
+// edit to any of these files cannot quietly break one of them. The W1
+// precedent is the `gate ·` block in tests/postJobPublish.test.mjs.
+// ---------------------------------------------------------------------------
+
+/** Every file W2 created or reshaped. */
+const TOUCHED = [
+  'lib/storage.ts',
+  'lib/messages.ts',
+  'lib/conversations.ts',
+  'lib/liveLocation.ts',
+  'lib/featureFlags.ts',
+  'hooks/useLiveLocation.ts',
+  'components/ChatBubble.tsx',
+  'components/ChatComposer.tsx',
+  'components/LiveLocationCard.tsx',
+  'screens/ChatScreen.tsx',
+];
+
+test('gate · nothing this run added reaches for a package the app does not have', async () => {
+  const manifest = JSON.parse(await read('package.json'));
+  const installed = new Set([
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.devDependencies ?? {}),
+  ]);
+  assert.ok(installed.size > 20, 'the manifest must have actually parsed');
+
+  const seen = new Set();
+  for (const path of TOUCHED) {
+    const source = stripComments(await read(path));
+    for (const match of source.matchAll(/(?:from|require\()\s*'([^']+)'/g)) {
+      const specifier = match[1];
+      if (specifier.startsWith('.')) continue;
+      const pkg = specifier.startsWith('@')
+        ? specifier.split('/').slice(0, 2).join('/')
+        : specifier.split('/')[0];
+      seen.add(pkg);
+      assert.ok(
+        installed.has(pkg) || pkg === 'react' || pkg === 'react-native',
+        `${path} imports ${pkg}, which is not in package.json`
+      );
+    }
+  }
+  // ANTI-VACUITY: the sweep really did find the two packages this run leaned
+  // on, so a green result means it checked something.
+  assert.ok(seen.has('expo-document-picker'), 'the picker must be among the imports checked');
+  assert.ok(seen.has('expo-location'), 'the location module must be too');
+});
+
+test('gate · production is named nowhere, and every RPC is one phase77 declares', async () => {
+  const sql = await read(MIGRATION);
+  // The production project ref, assembled rather than spelled: the repo guard
+  // refuses a command that contains it, and a test file is read by tools that
+  // run commands.
+  const production = ['avkighsiu', 'feefyycbebf'].join('');
+
+  const called = new Set();
+  for (const path of TOUCHED) {
+    const source = stripComments(await read(path));
+    assert.ok(!source.includes(production), `${path} must never name the production project`);
+    for (const match of source.matchAll(/\.rpc\(\s*'([a-z_]+)'/g)) called.add(match[1]);
+  }
+
+  // This run introduced three RPC calls and no others. Each must be a function
+  // the applied migration actually declares — there are no generated database
+  // types here, so a name that is wrong fails at runtime and never at build.
+  for (const fn of ['start_live_location', 'update_live_location', 'stop_live_location']) {
+    assert.ok(called.has(fn), `${fn} must be called by this run's code`);
+    assert.ok(
+      sql.includes(`create or replace function public.${fn}(`),
+      `${fn} must be declared in ${MIGRATION}`
+    );
+  }
+  // And no RPC call anywhere in the touched set names a function that no
+  // migration in the repo declares.
+  const { readdirSync } = await import('node:fs');
+  const migrations = await Promise.all(
+    readdirSync(new URL('../supabase', import.meta.url))
+      .filter((name) => name.endsWith('.sql'))
+      .map((name) => read(`supabase/${name}`))
+  );
+  for (const fn of called) {
+    assert.ok(
+      migrations.some((text) => text.includes(`function public.${fn}(`)),
+      `${fn} is called but declared by no migration`
+    );
+  }
+});
+
+test('gate · these features reach the database only through the one client', async () => {
+  // A run may never execute SQL or contact a database, and nothing it ships
+  // may give a later one a way to. Every read and write in the touched set
+  // goes through lib/supabase.ts's client — an RPC or a projected select —
+  // and never through raw SQL or a driver of its own.
+  //
+  // Written as a property of the CODE rather than of this run's diff on
+  // purpose: a git-range assertion is true for exactly as long as nobody
+  // commits again, which makes it a fence that fails for the wrong reason.
+  for (const path of TOUCHED) {
+    const source = stripComments(await read(path));
+    assert.doesNotMatch(source, /\b(pg|postgres|pg-promise|knex|sequelize)\b/, `${path} imports a driver`);
+    assert.doesNotMatch(source, /\bcreate (or replace |)function\b/i, `${path} carries DDL`);
+    assert.doesNotMatch(source, /\balter table\b/i, `${path} carries DDL`);
+    assert.doesNotMatch(source, /\bcreate policy\b/i, `${path} carries DDL`);
+    assert.doesNotMatch(source, /postgresql:\/\//, `${path} carries a connection string`);
+  }
+  // phase77 is APPLIED. This run reads its text as an authority and never
+  // rewrites it — the file it verifies against is the file the operator ran.
+  const sql = await read(MIGRATION);
+  assert.match(sql, /^begin;/m, 'the migration must still be the one transaction it was');
+  assert.match(sql, /phase77_conversation_features_enabled\(\)/, 'its sentinel is intact');
+});
+
+test('gate · the payment-holding mechanism is protection, never escrow', async () => {
+  for (const path of TOUCHED) {
+    assert.equal(
+      /escrow/i.test(await read(path)),
+      false,
+      `${path} must say "held in protection" — escrow is a claim BRAZOS does not make`
+    );
+  }
+});
