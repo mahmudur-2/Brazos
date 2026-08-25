@@ -471,17 +471,24 @@ export const categoryAccents = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// Theme-constant accents (RUN H2)
+// Theme-constant accents (RUN H2, extended by RUN H3)
 // ---------------------------------------------------------------------------
 
 /**
- * Four hues the structure pass fixes to ONE value across both palettes.
+ * Four hues fixed to ONE value across both palettes.
  *
- * Three of them the operator drew OUT of the light palette and asked for in
+ * Two of them the operator drew OUT of the light palette and asked for in
  * BOTH: the centre [ + ] and the greeting paint with light's own green and
- * slate whether the device is light or dark. The fourth is the reference's
- * one UI red, which the offline dot wears in both themes and the unread badge
- * wears in light.
+ * slate whether the device is light or dark. One is the reference's one UI
+ * red, which the offline dot wears in both themes and the unread badge wears
+ * in light.
+ *
+ * RUN H3 SWAPPED THE FOURTH AND ADDED A FIFTH, both on operator instruction and
+ * both LIGHT-only in effect: `goldDeep` replaces H2's `greetingSlateDeep` as
+ * the light [ + ]'s outline, and `creamInk` gives the light Post-a-job pill an
+ * outline the light palette has no hue for. Neither is drawn in dark today —
+ * they live here because a light-only hue has nowhere else to go that does not
+ * cost a dark twin to drift (see DELIBERATELY THEME-CONSTANT below).
  *
  * WHY THEY ARE TOKENS AND NOT LITERALS AT THE CALL SITE. Reaching a light
  * value while rendering dark has exactly two wrong shapes: a raw hex in a
@@ -495,8 +502,8 @@ export const categoryAccents = {
  * DELIBERATELY THEME-CONSTANT, and deliberately NOT part of
  * `colors`/`ColorToken` — the same construction, and the same reasoning, as
  * `categoryAccents` above. A dark counterpart is not merely unneeded here, it
- * would be WRONG: the whole point of these four is that dark renders the same
- * value light does. Folding them into `colors` would oblige `dark` to restate
+ * would be WRONG: the whole point of this table is that dark resolves to the
+ * same value light does. Folding them into `colors` would oblige `dark` to restate
  * them (the `satisfies` clause), and a second entry is a second thing to drift.
  * lib/theme.ts spreads this object into both of its palettes instead, exactly
  * as `star`, `black`, `white` and `mediaChrome` already carry one value in
@@ -517,12 +524,43 @@ export const constantAccents = {
   /** The light greeting grey — the value light's `homeSlate` carries. Rings
    *  the dark [ + ] and draws the light [ + ]'s glyph. */
   greetingSlate: '#526477',
-  /** One shade darker than `greetingSlate` — the light [ + ]'s outline, which
-   *  has to read as a ring against a glyph of the slate itself. Derived, not
-   *  sampled: every channel of `greetingSlate` at 80% (82,100,119 ->
-   *  66,80,95). An OPERATOR DIAL — see CREATE_BUTTON_* in
-   *  ui/primitives/BottomNav.tsx. */
-  greetingSlateDeep: '#42505F',
+  /**
+   * RUN H3 — one shade darker than LIGHT's `gold` (#C8A15B), and the light
+   * [ + ]'s outline. It REPLACES `greetingSlateDeep`, which H2 introduced for
+   * this exact borderColor and which the operator has now reversed; that token
+   * is deleted rather than left standing, because a value in this table with no
+   * call site is a hue nobody reviews and the next reader cannot tell whether
+   * it is a dial or a leftover.
+   *
+   * Derived, not sampled — every channel of `brand.gold` at 80%
+   * (200,161,91 -> 160,129,73) — which is the same construction the retired
+   * slate used, kept so "one shade deeper" means one arithmetic thing here.
+   *
+   * READ THE NAME CAREFULLY: this is theme-CONSTANT, like everything else in
+   * this table, so it is LIGHT's gold deepened in BOTH palettes and is NOT
+   * `dark.gold` (#D4A24C) deepened. Nothing in dark draws it today; it exists
+   * as a constant for the same reason every entry here does, so light can reach
+   * it off the resolved palette without indexing the light palette beside the
+   * dark one. An OPERATOR DIAL — see CREATE_BUTTON_* in
+   * ui/primitives/BottomNav.tsx.
+   */
+  goldDeep: '#A08149',
+  /**
+   * RUN H3 — THE APP'S CREAM, and the light Post-a-job pill's outline.
+   *
+   * The light palette has no cream at all: its `onForest`/`onPrimary` are
+   * #F4F1E8, the app's light GROUND, and reading a ground as an outline is how
+   * a border disappears into the page. The cream the operator asked for is the
+   * one the DARK palette carries as its ink, so this is a cross-theme reach and
+   * it is named here rather than performed at the call site — `dark.ink`
+   * referenced, not restated, so there is still one definition of the hue.
+   *
+   * Light draws it; dark's own pill has no ring at all
+   * (`heroButtonDark: borderColor: 'transparent'`), so this is theme-constant
+   * in the same sense the rest of the table is: one value on both sides,
+   * consumed by whichever palette has a use for it.
+   */
+  creamInk: dark.ink,
   /**
    * THE REFERENCE CORAL — the unread badge in light, and the worker's offline
    * dot in both themes.

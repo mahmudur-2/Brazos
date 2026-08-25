@@ -506,12 +506,19 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   //
   // RUN H2 GIVES THE COLOURS BACK PER THEME — the GEOMETRY stays shared, which
   // is the half the parity pass was actually about. Dark keeps its gold tile
-  // and takes light's green for the glyph and light's slate for the ring;
-  // light fills with that same green and draws the slate glyph inside a ring
-  // one shade deeper. All three hues are the LIGHT palette's, in both themes,
-  // which is why they arrive as `colors.postPillGreen` / `greetingSlate` /
-  // `greetingSlateDeep` — one value on both sides of the palette (ui/tokens.ts
-  // `homeConstants`) rather than a hex written here or a cross-palette reach.
+  // and takes light's green for the glyph and light's slate for the ring.
+  //
+  // RUN H3 CHANGES LIGHT'S HALF ONLY, on operator instruction: light still
+  // fills with that green, but the glyph is now GOLD and the ring follows it
+  // one shade down. Dark is untouched in every respect — same tile, same ring,
+  // same glyph — which is why the ternary below still reads
+  // `colors.postPillGreen` on the dark side and only the light side moved.
+  //
+  // The glyph takes `colors.gold` off the RESOLVED palette rather than a
+  // constant, because this branch only ever renders in light and light's gold
+  // is what was asked for. The ring takes the theme-constant `goldDeep`
+  // (ui/tokens.ts `constantAccents`) — one value on both sides of the palette
+  // rather than a hex written here or a cross-palette reach.
   const size = Math.round(TAB_BAR_CONTENT_HEIGHT * CREATE_BUTTON_PILL_RATIO);
   // The control CENTRES in the pill. The slot packs to flex-end with
   // TAB_BOTTOM_GAP beneath it, so lifting by half the slack minus that gap
@@ -551,7 +558,7 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         <Ionicons
           name="add"
           size={glyph}
-          color={isDark ? colors.postPillGreen : colors.greetingSlate}
+          color={isDark ? colors.postPillGreen : colors.gold}
         />
       </Pressable>
     </View>
@@ -687,13 +694,30 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.greetingSlate,
   },
   // RUN H2: light stops sharing dark's tile. It fills with the light Post-a-job
-  // pill's own green, draws the slate glyph, and rings that glyph in one shade
-  // deeper so the outline reads against it. Still an OPAQUE fill, so the shared
-  // elevation cannot trigger the transparent-background Android rendering bug
-  // the bar's own elevation:0 exists to avoid.
+  // pill's own green. Still an OPAQUE fill, so the shared elevation cannot
+  // trigger the transparent-background Android rendering bug the bar's own
+  // elevation:0 exists to avoid.
+  //
+  // RUN H3 — THE GLYPH AND THE RING GO GOLD, AND THIS IS AN OPERATOR REVERSAL
+  // OF H2 RATHER THAN A DEFECT IN IT. H2 shipped light's slate glyph
+  // (`greetingSlate`, #526477) inside a `greetingSlateDeep` (#42505F) ring,
+  // correctly to the instruction it had. The operator reviewed the render and
+  // asked for the glyph in light's GOLD instead, with the ring following it one
+  // shade down; `greetingSlateDeep` had no other call site and is gone from
+  // ui/tokens.ts rather than left behind as a hue nobody draws.
+  //
+  // THE FILL DOES NOT MOVE — it is still the Post-a-job pill's green, which is
+  // what keeps `tests/goldOnForest.test.mjs` honest: this is a GLYPH colour and
+  // a RING, the line-work gold has always been allowed to be, and
+  // `createButtonDark` is still the tree's only gold FILL.
+  //
+  // The glyph reads `colors.gold` — the RESOLVED palette's, which in this
+  // branch is always light's #C8A15B — while the ring reads the theme-constant
+  // `goldDeep`, because "light's gold, deepened" has no per-theme meaning and
+  // must not resolve to dark's gold deepened on a dark device.
   createButtonLight: {
     backgroundColor: colors.postPillGreen,
-    borderColor: colors.greetingSlateDeep,
+    borderColor: colors.goldDeep,
   },
   // home(18): the transform moved to the call site with the lift, so the pressed
   // state cannot fall out of step with the resting one.

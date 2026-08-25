@@ -2142,14 +2142,26 @@ test('RUN H2 fence: the greeting name and the Post-a-job pill', () => {
     "light's name is the light Post-a-job pill's own green"
   );
 
-  // THE PILL. Light gains a gold outline; dark loses its outline entirely and
+  // THE PILL. Light carries the outline; dark loses its outline entirely and
   // takes light's green as its fill. Text and geometry are untouched, and the
   // ring is dropped by COLOUR so the 1pt border never moves the content box in
   // one theme only.
+  //
+  // RUN H3 MOVED THE LIGHT RING FROM GOLD TO CREAM, on operator instruction —
+  // an expected CONSTANT changing, not this fence's claim. What the fence
+  // asserts is unchanged in kind: one ring weight for both themes, a ring
+  // colour that comes from a token rather than a hex, and a light ring that is
+  // not the light GROUND (which is what `onForest`/`onPrimary` resolve to over
+  // there, and an outline in the page's own colour is not an outline).
   const pill = /heroButton: \{([^}]*)\}/.exec(home);
   assert.ok(pill, 'the Post-a-job pill must keep a shared style');
   assert.match(pill[1], /borderWidth: 1,/, 'the ring WEIGHT is one number for both themes');
-  assert.match(pill[1], /borderColor: colors\.gold,/, 'light rings the pill in gold');
+  assert.match(pill[1], /borderColor: colors\.creamInk,/, "light rings the pill in the app's cream");
+  const lightRing = /borderColor: colors\.(\w+),/.exec(pill[1])[1];
+  assert.ok(
+    !['onForest', 'onPrimary', 'background', 'homeBackground'].includes(lightRing),
+    `the light ring is ${lightRing}, which is a GROUND — a ring in the page's own colour is invisible`
+  );
   assert.match(pill[1], /minHeight: 48,/, 'the pill geometry is untouched');
   assert.match(
     home,
@@ -2166,6 +2178,106 @@ test('RUN H2 fence: the greeting name and the Post-a-job pill', () => {
     home,
     /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.onForest \}/
   );
+});
+
+// ---------------------------------------------------------------------------
+// RUN H3 — TWO OPERATOR REVERSALS OF H2, BOTH LIGHT-ONLY.
+//
+// C1: the centre [ + ]'s glyph goes gold and its ring follows one shade down.
+// C2: the Post-a-job pill's ring goes cream. H2 shipped both surfaces correctly
+// to the instruction it had, so what this fence protects is not "H2 was wrong"
+// but "the reversal is complete and did not leak into dark".
+//
+// CATCHES: either light hue written as a hex at the call site; a ring that
+// resolves to the same value as the thing it rings; `goldDeep` drifting off its
+// stated derivation; the retired `greetingSlateDeep` coming back; and — the one
+// that matters most — either change reaching the DARK branch.
+// ---------------------------------------------------------------------------
+test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark does not move', () => {
+  const bar = flatten(read('ui/primitives/BottomNav.tsx'));
+  const home = flatten(read('screens/HomeScreen.tsx'));
+  const tokens = read('ui/tokens.ts');
+
+  const hex = (key) => {
+    const hit = new RegExp(`\\n  ${key}: '(#[0-9A-Fa-f]{6})'`).exec(tokens);
+    assert.ok(hit, `${key} must stay a plain hex in ui/tokens.ts`);
+    return hit[1];
+  };
+  const channels = (value) => [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16));
+
+  // ---- C1, the glyph ------------------------------------------------------
+  // The ternary still forks on theme and still reads the resolved palette. Only
+  // the LIGHT arm moved, and the dark arm is pinned BY NAME so a future edit
+  // that "unifies" the two fails here rather than in a screenshot.
+  const glyph =
+    /<Ionicons name="add" size=\{glyph\} color=\{isDark \? colors\.(\w+) : colors\.(\w+)\} \/>/.exec(bar);
+  assert.ok(glyph, 'the [ + ] glyph must still take its colour per theme, off the resolved palette');
+  assert.equal(glyph[1], 'postPillGreen', 'C1 is LIGHT ONLY — the dark glyph must not move');
+  assert.equal(glyph[2], 'gold', "the light glyph is the LIGHT palette's gold");
+
+  // ---- C1, the ring -------------------------------------------------------
+  const lightBranch = /createButtonLight: \{([^}]*)\}/.exec(bar);
+  assert.ok(lightBranch, 'the light [ + ] must keep its own branch');
+  assert.match(
+    lightBranch[1],
+    /backgroundColor: colors\.postPillGreen,/,
+    'the FILL does not move — this is a glyph and a ring, which is why the gold fence stays quiet'
+  );
+  assert.match(lightBranch[1], /borderColor: colors\.goldDeep,/, 'the ring follows the glyph, one shade down');
+  assert.doesNotMatch(
+    bar,
+    /greetingSlateDeep/,
+    "greetingSlateDeep was H2's value for exactly this ring and has no other call site"
+  );
+  // The DECLARATION must be gone; the comment recording why it went may stay,
+  // and should — it is the only place a reader learns this was a reversal.
+  assert.doesNotMatch(
+    stripComments(tokens),
+    /greetingSlateDeep/,
+    'a token with no call site is a hue nobody reviews — delete it rather than leave it standing'
+  );
+
+  // The DARK branch is asserted WHOLE, because "light only" is a claim about
+  // dark every bit as much as it is a claim about light.
+  assert.match(
+    bar,
+    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: colors\.greetingSlate, \}/,
+    'C1 is LIGHT ONLY — the dark tile keeps its gold fill and its slate ring'
+  );
+
+  // ---- the derivation, so "one shade down" cannot become a taste edit ------
+  const gold = hex('gold');
+  const goldDeep = hex('goldDeep');
+  assert.equal(gold, '#C8A15B', "the first `gold` in this file is the light palette's");
+  const expected = channels(gold).map((channel) => Math.round(channel * 0.8));
+  assert.deepEqual(
+    channels(goldDeep),
+    expected,
+    `goldDeep must stay every channel of light gold at 80% — expected ${expected.join(',')}`
+  );
+  assert.notEqual(goldDeep, gold, 'a ring the colour of the glyph inside it is not a ring');
+
+  // ---- C2, the pill's cream ----------------------------------------------
+  assert.match(home, /borderColor: colors\.creamInk,/, 'the light pill rings in the app cream');
+  // Referenced, not restated: one definition of the hue, and it is the DARK
+  // palette's ink because the light palette has no cream of its own.
+  assert.match(
+    stripComments(tokens),
+    /creamInk: dark\.ink,/,
+    'creamInk must reference dark.ink rather than restate its hex'
+  );
+  // Scoped to the dark block on purpose: `ink` is declared in `brand` too
+  // (#13201B, the light near-black), and it is the DARK one this reaches for.
+  const darkBlock = tokens.slice(tokens.indexOf('export const dark = {'), tokens.indexOf('export const spacing'));
+  assert.match(darkBlock, /\n  ink: '#F1EDE1',/, 'the cream the operator named is the dark palette ink');
+
+  // ---- neither hue is written at a call site ------------------------------
+  for (const [path, source] of [
+    ['ui/primitives/BottomNav.tsx', bar],
+    ['screens/HomeScreen.tsx', home],
+  ]) {
+    assert.doesNotMatch(source, /#A08149|#F1EDE1|#C8A15B/i, `${path} must name the token, never the hex`);
+  }
 });
 
 test('RUN H2 fence: the renamed sections, the unread marker and the offline dot', () => {

@@ -1274,11 +1274,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // which tests/themeTokens.test.mjs forbids and which is exactly the class of
   // drift that rule exists for. 'transparent' removes the ring and moves
   // nothing; the screen already uses it the same way on `scrollOverAtmosphere`.
+  // RUN H3 — THE LIGHT PILL'S OUTLINE IS CREAM, AND THIS REVERSES H2's GOLD ON
+  // OPERATOR INSTRUCTION rather than correcting a mistake in it. The ring was
+  // `colors.gold` (#C8A15B in light); it is now `creamInk` (#F1EDE1).
+  //
+  // IT IS A CROSS-THEME REACH AND THEREFORE A NAMED CONSTANT. Light has no
+  // cream: its `onForest`/`onPrimary` is #F4F1E8, which is the light GROUND —
+  // an outline in the page's own colour is not an outline. The cream the
+  // operator asked for is the one the DARK palette carries as its ink, so it
+  // arrives as the theme-constant `creamInk` (ui/tokens.ts `constantAccents`),
+  // the same shape H2 used for the two it introduced, and not as a hex here.
+  //
+  // DARK DOES NOT MOVE. `heroButtonDark` below already sets this ring to
+  // 'transparent', and it is merged after this style, so the dark pill has no
+  // ring to change — the whole of this correction lands on light.
   heroButton: {
     minHeight: 48,
     borderRadius: radius.pill,
     borderWidth: 1,
-    borderColor: colors.gold,
+    borderColor: colors.creamInk,
     backgroundColor: colors.emerald,
     alignItems: 'center',
     justifyContent: 'center',
