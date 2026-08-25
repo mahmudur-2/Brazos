@@ -4,7 +4,6 @@ import {
   FlatList,
   Image,
   Keyboard,
-  Linking,
   Pressable,
   StyleSheet,
   Text,
@@ -89,7 +88,7 @@ import {
   type RelationState,
 } from '../lib/moderation';
 import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
-import { shareProfileLink } from '../lib/sharing';
+import { shareDocument, shareProfileLink } from '../lib/sharing';
 import { useMode } from '../modes';
 import {
   canUnsend,
@@ -158,6 +157,10 @@ export function ChatScreen() {
   const [sending, setSending] = useState(false);
   const [reactionTarget, setReactionTarget] = useState<string | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  // WHICH document is being fetched, not whether one is: the tapped bubble
+  // spins and the rest of the thread stays live. Null again on success,
+  // failure and cancellation alike — see openDocument.
+  const [openingDocumentId, setOpeningDocumentId] = useState<string | null>(null);
   // Profile pictures open in the same viewer but without the share sheet, so
   // they're tracked separately from ordinary chat photos.
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -1511,27 +1514,36 @@ export function ChatScreen() {
   }
 
   /**
-   * Open a document attachment. `document_url` arrives here already exchanged
-   * for a short-lived signed URL (resolveMessageMedia), so the system opener
-   * is handed a real link and the private bucket is never made public to serve
-   * it.
+   * Open a document attachment IN THE OS.
    *
-   * A refusal is SAID rather than swallowed: the likeliest cause is a signature
-   * that has outlived the thread being left open, and silence would read as a
-   * dead bubble.
+   * NOT Linking.openURL, which is what this was until 2026-08-25 and what the
+   * fence in tests/chatDocuments.test.mjs now stops coming back. Opening the
+   * signed URL left the app and handed Safari the link — putting the Supabase
+   * project ref in the address bar and in the browser's history, and leaving
+   * the file in a browser tab rather than in the OS. shareDocument downloads
+   * it first and hands the OS the local file, exactly as a shared photo
+   * already does, so the app stays in the foreground and the URL reaches no
+   * browser at all.
+   *
+   * `document_url` arrives here already exchanged for a short-lived signed URL
+   * (resolveMessageMedia), so this is the resolution the download uses; there
+   * is no second one. A signature that has outlived the thread being left open
+   * fails the download and is SAID rather than swallowed — nothing here
+   * refreshes it, and silence would read as a dead bubble.
+   *
+   * The id, not a boolean: only the bubble that was tapped spins, and the rest
+   * of the thread stays live.
    */
   async function openDocument(message: Message) {
     const url = message.document_url;
-    if (!url) return;
-    try {
-      await Linking.openURL(url);
-    } catch (err) {
-      console.warn('[Chat] document open failed', err);
-      await alertAsync(
-        'Could not open document',
-        'This link may have expired. Leave the conversation and come back, then try again.'
-      );
-    }
+    // Already fetching one — a second tap must not start a second download.
+    if (!url || openingDocumentId) return;
+    setOpeningDocumentId(message.id);
+    const result = await shareDocument(url, message.document_name);
+    setOpeningDocumentId(null);
+    // Dismissing the OS sheet is a cancellation and returns ok, so nothing is
+    // surfaced for it. Only a real failure speaks.
+    if (!result.ok) await alertAsync('Could not open document', result.message);
   }
 
   return (
@@ -1765,6 +1777,7 @@ export function ChatScreen() {
                     onLongPress={item.unsent_at ? undefined : () => setMenuTarget(item)}
                     onPressImage={setViewerUri}
                     onPressDocument={openDocument}
+                    documentBusy={openingDocumentId === item.id}
                     replyTo={item.reply_to_id ? messagesById[item.reply_to_id] : null}
                     replyToName={
                       item.reply_to_id

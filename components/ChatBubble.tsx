@@ -1,4 +1,4 @@
-import { Pressable, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Image, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { MessageTicks } from './MessageTicks';
@@ -43,6 +43,15 @@ type ChatBubbleProps = {
    * pressable.
    */
   onPressDocument?: (message: Message) => void;
+  /**
+   * This document is being fetched right now. The screen owns the download and
+   * therefore owns this: the bubble cannot know when one finishes.
+   *
+   * A document is not opened instantly — it is pulled out of the bucket before
+   * the OS sees it, which on a large file over cellular is seconds of a bubble
+   * that would otherwise look like it ignored the tap.
+   */
+  documentBusy?: boolean;
   /** The quoted message, already resolved from the loaded thread. */
   replyTo?: Message | null;
   /** Display name for the quoted message's sender. */
@@ -61,6 +70,7 @@ export function ChatBubble({
   onLongPress,
   onPressImage,
   onPressDocument,
+  documentBusy = false,
   replyTo,
   replyToName,
   onLongPressAvatar,
@@ -164,20 +174,38 @@ export function ChatBubble({
                   the reaction/reply sheet. */}
               {message.document_url ? (
                 <Pressable
-                  onPress={onPressDocument ? () => onPressDocument(message) : undefined}
+                  onPress={
+                    onPressDocument && !documentBusy
+                      ? () => onPressDocument(message)
+                      : undefined
+                  }
                   onLongPress={onLongPress}
                   delayLongPress={350}
-                  disabled={!onPressDocument}
+                  // A second tap during the fetch would start a second download
+                  // of the same file over the top of the first.
+                  disabled={!onPressDocument || documentBusy}
                   accessibilityRole="button"
                   accessibilityLabel={`Document, ${message.document_name ?? 'unnamed'}`}
-                  accessibilityHint="Opens the file"
+                  accessibilityHint={documentBusy ? 'Opening' : 'Opens the file'}
+                  accessibilityState={{ busy: documentBusy, disabled: documentBusy }}
                   style={[styles.document, isOwn ? styles.documentOwn : styles.documentOther]}
                 >
-                  <Ionicons
-                    name={documentIconFor(message.document_name)}
-                    size={22}
-                    color={isOwn ? colors.onPrimary : colors.primary}
-                  />
+                  {/* IN PLACE OF THE GLYPH, not beside it, and sized to it: the
+                      row must not reflow while it works, or a thread of
+                      documents shifts under the finger that tapped one. */}
+                  {documentBusy ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={isOwn ? colors.onPrimary : colors.primary}
+                      style={styles.documentSpinner}
+                    />
+                  ) : (
+                    <Ionicons
+                      name={documentIconFor(message.document_name)}
+                      size={22}
+                      color={isOwn ? colors.onPrimary : colors.primary}
+                    />
+                  )}
                   <View style={styles.documentBody}>
                     {/* The head of a long name is the useful half — a middle
                         ellipsis is not available here, and truncating the
@@ -410,6 +438,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   documentOther: {
     backgroundColor: colors.primarySoft,
+  },
+  // The glyph's own box. ActivityIndicator measures smaller than 22pt, and
+  // without this the name and the size would slide left the moment a document
+  // was tapped and back again when it opened.
+  documentSpinner: {
+    width: 22,
+    height: 22,
   },
   documentBody: {
     flexGrow: 1,

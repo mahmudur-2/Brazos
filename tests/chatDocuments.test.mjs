@@ -417,8 +417,13 @@ test('[static] the document bubble renders before anything is downloaded', async
 
   // Tapping is the ONLY thing that downloads, and an absent handler leaves a
   // bubble that renders and simply is not pressable rather than a dead tap.
-  assert.match(bubble, /onPress=\{onPressDocument \? \(\) => onPressDocument\(message\) : undefined\}/);
-  assert.match(bubble, /disabled=\{!onPressDocument\}/);
+  // `documentBusy` joins the same two expressions rather than adding a third
+  // gate: a fetch in flight and an absent handler are both "not pressable".
+  assert.match(
+    bubble,
+    /onPress=\{\s*onPressDocument && !documentBusy\s*\? \(\) => onPressDocument\(message\)\s*: undefined\s*\}/
+  );
+  assert.match(bubble, /disabled=\{!onPressDocument \|\| documentBusy\}/);
   // The long-press must still reach the sheet — the same forwarding the image
   // branch needs, for the same reason: this inner Pressable claims the touch.
   assert.match(
@@ -471,8 +476,9 @@ test('[static] the send path is the resolved target, either thread kind', async 
   // Both props are wired, or the flag would produce a dead row.
   assert.match(chat, /onPickDocument=\{pickDocument\}/);
   assert.match(chat, /onPressDocument=\{openDocument\}/);
-  // Opening uses the already-signed URL; the bucket is never made public.
-  assert.match(chat, /await Linking\.openURL\(url\);/);
+  // Opening uses the already-signed URL; the bucket is never made public. What
+  // is DONE with that URL is section 9's — it used to be Linking.openURL.
+  assert.match(chat, /const url = message\.document_url;/);
   assert.match(chat, /Could not open document/, 'a refusal is said, not swallowed');
 });
 
@@ -860,4 +866,113 @@ test('[static] both share paths stage through ONE helper, and it is not duplicat
     1,
     'one character rule, shared by both namers'
   );
+});
+
+// ---------------------------------------------------------------------------
+// 9 — THE FENCE: NO Linking.openURL ON THE DOCUMENT PATH
+//
+// The press handler was never in the bubble. It lives on the SCREEN, which is
+// where `Linking.openURL(url)` sat and where the fence therefore has to sit
+// too — the bubble is fenced as well because that is the file a later edit
+// would most plausibly put an "open it" shortcut back into.
+//
+// Comment-stripped, so the docblock that explains WHY it is not openURL does
+// not itself trip the fence.
+// ---------------------------------------------------------------------------
+
+test('[static] neither the document bubble nor its screen may open a URL', async () => {
+  for (const path of ['components/ChatBubble.tsx', 'screens/ChatScreen.tsx']) {
+    const source = stripComments(await read(path));
+    assert.doesNotMatch(
+      source,
+      /Linking\.openURL/,
+      `${path} must never hand a signed URL to a browser — that is the 2026-08-25 defect`
+    );
+  }
+
+  // And the import is gone with it, not left behind for the next edit to
+  // reach for. openSettings() elsewhere in the app is a different call and is
+  // untouched; this screen imports neither.
+  const chatRaw = await read('screens/ChatScreen.tsx');
+  const importBlock = chatRaw.slice(0, chatRaw.indexOf("} from 'react-native';"));
+  assert.doesNotMatch(importBlock, /\bLinking\b/, 'the unused import must go with the call');
+});
+
+test('[static] the document press downloads through shareDocument, once', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // ONE import, ONE call, and the name comes off the row beside the URL —
+  // shareDocument stages under document_name, not the URL's timestamp.
+  assert.match(chat, /import \{ shareDocument, shareProfileLink \} from '\.\.\/lib\/sharing';/);
+  assert.match(chat, /const result = await shareDocument\(url, message\.document_name\);/);
+  assert.equal((chat.match(/shareDocument\(/g) ?? []).length, 1, 'one call site');
+
+  // The URL is the one resolveMessageMedia already signed. A second exchange
+  // here would be a second round trip for a URL the row already carries.
+  assert.doesNotMatch(chat.slice(chat.indexOf('async function openDocument')), /resolveChatMediaUrl|createSignedUrl/);
+
+  // D5 — the same shape PhotoViewer uses for sharePhoto: a failure is named,
+  // and a cancellation returns ok so nothing is surfaced for it.
+  assert.match(chat, /if \(!result\.ok\) await alertAsync\('Could not open document', result\.message\);/);
+  const viewer = stripComments(await read('components/PhotoViewer.tsx'));
+  assert.match(viewer, /if \(!result\.ok\) await alertAsync\(/, 'the error idiom is the existing one');
+});
+
+test('[static] a second tap while one is in flight starts no second download', async () => {
+  const chat = stripComments(await read('screens/ChatScreen.tsx'));
+
+  // The guard is in the handler, so it holds even if a press slips past the
+  // disabled Pressable — and it is WHICH document, so one bubble spinning
+  // does not freeze the rest of the thread.
+  assert.match(chat, /const \[openingDocumentId, setOpeningDocumentId\] = useState<string \| null>\(null\);/);
+  assert.match(chat, /if \(!url \|\| openingDocumentId\) return;/);
+  assert.match(chat, /setOpeningDocumentId\(message\.id\);/);
+  // Cleared on every outcome — the await settles for success, failure AND
+  // cancellation, and the clear sits before the alert rather than after it,
+  // so a dismissed alert cannot leave a bubble spinning forever.
+  assert.ok(
+    chat.indexOf('setOpeningDocumentId(null);') < chat.indexOf("alertAsync('Could not open document'"),
+    'the spinner clears before anything can block on a dialog'
+  );
+  assert.equal((chat.match(/setOpeningDocumentId\(null\)/g) ?? []).length, 1, 'one clear, on every path');
+
+  // Only the tapped bubble is told it is working.
+  assert.match(chat, /documentBusy=\{openingDocumentId === item\.id\}/);
+});
+
+test('[static] the working bubble swaps its glyph for a spinner and takes a token', async () => {
+  const bubble = stripComments(await read('components/ChatBubble.tsx'));
+
+  assert.match(bubble, /documentBusy\?: boolean;/);
+  assert.match(bubble, /documentBusy = false,/, 'a bubble with no screen behind it is not busy');
+
+  // IN PLACE OF the icon, not beside it: the ternary's two arms are the
+  // spinner and the glyph, so the row keeps exactly one leading element.
+  const branch = bubble.slice(bubble.indexOf('message.document_url ?'));
+  assert.match(
+    branch,
+    /\{documentBusy \? \(\s*<ActivityIndicator[\s\S]*?\) : \(\s*<Ionicons/,
+    'the spinner replaces the glyph rather than joining it'
+  );
+  assert.match(bubble, /import \{ ActivityIndicator, Pressable, Image, StyleSheet, Text, View \} from 'react-native';/);
+
+  // D8 — the indicator takes an existing palette token, never a literal.
+  assert.match(branch, /color=\{isOwn \? colors\.onPrimary : colors\.primary\}/);
+  const spinnerStyle = bubble.slice(bubble.indexOf('documentSpinner: {'), bubble.indexOf('documentBody: {'));
+  assert.equal(spinnerStyle.match(/#[0-9a-fA-F]{3,8}\b/), null, 'no raw hex on the spinner');
+  assert.equal(spinnerStyle.match(/\brgba?\(/), null, 'no raw rgb/rgba on the spinner');
+  // Sized to the 22pt glyph it stands in for, so the name does not slide.
+  assert.match(spinnerStyle, /width: 22,\s*height: 22,/);
+
+  // D10 — no animation was added. The platform indicator is the whole motion.
+  assert.doesNotMatch(bubble, /Animated|useNativeDriver|withTiming|LayoutAnimation/);
+
+  // Still announced, and now announced as BUSY rather than as a dead control.
+  assert.match(branch, /accessibilityHint=\{documentBusy \? 'Opening' : 'Opens the file'\}/);
+  assert.match(branch, /accessibilityState=\{\{ busy: documentBusy, disabled: documentBusy \}\}/);
+
+  // The bubble still downloads nothing itself — section 5's rule, unchanged
+  // by giving it a spinner.
+  assert.doesNotMatch(bubble, /\bfetch\(/);
+  assert.doesNotMatch(bubble, /shareDocument/, 'the screen owns the download, not the bubble');
 });
