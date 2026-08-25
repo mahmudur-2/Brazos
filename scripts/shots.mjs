@@ -164,6 +164,22 @@ const TO_REVIEW = [
   { pressText: 'Save' },
 ];
 
+/**
+ * Reaches worker search from customer Home the way a customer reaches it: by
+ * tapping a service chip.
+ *
+ * Dog walking is not one of the four pills HOME_SERVICE_ROWS draws (those are
+ * the first four of HOME_QUICK_SERVICES), so Home's "Other" sheet is its only
+ * tap path — and the sheet's rows call the SAME searchCategory() the visible
+ * pills do, so this is the chip path rather than a detour around it.
+ */
+const TO_WORKER_SEARCH = [
+  { expect: 'Take a task' },
+  { press: 'Other services' },
+  { expect: 'All services' },
+  { press: 'Pet Sitting & Dog Walking' },
+];
+
 const TARGETS = [
   { name: 'customer-home-dark', mode: 'customer', colorScheme: 'dark', wait: 'Take a task' },
   { name: 'customer-home-light', mode: 'customer', colorScheme: 'light', wait: 'Take a task' },
@@ -207,6 +223,25 @@ const TARGETS = [
       colorScheme,
       recipe: [...TO_REVIEW, { expect: 'Review and publish' }, { pressText: 'Publish' }],
       wait: 'Your job is live.',
+    },
+  ]),
+
+  ...['dark', 'light'].flatMap((colorScheme) => [
+    {
+      // WHERE A CATEGORY CHIP LANDS. Reached by TAPPING, not by navigating to
+      // the route: the question is what the destination shows about the
+      // category it was handed, and a direct navigate would seed that param by
+      // hand instead of proving the chip carries it.
+      //
+      // The harness invents no marketplace data, so "No workers matched" is
+      // the EXPECTED end state here and says nothing about what staging holds.
+      // It is the `wait` precisely because it cannot appear until the search
+      // has run to completion, so the shutter never catches the spinner.
+      name: `workersearch-category-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: TO_WORKER_SEARCH,
+      wait: 'No workers matched',
     },
   ]),
 ];
