@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTheme, type ThemeColors } from '../lib/ThemeContext';
-import { applyPaletteOverrides, useDesignOverrides } from '../lib/designOverrides';
+import { applyPaletteOverrides, usePaletteOverrides } from '../lib/designOverrides';
 
 /**
  * The single reactive palette read. Backed by lib/ThemeContext.tsx's
@@ -22,10 +22,12 @@ import { applyPaletteOverrides, useDesignOverrides } from '../lib/designOverride
  */
 export function useThemeColors(): ThemeColors {
   const theme = useTheme();
-  const overrides = useDesignOverrides();
+  // RUN S2 (C1): the PALETTE SLICE, not the whole override set — a blur or
+  // spacing dial keeps this slice's identity, so it repaints nothing here.
+  const overrides = usePaletteOverrides();
   return useMemo(() => {
-    const palette = applyPaletteOverrides(theme.palette, overrides, theme.isDark);
-    const emerald = applyPaletteOverrides(theme.emerald, overrides, theme.isDark);
+    const palette = applyPaletteOverrides(theme.palette, overrides, theme.isDark, 'app');
+    const emerald = applyPaletteOverrides(theme.emerald, overrides, theme.isDark, 'emerald');
     if (palette === theme.palette && emerald === theme.emerald) return theme;
     return { ...theme, palette, emerald };
   }, [theme, overrides]);

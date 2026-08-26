@@ -16,6 +16,7 @@ import {
 import { useFloatingNavClearance } from '../ui/primitives';
 import { THEME_PREFERENCES, type ThemePreference } from '../lib/themePreference';
 import { setDesignStudioOpen, useDesignStudioOpen } from '../lib/designOverrides';
+import { designStudioAvailable } from '../lib/designStudioGate';
 
 /**
  * Profile → Appearance (4D-4). Three options, the current one indicated; a
@@ -53,7 +54,10 @@ export function AppearanceScreen() {
   const navClearance = useFloatingNavClearance();
   // RUN G1 (C3): the design studio's toggle — the panel itself floats over
   // the whole app from navigation/ModeShell.tsx, so it survives leaving this
-  // screen and can tune any surface. STRIP BEFORE TESTFLIGHT with the panel.
+  // screen and can tune any surface. RUN S2 (C1): PERMANENT and
+  // CHANNEL-GATED — the row exists only where lib/designStudioGate.ts says
+  // the studio may (Metro, or the internal/development update channels;
+  // FAIL CLOSED everywhere else).
   const studioOpen = useDesignStudioOpen();
 
   return (
@@ -98,24 +102,26 @@ export function AppearanceScreen() {
               </Pressable>
             );
           })}
-          <Pressable
-            style={({ pressed }) => [styles.row, styles.rowDivider, pressed && styles.rowPressed]}
-            onPress={() => setDesignStudioOpen(!studioOpen)}
-            accessibilityRole="switch"
-            accessibilityState={{ checked: studioOpen }}
-          >
-            <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
-              <Ionicons
-                name="options-outline"
-                size={20}
-                color={isDark ? palette.gold : palette.primary}
-              />
-            </View>
-            <Text style={styles.label}>Design studio</Text>
-            <Text style={[styles.studioState, studioOpen && styles.studioStateOn]}>
-              {studioOpen ? 'On' : 'Off'}
-            </Text>
-          </Pressable>
+          {designStudioAvailable ? (
+            <Pressable
+              style={({ pressed }) => [styles.row, styles.rowDivider, pressed && styles.rowPressed]}
+              onPress={() => setDesignStudioOpen(!studioOpen)}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: studioOpen }}
+            >
+              <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
+                <Ionicons
+                  name="options-outline"
+                  size={20}
+                  color={isDark ? palette.gold : palette.primary}
+                />
+              </View>
+              <Text style={styles.label}>Design studio</Text>
+              <Text style={[styles.studioState, studioOpen && styles.studioStateOn]}>
+                {studioOpen ? 'On' : 'Off'}
+              </Text>
+            </Pressable>
+          ) : null}
         </Card>
       </ScrollView>
     </SafeAreaView>

@@ -1,6 +1,6 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { layout } from '../ui/tokens';
-import { useDesignOverrides } from '../lib/designOverrides';
+import { useDesignDial } from '../lib/designOverrides';
 
 /**
  * RUN G1 (C4/C6) — THE INSET CONTRACT, in one place.
@@ -48,14 +48,14 @@ export function navBottomPadFor(insetBottom: number, override?: number): number 
 /** The bar's live bottom padding: the studio dial, or the flush formula. */
 export function useNavBottomPad(): number {
   const insets = useSafeAreaInsets();
-  const { navBottomPad } = useDesignOverrides();
+  const navBottomPad = useDesignDial('navBottomPad');
   return navBottomPadFor(insets.bottom, navBottomPad);
 }
 
 /** The height content must clear — see the header. */
 export function useNavInset(): number {
   const insets = useSafeAreaInsets();
-  const { navBottomPad } = useDesignOverrides();
+  const navBottomPad = useDesignDial('navBottomPad');
   const pad = navBottomPadFor(insets.bottom, navBottomPad);
   return layout.floatingNavHeight + pad + Math.max(0, insets.bottom - pad);
 }

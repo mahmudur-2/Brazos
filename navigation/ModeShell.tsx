@@ -4,6 +4,7 @@ import { useMode } from '../modes';
 import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
 import { useThemeColors } from '../lib/theme';
 import { DesignStudioPanel } from '../components/DesignStudioPanel';
+import { designStudioAvailable } from '../lib/designStudioGate';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
 
@@ -129,8 +130,8 @@ export function ModeShell() {
       <View style={[styles.tree, { backgroundColor: treeGround }]}>
         {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
       </View>
-      {/* FENCE: DESIGN STUDIO (RUN G1 C3) — dev tuning overlay in every build FOR NOW; STRIP BEFORE TESTFLIGHT (delete this mount and components/DesignStudioPanel.tsx; HANDOFF.md records the process). Renders null until toggled on the Appearance screen. */}
-      <DesignStudioPanel />
+      {/* FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED: the panel mounts only where lib/designStudioGate.ts says the studio may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED on preview, production and unknown). tests/designStudio.test.mjs pins this gate — no future run may loosen it. Renders null until toggled on the Appearance screen. */}
+      {designStudioAvailable ? <DesignStudioPanel /> : null}
     </ShellGroundProvider>
   );
 }

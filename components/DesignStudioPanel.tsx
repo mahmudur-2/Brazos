@@ -27,7 +27,7 @@ import {
 } from '../ui/tokens';
 import { SURFACE_GLOW_ALPHA } from '../ui/primitives';
 
-// FENCE: DESIGN STUDIO — dev tuning overlay, in every build FOR NOW; STRIP BEFORE TESTFLIGHT (delete the ModeShell mount and this file; HANDOFF.md records the process).
+// FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED. The old "strip before TestFlight" instruction is SUPERSEDED: the panel ships in every build and lib/designStudioGate.ts decides where it may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED elsewhere). Its mount in navigation/ModeShell.tsx reads that gate.
 
 /**
  * RUN G1 (C3) — THE DESIGN STUDIO.
