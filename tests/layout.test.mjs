@@ -22,11 +22,13 @@ test('main tab screens do not reserve redundant gaps above the safe tab bar', as
     assert.match(screen, /paddingBottom: 0/);
   }
   // PJ1 (C9): the bar is ATTACHED — full width, flush to the bottom edge,
-  // with the safe-area inset carried INSIDE the bar as bottom padding, so
-  // the items always clear the home indicator and nothing floats by margin.
+  // with its bottom padding carried INSIDE. G1 (C4), the flush fix: that
+  // padding is navBottomPad — max(inset − 16, 6), or the studio dial — so
+  // the row sits lower than the full inset used to put it; the arithmetic's
+  // one home is hooks/useNavInset.ts and nothing floats by margin.
   assert.match(
     bottomNav,
-    /height: TAB_BAR_CONTENT_HEIGHT \+ insetBottom,\s*paddingBottom: insetBottom,/
+    /height: TAB_BAR_CONTENT_HEIGHT \+ navBottomPad,\s*paddingBottom: navBottomPad,/
   );
   assert.match(bottomNav, /marginHorizontal: 0,\s*marginBottom: 0,\s*borderRadius: 0,/);
   assert.ok(
@@ -138,39 +140,37 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
     'the ground must wrap the tree swap, not replace it'
   );
 
-  // The pill is the ONLY painted surface in the bar row. tabBarStyle carries
-  // exactly one backgroundColor and it is the pill's own.
+  // G1 (C4): the bar row's ONE painted layer is the chrome Surface rendered
+  // through tabBarBackground — the options themselves paint NOTHING. With
+  // tabBarBackground set, the library's own container goes transparent, and
+  // a backgroundColor reappearing in the options would put an opaque plate
+  // under the glass — the exact second-ground defect D2 buried.
   const options = bottomNav.slice(
     bottomNav.indexOf('export function bottomNavScreenOptions'),
     bottomNav.indexOf('Registration options for a tab')
   );
   assert.equal(
     (options.match(/backgroundColor:/g) ?? []).length,
-    1,
-    'the bar options must declare one background — the pill'
+    0,
+    'the bar options paint nothing — the chrome Surface is the one painted layer'
   );
-  assert.match(options, /backgroundColor: palette\.surface/);
   // No second GROUND may be introduced through the library's own hook for one.
   // Comments are stripped first — the D2 audit in BottomNav.tsx NAMES that hook
   // while recording what it may and may not carry.
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
-  // RUN MOTION1 (C3) — THE HOOK IS USED ONCE, AND ONLY FOR THE BLUR.
+  // G1 (C4) — THE HOOK IS USED ONCE, AND ONLY FOR THE CHROME.
   //
-  // This assertion used to be a flat ban on the identifier. The ban was a
-  // proxy for the rule stated above it, and the rule is about a COLOUR: emerald
-  // D2's white band came from a second painted ground in the bar row, and the
-  // pill's `backgroundColor: palette.surface` — asserted as the only one, four
-  // lines up — is still the one and only fill there. What C3 puts through the
-  // hook paints no colour at all: lib/blur.tsx renders expo-blur's BlurView or
-  // null, never a background, and it sits ON TOP of that single fill rather
-  // than beside it.
-  //
-  // So the identifier is allowed exactly once, in exactly one file, bound to
-  // exactly that element — and the two trees still may not name it at all. A
-  // ground reintroduced through this hook fails here as loudly as it did
-  // before, and now a colour smuggled in through the blur layer fails too.
+  // MOTION1 put the blur layer through this hook; G1 puts the whole chrome
+  // material through it. The rule is unchanged — ONE painted layer in the bar
+  // row — and it is now the Surface's: in light the solid theme surface with
+  // the ordinary hairline, in dark the chrome scrim + blur + mint hairline,
+  // every value from the materials table in ui/tokens.ts. The identifier is
+  // allowed exactly once, in exactly one file, bound to exactly the NavChrome
+  // component — and the two trees still may not name it at all. A second
+  // ground reintroduced through this hook fails here as loudly as ever, and a
+  // colour smuggled into the blur layer still fails below.
   const navCode = codeOnly(bottomNav);
   assert.equal(
     (navCode.match(/tabBarBackground/g) ?? []).length,
@@ -179,8 +179,13 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
   );
   assert.match(
     navCode.replace(/\s+/g, ' '),
-    /tabBarBackground: \(\) => <BlurLayer \/>,/,
-    'the only thing tabBarBackground may render is the shared blur layer'
+    /tabBarBackground: \(\) => <NavChrome \/>,/,
+    'the only thing tabBarBackground may render is the chrome component'
+  );
+  assert.match(
+    navCode.replace(/\s+/g, ' '),
+    /function NavChrome\(\) \{ const \{ navRadius \} = useDesignOverrides\(\); return \( <Surface material="chrome" border="top" corners="top" radius=\{navRadius \?\? 0\} style=\{StyleSheet\.absoluteFill\} \/> \); \}/,
+    'NavChrome is exactly the chrome material with the studio radius dial — nothing else'
   );
   const blur = codeOnly(await read('lib/blur.tsx'));
   assert.doesNotMatch(
@@ -198,10 +203,10 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
       `${path} must not add a tabBarBackground layer behind the pill`
     );
   }
-  // The pill's ring is one weight. BottomTabBar.tsx sets borderTopWidth to a
-  // hairline before tabBarStyle merges, and a specific edge beats the
-  // shorthand, so the top arc drew at 0.5 against 1 everywhere else.
-  assert.match(options, /borderTopWidth: 1,/);
+  // The bar's ONE edge — the top hairline — is the chrome material's now
+  // (G1 C4). The options ZERO the library's own hairline so there are never
+  // two lines drawn on the same edge.
+  assert.match(options, /borderTopWidth: 0,/);
 });
 
 test('the nav glyphs are D3 size and every slot still fits its label', async () => {

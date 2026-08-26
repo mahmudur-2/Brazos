@@ -418,20 +418,20 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
     /\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
     'the ground must wrap the tree swap so it covers both modes at once'
   );
-  // …and the pill's own fill stays the ONLY painted surface in the bar row.
+  // …and the bar row still has exactly ONE painted layer.
   //
-  // RUN MOTION1 (C3): this used to ban the library's hook by name. The name was
-  // a proxy for the rule — no second GROUND — and what C3 puts through the hook
-  // paints no colour at all: lib/blur.tsx renders expo-blur's BlurView or null,
-  // and it is layered ON TOP of the pill's one fill rather than beside it. So
-  // the rule is asserted directly now, on both files, and it is stricter than
-  // the name ban was: a background introduced anywhere in the bar options or in
-  // the blur layer fails here, which the old line could not have caught.
+  // RUN MOTION1 (C3) put the blur through the library's background hook; RUN
+  // G1 (C4) puts the whole chrome MATERIAL through it. The rule is unchanged
+  // — no second ground in the bar row — and the one painted layer is now the
+  // chrome Surface (solid theme surface in light; scrim + blur + mint
+  // hairline in dark, every value from ui/tokens.ts's materials table). The
+  // hook renders exactly the NavChrome component, the blur layer itself
+  // still paints nothing, and the options declare no background at all.
   const navBar = flatten(read('ui/primitives/BottomNav.tsx'));
   assert.match(
     navBar,
-    /tabBarBackground: \(\) => <BlurLayer \/>,/,
-    'the only thing the bar-background hook may render is the shared blur layer'
+    /tabBarBackground: \(\) => <NavChrome \/>,/,
+    'the only thing the bar-background hook may render is the chrome component'
   );
   assert.equal(
     (navBar.match(/tabBarBackground/g) ?? []).length,

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavBottomPad } from '../hooks/useNavInset';
 import { ActionSheet } from '../components/ActionSheet';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { useThemeColors } from '../lib/theme';
@@ -16,6 +16,7 @@ import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerSearchScreen } from '../screens/WorkerSearchScreen';
 import {
+  bottomNavScreenListeners,
   bottomNavScreenOptions,
   CenterCreateButton,
   HIDDEN_TAB_ITEM_OPTIONS,
@@ -141,7 +142,9 @@ function CreateActionScreen() {
 }
 
 export function CustomerRoot() {
-  const insets = useSafeAreaInsets();
+  // G1 (C4): the bar's resolved bottom padding — the flush formula, or the
+  // design studio's dial (hooks/useNavInset.ts owns the arithmetic).
+  const navBottomPad = useNavBottomPad();
   const { palette } = useThemeColors();
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -153,12 +156,17 @@ export function CustomerRoot() {
 
   return (
     <>
-      <Tab.Navigator screenOptions={bottomNavScreenOptions(insets.bottom, palette)}>
-        {/* No tabPress listener. Re-pressing the Home tab pops this stack to
-            its root, which is Customer Home — the correct destination in this
-            mode. The listener that used to intercept that existed only because
-            both modes shared one stack and popping it could silently change
-            mode. */}
+      <Tab.Navigator
+        screenOptions={bottomNavScreenOptions(navBottomPad, palette)}
+        screenListeners={bottomNavScreenListeners}
+      >
+        {/* The ONLY tabPress listener is the shared haptics tap
+            (bottomNavScreenListeners) — it navigates nothing and reads
+            nothing. Re-pressing the Home tab still pops this stack to its
+            root, which is Customer Home — the correct destination in this
+            mode; the interception listener that once lived here (it existed
+            only because both modes shared one stack, and popping it could
+            silently change mode) stays gone. */}
         <Tab.Screen name="Home" component={CustomerHomeStackNavigator} />
         {/* D1's slot: the browse surface, in the position Map used to hold. */}
         <Tab.Screen

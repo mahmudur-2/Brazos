@@ -5,7 +5,9 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
-import { BlurLayer } from '../../lib/blur';
+import { tap } from '../../lib/haptics';
+import { useDesignOverrides } from '../../lib/designOverrides';
+import { Surface } from './Surface';
 
 /**
  * §I's `BottomNav` primitive — deferred from Phase 1, built here because Phase 2
@@ -303,13 +305,18 @@ export function BottomNavItem({
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // G1 (C4): the studio's glow dial, when set, replaces the standing alpha.
+  const { glowAlpha } = useDesignOverrides();
   const tab = TAB_BY_KEY.get(routeName);
   const [active, inactive] = tab?.icons ?? (['ellipse', 'ellipse-outline'] as const);
   const label = tab?.label ?? routeName;
   // Decision 4: the active glyph and label glow softly. A dark-Prestige
   // treatment — light keeps its flat Heritage bar; the shape lives at token
   // level (glow.text), only the colour is resolved here.
-  const activeGlow = focused && isDark ? glow.text(withAlpha(colors.emerald, 0.55)) : null;
+  const activeGlow =
+    focused && isDark
+      ? glow.text(withAlpha(colors.emerald, glowAlpha ?? ACTIVE_TAB_GLOW_ALPHA))
+      : null;
 
   return (
     <View style={styles.tabItemContent}>
@@ -340,8 +347,10 @@ export function BottomNavItem({
  * The Tab.Navigator `screenOptions` both trees use — identical configuration
  * in customer and worker mode, so the chrome cannot drift between modes.
  *
- * `insetBottom` is passed in rather than read from a hook here so this stays a
- * plain function the catalog can also call.
+ * `navBottomPad` — the bar's resolved bottom padding (G1 C4's flush formula,
+ * or the studio dial; hooks/useNavInset.ts owns the arithmetic) — is passed
+ * in rather than read from a hook here so this stays a plain function the
+ * catalog can also call.
  */
 /**
  * RUN GROUND1 (C3) — THE TWO ROUTES THE PILL ACTUALLY FLOATS OVER.
@@ -368,12 +377,52 @@ export function isAtmosphereHomeRoute(route: { name: string }): boolean {
   return route.name === 'Home' && (leaf === undefined || ATMOSPHERE_HOME_ROUTES.has(leaf));
 }
 
-export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalette) {
+/**
+ * RUN G1 (C4) — the active tab's glow strength: the 0.55 the bar has always
+ * glowed at, now named so the design studio's glow dial can replace it live.
+ */
+const ACTIVE_TAB_GLOW_ALPHA = 0.55;
+
+/**
+ * RUN G1 (C4) — the bar's chrome. A component rather than an inline element
+ * so the studio's nav-radius dial is read as a hook and repaints the bar
+ * live. The material owns the bar's fill AND its one edge, the top hairline;
+ * `radius` rounds the top corners only when the dial asks (launch value 0:
+ * square, flush).
+ */
+function NavChrome() {
+  const { navRadius } = useDesignOverrides();
+  return (
+    <Surface
+      material="chrome"
+      border="top"
+      corners="top"
+      radius={navRadius ?? 0}
+      style={StyleSheet.absoluteFill}
+    />
+  );
+}
+
+/**
+ * RUN G1 (C4) — tab presses acknowledge with the light haptic tap. HAPTICS
+ * ONLY, pinned to exactly this shape by tests/mode.test.mjs: no navigation,
+ * no preventDefault, no mode logic — the mode-inference listener that fence
+ * buried cannot come back through this object.
+ */
+export const bottomNavScreenListeners = {
+  tabPress: () => {
+    tap();
+  },
+} as const;
+
+export function bottomNavScreenOptions(navBottomPad: number, palette: ColorPalette) {
   // RUN PJ1 (C9) — THE ATTACHED BAR. Flush to the bottom edge, full screen
-  // width, no side insets and no float gap; the home-indicator inset rides
-  // INSIDE the bar as bottom padding, so the items always sit above the
-  // indicator. This reverses the floating pill (RUN GROUND1 / 56ff86a) on
-  // confirmed operator decision.
+  // width, no side insets and no float gap. RUN G1 (C4), THE FLUSH FIX: the
+  // padding the bar carries inside is no longer the whole home-indicator
+  // inset — the operator's direct complaint was that the row sat too high —
+  // but max(inset − 16, 6), or the studio dial when set (the formula lives
+  // in hooks/useNavInset.ts). This reverses the floating pill (RUN GROUND1 /
+  // 56ff86a) on confirmed operator decision.
   //
   // IN FLOW EVERYWHERE EXCEPT THE TWO HOMES (RUN GROUND1, C3). BottomTabView
   // lays scenes and bar out in one column, so an in-flow bar reserves real
@@ -386,18 +435,17 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
 
   return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
     headerShown: false,
-    // RUN MOTION1 (C3) — THE PILL'S FILL IS FROSTED, NOT REPLACED.
-    //
-    // BottomTabBar.js renders this element inside a pointerEvents="none"
-    // absoluteFill view that is the bar's FIRST child, so it lands ON TOP of
-    // the container's own background and UNDER every tab item. The opaque
-    // fallback is therefore the pill's existing surface fill below —
-    // untouched, and still the only colour the bar row paints.
-    // lib/blur.tsx renders nothing at all on web and on any binary
-    // without the native module, which is why the harness render does not move
-    // and why a build predating expo-blur still shows a solid pill rather than
-    // a hole.
-    tabBarBackground: () => <BlurLayer />,
+    // RUN G1 (C4) — THE BAR WEARS CHROME. BottomTabBar.js renders this
+    // element inside a pointerEvents="none" absoluteFill view under every tab
+    // item, and with tabBarBackground set the library's own container paints
+    // transparent — so the chrome Surface is the bar row's ONE painted layer.
+    // Light renders the solid theme surface with the ordinary hairline (the
+    // bar as it has always looked); dark wears the chrome material — scrim,
+    // blur through lib/blur.tsx, mint hairline — and falls back to scrim-only
+    // on web and under Reduce Transparency, so the harness render stays
+    // meaningful and a binary without expo-blur shows a solid bar, never a
+    // hole.
+    tabBarBackground: () => <NavChrome />,
     // Decision 4 — the ONE active rule that replaced the masters' five
     // competing treatments (manifest B-1): emerald active, navInactive rest.
     tabBarActiveTintColor: palette.emerald,
@@ -412,24 +460,25 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
     tabBarIconStyle: { width: '100%', height: TAB_ICON_WRAPPER_HEIGHT },
     tabBarStyle: {
       // getTabBarHeight() (bottom-tabs internals) uses a custom height
-      // VERBATIM. C9: the box is content + inset, and the library's own
-      // `paddingBottom: insets.bottom` (which the floating era zeroed out) is
-      // now exactly what the design wants — restated explicitly so the item
-      // slots stay the content height whatever the library's default does.
-      height: TAB_BAR_CONTENT_HEIGHT + insetBottom,
-      paddingBottom: insetBottom,
+      // VERBATIM. G1 (C4): the box is content + navBottomPad — the flush
+      // formula's pad or the studio dial, resolved by the trees — restated
+      // explicitly so the item slots stay the content height whatever the
+      // library's default does.
+      height: TAB_BAR_CONTENT_HEIGHT + navBottomPad,
+      paddingBottom: navBottomPad,
       // Full width, flush: no side margins, no bottom gap, no rounded pill.
       marginHorizontal: 0,
       marginBottom: 0,
       borderRadius: 0,
       borderWidth: 0,
       // BottomTabBar.tsx sets `borderTopWidth: StyleSheet.hairlineWidth` on
-      // its own style, BEFORE tabBarStyle is merged; restated at full weight
-      // so the attached bar's ONE edge — the top hairline — draws at 1. In
-      // dark that token IS the dim-gold hairline; light keeps Heritage.
-      borderTopWidth: 1,
-      borderTopColor: palette.border,
-      backgroundColor: palette.surface,
+      // its own style, BEFORE tabBarStyle is merged; ZEROED here (G1 C4)
+      // because the bar's ONE edge — the top hairline — is the chrome
+      // material's now: mint on dark glass, the ordinary border in light,
+      // drawn by the Surface so there are never two lines. No background
+      // either: with tabBarBackground set the library's container goes
+      // transparent, and the chrome is the one painted layer.
+      borderTopWidth: 0,
       elevation: 0,
       // C3: out of flow on the two homes only. tabBarStyle is the LAST entry
       // in BottomTabBar.js's style array, so this wins over the library's own
@@ -580,7 +629,13 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   return (
     <View style={styles.createSlot}>
       <Pressable
-        onPress={onPress}
+        onPress={() => {
+          // G1 (C4): the [ + ] acknowledges like every tab press. Its slot
+          // replaces the library's pressable, so the shared tabPress listener
+          // never fires here — the tap lives on the control itself.
+          tap();
+          onPress();
+        }}
         style={({ pressed }) => [
           styles.createButton,
           // A TERNARY, not a dark-only override, because the two themes no
@@ -640,13 +695,15 @@ export function BottomNavPreview({
   return (
     <View
       // C9 — mirrors the attached bar: content height plus the simulated
-      // inset carried inside as bottom padding.
+      // inset carried inside as bottom padding. G1 (C4): the paint is the
+      // same chrome Surface the real bar wears, laid behind the items.
       style={[
         styles.previewBar,
         { height: TAB_BAR_CONTENT_HEIGHT + insetBottom, paddingBottom: insetBottom },
       ]}
       accessibilityRole="tablist"
     >
+      <Surface material="chrome" border="top" corners="top" radius={0} style={StyleSheet.absoluteFill} />
       {items.map((item) =>
         item.kind === 'create' ? (
           <View key="create" style={styles.previewItem}>
@@ -768,12 +825,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // home(18): the transform moved to the call site with the lift, so the pressed
   // state cannot fall out of step with the resting one.
   createButtonPressed: { opacity: 0.88 },
-  // C9 — the attached bar's own vocabulary: full width, one top hairline.
+  // C9 — the attached bar's own vocabulary: full width, one top hairline —
+  // both the chrome Surface's now (G1 C4), painted behind the items.
   previewBar: {
     flexDirection: 'row',
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
   },
   previewItem: {
     flex: 1,

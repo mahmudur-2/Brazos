@@ -1,6 +1,6 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavBottomPad } from '../hooks/useNavInset';
 import type { WorkerHomeStackParamList, WorkerParamList } from '../lib/navigation';
 import { useThemeColors } from '../lib/theme';
 import { BidSentScreen } from '../screens/BidSentScreen';
@@ -12,7 +12,7 @@ import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { WorkerHomeScreen } from '../screens/WorkerHomeScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerResultsScreen } from '../screens/WorkerResultsScreen';
-import { bottomNavScreenOptions } from '../ui/primitives/BottomNav';
+import { bottomNavScreenListeners, bottomNavScreenOptions } from '../ui/primitives/BottomNav';
 import {
   MapStackNavigator,
   MessagesStackNavigator,
@@ -72,11 +72,16 @@ function WorkerHomeStackNavigator() {
 }
 
 export function WorkerRoot() {
-  const insets = useSafeAreaInsets();
+  // G1 (C4): the bar's resolved bottom padding — the flush formula, or the
+  // design studio's dial (hooks/useNavInset.ts owns the arithmetic).
+  const navBottomPad = useNavBottomPad();
   const { palette } = useThemeColors();
 
   return (
-    <Tab.Navigator screenOptions={bottomNavScreenOptions(insets.bottom, palette)}>
+    <Tab.Navigator
+      screenOptions={bottomNavScreenOptions(navBottomPad, palette)}
+      screenListeners={bottomNavScreenListeners}
+    >
       <Tab.Screen name="Home" component={WorkerHomeStackNavigator} />
       <Tab.Screen name="Map" component={MapStackNavigator} options={{ tabBarLabel: 'Map' }} />
       <Tab.Screen

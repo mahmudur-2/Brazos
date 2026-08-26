@@ -281,12 +281,29 @@ test('the Home tab roots at the home of the mode you are in', () => {
   assert.match(workerRoot, /name="WorkerHome" component=\{WorkerHomeScreen\}/);
   assert.doesNotMatch(workerRoot, /name="BrowseJobs"/);
   // The listener that used to infer mode from stack contents is gone, because
-  // popping to the root is now correct in both trees. (Comments are stripped
-  // first — CustomerRoot.tsx explains the absence in prose.)
+  // popping to the root is now correct in both trees. RUN G1 (C4) allows ONE
+  // successor: the shared haptics-only tabPress object from BottomNav —
+  // pinned to exactly a tap() and nothing else, so it can never navigate,
+  // never preventDefault, and never read the stack; the mode-inference
+  // listener cannot come back through it. It is the only listener wiring a
+  // tree may carry, and App.tsx still carries none at all. (Comments are
+  // stripped first — CustomerRoot.tsx explains the history in prose.)
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-  assert.doesNotMatch(codeOnly(customerRoot), /tabPress|listeners=/);
-  assert.doesNotMatch(codeOnly(workerRoot), /tabPress|listeners=/);
+  assert.match(codeOnly(customerRoot), /screenListeners=\{bottomNavScreenListeners\}/);
+  assert.match(codeOnly(workerRoot), /screenListeners=\{bottomNavScreenListeners\}/);
+  for (const source of [customerRoot, workerRoot]) {
+    assert.equal(
+      (codeOnly(source).match(/[lL]isteners=/g) ?? []).length,
+      1,
+      'the shared haptics listener is the ONLY listener wiring a tree may carry'
+    );
+  }
+  assert.match(
+    codeOnly(bottomNav).replace(/\s+/g, ' '),
+    /export const bottomNavScreenListeners = \{ tabPress: \(\) => \{ tap\(\); \}, \} as const;/,
+    'the shared listener is exactly a haptic tap — nothing else'
+  );
   assert.doesNotMatch(codeOnly(app), /tabPress|listeners=/);
 });
 
@@ -404,9 +421,13 @@ test('each tree carries its own tab contract (emerald D1 + D4)', () => {
   assert.match(customerRoot, /tabBarButton: \(\) => <CenterCreateButton onPress=/);
   assert.match(customerRoot, /function CreateActionScreen\(\) \{\s*return null;/);
   // 4D-4: the options factory takes the resolved palette so the bar repaints
-  // on a theme change — still the ONE implementation, now theme-aware.
-  assert.match(customerRoot, /bottomNavScreenOptions\(insets\.bottom, palette\)/);
-  assert.match(workerRoot, /bottomNavScreenOptions\(insets\.bottom, palette\)/);
+  // on a theme change — still the ONE implementation, now theme-aware. G1
+  // (C4): the first argument is the resolved navBottomPad — the flush
+  // formula or the studio dial — from the one hook in hooks/useNavInset.ts.
+  assert.match(customerRoot, /const navBottomPad = useNavBottomPad\(\);/);
+  assert.match(workerRoot, /const navBottomPad = useNavBottomPad\(\);/);
+  assert.match(customerRoot, /bottomNavScreenOptions\(navBottomPad, palette\)/);
+  assert.match(workerRoot, /bottomNavScreenOptions\(navBottomPad, palette\)/);
 });
 
 test('customer Home no longer links to Map, and the Map route survived anyway', () => {
