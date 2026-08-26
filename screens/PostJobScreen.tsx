@@ -29,6 +29,8 @@ import { EditBudgetDialog } from '../components/EditBudgetDialog';
 import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { ServicePickerSheet } from '../components/ServicePickerSheet';
+import type { SkillCategory } from '../lib/skillCategories';
 import { SuccessMark } from '../components/SuccessMark';
 import { FieldLabel, TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
@@ -199,6 +201,24 @@ const POST_STEPS = [
  * second alpha here would be a second decision about the same wash.
  */
 const PUBLISH_CARD_LIFT_ALPHA = 0.04;
+
+/**
+ * RUN PJ1 (C3) — THE "OTHER" PILL'S SHEET ROWS.
+ *
+ * Home's "Other services" sheet (components/ServicePickerSheet.tsx) is reused
+ * verbatim — no prop was added and no caller changed. What differs is the
+ * list: Home browses WORKERS, so its rows come from lib/skillCategories'
+ * search entry points; this screen writes a JOB, whose category must be a
+ * value the `job_category` enum accepts — so the rows are JOB_CATEGORIES,
+ * the one source create_job() is typed against, each with the label and
+ * glyph the pills themselves draw. "Other" is itself a row, so choosing it
+ * selects the Other category.
+ */
+const OTHER_SHEET_SERVICES: SkillCategory[] = JOB_CATEGORIES.map((c) => ({
+  key: c,
+  label: JOB_CATEGORY_LABELS[c],
+  icon: JOB_CATEGORY_ICONS[c],
+}));
 
 /**
  * RUN PJ1 (C2b) — FIRST-FIT-DECREASING PACKING OF THE CATEGORY PILLS.
@@ -375,6 +395,8 @@ export function PostJobScreen() {
   const [chipMeasureCount, setChipMeasureCount] = useState(0);
   const [chipsWidth, setChipsWidth] = useState(0);
   const [chipOrder, setChipOrder] = useState<readonly JobCategory[] | null>(null);
+  // C3 — the "Other" pill's category sheet. Dismissing changes nothing.
+  const [otherSheetOpen, setOtherSheetOpen] = useState(false);
 
   useEffect(() => {
     if (chipOrder != null || chipsWidth <= 0) return;
@@ -1175,7 +1197,9 @@ export function PostJobScreen() {
                     the pristine no-category state (Continue then refuses with
                     the same "Complete this step" alert it always used). C2b —
                     the packed order once measured; source order, invisible,
-                    for the frame or two before. */}
+                    for the frame or two before. C3 — the Other pill opens the
+                    category sheet instead of toggling; it still shows
+                    selected when the sheet (or a row in it) chose 'other'. */}
                 {(chipOrder ?? JOB_CATEGORIES).map((c) => (
                   <Chip
                     key={c}
@@ -1184,7 +1208,14 @@ export function PostJobScreen() {
                     accentColor={isDark ? colors.gold : categoryAccent(c).bg}
                     variant="filter"
                     selected={category === c}
-                    onPress={() => setCategory(category === c ? null : c)}
+                    onPress={
+                      c === 'other'
+                        ? () => setOtherSheetOpen(true)
+                        : () => setCategory(category === c ? null : c)
+                    }
+                    accessibilityHint={
+                      c === 'other' ? 'Opens the full list of categories' : undefined
+                    }
                   />
                 ))}
               </View>
@@ -1837,6 +1868,22 @@ export function PostJobScreen() {
         visible={!!viewerUri}
         uri={viewerUri}
         onClose={() => setViewerUri(null)}
+      />
+
+      {/* C3 — Home's "Other services" sheet, reused unchanged, listing the
+          job categories create_job() actually accepts. Selecting a row
+          selects it on step 1 and closes; dismissing changes nothing. */}
+      <ServicePickerSheet
+        visible={otherSheetOpen}
+        title="All categories"
+        subtitle="Pick what the job is about"
+        services={OTHER_SHEET_SERVICES}
+        onSelect={(categoryKey) => {
+          setOtherSheetOpen(false);
+          const chosen = JOB_CATEGORIES.find((c) => c === categoryKey);
+          if (chosen) setCategory(chosen);
+        }}
+        onClose={() => setOtherSheetOpen(false)}
       />
 
       {/* D15 — the one budget editor. Cancel discards, Save writes and
