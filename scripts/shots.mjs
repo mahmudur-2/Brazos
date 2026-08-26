@@ -432,6 +432,62 @@ const TARGETS = [
       wait: 'What is removed',
     },
   ]),
+
+  // =========================================================================
+  // RUN SHOTS1 — worker-mode coverage. Only surfaces whose render is not
+  // already photographed above earn a frame: the shared settings pages are
+  // the same screens in both modes and are covered once, in customer mode.
+  // The map tab is deliberately absent — its web implementation addresses
+  // external tile hosts, which the escape assertion (rightly) fails.
+  // =========================================================================
+  ...['dark', 'light'].flatMap((colorScheme) => [
+    {
+      // Worker Home's "Other" services sheet, open over worker Home.
+      name: `worker-services-sheet-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      recipe: [{ expect: 'Get hired.' }, { press: 'Other services' }],
+      wait: 'All services',
+    },
+    {
+      // The open-jobs list, by worker Home's own "view all" path. EMPTY
+      // state: no job fixtures exist. Neither the header title nor any part
+      // of the empty-state copy can be the wait — worker Home spells both,
+      // hidden but first in DOM once this screen is pushed over it, and the
+      // non-exact text match is case-insensitive — so the wait is a distance
+      // chip, which only this screen draws.
+      name: `worker-results-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      recipe: [{ expect: 'Get hired.' }, { press: 'View all open jobs' }],
+      wait: '10 mi',
+    },
+    {
+      // The worker's job-hub tab root. EMPTY state, worker wording.
+      name: `worker-myjobs-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      recipe: [{ expect: 'Get hired.' }, { pressText: 'My Jobs' }],
+      wait: 'Nothing here yet',
+    },
+    {
+      // The worker's messages tab root. EMPTY state.
+      name: `worker-inbox-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      recipe: [{ expect: 'Get hired.' }, { pressText: 'Inbox' }],
+      wait: 'No messages yet',
+    },
+    {
+      // The worker's Profile tab root — the same shared screen, but worker
+      // mode adds the profile-completeness prompt, so it earns its own frame.
+      name: `worker-profile-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      recipe: [{ expect: 'Get hired.' }, { pressText: 'Profile' }],
+      wait: 'Choose which events can alert you.',
+    },
+  ]),
 ];
 
 const MIME = {

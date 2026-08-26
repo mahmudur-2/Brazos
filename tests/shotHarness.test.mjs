@@ -111,10 +111,21 @@ test('the registry photographs where a category chip lands, in both schemes', ()
     'customer-legal-terms-light',
     'customer-delete-account-dark',
     'customer-delete-account-light',
+    // RUN SHOTS1 — worker-mode coverage, both schemes.
+    'worker-services-sheet-dark',
+    'worker-services-sheet-light',
+    'worker-results-dark',
+    'worker-results-light',
+    'worker-myjobs-dark',
+    'worker-myjobs-light',
+    'worker-inbox-dark',
+    'worker-inbox-light',
+    'worker-profile-dark',
+    'worker-profile-light',
   ]) {
     assert.ok(names.includes(existing), `${existing} disappeared from the registry`);
   }
-  assert.equal(names.length, 50, `registry is ${names.length} targets, expected 50`);
+  assert.equal(names.length, 60, `registry is ${names.length} targets, expected 60`);
 });
 
 test('that target is reached by tapping a chip, never by naming the route', async () => {
