@@ -76,6 +76,26 @@ type SuccessScreenProps = {
    * and this says the other half.
    */
   clearsFloatingNav?: boolean;
+  /**
+   * RUN PUBLISH1 (C1) — TWO ACTIONS ON ONE ROW, WHERE THE SURFACE NEEDS THE
+   * HEIGHT BACK.
+   *
+   * Stacked full-width buttons stay the default: most success surfaces carry a
+   * mark, two lines of copy and nothing else, and a stacked pair reads as a
+   * list of next steps.
+   *
+   * The published-job surface is the one that does not fit. Measured on the
+   * control render at 393x852: its last action's box ran y 751..798 against a
+   * pill whose top edge is 770, so it was cut. The surface carries the 200pt
+   * success mark, a four-row job card and a notice card above those actions,
+   * and C1 puts the mark's structure out of scope — so the height has to come
+   * from the actions themselves. One row instead of two returns a whole button
+   * plus its gap, which is what lands both of them above the pill.
+   *
+   * It is the same shape RUN PUBLISH1 gives Edit Budget's Save/Cancel pair, and
+   * for the same reason: two actions that are one decision belong on one line.
+   */
+  actionsLayout?: 'stacked' | 'row';
 };
 
 export function SuccessScreen({
@@ -87,6 +107,7 @@ export function SuccessScreen({
   actions,
   insideTabs = true,
   clearsFloatingNav = true,
+  actionsLayout = 'stacked',
 }: SuccessScreenProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -139,7 +160,9 @@ export function SuccessScreen({
 
         {details ? <Animated.View style={[styles.details, detailsEntrance]}>{details}</Animated.View> : null}
 
-        <Animated.View style={[styles.actions, actionsEntrance]}>
+        <Animated.View
+          style={[styles.actions, actionsLayout === 'row' && styles.actionsRow, actionsEntrance]}
+        >
           {actions.map((action) => {
             const secondary = action.variant === 'secondary';
             return (
@@ -148,6 +171,7 @@ export function SuccessScreen({
                 onPress={action.onPress}
                 style={({ pressed }) => [
                   styles.button,
+                  actionsLayout === 'row' && styles.buttonInRow,
                   secondary ? styles.secondary : styles.primary,
                   // Decision 3's standard control: surface fill, gold
                   // hairline, cream serif label. The Heritage pair it
@@ -228,12 +252,22 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     maxWidth: layout.maxContentWidth,
     gap: spacing.md,
   },
+  // PUBLISH1 (C1): one row, each action half of it. See .
+  actionsRow: {
+    flexDirection: 'row',
+  },
   button: {
     minHeight: controls.buttonHeight,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radius.pill,
     paddingHorizontal: spacing.xl,
+  },
+  // A row's buttons share the width; the label shrinks rather than the pill,
+  // so the two keep one height and one radius.
+  buttonInRow: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
   },
   primary: {
     backgroundColor: colors.forest,

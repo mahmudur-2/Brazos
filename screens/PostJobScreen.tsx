@@ -1511,6 +1511,9 @@ export function PostJobScreen() {
               // inside it is what pushed "Back to Home" off the bottom. The
               // template still owns only the top safe-area edge.
               clearsFloatingNav={false}
+              // C1: one row, so both actions land above the pill — see the
+              // prop's docblock for the measurement that forced it.
+              actionsLayout="row"
               title="Your job is live."
               body="Workers can now see your job. Bids appear as workers respond, and you choose who gets it."
               // D23-D26 — the mark, and the only thing on this surface that
