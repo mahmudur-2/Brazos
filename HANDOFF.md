@@ -43,7 +43,305 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-26 ground pass (RUN GROUND1)
+## Current state — after the 2026-08-26 motion pass (RUN MOTION1)
+
+Three native modules had been installed and none of them was called. This run
+gave all three a boundary and callers: press feedback with haptics on every
+primitive control, staggered entrances on Home and the success surface, blur on
+the nav pill and the shared backdrops, and expo-image behind every remote
+photo. **Not one of the sixteen harness renders moved.**
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`7186d59`|`hooks/usePressFeedback.ts`, applied to four primitives; the haptics boundary fenced tree-wide|
+|C2|`976f1f4`|`hooks/useEntrance.ts`; Home's three sections and the success surface|
+|C3|`7650bfe`|`lib/blur.tsx`; the nav pill's fill and four shared backdrops|
+|C4|`bf7e2c3`|`components/RemoteImage.tsx`; 27 remote photos across 22 files|
+|C5|(this file)|the handoff|
+
+**Motion, haptics and blur are UNVERIFIED until the operator runs a NEW NATIVE
+BUILD on device; expo-blur, expo-haptics and expo-image are native modules
+absent from build 7, and the harness cannot see any of the three.**
+
+### THE ONE THING THE DISPATCH GOT WRONG, AND IT WAS CHECKED RATHER THAN ASSUMED
+
+The dispatch said `lib/haptics.ts` did not exist and had to be created. **It
+already did** — RUN DEPS1 landed it at `5acd836` ("web-safe wrapper, no callers
+yet") with exactly the `tap()` / `confirm()` contract C1 specifies, plus
+`select()`, and `tests/haptics.test.mjs` already fenced its internals. It was
+not recreated. What C1 actually owed it was the half that was missing: the
+fence covered how the boundary loads the vendor, not whether anything else in
+the tree bypassed it — which was unfalsifiable while nothing imported it at
+all. C1 gave it callers, so a tree-wide sweep now asserts `expo-blur`'s
+sibling rule for it too, and asserts the boundary has callers so the sweep
+cannot go vacuous again.
+
+### C1 — ONE PRESS FEEDBACK, AND WHERE IT COULD NOT GO
+
+`hooks/usePressFeedback.ts`. A spring to **0.97** on press-in and back to 1 on
+release — `stiffness 320, damping 26, mass 0.6`, about 120ms to settle with no
+visible overshoot — plus `lib/haptics`'s light `tap()` at the moment the finger
+lands.
+
+A spring rather than a timing because a press has a release, and a spring
+interrupted mid-flight carries its velocity into the reverse where a timing
+restarts from wherever it was. `components/AuthButton.tsx` (0.985 / 100 / 120)
+and `components/SetupRow.tsx` (0.99 / 90 / 110) are the auth and setup flows'
+own copies and are left where they are; what this stops is that divergence
+spreading across the primitives.
+
+Applied through the ONE hook to:
+
+| primitive | controls |
+|-|-|
+|`ui/primitives/JobCard.tsx`|the card, and the "Place a bid" pill (two instances)|
+|`ui/primitives/ListRow.tsx`|the row, when it has a handler|
+|`ui/primitives/Toggle.tsx`|the track|
+|`ui/primitives/SearchBar.tsx`|the field-as-button, the clear glyph, the mic|
+
+**TWO WERE SKIPPED, both reported rather than forced:**
+
+* `ui/primitives/StatusPill.tsx` has **no Pressable at all** — it is a label,
+  not a control. Nothing to attach.
+* `ui/primitives/MediaGrid.tsx`'s tiles carry an inline **percentage width**
+  (`48%` / `31.5%`) inside a wrapping flex grid, and its remove button is
+  absolutely positioned inside the tile. The press-scale rides an
+  `Animated.View` WRAPPER (the arrangement AuthButton already uses — a
+  Pressable's `style` is a function of `pressed`, and an Animated.Value inside
+  a function style is never attached to the node), and a wrapper around either
+  of those takes the percentage or the positioning away from the element that
+  needs it. That is the continue-path the dispatch names, taken deliberately.
+
+**THE TRANSFORM DISAPPEARS ENTIRELY UNDER REDUCED MOTION** rather than
+animating to the same resting value, and that is a measured decision, not a
+tidiness one. `scripts/shots.mjs` renders with `prefers-reduced-motion: reduce`
+and asserts it before capturing; Playwright's animations flag freezes CSS
+animations, not JS-driven `Animated` transforms. A resting `transform: scale(1)`
+is still a transform, and a transform promotes the element to its own
+compositing layer where its edges can antialias a level differently. So the
+hook returns `undefined` for its style unless motion is actually on. The same
+contract, for the same reason, in `useEntrance`.
+
+The haptic is NOT gated on reduced motion: that setting is a request about
+movement, and `lib/haptics` is already a no-op on web and on any binary
+without the native module.
+
+### C2 — ENTRANCES, AS A STYLE RATHER THAN A WRAPPER
+
+`hooks/useEntrance.ts`. A spring from `opacity 0, translateY 10` to exactly
+today's frame — `stiffness 140, damping 20, mass 0.9`, about 320ms — staggered
+**70ms** apart. The deepest stagger in the tree is index 3, so the last piece
+is at rest inside 550ms, well under the harness's 2500ms settle window even if
+reduced motion were ever off.
+
+**WHY A HOOK AND NOT A COMPONENT.** A wrapper component puts a NODE in the
+tree, and a node changes layout — react-native-web's View is a flex container
+with its own defaults, so a card that was a direct child of a `gap: 20` column
+stops being one. Returning a STYLE means the caller's existing View simply
+becomes an `Animated.View` with one more entry in its style array: same node,
+same box, same DOM, and nothing about the resting layout can move because
+nothing about layout is expressed in the hook at all.
+
+| surface | what arrives, in order |
+|-|-|
+|`screens/HomeScreen.tsx`|the chip rows (1), the promo card (2), the Nearby section (3)|
+|`ui/templates/SuccessScreen.tsx`|the default glyph (0), the copy (1), the details slot (2), the actions (3)|
+
+`ui/primitives/LitSurface.tsx`'s node became an `Animated.View` so the promo
+card could take the style in the array it already takes its surface styles in.
+react-native-web renders the two identically with no animated value present, so
+that is not a second node — it is the one node, able to take a transform.
+
+**THE SUCCESS MARK WAS EXTENDED, NOT REPLACED.** `components/SuccessMark.tsx`
+already resolves a motion120 implementation above the boundary and animates its
+disc, rings and sparkles over 950ms on mount, then holds; reduced motion and a
+binary without worklets both get the full still artwork. That arrangement is
+untouched. The template therefore staggers only what it owns itself, and a
+caller-supplied `mark` is never wrapped in a second entrance — two entrances on
+one mark would be two claims about the same arrival, and there is now a fence
+saying so.
+
+`confirm()` — the success NOTIFICATION haptic, not the light press tap — fires
+from `SuccessScreen`'s mount effect with empty deps, so once per surface and
+never on a re-render. It reaches BidSent and JobConfirmed as well as the
+published job, which is correct: all three are the end of a flow.
+
+### C3 — BLUR, ON EXACTLY TWO KINDS OF SURFACE
+
+`lib/blur.tsx`, the third boundary in the same shape as `lib/haptics.ts` and
+`lib/clipboard.ts`: one lazy, caught `require`, resolved once, and short-
+circuited on web BEFORE the require so the vendor is never executed there.
+
+**THE FALLBACK IS NOT IN THE BOUNDARY, AND THAT IS THE DESIGN.** `BlurLayer`
+renders the blur or NOTHING. It never paints a colour and it is never the
+surface — it is always the layer ON TOP of a surface the caller has already
+painted. So the degraded case needs no code path: with no native module the
+layer is absent and what shows is the solid fill that was always underneath.
+A blur boundary that painted its own fallback would be a second ground, and the
+nav pill in particular is allowed exactly one.
+
+| surface | the opaque fallback beneath it |
+|-|-|
+|the nav pill's fill|`tabBarStyle.backgroundColor: palette.surface` — untouched|
+|`components/ActionSheet.tsx`|`styles.backdrop` / `backdropDark` scrim|
+|`components/AmountPrompt.tsx`|the same scrim pair|
+|`components/ConfirmDialog.tsx`|the same scrim pair|
+|`ui/primitives/Sheet.tsx`|the same scrim pair|
+
+Intensity 24 — a frosted pane rather than a smear, so the pill's hairline and
+the sheet's rounded top still read as edges, which is the reason to blur rather
+than to dim harder. Tint follows the APP's palette, not the system appearance:
+the two can disagree and this app's dark mode is a choice made inside it.
+
+**EDIT BUDGET IS LEFT OPAQUE DIM, and it is its own surface rather than one of
+the shared backdrops** — `components/EditBudgetDialog.tsx`, used by nothing
+else. The dispatch's condition ("blur it only if it already reads as a shared
+modal backdrop") is not met, so it was not blurred, and a fence now asserts it
+stays that way.
+
+**THE PILL'S GEOMETRY, LABELS, ICONS AND GLYPH COLOURS DID NOT CHANGE.** The
+blur arrives through `tabBarBackground`, which BottomTabBar.js renders inside a
+`pointerEvents="none"` absoluteFill view that is the bar's FIRST child — on top
+of the container's background, under every tab item.
+
+**A FENCE WAS REDONE FOR IT, in two files, and it came out stricter.**
+`tests/layout.test.mjs` and `tests/emeraldFences.test.mjs` both banned the
+identifier `tabBarBackground` outright. The ban was a proxy for the rule
+written above it — *no second GROUND* — and emerald D2's white band was a
+second painted ground in the bar row. What goes through the hook now paints no
+colour at all. So both fences assert the rule directly: the identifier may
+appear exactly once, in exactly one file, bound to exactly `<BlurLayer />`; the
+two navigator trees still may not name it; the bar options still declare
+exactly one `backgroundColor` and it is the pill's; and `lib/blur.tsx` must
+contain no `backgroundColor` whatever. A ground smuggled in through the blur
+layer now fails, which the name ban could never have caught.
+
+### C4 — EVERY REMOTE PHOTO, THROUGH ONE BOUNDARY
+
+`components/RemoteImage.tsx`. **27 call sites across 22 files** — job media,
+avatars, portfolio, chat photos and every feed thumbnail — moved off
+react-native's `<Image source={{ uri }}>` onto expo-image with a **220ms**
+cross-fade and a caller-supplied placeholder colour.
+
+Loaded the same way as the other two boundaries, so a binary predating the
+package renders react-native's own `<Image>` with the same source and the same
+fit: the degraded case is today's app, not a hole.
+
+**LOCAL ART IS DELIBERATELY NOT ROUTED THROUGH IT.** The hero crops, the gold B
+drape and the atmosphere raster are `require`d and bundled; they have no load
+state, and giving them a placeholder and a cross-fade would fade in something
+that was never absent.
+
+**ONE RECORDED EXCEPTION.** `components/PhotoViewer.tsx` keeps
+`Animated.Image`: the viewer's pinch, pan and dismiss gestures drive scale and
+translate on THAT element through `Animated.createAnimatedComponent`, and a
+plain node between the animated values and the picture stops the gestures
+moving it. It also needs neither half of what the boundary adds — it opens from
+a thumbnail whose bytes are already cached. The exception is named in
+`tests/remoteImage.test.mjs` and the fence asserts the reason is still written
+beside the code.
+
+The placeholder is a colour the CALLER passes, never one written in the
+boundary: CLAUDE.md's literal ban covers that directory, and a placeholder
+invented there would be the one hardcoded colour in the tree. Call sites that
+pass none get what react-native's Image gives them today.
+
+### THE GATE — BYTE IDENTITY AGAINST THIS RUN'S OWN CONTROL
+
+The control was rendered from a clean tree at `731ad61`, before any edit, with
+`node scripts/shots.mjs --build` over all sixteen targets. The gate re-rendered
+all sixteen after C4.
+
+**FOURTEEN OF SIXTEEN WERE BYTE-IDENTICAL ON THE FIRST GATE RENDER.** The two
+that were not are `worker-home-dark` and `worker-home-light`, and **the harness
+is nondeterministic on exactly those two targets, independently of anything
+this run did.** That was established BEFORE the first edit and again after C4:
+
+```
+before any edit, same export, no code change between renders:
+  render 1   worker-home-dark 8c1f9b48   worker-home-light 4c5787dd
+  render 2   worker-home-dark 629c75b9   worker-home-light b4733e3c
+
+after C4, same build:
+  worker-home-light   c442053e / b4733e3c / b4733e3c / 4c5787dd  <- the control hash
+  worker-home-dark    629c75b9 / 629c75b9 / 8c1f9b48             <- the control hash
+```
+
+**Both targets reproduce their CONTROL hash exactly from the post-C4 build**,
+which is the strongest available statement that nothing moved: it is the same
+bytes, from the changed code, on demand.
+
+What actually differs between the variants is **at most 7 pixels of 334 836,
+max channel delta 2, on two columns (x 175 and 177) of the worker summary
+card's gold centre glyph** — `(175,440) 62,55,38 → 64,55,39`. An antialiasing
+flicker, sub-visual, and it predates this run.
+
+```
+target                        control    gate       result
+customer-home-dark            c02ab9f3   c02ab9f3   identical
+customer-home-light           554c352d   554c352d   identical
+worker-home-dark              8c1f9b48   b6a7d3ca   flicker; control hash reproduced
+worker-home-light             4c5787dd   b4733e3c   flicker; control hash reproduced
+postjob-media-dark            99f13e71   99f13e71   identical
+postjob-media-light           86d8c369   86d8c369   identical
+postjob-location-dark         57a931aa   57a931aa   identical
+postjob-location-light        009a0853   009a0853   identical
+postjob-review-dark           5287e4c9   5287e4c9   identical
+postjob-review-light          ba364214   ba364214   identical
+postjob-budget-dialog-dark    c309702c   c309702c   identical
+postjob-budget-dialog-light   bfe8866b   bfe8866b   identical
+postjob-published-dark        de4ae740   de4ae740   identical
+postjob-published-light       f6e3e8a4   f6e3e8a4   identical
+workersearch-category-dark    95d60841   95d60841   identical
+workersearch-category-light   92d66a2f   92d66a2f   identical
+```
+
+**THE NEXT RUN SHOULD FIX THE HARNESS, NOT THE SCREEN.** Two targets that
+cannot be held byte-identical make the gate weaker than it reads: a real
+regression on worker Home would arrive looking exactly like this. The cause is
+worth finding — it is two columns of one glyph, so it is almost certainly a
+sub-pixel text layout race rather than app state.
+
+### Verification
+
+`npm run verify` exits 0 before every commit in this run.
+
+```
+base gate   1073 tests, 0 fail
+after C1    1074   (+1: the tree-wide expo-haptics sweep)
+after C2    1074
+after C3    1077   (+3: tests/blurBoundary.test.mjs)
+after C4    1079   (+2: tests/remoteImage.test.mjs)
+```
+
+No test was deleted, disabled, skipped or weakened. Four fences were redone
+because what they described genuinely moved, and each came out at least as
+strong:
+
+* `tests/voiceSearch.test.mjs` banned `onPressIn=` / `onPressOut=` anywhere in
+  SearchBar, to keep the retired press-and-HOLD dictation gone. C1 put press
+  feedback on that primitive's controls, so the names are back. The ban was
+  never the guarantee — the hold DESIGN was — so the fence now parses every
+  press handler in the file and requires each to be press feedback and nothing
+  else, and separately forbids the session being driven from either.
+* `tests/layout.test.mjs` and `tests/emeraldFences.test.mjs` — the
+  `tabBarBackground` ban, described under C3.
+* `tests/postJobPublish.test.mjs` pinned the template's default-glyph JSX
+  verbatim. The guarantee it makes is the `??` — a caller mark REPLACES the
+  glyph — and that is unchanged; the node it names is now the Animated.View
+  carrying the entrance, and a second assertion was added that a caller mark is
+  never given the template's own entrance.
+* `tests/chatDocuments.test.mjs` pinned ChatBubble's react-native import line
+  to confirm the spinner is `ActivityIndicator`. C4 took `Image` out of that
+  line; the line was updated and an assertion added that `RemoteImage` is
+  imported in its place.
+
+Nothing was pushed; no database was contacted; no SQL was executed; no image
+was opened for viewing; no dependency was added. `.gitignore`, `app.json` and
+`eas.json` are untouched.
+
+
+## The run before it — after the 2026-08-26 ground pass (RUN GROUND1)
 
 Three defects, one of which turned out not to exist. The atmosphere raster was
 banded and was believed to be far too bright; the nav pill sat in a flat
@@ -445,7 +743,7 @@ expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
 differ from build 7's.**
 
 
-## The run before it — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Two runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -643,7 +941,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## Two runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Three runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -731,7 +1029,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Three runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Four runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -916,7 +1214,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Four runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Five runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -1141,7 +1439,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Five runs back — after the 2026-08-25 three corrections (RUN H3)
+## Six runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -1316,7 +1614,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Six runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Seven runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -1585,7 +1883,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Seven runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Eight runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -1736,7 +2034,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Eight runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Nine runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -1797,7 +2095,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Nine runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Ten runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
