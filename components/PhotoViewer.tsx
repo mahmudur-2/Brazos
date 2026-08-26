@@ -311,6 +311,20 @@ export function PhotoViewer({
         {...panResponder.panHandlers}
       >
         {uri ? (
+          // RUN MOTION1 (C4) — THE ONE DELIBERATE EXCEPTION to routing remote
+          // photos through components/RemoteImage.tsx.
+          //
+          // This node is an `Animated.Image`: the viewer's pinch, pan and
+          // dismiss gestures drive its scale and translate directly, and
+          // `Animated.createAnimatedComponent` attaches those values to THIS
+          // element. Wrapping it in the shared boundary would put a plain node
+          // between the animated values and the picture, so the gestures would
+          // stop moving it.
+          //
+          // It also needs neither half of what the boundary adds: this is a
+          // full-screen viewer opened from a thumbnail that has already been
+          // fetched, so the bytes are in cache and there is no grey box to
+          // cross-fade out of.
           <Animated.Image
             source={{ uri }}
             resizeMode="contain"

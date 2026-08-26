@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Keyboard,
   Pressable,
   ScrollView as ScrollViewRN,
@@ -10,6 +9,7 @@ import {
   View,
   type ScrollView,
 } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { Button } from './Button';
@@ -337,7 +337,7 @@ export function ReviewSection({
             style={styles.photoScroll}
           >
             {existing.photos.map((url) => (
-              <Image key={url} source={{ uri: url }} style={styles.photo} />
+              <RemoteImage key={url} uri={url} style={styles.photo} />
             ))}
           </ScrollViewRN>
         )}
@@ -380,7 +380,7 @@ export function ReviewSection({
         >
           {photos.map((url) => (
             <View key={url} style={styles.photoWrap}>
-              <Image source={{ uri: url }} style={styles.photo} />
+              <RemoteImage uri={url} style={styles.photo} />
               <Pressable
                 style={styles.photoRemove}
                 onPress={() => removePhoto(url)}

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,6 +10,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
@@ -580,7 +580,7 @@ export function JobDetailScreen() {
                     accessibilityRole="imagebutton"
                     accessibilityLabel={`Open photo ${index + 1} of ${galleryPhotos.length}`}
                   >
-                    <Image source={{ uri: url }} style={styles.heroPhoto} resizeMode="cover" />
+                    <RemoteImage uri={url} style={styles.heroPhoto} contentFit="cover" />
                   </Pressable>
                 ))}
               </ScrollView>

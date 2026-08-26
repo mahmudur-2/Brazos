@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
@@ -598,7 +598,7 @@ export function ClientJobDetailScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Open posting photo"
                   >
-                    <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
+                    <RemoteImage uri={url} style={styles.beforeAfterPhoto} />
                   </Pressable>
                 ))}
               </ScrollView>
@@ -977,7 +977,7 @@ export function ClientJobDetailScreen() {
                           accessibilityRole="button"
                           accessibilityLabel="Open before photo"
                         >
-                          <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
+                          <RemoteImage uri={url} style={styles.beforeAfterPhoto} />
                         </Pressable>
                       ))}
                     </ScrollView>
@@ -1016,7 +1016,7 @@ export function ClientJobDetailScreen() {
                           accessibilityRole="button"
                           accessibilityLabel="Open finished work photo"
                         >
-                          <Image source={{ uri: url }} style={styles.beforeAfterPhoto} />
+                          <RemoteImage uri={url} style={styles.beforeAfterPhoto} />
                         </Pressable>
                       ))}
                     </ScrollView>

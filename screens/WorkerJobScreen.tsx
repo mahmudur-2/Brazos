@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
@@ -533,7 +533,7 @@ export function WorkerJobScreen() {
                   {donePhotos.map((url) => (
                     <View key={url} style={styles.photoWrap}>
                       <Pressable onPress={() => setViewerUri(url)}>
-                        <Image source={{ uri: url }} style={styles.photo} />
+                        <RemoteImage uri={url} style={styles.photo} />
                       </Pressable>
                       <Pressable
                         style={styles.photoRemove}
@@ -596,7 +596,7 @@ export function WorkerJobScreen() {
                     >
                       {completionPhotosOf(job).map((url) => (
                         <Pressable key={url} onPress={() => setViewerUri(url)}>
-                          <Image source={{ uri: url }} style={styles.donePhoto} />
+                          <RemoteImage uri={url} style={styles.donePhoto} />
                         </Pressable>
                       ))}
                     </ScrollView>

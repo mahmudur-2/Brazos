@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../../components/RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { useModePerspective } from '../../modes';
 import {
@@ -136,10 +137,10 @@ export function JobCard({
       >
       <View style={styles.row}>
         {showImage ? (
-          <Image
-            source={{ uri: thumbUrl }}
+          <RemoteImage
+            uri={thumbUrl}
             style={styles.thumb}
-            resizeMode="cover"
+            contentFit="cover"
             onError={() => setImageFailed(true)}
             accessible
             accessibilityLabel={`Photo for ${job.title}`}

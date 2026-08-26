@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -249,7 +249,7 @@ export function ProfileReviewsScreen() {
                     >
                       {/* Thumbnail size only — the full-resolution image is
                           loaded once, in the viewer, on demand. */}
-                      <Image source={{ uri: url }} style={styles.photo} />
+                      <RemoteImage uri={url} style={styles.photo} />
                     </Pressable>
                   ))}
                 </ScrollView>

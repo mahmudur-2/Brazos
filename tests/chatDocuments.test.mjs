@@ -954,7 +954,15 @@ test('[static] the working bubble swaps its glyph for a spinner and takes a toke
     /\{documentBusy \? \(\s*<ActivityIndicator[\s\S]*?\) : \(\s*<Ionicons/,
     'the spinner replaces the glyph rather than joining it'
   );
-  assert.match(bubble, /import \{ ActivityIndicator, Pressable, Image, StyleSheet, Text, View \} from 'react-native';/);
+  // RUN MOTION1 (C4) took `Image` out of this line: the bubble's quote thumb
+  // and its photo are remote, so both moved onto components/RemoteImage.tsx.
+  // What this line asserts is unchanged — the spinner is react-native's own
+  // ActivityIndicator rather than something drawn here.
+  assert.match(
+    bubble,
+    /import \{ ActivityIndicator, Pressable, StyleSheet, Text, View \} from 'react-native';/
+  );
+  assert.match(bubble, /import \{ RemoteImage \} from '\.\/RemoteImage';/);
 
   // D8 — the indicator takes an existing palette token, never a literal.
   assert.match(branch, /color=\{isOwn \? colors\.onPrimary : colors\.primary\}/);

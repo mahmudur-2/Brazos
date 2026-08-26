@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
-  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
@@ -349,8 +349,8 @@ export function PortfolioPicker({
                   onPress={() => handlePick(c)}
                   style={styles.gridItem}
                 >
-                  <Image
-                    source={{ uri: c.photoUrl }}
+                  <RemoteImage
+                    uri={c.photoUrl}
                     style={[styles.gridPhoto, already && styles.gridPhotoUsed]}
                   />
                   {already && (
@@ -398,8 +398,8 @@ export function PortfolioPicker({
                   </Pressable>
                 </View>
 
-                <Image
-                  source={{ uri: selected ? selected.photoUrl : editingItem!.photo_url }}
+                <RemoteImage
+                  uri={selected ? selected.photoUrl : editingItem!.photo_url}
                   style={styles.detailPhoto}
                 />
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { Card } from './Card';
@@ -86,10 +87,10 @@ export function HubCard({
 
       <View style={styles.headerRow}>
         {showImage ? (
-          <Image
-            source={{ uri: thumbnailUrl! }}
+          <RemoteImage
+            uri={thumbnailUrl!}
             style={styles.thumb}
-            resizeMode="cover"
+            contentFit="cover"
             onError={() => setImageFailed(true)}
             accessible
             accessibilityLabel={`Photo for ${title}`}

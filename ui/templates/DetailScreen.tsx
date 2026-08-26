@@ -1,4 +1,5 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
@@ -82,7 +83,7 @@ export function DetailScreen({
             {media ? (
               <View style={styles.media}>{media}</View>
             ) : mediaUri ? (
-              <Image source={{ uri: mediaUri }} style={styles.hero} resizeMode="cover" />
+              <RemoteImage uri={mediaUri} style={styles.hero} contentFit="cover" />
             ) : null}
 
             {sections.map((section, index) => (

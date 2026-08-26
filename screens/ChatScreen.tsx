@@ -2,13 +2,13 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Keyboard,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   useFocusEffect,
@@ -1908,7 +1908,7 @@ export function ChatScreen() {
                     </Text>
                   </View>
                   {replyTo.image_url ? (
-                    <Image source={{ uri: replyTo.image_url }} style={styles.replyThumb} />
+                    <RemoteImage uri={replyTo.image_url} style={styles.replyThumb} />
                   ) : null}
                   <Pressable
                     onPress={() => setReplyTo(null)}

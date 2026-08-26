@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from './Card';
 import { useAuth } from '../hooks/useAuth';
@@ -74,10 +75,10 @@ export function BrowseJobCard({
     <Card onPress={onPress} style={styles.card}>
       <View style={styles.row}>
         {showImage ? (
-          <Image
-            source={{ uri: thumbUrl }}
+          <RemoteImage
+            uri={thumbUrl}
             style={styles.thumb}
-            resizeMode="cover"
+            contentFit="cover"
             onError={() => setImageFailed(true)}
             accessible
             accessibilityLabel={`Photo for ${job.title}`}

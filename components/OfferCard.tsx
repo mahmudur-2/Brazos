@@ -1,4 +1,5 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { Button } from './Button';
@@ -429,7 +430,7 @@ function OfferThreadCard({
         {photos.length > 0 || videos.length > 0 ? (
           <View style={styles.mediaRow}>
             {photos.slice(0, 3).map((url) => (
-              <Image key={url} source={{ uri: url }} style={styles.mediaThumb} />
+              <RemoteImage key={url} uri={url} style={styles.mediaThumb} />
             ))}
             {videos.length > 0 && (
               <View style={[styles.mediaThumb, styles.videoThumb]}>

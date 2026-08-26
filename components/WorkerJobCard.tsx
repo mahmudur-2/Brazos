@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from './Chip';
 import { Skeleton } from './Skeleton';
@@ -106,10 +107,10 @@ export function WorkerJobCard({
       accessibilityLabel={job.title}
     >
       {showImage ? (
-        <Image
-          source={{ uri: thumbUrl }}
+        <RemoteImage
+          uri={thumbUrl}
           style={[styles.thumb, isDark && styles.thumbDark]}
-          resizeMode="cover"
+          contentFit="cover"
           onError={() => setImageFailed(true)}
           accessible
           accessibilityLabel={`Photo for ${job.title}`}

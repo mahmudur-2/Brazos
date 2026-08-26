@@ -1,4 +1,5 @@
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
@@ -124,7 +125,7 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
                         contentContainerStyle={styles.mediaRow}
                       >
                         {job.photos.map((url) => (
-                          <Image key={url} source={{ uri: url }} style={styles.mediaPhoto} />
+                          <RemoteImage key={url} uri={url} style={styles.mediaPhoto} />
                         ))}
                       </ScrollView>
                     ) : null}

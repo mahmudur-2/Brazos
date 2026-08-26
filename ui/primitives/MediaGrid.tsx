@@ -1,4 +1,5 @@
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../../components/RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { radius, spacing, withAlpha, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
@@ -60,7 +61,7 @@ export function MediaGrid({
         const isVideo = item.kind === 'video';
         const tile = (
           <>
-            <Image source={{ uri: item.uri }} style={styles.image} resizeMode="cover" />
+            <RemoteImage uri={item.uri} style={styles.image} contentFit="cover" />
             {isVideo ? (
               <View style={styles.videoBadge}>
                 <Ionicons name="play" size={12} color={colors.onForest} />

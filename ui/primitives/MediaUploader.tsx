@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from '../../components/RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -257,7 +258,7 @@ export function MediaUploader({
               style={styles.thumb}
             >
               {kind === 'photo' ? (
-                <Image source={{ uri: url }} style={styles.thumb} resizeMode="cover" />
+                <RemoteImage uri={url} style={styles.thumb} contentFit="cover" />
               ) : (
                 <VideoTile uri={url} durationMs={durationsRef.current.get(url) ?? null} />
               )}

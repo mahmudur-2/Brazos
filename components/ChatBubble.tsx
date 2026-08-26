@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, Image, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { AvatarPressable } from './AvatarPressable';
 import { MessageTicks } from './MessageTicks';
@@ -135,7 +136,7 @@ export function ChatBubble({
                     </Text>
                   </View>
                   {replyTo.image_url ? (
-                    <Image source={{ uri: replyTo.image_url }} style={styles.quoteThumb} />
+                    <RemoteImage uri={replyTo.image_url} style={styles.quoteThumb} />
                   ) : null}
                 </View>
               )}
@@ -150,7 +151,7 @@ export function ChatBubble({
                   onLongPress={onLongPress}
                   delayLongPress={350}
                 >
-                  <Image source={{ uri: message.image_url }} style={styles.image} />
+                  <RemoteImage uri={message.image_url} style={styles.image} />
                 </Pressable>
               ) : null}
               {message.audio_url ? (

@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { RemoteImage } from '../components/RemoteImage';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
@@ -373,7 +374,7 @@ export function ApproveOrDisputeScreen() {
                     accessibilityRole="button"
                     accessibilityLabel="Open finished work photo"
                   >
-                    <Image source={{ uri: url }} style={styles.mediaPhoto} />
+                    <RemoteImage uri={url} style={styles.mediaPhoto} />
                   </Pressable>
                 ))}
               </ScrollView>

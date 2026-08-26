@@ -1,4 +1,5 @@
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { fonts, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { getInitials } from '../lib/profiles';
 
@@ -27,7 +28,7 @@ export function Avatar({ name, uri, size = 44 }: AvatarProps) {
   };
 
   if (uri) {
-    return <Image source={{ uri }} style={[styles.image, dimension, ring]} />;
+    return <RemoteImage uri={uri} style={[styles.image, dimension, ring]} />;
   }
 
   return (

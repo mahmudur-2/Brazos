@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -898,10 +899,10 @@ function OpenJobCard({
     >
       <View style={styles.jobBody}>
         {showThumb ? (
-          <Image
-            source={{ uri: thumbUrl }}
+          <RemoteImage
+            uri={thumbUrl}
             style={styles.jobThumb}
-            resizeMode="cover"
+            contentFit="cover"
             onError={() => setThumbFailed(true)}
           />
         ) : (

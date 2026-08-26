@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import { Card } from './Card';
@@ -185,7 +185,7 @@ export function PastWork({
                 {visible.map((item) => (
                   <View key={item.id} style={styles.tile}>
                     <Pressable onPress={() => setViewerUri(item.photo_url)}>
-                      <Image source={{ uri: item.photo_url }} style={styles.photo} />
+                      <RemoteImage uri={item.photo_url} style={styles.photo} />
                     </Pressable>
 
                     {editable && (
