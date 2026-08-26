@@ -43,7 +43,205 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Current state — after the 2026-08-25 lit-surface pass (RUN LIT1)
+
+Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
+135° diagonal, and a faint bright edge along the top of the pill. The app drew
+both as flat fills. This run measured that gap, built the surface, and measured
+again. **Dark now carries the wash; light did not move by a single byte.**
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`c258e38`|`scripts/master-diff.mjs`; `scripts/home-diff.mjs` became a shim over it|
+|C2|`3d1bc77`|`ui/primitives/LitSurface.tsx` + its fence|
+|C3|`12ad521`|the promo card and the pill render lit in dark|
+|C4|(this file)|the handoff|
+
+### The tool
+
+    node scripts/master-diff.mjs --render <png> --master <png>
+    node scripts/master-diff.mjs --master-inset 59 --render-inset 0
+
+Everything `home-diff` measured (outlined boxes, ink bands, the resampled
+difference summary) plus a COLOUR pass: for each outlined control it samples
+7x7px patches at 10% and 90% along the top-left→bottom-right diagonal, reports
+each patch's median sRGB and relative luminance for both images, and reports
+the diagonal luminance delta. Defaults are unchanged, output is stdout only.
+
+`scripts/home-diff.mjs` is now a thin shim over it — the same arrangement
+`home-shots.mjs` has over `shots.mjs` — and its output is **byte-identical**:
+run before C1 and after C1 on the same two inputs, both were md5
+`24c60bdfcfb9511b54680b3d31211db5`. The colour pass is off for it, because a
+section it never printed would be a behaviour change.
+
+Three things the colour pass has to get right, all of them learned the hard way
+on the first run of it:
+
+* **It samples the fill, not the border.** Patch centres sit on the diagonal of
+  the box inset by a 2pt hairline allowance plus half a patch.
+* **It refuses to measure type.** Ink is detected by luminance SPREAD, not by
+  threshold: a flat fill and a slow gradient both sit under one unit of standard
+  deviation over 49 adjacent pixels, and an edge does not. A rejected patch
+  steps inward along the diagonal until clean. That is why the card's 10% sample
+  reports t = 0.15/0.16 — it steps past the "FASTEST WAY TO START" eyebrow.
+* **It steps around a NESTED control.** The pill sits at the bottom of the card,
+  so the card's own diagonal at 90% lands inside the pill — in both images. The
+  ink test cannot catch that: a flat pill fill has a spread of zero and reads as
+  perfectly clean surface. It just is not the surface being asked about. Without
+  this the card's "delta" was its top-left against the PILL, and the first
+  measurement said −20.87 instead of +2.29. That is the number a calibration
+  would have chased.
+
+A control found in only one image is PROJECTED into the other through
+content-relative points and labelled `projected` — which is not an edge case
+here: dark's pill sets `borderColor: 'transparent'`, so the edge pass could not
+see it in the render at all until C3 gave it a top edge.
+
+### BASELINE — the control render, before any change
+
+The control is the second of two `--build` renders; the first was cold-cache
+because DEPS1 had just changed `node_modules`, and the two came out
+byte-identical anyway (dark `1a539872…`, light `09e12988…`), so no third render
+was needed.
+
+| control | image | bounds | t | median | Y | sd | ink |
+|-|-|-|-|-|-|-|-|
+|promo card|master|edges|0.15|`#081611`|18.66|2.43|no|
+|promo card|master|edges|0.62|`#08130F`|16.37|0.78|no|
+|promo card|render|edges|0.16|`#0A1813`|20.66|0.00|no|
+|promo card|render|edges|0.61|`#0A1813`|20.66|0.00|no|
+|CTA|master|edges|0.10|`#1A3526`|46.18|0.76|no|
+|CTA|master|edges|0.90|`#172D21`|39.46|0.58|no|
+|CTA|render|**projected**|0.10|`#0D6B52`|85.21|0.00|no|
+|CTA|render|**projected**|0.90|`#0D6B52`|85.21|0.00|no|
+
+| control | master delta | render delta | render − master |
+|-|-|-|-|
+|promo card|**+2.29**|0.00|−2.29|
+|CTA|**+6.72**|0.00|−6.72|
+
+The render read the SAME hex at both ends of both controls. That is what "flat"
+looks like as a number, and it is the whole finding.
+
+Ground, from the blank band above the search pill: master `#020E0C` (Y 11.30)
+against render `#000707` (Y 5.51) — the harness's ground is darker than the
+master's. Recorded, not acted on; it is not this run's item.
+
+### AFTER — the post-commit render
+
+Rendered after C3 landed. Commit `12ad521` at `2026-08-25T22:58:51-04:00`; the
+PNGs are `22:59:12` (dark) and `22:59:15` (light), so both postdate it.
+
+| control | image | bounds | t | median | Y | sd | ink |
+|-|-|-|-|-|-|-|-|
+|promo card|master|edges|0.15|`#081611`|18.66|2.43|no|
+|promo card|master|edges|0.62|`#08130F`|16.37|0.78|no|
+|promo card|render|edges|0.16|`#0D1D17`|25.17|0.30|no|
+|promo card|render|edges|0.63|`#0B1A15`|22.45|0.37|no|
+|CTA|master|edges|0.10|`#1A3526`|46.18|0.76|no|
+|CTA|master|edges|0.90|`#172D21`|39.46|0.58|no|
+|CTA|render|**edges**|0.10|`#167358`|93.28|0.46|no|
+|CTA|render|**edges**|0.90|`#0E6C52`|86.14|0.43|no|
+
+| control | master delta | render delta | error | within ±40%? | sign |
+|-|-|-|-|-|-|
+|promo card|+2.29|**+2.72**|**+18.8%**|yes|same|
+|CTA|+6.72|**+7.14**|**+6.25%**|yes|same|
+
+**Both matched on the first iteration; the second allowed iteration was not
+needed.** The pill's `bounds` column moving from `projected` to `edges` is
+independent evidence that the 1pt top edge actually rendered on web: the edge
+pass now finds a horizontal hairline there that did not exist in the control.
+Its detected WIDTH still snaps to the card's side borders, because the pill
+still has none — both sample points land inside the pill regardless, at x 59.2
+and x 332.8 against a pill spanning x 36..357.
+
+### The alphas, and why they are not preferences
+
+`LitSurface`'s wash composites to an effective overlay opacity of
+`alpha x (1 - g)` at gradient fraction `g`, and luminance is linear in RGB, so
+`delta = alpha x (g90 - g10) x (Y_lift - Y_surface)`. Each alpha below is that
+equation solved for the master's own delta, then confirmed on a fresh render.
+
+| constant | value | solved from | predicted | measured |
+|-|-|-|-|-|
+|`CARD_LIFT_ALPHA`|**0.04**|2.29 / (0.433 x 133.29)|2.31|**2.72**|
+|`CTA_LIFT_ALPHA`|**0.13**|6.72 / (0.752 x 68.74)|6.72|**7.14**|
+|`CTA_EDGE_ALPHA`|**0.38**|the master's own edge row|116.7|not in the delta criterion|
+
+`emerald` is the lift colour for both. The master's lift is green-weighted — its
+pill rises +3/+8/+5 across R/G/B between the 90% and 10% patches, which is a
+consistent ~0.05 of emerald and is NOT what a cream lift does (a cream lift
+would need 0.014 of R and 0.042 of G to explain the same rise).
+
+`CTA_EDGE_ALPHA` is anchored rather than calibrated, and the difference is worth
+being explicit about. The master's pill edge row peaks at luminance 117.2 over a
+46.5 fill; 0.38 of emerald over the app pill's lit top lands at 116.7, so the
+ABSOLUTE value transfers. The CONTRAST does not and cannot: dark's pill is
+LIGHT's green by operator decision (RUN H2, fenced in
+`tests/emeraldFences.test.mjs`), so its fill sits at Y 93 where the master's
+sits at 46. Matching the master's edge-to-fill ratio would mean over-fitting a
+colour the operator chose. The diagonal-delta criterion does not cover this
+number and this run does not claim it does.
+
+### LIGHT DID NOT MOVE — the byte-identity proof
+
+    control-light.png   09e129883311f85acf4771d883e3731f
+    post-C3 light       09e129883311f85acf4771d883e3731f
+
+Identical md5, twice: once on the iteration-1 render and again on the
+post-commit render. The mechanism is that `flat` costs literally nothing —
+`litFill()` returns `undefined`, React Native drops `undefined` from a style
+array, and `LitSurface` in flat mode renders the same single `<View style={…}>`
+the card always had. No style key, no extra node, no pixel. The pill keeps its
+`Pressable` and takes the fill into its own style array for exactly this
+reason: an absolutely-positioned highlight child would have been a DOM node in
+light as well as dark.
+
+### What LitSurface is
+
+`ui/primitives/LitSurface.tsx`, exported from the barrel with `litFill` and
+`litGradient`. A View whose fill is a 135° CSS gradient string, set through
+`experimental_backgroundImage` on native (a real, typed View style in RN 0.81 —
+no cast needed) and `backgroundImage` on web (react-native-web forwards it to
+CSS; its own CheckBox is styled that way, and the single cast in the file is
+there because RN's `ViewStyle` has no such key).
+
+**The web branch is not a nicety.** `scripts/shots.mjs` renders the web export,
+and that render is the only instrument this repo has for looking at a change. A
+native-only gradient would have left every number above unmeasurable while the
+source still looked correct.
+
+The 1pt top edge is a SECOND gradient layer on the same string — first, so
+topmost, hard-stopped at 1px — rather than a child View, for the byte-identity
+reason above. RN 0.81's `splitGradients` is depth-aware, so multiple
+comma-separated gradients and `rgba(r,g,b,a)` stops both survive its parser.
+
+Every stop is a palette token through `withAlpha`; no colour is written in the
+file, and `tests/litSurface.test.mjs` fails on a hex parked even in a comment.
+
+### Verification
+
+`npm run verify` exits 0 at BASELINE, after C1, after C2 and after C3.
+
+| point | tests | pass | fail | skipped |
+|-|-|-|-|-|
+|BASELINE|1072|1072|0|0|
+|after C1|1072|1072|0|0|
+|after C2|**1073**|**1073**|0|0|
+|after C3|1073|1073|0|0|
+
+The one added test is `tests/litSurface.test.mjs`. No test was deleted,
+disabled, skipped or weakened, and no existing fence needed changing — the H2
+pill fence and the H24/H25 card fences all read StyleSheet entries this run did
+not touch, because the lit fill arrives as a prop and a style-array entry rather
+than as an edit to `heroCard`/`heroButton`.
+
+Nothing was pushed; no database was contacted; no SQL was executed; no archive
+work was done. The one image read was
+`docs/mockups/44_customer_home_dark.png`, as script input only.
+
+## The run before it — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -131,7 +329,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## The run before it — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Two runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -316,7 +514,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Two runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Three runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -541,7 +739,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Three runs back — after the 2026-08-25 three corrections (RUN H3)
+## Four runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -716,7 +914,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Four runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Five runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -985,7 +1183,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Five runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Six runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -1136,7 +1334,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Six runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Seven runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -1197,7 +1395,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Seven runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Eight runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
