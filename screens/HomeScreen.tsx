@@ -47,8 +47,39 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { SearchBar } from '../ui/primitives';
+import { litFill, LitSurface, SearchBar } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+
+// lit(3) — THE TWO ALPHAS ARE MEASUREMENTS, NOT PREFERENCES.
+//
+// Master 44 lights the promo card and the Post-a-job pill along a 135° axis;
+// the app drew both flat. `node scripts/master-diff.mjs` reports each control's
+// DIAGONAL LUMINANCE DELTA — the median luminance of a clean 7x7 patch at 10%
+// along its top-left→bottom-right diagonal, minus the one at 90% — and on the
+// control render both read exactly 0.00 against the master's +2.29 (card) and
+// +6.72 (pill).
+//
+// Each number below is the alpha that reproduces its master's delta, solved
+// rather than guessed. `LitSurface`'s wash composites to an effective overlay
+// opacity of alpha x (1 - g) at gradient fraction g, and luminance is linear in
+// RGB, so delta = alpha x (g90 - g10) x (Y_lift - Y_surface) — and the tool
+// then confirms the prediction on a fresh render.
+//
+//   card  (g90-g10 = 0.433, emerald 153.95 over surface 20.66)  2.29 / 57.7
+//   pill  (g90-g10 = 0.752, emerald 153.95 over pill    85.21)  6.72 / 51.7
+//
+// `emerald` is the lift in both because the master's own lift is green-weighted
+// — its pill rises +3/+8/+5 in R/G/B, which a cream lift cannot do and emerald
+// at ~0.05 does.
+const CARD_LIFT_ALPHA = 0.04;
+const CTA_LIFT_ALPHA = 0.13;
+// The pill's 1pt top edge. Anchored on the master's own edge row, which peaks
+// at luminance 117.2 over a 46.5 fill: 0.38 of emerald over the pill's lit top
+// lands at 116.7. Only the ABSOLUTE value transfers — the app's pill is light's
+// green by operator decision (RUN H2) and therefore much brighter than the
+// master's, so the edge-to-fill CONTRAST cannot match without over-fitting a
+// colour the operator chose. Not covered by the delta criterion above.
+const CTA_EDGE_ALPHA = 0.38;
 
 // Light keeps the approved Heritage brand crops; dark renders the Prestige
 // master-44 artwork (assets/prestige is dark-only by standing decision).
@@ -648,7 +679,13 @@ export function HomeScreen() {
               2026-08-23: light is the SAME design in the light palette, not a
               second design — its pill was a solid white fill with an invisible
               ring, and is now the outlined treatment dark draws. */}
-          <View style={[styles.heroCard, isDark && styles.heroCardDark]}>
+          <LitSurface
+            style={[styles.heroCard, isDark && styles.heroCardDark]}
+            surface={colors.surface}
+            lift={colors.emerald}
+            liftAlpha={CARD_LIFT_ALPHA}
+            flat={!isDark}
+          >
             <View style={styles.heroBody}>
               {/* Parity 2026-08-22: one copy column, reserved from the B
                   drape's own computed width in both themes (home(2)). */}
@@ -670,6 +707,20 @@ export function HomeScreen() {
                     minHeight: design.ctaHeight,
                     borderRadius: design.ctaRadius,
                   },
+                  // The pill is a Pressable, so it cannot BECOME a LitSurface
+                  // without losing its press target — it takes the same lit
+                  // fill through the same one implementation instead. In light
+                  // `flat` returns undefined, which React Native drops from a
+                  // style array: no key, no node, no pixel, which is what keeps
+                  // the light render byte-identical.
+                  litFill({
+                    surface: colors.postPillGreen,
+                    lift: colors.emerald,
+                    liftAlpha: CTA_LIFT_ALPHA,
+                    highlight: true,
+                    highlightAlpha: CTA_EDGE_ALPHA,
+                    flat: !isDark,
+                  }),
                   pressed && styles.heroButtonPressed,
                 ]}
                 accessibilityRole="button"
@@ -686,7 +737,7 @@ export function HomeScreen() {
               resizeMode="contain"
               accessibilityIgnoresInvertColors
             />
-          </View>
+          </LitSurface>
 
           <View style={styles.section}>
             <View style={styles.liveNearbyHeader}>
