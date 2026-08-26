@@ -38,10 +38,10 @@ const HOME_ATMOSPHERE = require('../assets/prestige/home-atmosphere-dark.png');
  * one percent of the width; the mode is chosen for the rule, not for that
  * number, and a future artwork of any shape still fills the screen.
  *
- * WHAT IT CARRIES — RE-MEASURED 2026-08-25, AND THE NUMBERS THAT USED TO STAND
- * HERE DESCRIBED A DIFFERENT FILE. This docblock claimed a size this raster has
- * never had, and a vignette of 3.7 in the corners against 20.1 in the middle.
- * The centre of the file on disk reads 21.86 — while
+ * WHAT IT CARRIES — RE-MEASURED 2026-08-25 AFTER RUN GROUND1 REWROTE THE FILE,
+ * AND THE NUMBERS THAT USED TO STAND HERE DESCRIBED A DIFFERENT FILE. This
+ * docblock once claimed a size this raster has never had, and a vignette of 3.7
+ * in the corners against 20.1 in the middle — while
  * assets/prestige/hero_armchair_customer.png measures 4.66 against 20.12 under
  * the identical probe. The retired numbers were the HERO's, not this layer's, so
  * they are replaced rather than carried forward, and the exact figures they
@@ -50,24 +50,40 @@ const HOME_ATMOSPHERE = require('../assets/prestige/home-atmosphere-dark.png');
  * tests/emeraldFences.test.mjs now fails on any size named here that is not
  * this file's own.
  *
- * The measurement below is re-derivable: Rec.601 luma over four corner boxes of
- * 10% of each dimension (129x280), against one 129x280 box centred in the frame.
+ * The measurement below is re-derivable — `node scripts/master-diff.mjs --asset
+ * assets/prestige/home-atmosphere-dark.png` prints exactly it — and is Rec.601
+ * luma over four corner boxes of 10% of each dimension (129x280), against one
+ * 129x280 box centred in the frame.
  *
- *   corners   4.51 / 4.64 / 3.12 / 5.53   mean 4.45
- *   centre    21.86
- *   lift      4.91x
- *   frame     mean 11.23, min 0.70, max 53.13
+ *   corners   4.55 / 4.68 / 3.16 / 4.97   mean 4.34
+ *   centre    21.87
+ *   lift      5.04x
+ *   frame     mean 11.10, min 0.11, max 53.24
+ *   banding   14 plateaus longer than 8px down the centre column
  *
  * So: a real vignette, and dark throughout. Master 44's own ground is not flat
  * either (its side gutters run 0.0 to 6.4 rather than sitting on one value),
- * which is what this layer is for. It is still STRONGER than the master's: the
- * master's gutters average about 3.4 where this layer's outer 5% of columns
- * read 8.88 left and 7.67 right, a mean of 8.27. It is left alone anyway — the
- * only ways to close that gap are editing the raster's bytes or lowering the
- * layer's opacity, and lowering opacity blends towards `homeBackground`
- * (#02110D, luminance 13.5), which would make the gutters BRIGHTER. The palette
- * is frozen and the raster is not ours to repaint, so the difference is
- * recorded here rather than chased.
+ * which is what this layer is for.
+ *
+ * WHAT RUN GROUND1 CHANGED IN THE FILE, AND WHAT IT DELIBERATELY DID NOT. The
+ * raster was rewritten once by scripts/atmosphere-tune.mjs, which is where the
+ * transform and its constants live. Two things happened. Every pixel was
+ * dithered by ±1 per channel, taking the banding metric from 33 plateaus to 14
+ * against master 44's own 44, at a cost of 3333006 -> 4081860 bytes. And ONE
+ * region was darkened: `node scripts/master-diff.mjs --ground` measured the
+ * same normalised patch in this app's render and in master 44 and found the
+ * render at or BELOW the master at three of the four ground positions it could
+ * measure, and above it at one — the lower right gutter, by 1.57/255. That
+ * region alone was scaled by 0.8628 behind a smooth falloff. Nothing else
+ * moved: the centre box reads 21.711 before and after, and the left gutter
+ * 7.595 -> 7.605.
+ *
+ * The claim that used to stand here — that this layer is "STRONGER than the
+ * master's" because its outer columns average 8.27 against the master's 3.4 —
+ * put a whole-column average next to a differently placed patch, which is the
+ * same mistake as calling the layer 4.9x too bright by reading its centre
+ * against the master's gutters. It is retired with the measurement that
+ * replaced it.
  */
 export function HomeAtmosphere() {
   const { isDark } = useThemeColors();

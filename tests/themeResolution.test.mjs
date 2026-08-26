@@ -473,10 +473,18 @@ const BAKED_ART = {
   'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
   // is the strongest case on the roster — this one is genuinely still baked
-  // (RGB, no alpha channel at all, 1080x2335 of dark room), it is full-bleed
+  // (RGB, no alpha channel at all, 1290x2796 of dark room), it is full-bleed
   // rather than a corner crop, and it is mounted by a component rather than by
   // the screen, so nothing on the screen itself would show the mistake.
   // components/HomeAtmosphere.tsx returns null under the light palette.
+  //
+  // RUN GROUND1 REWROTE THE PIXELS and the bake did not move: still colour
+  // type 2, still 1290x2796, still no alpha channel, so the opaque branch of
+  // the sweep below measures it exactly as it always did. What changed is
+  // inside the frame — a ±1 dither over the whole raster and one darkened
+  // region in the lower right gutter — and scripts/atmosphere-tune.mjs is the
+  // record of it. The 1080x2335 this comment used to name was never this
+  // file's size; it is corrected here rather than carried forward.
   'assets/prestige/home-atmosphere-dark.png': { bake: 'opaque-dark', gate: true },
   // GONE 2026-08-23 — the Heritage armchair. It was the LIGHT-only hero (RGBA,
   // 62.81% fully transparent, a stem-less rosette and a whole chair on
