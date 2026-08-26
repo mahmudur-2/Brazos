@@ -201,6 +201,47 @@ const POST_STEPS = [
 const PUBLISH_CARD_LIFT_ALPHA = 0.04;
 
 /**
+ * RUN PJ1 (C2b) — FIRST-FIT-DECREASING PACKING OF THE CATEGORY PILLS.
+ *
+ * The pills keep their natural content width and the row keeps its uniform
+ * gap; only the RENDER ORDER changes, so flexWrap fills each row as fully as
+ * first-fit-decreasing gets it instead of leaving large dead ends. Computed
+ * once from real measured widths, deterministic (widths sort descending with
+ * the source order as the tiebreak). "Other" never participates — it renders
+ * last regardless of fit, because C3 gives it the category sheet.
+ *
+ * Flattening the packed rows re-wraps identically under flexWrap: every
+ * row's prefix fits by construction, and a row's first item was placed there
+ * precisely because no earlier row had room for it at the time — and earlier
+ * rows only ever grew. The half-point epsilon absorbs sub-pixel layout noise;
+ * at worst it wraps one pill a row early, which is still a legal layout.
+ */
+function packCategoryChips(
+  widths: ReadonlyMap<JobCategory, number>,
+  rowWidth: number,
+  gap: number
+): JobCategory[] {
+  const packable = JOB_CATEGORIES.filter((c) => c !== 'other');
+  const sorted = [...packable].sort(
+    (a, b) =>
+      (widths.get(b) ?? 0) - (widths.get(a) ?? 0) ||
+      packable.indexOf(a) - packable.indexOf(b)
+  );
+  const rows: { used: number; items: JobCategory[] }[] = [];
+  for (const c of sorted) {
+    const w = widths.get(c) ?? 0;
+    const row = rows.find((r) => r.used + gap + w <= rowWidth - 0.5);
+    if (row) {
+      row.items.push(c);
+      row.used += gap + w;
+    } else {
+      rows.push({ used: w, items: [c] });
+    }
+  }
+  return [...rows.flatMap((r) => r.items), 'other'];
+}
+
+/**
  * RUN PJ1 (C1) — EVERY STEP CHANGE ANIMATES ITS INCOMING CONTENT.
  *
  * The wizard's steps are internal renders keyed off the `step` state, not
@@ -324,6 +365,22 @@ export function PostJobScreen() {
   // The amount an offer is about to be sent at, held while the confirmation
   // is open. Null means nothing is pending.
   const [confirmOfferCents, setConfirmOfferCents] = useState<number | null>(null);
+
+  // C2b — the category pills' one-time measurement. Widths land from a
+  // hidden measurement pass; the visible row stays invisible (a plain style,
+  // not an animation) until the packed order exists, so no reorder is ever
+  // displayed. The order then persists for the life of the screen — step
+  // revisits render it directly with no second measurement.
+  const chipWidthsRef = useRef<Map<JobCategory, number>>(new Map());
+  const [chipMeasureCount, setChipMeasureCount] = useState(0);
+  const [chipsWidth, setChipsWidth] = useState(0);
+  const [chipOrder, setChipOrder] = useState<readonly JobCategory[] | null>(null);
+
+  useEffect(() => {
+    if (chipOrder != null || chipsWidth <= 0) return;
+    if (JOB_CATEGORIES.some((c) => !chipWidthsRef.current.has(c))) return;
+    setChipOrder(packCategoryChips(chipWidthsRef.current, chipsWidth, spacing.sm));
+  }, [chipMeasureCount, chipsWidth, chipOrder]);
 
   const successScale = useRef(new Animated.Value(0.4)).current;
   const reducedMotion = useReducedMotion();
@@ -1108,10 +1165,18 @@ export function PostJobScreen() {
           {step === 0 && (
             <View style={styles.field}>
               <Text style={styles.fieldLabel}>Category</Text>
-              <View style={styles.chips}>
+              <View
+                style={[styles.chips, chipOrder == null && styles.chipsMeasuring]}
+                onLayout={(event) => setChipsWidth(event.nativeEvent.layout.width)}
+              >
                 {/* D2: the saturated per-category palette is retired in dark
                     wherever a category is drawn. Light keeps it. */}
-                {JOB_CATEGORIES.map((c) => (
+                {/* C2a — tapping the selected pill again deselects it, back to
+                    the pristine no-category state (Continue then refuses with
+                    the same "Complete this step" alert it always used). C2b —
+                    the packed order once measured; source order, invisible,
+                    for the frame or two before. */}
+                {(chipOrder ?? JOB_CATEGORIES).map((c) => (
                   <Chip
                     key={c}
                     label={JOB_CATEGORY_LABELS[c]}
@@ -1119,10 +1184,38 @@ export function PostJobScreen() {
                     accentColor={isDark ? colors.gold : categoryAccent(c).bg}
                     variant="filter"
                     selected={category === c}
-                    onPress={() => setCategory(c)}
+                    onPress={() => setCategory(category === c ? null : c)}
                   />
                 ))}
               </View>
+              {chipOrder == null && (
+                /* C2b — the measurement pass: absolute, invisible, inert, one
+                   column of naturally-sized copies. Unmounts the moment the
+                   order exists. */
+                <View
+                  style={styles.chipsMeasure}
+                  pointerEvents="none"
+                  accessibilityElementsHidden
+                  importantForAccessibility="no-hide-descendants"
+                >
+                  {JOB_CATEGORIES.map((c) => (
+                    <View
+                      key={c}
+                      onLayout={(event) => {
+                        chipWidthsRef.current.set(c, event.nativeEvent.layout.width);
+                        setChipMeasureCount((count) => count + 1);
+                      }}
+                    >
+                      <Chip
+                        label={JOB_CATEGORY_LABELS[c]}
+                        icon={JOB_CATEGORY_ICONS[c]}
+                        accentColor={isDark ? colors.gold : categoryAccent(c).bg}
+                        variant="filter"
+                      />
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
@@ -2013,6 +2106,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.sm,
+  },
+  // C2b — a plain style, deliberately not an animation: the row is simply not
+  // painted until the packed order exists, so no reorder is ever visible.
+  chipsMeasuring: {
+    opacity: 0,
+  },
+  chipsMeasure: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    opacity: 0,
+    alignItems: 'flex-start',
   },
   locationRow: {
     flexDirection: 'row',
