@@ -84,7 +84,7 @@ const schemaModule = (async () => {
     )
     .replace(
       /import \{[\s\S]*?\} from '\.\/tokens';/,
-      'const { controls, layout, navBar, radius: tokenRadius, spacing } = globalThis.__S2_TOKENS__;',
+      'const { controls, layout, navBar, radius: tokenRadius, shadows: tokenShadows, spacing } = globalThis.__S2_TOKENS__;',
     );
   assert.doesNotMatch(
     stubbed,
@@ -821,6 +821,55 @@ test('[static] the chrome and templates read their dials through the override la
     for (const key of ["'layout.pagePadding'", "'layout.contentTopPad'", gapKey]) {
       assert.ok(source.includes(key), `${path} must read the ${key} dial`);
     }
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Shadows & Glows (S2 C10)
+// ---------------------------------------------------------------------------
+
+test('shadow and glow dials: per-surface defaults, glow-on-selection ships OFF, no spread anywhere', async () => {
+  const schema = await schemaModule;
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+  const ctx = await contextFor();
+  const light = { ...ctx, isDark: false };
+
+  assert.equal(byKey.get('card.shadowColor').defaultValue(light), '#10261D', '§I’s shadow ink');
+  assert.equal(byKey.get('card.shadowColor').defaultValue(ctx), '#000000', 'GROUND1’s black');
+  assert.equal(byKey.get('card.elevation').defaultValue(ctx), 6);
+  assert.equal(byKey.get('card.elevation').defaultValue(light), 3);
+  assert.equal(byKey.get('button.primary.shadowOpacity').defaultValue(ctx), 0, 'the hero carries no shadow today');
+  assert.equal(byKey.get('sheet.shadowOpacity').defaultValue(ctx), 0.14, 'the raised lift');
+  assert.equal(byKey.get('glow.chipSelection').defaultValue(ctx), false, 'chips do not glow today');
+  assert.equal(byKey.get('glow.chipSelection').kind, 'boolean');
+
+  // RN renders no shadow spread — no dial may pretend otherwise. (nav.spread
+  // is TAB spread, a layout quantity, and is deliberately not caught here.)
+  for (const entry of schema.STUDIO_REGISTRY) {
+    assert.ok(
+      !/shadow.*spread|spread.*shadow/i.test(`${entry.key} ${entry.plainLabel}`),
+      `${entry.key}: no shadow-spread dial`,
+    );
+  }
+});
+
+test('[static] the glow follows selection and the depth dials reach their surfaces', async () => {
+  const chip = stripComments(await read('components/Chip.tsx'));
+  assert.match(chip, /'glow\.chipSelection'/);
+  assert.match(
+    chip.replace(/\s+/g, ' '),
+    /chipGlowOn && goldSelected \? glow\.halo\(withAlpha\(chosen\.line, glowAlphaDial \?\? SURFACE_GLOW_ALPHA\)\) : null/,
+    'the CHOSEN chip lights at the global glow strength; the rest stay dark',
+  );
+  assert.match(stripComments(await read('ui/primitives/JobCard.tsx')), /'card\.shadowColor'/);
+  assert.match(stripComments(await read('components/Button.tsx')), /'button\.primary\.shadowOpacity'/);
+  assert.match(stripComments(await read('ui/primitives/BottomNav.tsx')), /'create\.glowColor'/);
+  for (const path of [
+    'components/ActionSheet.tsx',
+    'components/ConfirmDialog.tsx',
+    'components/AmountPrompt.tsx',
+  ]) {
+    assert.match(stripComments(await read(path)), /'sheet\.shadowOpacity'/, `${path} lift dial`);
   }
 });
 

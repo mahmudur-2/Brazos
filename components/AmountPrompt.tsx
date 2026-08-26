@@ -48,6 +48,7 @@ export function AmountPrompt({
   const [error, setError] = useState<string | null>(null);
   // RUN S2 (C7) — the shared sheet-family dials: backdrop scrim, card radius.
   const promptRadius = useOverrideNumber('sheet.promptRadius') ?? radius.lg;
+  const sheetShadowDial = useOverrideNumber('sheet.shadowOpacity');
   const backdropColorDial = useOverrideString('sheet.backdropColor');
   const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
   const backdropDial =
@@ -88,7 +89,7 @@ export function AmountPrompt({
             the material's hairline where the card had none (the parity rule
             keeps border weight shared between themes). Backdrop and
             mechanics untouched. */}
-        <Surface material="sheet" corners="all" radius={promptRadius} style={styles.sheet}>
+        <Surface material="sheet" corners="all" radius={promptRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
 

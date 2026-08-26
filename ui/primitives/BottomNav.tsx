@@ -664,6 +664,7 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   const fillDial = useOverrideString('create.fill');
   const ringDial = useOverrideString('create.border');
   const glowDial = useOverrideNumber('create.glowAlpha');
+  const glowColorDial = useOverrideString('create.glowColor');
   const glyphSizeDial = useOverrideNumber('create.glyphSize');
   const glyphColorDial = useOverrideString('create.glyphColor');
   const glyphOffsetX = useOverrideNumber('create.glyphOffsetX') ?? 0;
@@ -712,7 +713,7 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   // and dial-replaceable): glow.halo pins shadowOpacity at 1 on native, so the
   // alpha here is the one dilution. Applied inline, identically in both
   // themes — the depth never forks, only colours do.
-  const halo = glow.halo(withAlpha(colors.gold, glowDial ?? navBar.createGlowAlpha));
+  const halo = glow.halo(withAlpha(glowColorDial ?? colors.gold, glowDial ?? navBar.createGlowAlpha));
 
   return (
     <View style={[styles.createSlot, centerClearance ? { marginHorizontal: centerClearance } : null]}>

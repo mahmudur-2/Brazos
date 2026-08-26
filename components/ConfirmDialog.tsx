@@ -58,6 +58,7 @@ export function ConfirmDialog({
   // run's to move — the dialog-radius dial drives ActionSheet instead.
   const backdropColorDial = useOverrideString('sheet.backdropColor');
   const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
+  const sheetShadowDial = useOverrideNumber('sheet.shadowOpacity');
   const backdropDial =
     backdropColorDial != null || backdropAlphaDial != null
       ? {
@@ -88,7 +89,7 @@ export function ConfirmDialog({
               radius, hairline weight) is unchanged via the props, and the
               backdrop above is byte-identical. A caller-supplied palette
               still colours the copy and the buttons. */}
-          <Surface material="sheet" corners="all" radius={radius.xl} style={styles.sheet}>
+          <Surface material="sheet" corners="all" radius={radius.xl} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
             <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
             {message ? (
               <Text style={[styles.message, { color: palette.textMuted }]}>{message}</Text>

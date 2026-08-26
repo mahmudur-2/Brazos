@@ -143,11 +143,7 @@ export function DropMenuItems({
   const separators = useOverrideValue('menu.separators') !== false;
   return (
     <>
-      <Surface
-        material="menu"
-        radius={menuRadius}
-        style={[StyleSheet.absoluteFill, styles.panelMaterial]}
-      />
+      <Surface material="menu" radius={menuRadius} style={[StyleSheet.absoluteFill, styles.panelMaterial]} />
       {items.map((item, index) => (
         <Pressable
           key={item.key}

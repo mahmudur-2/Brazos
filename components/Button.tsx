@@ -98,6 +98,11 @@ export function Button({
   const pressedOpacityDial = useOverrideNumber('button.pressedOpacity');
   const pressedScaleDial = useOverrideNumber('button.pressedScale');
   const disabledOpacityDial = useOverrideNumber('button.disabledOpacity');
+  // C10 — a hero-only drop shadow, OFF (opacity 0) until dialled.
+  const heroShadowOpacity = useOverrideNumber('button.primary.shadowOpacity');
+  const heroShadowRadius = useOverrideNumber('button.primary.shadowRadius');
+  const heroShadowY = useOverrideNumber('button.primary.shadowOffsetY');
+  const heroShadowColor = useOverrideString('button.primary.shadowColor');
 
   // dangerBg is a pale tint of danger in the light palette and a dark one in
   // the dark palette, so `danger` text stays legible on it either way — the
@@ -188,6 +193,15 @@ export function Button({
         },
         fillStyle,
         dialStyle,
+        variant === 'primary' && !isDisabled && heroShadowOpacity != null && heroShadowOpacity > 0
+          ? {
+              shadowColor: heroShadowColor ?? palette.black,
+              shadowOpacity: heroShadowOpacity,
+              shadowRadius: heroShadowRadius ?? 12,
+              shadowOffset: { width: 0, height: heroShadowY ?? 4 },
+              elevation: Math.round((heroShadowRadius ?? 12) / 2),
+            }
+          : null,
         state.pressed &&
           !isDisabled &&
           (pressedOpacityDial != null || pressedScaleDial != null

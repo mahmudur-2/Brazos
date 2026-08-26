@@ -9,14 +9,17 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import {
+  glow,
   radius,
   selectedInDark,
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
-import { useOverrideNumber } from '../lib/designOverrides';
+import { useDesignDial, useOverrideNumber, useOverrideValue } from '../lib/designOverrides';
+import { SURFACE_GLOW_ALPHA } from '../ui/primitives/Surface';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -133,6 +136,15 @@ export function Chip({
   const gapDial = useOverrideNumber('chip.gap');
   const borderWidthDial = useOverrideNumber('chip.borderWidth');
   const minHeightDial = useOverrideNumber('chip.minHeight');
+  // C10 — glow-on-selection: OFF by default; when the studio turns it on,
+  // the CHOSEN chip lights (dark theme), the rest stay dark, and the global
+  // glow dial sets the intensity.
+  const chipGlowOn = useOverrideValue('glow.chipSelection') === true;
+  const glowAlphaDial = useDesignDial('glowAlpha');
+  const selectionGlow =
+    chipGlowOn && goldSelected
+      ? glow.halo(withAlpha(chosen.line, glowAlphaDial ?? SURFACE_GLOW_ALPHA))
+      : null;
   const chipDial = {
     ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
     ...(padYDial != null ? { paddingVertical: padYDial } : null),
@@ -164,6 +176,7 @@ export function Chip({
     // colour. Applied last so it wins over every variant's own selected fill;
     // light keeps each variant's Heritage pair untouched.
     goldSelected && { backgroundColor: chosen.fill, borderColor: chosen.line },
+    selectionGlow,
     style,
   ];
 

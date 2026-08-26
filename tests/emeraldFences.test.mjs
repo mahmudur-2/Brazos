@@ -1836,7 +1836,7 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // both themes share, so the depth still never forks.
   assert.match(
     flat,
-    /const halo = glow\.halo\(withAlpha\(colors\.gold, glowDial \?\? navBar\.createGlowAlpha\)\);/,
+    /const halo = glow\.halo\(withAlpha\(glowColorDial \?\? colors\.gold, glowDial \?\? navBar\.createGlowAlpha\)\);/,
     'the control lifts with a gold glow built from the shared glow shape'
   );
   const glowAlphaMatch = /createGlowAlpha: ([\d.]+),/.exec(stripComments(read('ui/tokens.ts')));

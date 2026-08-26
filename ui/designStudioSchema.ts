@@ -16,6 +16,7 @@ import {
   layout,
   navBar,
   radius as tokenRadius,
+  shadows as tokenShadows,
   spacing,
   type MaterialName,
 } from './tokens';
@@ -1329,6 +1330,74 @@ function layoutDialEntries(): StudioEntry[] {
 }
 
 // ---------------------------------------------------------------------------
+// Shadows & Glows (C10). The Blur & Material category is already complete
+// (intensity, tint/scrim colour, scrim alpha, hairline colour+alpha and the
+// no-blur fallback per material — C1 and C7); what lands here is the
+// per-surface depth set and glow-on-selection. No `spread` dial anywhere —
+// React Native does not render shadow spread.
+// ---------------------------------------------------------------------------
+
+function shadowDialEntries(): StudioEntry[] {
+  return [
+    ...dialEntries('shadows', 'Cards', [
+      {
+        key: 'card.shadowColor',
+        label: 'Shadow colour',
+        description: 'The card shadow’s ink — §I’s deep green in light, GROUND1’s black in dark.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => {
+          const spec = ctx.isDark ? tokenShadows.cardDark : tokenShadows.card;
+          return typeof spec.shadowColor === 'string' ? spec.shadowColor : '';
+        },
+      },
+      { key: 'card.elevation', label: 'Elevation', description: 'The card’s Android elevation (inert on iOS and web).', tier: 'advanced', scope: 'local', min: 0, max: 16, step: 1, defaultValue: (ctx) => (ctx.isDark ? 6 : 3) },
+    ]),
+    ...dialEntries('shadows', 'Primary CTA', [
+      { key: 'button.primary.shadowOpacity', label: 'Shadow opacity', description: 'A drop shadow the hero button does not carry today — 0 keeps it off.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 0 },
+      { key: 'button.primary.shadowRadius', label: 'Shadow blur', description: 'How soft the hero shadow spreads, when its opacity is on.', tier: 'advanced', scope: 'local', min: 0, max: 40, step: 1, defaultValue: 12 },
+      { key: 'button.primary.shadowOffsetY', label: 'Shadow Y offset', description: 'Moves the hero shadow down, when its opacity is on.', tier: 'advanced', scope: 'local', min: -20, max: 20, step: 1, defaultValue: 4 },
+      {
+        key: 'button.primary.shadowColor',
+        label: 'Shadow colour',
+        description: 'The hero shadow’s ink, when its opacity is on.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themePalette(ctx).black ?? '',
+      },
+    ]),
+    ...dialEntries('shadows', 'Sheets', [
+      { key: 'sheet.shadowOpacity', label: 'Dialog shadow opacity', description: 'The floating dialog cards’ lift (the raised shadow ships at 0.14).', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 0.14 },
+    ]),
+    ...dialEntries('shadows', 'Centre [+]', [
+      {
+        key: 'create.glowColor',
+        label: 'Glow colour',
+        description: 'The halo under the centre [+] — palette gold today.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themePalette(ctx).gold ?? '',
+      },
+    ]),
+    ...dialEntries('shadows', 'Selection', [
+      {
+        key: 'glow.chipSelection',
+        label: 'Selected chips glow',
+        description:
+          'Glow follows selection: the chosen chip lights (dark theme), the rest stay dark; the global glow strength sets the intensity. Off today.',
+        tier: 'basic',
+        scope: 'token',
+        kind: 'boolean',
+        defaultValue: false,
+      },
+    ]),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // The registry. C1 seeds it with every dial the G1 studio already offered;
 // C5–C10 grow the categories. Order inside a category is display order.
 // ---------------------------------------------------------------------------
@@ -1345,6 +1414,7 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...inputDialEntries(),
   ...chromeDialEntries(),
   ...layoutDialEntries(),
+  ...shadowDialEntries(),
   {
     key: 'glow.alpha',
     plainLabel: 'Glow strength',

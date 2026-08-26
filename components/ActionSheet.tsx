@@ -66,6 +66,7 @@ export function ActionSheet({
   // RUN S2 (C7) — the shared sheet-family dials: backdrop scrim and the
   // dialog-card radius. Fill, blur and hairline are the sheet MATERIAL's.
   const dialogRadius = useOverrideNumber('sheet.dialogRadius') ?? radius.xl;
+  const sheetShadowDial = useOverrideNumber('sheet.shadowOpacity');
   const backdropColorDial = useOverrideString('sheet.backdropColor');
   const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
   const backdropDial =
@@ -98,7 +99,7 @@ export function ActionSheet({
             via the radius prop. The backdrop above and every open/close
             mechanic are byte-identical. */}
         <Pressable onPress={() => {}}>
-          <Surface material="sheet" corners="all" radius={dialogRadius} style={styles.sheet}>
+          <Surface material="sheet" corners="all" radius={dialogRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
           {(title || subtitle) && (
             <View style={styles.header}>
               {title ? <Text style={styles.title}>{title}</Text> : null}

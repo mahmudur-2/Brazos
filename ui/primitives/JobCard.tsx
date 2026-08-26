@@ -136,6 +136,8 @@ export function JobCard({
   const shadowXDial = useOverrideNumber('card.shadowOffsetX');
   const shadowYDial = useOverrideNumber('card.shadowOffsetY');
   const gapDial = useOverrideNumber('card.gap');
+  const shadowColorDial = useOverrideString('card.shadowColor');
+  const elevationDial = useOverrideNumber('card.elevation');
   const cardDial = {
     ...(fillDial != null || fillAlphaDial != null
       ? { backgroundColor: withAlpha(fillDial ?? colors.surface, fillAlphaDial ?? 1) }
@@ -155,6 +157,8 @@ export function JobCard({
       ? { shadowOffset: { width: shadowXDial ?? 0, height: shadowYDial ?? (isDark ? 6 : 5) } }
       : null),
     ...(gapDial != null ? { gap: gapDial } : null),
+    ...(shadowColorDial != null ? { shadowColor: shadowColorDial } : null),
+    ...(elevationDial != null ? { elevation: elevationDial } : null),
   };
 
   return (
