@@ -6,6 +6,7 @@ import { ScreenHeader } from '../../components/ScreenHeader';
 import { PINNED_FOOTER_BOTTOM_PADDING, useFloatingNavClearance } from '../primitives';
 import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { useOverrideNumber } from '../../lib/designOverrides';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
 
 /**
@@ -62,6 +63,15 @@ export function DetailScreen({
   // the pill's real footprint — the action bar when there is one, otherwise
   // the scroller.
   const navClearance = useFloatingNavClearance();
+  // RUN S2 (C9) — the layout dials, live across every template screen.
+  const pagePadDial = useOverrideNumber('layout.pagePadding');
+  const topPadDial = useOverrideNumber('layout.contentTopPad');
+  const sectionGapDial = useOverrideNumber('layout.detailSectionGap');
+  const layoutDial = {
+    ...(pagePadDial != null ? { paddingHorizontal: pagePadDial } : null),
+    ...(topPadDial != null ? { paddingTop: topPadDial } : null),
+    ...(sectionGapDial != null ? { gap: sectionGapDial } : null),
+  };
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScreenHeader title={title} subtitle={subtitle} onBack={onBack} right={headerRight} />
@@ -74,6 +84,7 @@ export function DetailScreen({
             style={styles.flex}
             contentContainerStyle={[
               styles.content,
+              layoutDial,
               // With an action bar, that bar handles bottom clearance; without
               // one, the scroller has to clear the floating nav itself.
               !actionBar && insideTabs && { paddingBottom: navClearance },

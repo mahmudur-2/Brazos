@@ -1,7 +1,8 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { fonts, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { fonts, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 
 type ScreenHeaderProps = {
   title: string;
@@ -79,6 +80,31 @@ export function ScreenHeader({
   // Every dark master draws the back chevron in gold — it is the one piece of
   // chrome the whole set agrees on. Light keeps the ink chevron.
   const backColor = isDark ? palette.gold : palette.text;
+
+  // RUN S2 (C9) — the chrome dials. The header paints no surface of its own
+  // today (the screen's ground shows through), so the border dial ADDS a
+  // hairline when turned; every other default is the shipped value.
+  const padXDial = useOverrideNumber('header.padX');
+  const padYDial = useOverrideNumber('header.padY');
+  const minHeightDial = useOverrideNumber('header.minHeight');
+  const alignDial = useOverrideString('header.titleAlign');
+  const backSizeDial = useOverrideNumber('header.backSize');
+  const backOffsetDial = useOverrideNumber('header.backOffsetX');
+  const borderWidthDial = useOverrideNumber('header.borderBottomWidth');
+  const borderColorDial = useOverrideString('header.borderColor');
+  const borderAlphaDial = useOverrideNumber('header.borderAlpha');
+  const containerDial = {
+    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
+    ...(padYDial != null ? { paddingVertical: padYDial } : null),
+    ...(minHeightDial != null && minHeightDial > 0 ? { minHeight: minHeightDial } : null),
+    ...(borderWidthDial != null && borderWidthDial > 0
+      ? {
+          borderBottomWidth: borderWidthDial,
+          borderBottomColor: withAlpha(borderColorDial ?? palette.border, borderAlphaDial ?? 1),
+        }
+      : null),
+  };
+  const centered = alignDial === 'center' ? true : alignDial === 'left' ? false : centerTitle;
   const titleText = (
     <Text
       style={[
@@ -123,11 +149,14 @@ export function ScreenHeader({
     <Pressable
       onPress={onBack}
       hitSlop={10}
-      style={backLabel ? styles.link : styles.back}
+      style={[
+        backLabel ? styles.link : styles.back,
+        backOffsetDial != null && { marginLeft: backOffsetDial },
+      ]}
       accessibilityRole={backLabel ? 'button' : undefined}
       accessibilityLabel={backLabel ? `Back to ${backLabel}` : undefined}
     >
-      <Ionicons name="chevron-back" size={backLabel ? 20 : 26} color={backColor} />
+      <Ionicons name="chevron-back" size={backLabel ? 20 : (backSizeDial ?? 26)} color={backColor} />
       {backLabel ? (
         <Text style={[styles.linkLabel, { color: backColor }]} numberOfLines={1}>
           {backLabel}
@@ -166,9 +195,9 @@ export function ScreenHeader({
       </Pressable>
     ) : null;
 
-  if (centerTitle) {
+  if (centered) {
     return (
-      <View style={[styles.container, styles.containerCentered]}>
+      <View style={[styles.container, styles.containerCentered, containerDial]}>
         {/* First, so both edge slots paint above it — a long title truncates
             into its inset instead of covering a link. */}
         <View style={styles.centerTitles} pointerEvents="none">
@@ -181,7 +210,7 @@ export function ScreenHeader({
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, containerDial]}>
       {backControl}
 
       {leading}

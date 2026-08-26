@@ -1029,6 +1029,7 @@ type DialRow = {
   min?: number;
   max?: number;
   step?: number;
+  options?: readonly string[];
   defaultValue: StudioValue | ((ctx: StudioContext) => StudioValue);
   contrastGround?: StudioEntry['contrastGround'];
 };
@@ -1055,6 +1056,7 @@ function dialEntries(
       min: row.min,
       max: row.max,
       step: row.step,
+      options: row.options,
       defaultValue: typeof fallback === 'function' ? fallback : () => fallback,
       contrastGround: row.contrastGround,
     });
@@ -1275,6 +1277,58 @@ function inputDialEntries(): StudioEntry[] {
 }
 
 // ---------------------------------------------------------------------------
+// Chrome/Header and Layout (C9). SPACING's scale multipliers and per-step
+// token dials are deliberately ABSENT: the spacing tokens are consumed at
+// stylesheet build time (themedStyles caches keyed on the palette object),
+// so no live read point exists — overriding them means rebuilding the
+// theming layer, which is the sweep's work, and a dial that silently did
+// nothing would be worse than none. DIVIDERS likewise have no shared
+// primitive — each surface draws its own hairline — so their shared dials
+// wait for the sweep too; the menu separators and every material hairline
+// are already dialled. Both omissions are on the run report.
+// ---------------------------------------------------------------------------
+
+function chromeDialEntries(): StudioEntry[] {
+  const header = (row: DialRow[]) => dialEntries('chrome', 'Screen header', row);
+  const step = (row: DialRow[]) => dialEntries('chrome', 'Wizard header', row);
+  return [
+    ...header([
+      { key: 'header.padX', label: 'Side padding', description: 'Inside the screen header, left and right.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, defaultValue: spacing.lg },
+      { key: 'header.padY', label: 'Top/bottom padding', description: 'Inside the screen header, above and below.', tier: 'basic', scope: 'token', min: 0, max: 24, step: 1, defaultValue: spacing.md },
+      { key: 'header.minHeight', label: 'Height', description: 'A minimum header height — 0 keeps today’s content-driven height.', tier: 'advanced', scope: 'local', min: 0, max: 96, step: 2, defaultValue: 0 },
+      { key: 'header.titleAlign', label: 'Title position', description: 'Auto follows each screen’s own choice; left and centre force it.', tier: 'basic', scope: 'token', kind: 'enum', options: ['auto', 'left', 'center'], defaultValue: 'auto' },
+      { key: 'header.backSize', label: 'Back chevron size', description: 'The bare back chevron (labelled links keep their 20pt glyph).', tier: 'advanced', scope: 'local', min: 16, max: 36, step: 1, defaultValue: 26 },
+      { key: 'header.backOffsetX', label: 'Back position', description: 'Nudges the back control sideways.', tier: 'advanced', scope: 'local', min: -16, max: 16, step: 1, defaultValue: -spacing.xs },
+      { key: 'header.borderBottomWidth', label: 'Bottom hairline', description: 'A hairline under the header the app does not draw today — 0 keeps it off.', tier: 'advanced', scope: 'local', min: 0, max: 3, step: 1, defaultValue: 0 },
+      {
+        key: 'header.borderColor',
+        label: 'Hairline colour',
+        description: 'The added hairline’s ink, where a width is set.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themePalette(ctx).border ?? '',
+      },
+      { key: 'header.borderAlpha', label: 'Hairline opacity', description: 'The added hairline’s opacity.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 1 },
+    ]),
+    ...step([
+      { key: 'header.stepPadX', label: 'Side padding', description: 'Inside the wizard progress header.', tier: 'advanced', scope: 'local', min: 0, max: 32, step: 1, defaultValue: layout.screenGutter },
+      { key: 'header.stepPadY', label: 'Top/bottom padding', description: 'Inside the wizard progress header.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, defaultValue: spacing.md },
+      { key: 'header.stepBarHeight', label: 'Progress bar height', description: 'The segmented progress bar’s thickness.', tier: 'advanced', scope: 'local', min: 1, max: 10, step: 1, defaultValue: 4 },
+    ]),
+  ];
+}
+
+function layoutDialEntries(): StudioEntry[] {
+  return dialEntries('layout', 'Template screens', [
+    { key: 'layout.pagePadding', label: 'Page side padding', description: 'The horizontal gutter on every template screen (17 screens read it live).', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: layout.screenGutter },
+    { key: 'layout.contentTopPad', label: 'Content top spacing', description: 'Between the header and the first content block on template screens.', tier: 'basic', scope: 'token', min: 0, max: 48, step: 1, defaultValue: layout.screenGutter },
+    { key: 'layout.formSectionGap', label: 'Form section gap', description: 'Between the sections of every form template screen.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: spacing.lg },
+    { key: 'layout.detailSectionGap', label: 'Detail section gap', description: 'Between the sections of every detail template screen.', tier: 'basic', scope: 'token', min: 0, max: 48, step: 1, defaultValue: spacing.xl },
+  ]);
+}
+
+// ---------------------------------------------------------------------------
 // The registry. C1 seeds it with every dial the G1 studio already offered;
 // C5–C10 grow the categories. Order inside a category is display order.
 // ---------------------------------------------------------------------------
@@ -1289,6 +1343,8 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...cardDialEntries(),
   ...buttonDialEntries(),
   ...inputDialEntries(),
+  ...chromeDialEntries(),
+  ...layoutDialEntries(),
   {
     key: 'glow.alpha',
     plainLabel: 'Glow strength',

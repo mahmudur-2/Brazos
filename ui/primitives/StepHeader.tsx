@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { useOverrideNumber } from '../../lib/designOverrides';
 
 /**
  * The wizard progress header (§I) — a segmented bar plus "Step N of M" and the
@@ -28,8 +29,17 @@ export function StepHeader({ step, steps }: StepHeaderProps) {
   // empty label and a bar that looks finished.
   const index = Math.min(Math.max(step, 0), total - 1);
 
+  // RUN S2 (C9) — the wizard header's chrome dials.
+  const padXDial = useOverrideNumber('header.stepPadX');
+  const padYDial = useOverrideNumber('header.stepPadY');
+  const barHeightDial = useOverrideNumber('header.stepBarHeight');
+  const wrapDial = {
+    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
+    ...(padYDial != null ? { paddingVertical: padYDial } : null),
+  };
+
   return (
-    <View style={styles.wrap}>
+    <View style={[styles.wrap, wrapDial]}>
       <View
         style={styles.track}
         accessibilityRole="progressbar"
@@ -38,7 +48,11 @@ export function StepHeader({ step, steps }: StepHeaderProps) {
         {steps.map((name, i) => (
           <View
             key={name}
-            style={[styles.segment, i <= index ? styles.segmentDone : styles.segmentTodo]}
+            style={[
+              styles.segment,
+              barHeightDial != null && { height: barHeightDial },
+              i <= index ? styles.segmentDone : styles.segmentTodo,
+            ]}
           />
         ))}
       </View>

@@ -772,6 +772,59 @@ test('[static] every C8 wearer reads its dials through the override layer', asyn
 });
 
 // ---------------------------------------------------------------------------
+// Chrome/Header and Layout (S2 C9)
+// ---------------------------------------------------------------------------
+
+test('chrome and layout dials: defaults mirror the shipped values; spacing/dividers stay honestly absent', async () => {
+  const schema = await schemaModule;
+  const tokens = await tokensModule;
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+  const ctx = await contextFor();
+
+  assert.equal(byKey.get('header.padX').defaultValue(ctx), tokens.spacing.lg);
+  assert.equal(byKey.get('header.padY').defaultValue(ctx), tokens.spacing.md);
+  assert.equal(byKey.get('header.minHeight').defaultValue(ctx), 0, 'content-driven today');
+  assert.equal(byKey.get('header.titleAlign').defaultValue(ctx), 'auto');
+  assert.deepEqual([...byKey.get('header.titleAlign').options], ['auto', 'left', 'center']);
+  assert.equal(byKey.get('header.backSize').defaultValue(ctx), 26);
+  assert.equal(byKey.get('header.backOffsetX').defaultValue(ctx), -tokens.spacing.xs);
+  assert.equal(byKey.get('header.borderBottomWidth').defaultValue(ctx), 0, 'no hairline ships today');
+  assert.equal(byKey.get('header.stepBarHeight').defaultValue(ctx), 4);
+
+  assert.equal(byKey.get('layout.pagePadding').defaultValue(ctx), tokens.layout.screenGutter);
+  assert.equal(byKey.get('layout.formSectionGap').defaultValue(ctx), tokens.spacing.lg);
+  assert.equal(byKey.get('layout.detailSectionGap').defaultValue(ctx), tokens.spacing.xl);
+
+  // The honest absences: a spacing multiplier or per-step token dial would
+  // silently do nothing (the tokens are consumed at stylesheet build time),
+  // and dividers have no shared primitive — both wait for the sweep.
+  const spacingEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'spacing');
+  const dividerEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'borders');
+  assert.deepEqual(spacingEntries, [], 'no dead spacing dials — the omission is the report’s');
+  assert.deepEqual(dividerEntries, [], 'no dead divider dials — the omission is the report’s');
+});
+
+test('[static] the chrome and templates read their dials through the override layer', async () => {
+  const headerSource = stripComments(await read('components/ScreenHeader.tsx'));
+  for (const key of ["'header.padX'", "'header.titleAlign'", "'header.backSize'", "'header.borderBottomWidth'"]) {
+    assert.ok(headerSource.includes(key), `ScreenHeader must read the ${key} dial`);
+  }
+  const stepSource = stripComments(await read('ui/primitives/StepHeader.tsx'));
+  for (const key of ["'header.stepPadX'", "'header.stepBarHeight'"]) {
+    assert.ok(stepSource.includes(key), `StepHeader must read the ${key} dial`);
+  }
+  for (const [path, gapKey] of [
+    ['ui/templates/FormScreen.tsx', "'layout.formSectionGap'"],
+    ['ui/templates/DetailScreen.tsx', "'layout.detailSectionGap'"],
+  ]) {
+    const source = stripComments(await read(path));
+    for (const key of ["'layout.pagePadding'", "'layout.contentTopPad'", gapKey]) {
+      assert.ok(source.includes(key), `${path} must read the ${key} dial`);
+    }
+  }
+});
+
+// ---------------------------------------------------------------------------
 // History, presets, export and import (S2 C4)
 // ---------------------------------------------------------------------------
 

@@ -20,6 +20,7 @@ import {
   type as typeScale,
 } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { useOverrideNumber } from '../../lib/designOverrides';
 import { ScreenStateView, isReady, type ScreenState } from './ScreenStates';
 
 /**
@@ -85,6 +86,15 @@ export function FormScreen({
   const { emerald: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const showFooter = Boolean(submitLabel && onSubmit);
+  // RUN S2 (C9) — the layout dials, live across every template screen.
+  const pagePadDial = useOverrideNumber('layout.pagePadding');
+  const topPadDial = useOverrideNumber('layout.contentTopPad');
+  const sectionGapDial = useOverrideNumber('layout.formSectionGap');
+  const layoutDial = {
+    ...(pagePadDial != null ? { paddingHorizontal: pagePadDial } : null),
+    ...(topPadDial != null ? { paddingTop: topPadDial } : null),
+    ...(sectionGapDial != null ? { gap: sectionGapDial } : null),
+  };
   // emerald(3): the pill's real footprint, read from the device rather than
   // from a flat token. Whichever of the two bottom elements is last on screen
   // takes it — the footer when there is one, the scroller when there is not.
@@ -111,6 +121,7 @@ export function FormScreen({
             style={styles.flex}
             contentContainerStyle={[
               styles.content,
+              layoutDial,
               // Only the LAST element on screen clears the pill. With a footer
               // that is the footer, and the content then clears both by
               // sitting above it.
