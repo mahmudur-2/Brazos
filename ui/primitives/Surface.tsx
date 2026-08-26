@@ -7,7 +7,8 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { glow, materials, withAlpha, type MaterialName } from '../tokens';
+import { glow, withAlpha, type MaterialName } from '../tokens';
+import { useDesignOverrides, useMaterials } from '../../lib/designOverrides';
 import { useThemeColors } from '../../lib/theme';
 import { BlurLayer } from '../../lib/blur';
 
@@ -105,7 +106,10 @@ export function Surface({
 }: SurfaceProps) {
   const { palette: colors, isDark } = useThemeColors();
   const reduceTransparency = useReduceTransparency();
-  const spec = materials[material];
+  // The static table with the studio's live dials folded in (C2) — an
+  // identity read while no dial is set.
+  const overrides = useDesignOverrides();
+  const spec = useMaterials()[material];
 
   const cornerRadius = radius ?? spec.radius ?? 0;
   const topOnly = (corners ?? (spec.radiusTopOnly ? 'top' : 'all')) === 'top';
@@ -124,7 +128,10 @@ export function Surface({
       }
     : { backgroundColor: colors.surface, borderColor: colors.border };
 
-  const halo = glowColor && isDark ? glow.halo(withAlpha(glowColor, SURFACE_GLOW_ALPHA)) : null;
+  const halo =
+    glowColor && isDark
+      ? glow.halo(withAlpha(glowColor, overrides.glowAlpha ?? SURFACE_GLOW_ALPHA))
+      : null;
 
   return (
     <View style={[corner, hairline, fill, halo, style]}>

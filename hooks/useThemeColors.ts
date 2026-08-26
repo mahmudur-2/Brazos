@@ -1,4 +1,6 @@
+import { useMemo } from 'react';
 import { useTheme, type ThemeColors } from '../lib/ThemeContext';
+import { applyPaletteOverrides, useDesignOverrides } from '../lib/designOverrides';
 
 /**
  * The single reactive palette read. Backed by lib/ThemeContext.tsx's
@@ -10,7 +12,21 @@ import { useTheme, type ThemeColors } from '../lib/ThemeContext';
  * `palette` and `isDark` are what components style from; `preference` and
  * `setPreference` exist for the Appearance setting screen. lib/theme.ts
  * re-exports this hook so screens can take it from their standard import.
+ *
+ * RUN G1 (C2) — THIS IS THE TOKEN READ POINT, so the live design overrides
+ * merge here: the studio's `gold` and `cardFill` dials fold into BOTH
+ * resolved palettes before any consumer sees them. With no override set the
+ * merge is an identity — the provider's own object comes back, so a fresh
+ * app is byte-identical in behaviour and every palette-keyed style cache
+ * works exactly as before.
  */
 export function useThemeColors(): ThemeColors {
-  return useTheme();
+  const theme = useTheme();
+  const overrides = useDesignOverrides();
+  return useMemo(() => {
+    const palette = applyPaletteOverrides(theme.palette, overrides, theme.isDark);
+    const emerald = applyPaletteOverrides(theme.emerald, overrides, theme.isDark);
+    if (palette === theme.palette && emerald === theme.emerald) return theme;
+    return { ...theme, palette, emerald };
+  }, [theme, overrides]);
 }

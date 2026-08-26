@@ -595,6 +595,78 @@ test('G1 materials: the web-fallback scrim on pure white keeps primary text ≥4
 });
 
 // ---------------------------------------------------------------------------
+// RUN G1 (C2) — the live override layer resolves to the static tokens when
+// no dial is set. Identity, not merely equality: unchanged inputs must come
+// back as the SAME objects, so palette-keyed style caches keep working and a
+// fresh app is byte-identical in behaviour.
+// ---------------------------------------------------------------------------
+
+/** lib/designOverrides.ts, executed with react stubbed and ui/tokens fed
+ *  from the module already executed above. */
+const designOverridesModule = (async () => {
+  const tokens = await tokensModule;
+  globalThis.__DESIGN_TOKENS__ = tokens;
+  const js = stripTypeScriptTypes(await read('lib/designOverrides.ts'), { mode: 'strip' });
+  const stubbed = js
+    .replace(
+      /import \{[^}]*\} from 'react';/,
+      'const useSyncExternalStore = () => { throw new Error("hooks are not under test"); }; const useMemo = (factory) => factory();',
+    )
+    .replace(
+      /import \{[^}]*\} from '\.\.\/ui\/tokens';/,
+      'const { materials } = globalThis.__DESIGN_TOKENS__;',
+    );
+  assert.doesNotMatch(
+    stubbed,
+    /from '(?:react|\.[^']*)'/,
+    'every import lib/designOverrides.ts carries must be stubbed or dropped',
+  );
+  return import(toDataUrl(stubbed));
+})();
+
+test('G1 overrides: a fresh app resolves byte-identically — no override, no change', async () => {
+  const { materials } = await tokensModule;
+  const { colors, darkColors } = await themeModule;
+  const o = await designOverridesModule;
+
+  assert.deepEqual(o.getDesignOverrides(), { materials: {} }, 'the store must start empty');
+  assert.equal(o.resolveMaterials(o.EMPTY_DESIGN_OVERRIDES), materials, 'materials must come back by identity');
+  assert.deepEqual(o.resolveMaterials(o.EMPTY_DESIGN_OVERRIDES), materials);
+  assert.equal(o.applyPaletteOverrides(darkColors, o.EMPTY_DESIGN_OVERRIDES, true), darkColors);
+  assert.equal(o.applyPaletteOverrides(colors, o.EMPTY_DESIGN_OVERRIDES, false), colors);
+});
+
+test('G1 overrides: a dial moves only its own value, and reset restores the static truth', async () => {
+  const { materials } = await tokensModule;
+  const { darkColors } = await themeModule;
+  const o = await designOverridesModule;
+  try {
+    o.patchMaterialOverride('chrome', { blur: 44, scrimAlpha: 0.61 });
+    o.patchDesignOverrides({ gold: '#DCAB60', cardFill: '#182725', navBottomPad: 12 });
+
+    const resolved = o.resolveMaterials(o.getDesignOverrides());
+    assert.equal(resolved.chrome.blur, 44);
+    assert.equal(resolved.chrome.scrimAlpha, 0.61);
+    assert.equal(resolved.chrome.borderAlpha, materials.chrome.borderAlpha, 'an unset dial keeps the static value');
+    assert.equal(resolved.sheet, materials.sheet, 'an untouched material keeps its identity');
+    assert.equal(resolved.menu, materials.menu);
+
+    const dark = o.applyPaletteOverrides(darkColors, o.getDesignOverrides(), true);
+    assert.equal(dark.gold, '#DCAB60');
+    assert.equal(dark.surface, '#182725');
+    assert.equal(dark.background, darkColors.background, 'only the dialled roles move');
+    // cardFill is by definition the DARK card surface; light never reads it.
+    const light = o.applyPaletteOverrides(darkColors, o.getDesignOverrides(), false);
+    assert.equal(light.surface, darkColors.surface);
+    assert.equal(light.gold, '#DCAB60');
+  } finally {
+    o.resetDesignOverrides();
+  }
+  assert.equal(o.resolveMaterials(o.getDesignOverrides()), materials, 'reset must restore identity');
+  assert.equal(o.applyPaletteOverrides(darkColors, o.getDesignOverrides(), true), darkColors);
+});
+
+// ---------------------------------------------------------------------------
 // Resolver plumbing — 4D-4: preference + system resolution, native sync
 // ---------------------------------------------------------------------------
 
