@@ -14,6 +14,13 @@
 //                                --master docs/mockups/44_customer_home_dark.png
 //   node scripts/master-diff.mjs --master-inset 59 --render-inset 0
 //
+// ground(1) added two modes that are NOT a comparison of two screens, and each
+// replaces the whole report rather than adding a section to it:
+//
+//   node scripts/master-diff.mjs --asset assets/prestige/home-atmosphere-dark.png
+//   node scripts/master-diff.mjs --ground docs/mockups/44_customer_home_dark.png \
+//                                         .shots/customer-home-dark.png
+//
 // Output goes to stdout only. Nothing is written to disk, so nothing can be
 // committed by accident; `.shots/` is gitignored and this never touches it.
 //
@@ -81,6 +88,7 @@
 // not move a median.
 // -------------------------------------------------------------------------
 
+import { statSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { decode, luminance } from '../tests/pngGeometry.mjs';
 
@@ -104,12 +112,19 @@ const INK_STEP = 0.01;
 /** 45 x 0.01 reaches t = 0.5 from either 0.10 or 0.90, which is the far end. */
 const INK_MAX_STEPS = 45;
 
+/**
+ * ground(1) added `asset` and `ground`. Both default to null, and `run()` below
+ * destructures only the four keys it always did, so scripts/home-diff.mjs —
+ * which spreads this straight into run() — is untouched by their presence.
+ */
 export function parseArgs(argv) {
   const out = {
     render: '.shots/customer-home-dark.png',
     master: 'docs/mockups/44_customer_home_dark.png',
     masterInset: 59,
     renderInset: 0,
+    asset: null,
+    ground: null,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -118,7 +133,12 @@ export function parseArgs(argv) {
     else if (flag === '--master') out.master = value;
     else if (flag === '--master-inset') out.masterInset = Number(value);
     else if (flag === '--render-inset') out.renderInset = Number(value);
-    else continue;
+    else if (flag === '--asset') out.asset = value;
+    // The only two-value flag here: `--ground <master> <render>`.
+    else if (flag === '--ground') {
+      out.ground = [value, argv[i + 2]];
+      i += 1;
+    } else continue;
     i += 1;
   }
   return out;
@@ -794,8 +814,307 @@ export function run({ render: renderPath, master: masterPath, masterInset, rende
   return deltas;
 }
 
+// ===========================================================================
+// THE RASTER PASS — ONE PNG, MEASURED ON ITS OWN  (ground(1), --asset)
+// ===========================================================================
+//
+// Everything above needs TWO pictures. The atmosphere raster is one picture
+// with no counterpart: it is not a screen, nothing is laid out on it, and the
+// two defects reported against it — a ground that may or may not be too
+// bright, and visible BANDING in its gradient — are properties of the file
+// itself rather than of any comparison. So this pass takes a single PNG.
+//
+// WHY REC.601 HERE AND REC.709 EVERYWHERE ELSE IN THIS FILE.
+// components/HomeAtmosphere.tsx's docblock states this raster's vignette in
+// Rec.601 luma, over four corner boxes of a tenth of each dimension against
+// one centred box of the same size, and tests/emeraldFences.test.mjs's RUN H2
+// fence ties that docblock to the file it describes. Measuring the same boxes
+// under a second weighting would produce a second set of numbers for one
+// picture and nobody would know which set the docblock meant. The comparison
+// passes above stay on Rec.709 because that is what tests/pngGeometry.mjs's
+// luminance() is and what every fence that reads a screenshot uses.
+//
+// THE BANDING METRIC, STATED RATHER THAN IMPLIED. Down the image's centre
+// column, consecutive pixels are grouped into runs whose luma never leaves the
+// value the run STARTED on by more than one level — "adjacent values", which
+// is what a band in a quantised gradient is — and a run longer than 8px is
+// counted. A dithered gradient has almost none; a gradient cut into steps is
+// nothing but. The count is raw, and a per-1000-rows figure prints beside it
+// because two images of different heights get different numbers of chances at
+// it and the raw counts are not otherwise comparable.
+
+/** Rec.601 luma, 0..255 — the weighting HomeAtmosphere.tsx's docblock uses. */
+export const luma601 = (r, g, b) => 0.299 * r + 0.587 * g + 0.114 * b;
+
+/** Mean Rec.601 luma of the w x h pixel box with its top-left at (x0, y0). */
+function lumaBox(img, x0, y0, w, h) {
+  let sum = 0;
+  let n = 0;
+  for (let y = y0; y < y0 + h; y += 1) {
+    for (let x = x0; x < x0 + w; x += 1) {
+      const [r, g, b] = img.at(x, y);
+      sum += luma601(r, g, b);
+      n += 1;
+    }
+  }
+  return sum / n;
+}
+
+/** The docblock's four corners and centre, each a tenth of each dimension. */
+export function vignetteBoxes(img) {
+  const w = Math.round(img.width * 0.1);
+  const h = Math.round(img.height * 0.1);
+  const topLeft = lumaBox(img, 0, 0, w, h);
+  const topRight = lumaBox(img, img.width - w, 0, w, h);
+  const bottomLeft = lumaBox(img, 0, img.height - h, w, h);
+  const bottomRight = lumaBox(img, img.width - w, img.height - h, w, h);
+  const centre = lumaBox(img, Math.round((img.width - w) / 2), Math.round((img.height - h) / 2), w, h);
+  const corners = (topLeft + topRight + bottomLeft + bottomRight) / 4;
+  return { w, h, topLeft, topRight, bottomLeft, bottomRight, corners, centre, lift: centre / corners };
+}
+
+/** Whole-frame Rec.601 luma mean, min and max — the docblock's `frame` line. */
+export function frameLuma(img) {
+  let sum = 0;
+  let n = 0;
+  let min = Infinity;
+  let max = -Infinity;
+  for (let y = 0; y < img.height; y += 1) {
+    for (let x = 0; x < img.width; x += 1) {
+      const [r, g, b] = img.at(x, y);
+      const l = luma601(r, g, b);
+      sum += l;
+      n += 1;
+      if (l < min) min = l;
+      if (l > max) max = l;
+    }
+  }
+  return { mean: sum / n, min, max };
+}
+
+/** The BANDING metric described above. */
+export function bandingCount(img, { minRunPx = 8, tolerance = 1 } = {}) {
+  const x = Math.floor(img.width / 2);
+  let runs = 0;
+  let start = 0;
+  let base = luma601(...img.at(x, 0));
+  for (let y = 1; y <= img.height; y += 1) {
+    // The sentinel past the last row closes the final run, so a plateau that
+    // reaches the bottom edge is counted like any other.
+    const here = y < img.height ? luma601(...img.at(x, y)) : Infinity;
+    if (Math.abs(here - base) <= tolerance) continue;
+    if (y - start > minRunPx) runs += 1;
+    start = y;
+    base = here;
+  }
+  return runs;
+}
+
+/**
+ * Per-channel occupancy of the bottom `cap` levels: how many of those levels
+ * any pixel actually lands on, and what share of the frame sits down there. A
+ * near-black raster that uses 12 of the bottom 32 levels is banded by
+ * construction — there is nothing between the steps for a gradient to be made
+ * of — and the same frame after dithering uses all of them.
+ */
+export function bottomLevels(img, cap = 32) {
+  const hist = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+  for (let y = 0; y < img.height; y += 1) {
+    for (let x = 0; x < img.width; x += 1) {
+      const px = img.at(x, y);
+      for (let c = 0; c < 3; c += 1) hist[c][px[c]] += 1;
+    }
+  }
+  const total = img.width * img.height;
+  return ['R', 'G', 'B'].map((name, c) => {
+    let occupied = 0;
+    let count = 0;
+    for (let v = 0; v < cap; v += 1) {
+      if (hist[c][v]) occupied += 1;
+      count += hist[c][v];
+    }
+    return { name, occupied, cap, share: count / total };
+  });
+}
+
+export function reportAsset(path) {
+  const img = decode(path);
+  const bytes = statSync(path).size;
+  const v = vignetteBoxes(img);
+  const frame = frameLuma(img);
+  const band = bandingCount(img);
+
+  console.log(`ASSET — ${path}`);
+  console.log(
+    `  ${img.width}x${img.height}px, PNG colour type ${img.colourType}, ${bytes} bytes on disk`,
+  );
+
+  console.log('\n  histogram occupancy, bottom 32 levels (levels used / 32, share of frame)');
+  for (const ch of bottomLevels(img)) {
+    console.log(
+      `    ${ch.name}  ${String(ch.occupied).padStart(2)} / ${ch.cap}   ` +
+        `${(ch.share * 100).toFixed(2)}% of pixels`,
+    );
+  }
+
+  console.log(`\n  BANDING — plateaus longer than 8px down the centre column (x ${Math.floor(img.width / 2)})`);
+  console.log(
+    `    ${band} plateaus over ${img.height} rows   ` +
+      `${((band * 1000) / img.height).toFixed(1)} per 1000 rows`,
+  );
+
+  console.log(`\n  vignette — Rec.601 luma, ${v.w}x${v.h} boxes (a tenth of each dimension)`);
+  console.log(
+    `    corners   ${v.topLeft.toFixed(2)} / ${v.topRight.toFixed(2)} / ` +
+      `${v.bottomLeft.toFixed(2)} / ${v.bottomRight.toFixed(2)}   mean ${v.corners.toFixed(2)}`,
+  );
+  console.log(`    centre    ${v.centre.toFixed(2)}`);
+  console.log(`    lift      ${v.lift.toFixed(2)}x`);
+  console.log(
+    `    frame     mean ${frame.mean.toFixed(2)}, min ${frame.min.toFixed(2)}, max ${frame.max.toFixed(2)}`,
+  );
+  return { img, bytes, vignette: v, frame, banding: band };
+}
+
+// ===========================================================================
+// THE GROUND PASS — LIKE FOR LIKE  (ground(1), --ground)
+// ===========================================================================
+//
+// WHAT WENT WRONG WITHOUT IT. An earlier analysis called this app's atmosphere
+// "4.9x too bright against the master" by putting the RASTER'S CENTRE box next
+// to MASTER 44'S SIDE GUTTERS. Those are different regions of a screen — the
+// centre sits behind the hero and the cards and is barely visible, the gutters
+// are the one strip with nothing in front of them — so the ratio was a number
+// about two different places. Nothing in the comparison passes above could
+// catch it, because they compare positions, not regions.
+//
+// SO EVERY POSITION HERE IS SAMPLED IN BOTH IMAGES AT THE SAME FRACTION OF
+// THAT IMAGE'S OWN CANVAS. The master is 853x1844 and the render is 393x852,
+// so a pixel means nothing across the pair and every coordinate below is a
+// fraction. The first four are tests/emeraldFences.test.mjs home(13)'s own two
+// gutter patches plus their mirrors on the right edge, so this tool and that
+// fence are reading the same strip of the master.
+//
+// AND THE TWO ADDED BANDS ARE EXPECTED TO BE REJECTED ON THE RENDER, which is
+// a finding rather than a fault. The master carries 59pt of iOS status bar
+// that the web harness has none of, so the two screens' CONTENT is offset by
+// about 7% of the height: the master's blank band above the search pill lands
+// on the render's own search results, and the band under the master's last
+// card lands inside the render's card. A tall band cannot be both. The gutters
+// survive precisely because they are tall enough to average over the offset,
+// which is why the fence chose them. Rather than invent a second coordinate
+// system for the two that do not survive — which is the exact fault at the top
+// of this comment — the variance gate throws them out and says so.
+//
+// THE GATE: a position is rejected if EITHER image's per-pixel luminance
+// standard deviation over the patch exceeds INK_SD, the same 6/255 the colour
+// pass already uses to mean "there is something drawn here". Ground runs 1.2
+// to 4.3; a patch with a card or a line of type in it runs 30 to 44.
+
+/** Ground-only positions, as fractions of each image's own canvas. */
+export const GROUND_POSITIONS = {
+  // home(13)'s two, verbatim, and their mirrors.
+  'upper gutter L': [0.0, 0.08, 0.045, 0.3],
+  'lower gutter L': [0.0, 0.55, 0.045, 0.85],
+  'upper gutter R': [0.955, 0.08, 1.0, 0.3],
+  'lower gutter R': [0.955, 0.55, 1.0, 0.85],
+  // Derived from the MASTER's layout, because the master is the reference this
+  // whole tool measures against: the blank band between the last ink above the
+  // search pill and the pill's own top edge, and the band between the bottom
+  // of the promo card and the "Nearby" heading under it. Both are taken across
+  // the middle 70% of the width so they cannot reach into the gutters above.
+  'above search pill': [0.15, 0.324, 0.85, 0.334],
+  'below last card': [0.15, 0.822, 0.85, 0.848],
+};
+
+/** Per-channel median, its luminance, and the patch's own luminance spread. */
+export function groundPatch(img, [fx0, fy0, fx1, fy1]) {
+  const x0 = Math.floor(fx0 * img.width);
+  const x1 = Math.min(img.width - 1, Math.ceil(fx1 * img.width) - 1);
+  const y0 = Math.floor(fy0 * img.height);
+  const y1 = Math.min(img.height - 1, Math.ceil(fy1 * img.height) - 1);
+  const r = [];
+  const g = [];
+  const b = [];
+  const lums = [];
+  for (let y = y0; y <= y1; y += 1) {
+    for (let x = x0; x <= x1; x += 1) {
+      const [pr, pg, pb] = img.at(x, y);
+      r.push(pr);
+      g.push(pg);
+      b.push(pb);
+      lums.push(luminance(pr, pg, pb));
+    }
+  }
+  const mean = lums.reduce((a, v) => a + v, 0) / lums.length;
+  const sd = Math.sqrt(lums.reduce((a, v) => a + (v - mean) ** 2, 0) / lums.length);
+  const mr = median(r);
+  const mg = median(g);
+  const mb = median(b);
+  return { r: mr, g: mg, b: mb, y: luminance(mr, mg, mb), sd, n: lums.length, x0, x1, y0, y1 };
+}
+
+export function reportGroundPositions(masterPath, renderPath) {
+  const master = decode(masterPath);
+  const render = decode(renderPath);
+  console.log('GROUND — the same normalised patches in both images');
+  console.log(`  master  ${masterPath}  ${master.width}x${master.height}px`);
+  console.log(`  render  ${renderPath}  ${render.width}x${render.height}px`);
+  console.log(`  a position is REJECTED when either image's luminance sd over it exceeds ${INK_SD}`);
+  console.log(
+    '\nposition            fraction (x0,y0,x1,y1)      master           Y      sd |    render           Y      sd |    ΔY     ΔR     ΔG     ΔB',
+  );
+  const rows = [];
+  const rejected = [];
+  for (const [name, box] of Object.entries(GROUND_POSITIONS)) {
+    const m = groundPatch(master, box);
+    const r = groundPatch(render, box);
+    const frac = box.map((v) => v.toFixed(3)).join(',');
+    if (m.sd > INK_SD || r.sd > INK_SD) {
+      const which = m.sd > INK_SD && r.sd > INK_SD ? 'both' : m.sd > INK_SD ? 'master' : 'render';
+      rejected.push({ name, which, m, r });
+      console.log(
+        `${name.padEnd(18)}  ${frac.padEnd(25)}  REJECTED — ${which} carries content ` +
+          `(master sd ${m.sd.toFixed(2)}, render sd ${r.sd.toFixed(2)})`,
+      );
+      continue;
+    }
+    rows.push({ name, box, m, r });
+    console.log(
+      `${name.padEnd(18)}  ${frac.padEnd(25)}  ${hex(m)} ${i3(m.r)} ${i3(m.g)} ${i3(m.b)} ` +
+        `${f2(m.y)} ${f2(m.sd)} | ${hex(r)} ${i3(r.r)} ${i3(r.g)} ${i3(r.b)} ${f2(r.y)} ${f2(r.sd)} | ` +
+        `${f2(r.y - m.y)} ${i3(r.r - m.r)} ${i3(r.g - m.g)} ${i3(r.b - m.b)}`,
+    );
+  }
+  const above = rows.filter((row) => row.r.y > row.m.y);
+  console.log(
+    `\n  ${rows.length} position(s) measured, ${rejected.length} rejected; ` +
+      `the render reads ABOVE the master at ${above.length} of them`,
+  );
+  for (const row of above) {
+    console.log(
+      `    ${row.name}: render ${row.r.y.toFixed(2)} vs master ${row.m.y.toFixed(2)} — ` +
+        `${(row.r.y - row.m.y).toFixed(2)}/255 too bright, needs gain ${(row.m.y / row.r.y).toFixed(4)}`,
+    );
+  }
+  if (!above.length) {
+    console.log('    none — every measured position is already at or below the master');
+  }
+  return { rows, rejected };
+}
+
+// ===========================================================================
+
 function main() {
   const args = parseArgs(process.argv.slice(2));
+  if (args.asset) {
+    reportAsset(args.asset);
+    return;
+  }
+  if (args.ground) {
+    reportGroundPositions(args.ground[0], args.ground[1]);
+    return;
+  }
   run({ ...args, title: 'master-diff — a master versus a harness render', colour: true });
 }
 
