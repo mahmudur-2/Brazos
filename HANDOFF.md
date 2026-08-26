@@ -43,7 +43,409 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Current state — after the 2026-08-26 ground pass (RUN GROUND1)
+
+Three defects, one of which turned out not to exist. The atmosphere raster was
+banded and was believed to be far too bright; the nav pill sat in a flat
+rectangle of shell ground instead of on the atmosphere; and every card in dark
+was casting a shadow that arithmetically could not darken the ground under it.
+**Two were real and are fixed. The brightness one was measured properly for the
+first time and is almost entirely a measurement artefact.**
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`2aa116c`|`scripts/master-diff.mjs` grew `--asset` and `--ground`|
+|C2|`5d58984`|`scripts/atmosphere-tune.mjs` + the rewritten raster|
+|C3|`56ff86a`|the pill floats; the atmosphere reaches the screen's bottom edge|
+|C4|`6477630`|`shadows.cardDark`, applied at nine sites; the Home chips gain depth|
+|C5|(this file)|the handoff|
+
+### THE PREMISE THAT WAS WRONG, AND HOW IT WAS WRONG
+
+An earlier analysis called this app's atmosphere "4.9x too bright" against
+master 44. That number came from putting the RASTER'S CENTRE box next to MASTER
+44'S SIDE GUTTERS — two different regions of a screen. The centre of the layer
+sits behind the hero and the promo card and is barely visible; the gutters are
+the one strip of the master with nothing in front of them. The ratio was a fact
+about two places, not about one difference.
+
+`node scripts/master-diff.mjs --ground <master> <render>` exists so that
+question can be asked properly: the same normalised patch, in both images. It
+is what decided C2(a).
+
+### BASELINE — before any change, at `bfb4c52`
+
+`npm run verify` exit 0, **1073 tests, 0 fail** — the same tally RUN LIT1 left.
+
+```
+GROUND — the same normalised patches in both images
+  master  docs/mockups/44_customer_home_dark.png  853x1844px
+  render  .shots/customer-home-dark.png  393x852px
+  a position is REJECTED when either image's luminance sd over it exceeds 6
+
+position            fraction (x0,y0,x1,y1)      master           Y      sd |    render           Y      sd |    dY     dR     dG     dB
+upper gutter L      0.000,0.080,0.045,0.300    #030E0B   3  14  11   11.44    3.39 | #010607   1   6   7    5.01    1.31 |   -6.44  -2  -8  -4
+lower gutter L      0.000,0.550,0.045,0.850    #030F0D   3  15  13   12.30    1.33 | #030E0D   3  14  13   11.59    1.95 |   -0.72   0  -1   0
+upper gutter R      0.955,0.080,1.000,0.300    #040A08   4  10   8    8.58    2.63 | #030706   3   7   6    6.08    4.24 |   -2.50  -1  -3  -2
+lower gutter R      0.955,0.550,1.000,0.850    #030C0A   3  12  10    9.94    1.22 | #030E0C   3  14  12   11.52    1.40 |    1.57   0   2   2
+above search pill   0.150,0.324,0.850,0.334    REJECTED — render carries content (master sd 1.47, render sd 43.68)
+below last card     0.150,0.822,0.850,0.848    REJECTED — render carries content (master sd 2.26, render sd 31.77)
+
+  4 position(s) measured, 2 rejected; the render reads ABOVE the master at 1 of them
+    lower gutter R: render 11.52 vs master 9.94 — 1.57/255 too bright, needs gain 0.8633
+```
+
+**The two rejections are a finding, not a fault.** The master carries 59pt of
+iOS status bar the web harness has none of, so the two screens' content is
+offset by about 7% of the height: the master's blank band above the search pill
+lands on the render's own search results, and the band under the master's last
+card lands inside the render's card. A tall band cannot be both. Inventing a
+second coordinate system for them would be the same mistake as the 4.9x
+comparison, so the variance gate throws them out and names them.
+
+The four gutters survive because they are tall enough to average over the
+offset — which is why `tests/emeraldFences.test.mjs`'s home(13) fence chose two
+of them in the first place. This run mirrored those two onto the right edge.
+
+Baseline raster, `--asset`:
+
+```
+ASSET — assets/prestige/home-atmosphere-dark.png
+  1290x2796px, PNG colour type 2, 3333006 bytes on disk
+  histogram occupancy, bottom 32 levels:  R 32/32 100.00%   G 31/32 98.50%   B 32/32 99.76%
+  BANDING — 33 plateaus longer than 8px down the centre column, 11.8 per 1000 rows
+  vignette — corners 4.51 / 4.64 / 3.12 / 5.53   mean 4.45   centre 21.86   lift 4.91x
+  frame     mean 11.23, min 0.70, max 53.13
+```
+
+Master 44 under the same probe: **44 plateaus, 23.9 per 1000 rows.**
+
+### C2(a) — DARKENED, BUT ONLY IN ONE CORNER
+
+Three of the four measurable ground positions already sat at or BELOW master
+44's. One did not: the lower right gutter, by 1.57/255. So the transform is
+1.0 — no change whatever — everywhere except a smooth well around that one
+rectangle, fading back to 1.0 over 0.30 of the frame. It is not a scale on the
+frame, and it is not calibrated on a range measured somewhere else.
+
+Measured on the raster itself, before to after:
+
+```
+right band 0.955..1 x 0.55..0.85   mean Y  9.141 -> 7.835   (the correction)
+left  band 0..0.045 x 0.55..0.85   mean Y  7.595 -> 7.605   (dither only)
+centre box 0.3..0.7 x 0.42..0.62   mean Y 21.711 -> 21.711  (untouched)
+home(13) fence: corners 4.537 -> 4.419, middle 21.702 -> 21.702, ratio 4.783 -> 4.911
+```
+
+The corner-to-centre ratio moved **+2.7%**, well inside the 15% cap, and it
+moved UPWARD — the fence's `middle > corners * 2` has more headroom than before,
+not less.
+
+### C2(b) — DITHERED, AT THE LEAST AMPLITUDE THAT HOLDS THE METRIC
+
+Plus or minus 1 per channel, xorshift32 seeded `0x5bf03635`.
+
+| | before | after | master 44 |
+|-|-|-|-|
+|BANDING (plateaus > 8px, centre column)|33|**14**|44|
+|per 1000 rows|11.8|**5.0**|23.9|
+|bytes|3 333 006|**4 081 860**|—|
+|bottom-32 occupancy G|31/32|**32/32**|32/32|
+
+**The target was already met at baseline** — 33 is under master 44's 44 — and
+that is stated rather than hidden. The dither was applied anyway because C2(b)
+is unconditional, at the least non-zero amplitude; doubling it would have
+reached 3 plateaus and cost more bytes. The 22.5% file growth is the price of
+the noise.
+
+### THE PNG ENCODER, AND THE PROOF IT IS ONE
+
+There is no image library on this machine and none may be installed, so
+`scripts/atmosphere-tune.mjs` writes the PNG itself: IHDR / IDAT / IEND with
+their own CRC32s, adaptive per-row filtering (the spec's minimum-sum-of-
+absolute-differences heuristic) and `deflateSync`. Filter 0 on every row is
+correct but deflates a dithered near-black frame to roughly three times the
+size, so the heuristic is used; `tests/pngGeometry.mjs`'s decoder already
+handles all five filter types.
+
+```
+encoder round-trip: 61x43, 2623 pixels re-read through tests/pngGeometry.mjs
+decode() — every channel and the colour type match
+```
+
+It runs on every invocation, before the real asset is opened. **Determinism**,
+proved by running the transform twice on two copies of the same input:
+
+```
+determinism: run A 208261bacf7e43aa0552002e4788d4df056067eacdaafb74b356def5835e7794
+determinism: run B 208261bacf7e43aa0552002e4788d4df056067eacdaafb74b356def5835e7794
+determinism: IDENTICAL
+```
+
+The script records the SHA-256 of the input it is calibrated against and
+REFUSES an in-place re-run against anything else, so the gain can never be
+applied twice by accident. `--force` is the deliberate override.
+
+### C3 — THE PILL FLOATS, AND THE ATMOSPHERE RUNS TO THE EDGE
+
+`@react-navigation/bottom-tabs` lays the scene container and the bar out as
+siblings in one column, and that container is `{ flex: 1, overflow: 'hidden' }`
+(verified against the installed 7.18.3 source). So the scene — and every layer
+inside it — stops at the pill's top edge, and no negative offset can reach past
+it. What painted the bar row instead was `navigation/ModeShell.tsx`'s flat
+ground: on the dark render it measured exactly `#02110D`, the token, against an
+atmosphere at `#031211` a pixel above it.
+
+The mechanism is the bar itself. `tabBarStyle` gains
+`position: 'absolute', left: 0, right: 0, bottom: 0` for exactly two routes —
+`HomeMain` and `WorkerHome`, the only two screens that mount
+`components/HomeAtmosphere.tsx` — resolved through
+`getFocusedRouteNameFromRoute`, so it is the focused LEAF and not the `Home`
+TAB, which is a stack holding nine other screens. The pill's own geometry does
+not move: the margins, the height and the radius are untouched, and `bottom: 0`
+puts its bottom edge exactly where the column put it. The two homes reserve the
+footprint themselves with `useFloatingNavClearance()` — the derived hook.
+`layout.floatingNavClearance` stays deleted.
+
+**THE PROOF — the ground on both sides of the pill's top edge (y 770), sampled
+in both side gutters where the page shows beside the pill:**
+
+```
+render                        above (y764..769)            below (y771..776)            |d| R G B
+BEFORE
+customer-home-dark [L]        #031211 (3,18,17) Y 14.74   #02110D (2,17,13) Y 13.52   1 1 4  FAIL
+customer-home-dark [R]        #03100D (3,16,13) Y 13.02   #02110D (2,17,13) Y 13.52   1 1 0  pass
+worker-home-dark   [L]        #031211 (3,18,17) Y 14.74   #02110D (2,17,13) Y 13.52   1 1 4  FAIL
+worker-home-dark   [R]        #03100D (3,16,13) Y 13.02   #02110D (2,17,13) Y 13.52   1 1 0  pass
+workersearch-dark  [L]        #02110D (2,17,13) Y 13.52   #02110D (2,17,13) Y 13.52   0 0 0  pass
+workersearch-dark  [R]        #02110D (2,17,13) Y 13.52   #02110D (2,17,13) Y 13.52   0 0 0  pass
+AFTER
+customer-home-dark [L]        #041211 (4,18,17) Y 14.95   #03100F (3,16,15) Y 13.16   1 2 2  PASS
+customer-home-dark [R]        #04100E (4,16,14) Y 13.30   #04110F (4,17,15) Y 14.09   0 1 1  PASS
+worker-home-dark   [L]        #041211 (4,18,17) Y 14.95   #03100F (3,16,15) Y 13.16   1 2 2  PASS
+worker-home-dark   [R]        #04100E (4,16,14) Y 13.30   #04110F (4,17,15) Y 14.09   0 1 1  PASS
+workersearch-dark  [L]        #02110D (2,17,13) Y 13.52   #02110D (2,17,13) Y 13.52   0 0 0  PASS
+workersearch-dark  [R]        #02110D (2,17,13) Y 13.52   #02110D (2,17,13) Y 13.52   0 0 0  PASS
+```
+
+Before, the rows under the line were the flat token on both homes; after, they
+are the raster, and every channel agrees within 2/255 across the line. **The
+non-Home control is byte-for-byte what it always was** — `#02110D` on both
+sides, no atmosphere anywhere near it. Note the right gutter passed BEFORE the
+fix by accident, because the atmosphere happens to be that dark there; a
+one-sided sample would have called this fixed while it was broken.
+
+### C4 — A SHADOW THAT CAN ACTUALLY DARKEN THIS GROUND
+
+`shadows.card` is `#10261D` at 0.08. Its relative luminance is 32.7/255; the
+dark page ground is 13.5 and the atmosphere over it measures about 11.5.
+Compositing 8% of something BRIGHTER than the surface it falls on cannot darken
+it — it lifts it. Every card in dark has been casting a shadow that does nothing
+or very slightly glows.
+
+`shadows.cardDark`, new in `ui/tokens.ts` and surfaced by reference from
+`lib/theme.ts` (one definition, two import surfaces):
+
+```
+web      boxShadow: '0 6px 16px rgba(0,0,0,0.5)'
+native   shadowColor '#000000'  opacity 0.5  radius 16  offset (0, 6)  elevation 6
+```
+
+Deliberately NOT tighter: `ui/primitives/BottomNav.tsx` records an operator
+rejection of a black shadow at 0.28 / radius 8 under the `[ + ]` tile — it "read
+as a hole punched under" it. 16 of blur under a 6pt offset spreads the same ink
+over about four times the area.
+
+**THE STEP, measured below the promo card's bottom edge (y 640), x 40..352:**
+
+```
+                BEFORE                AFTER
+   + 1.. 3px    #030E0C  Y 11.52      #010908  Y  7.23
+   + 4.. 6px    #030F0D  Y 12.30      #020A09  Y  8.23
+   + 7.. 9px    #030E0D  Y 11.59      #020B0A  Y  9.01
+   +10..12px    #030E0D  Y 11.59      #020C0A  Y  9.73
+   +13..15px    #030E0D  Y 11.59      #020D0B  Y 10.52
+   +16..18px    #030E0D  Y 11.59      #020D0C  Y 10.59
+   +19..21px    #030E0D  Y 11.59      #020D0C  Y 10.59
+   +22..24px    #030E0D  Y 11.59      #020E0C  Y 11.30
+   STEP         0.07 / 255            4.08 / 255
+```
+
+Before, the ground below the card is flat to within a tenth of a level — and
+the one row that moves at all is BRIGHTER, which is the old token doing exactly
+what the arithmetic above predicts. After, it is a monotone ramp from 7.23 at
+the edge to 11.30 twenty-four pixels out.
+
+The Home service chips carried no depth at all and now carry this token: below
+a row-1 chip (y 377), `+1..3px` went `#020B0A` Y 9.01 to `#010706` Y 5.65,
+against `+7..9px` at Y 6.44 — **a step of 0.00 to 0.79**. Small because a chip
+is small, and real.
+
+Applied at nine of the ten sites that spread `shadows.card`, always as an
+ADDITION gated on `isDark`, never a replacement, so light keeps exactly what it
+had: `HomeScreen` (promo card, job card, skeleton card, and both chip rows),
+`PostJobScreen` (both review cards), `WorkerHomeScreen` (summary card),
+`WorkerSearchScreen` (search row), `Card`, `ChatBubble` (reaction badge),
+`WorkerJobCard` (card and skeleton) and `ui/primitives/JobCard`.
+
+**THE ONE SITE DELIBERATELY LEFT ALONE** is
+`components/SuccessMark.shared.tsx`. Its dark treatment is already a decided
+one — `glow.halo` on the emerald — and on web a View carries ONE `boxShadow`,
+so adding this token there would not layer under the halo, it would delete it.
+
+**AND A RECORDED DEPARTURE.** `tests/themeTokens.test.mjs`'s parity fence holds
+that a theme decision may change a colour and nothing else, and it names
+`shadowOpacity` and `shadowRadius`. This token changes both, per theme, on the
+dispatch's explicit instruction. The fence was not edited, weakened or routed
+around by renaming: it does not see a token spread, because it reads object
+literals and `styles.*` keys — the same shape `glow` has been applied through
+since Prestige 0d. If the operator wants depth parity enforced against tokens
+too, that fence needs widening. It is a real gap and it is named here rather
+than left for someone to find.
+
+### THE GATE
+
+`node scripts/shots.mjs --build --only home`, fresh, after C4 landed at
+`2026-08-26T00:09:53-04:00`:
+
+```
+2026-08-26T00:10:13-04:00  .shots/customer-home-dark.png
+2026-08-26T00:10:15-04:00  .shots/customer-home-light.png
+2026-08-26T00:10:18-04:00  .shots/worker-home-dark.png
+2026-08-26T00:10:21-04:00  .shots/worker-home-light.png
+2026-08-26T00:10:32-04:00  .shots/workersearch-category-dark.png   (the control, same export)
+```
+
+AFTER, `--ground`:
+
+```
+position            fraction (x0,y0,x1,y1)      master           Y      sd |    render           Y      sd |    dY     dR     dG     dB
+upper gutter L      0.000,0.080,0.045,0.300    #030E0B   3  14  11   11.44    3.39 | #010607   1   6   7    5.01    1.42 |   -6.44  -2  -8  -4
+lower gutter L      0.000,0.550,0.045,0.850    #030F0D   3  15  13   12.30    1.33 | #020D0C   2  13  12   10.59    2.31 |   -1.72  -1  -2  -1
+upper gutter R      0.955,0.080,1.000,0.300    #040A08   4  10   8    8.58    2.63 | #030706   3   7   6    6.08    4.25 |   -2.50  -1  -3  -2
+lower gutter R      0.955,0.550,1.000,0.850    #030C0A   3  12  10    9.94    1.22 | #020D0B   2  13  11   10.52    1.61 |    0.57  -1   1   1
+above search pill   0.150,0.324,0.850,0.334    REJECTED — render carries content (master sd 1.47, render sd 43.68)
+below last card     0.150,0.822,0.850,0.848    REJECTED — render carries content (master sd 2.26, render sd 31.77)
+```
+
+**The delta at the corrected position went +1.57 to +0.57, not to zero, and the
+reason is C3.** The gain was computed against a layer whose box was the SCENE —
+393x770, because the bar was in flow — and `resizeMode="cover"` cropped the
+raster vertically to fit it. C3 gave the layer the whole 393x852, so the same
+normalised patch of the RENDER now samples a different band of the RASTER, and
+the corrected well no longer sits exactly under it. The same re-crop is why
+`lower gutter L` moved from -0.72 to -1.72 with no edit anywhere near it. The
+residual is 0.57/255 at one of four positions, with the other three between 2.5
+and 6.4 BELOW the master. **It is not chased with a second pass**: re-deriving
+the gain would mean re-extracting the pre-C2 bytes and landing a sixth commit
+this dispatch does not name, to move two thirds of one level.
+
+### LIGHT — WHAT MOVED, AND WHY THE HASH DID NOT HOLD
+
+The light customer Home render hashes **`554c352df4d053c60a6358f163e53803`**.
+RUN LIT1 recorded `09e129883311f85acf4771d883e3731f`, and that hash was still
+being produced by the pre-run tree an hour before this render was taken. **Byte
+identity did NOT hold, and it was never attainable in this run.** Both causes
+are measured, and neither is a visible change:
+
+```
+differing pixels: 1677 of 334836   max channel delta 168
+  y  13.. 30   627 px, max delta 168     the greeting
+  y 770..839  1050 px, max delta  91     the pill's glyph antialiasing
+```
+
+1. **The greeting is the clock, not the code.** `lib/time.ts`'s `greetingFor`
+   returns "Good evening" after 18:00 and "Good morning" before noon. LIT1's
+   baseline was rendered at about 22:59; this one at 00:10. The word under the
+   status bar is a different word, and `scripts/shots.mjs` fixes fixture
+   timestamps but not the wall clock. **Any run that renders Home outside
+   18:00-23:59 local will fail this byte-identity gate regardless of what it
+   changed** — that is a property of the gate. It should either fix the clock in
+   the harness or mask that band.
+2. **The bar row is sub-pixel.** All five nav slots hold the same colours to the
+   pixel except slot 0, where 40 pixels of the Home glyph's edge changed
+   antialiasing blend. Sampled deltas are 1-2 across most of the band; the large
+   ones are subpixel colour fringes on one glyph edge (`186,148,82` to
+   `97,158,142` — the same edge, half a pixel over). The cause is the pill's box
+   now being positioned absolutely, so its origin lands on a different
+   fractional pixel.
+
+Everything else in the light render — every row from y 31 to y 769 — is
+byte-identical. **No light-mode style, token or geometry was edited by this
+run.**
+
+Render hashes, for the next run to diff against:
+
+```
+customer-home-dark    c02ab9f3bb17fccfe8a48806220f9559
+customer-home-light   554c352df4d053c60a6358f163e53803
+worker-home-dark      629c75b950251b871a170e356ead7622
+worker-home-light     b4733e3c04dcefa7d2c0381f93caa17e
+```
+
+### THE TOOL DID NOT CHANGE UNDER ANYONE
+
+C1 added two modes to `scripts/master-diff.mjs` and everything it already did
+had to keep doing it. Proved twice, on the inputs that existed at run start:
+
+```
+master-diff  before 7f5f569fd4b64a34783bba0202f5fa40a292ae84cb33e2a3dde21946a79bc233
+master-diff  after  7f5f569fd4b64a34783bba0202f5fa40a292ae84cb33e2a3dde21946a79bc233
+home-diff    before ee5abb8d52dc8239ca392e42c45bb45e87af5211c3df5f9ad1e6299aa2d97fda
+home-diff    after  ee5abb8d52dc8239ca392e42c45bb45e87af5211c3df5f9ad1e6299aa2d97fda
+```
+
+`diff` reports the two master-diff runs identical line for line — colour pass,
+content-relative projection, nested-control step-around and all. The hashes are
+SHA-256 of the captured stdout and are computed on THIS run's inputs; no hash
+from a previous run was reused, because the renders those described no longer
+exist.
+
+### Verification
+
+`npm run verify` exits 0 before every commit in this run: **1073 tests, 0 fail**
+at the base gate and again after C4. No test was deleted, disabled, skipped or
+weakened.
+
+Three fences were REDONE rather than adjusted, each because the thing it
+described genuinely moved:
+
+* `tests/motion120.test.mjs`'s chat-column arithmetic asserted "nothing here is
+  absolutely positioned" and carried an explicit instruction — *"If the bar is
+  ever absolutely positioned, this test is wrong and must be redone rather than
+  adjusted."* It now asserts the exception is an ALLOW-LIST of exactly two leaf
+  route names, reads those names out of the source, and fails if a third
+  appears or if `Chat` joins them. Strictly stronger than the line it replaced.
+* `tests/workerHome.test.mjs` found the summary card by its whole `style` prop
+  and now finds it by its style KEY, walking back to the enclosing `<View>`.
+  The tag-balance walk that proves the count pills sit inside it is untouched.
+* `tests/themeTokens.test.mjs`'s executable stub of `lib/theme.ts` destructures
+  what that module imports from `ui/tokens`. `shadows` joined that import, so
+  the STUB is widened — which is what its own comment says to do: "the stub is
+  widened, never the assertions".
+
+`tests/themeResolution.test.mjs`'s BAKED_ART roster keeps the atmosphere at
+`opaque-dark`: the rewritten file is still PNG colour type 2 at 1290x2796 with
+no alpha channel, so the opaque branch of the alpha sweep measures it exactly as
+before. The roster comment that named a size this file has never had is
+corrected in the same commit.
+
+`components/HomeAtmosphere.tsx`'s docblock is re-derived from the file it
+mounts, as the RUN H2 fence requires, and now also records what the transform
+did and what it left alone.
+
+Nothing was pushed; no database was contacted; no SQL was executed; no archive
+work was done. `.gitignore`, `app.json` and `eas.json` are untouched. The images
+read were `docs/mockups/44_customer_home_dark.png`,
+`assets/prestige/home-atmosphere-dark.png` and the `.shots/*.png` this run
+rendered — all as script input, none opened for viewing.
+
+**A native build is REQUIRED before any OTA; package.json changed when
+expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
+differ from build 7's.**
+
+
+## The run before it — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -241,7 +643,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## The run before it — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Two runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -329,7 +731,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Two runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Three runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -514,7 +916,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Three runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Four runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -739,7 +1141,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Four runs back — after the 2026-08-25 three corrections (RUN H3)
+## Five runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -914,7 +1316,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Five runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Six runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -1183,7 +1585,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Six runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Seven runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -1334,7 +1736,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Seven runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Eight runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -1395,7 +1797,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Eight runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Nine runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
