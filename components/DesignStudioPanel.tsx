@@ -1,6 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Animated,
   PanResponder,
   Platform,
   Pressable,
@@ -9,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -29,7 +29,13 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { dark as emeraldDarkPalette, light as emeraldLightPalette } from '../ui/tokens';
-import { SURFACE_GLOW_ALPHA } from '../ui/primitives';
+import { SURFACE_GLOW_ALPHA, useFloatingNavClearance } from '../ui/primitives';
+import {
+  clampPanelRect,
+  panelWidthFor,
+  type PanelFrame,
+  type PanelRect,
+} from '../ui/designStudioLayout';
 import {
   STUDIO_CATEGORIES,
   STUDIO_REGISTRY,
@@ -44,23 +50,29 @@ import {
 // FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED. The old "strip before TestFlight" instruction is SUPERSEDED: the panel ships in every build and lib/designStudioGate.ts decides where it may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED elsewhere). Its mount in navigation/ModeShell.tsx reads that gate.
 
 /**
- * RUN S2 (C2) — THE SCHEMA-DRIVEN DESIGN STUDIO.
+ * RUN S2 (C2/C3) — THE SCHEMA-DRIVEN DESIGN STUDIO.
  *
  * A floating tuning panel over the whole app, toggled from the Appearance
  * screen's "Design studio" row. It renders ENTIRELY from the registry in
  * ui/designStudioSchema.ts — zero hand-wired rows, no per-token literals
  * (tests/designStudio.test.mjs holds both) — and writes overrides only
- * through each entry's own `write`. Categories collapse, carry their
- * Ionicons glyph and live counts; rows show the plain label over the
- * technical key, a modified indicator ("24 → 18"), a star, an info
- * affordance surfacing the one-line description, and a per-token reset.
- * The toolbar filters live: search over label/key/category, favourites,
- * modified-only, and the Simple/Advanced tier toggle (Simple default).
+ * through each entry's own `write`.
+ *
+ * C3 ERGONOMICS. The panel is clamped on EVERY axis through
+ * ui/designStudioLayout.ts's pure `clampPanelRect`, re-applied on drag,
+ * resize, collapse and every frame change: the header can never leave the
+ * safe interactive area, and the bottom nav is never covered — the panel is
+ * NON-MODAL and the app behind stays fully interactive. It is vertically
+ * resizable by its header handle (PANEL_MIN_HEIGHT up to the full available
+ * area) with the content scrolling internally at every height, and it
+ * collapses — separately from resizing — to a slim "Customizing — <category>"
+ * pill that restores both height and scroll position on tap. Geometry
+ * persists for the session in a module-level store, so closing and reopening
+ * the studio keeps the operator's arrangement; a relaunch resets it.
  *
  * DELIBERATELY NOT GLASS. The panel is a plain solid dark card in both
  * themes, so it never blurs — or repaints with — the very materials it is
- * tuning. Dragging and clamping are C3's work; this commit keeps G1's
- * vertical header drag.
+ * tuning.
  */
 
 /** The Values readout is data, so it renders in the platform's monospace. */
@@ -82,6 +94,15 @@ function normalizeHex(raw: string): string | null {
       : bare;
   return `#${full.toUpperCase()}`;
 }
+
+/** The session's panel arrangement — survives closing the studio, dies with
+ *  the process. LIVE-tier state, exactly like the overrides it tunes. */
+const panelSession = {
+  rect: { x: 12, y: 72, height: 360 } as PanelRect,
+  collapsed: false,
+  scrollY: 0,
+  category: 'All controls',
+};
 
 type PanelStyles = ReturnType<typeof stylesFor>;
 
@@ -361,6 +382,8 @@ export function DesignStudioPanel() {
   const styles = stylesFor(colors);
   const overrides = useDesignOverrides();
   const insets = useSafeAreaInsets();
+  const window = useWindowDimensions();
+  const navClearance = useFloatingNavClearance();
 
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<StudioFilter>('all');
@@ -368,6 +391,97 @@ export function DesignStudioPanel() {
   const [favourites, setFavourites] = useState<ReadonlySet<string>>(new Set());
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [infoKey, setInfoKey] = useState<string | null>(null);
+
+  // C3 — geometry. One rect, one collapse flag, every mutation clamped, and
+  // the session store keeps the arrangement while the studio is toggled off.
+  const frame: PanelFrame = useMemo(
+    () => ({
+      windowWidth: window.width,
+      windowHeight: window.height,
+      topInset: insets.top,
+      bottomInset: navClearance,
+    }),
+    [window.width, window.height, insets.top, navClearance],
+  );
+  const [rect, setRect] = useState<PanelRect>(() =>
+    clampPanelRect(panelSession.rect, frame, panelSession.collapsed),
+  );
+  const [collapsed, setCollapsed] = useState(panelSession.collapsed);
+  const [lastCategory, setLastCategory] = useState(panelSession.category);
+
+  const rectRef = useRef(rect);
+  rectRef.current = rect;
+  const frameRef = useRef(frame);
+  frameRef.current = frame;
+  const collapsedRef = useRef(collapsed);
+  collapsedRef.current = collapsed;
+
+  // Re-applied on every frame change — rotation, inset change, the nav bar's
+  // own dials moving its footprint — never only on gestures.
+  useEffect(() => {
+    setRect((current) => {
+      const next = clampPanelRect(current, frame, collapsed);
+      return next.x === current.x && next.y === current.y && next.height === current.height
+        ? current
+        : next;
+    });
+  }, [frame, collapsed]);
+
+  useEffect(() => {
+    panelSession.rect = rect;
+    panelSession.collapsed = collapsed;
+    panelSession.category = lastCategory;
+  }, [rect, collapsed, lastCategory]);
+
+  const scrollRef = useRef<ScrollView | null>(null);
+
+  const dragStart = useRef<PanelRect>(rect);
+  const drag = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_event, gesture) =>
+        Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+      onPanResponderGrant: () => {
+        dragStart.current = rectRef.current;
+      },
+      onPanResponderMove: (_event, gesture) => {
+        setRect(
+          clampPanelRect(
+            {
+              x: dragStart.current.x + gesture.dx,
+              y: dragStart.current.y + gesture.dy,
+              height: dragStart.current.height,
+            },
+            frameRef.current,
+            collapsedRef.current,
+          ),
+        );
+      },
+    }),
+  ).current;
+
+  const resizeStart = useRef<PanelRect>(rect);
+  const resize = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        resizeStart.current = rectRef.current;
+      },
+      onPanResponderMove: (_event, gesture) => {
+        setRect(
+          clampPanelRect(
+            {
+              x: resizeStart.current.x,
+              y: resizeStart.current.y,
+              height: resizeStart.current.height + gesture.dy,
+            },
+            frameRef.current,
+            false,
+          ),
+        );
+      },
+    }),
+  ).current;
 
   const ctx: StudioContext = useMemo(
     () => ({
@@ -383,25 +497,6 @@ export function DesignStudioPanel() {
     }),
     [overrides, isDark, insets.bottom],
   );
-
-  // Vertical drag by the header — position state only, never an animation.
-  const translateY = useRef(new Animated.Value(0)).current;
-  const restingY = useRef(0);
-  const drag = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 4,
-      onPanResponderMove: (_event, gesture) => {
-        translateY.setValue(restingY.current + gesture.dy);
-      },
-      onPanResponderRelease: (_event, gesture) => {
-        restingY.current += gesture.dy;
-      },
-      onPanResponderTerminate: (_event, gesture) => {
-        restingY.current += gesture.dy;
-      },
-    }),
-  ).current;
 
   const query = search.trim().toLowerCase();
 
@@ -440,6 +535,34 @@ export function DesignStudioPanel() {
   const modifiedCountOf = (entries: StudioEntry[]) =>
     entries.reduce((count, entry) => count + (isModified(entry, ctx) ? 1 : 0), 0);
 
+  const panelWidth = panelWidthFor(frame);
+
+  // COLLAPSE, separate from resize: a slim pill that keeps the drag handle,
+  // names what was being customised, and restores height AND scroll position.
+  if (collapsed) {
+    return (
+      <View style={styles.overlay} pointerEvents="box-none">
+        <View
+          style={[styles.collapsedPill, { left: rect.x, top: rect.y, maxWidth: panelWidth }]}
+          {...drag.panHandlers}
+        >
+          <View style={styles.grip} />
+          <Pressable
+            onPress={() => setCollapsed(false)}
+            style={({ pressed }) => [styles.collapsedBody, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Restore the design studio"
+          >
+            <Text style={styles.collapsedLabel} numberOfLines={1}>
+              Customizing — {lastCategory}
+            </Text>
+            <Ionicons name="chevron-up" size={14} color={withAlpha(colors.white, 0.7)} />
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   const renderCategory = (category: StudioCategory) => {
     const entries = visibleByCategory.get(category.key) ?? [];
     if (!entries.length) return null;
@@ -455,7 +578,10 @@ export function DesignStudioPanel() {
     return (
       <View key={category.key} style={styles.category}>
         <Pressable
-          onPress={() => toggleSet(expanded, category.key, setExpanded)}
+          onPress={() => {
+            toggleSet(expanded, category.key, setExpanded);
+            setLastCategory(category.label);
+          }}
           style={({ pressed }) => [styles.categoryHeader, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityState={{ expanded: isOpen }}
@@ -510,17 +636,32 @@ export function DesignStudioPanel() {
 
   return (
     <View style={styles.overlay} pointerEvents="box-none">
-      <Animated.View style={[styles.panel, { transform: [{ translateY }] }]}>
-        <View style={styles.header} {...drag.panHandlers}>
-          <View style={styles.grip} />
-          <Text style={styles.title}>Design studio</Text>
+      <View
+        style={[
+          styles.panel,
+          { left: rect.x, top: rect.y, width: panelWidth, height: rect.height },
+        ]}
+      >
+        <View style={styles.header}>
+          <View style={styles.dragZone} {...drag.panHandlers}>
+            <View style={styles.grip} />
+            <Text style={styles.title}>Design studio</Text>
+          </View>
+          <View
+            style={styles.headerAction}
+            {...resize.panHandlers}
+            accessibilityRole="adjustable"
+            accessibilityLabel="Resize the design studio"
+          >
+            <Ionicons name="resize-outline" size={16} color={withAlpha(colors.white, 0.75)} />
+          </View>
           <Pressable
-            onPress={resetDesignOverrides}
+            onPress={() => setCollapsed(true)}
             style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
             accessibilityRole="button"
-            accessibilityLabel="Reset all overrides"
+            accessibilityLabel="Collapse the design studio"
           >
-            <Text style={styles.headerActionLabel}>Reset</Text>
+            <Ionicons name="chevron-down" size={16} color={withAlpha(colors.white, 0.75)} />
           </Pressable>
           <Pressable
             onPress={() => setDesignStudioOpen(false)}
@@ -584,10 +725,30 @@ export function DesignStudioPanel() {
                 </Text>
               </Pressable>
             ))}
+            <Pressable
+              onPress={resetDesignOverrides}
+              style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Reset all overrides"
+            >
+              <Text style={styles.filterLabel}>Reset</Text>
+            </Pressable>
           </View>
         </View>
 
-        <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+        <ScrollView
+          ref={scrollRef}
+          style={styles.body}
+          contentContainerStyle={styles.bodyContent}
+          onScroll={(event) => {
+            panelSession.scrollY = event.nativeEvent.contentOffset.y;
+          }}
+          scrollEventThrottle={64}
+          onLayout={() => {
+            // Restoring from the collapse pill: put the list back where it was.
+            scrollRef.current?.scrollTo({ y: panelSession.scrollY, animated: false });
+          }}
+        >
           {STUDIO_CATEGORIES.map(renderCategory)}
 
           <Text style={styles.sectionLabel}>Values</Text>
@@ -595,7 +756,7 @@ export function DesignStudioPanel() {
             {JSON.stringify(overrides, null, 2)}
           </Text>
         </ScrollView>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -606,26 +767,54 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       ...StyleSheet.absoluteFillObject,
     },
     // A plain solid dark card in BOTH themes — never glass, never the palette
-    // surface it might itself be tuning.
+    // surface it might itself be tuning. Position and size arrive at render
+    // from the clamped rect.
     panel: {
       position: 'absolute',
-      top: 72,
-      left: 12,
-      right: 12,
-      maxHeight: 460,
       backgroundColor: colors.black,
       borderRadius: 14,
       borderWidth: 1,
       borderColor: withAlpha(colors.white, 0.18),
     },
-    header: {
+    collapsedPill: {
+      position: 'absolute',
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
+      height: 44,
+      paddingHorizontal: 14,
+      borderRadius: 22,
+      backgroundColor: colors.black,
+      borderWidth: 1,
+      borderColor: withAlpha(colors.white, 0.18),
+    },
+    collapsedBody: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      flexShrink: 1,
+    },
+    collapsedLabel: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.white,
+      flexShrink: 1,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
       paddingHorizontal: 14,
       paddingVertical: 10,
       borderBottomWidth: 1,
       borderBottomColor: withAlpha(colors.white, 0.12),
+    },
+    dragZone: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      minHeight: 32,
     },
     grip: {
       width: 24,
@@ -640,11 +829,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.white,
     },
     headerAction: {
-      minWidth: 44,
+      minWidth: 36,
       minHeight: 32,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 8,
+      paddingHorizontal: 6,
     },
     headerActionLabel: {
       fontSize: 13,
@@ -695,7 +884,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flex: 1,
     },
     body: {
-      flexGrow: 0,
+      flex: 1,
     },
     bodyContent: {
       padding: 12,

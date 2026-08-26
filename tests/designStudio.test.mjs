@@ -387,6 +387,81 @@ test('[static] the panel renders from the registry — zero hand-wired rows, no 
 });
 
 // ---------------------------------------------------------------------------
+// Panel ergonomics (S2 C3) — the clamp, executed
+// ---------------------------------------------------------------------------
+
+test('clamp: the header can never leave the safe interactive area, at min and max height', async () => {
+  const js = stripTypeScriptTypes(await read('ui/designStudioLayout.ts'), { mode: 'strip' });
+  const layout = await import(toDataUrl(js));
+  const { clampPanelRect, panelWidthFor, PANEL_MIN_HEIGHT, PANEL_COLLAPSED_HEIGHT } = layout;
+
+  assert.equal(PANEL_MIN_HEIGHT, 180, 'the dispatched resize floor');
+
+  // A notched iPhone-ish frame: 393x852, status area 59, nav footprint 122.
+  const frame = { windowWidth: 393, windowHeight: 852, topInset: 59, bottomInset: 122 };
+  const maxY = frame.windowHeight - frame.bottomInset;
+  const available = maxY - frame.topInset;
+
+  const heights = [Number.NEGATIVE_INFINITY, -50, 0, PANEL_MIN_HEIGHT, 400, available, 10_000, Number.NaN];
+  const positions = [-10_000, -1, 0, 59, 400, 700, 10_000, Number.NaN];
+  for (const collapsed of [false, true]) {
+    for (const height of heights) {
+      for (const y of positions) {
+        for (const x of [-10_000, -1, 0, 12, 24, 400, 10_000, Number.NaN]) {
+          const next = clampPanelRect({ x, y, height }, frame, collapsed);
+          const box = collapsed ? Math.min(PANEL_COLLAPSED_HEIGHT, available) : next.height;
+          assert.ok(next.y >= frame.topInset, `top edge above the status area: y=${next.y}`);
+          assert.ok(
+            next.y + box <= maxY,
+            `bottom edge over the nav: y=${next.y} box=${box} (from y=${y}, h=${height})`,
+          );
+          assert.ok(next.x >= 0, `left edge off-screen: x=${next.x}`);
+          assert.ok(
+            next.x + panelWidthFor(frame) <= frame.windowWidth,
+            `right edge off-screen: x=${next.x}`,
+          );
+          assert.ok(next.height >= Math.min(PANEL_MIN_HEIGHT, available), 'height under the floor');
+          assert.ok(next.height <= available, 'height over the available area');
+          assert.ok(
+            Number.isFinite(next.x) && Number.isFinite(next.y) && Number.isFinite(next.height),
+            'a non-finite gesture input must resolve to a safe rect',
+          );
+        }
+      }
+    }
+  }
+
+  // Height runs the full available area — the max is exactly the space
+  // between the status area and the nav, never a fixed cap.
+  assert.equal(clampPanelRect({ x: 12, y: 59, height: 10_000 }, frame, false).height, available);
+
+  // A degenerate window (smaller than the floor) still holds every bound.
+  const tiny = { windowWidth: 100, windowHeight: 200, topInset: 40, bottomInset: 100 };
+  const cramped = clampPanelRect({ x: 0, y: 0, height: 500 }, tiny, false);
+  assert.ok(cramped.y >= tiny.topInset);
+  assert.ok(cramped.y + cramped.height <= tiny.windowHeight - tiny.bottomInset);
+});
+
+test('[static] the panel routes every gesture and frame change through the clamp, and stays non-modal', async () => {
+  const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
+  // Every mutation path clamps: init, the re-clamp effect, drag, resize.
+  const clampCalls = panel.match(/clampPanelRect\(/g) ?? [];
+  assert.ok(clampCalls.length >= 4, `every rect mutation must clamp (saw ${clampCalls.length})`);
+  // The frame's bottom boundary is the nav's LIVE footprint, so the bar is
+  // never covered and the app behind stays interactive.
+  assert.match(panel, /useFloatingNavClearance\(\)/);
+  assert.match(panel, /bottomInset: navClearance/);
+  assert.match(panel, /pointerEvents="box-none"/, 'the overlay must pass touches through');
+  // Collapse is its own affordance: the slim pill names the category and
+  // restores height and scroll position.
+  assert.match(panel, /Customizing — \{lastCategory\}/);
+  assert.match(panel, /panelSession\.scrollY/, 'scroll position must persist for the session');
+  // Content scrolls internally at every height: the body flexes inside the
+  // sized panel rather than sizing it.
+  assert.match(panel, /height: rect\.height/);
+});
+
+// ---------------------------------------------------------------------------
 // The generalised override layer (S2 C1)
 // ---------------------------------------------------------------------------
 
