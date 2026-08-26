@@ -80,6 +80,16 @@ export type MediaUploaderProps = {
   /** Caps in-picker recording length for `kind="video"`. Library picks are
    *  not covered by it — enforce real duration limits via `validate`. */
   videoMaxDurationSec?: number;
+  /**
+   * RUN PJ1 (C5) — a per-instance scale for the whole control: tile
+   * dimensions, label and caption sizes, glyphs and internal spacing move
+   * together so the proportions hold. Default 1 leaves every other caller
+   * byte-identical; the Post-a-Job media step passes 1.2.
+   */
+  scale?: number;
+  /** Width-to-height ratio of the tiles (default 1, a square). The
+   *  Post-a-Job video control passes 2 so its one clip tile reads wide. */
+  tileAspect?: number;
   kind: MediaUploaderKind;
   maxItems: number;
   disabled?: boolean;
@@ -96,7 +106,16 @@ export type MediaUploaderProps = {
  * informative one. No thumbnail service and no new dependency: expo-video is
  * already how this app shows a paused frame.
  */
-function VideoTile({ uri, durationMs }: { uri: string; durationMs: number | null }) {
+function VideoTile({
+  uri,
+  durationMs,
+  playSize = 30,
+}: {
+  uri: string;
+  durationMs: number | null;
+  /** C5 — the play mark rides the caller's scale with the tile it sits on. */
+  playSize?: number;
+}) {
   const { emerald: colors, palette } = useThemeColors();
   const styles = stylesFor(colors);
   const chrome = chromeFor(palette);
@@ -119,7 +138,7 @@ function VideoTile({ uri, durationMs }: { uri: string; durationMs: number | null
           swallow both without this. */}
       <View style={[styles.videoPoster, chrome.posterScrim]} pointerEvents="none" />
       <View style={styles.videoCentre} pointerEvents="none">
-        <Ionicons name="play-circle" size={30} color={palette.white} />
+        <Ionicons name="play-circle" size={playSize} color={palette.white} />
       </View>
       {duration ? (
         <View style={[styles.durationBadge, chrome.scrim]} pointerEvents="none">
@@ -140,6 +159,8 @@ export function MediaUploader({
   shouldDeleteOnRemove,
   onPressItem,
   videoMaxDurationSec,
+  scale = 1,
+  tileAspect = 1,
   kind,
   maxItems,
   disabled,
@@ -172,6 +193,27 @@ export function MediaUploader({
   const durationsRef = useRef<Map<string, number>>(new Map());
 
   const atLimit = items.length >= maxItems;
+
+  // C5 — the scaled overrides. Inline rather than in the stylesheet because
+  // themedStyles caches per PALETTE, not per instance; a null leaves every
+  // scale-1 caller rendering the cached styles byte-identically. The remove
+  // control and the duration badge are overlay chrome shared with every media
+  // surface and deliberately do not scale.
+  const s = (value: number) => Math.round(value * scale);
+  const sized =
+    scale !== 1 || tileAspect !== 1
+      ? {
+          wrap: { gap: s(spacing.sm) },
+          labelRow: { gap: s(spacing.sm) },
+          row: { gap: s(spacing.sm) },
+          tile: {
+            width: Math.round(TILE_SIZE * scale * tileAspect),
+            height: s(TILE_SIZE),
+          },
+          label: { fontSize: s(typeScale.sub.fontSize) },
+          capText: { fontSize: s(typeScale.caption.fontSize) },
+        }
+      : null;
 
   // RUN PJ1 (C4) — ONE cap badge, both kinds, derived here and rendered by
   // one block below: the video control reads the exact cap handed to the
@@ -243,9 +285,9 @@ export function MediaUploader({
   }
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.labelRow}>
-        <Text style={[styles.label, isDark && styles.labelDark]}>
+    <View style={[styles.wrap, sized?.wrap]}>
+      <View style={[styles.labelRow, sized?.labelRow]}>
+        <Text style={[styles.label, isDark && styles.labelDark, sized?.label]}>
           {label} · {items.length}/{maxItems}
         </Text>
         {/* The cap, said out loud beside the counter, and READ FROM the value
@@ -254,16 +296,16 @@ export function MediaUploader({
             limit from the one the control applies. */}
         {capBadge ? (
           <View style={[styles.capPill, isDark && styles.capPillDark]}>
-            <Ionicons name={capBadge.icon} size={12} color={lineWork} />
-            <Text style={[styles.capPillText, isDark && styles.capPillTextDark]}>
+            <Ionicons name={capBadge.icon} size={s(12)} color={lineWork} />
+            <Text style={[styles.capPillText, isDark && styles.capPillTextDark, sized?.capText]}>
               {capBadge.text}
             </Text>
           </View>
         ) : null}
       </View>
-      <View style={styles.row}>
+      <View style={[styles.row, sized?.row]}>
         {items.map((url, index) => (
-          <View key={url} style={styles.tile}>
+          <View key={url} style={[styles.tile, sized?.tile]}>
             <Pressable
               onPress={onPressItem ? () => onPressItem(url) : undefined}
               disabled={!onPressItem}
@@ -274,7 +316,11 @@ export function MediaUploader({
               {kind === 'photo' ? (
                 <RemoteImage uri={url} style={styles.thumb} contentFit="cover" />
               ) : (
-                <VideoTile uri={url} durationMs={durationsRef.current.get(url) ?? null} />
+                <VideoTile
+                  uri={url}
+                  durationMs={durationsRef.current.get(url) ?? null}
+                  playSize={s(30)}
+                />
               )}
             </Pressable>
             {/* D8 — ONE remove control, identical on both kinds, anchored
@@ -296,7 +342,7 @@ export function MediaUploader({
 
         {!atLimit && (
           <Pressable
-            style={[styles.tile, styles.addTile, isDark && styles.addTileDark]}
+            style={[styles.tile, styles.addTile, isDark && styles.addTileDark, sized?.tile]}
             onPress={handleAdd}
             disabled={uploading || disabled}
             accessibilityRole="button"
@@ -307,7 +353,7 @@ export function MediaUploader({
             ) : (
               <Ionicons
                 name={kind === 'photo' ? 'add' : 'videocam-outline'}
-                size={24}
+                size={s(24)}
                 color={lineWork}
               />
             )}

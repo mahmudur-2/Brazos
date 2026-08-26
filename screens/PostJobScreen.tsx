@@ -1276,6 +1276,8 @@ export function PostJobScreen() {
               <MediaUploader
                 kind="photo"
                 label="Photos (optional)"
+                // PJ1 (C5) — the whole media section renders 20% up.
+                scale={1.2}
                 // A hire request goes through create_offer(), whose server
                 // cap is still 5 (Phase 5 owns the offer RPCs); only the
                 // posting path's create_job() was raised to 10 in phase49.
@@ -1294,6 +1296,12 @@ export function PostJobScreen() {
                 <MediaUploader
                   kind="video"
                   label="Video (optional)"
+                  // PJ1 (C5) — same 20% scale as the photos above it, and the
+                  // one clip tile widens to twice its post-scale width
+                  // (202pt in a 345pt content column — no overflow, so the
+                  // full 2x is achieved).
+                  scale={1.2}
+                  tileAspect={2}
                   maxItems={MAX_VIDEOS}
                   items={videos}
                   onItemsChange={setVideos}
@@ -1311,9 +1319,12 @@ export function PostJobScreen() {
                   onUploadError={(message) => void alertAsync('Video upload failed', message)}
                 />
                 {/* PJ1 (C4) — the badge beside the counter says the minute
-                    now, so the caption keeps only the explanation. It fits
-                    ONE line at 393pt (measured 322 of 345 at 12pt). */}
-                <Text style={styles.fieldHint}>
+                    now, so the caption keeps only the explanation, on ONE
+                    line at 393pt. C5's 20% scale is capped by that rule: at
+                    14pt the sentence overflows the 345pt column even fully
+                    tightened (measured 351), so the caption stops at 13pt
+                    with -0.3 tracking (330 of 345). */}
+                <Text style={styles.videoHint}>
                   A short clip explains an awkward job faster than a paragraph.
                 </Text>
               </View>
@@ -2050,6 +2061,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     color: colors.textMuted,
     lineHeight: 17,
+    marginTop: -spacing.xs,
+  },
+  // C5 — the media caption's share of the section's 20% scale, capped by
+  // C4's one-line rule (see the call site). 13pt, tracked -0.3.
+  videoHint: {
+    fontSize: 13,
+    lineHeight: 18,
+    letterSpacing: -0.3,
+    color: colors.textMuted,
     marginTop: -spacing.xs,
   },
   floorHint: {
