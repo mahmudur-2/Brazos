@@ -1370,22 +1370,12 @@ export function PostJobScreen() {
                 </Pressable>
               </View>
 
-              {/* D11 — THIS CARD WAS UNREADABLE IN DARK, and the cause was
-                  the missing half of the treatment its sibling on step 2
-                  already had: `infoText` is `forest`, a deep green, and
-                  `infoCard` is `mint`, a near-black green. One deep green on
-                  another. The dark ink and border overrides are the same two
-                  the media advisory carries; this card simply never got
-                  them. */}
-              <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
-                <View style={styles.infoIcon}>
-                  <Ionicons name="information-circle-outline" size={20} color={colors.emerald} />
-                </View>
-                <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-                  Shows approximate area, exact coordinates stay hidden until job is
-                  confirmed by both parties.
-                </Text>
-              </View>
+              {/* PJ1 (C7) — the approximate-area info card is deleted. The
+                  privacy fact still reads twice on this same step: the step
+                  subtitle ("Workers browsing see only the area. The exact
+                  address stays private until you hire someone.") and the
+                  address field's caption ("Never shown until you hire — can
+                  see after job is accepted."). */}
 
               {/* The exact address and timing are meaningless for a direct
                   offer (the negotiation carries its own terms — Phase 5's

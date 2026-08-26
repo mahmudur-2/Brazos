@@ -529,36 +529,45 @@ const mediaSummary = await (async () => {
   return (await import(url)).mediaSummary;
 })();
 
-test('D11 · the area card says what it protects, and is legible in dark', () => {
+test('D11/PJ1-C7 · the area card is deleted, and the privacy fact still reads twice', () => {
   const screen = read('screens/PostJobScreen.tsx');
   const flat = flatten(screen);
 
-  // The copy, verbatim, with the "i" glyph in the existing icon slot.
-  assert.match(
-    flat,
-    /<Ionicons name="information-circle-outline" size=\{20\} color=\{colors\.emerald\} \/>/
-  );
-  assert.match(
-    flat,
-    /Shows approximate area, exact coordinates stay hidden until job is confirmed by both parties\./
+  // C7 — the card, its copy and its glyph are gone from the Location step.
+  assert.ok(
+    !flat.includes('Shows approximate area'),
+    'the approximate-area card is deleted, not reworded'
   );
   assert.ok(
-    !flat.includes('protected job-location data'),
-    'the sentence it replaced is retired, not left beside it'
+    !flat.includes('information-circle-outline'),
+    'the card\'s "i" glyph went with it'
   );
 
-  // THE READABILITY FAULT, NAMED. Both info cards must carry the dark
-  // overrides — the area card was the one missing them, which left deep-green
-  // text (`forest`) on a near-black-green card (`mint`).
+  // The privacy fact survives it, stated at least twice on the same step —
+  // the step subtitle and the address caption, both verbatim.
+  assert.match(
+    flat,
+    /Workers browsing see only the area\. The exact address stays private until you hire someone\./,
+    'the Location step subtitle still states the privacy rule'
+  );
+  assert.match(
+    flat,
+    /Never shown until you hire — can see after job is accepted\./,
+    'the address caption still states the privacy rule'
+  );
+
+  // Exactly ONE info card remains — the media advisory — and it keeps the
+  // dark overrides D11 established (deep-green text on a near-black-green
+  // card is the fault they exist for).
   assert.equal(
     (flat.match(/\[styles\.infoCard, isDark && styles\.infoCardDark\]/g) ?? []).length,
-    2,
-    'both info cards take the dark card treatment'
+    1,
+    'one info card remains and it takes the dark card treatment'
   );
   assert.equal(
     (flat.match(/\[styles\.infoText, isDark && styles\.infoTextDark\]/g) ?? []).length,
-    2,
-    'both info cards take the dark ink — this is the fix, not a repaint'
+    1,
+    'and its text takes the dark ink'
   );
 
   // ANTI-VACUITY: the two tokens the fault was made of really are one deep
