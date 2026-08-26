@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -9,6 +9,8 @@ import {
   StyleSheet,
   Text,
   View,
+  type StyleProp,
+  type ViewStyle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -30,6 +32,7 @@ import { ScreenHeader } from '../components/ScreenHeader';
 import { SuccessMark } from '../components/SuccessMark';
 import { FieldLabel, TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
+import { useEntrance } from '../hooks/useEntrance';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   arrivalWindowLabel,
@@ -196,6 +199,35 @@ const POST_STEPS = [
  * second alpha here would be a second decision about the same wash.
  */
 const PUBLISH_CARD_LIFT_ALPHA = 0.04;
+
+/**
+ * RUN PJ1 (C1) — EVERY STEP CHANGE ANIMATES ITS INCOMING CONTENT.
+ *
+ * The wizard's steps are internal renders keyed off the `step` state, not
+ * navigator routes, so the stack transition only ever plays on the way in
+ * from Home — moving between steps was an instant cut. This pane plays
+ * hooks/useEntrance's entrance (opacity 0→1, translateY 10→0 on the shared
+ * spring — the exact arrangement Home's sections use) for the arriving step.
+ *
+ * useEntrance fires once per MOUNT, so callers key the pane by the step
+ * index: a step change remounts it and the entrance fires again, forward and
+ * back, while unrelated re-renders (typing, uploads) keep the key and never
+ * replay it. Under reduced motion useEntrance returns undefined and this is
+ * a plain static View — which is also why the screenshot harness, which
+ * renders with prefers-reduced-motion, sees no transform at rest.
+ */
+function StepPane({
+  index = 0,
+  style,
+  children,
+}: {
+  index?: number;
+  style?: StyleProp<ViewStyle>;
+  children: ReactNode;
+}) {
+  const entrance = useEntrance(index);
+  return <Animated.View style={[style, entrance]}>{children}</Animated.View>;
+}
 
 export function PostJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -976,13 +1008,18 @@ export function PostJobScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.stepIntro}>
-            {/* Eyebrow law (decision 6): "STEP 2 OF 4" labels STRUCTURE, so it
-                is gold in dark. Light keeps the Heritage emerald. */}
-            <Text style={[styles.stepEyebrow, isDark && styles.stepEyebrowDark]}>
-              STEP {step + 1} OF {POST_STEPS.length}
-            </Text>
-            <Text style={styles.stepTitle}>{currentStepTitle}</Text>
-            <Text style={styles.stepSubtitle}>{currentStepSubtitle}</Text>
+            {/* C1 — keyed by step, so the heading trio re-enters with the
+                step it introduces. The progress row below stays put: it is
+                the wizard's persistent chrome, not the step's content. */}
+            <StepPane key={`intro-${step}`} style={styles.stepIntroText}>
+              {/* Eyebrow law (decision 6): "STEP 2 OF 4" labels STRUCTURE, so
+                  it is gold in dark. Light keeps the Heritage emerald. */}
+              <Text style={[styles.stepEyebrow, isDark && styles.stepEyebrowDark]}>
+                STEP {step + 1} OF {POST_STEPS.length}
+              </Text>
+              <Text style={styles.stepTitle}>{currentStepTitle}</Text>
+              <Text style={styles.stepSubtitle}>{currentStepSubtitle}</Text>
+            </StepPane>
 
             <View
               style={styles.progressRow}
@@ -1025,6 +1062,12 @@ export function PostJobScreen() {
             </View>
           )}
 
+          {/* C1 — one pane per step, keyed by the step index: the arriving
+              step's fields enter together, one stagger beat after the
+              heading trio above. Layout at rest is unchanged — the pane
+              carries the scroller's own gap between its children. */}
+          <StepPane key={`fields-${step}`} index={1} style={styles.stepPane}>
+
           {step === 0 && (
             <View style={styles.stepFields}>
               <TextField
@@ -1059,6 +1102,27 @@ export function PostJobScreen() {
                   before you can continue.
                 </Text>
               ) : null}
+            </View>
+          )}
+
+          {step === 0 && (
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Category</Text>
+              <View style={styles.chips}>
+                {/* D2: the saturated per-category palette is retired in dark
+                    wherever a category is drawn. Light keeps it. */}
+                {JOB_CATEGORIES.map((c) => (
+                  <Chip
+                    key={c}
+                    label={JOB_CATEGORY_LABELS[c]}
+                    icon={JOB_CATEGORY_ICONS[c]}
+                    accentColor={isDark ? colors.gold : categoryAccent(c).bg}
+                    variant="filter"
+                    selected={category === c}
+                    onPress={() => setCategory(c)}
+                  />
+                ))}
+              </View>
             </View>
           )}
 
@@ -1129,27 +1193,6 @@ export function PostJobScreen() {
                   Up to {MAX_VIDEO_DURATION_MS / 1000} seconds. A short clip explains an
                   awkward job faster than a paragraph.
                 </Text>
-              </View>
-            </View>
-          )}
-
-          {step === 0 && (
-            <View style={styles.field}>
-              <Text style={styles.fieldLabel}>Category</Text>
-              <View style={styles.chips}>
-                {/* D2: the saturated per-category palette is retired in dark
-                    wherever a category is drawn. Light keeps it. */}
-                {JOB_CATEGORIES.map((c) => (
-                  <Chip
-                    key={c}
-                    label={JOB_CATEGORY_LABELS[c]}
-                    icon={JOB_CATEGORY_ICONS[c]}
-                    accentColor={isDark ? colors.gold : categoryAccent(c).bg}
-                    variant="filter"
-                    selected={category === c}
-                    onPress={() => setCategory(c)}
-                  />
-                ))}
               </View>
             </View>
           )}
@@ -1447,6 +1490,8 @@ export function PostJobScreen() {
               </View>
             </View>
           )}
+
+          </StepPane>
 
         </ScrollView>
 
@@ -1766,6 +1811,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   stepIntro: {
     gap: spacing.sm,
+  },
+  // C1 — the two panes restate the gaps their children shared before the
+  // wrappers existed (stepIntro's sm between the heading trio; the scroll
+  // content's xl between step blocks), so the resting layout cannot move.
+  stepIntroText: {
+    gap: spacing.sm,
+  },
+  stepPane: {
+    gap: spacing.xl,
   },
   stepEyebrow: {
     fontSize: 12,
