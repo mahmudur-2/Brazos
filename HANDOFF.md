@@ -43,7 +43,215 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-26 motion pass (RUN MOTION1)
+## Current state — after the 2026-08-26 publish pass (RUN PUBLISH1)
+
+The published-job screen and the budget editor were the two surfaces the
+Prestige language had not reached. Both now speak it — and the button that had
+been cut in half by the nav pill is fully on screen in both themes, measured.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`d992521`|lit cards, gold eyebrow rows, the sage category chip, MoneyText, the clearance split|
+|C1b|`5bc6ed7`|the two actions share one row, which is what actually cleared the pill|
+|C2|`7e49039`|Edit Budget: lit card, "$" prefix field, side-by-side actions, no "Maximum ($)"|
+|C3|—|**no commit.** The tint bisect found no removable cause. See below.|
+|C4|(this file)|the handoff|
+
+**What is UNVERIFIED until device:** the tint itself (the harness measures the
+correct values, so it is an iOS compositing effect the web render cannot show),
+and every native effect RUN MOTION1 added underneath these surfaces.
+
+### THE CLIPPED BUTTON — WHAT IT ACTUALLY WAS, AND WHAT FIXED IT
+
+Measured on this run's control render at 393x852, both themes:
+
+```
+                    control                after
+"Back to Home"      y 751..798             y 703..750
+nav pill top edge   y 770                  y 770
+result              29 of 48pt cut off     fully visible, 20pt of clearance
+```
+
+**IT WAS NOT ONE FAULT, IT WAS TWO, AND ONLY THE SECOND ONE MATTERED.**
+
+1. **A double count.** `ui/templates/SuccessScreen.tsx` reserved the floating
+   pill's whole footprint inside its scroll content whenever `insideTabs` was
+   true. On the published surface that is wrong twice over: the surface renders
+   inside PostJobScreen's `successOverlay`, which is bounded by the tab SCENE,
+   and PostJob is not one of the two routes where RUN GROUND1 made the bar
+   float — so the scene already ends at the pill's top edge. `insideTabs` was
+   answering two different questions with one boolean (which safe-area EDGES
+   the surface owns, and whether it must clear the pill), and on this surface
+   they have opposite answers. They are now two props: `insideTabs` still owns
+   the edges, `clearsFloatingNav` owns the clearance, and the published surface
+   passes `clearsFloatingNav={false}`. **This removed 82pt of dead scroll and
+   moved the button not at all** — the content is top-anchored, so trailing
+   padding was never what pushed it down.
+
+2. **The surface is taller than the screen.** A 200pt success mark, two lines
+   of copy, a four-row job card, a notice card and then two full-width buttons
+   stacked. C1 puts the mark's structure out of scope, so the height had to
+   come from the actions: they now share ONE row (`actionsLayout="row"`, a new
+   prop that leaves every other success surface stacked). That returned a whole
+   button plus its 12pt gap — 60pt — and is what actually cleared the pill. It
+   is also the same shape C2 gives Edit Budget's Save/Cancel pair, for the same
+   reason: two actions that are one decision belong on one line.
+
+**A THIRD THING WAS TRIED AND REVERTED, in the same commit, because it was
+measured rather than assumed.** C1 asks for Home's vertical rhythm. Home gives
+every page SECTION 20 (`sectionGap`), so the two publish cards were taken from
+12 to 20 — and the button went from partly clipped to entirely below the fold.
+Those two cards are one detail block inside the template's own `spacing.xl`
+(20) rhythm, which IS Home's number and is already applied between the mark,
+the copy, the block and the actions. So the block keeps its 12 and the
+deviation is recorded in the code beside it. Everything else already matched:
+the card padding is `spacing.lg` (16), which is `heroBody`'s padding on Home's
+promo card.
+
+### C1 — THE PUBLISHED SCREEN
+
+There is no master for this surface, so nothing here was designed. Every part
+is copied from what customer Home already ships:
+
+| part | copied from |
+|-|-|
+|the job card and the notice card|`LitSurface` at `liftAlpha 0.04` — Home's `CARD_LIFT_ALPHA`, flat in light|
+|their depth|`shadows.cardDark`, RUN GROUND1's dark token, gated on `isDark`|
+|the row labels|Home's gold eyebrow — 11/700 at letterSpacing 1.1 in `colors.gold`|
+|the category row|`components/Chip.tsx` `variant="service"`, Home's own sage service pill|
+|the Budget row|its literal emerald "$" glyph (D19), unchanged, beside `MoneyText`|
+|the spacing|`spacing.lg` (16) card padding and `spacing.xl` (20) between sections|
+
+`MoneyText` is passed **no state**, deliberately: this is an amount, not a
+payment, and a state would attach a caption from the payment machine to a job
+nobody has paid for. A budget RANGE still falls back to `budgetRangeLabel` —
+MoneyText renders one figure, and that helper is the one place that knows how
+two are written.
+
+The row LABEL moved from `textMuted` to gold, which is the eyebrow law
+(decision 6) applied where it had not been: structure is gold, money is
+emerald. The success mark's structure is untouched.
+
+**The review STEP inherited the eyebrow and the chip**, because it shares
+`styles.reviewCard` and `styles.reviewLabel` with the published card. That is
+the intended reading of "the language now shipping" rather than a leak — the
+two surfaces show the same job, and showing it two ways was the fault.
+
+### C2 — EDIT BUDGET
+
+A centred card over the opaque dim backdrop it already had — **no blur**, per
+the operator's decision, and `components/EditBudgetDialog.tsx` is now fenced
+against gaining one. The card is a `LitSurface` at the same 0.04 wash over
+`shadows.cardDark`, with the sheet's own translucent forest fill as the
+gradient's far stop so the review screen still reads through it exactly as
+before.
+
+**The "Maximum ($)" label is deleted, not moved.** It said in a caption what
+the message above it says in a sentence and what the field's new "$" says in a
+glyph — three statements of one fact, stacked. The field is drawn in the dialog
+rather than through `components/TextField.tsx`: that component requires a label
+and renders one, and widening it for one dialog would change every form in the
+app. The field keeps TextField's own geometry (`controls.fieldHeight`, pill
+radius, 1pt border) so no second field shape enters the tree, and the refusal
+is now rendered under the field AND carried by the field's own border.
+
+**Save and Cancel are side by side on one row**, Save first, each half of it.
+
+**THERE WAS NO "DONE" KEYBOARD ACCESSORY TO REMOVE.** `InputAccessoryView`
+appears nowhere in this repository — the sweep is in the report. The only
+"Done" here is `returnKeyType="done"`, which is iOS's own numeric-keyboard
+return key: that keyboard renders no other, and the file already records that
+the key IS Save rather than a second outcome. Nothing was removed and nothing
+needed to be.
+
+**Empty is still legal and still means no maximum.** `problemFor` is untouched.
+
+### C3 — THE TINT BISECT: NO CAUSE FOUND, NO COMMIT
+
+The publish screen loses 30-37% HSV saturation on device against every other
+screen, the harness measures the correct values, and the nav backdrop was
+already ruled out. The publish branch's own containers were read for anything
+that forces an iOS offscreen composite. **Nothing that is both publish-only and
+permanent survived the audit.**
+
+| candidate | verdict |
+|-|-|
+|`successOverlay`'s animated `opacity`|**ALREADY REMOVED** — decision D0 took it out and the file records why: a group opacity composites the whole subtree offscreen and blends the still-mounted form into it. This is the known instance of exactly this fault, and it is gone.|
+|`successOverlay`'s other properties|RULED OUT. `position/top/left/right/bottom`, an opaque `backgroundColor` and `zIndex: 10`. `zIndex` reorders subviews on iOS; it does not rasterize.|
+|`accessibilityViewIsModal`|RULED OUT. It sets one accessibility property on the UIView so VoiceOver ignores siblings. It has no compositing behaviour.|
+|shadow plus clip on one node|RULED OUT, all four cards. `reviewCard`, `bidsCard` and the dialog `sheet` carry a shadow and NO `overflow`; the LitSurface calls pass no `radius`, which is the only thing that would add `overflow: 'hidden'`. `components/SuccessMark.shared.tsx` already records the rule ("NO NODE CARRIES BOTH A SHADOW AND A CLIP") and holds to it.|
+|remaining `opacity` bindings|RULED OUT. Two, both PRESSED states — `locationBtnPressed` 0.82 and the template's `pressed` 0.85. Neither exists unless a finger is down.|
+|transforms|RULED OUT as permanent. The only ones are the still-mark's entrance (`SuccessMark.motion120`, settles at scale 1) and the hire/edit branch's `successCircle`, which the published branch does not render.|
+
+**ONE FINDING WORTH THE OPERATOR'S ATTENTION, and it is new.** RUN MOTION1's
+`hooks/useEntrance.ts` puts an **animated group opacity** on this template's
+copy, details and actions wrappers — which is the D0 mechanism, on this very
+surface, reintroduced hours ago. It is TRANSIENT (it settles at opacity 1,
+after which iOS stops compositing offscreen) and it postdates the tint report,
+so it cannot be the original cause and was not removed. But if the device pass
+shows the tint only DURING the entrance and correct once it settles, that is
+where to look first.
+
+### THE GATE
+
+`node scripts/shots.mjs --build --only postjob`, fresh, after `5bc6ed7`
+(01:11:25). **All ten postjob targets rendered; none timed out**, so every
+harness wait string survived — `Edit budget`, `Edit Budget`, `Your job is
+live.` and `Review and publish` are all byte-identical and the registry was not
+touched. Mtimes ran 01:12:39 to 01:13:15, all after the commit.
+
+Then `--build` over all sixteen against this run's control:
+
+```
+target                        result
+customer-home-dark            identical
+customer-home-light           identical
+worker-home-dark              flicker (see below)
+worker-home-light             flicker (see below)
+workersearch-category-dark    identical
+workersearch-category-light   identical
+postjob-media-dark/light      identical
+postjob-location-dark/light   identical
+postjob-review-dark/light     CHANGED — the eyebrow and chip this run applied
+postjob-published-dark/light  CHANGED — this run's whole subject
+postjob-budget-dialog-*       CHANGED — this run's whole subject
+```
+
+Every non-postjob target is byte-identical except the two worker-home targets,
+which RUN MOTION1 established are nondeterministic across renders of ANY build,
+before and after any edit: at most 7 pixels of 334 836, max channel delta 2, on
+two columns of the worker summary card's gold centre glyph. Nothing in this run
+touches worker Home.
+
+### Verification
+
+`npm run verify` exits 0 before every commit: **1079 tests, 0 fail** at the
+base gate and at each of the three commits. No test was deleted, disabled,
+skipped or weakened. Three fences were updated, each because what it named
+genuinely moved and each at least as strong afterwards:
+
+* `D5` pinned PostJobScreen's react-native-primitives import as one LINE. C1
+  widened it to a block when the surface took `LitSurface` and `MoneyText`; the
+  assertion now reads the block. The guarantee — the clearance derives from the
+  shared `PINNED_FOOTER_BOTTOM_PADDING` — is untouched.
+* `D15`'s "flat fills only" banned the WORDS `gradient`, `blur` and `Svg` in
+  the dialog. What L1 protects is *no library and no fill drawn here*, and the
+  wash now comes from `ui/primitives/LitSurface.tsx` — a `backgroundImage`
+  string on one node, no dependency. The fence asserts that directly now: no
+  gradient/blur/SVG library may be imported, the dialog writes no fill
+  expression of its own, and the wash arrives from the shared primitive.
+* `D15` also pinned the Save button's JSX and the field's `error={problem}`
+  prop. Both moved with the redesign; both are re-pinned, and the refusal is
+  now checked on BOTH halves (the message under the field and the field's own
+  error border). Three assertions were ADDED there: the actions row, the
+  deleted "Maximum ($)" caption, and the "$" prefix.
+
+Nothing was pushed; no database was contacted; no SQL was executed; no image
+was opened for viewing; no dependency was added. No font, no bottom-nav change,
+no CTA green. `.gitignore`, `app.json` and `eas.json` are untouched.
+
+
+## The run before it — after the 2026-08-26 motion pass (RUN MOTION1)
 
 Three native modules had been installed and none of them was called. This run
 gave all three a boundary and callers: press feedback with haptics on every
@@ -341,7 +549,7 @@ was opened for viewing; no dependency was added. `.gitignore`, `app.json` and
 `eas.json` are untouched.
 
 
-## The run before it — after the 2026-08-26 ground pass (RUN GROUND1)
+## Two runs back — after the 2026-08-26 ground pass (RUN GROUND1)
 
 Three defects, one of which turned out not to exist. The atmosphere raster was
 banded and was believed to be far too bright; the nav pill sat in a flat
@@ -743,7 +951,7 @@ expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
 differ from build 7's.**
 
 
-## Two runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Three runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -941,7 +1149,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## Three runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Four runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -1029,7 +1237,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Four runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Five runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -1214,7 +1422,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Five runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Six runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -1439,7 +1647,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Six runs back — after the 2026-08-25 three corrections (RUN H3)
+## Seven runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -1614,7 +1822,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Seven runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Eight runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -1883,7 +2091,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Eight runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Nine runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -2034,7 +2242,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Nine runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Ten runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -2095,7 +2303,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Ten runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Eleven runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
