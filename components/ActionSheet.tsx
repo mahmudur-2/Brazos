@@ -13,6 +13,7 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { BlurLayer } from '../lib/blur';
+import { Surface } from '../ui/primitives/Surface';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -74,8 +75,13 @@ export function ActionSheet({
             already paints, and under the sheet. Absent on web and on any
             binary without expo-blur, where the scrim alone is the backdrop. */}
         <BlurLayer />
-        {/* Empty onPress absorbs taps so they don't dismiss the sheet. */}
-        <Pressable style={styles.sheet} onPress={() => {}}>
+        {/* Empty onPress absorbs taps so they don't dismiss the sheet.
+            G1 (C5): the card SURFACE wears the sheet material — fill,
+            hairline and blur from ui/tokens.ts's table, geometry unchanged
+            via the radius prop. The backdrop above and every open/close
+            mechanic are byte-identical. */}
+        <Pressable onPress={() => {}}>
+          <Surface material="sheet" corners="all" radius={radius.xl} style={styles.sheet}>
           {(title || subtitle) && (
             <View style={styles.header}>
               {title ? <Text style={styles.title}>{title}</Text> : null}
@@ -108,6 +114,7 @@ export function ActionSheet({
           >
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
+          </Surface>
         </Pressable>
       </Pressable>
     </Modal>
@@ -127,11 +134,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     padding: spacing.lg,
   },
   backdropDark: { backgroundColor: scrimInDark(colors.background) },
+  // G1 (C5): fill, hairline and radius are the sheet MATERIAL's now — only
+  // the clip and the lift stay here. (overflow already cancelled this shadow
+  // on iOS before the material arrived; behaviour is unchanged.)
   sheet: {
-    backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
     overflow: 'hidden',
     ...shadows.raised,
   },

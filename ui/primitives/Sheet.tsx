@@ -12,6 +12,7 @@ import {
 } from '../tokens';
 import { scrimInDark, themedStyles, useThemeColors } from '../../lib/theme';
 import { BlurLayer } from '../../lib/blur';
+import { Surface } from './Surface';
 
 /**
  * The generic bottom sheet / modal (§I).
@@ -72,7 +73,16 @@ export function Sheet({
               scrim alone is the backdrop it has always been. */}
           <BlurLayer />
         </Pressable>
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
+        {/* G1 (C5): the docked card wears the sheet material — the top
+            corners keep their xxl radius via the props; in light this adds
+            the material hairline. The backdrop above and every open/close
+            mechanic are byte-identical. */}
+        <Surface
+          material="sheet"
+          corners="top"
+          radius={radius.xxl}
+          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+        >
           <View style={styles.handle} />
           {title ? (
             <View style={styles.header}>
@@ -99,7 +109,7 @@ export function Sheet({
           >
             {children}
           </ScrollView>
-        </View>
+        </Surface>
       </View>
     </Modal>
   );
@@ -120,10 +130,8 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
     backgroundColor: withAlpha(colors.ink, 0.45),
   },
   backdropDark: { backgroundColor: scrimInDark(colors.bg) },
+  // G1 (C5): fill, top radius and hairline are the sheet material's now.
   sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.xxl,
-    borderTopRightRadius: radius.xxl,
     // Never taller than most of the screen, whatever the content.
     maxHeight: '88%',
     paddingTop: spacing.sm,

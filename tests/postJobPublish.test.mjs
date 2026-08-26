@@ -665,19 +665,26 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   const flat = flatten(dialog);
   const confirm = flatten(read('components/ConfirmDialog.tsx'));
 
-  // ConfirmDialog's structure: the same Modal, scrim, centred wrap, xl sheet.
+  // ConfirmDialog's structure: the same Modal, scrim, centred wrap.
   for (const shared of [
     /<Modal visible=\{visible\} transparent animationType="fade"/,
     /backdrop: \{ flex: 1,/,
     /centerWrap: \{ flex: 1, justifyContent: 'center', paddingHorizontal: spacing\.lg, \}/,
-    /borderRadius: radius\.xl,/,
   ]) {
     assert.match(flat, shared, 'the dialog must keep ConfirmDialog\'s structure');
     assert.match(confirm, shared, 'and that structure must still be what ConfirmDialog has');
   }
+  // The xl radius survives on both — the budget editor on its own panel, and
+  // ConfirmDialog through the sheet material's radius prop (G1 C5).
+  assert.match(flat, /borderRadius: radius\.xl,/, 'the budget editor keeps the xl radius');
+  assert.match(
+    confirm,
+    /<Surface material="sheet" corners="all" radius=\{radius\.xl\}/,
+    "ConfirmDialog's card wears the sheet material at the same xl radius (G1 C5)"
+  );
 
-  // …but an EMERALD, TRANSLUCENT panel where ConfirmDialog has an opaque one.
-  assert.match(confirm, /backgroundColor: palette\.surface, borderColor: palette\.border/);
+  // …and the budget editor keeps an EMERALD, TRANSLUCENT panel of its own,
+  // outside the material system by operator decision.
   assert.match(flat, /backgroundColor: withAlpha\(colors\.forest, 0\.92\)/);
   assert.match(flat, /borderColor: withAlpha\(colors\.emerald, 0\.55\)/);
 

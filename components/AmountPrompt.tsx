@@ -12,6 +12,7 @@ import {
   scrimInDark,
 } from '../lib/theme';
 import { BlurLayer } from '../lib/blur';
+import { Surface } from '../ui/primitives/Surface';
 
 type AmountPromptProps = {
   visible: boolean;
@@ -68,7 +69,11 @@ export function AmountPrompt({
       <View style={[styles.backdrop, isDark && styles.backdropDark]}>
         {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
         <BlurLayer />
-        <View style={styles.sheet}>
+        {/* G1 (C5): the card wears the sheet material — in light this adds
+            the material's hairline where the card had none (the parity rule
+            keeps border weight shared between themes). Backdrop and
+            mechanics untouched. */}
+        <Surface material="sheet" corners="all" radius={radius.lg} style={styles.sheet}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
 
@@ -100,7 +105,7 @@ export function AmountPrompt({
             />
             <Button title={confirmText} onPress={handleSubmit} style={styles.btn} />
           </View>
-        </View>
+        </Surface>
       </View>
     </Modal>
   );
@@ -119,11 +124,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     padding: spacing.lg,
   },
   backdropDark: { backgroundColor: scrimInDark(colors.background) },
+  // G1 (C5): fill, radius and hairline are the sheet material's now.
   sheet: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: colors.surface,
-    borderRadius: radius.lg,
     padding: spacing.lg,
     gap: spacing.sm,
   },

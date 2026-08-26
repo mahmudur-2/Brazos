@@ -11,6 +11,7 @@ import {
   scrimInDark,
 } from '../lib/theme';
 import { BlurLayer } from '../lib/blur';
+import { Surface } from '../ui/primitives/Surface';
 
 type ConfirmDialogProps = {
   visible: boolean;
@@ -66,12 +67,11 @@ export function ConfirmDialog({
         {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
         <BlurLayer />
         <View style={styles.centerWrap}>
-          <View
-            style={[
-              styles.sheet,
-              { backgroundColor: palette.surface, borderColor: palette.border },
-            ]}
-          >
+          {/* G1 (C5): the card wears the sheet material — geometry (xl
+              radius, hairline weight) is unchanged via the props, and the
+              backdrop above is byte-identical. A caller-supplied palette
+              still colours the copy and the buttons. */}
+          <Surface material="sheet" corners="all" radius={radius.xl} style={styles.sheet}>
             <Text style={[styles.title, { color: palette.text }]}>{title}</Text>
             {message ? (
               <Text style={[styles.message, { color: palette.textMuted }]}>{message}</Text>
@@ -94,7 +94,7 @@ export function ConfirmDialog({
                 disabled={loading}
               />
             </View>
-          </View>
+          </Surface>
         </View>
       </View>
     </Modal>
@@ -116,9 +116,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
   },
+  // G1 (C5): radius and hairline are the sheet material's now.
   sheet: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
     padding: spacing.xl,
     ...shadows.raised,
   },
