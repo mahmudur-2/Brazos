@@ -649,22 +649,66 @@ test('[executed] the chat column counts the pill once at rest and the keyboard o
   const navGap = Number(tokens.match(/const FLOATING_NAV_GAP = (\d+);/)[1]);
   const bottomNav = read('ui/primitives/BottomNav.tsx');
 
-  // (1) The pill is in NORMAL FLOW. This is the premise the whole double count
-  //     turned on: BottomTabView lays the scene container out as a flex:1
-  //     sibling above the bar, so the scene already ends at the pill's top
-  //     edge. If the bar is ever absolutely positioned, this test is wrong and
-  //     must be redone rather than adjusted.
+  // (1) The pill is in NORMAL FLOW on the route this arithmetic is about.
+  //     This is the premise the whole double count turned on: BottomTabView
+  //     lays the scene container out as a flex:1 sibling above the bar, so the
+  //     scene already ends at the pill's top edge.
+  //
+  //     RUN GROUND1 (C3) TOOK THE BAR OUT OF FLOW ON TWO ROUTES, and this
+  //     block is REDONE rather than adjusted — which is exactly what the note
+  //     that used to stand here demanded of whoever did it. The bar is
+  //     absolutely positioned on customer Home and worker Home so the
+  //     atmosphere raster behind them can reach the screen's bottom edge
+  //     instead of stopping at a band above the bar. The chat column does not
+  //     live on either, and cannot: the exception is an ALLOW-LIST of two leaf
+  //     route names, read out of the source below, and every other route —
+  //     Chat included — still gets an in-flow bar that reserves the scene
+  //     space this model relies on. A third name appearing there fails here.
+  const flatNav = bottomNav.replace(/\/\//g, ' ').replace(/\s+/g, ' ');
   assert.match(
-    bottomNav.replace(/\/\//g, ' ').replace(/\s+/g, ' '),
-    /nothing here is absolutely positioned/,
-    'the bar must still declare itself in-flow where the next reader will look'
+    flatNav,
+    /IN FLOW EVERYWHERE EXCEPT THE TWO HOMES/,
+    'the bar must still declare where it is in-flow where the next reader will look'
   );
   const tabBarStyle = stripComments(bottomNav).match(/tabBarStyle: \{([\s\S]*?)\n {4}\},/);
   assert.ok(tabBarStyle, 'bottomNavScreenOptions must still declare a tabBarStyle');
-  assert.doesNotMatch(
-    tabBarStyle[1],
-    /position:/,
-    'an absolutely positioned pill would stop reserving the scene space this model relies on'
+  // The pill declares `position` exactly once and never unconditionally: it
+  // rides a spread that is gated on the route.
+  assert.equal(
+    (tabBarStyle[1].match(/position:/g) ?? []).length,
+    1,
+    'the pill may declare position once, and only behind the route gate'
+  );
+  assert.match(
+    tabBarStyle[1].replace(/\s+/g, ' '),
+    /\.\.\.\(isAtmosphereHomeRoute\(route\) \? \(\{ position: 'absolute', left: 0, right: 0, bottom: 0 \} as const\) : null\),/,
+    'the absolutely positioned pill must stay gated on the two Home routes'
+  );
+  const allowList = stripComments(bottomNav).match(
+    /const ATMOSPHERE_HOME_ROUTES = new Set\(\[([^\]]*)\]\)/
+  );
+  assert.ok(allowList, 'the exception must stay a named allow-list of route names');
+  const floating = allowList[1]
+    .split(',')
+    .map((name) => name.trim().replace(/'/g, ''))
+    .filter(Boolean)
+    .sort();
+  assert.deepEqual(
+    floating,
+    ['HomeMain', 'WorkerHome'],
+    'only the two screens that mount the atmosphere may take the bar out of flow'
+  );
+  assert.ok(
+    !floating.includes('Chat'),
+    'the chat column is modelled against an in-flow bar; Chat must not join the exception'
+  );
+  // And the gate is the leaf, not the tab: `Home` is a STACK, so scoping to
+  // the tab route would take the bar out of flow for Chat itself, which is
+  // registered on the worker Home stack.
+  assert.match(
+    stripComments(bottomNav).replace(/\s+/g, ' '),
+    /export function isAtmosphereHomeRoute\(route: \{ name: string \}\): boolean \{ const leaf = getFocusedRouteNameFromRoute\(route\); return route\.name === 'Home' && \(leaf === undefined \|\| ATMOSPHERE_HOME_ROUTES\.has\(leaf\)\); \}/,
+    'the gate must read the focused LEAF, or every screen in the Home stack floats too'
   );
   assert.match(
     bottomNav,

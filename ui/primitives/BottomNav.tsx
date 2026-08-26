@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
 
 /**
@@ -349,12 +350,49 @@ export function BottomNavItem({
  * `insetBottom` is passed in rather than read from a hook here so this stays a
  * plain function the catalog can also call.
  */
+/**
+ * RUN GROUND1 (C3) — THE TWO ROUTES THE PILL ACTUALLY FLOATS OVER.
+ *
+ * Both trees name their first tab `Home`; the screen under it is `HomeMain` in
+ * navigation/CustomerRoot.tsx and `WorkerHome` in navigation/WorkerRoot.tsx.
+ * Those two are the only screens that mount components/HomeAtmosphere.tsx, and
+ * they are the only two this changes anything for.
+ *
+ * WHY THE LEAF AND NOT THE TAB. `Home` is a STACK, so PostJob, WorkerSearch,
+ * JobDetail and six more sit under the same tab route. Scoping to the tab
+ * would give all of them a bar that is out of layout flow, which is a change
+ * to how their ground reaches the bar row — and C3 is explicit that every
+ * screen but the two homes behaves exactly as it did.
+ * `getFocusedRouteNameFromRoute` is React Navigation's own answer to this
+ * question and returns undefined until the nested navigator has state of its
+ * own, which is the initial route — the home screen in both trees.
+ */
+const ATMOSPHERE_HOME_ROUTES = new Set(['HomeMain', 'WorkerHome']);
+
+/** True only while one of those two screens is the focused leaf of this tab. */
+export function isAtmosphereHomeRoute(route: { name: string }): boolean {
+  const leaf = getFocusedRouteNameFromRoute(route);
+  return route.name === 'Home' && (leaf === undefined || ATMOSPHERE_HOME_ROUTES.has(leaf));
+}
+
 export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalette) {
-  // The floating pill (Prestige 0d). The bar stays in normal layout flow —
-  // BottomTabView lays scenes and bar in one column — so these MARGINS reserve
-  // real space and no screen content can slide beneath the pill; nothing here
-  // is absolutely positioned. The home indicator lives in the bottom gap: the
-  // margin grows to the full reported inset on a notched device.
+  // The floating pill (Prestige 0d). These MARGINS are what float it: 12 each
+  // side, and a bottom gap that grows to the full reported inset on a notched
+  // device so the home indicator lives in it.
+  //
+  // IN FLOW EVERYWHERE EXCEPT THE TWO HOMES (RUN GROUND1, C3). BottomTabView
+  // lays scenes and bar out in one column, so an in-flow bar reserves real
+  // space and the scene stops above it — which is exactly why the Home
+  // atmosphere stopped there too, leaving a flat rectangle of shell ground
+  // across the bar row that the operator photographed in dark. Taking the bar
+  // OUT of flow for those two routes gives their scene the full screen, and
+  // the atmosphere with it; the pill then floats over the layer instead of
+  // sitting in a band beside it. Its own geometry does not move: the margins
+  // and height below are unchanged, and `bottom: 0` puts its bottom edge where
+  // the column already put it. Everywhere else the bar stays in flow.
+  //
+  // The two homes reserve the space themselves with useFloatingNavClearance()
+  // — the derived hook, never a static token.
   const bottomMargin = Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
 
   return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
@@ -396,6 +434,13 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
       // is merged last) — the float margin owns the home-indicator clearance.
       paddingBottom: 0,
       elevation: 0,
+      // C3: out of flow on the two homes only. tabBarStyle is the LAST entry
+      // in BottomTabBar.js's style array, so this wins over the library's own
+      // conditional `position`, and the three offsets are needed because Yoga
+      // gives an absolutely positioned child no implicit ones.
+      ...(isAtmosphereHomeRoute(route)
+        ? ({ position: 'absolute', left: 0, right: 0, bottom: 0 } as const)
+        : null),
     },
   });
 }

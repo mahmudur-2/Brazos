@@ -47,7 +47,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { litFill, LitSurface, SearchBar } from '../ui/primitives';
+import { litFill, LitSurface, SearchBar, useFloatingNavClearance } from '../ui/primitives';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // lit(3) — THE TWO ALPHAS ARE MEASUREMENTS, NOT PREFERENCES.
@@ -367,6 +367,15 @@ export function HomeScreen() {
   // page, named once for the shell and once for the styles that use it.
   useShellGround('homeBackground');
 
+  // RUN GROUND1 (C3): the pill is out of layout flow on this route, so this
+  // scene is the whole screen and the atmosphere behind it reaches the bottom
+  // edge with no band at the bar row. Nothing reserves the pill's footprint
+  // any more except this, and the reservation is DERIVED — the pill's own
+  // height plus the margin that floats it, which grows to the home-indicator
+  // inset. `layout.floatingNavClearance` was a flat 68 that could not see the
+  // inset; it was deleted and must not come back.
+  const navClearance = useFloatingNavClearance();
+
   // home(2): the drape's box and the headline column it clears, both derived
   // from one fraction of the screen so they can never drift apart.
   const bDrape = useMemo(() => {
@@ -497,7 +506,14 @@ export function HomeScreen() {
           contentContainerStyle={[
             styles.content,
             isDark && styles.contentOverAtmosphere,
-            { paddingHorizontal: design.screenPadding, gap: design.sectionGap },
+            {
+              paddingHorizontal: design.screenPadding,
+              gap: design.sectionGap,
+              // C3: the pill floats over this scene now, so the last row has to
+              // clear it here. One value for both themes — light gets the same
+              // reservation it always had, just from this side of the bar.
+              paddingBottom: navClearance,
+            },
           ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"

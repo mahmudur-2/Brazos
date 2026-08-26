@@ -263,7 +263,14 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
   assert.match(code, /statusRow: \{ flexDirection: 'row', alignItems: 'center', gap: spacing\.sm \}/);
   assert.match(code, /onValueChange=\{\(value\) => void saveAcceptingWork\(value\)\}/);
   assert.match(code, /disabled=\{savingAvailability \|\| !profile\}/);
-  assert.match(code, /import \{ SearchBar, Toggle \} from '\.\.\/ui\/primitives'/);
+  // RUN GROUND1 (C3) added the clearance hook to this import: the nav pill is
+  // out of layout flow on this route now, so the screen reserves its footprint
+  // itself. The assertion this line makes is unchanged — the shared Toggle and
+  // SearchBar come from ui/primitives, not from a local re-implementation.
+  assert.match(
+    code,
+    /import \{ SearchBar, Toggle, useFloatingNavClearance \} from '\.\.\/ui\/primitives'/
+  );
   assert.match(code, /<Toggle\b/);
   assert.doesNotMatch(code, /<Switch\b/);
   // The continue-path floor is built in: 30pt auto-fits no lower than

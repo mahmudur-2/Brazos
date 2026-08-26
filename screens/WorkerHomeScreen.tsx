@@ -45,7 +45,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { SearchBar, Toggle } from '../ui/primitives';
+import { SearchBar, Toggle, useFloatingNavClearance } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
 // Master 43's hero crop, mounted in BOTH themes since the 2026-08-22 parity
@@ -84,6 +84,12 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
 export function WorkerHomeScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN GROUND1 (C3): the nav pill is out of layout flow on this route, so this
+  // scene is the whole screen and the atmosphere behind it reaches the bottom
+  // edge instead of stopping at a band above the bar. The pill's footprint is
+  // no longer reserved by the column, so it is reserved here — DERIVED from the
+  // bar's own height plus the margin that floats it, never a static token.
+  const navClearance = useFloatingNavClearance();
   // Forest is a near-black deep green in the v2 dark palette, so a forest
   // glyph on a dark surface is invisible paint. Two resolved accents instead:
   // `accent` is the interactive green the masters draw, `glyph` the cream
@@ -235,7 +241,7 @@ export function WorkerHomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -588,8 +594,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   content: {
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
-    // MainTabs already reserves the safe tab-bar height. Adding another
-    // bottom inset here creates a visible dead strip above that bar.
+    // The column reserved the bar's height for every screen, so a second
+    // bottom inset here was a visible dead strip above the pill. RUN GROUND1
+    // (C3) took the pill out of flow on this route so the atmosphere could
+    // reach the screen's bottom edge, which means the reservation is now owed
+    // — and it is applied at the call site from useFloatingNavClearance(),
+    // because it depends on the device inset and this object cannot see one.
     paddingBottom: 0,
     gap: spacing.lg,
   },
