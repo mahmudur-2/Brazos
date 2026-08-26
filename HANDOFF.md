@@ -43,7 +43,129 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
+## Current state — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
+
+Post-a-Job's first three steps were restructured and re-copied, the bottom
+nav became an ATTACHED full-width bar (a confirmed operator reversal of
+56ff86a's floating pill — revert that one commit, `8b0437c`, to undo it),
+and the first measured colour pass ran against the mockups — landing **no
+colour change**, for reasons measured and recorded below.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`05b7a20`|every step change (forward AND back) animates its incoming content on the shared useEntrance spring, keyed to the step index|
+|C2|`172458e`|the selected category pill toggles off; the pills render in measured first-fit-decreasing order (6 rows → 5), "Other" always last|
+|C3|`5e11a57`|the "Other" pill opens Home's ServicePickerSheet (reused byte-identical — nothing added), listing JOB_CATEGORIES' own values|
+|C4|`41c827f`|"Up to 60 seconds" + a shared-block "Up to 10 photos" badge; the advisory is one plain sentence, heading deleted; the video caption keeps only its explanation, one line|
+|C5|`7d41073`|the media section scales +20% as one proportion (tiles 84→101); the clip tile widens to the full 2x (202×101)|
+|C6|`6ec0feb`|components/EyeOffIcon.tsx — the notice's shield became the universal "not visible" eye, a reusable component (size/color/weight props)|
+|C7|`2bff1c5`|the approximate-area card is deleted; the privacy rule still reads twice on the Location step (step subtitle + address caption)|
+|C8|—|**no commit — measured, nothing met the apply bar.** Table below.|
+|C9|`8b0437c`|the attached bar: full width, flush, inset INSIDE as padding, content 70→88, icons 28→35, labels 11→14; fences (layout/motion120) updated to the new truth|
+|C10|(this file)|the handoff|
+
+### C8 — the measured colour pass, and why nothing landed
+
+Image OPENS are blocked by the evidence guard (the run launched without the
+images authorization), so every number below is scripted pixel analysis —
+the guard's own sanctioned fallback. Two structural findings first:
+
+* **`44_customer_home_dark.png` is 853×1844** — a true-device-aspect render
+  (~2.17× of 393×852), NOT the manifest's "941×1672 class A". The PNG wins.
+  It draws the CURRENT app design (five slots with a gold centre [ + ]).
+* **`9_job_post_dark.png` (941×1672)** is the only Post-a-Job mockup, has no
+  per-screen manifest entry, and does not speak the Prestige palette: its
+  ground is teal (`#041414`, blue == green), its text tiers are grey-blue
+  (`#6a7776`/`#727c7a`), it contains outright blue elements
+  (`#62a7db`/`#1b86ca`) the master set reserves for the map user-dot alone,
+  and it contains NO gold cluster at all.
+
+Post-a-Job table (mockup 9 vs the dark tokens; all REPORTED-ONLY — no delta
+is unambiguous when the source sits outside the set's own language and
+within the manifest's documented ±10 AI drift):
+
+| surface | mockup 9 | current dark token | delta | verdict |
+|-|-|-|-|-|
+|screen background|`#041414`|`background` `#02110D`|+2/+3/+7 — cooler, cyan-shifted|REPORTED-ONLY|
+|card fills|`#182725`/`#16241C`|`surface` `#0A1813`, `mint` `#0E1F18`|mockup lighter, cooler|REPORTED-ONLY|
+|chip fills|`#283429`/`#283637`|`mint` `#0E1F18` + `mint2` `#254539` border|mockup far lighter|REPORTED-ONLY|
+|primary text|`#EAE9E5`–`#F0EDE7`|`ink` `#F1EDE1`|≤7/channel|match — no change|
+|muted text|`#6A7776`/`#727C7A`|`textMuted` `#93A096`|mockup ~30 darker|REPORTED-ONLY|
+|gold (eyebrow, labels)|**absent from mockup**|`gold` `#D4A24C`|n/a|REPORTED-ONLY|
+|blue accents|`#62A7DB`/`#1B86CA`|no code surface|foreign to palette|REPORTED-ONLY|
+
+Home table (mockup 44; report-only by C8's own scoping — the apply clause
+covers Post-a-Job surfaces):
+
+| surface | mockup 44 | current dark token | delta |
+|-|-|-|-|
+|page bg (incl. atmosphere raster)|`#030B09`|`background` `#02110D`|dispatch forbids matching the atmosphere — untouched|
+|cards|`#0A1914`|`surface` `#0A1813`|0/+1/+1 — effectively exact|
+|bar fill|`#0E1D18`|`surface` `#0A1813`|+4/+5/+5 — mockup draws the bar one step lighter than cards; one token paints both, so a match needs a new role, not a token value|
+|forest CTA fill|`#1B3527`|`forest` `#1B3527`|exact|
+|gold|`#DBAB5E`|`gold` `#D4A24C`|+7/+9/+18 — mockup gold matches the manifest canonical `#DCAB60`, the token is deliberately deeper; moving it repaints the whole app from one screen's evidence — not unambiguous|
+|cream|`#FBFBF8`/`#E9E4DA`|`ink` `#F1EDE1`|text-tier spread, consistent|
+
+### C9 — the attached bar, measured
+
+The dispatch's mockup branch measured AGAINST the confirmed decision: 44's
+bar is a floating pill (side edges are page ground), content ≈149px ≈ 69pt
+(8.1% of screen height), icons ≈24pt, labels ≈10pt, with a ~25pt gap below —
+SMALLER than even the pre-C9 70pt pill. Matching those proportions would
+have shrunk the bar the operator asked to grow, so the +25% branch shipped
+and the mockup numbers are recorded here instead. Final bar: content 88pt +
+the device bottom inset INSIDE as padding (122pt box on a notched iPhone;
+88 on the harness), full width, flush, one top hairline, borderRadius 0,
+icons 35 / labels 14, the [ + ] at 75pt (0.857 of content, unchanged ratio).
+Pixel-verified on the fresh renders: bar surface spans x0–392 and y765–851
+flush to the bottom edge, [ + ] centred inside.
+
+SuccessScreen's "View job and bids" / "Back to Home" row (harness, both
+themes): before x16/x201.5, y703..751 against a pill top of 770; after
+x16/x201.5, y700..748 against a bar top of 764 — fully visible, 16pt clear.
+In-flow scrolling surfaces keep their pre-existing scroll-end clearance
+semantics through the derived hook (now 88+inset); no screen sits behind
+the bar and no float-gap geometry survives anywhere.
+
+### Harness fidelity — why .shots/ renders differ from the physical iPhone
+
+Report-only, nothing changed. In order of effect on the bottom bar:
+
+1. **Safe-area insets are zero** in the harness browser. A physical iPhone
+   reports bottom 34 / top ~54–59. This is the dominant bar difference:
+   post-C9 the bar's box is 88pt in shots but 122pt on device (the inset
+   region is part of the bar's surface); pre-C9 the pill floated 12pt up in
+   shots but 34pt up on device. Position AND size of the bar move.
+2. **No status bar**: content starts at y=0, so everything sits ~50pt higher
+   than on the phone and the scene shows MORE content; the bar's top edge
+   lands proportionally lower against the content.
+3. **The bar's frosted blur does not render**: lib/blur.tsx returns null on
+   web, so shots show a flat opaque bar; the device shows BlurLayer over it.
+4. **react-native-web collapses the tab label's text box** (~1px vs ~14 —
+   recorded in BottomNav.tsx), so the icon+label stack packs ~13px
+   differently inside the bar than native does.
+5. **Font rendering**: Windows chromium resolves system-ui to Segoe UI, not
+   SF Pro — different widths/weights move label fit and every wrap point
+   (the run's one-line/two-line fit checks hold on Segoe with margin, but
+   device is the truth).
+6. **deviceScaleFactor 1 vs 3×**: hairlines (the bar's top border included)
+   rasterize differently; no subpixel smoothing parity.
+7. **Reduced motion is forced**, so entrances/press feedback never appear in
+   a shot; **all data is synthetic/empty**, so list surfaces differ from the
+   operator's staging-backed phone.
+   Items 1–6 change the apparent position or size of the bottom bar; 1, 2
+   and 3 are the ones the operator is most likely noticing.
+
+### Render gate, verification, push
+
+See the run report (printed at dispatch end) for the 60-target render
+result and tallies; baseline and every post-commit `npm run verify` was
+green at **1079 pass / 0 fail** (fences were UPDATED to the new truths of
+C4/C7/C9 — none deleted or weakened, tally unchanged). No database contact,
+no SQL, no dependency, no image opened for viewing; `.gitignore`,
+`package.json`, `package-lock.json`, `app.json`, `eas.json` untouched.
+
+## The run before it — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
 
 The next redesign runs must be written against renders of the screens as they
 are today. The registry could photograph 16 surfaces; it now photographs
