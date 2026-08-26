@@ -66,8 +66,8 @@ RETIRED.
 |C10|`1e31776`|Shadows & Glows per surface (card shadow colour+elevation; primary-CTA optional shadow, 0 today; dialog lift; [+] glow colour) + glow-on-selection (boolean, OFF today: the chosen chip lights in dark at the global glow strength); no spread dial (RN doesn't render it, fenced)|
 |C11|(this commit)|render gate + this live edge; removed the stale `screens/HomeScreen.tsx` LITERAL_FILE_ALLOWLIST entry (`tests/themeResolution.test.mjs`) — the fence stayed green: every hex in that file lives in comments|
 
-`npm run verify` exited 0 after every commit (1086 baseline → 1146 tests at
-C10; the studio suite is `tests/designStudio.test.mjs`).
+`npm run verify` exited 0 after every commit (1086 tests at the baseline →
+1123 at C11; the studio suite is `tests/designStudio.test.mjs`).
 
 ### THE GATE — permanent, channel-gated, fail closed
 
