@@ -26,6 +26,7 @@ import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { EditBudgetDialog } from '../components/EditBudgetDialog';
+import { EyeOffIcon } from '../components/EyeOffIcon';
 import { OfferAmountField, validateOfferAmount } from '../components/OfferComposer';
 import { PhotoViewer } from '../components/PhotoViewer';
 import { ScreenHeader } from '../components/ScreenHeader';
@@ -1262,7 +1263,10 @@ export function PostJobScreen() {
                   padding moved. */}
               <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
                 <View style={styles.infoIcon}>
-                  <Ionicons name="shield-checkmark-outline" size={20} color={colors.emerald} />
+                  {/* C6 — the "not visible" eye, replacing the shield: this
+                      notice is about what must not be SEEN. Defaults match
+                      the shield's old footprint. */}
+                  <EyeOffIcon />
                 </View>
                 <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
                   Avoid faces, documents, license plates, addresses, or any other personal information
