@@ -76,7 +76,7 @@ const schemaModule = (async () => {
   const js = stripTypeScriptTypes(await read('ui/designStudioSchema.ts'), { mode: 'strip' });
   const stubbed = js.replace(
     /import \{[\s\S]*?\} from '\.\.\/lib\/designOverrides';/,
-    'const { STATIC_MATERIALS, getDesignOverrides, patchDesignOverrides, patchMaterialOverride, setOverrideValue } = globalThis.__S2_OVERRIDES__;',
+    'const { STATIC_MATERIALS, getDesignOverrides, patchDesignOverrides, patchMaterialOverride, setOverrideValue, setPaletteTokenOverride } = globalThis.__S2_OVERRIDES__;',
   );
   assert.doesNotMatch(
     stubbed,
@@ -753,6 +753,135 @@ test('[static] the four destructive acts confirm; dial changes and per-token res
   // Export rides RN's built-in Share, never a clipboard module.
   assert.match(panel, /Share\.share\(\{ message: exportJson \}\)/);
   assert.doesNotMatch(panel, /expo-clipboard/, 'the clipboard native module is absent from the installed binary');
+});
+
+// ---------------------------------------------------------------------------
+// The Colors category (S2 C5)
+// ---------------------------------------------------------------------------
+
+/** ui/colorMath.ts — import-free, executed directly. */
+const colorMathModule = (async () => {
+  const js = stripTypeScriptTypes(await read('ui/colorMath.ts'), { mode: 'strip' });
+  assert.doesNotMatch(js, /from '/, 'ui/colorMath.ts must stay import-free');
+  return import(toDataUrl(js));
+})();
+
+test('colour math: parse/format round-trips, HSL wraps and clamps, WCAG contrast agrees with the G1 fence', async () => {
+  const m = await colorMathModule;
+
+  assert.deepEqual(m.parseHex('#D4A24C'), { r: 212, g: 162, b: 76, alpha: null });
+  assert.deepEqual(m.parseHex('d4a24c'), { r: 212, g: 162, b: 76, alpha: null });
+  assert.deepEqual(m.parseHex('#abc'), { r: 170, g: 187, b: 204, alpha: null });
+  assert.equal(m.parseHex('#D4A24C80').alpha.toFixed(3), (128 / 255).toFixed(3));
+  assert.equal(m.parseHex('#D4A2'), null);
+  assert.equal(m.parseHex('not a colour'), null);
+  assert.equal(m.formatHex(212, 162, 76, null), '#D4A24C');
+  assert.equal(m.formatHex(212, 162, 76, 0.5), '#D4A24C80');
+
+  // HSL round-trip lands back on the same bytes for a representative set.
+  for (const hex of ['#D4A24C', '#02110D', '#F1EDE1', '#5FAE81', '#000000', '#FFFFFF']) {
+    const { r, g, b } = m.parseHex(hex);
+    const hsl = m.rgbToHsl(r, g, b);
+    assert.equal(m.hslToHex(hsl.h, hsl.s, hsl.l, null), hex, `${hex} must round-trip`);
+  }
+  // The hue stepper wraps; saturation and lightness clamp.
+  const red = m.rgbToHsl(255, 0, 0);
+  assert.equal(Math.round(red.h), 0);
+  assert.equal(m.hslToHex(-2, 100, 50, null), m.hslToHex(358, 100, 50, null));
+  assert.equal(m.hslToHex(362, 100, 50, null), m.hslToHex(2, 100, 50, null));
+  assert.equal(m.hslToHex(0, 120, 50, null), m.hslToHex(0, 100, 50, null));
+  assert.equal(m.hslToHex(0, 100, -10, null), '#000000');
+
+  // The SAME WCAG formula the G1 material fence runs (themeTokens.test.mjs):
+  // identical inputs must give identical answers, so the studio's readout
+  // and the executed fence can never disagree.
+  assert.ok(Math.abs(m.contrastRatio('#FFFFFF', '#000000') - 21) < 1e-9);
+  assert.equal(
+    m.contrastRatio('#FFFFFF', '#000000'),
+    m.contrastRatio('#000000', '#FFFFFF'),
+    'contrast is symmetric',
+  );
+  const fenceLuminance = (hex) => {
+    const channel = (byte) => {
+      const c = byte / 255;
+      return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+    };
+    const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+  };
+  for (const hex of ['#F1EDE1', '#93A096', '#071B15', '#D4A24C']) {
+    assert.equal(m.relativeLuminance(hex), fenceLuminance(hex), `${hex}: one luminance formula`);
+  }
+  assert.equal(m.contrastRatio('junk', '#000000'), null, 'unreadable input warns as absent, never throws');
+});
+
+test('colour tokens: enumerated at runtime, both surfaces, both themes — a new token needs no edit', async () => {
+  const schema = await schemaModule;
+  const o = await overridesModule;
+  const ctx = await contextFor();
+
+  const entries = schema.colorTokenEntries(ctx, 'dark');
+  assert.equal(
+    entries.length,
+    Object.keys(ctx.appLight).length + Object.keys(ctx.emeraldLight).length,
+    'one entry per palette token per surface',
+  );
+  for (const entry of entries) {
+    assert.ok(entry.plainLabel.trim().length > 0, `${entry.key}: empty label`);
+    assert.ok(entry.description.trim().length > 0, `${entry.key}: empty description`);
+    assert.equal(entry.kind, 'color');
+    assert.equal(entry.category, 'colors');
+    assert.equal(entry.technicalKey, entry.key);
+  }
+
+  // Defaults ARE the palette's own values.
+  const emeraldBg = entries.find((entry) => entry.key === 'palette.dark.emerald.bg');
+  assert.ok(emeraldBg, 'ui/tokens tokens must enumerate');
+  assert.equal(emeraldBg.defaultValue(ctx), ctx.emeraldDark.bg);
+
+  // Writes round-trip through the palette bank, and clear again.
+  try {
+    emeraldBg.write('#101010');
+    const live = await contextFor();
+    assert.equal(emeraldBg.overrideValue(live), '#101010');
+    assert.equal(o.getDesignOverrides().palette.dark['emerald.bg'], '#101010');
+    emeraldBg.write(undefined);
+    assert.equal('palette' in o.getDesignOverrides(), false);
+  } finally {
+    o.resetDesignOverrides();
+  }
+
+  // The contrast ground pairs an ink with its ground and a ground with its ink.
+  const text = entries.find((entry) => entry.key === 'palette.dark.app.text');
+  assert.equal(text.contrastGround(ctx).label, 'background');
+  const surface = entries.find((entry) => entry.key === 'palette.dark.app.surface');
+  assert.equal(surface.contrastGround(ctx).label, 'text');
+
+  // A NEW TOKEN APPEARS WITH NO PANEL EDIT: enumeration reads the palettes.
+  const grown = {
+    ...ctx,
+    appLight: { ...ctx.appLight, brandNewRole: '#123456' },
+  };
+  const grownEntries = schema.colorTokenEntries(grown, 'light');
+  const added = grownEntries.find((entry) => entry.key === 'palette.light.app.brandNewRole');
+  assert.ok(added, 'a token added to the palette must appear in the studio');
+  assert.equal(added.plainLabel, 'Brand new role');
+});
+
+test('[static] the colour editor is HSL + hex + alpha + live contrast, and the G1 cycles are gone', async () => {
+  const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
+  assert.match(panel, /colorTokenEntries\(ctx, colorTheme\)/, 'the Colors category enumerates at runtime');
+  assert.match(panel, /setColorTheme/, 'the light/dark toggle must exist');
+  assert.match(panel, /hslToHex\(hsl\.h \+ direction \* 2/, 'hue steps ±2');
+  assert.match(panel, /clamp\(hsl\.s \+ direction \* 2, 0, 100\)/, 'saturation steps ±2, clamped');
+  assert.match(panel, /clamp\(hsl\.l \+ direction \* 2, 0, 100\)/, 'lightness steps ±2, clamped');
+  assert.match(panel, /parsed\.alpha != null \?/, 'the alpha stepper appears only where alpha exists');
+  assert.match(panel, /ratio < 4\.5 && styles\.contrastLow/, 'the contrast readout warns below 4.5:1');
+  assert.match(panel, /contrastRatio\(current, ground\.hex\)/);
+
+  const tokens = await read('ui/tokens.ts');
+  assert.doesNotMatch(tokens, /STUDIO_GOLD_CYCLE\s*=/, 'the gold cycle is retired');
+  assert.doesNotMatch(tokens, /STUDIO_CARD_FILL_CYCLE\s*=/, 'the card-fill cycle is retired');
 });
 
 // ---------------------------------------------------------------------------

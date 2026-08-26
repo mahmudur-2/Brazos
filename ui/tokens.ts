@@ -509,14 +509,12 @@ export const materials: Record<MaterialName, MaterialSpec> = {
   },
 };
 
-/**
- * RUN G1 (C3) — the design studio's two colour cycles. Hexes live at the
- * token layer by the literal contract (tests/themeResolution.test.mjs);
- * the studio panel consumes them from here, and "the palette's own current
- * value" (no override) leads each cycle.
- */
-export const STUDIO_GOLD_CYCLE = ['#DCAB60', '#DBAB5E', '#D4A24C'] as const;
-export const STUDIO_CARD_FILL_CYCLE = ['#182725', '#16241C', '#0E1F18'] as const;
+// RUN S2 (C5) — G1's two studio colour cycles (STUDIO_GOLD_CYCLE and
+// STUDIO_CARD_FILL_CYCLE) are GONE: the design studio edits every palette
+// token directly now (HSL steppers + validated hex, both themes), so a
+// fixed three-hex cycle would be a second, poorer way to say the same
+// thing. The gold and cardFill DIALS survive unchanged in
+// lib/designOverrides.ts — only the canned hex lists retired.
 
 // ---------------------------------------------------------------------------
 // Controls

@@ -56,6 +56,7 @@ import {
 import {
   STUDIO_CATEGORIES,
   STUDIO_REGISTRY,
+  colorTokenEntries,
   currentValueOf,
   exportModifiedOverrides,
   isModified,
@@ -66,6 +67,7 @@ import {
   type StudioEntry,
   type StudioValue,
 } from '../ui/designStudioSchema';
+import { contrastRatio, formatHex, hslToHex, parseHex, rgbToHsl } from '../ui/colorMath';
 
 // FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED. The old "strip before TestFlight" instruction is SUPERSEDED: the panel ships in every build and lib/designStudioGate.ts decides where it may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED elsewhere). Its mount in navigation/ModeShell.tsx reads that gate.
 
@@ -206,6 +208,115 @@ function ColorEditor({
         />
         {invalid ? <Text style={styles.hexError}>Not a hex colour</Text> : null}
       </View>
+    </View>
+  );
+}
+
+function MiniStepper({
+  label,
+  display,
+  onStep,
+  styles,
+}: {
+  label: string;
+  display: string;
+  onStep: (direction: 1 | -1) => void;
+  styles: PanelStyles;
+}) {
+  return (
+    <View style={styles.miniStepper}>
+      <Text style={styles.miniLabel}>{label}</Text>
+      <Pressable
+        onPress={() => onStep(-1)}
+        style={({ pressed }) => [styles.miniStep, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} minus`}
+        hitSlop={4}
+      >
+        <Text style={styles.stepGlyph}>−</Text>
+      </Pressable>
+      <Text style={styles.miniValue}>{display}</Text>
+      <Pressable
+        onPress={() => onStep(1)}
+        style={({ pressed }) => [styles.miniStep, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`${label} plus`}
+        hitSlop={4}
+      >
+        <Text style={styles.stepGlyph}>+</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+/** C5 — HSL steppers (H ±2 wraps, S/L ±2 clamp), an alpha stepper where the
+ *  value carries alpha, and the live contrast readout vs the token's own
+ *  ground — danger-coloured under 4.5:1, warning only, never blocking. */
+function HslBlock({
+  entry,
+  ctx,
+  styles,
+}: {
+  entry: StudioEntry;
+  ctx: StudioContext;
+  styles: PanelStyles;
+}) {
+  const current = String(currentValueOf(entry, ctx));
+  const parsed = parseHex(current);
+  if (!parsed) return null;
+  const hsl = rgbToHsl(parsed.r, parsed.g, parsed.b);
+  const ground = entry.contrastGround?.(ctx) ?? null;
+  const ratio = ground ? contrastRatio(current, ground.hex) : null;
+  return (
+    <View style={styles.hslBlock}>
+      <View style={styles.hslRow}>
+        <MiniStepper
+          styles={styles}
+          label="H"
+          display={String(Math.round(hsl.h))}
+          onStep={(direction) =>
+            entry.write(hslToHex(hsl.h + direction * 2, hsl.s, hsl.l, parsed.alpha))
+          }
+        />
+        <MiniStepper
+          styles={styles}
+          label="S"
+          display={String(Math.round(hsl.s))}
+          onStep={(direction) =>
+            entry.write(hslToHex(hsl.h, clamp(hsl.s + direction * 2, 0, 100), hsl.l, parsed.alpha))
+          }
+        />
+        <MiniStepper
+          styles={styles}
+          label="L"
+          display={String(Math.round(hsl.l))}
+          onStep={(direction) =>
+            entry.write(hslToHex(hsl.h, hsl.s, clamp(hsl.l + direction * 2, 0, 100), parsed.alpha))
+          }
+        />
+        {parsed.alpha != null ? (
+          <MiniStepper
+            styles={styles}
+            label="A"
+            display={parsed.alpha.toFixed(2)}
+            onStep={(direction) =>
+              entry.write(
+                formatHex(
+                  parsed.r,
+                  parsed.g,
+                  parsed.b,
+                  clamp(round2((parsed.alpha ?? 1) + direction * 0.02), 0, 1),
+                ),
+              )
+            }
+          />
+        ) : null}
+      </View>
+      {ratio != null && ground ? (
+        <Text style={[styles.contrast, ratio < 4.5 && styles.contrastLow]}>
+          contrast {ratio.toFixed(2)}:1 vs {ground.label}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -370,6 +481,7 @@ function EntryRow({
           />
         </Pressable>
       </View>
+      {entry.kind === 'color' ? <HslBlock entry={entry} ctx={ctx} styles={styles} /> : null}
       {modified ? (
         <Text style={styles.modifiedTrail}>
           {formatValue(entry, entry.defaultValue(ctx))} → {formatValue(entry, currentValueOf(entry, ctx))}
@@ -397,6 +509,8 @@ export function DesignStudioPanel() {
   const [favourites, setFavourites] = useState<ReadonlySet<string>>(new Set());
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [infoKey, setInfoKey] = useState<string | null>(null);
+  // C5 — which theme's colour tokens the Colors category edits.
+  const [colorTheme, setColorTheme] = useState<'light' | 'dark'>(isDark ? 'dark' : 'light');
 
   // C3 — geometry. One rect, one collapse flag, every mutation clamped, and
   // the session store keeps the arrangement while the studio is toggled off.
@@ -506,10 +620,13 @@ export function DesignStudioPanel() {
 
   const query = search.trim().toLowerCase();
 
+  // C5 — the palette tokens, enumerated at runtime for the selected theme.
+  const colorEntries = useMemo(() => colorTokenEntries(ctx, colorTheme), [ctx, colorTheme]);
+
   const visibleByCategory = useMemo(() => {
     const grouped = new Map<string, StudioEntry[]>();
     for (const category of STUDIO_CATEGORIES) grouped.set(category.key, []);
-    for (const entry of STUDIO_REGISTRY) {
+    for (const entry of [...STUDIO_REGISTRY, ...colorEntries]) {
       if (tier === 'simple' && entry.tier !== 'basic') continue;
       if (filter === 'favourites' && !favourites.has(entry.key)) continue;
       if (filter === 'modified' && !isModified(entry, ctx)) continue;
@@ -523,7 +640,7 @@ export function DesignStudioPanel() {
       grouped.get(entry.category)?.push(entry);
     }
     return grouped;
-  }, [tier, filter, favourites, query, ctx]);
+  }, [tier, filter, favourites, query, ctx, colorEntries]);
 
   // C4 — history, presets, export, import and the raw editor.
   const history = useDesignHistoryCounts();
@@ -777,6 +894,25 @@ export function DesignStudioPanel() {
             color={withAlpha(colors.white, 0.55)}
           />
         </Pressable>
+        {isOpen && category.key === 'colors' ? (
+          <View style={styles.filterRow}>
+            {(['light', 'dark'] as const).map((themeKey) => (
+              <Pressable
+                key={themeKey}
+                onPress={() => setColorTheme(themeKey)}
+                style={[styles.filterChip, colorTheme === themeKey && styles.filterChipActive]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: colorTheme === themeKey }}
+              >
+                <Text
+                  style={[styles.filterLabel, colorTheme === themeKey && styles.filterLabelActive]}
+                >
+                  {themeKey === 'light' ? 'Light' : 'Dark'}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
         {isOpen
           ? rows.map(({ subcategory, entry }) => (
               <View key={entry.key}>
@@ -1358,6 +1494,49 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     hexError: {
       fontSize: 10,
+      color: colors.danger,
+    },
+    hslBlock: {
+      marginLeft: 22,
+      gap: 2,
+    },
+    hslRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      flexWrap: 'wrap',
+    },
+    miniStepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+    },
+    miniLabel: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: withAlpha(colors.white, 0.55),
+    },
+    miniStep: {
+      width: 24,
+      height: 24,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: withAlpha(colors.white, 0.25),
+    },
+    miniValue: {
+      minWidth: 28,
+      textAlign: 'center',
+      fontSize: 11,
+      fontWeight: '700',
+      color: colors.white,
+    },
+    contrast: {
+      fontSize: 10,
+      color: withAlpha(colors.white, 0.6),
+    },
+    contrastLow: {
       color: colors.danger,
     },
     resetToken: {

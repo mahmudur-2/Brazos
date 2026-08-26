@@ -4,9 +4,11 @@ import {
   patchDesignOverrides,
   patchMaterialOverride,
   setOverrideValue,
+  setPaletteTokenOverride,
   type DesignOverrides,
   type MaterialOverride,
   type PaletteNamespace,
+  type PaletteThemeKey,
   type StudioValue,
 } from '../lib/designOverrides';
 import type { MaterialName } from './tokens';
@@ -142,6 +144,9 @@ export type StudioEntry = {
   overrideValue: (ctx: StudioContext) => StudioValue | undefined;
   /** Apply an override; undefined returns the entry to its default. */
   write: (value: StudioValue | undefined) => void;
+  /** For colour entries: the token's own ground, for the live contrast
+   *  readout (warns below 4.5:1, never blocks). */
+  contrastGround?: (ctx: StudioContext) => { label: string; hex: string } | null;
 };
 
 /** An entry's current value: the override when set, else the default. */
@@ -313,10 +318,10 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   },
   {
     key: 'color.gold',
-    plainLabel: 'Gold accent',
+    plainLabel: 'Gold accent (both themes)',
     technicalKey: 'gold',
     description:
-      'The metal line-work — eyebrows, hairlines, icons, rings — in whichever theme is showing.',
+      'The metal line-work — eyebrows, hairlines, icons, rings — replaced in BOTH themes at once.',
     category: 'colors',
     subcategory: 'Accents',
     tier: 'basic',
@@ -325,6 +330,10 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
     defaultValue: (ctx) => (ctx.isDark ? ctx.appDark.gold : ctx.appLight.gold),
     overrideValue: (ctx) => ctx.overrides.gold,
     write: (value) => patchDesignOverrides({ gold: value as string | undefined }),
+    contrastGround: (ctx) => ({
+      label: 'background',
+      hex: ctx.isDark ? ctx.appDark.background : ctx.appLight.background,
+    }),
   },
   {
     key: 'color.cardFill',
@@ -339,8 +348,133 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
     defaultValue: (ctx) => ctx.appDark.surface,
     overrideValue: (ctx) => ctx.overrides.cardFill,
     write: (value) => patchDesignOverrides({ cardFill: value as string | undefined }),
+    contrastGround: (ctx) => ({ label: 'text', hex: ctx.appDark.text }),
   },
 ];
+
+// ---------------------------------------------------------------------------
+// The Colors category (C5): the palette tokens, ENUMERATED AT RUNTIME from
+// the palettes the panel passes in — a token added to either surface appears
+// in the studio with no edit to any file. One entry per token per theme; the
+// panel's Light/Dark toggle chooses which theme's set renders.
+// ---------------------------------------------------------------------------
+
+/** Roles that read as GROUNDS — their contrast partner is the ink. */
+const GROUND_ROLES = new Set([
+  'background',
+  'surface',
+  'homeBackground',
+  'bg',
+  'primarySoft',
+  'goldSoft',
+  'mint',
+  'mint2',
+  'successBg',
+  'warningBg',
+  'dangerBg',
+  'infoBg',
+  'neutralBg',
+  'dangerSurface',
+  'cardFill',
+]);
+
+/** Content-on-fill roles pair with their own fill, not the page ground. */
+const ON_FILL_GROUND: Record<string, string> = {
+  onPrimary: 'primary',
+  onForest: 'forest',
+};
+
+/** The high-impact roles Simple mode shows; the rest are Advanced. */
+const BASIC_COLOR_ROLES = new Set([
+  'text',
+  'textMuted',
+  'background',
+  'surface',
+  'primary',
+  'gold',
+  'emerald',
+  'forest',
+  'danger',
+  'border',
+  'homeBackground',
+  'bg',
+  'ink',
+  'muted',
+  'line',
+]);
+
+function paletteBankOf(
+  ctx: StudioContext,
+  theme: PaletteThemeKey,
+  namespace: PaletteNamespace,
+): Record<string, string> {
+  if (namespace === 'app') return theme === 'dark' ? ctx.appDark : ctx.appLight;
+  return theme === 'dark' ? ctx.emeraldDark : ctx.emeraldLight;
+}
+
+/** A role's live value: the bank override when set, else the palette's own. */
+function resolvedRole(
+  ctx: StudioContext,
+  theme: PaletteThemeKey,
+  namespace: PaletteNamespace,
+  role: string,
+): string | undefined {
+  return (
+    ctx.overrides.palette?.[theme]?.[`${namespace}.${role}`] ??
+    paletteBankOf(ctx, theme, namespace)[role]
+  );
+}
+
+function groundRoleFor(namespace: PaletteNamespace, role: string): string {
+  const onFill = ON_FILL_GROUND[role];
+  if (onFill) return onFill;
+  if (GROUND_ROLES.has(role)) return namespace === 'app' ? 'text' : 'ink';
+  return namespace === 'app' ? 'background' : 'bg';
+}
+
+/** "textMuted" → "Text muted" — plain enough to read beside the category. */
+function labelForRole(role: string): string {
+  const spaced = role.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+export function colorTokenEntries(ctx: StudioContext, theme: PaletteThemeKey): StudioEntry[] {
+  const entries: StudioEntry[] = [];
+  const themeWord = theme === 'dark' ? 'dark' : 'light';
+  const build = (
+    namespace: PaletteNamespace,
+    subcategory: string,
+    surfaceName: string,
+    roles: Record<string, string>,
+  ) => {
+    for (const role of Object.keys(roles)) {
+      const bankKey = `${namespace}.${role}`;
+      const key = `palette.${theme}.${bankKey}`;
+      entries.push({
+        key,
+        plainLabel: labelForRole(role),
+        technicalKey: key,
+        description: `The ${themeWord} value of ${surfaceName}'s “${role}” — every surface reading that token repaints live.`,
+        category: 'colors',
+        subcategory,
+        tier: BASIC_COLOR_ROLES.has(role) ? 'basic' : 'advanced',
+        kind: 'color',
+        scope: 'token',
+        defaultValue: (c) => paletteBankOf(c, theme, namespace)[role] ?? '',
+        overrideValue: (c) => c.overrides.palette?.[theme]?.[bankKey],
+        write: (value) => setPaletteTokenOverride(theme, bankKey, value as string | undefined),
+        contrastGround: (c) => {
+          const ground = groundRoleFor(namespace, role);
+          const hex = resolvedRole(c, theme, namespace, ground);
+          return hex ? { label: ground, hex } : null;
+        },
+      });
+    }
+  };
+  build('app', 'App palette', 'lib/theme', ctx.appLight);
+  build('emerald', 'Emerald tokens', 'ui/tokens', ctx.emeraldLight);
+  return entries;
+}
 
 /** Registry entries grouped by category, in category order. */
 export function entriesByCategory(): ReadonlyMap<StudioCategoryKey, StudioEntry[]> {
