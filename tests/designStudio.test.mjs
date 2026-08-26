@@ -109,8 +109,8 @@ const contextFor = async (overrides = {}) => {
   return {
     overrides: { ...o.getDesignOverrides(), ...overrides },
     staticMaterials: tokens.materials,
-    appLight: { gold: tokens.brand.gold, surface: '#FFFFFF' },
-    appDark: { gold: tokens.dark.gold, surface: tokens.dark.surface },
+    appLight: { gold: tokens.brand.gold, surface: '#FFFFFF', text: '#1F2E22', background: '#F4F1E8' },
+    appDark: { gold: tokens.dark.gold, surface: tokens.dark.surface, text: '#F1EDE1', background: '#02110D' },
     emeraldLight: tokens.light,
     emeraldDark: tokens.dark,
     isDark: true,
@@ -459,6 +459,300 @@ test('[static] the panel routes every gesture and frame change through the clamp
   // Content scrolls internally at every height: the body flexes inside the
   // sized panel rather than sizing it.
   assert.match(panel, /height: rect\.height/);
+});
+
+// ---------------------------------------------------------------------------
+// History, presets, export and import (S2 C4)
+// ---------------------------------------------------------------------------
+
+/** lib/designStudioHistory.ts, executed against the executed store. */
+const historyModule = (async () => {
+  const overrides = await overridesModule;
+  globalThis.__S2_OVERRIDES__ = overrides;
+  const js = stripTypeScriptTypes(await read('lib/designStudioHistory.ts'), { mode: 'strip' });
+  const stubbed = js
+    .replace(
+      /import \{[^}]*\} from 'react';/,
+      'const useSyncExternalStore = () => { throw new Error("hooks are not under test"); };',
+    )
+    .replace(
+      /import \{[\s\S]*?\} from '\.\/designOverrides';/,
+      'const { getDesignOverrides, setDesignOverrides, setDesignOverridesChangeListener } = globalThis.__S2_OVERRIDES__;',
+    );
+  assert.doesNotMatch(stubbed, /from '(?:react|\.[^']*)'/, 'history imports must be stubbed');
+  return import(toDataUrl(stubbed));
+})();
+
+test('history: every override change is one undoable step, bounded, with redo', async () => {
+  const o = await overridesModule;
+  const h = await historyModule;
+  assert.ok(h.HISTORY_LIMIT >= 50, 'the dispatch floor is a 50-step stack');
+  o.resetDesignOverrides();
+  h.resetDesignHistory();
+  try {
+    o.patchDesignOverrides({ glowAlpha: 0.3 });
+    o.patchDesignOverrides({ navRadius: 8 });
+    assert.equal(h.canUndoDesignChange(), true);
+
+    h.undoDesignChange();
+    assert.equal(o.getDesignOverrides().navRadius, undefined, 'undo removes the last step');
+    assert.equal(o.getDesignOverrides().glowAlpha, 0.3, 'earlier steps survive');
+    assert.equal(h.canRedoDesignChange(), true);
+
+    h.redoDesignChange();
+    assert.equal(o.getDesignOverrides().navRadius, 8, 'redo reapplies the undone step');
+
+    // Undo of undo's own write must not be re-recorded: two undos walk back
+    // to the empty set, never ping-pong.
+    h.undoDesignChange();
+    h.undoDesignChange();
+    assert.deepEqual(o.getDesignOverrides(), { materials: {} });
+    assert.equal(h.canUndoDesignChange(), false);
+
+    // A new change clears the redo branch.
+    o.patchDesignOverrides({ glowAlpha: 0.5 });
+    assert.equal(h.canRedoDesignChange(), false);
+
+    // Bounded: flooding past the limit keeps the stack at the limit.
+    for (let i = 0; i < h.HISTORY_LIMIT + 25; i += 1) {
+      o.patchDesignOverrides({ navRadius: (i % 20) + 1 });
+    }
+    let undos = 0;
+    while (h.canUndoDesignChange() && undos < 1000) {
+      h.undoDesignChange();
+      undos += 1;
+    }
+    assert.ok(undos <= h.HISTORY_LIMIT, `stack must stay bounded (walked ${undos})`);
+  } finally {
+    o.resetDesignOverrides();
+    h.resetDesignHistory();
+  }
+});
+
+test('history: an atomic apply (import / preset load) is one undoable step', async () => {
+  const o = await overridesModule;
+  const h = await historyModule;
+  const schema = await schemaModule;
+  o.resetDesignOverrides();
+  h.resetDesignHistory();
+  try {
+    const ctx = await contextFor();
+    const sanitized = schema.sanitizeOverrides(
+      { glowAlpha: 0.4, materials: { chrome: { blur: 50 } } },
+      ctx,
+    );
+    o.setDesignOverrides(sanitized.overrides);
+    assert.equal(o.getDesignOverrides().glowAlpha, 0.4);
+    h.undoDesignChange();
+    assert.deepEqual(o.getDesignOverrides(), { materials: {} }, 'one undo reverts the whole import');
+  } finally {
+    o.resetDesignOverrides();
+    h.resetDesignHistory();
+  }
+});
+
+test('sanitize: a raw override object round-trips; junk is dropped and listed, never applied', async () => {
+  const schema = await schemaModule;
+  const ctx = await contextFor();
+
+  const good = schema.sanitizeOverrides(
+    {
+      materials: { chrome: { blur: 44, scrimAlpha: 0.6 }, sheet: { borderAlpha: 0.3 } },
+      glowAlpha: 0.31,
+      navRadius: 12,
+      gold: 'dcab60',
+      values: {},
+      palette: { dark: { 'app.text': '#abc' } },
+    },
+    ctx,
+  );
+  assert.deepEqual(good.dropped, []);
+  assert.equal(good.overrides.materials.chrome.blur, 44);
+  assert.equal(good.overrides.gold, '#DCAB60', 'hex normalises');
+  assert.equal(good.overrides.palette.dark['app.text'], '#AABBCC', 'shorthand hex expands');
+  assert.equal('values' in good.overrides, false, 'an empty bag never materialises');
+
+  const junk = schema.sanitizeOverrides(
+    {
+      materials: { chrome: { blur: 'loud', scrimColor: '#071B20' }, kitchen: { blur: 10 } },
+      glowAlpha: Number.POSITIVE_INFINITY,
+      navRadius: 999,
+      cardFill: 'not-a-colour',
+      values: { 'no.such.entry': 5, 'material.chrome.blur': 51 },
+      palette: { dark: { 'app.notARole': '#111111', 'emerald.bg': '#101010' }, mars: {} },
+      utterlyUnknown: true,
+    },
+    ctx,
+  );
+  assert.equal(junk.overrides.materials.chrome.scrimColor, '#071B20', 'valid keys beside junk survive');
+  assert.equal(junk.overrides.materials.chrome.blur, undefined, 'a non-numeric blur is dropped');
+  assert.equal(junk.overrides.navRadius, 40, 'out-of-range clamps to the schema max');
+  assert.equal(junk.overrides.glowAlpha, undefined, 'a non-finite number is dropped');
+  assert.equal(junk.overrides.cardFill, undefined);
+  assert.equal(
+    'values' in junk.overrides,
+    false,
+    'a bag key that is not bag-addressed is junk — it would sit unread',
+  );
+  assert.equal(junk.overrides.palette.dark['emerald.bg'], '#101010');
+  for (const expected of [
+    'materials.chrome.blur',
+    'materials.kitchen',
+    'glowAlpha',
+    'cardFill',
+    'values.no.such.entry',
+    'values.material.chrome.blur',
+    'palette.dark.app.notARole',
+    'palette.mars',
+    'utterlyUnknown',
+  ]) {
+    assert.ok(junk.dropped.includes(expected), `dropped list must name ${expected} (got ${junk.dropped.join(', ')})`);
+  }
+
+  // Malformed roots can never crash or partially apply.
+  for (const bad of [null, undefined, 42, 'overrides', [1, 2], true]) {
+    const result = schema.sanitizeOverrides(bad, ctx);
+    assert.deepEqual(result.overrides, { materials: {} });
+    assert.ok(result.dropped.length > 0);
+  }
+});
+
+test('sanitize: the grouped export shape imports through the same path', async () => {
+  const schema = await schemaModule;
+  const ctx = await contextFor();
+  const result = schema.sanitizeOverrides(
+    {
+      'Blur & Material': [
+        { technicalKey: 'materials.menu.blur', scope: 'token', value: 60, default: 50 },
+        { technicalKey: 'materials.menu.nonsense', value: 1 },
+        'not an item',
+      ],
+      Navigation: [{ technicalKey: 'navBottomPad', scope: 'token', value: 10 }],
+      Colors: [{ technicalKey: 'palette.light.app.text', value: '#112233' }],
+    },
+    ctx,
+  );
+  assert.equal(result.overrides.materials.menu.blur, 60);
+  assert.equal(result.overrides.navBottomPad, 10);
+  assert.equal(result.overrides.palette.light['app.text'], '#112233');
+  assert.ok(result.dropped.includes('materials.menu.nonsense'));
+  assert.ok(result.dropped.some((entry) => entry.includes('unreadable item')));
+});
+
+test('export: modified values only, grouped, carrying technicalKey and scope', async () => {
+  const o = await overridesModule;
+  const schema = await schemaModule;
+  o.resetDesignOverrides();
+  try {
+    assert.deepEqual(schema.exportModifiedOverrides(await contextFor()), {}, 'no overrides, no payload');
+
+    o.patchMaterialOverride('chrome', { blur: 44 });
+    o.patchDesignOverrides({ navRadius: 12 });
+    o.setPaletteTokenOverride('dark', 'app.text', '#AABBCC');
+    const grouped = schema.exportModifiedOverrides(await contextFor());
+
+    assert.deepEqual(Object.keys(grouped).sort(), ['Blur & Material', 'Colors', 'Navigation']);
+    const blur = grouped['Blur & Material'][0];
+    assert.deepEqual(blur, {
+      technicalKey: 'materials.chrome.blur',
+      scope: 'token',
+      value: 44,
+      default: (await tokensModule).materials.chrome.blur,
+    });
+    const colour = grouped.Colors[0];
+    assert.equal(colour.technicalKey, 'palette.dark.app.text');
+    assert.equal(colour.scope, 'token');
+    assert.equal(colour.value, '#AABBCC');
+    // The export round-trips through the import path byte-for-value.
+    const reimported = schema.sanitizeOverrides(grouped, await contextFor());
+    assert.deepEqual(reimported.dropped, []);
+    assert.equal(reimported.overrides.materials.chrome.blur, 44);
+    assert.equal(reimported.overrides.navRadius, 12);
+    assert.equal(reimported.overrides.palette.dark['app.text'], '#AABBCC');
+  } finally {
+    o.resetDesignOverrides();
+  }
+});
+
+/** lib/designStudioPresets.ts, executed with AsyncStorage shimmed. */
+const presetsModuleWith = async (shim) => {
+  globalThis.__S2_STORAGE_SHIM__ = shim;
+  const js = stripTypeScriptTypes(await read('lib/designStudioPresets.ts'), { mode: 'strip' });
+  const stubbed = js.replace(
+    /import AsyncStorage from '@react-native-async-storage\/async-storage';/,
+    'const AsyncStorage = globalThis.__S2_STORAGE_SHIM__;',
+  );
+  assert.doesNotMatch(stubbed, /from '(?:@|\.[^']*)'/, 'presets imports must be stubbed');
+  return import(toDataUrl(`${stubbed}\n// presets case ${presetsCase++}`));
+};
+let presetsCase = 0;
+
+test('presets: save / load / rename / duplicate / delete round-trip under the versioned key', async () => {
+  const store = new Map();
+  const p = await presetsModuleWith({
+    getItem: async (key) => (store.has(key) ? store.get(key) : null),
+    setItem: async (key, value) => {
+      store.set(key, String(value));
+    },
+  });
+  assert.equal(p.DESIGN_STUDIO_PRESETS_KEY, 'brazos.designstudio.presets.v1');
+
+  const overrides = { materials: {}, glowAlpha: 0.4 };
+  assert.equal(await p.saveDesignPreset('warm glass', overrides), true);
+  assert.ok(store.has('brazos.designstudio.presets.v1'), 'the versioned key is the one home');
+  assert.deepEqual(await p.loadDesignPreset('warm glass'), overrides);
+
+  assert.equal(await p.duplicateDesignPreset('warm glass'), true);
+  assert.deepEqual(
+    (await p.listDesignPresets()).map((preset) => preset.name),
+    ['warm glass', 'warm glass copy'],
+  );
+
+  assert.equal(await p.renameDesignPreset('warm glass copy', 'warm glass'), false, 'rename never clobbers');
+  assert.equal(await p.renameDesignPreset('warm glass copy', 'cool glass'), true);
+  assert.equal(await p.deleteDesignPreset('warm glass'), true);
+  assert.deepEqual((await p.listDesignPresets()).map((preset) => preset.name), ['cool glass']);
+  assert.equal(await p.deleteDesignPreset('never existed'), false);
+
+  // Junk in storage reads as empty, never a crash.
+  store.set('brazos.designstudio.presets.v1', '{broken json');
+  assert.deepEqual(await p.listDesignPresets(), []);
+});
+
+test('presets: a broken store is swallowed, never thrown', async () => {
+  const p = await presetsModuleWith({
+    getItem: async () => {
+      throw new Error('storage down');
+    },
+    setItem: async () => {
+      throw new Error('storage down');
+    },
+  });
+  assert.deepEqual(await p.listDesignPresets(), []);
+  assert.equal(await p.saveDesignPreset('x', { materials: {} }), false);
+  assert.equal(await p.loadDesignPreset('x'), null);
+  assert.equal(await p.deleteDesignPreset('x'), false);
+});
+
+test('[static] the four destructive acts confirm; dial changes and per-token resets never do', async () => {
+  const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
+  for (const title of [
+    'Reset everything?',
+    'Import overrides?',
+    'Apply raw overrides?',
+  ]) {
+    assert.ok(panel.includes(title), `missing confirm: ${title}`);
+  }
+  assert.match(panel, /title: `Reset \$\{label\}\?`/, 'section resets confirm');
+  assert.match(panel, /title: `Load “\$\{preset\.name\}”\?`/, 'preset load over changes confirms');
+  assert.match(panel, /title: `Delete “\$\{preset\.name\}”\?`/, 'preset delete confirms');
+  assert.match(panel, /from '\.\.\/lib\/dialog'/, 'confirms ride the shared dialog helper (real iOS Alert.alert on device)');
+  // The stepper path applies live — no confirmAsync may sit inside it.
+  const stepper = panel.slice(panel.indexOf('function StepperEditor'), panel.indexOf('function ColorEditor'));
+  assert.doesNotMatch(stepper, /confirmAsync/, 'dial changes apply live, no confirm');
+  // Export rides RN's built-in Share, never a clipboard module.
+  assert.match(panel, /Share\.share\(\{ message: exportJson \}\)/);
+  assert.doesNotMatch(panel, /expo-clipboard/, 'the clipboard native module is absent from the installed binary');
 });
 
 // ---------------------------------------------------------------------------

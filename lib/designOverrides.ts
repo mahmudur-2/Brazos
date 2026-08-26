@@ -121,8 +121,26 @@ export function getDesignOverrides(): DesignOverrides {
   return state.overrides;
 }
 
+/**
+ * RUN S2 (C4) — the undo stack's hook-in point. ONE listener (the history
+ * module registers itself), told the PREVIOUS override set on every real
+ * change, whatever wrote it — a dial, a reset, a preset load, an import —
+ * so undo covers all override changes by construction.
+ */
+type OverridesChangeListener = (previous: DesignOverrides) => void;
+let changeListener: OverridesChangeListener | null = null;
+
+export function setDesignOverridesChangeListener(
+  listener: OverridesChangeListener | null,
+): void {
+  changeListener = listener;
+}
+
 export function setDesignOverrides(next: DesignOverrides): void {
+  const previous = state.overrides;
+  if (next === previous) return;
   state = { ...state, overrides: next };
+  changeListener?.(previous);
   const nextSlice = computePaletteSlice(next);
   if (
     nextSlice.gold !== paletteSlice.gold ||

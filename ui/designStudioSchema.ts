@@ -6,6 +6,7 @@ import {
   setOverrideValue,
   type DesignOverrides,
   type MaterialOverride,
+  type PaletteNamespace,
   type StudioValue,
 } from '../lib/designOverrides';
 import type { MaterialName } from './tokens';
@@ -347,4 +348,317 @@ export function entriesByCategory(): ReadonlyMap<StudioCategoryKey, StudioEntry[
   for (const category of STUDIO_CATEGORIES) grouped.set(category.key, []);
   for (const entry of STUDIO_REGISTRY) grouped.get(entry.category)?.push(entry);
   return grouped;
+}
+
+// ---------------------------------------------------------------------------
+// Export and import (C4). One validation path serves the paste field, the
+// raw editor and preset loads: unknown keys and invalid values are DROPPED
+// and listed, a malformed paste can never crash or partially apply, and
+// every numeric survives only clamped to its schema range.
+// ---------------------------------------------------------------------------
+
+const REGISTRY_BY_KEY: ReadonlyMap<string, StudioEntry> = new Map(
+  STUDIO_REGISTRY.map((entry) => [entry.key, entry]),
+);
+const REGISTRY_BY_TECHNICAL: ReadonlyMap<string, StudioEntry> = new Map(
+  STUDIO_REGISTRY.map((entry) => [entry.technicalKey, entry]),
+);
+
+/** #RGB, #RRGGBB or #RRGGBBAA, '#' optional, case-insensitive → #UPPER. */
+export function normalizeHex(raw: string): string | null {
+  const bare = raw.trim().replace(/^#/, '');
+  if (!/^(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(bare)) return null;
+  const full =
+    bare.length === 3
+      ? bare
+          .split('')
+          .map((c) => c + c)
+          .join('')
+      : bare;
+  return `#${full.toUpperCase()}`;
+}
+
+export type StudioExportItem = {
+  technicalKey: string;
+  scope: StudioScope;
+  value: StudioValue;
+  default: StudioValue;
+};
+
+/**
+ * The share/export payload: MODIFIED values only, grouped by category label,
+ * each entry carrying its technicalKey and scope. Palette-bank colours (the
+ * runtime-enumerated tokens) export as `palette.<theme>.<ns>.<role>`.
+ */
+export function exportModifiedOverrides(ctx: StudioContext): Record<string, StudioExportItem[]> {
+  const grouped: Record<string, StudioExportItem[]> = {};
+  const push = (label: string, item: StudioExportItem) => {
+    (grouped[label] ??= []).push(item);
+  };
+  for (const entry of STUDIO_REGISTRY) {
+    const value = entry.overrideValue(ctx);
+    if (value === undefined) continue;
+    const label = STUDIO_CATEGORY_BY_KEY.get(entry.category)?.label ?? entry.category;
+    push(label, {
+      technicalKey: entry.technicalKey,
+      scope: entry.scope,
+      value,
+      default: entry.defaultValue(ctx),
+    });
+  }
+  const banks = ctx.overrides.palette;
+  if (banks) {
+    const colorsLabel = STUDIO_CATEGORY_BY_KEY.get('colors')?.label ?? 'Colors';
+    for (const theme of ['light', 'dark'] as const) {
+      const bank = banks[theme];
+      if (!bank) continue;
+      for (const key of Object.keys(bank).sort()) {
+        const dot = key.indexOf('.');
+        const namespace = key.slice(0, dot) as PaletteNamespace;
+        const role = key.slice(dot + 1);
+        const defaults =
+          namespace === 'app'
+            ? theme === 'dark'
+              ? ctx.appDark
+              : ctx.appLight
+            : theme === 'dark'
+              ? ctx.emeraldDark
+              : ctx.emeraldLight;
+        push(colorsLabel, {
+          technicalKey: `palette.${theme}.${key}`,
+          scope: 'token',
+          value: bank[key],
+          default: defaults[role] ?? '',
+        });
+      }
+    }
+  }
+  return grouped;
+}
+
+/** Validate one value against its entry's kind and range. Null = dropped. */
+function sanitizeEntryValue(entry: StudioEntry, value: unknown): StudioValue | null {
+  switch (entry.kind) {
+    case 'number':
+    case 'decimal': {
+      if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+      const min = entry.min ?? Number.NEGATIVE_INFINITY;
+      const max = entry.max ?? Number.POSITIVE_INFINITY;
+      return Math.min(max, Math.max(min, value));
+    }
+    case 'color':
+      return typeof value === 'string' ? normalizeHex(value) : null;
+    case 'boolean':
+      return typeof value === 'boolean' ? value : null;
+    case 'enum':
+      return typeof value === 'string' && (entry.options ?? []).includes(value) ? value : null;
+    case 'text':
+      return typeof value === 'string' ? value : null;
+  }
+}
+
+type SanitizeAccumulator = {
+  materials: Record<string, Record<string, StudioValue>>;
+  top: Record<string, StudioValue>;
+  values: Record<string, StudioValue>;
+  palette: { light: Record<string, string>; dark: Record<string, string> };
+  dropped: string[];
+};
+
+const TOP_LEVEL_DIALS = ['glowAlpha', 'navRadius', 'navBottomPad', 'gold', 'cardFill'] as const;
+
+const MATERIAL_TECHNICAL =
+  /^materials\.(chrome|sheet|menu)\.(blur|scrimAlpha|borderAlpha|scrimColor|borderColor|fallbackScrimAlpha)$/;
+const PALETTE_TECHNICAL = /^palette\.(light|dark)\.((?:app|emerald)\.[A-Za-z0-9_]+)$/;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Route one technicalKey-addressed value into the accumulator, validated. */
+function foldTechnical(
+  acc: SanitizeAccumulator,
+  technicalKey: string,
+  value: unknown,
+  ctx: StudioContext,
+): void {
+  const material = MATERIAL_TECHNICAL.exec(technicalKey);
+  if (material) {
+    const [, name, prop] = material;
+    const entry = REGISTRY_BY_TECHNICAL.get(technicalKey);
+    const clean = entry
+      ? sanitizeEntryValue(entry, value)
+      : (prop === 'scrimColor' || prop === 'borderColor') && typeof value === 'string'
+        ? normalizeHex(value)
+        : null;
+    if (clean == null) {
+      acc.dropped.push(technicalKey);
+      return;
+    }
+    (acc.materials[name] ??= {})[prop] = clean;
+    return;
+  }
+  if ((TOP_LEVEL_DIALS as readonly string[]).includes(technicalKey)) {
+    const entry = REGISTRY_BY_TECHNICAL.get(technicalKey);
+    const clean = entry ? sanitizeEntryValue(entry, value) : null;
+    if (clean == null) {
+      acc.dropped.push(technicalKey);
+      return;
+    }
+    acc.top[technicalKey] = clean;
+    return;
+  }
+  const palette = PALETTE_TECHNICAL.exec(technicalKey);
+  if (palette) {
+    const [, theme, key] = palette;
+    const dot = key.indexOf('.');
+    const namespace = key.slice(0, dot) as PaletteNamespace;
+    const role = key.slice(dot + 1);
+    const roles = namespace === 'app' ? ctx.appLight : ctx.emeraldLight;
+    const clean = typeof value === 'string' ? normalizeHex(value) : null;
+    if (clean == null || !(role in roles)) {
+      acc.dropped.push(technicalKey);
+      return;
+    }
+    acc.palette[theme as 'light' | 'dark'][key] = clean;
+    return;
+  }
+  const entry = REGISTRY_BY_TECHNICAL.get(technicalKey);
+  if (entry) {
+    const clean = sanitizeEntryValue(entry, value);
+    if (clean == null) {
+      acc.dropped.push(technicalKey);
+      return;
+    }
+    acc.values[entry.key] = clean;
+    return;
+  }
+  acc.dropped.push(technicalKey);
+}
+
+/** Fold a raw DesignOverrides-shaped object into the accumulator. */
+function foldRawObject(
+  acc: SanitizeAccumulator,
+  raw: Record<string, unknown>,
+  ctx: StudioContext,
+): void {
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === 'materials') {
+      if (!isPlainObject(value)) {
+        acc.dropped.push('materials');
+        continue;
+      }
+      for (const [name, dial] of Object.entries(value)) {
+        if (!(name in ctx.staticMaterials) || !isPlainObject(dial)) {
+          acc.dropped.push(`materials.${name}`);
+          continue;
+        }
+        for (const [prop, propValue] of Object.entries(dial)) {
+          foldTechnical(acc, `materials.${name}.${prop}`, propValue, ctx);
+        }
+      }
+      continue;
+    }
+    if (key === 'values') {
+      if (!isPlainObject(value)) {
+        acc.dropped.push('values');
+        continue;
+      }
+      for (const [valueKey, bagValue] of Object.entries(value)) {
+        // Only entries whose storage IS the bag (key === technicalKey, the
+        // bagEntry convention) may land here — a material or dial key in the
+        // bag would sit unread by every consumer, so it is junk, not data.
+        const entry = REGISTRY_BY_KEY.get(valueKey);
+        const clean =
+          entry && entry.technicalKey === valueKey ? sanitizeEntryValue(entry, bagValue) : null;
+        if (clean == null) {
+          acc.dropped.push(`values.${valueKey}`);
+          continue;
+        }
+        acc.values[valueKey] = clean;
+      }
+      continue;
+    }
+    if (key === 'palette') {
+      if (!isPlainObject(value)) {
+        acc.dropped.push('palette');
+        continue;
+      }
+      for (const [theme, bank] of Object.entries(value)) {
+        if ((theme !== 'light' && theme !== 'dark') || !isPlainObject(bank)) {
+          acc.dropped.push(`palette.${theme}`);
+          continue;
+        }
+        for (const [bankKey, hex] of Object.entries(bank)) {
+          foldTechnical(acc, `palette.${theme}.${bankKey}`, hex, ctx);
+        }
+      }
+      continue;
+    }
+    if ((TOP_LEVEL_DIALS as readonly string[]).includes(key)) {
+      foldTechnical(acc, key, value, ctx);
+      continue;
+    }
+    acc.dropped.push(key);
+  }
+}
+
+export type SanitizedOverrides = {
+  overrides: DesignOverrides;
+  /** Every key or value the validation dropped, by address. */
+  dropped: string[];
+};
+
+/**
+ * THE import path. Accepts either a raw override object (the raw editor's
+ * shape) or the grouped export payload (arrays of {technicalKey, value}),
+ * and returns a complete, valid override set plus the list of everything it
+ * had to drop. It never throws, and because callers apply the RETURNED set
+ * atomically, a malformed paste can never partially apply.
+ */
+export function sanitizeOverrides(input: unknown, ctx: StudioContext): SanitizedOverrides {
+  const acc: SanitizeAccumulator = {
+    materials: {},
+    top: {},
+    values: {},
+    palette: { light: {}, dark: {} },
+    dropped: [],
+  };
+  try {
+    if (!isPlainObject(input)) {
+      return { overrides: { materials: {} }, dropped: ['not an override object'] };
+    }
+    const groups = Object.values(input);
+    const isExportShape = groups.length > 0 && groups.every((group) => Array.isArray(group));
+    if (isExportShape) {
+      for (const [label, group] of Object.entries(input)) {
+        for (const item of group as unknown[]) {
+          if (!isPlainObject(item) || typeof item.technicalKey !== 'string') {
+            acc.dropped.push(`${label}: unreadable item`);
+            continue;
+          }
+          foldTechnical(acc, item.technicalKey, item.value, ctx);
+        }
+      }
+    } else {
+      foldRawObject(acc, input, ctx);
+    }
+  } catch {
+    return { overrides: { materials: {} }, dropped: ['unreadable input'] };
+  }
+
+  const materials: Record<string, Record<string, StudioValue>> = {};
+  for (const [name, dial] of Object.entries(acc.materials)) {
+    if (Object.keys(dial).length) materials[name] = dial;
+  }
+  const overrides: DesignOverrides = {
+    materials: materials as DesignOverrides['materials'],
+    ...(acc.top as Partial<DesignOverrides>),
+  };
+  if (Object.keys(acc.values).length) overrides.values = acc.values;
+  const palette: NonNullable<DesignOverrides['palette']> = {};
+  if (Object.keys(acc.palette.light).length) palette.light = acc.palette.light;
+  if (Object.keys(acc.palette.dark).length) palette.dark = acc.palette.dark;
+  if (Object.keys(palette).length) overrides.palette = palette;
+  return { overrides, dropped: acc.dropped };
 }
