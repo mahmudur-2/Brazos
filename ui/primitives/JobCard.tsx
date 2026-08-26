@@ -23,7 +23,8 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { themedStyles, useThemeColors } from '../../lib/theme';
+import { themedStyles, useThemeColors, withAlpha } from '../../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
 
 /**
@@ -121,6 +122,41 @@ export function JobCard({
   // — for whom "no bids yet" is a status, not an invitation.
   const showBreakTheIce = isWorker && bidCount === 0 && !isOwn;
 
+  // RUN S2 (C8) — the card dials, each defaulting to today's shipped value.
+  const fillDial = useOverrideString('card.fill');
+  const fillAlphaDial = useOverrideNumber('card.fillAlpha');
+  const padXDial = useOverrideNumber('card.paddingX');
+  const padYDial = useOverrideNumber('card.paddingY');
+  const radiusDial = useOverrideNumber('card.radius');
+  const borderWidthDial = useOverrideNumber('card.borderWidth');
+  const borderColorDial = useOverrideString('card.borderColor');
+  const borderAlphaDial = useOverrideNumber('card.borderAlpha');
+  const shadowOpacityDial = useOverrideNumber('card.shadowOpacity');
+  const shadowRadiusDial = useOverrideNumber('card.shadowRadius');
+  const shadowXDial = useOverrideNumber('card.shadowOffsetX');
+  const shadowYDial = useOverrideNumber('card.shadowOffsetY');
+  const gapDial = useOverrideNumber('card.gap');
+  const cardDial = {
+    ...(fillDial != null || fillAlphaDial != null
+      ? { backgroundColor: withAlpha(fillDial ?? colors.surface, fillAlphaDial ?? 1) }
+      : null),
+    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
+    ...(padYDial != null ? { paddingVertical: padYDial } : null),
+    ...(radiusDial != null ? { borderRadius: radiusDial } : null),
+    ...(borderWidthDial != null || borderColorDial != null || borderAlphaDial != null
+      ? {
+          borderWidth: borderWidthDial ?? 1,
+          borderColor: withAlpha(borderColorDial ?? colors.line, borderAlphaDial ?? 1),
+        }
+      : null),
+    ...(shadowOpacityDial != null ? { shadowOpacity: shadowOpacityDial } : null),
+    ...(shadowRadiusDial != null ? { shadowRadius: shadowRadiusDial } : null),
+    ...(shadowXDial != null || shadowYDial != null
+      ? { shadowOffset: { width: shadowXDial ?? 0, height: shadowYDial ?? (isDark ? 6 : 5) } }
+      : null),
+    ...(gapDial != null ? { gap: gapDial } : null),
+  };
+
   return (
     // MOTION1 (C1): the press-scale rides an Animated.View WRAPPER, which is
     // the arrangement components/AuthButton.tsx already uses — a Pressable's
@@ -131,7 +167,7 @@ export function JobCard({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={({ pressed }) => [styles.card, isDark && shadows.cardDark, pressed && styles.cardPressed]}
+        style={({ pressed }) => [styles.card, isDark && shadows.cardDark, cardDial, pressed && styles.cardPressed]}
         accessibilityRole="button"
         accessibilityLabel={job.title}
       >

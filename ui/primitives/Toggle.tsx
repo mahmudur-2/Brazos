@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
 import { glow, radius, useThemeColors, withAlpha } from '../../lib/theme';
+import { useOverrideNumber } from '../../lib/designOverrides';
 import { USE_NATIVE_DRIVER } from '../../lib/motion';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
 
@@ -56,7 +57,6 @@ const TRACK_HEIGHT = 32;
 const KNOB = 26;
 /** Border (1) + inner padding (2) on each side. */
 const INSET = 3;
-const TRAVEL = TRACK_WIDTH - KNOB - INSET * 2;
 
 type ToggleProps = {
   value: boolean;
@@ -69,6 +69,13 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   const { palette, isDark } = useThemeColors();
   const position = useRef(new Animated.Value(value ? 1 : 0)).current;
   const press = usePressFeedback();
+
+  // RUN S2 (C8) — the drawn geometry dials; TRAVEL derives from them so the
+  // knob still lands exactly inside the rim at any size. Colours stay D5's.
+  const trackWidth = useOverrideNumber('toggle.trackWidth') ?? TRACK_WIDTH;
+  const trackHeight = useOverrideNumber('toggle.trackHeight') ?? TRACK_HEIGHT;
+  const knobSize = useOverrideNumber('toggle.knobSize') ?? KNOB;
+  const TRAVEL = trackWidth - knobSize - INSET * 2;
 
   useEffect(() => {
     Animated.timing(position, {
@@ -116,6 +123,7 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
       accessibilityState={{ checked: value, disabled }}
       style={[
         styles.track,
+        { width: trackWidth, height: trackHeight },
         { backgroundColor: trackColor, borderColor: trackBorder },
         disabled && styles.disabled,
       ]}
@@ -123,6 +131,7 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
       <Animated.View
         style={[
           styles.knob,
+          { width: knobSize, height: knobSize },
           { backgroundColor: knobColor, borderColor: knobBorder },
           knobGlow,
           {

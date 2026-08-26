@@ -9,6 +9,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { fonts, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -82,6 +83,22 @@ export function Button({
   const isDestructive = variant === 'destructive';
   const sizeStyle = SIZES[size];
 
+  // RUN S2 (C8) — each variant's own dials, plus the shared press/disabled
+  // set. Every default below is the expression this button has always used;
+  // a dial replaces exactly its own value and nothing else.
+  const heightDial = useOverrideNumber(`button.${variant}.height`);
+  const padXDial = useOverrideNumber(`button.${variant}.padX`);
+  const radiusDial = useOverrideNumber(`button.${variant}.radius`);
+  const fillDial = useOverrideString(`button.${variant}.fill`);
+  const fillAlphaDial = useOverrideNumber(`button.${variant}.fillAlpha`);
+  const borderDial = useOverrideString(`button.${variant}.border`);
+  const borderAlphaDial = useOverrideNumber(`button.${variant}.borderAlpha`);
+  const textDial = useOverrideString(`button.${variant}.text`);
+  const iconGapDial = useOverrideNumber('button.iconGap');
+  const pressedOpacityDial = useOverrideNumber('button.pressedOpacity');
+  const pressedScaleDial = useOverrideNumber('button.pressedScale');
+  const disabledOpacityDial = useOverrideNumber('button.disabledOpacity');
+
   // dangerBg is a pale tint of danger in the light palette and a dark one in
   // the dark palette, so `danger` text stays legible on it either way — the
   // same pairing the status badges already rely on.
@@ -125,6 +142,39 @@ export function Button({
       ? palette.ink
       : palette.primary
     : palette.onPrimary;
+  const finalTextColor = !isDisabled && textDial != null ? textDial : textColor;
+
+  // The dial overlay — applied AFTER fillStyle so a set dial wins, and empty
+  // (so byte-inert) while nothing is set. Disabled keeps decision 3's flat
+  // treatment: only the opacity dial may dim it.
+  const baseFillColor =
+    'backgroundColor' in fillStyle && typeof fillStyle.backgroundColor === 'string'
+      ? fillStyle.backgroundColor
+      : undefined;
+  const dialStyle = isDisabled
+    ? disabledOpacityDial != null
+      ? { opacity: disabledOpacityDial }
+      : null
+    : {
+        ...(radiusDial != null ? { borderRadius: radiusDial } : null),
+        ...(fillDial != null || (fillAlphaDial != null && baseFillColor && baseFillColor !== 'transparent')
+          ? {
+              backgroundColor: withAlpha(
+                fillDial ?? (baseFillColor as string),
+                fillAlphaDial ?? 1,
+              ),
+            }
+          : null),
+        ...((borderDial != null || borderAlphaDial != null) && (isSecondary || isDestructive)
+          ? {
+              borderColor: withAlpha(
+                borderDial ??
+                  (isDestructive ? palette.danger : isDark ? palette.gold : palette.border),
+                borderAlphaDial ?? (isSecondary && isDark ? 0.55 : 1),
+              ),
+            }
+          : null),
+      };
 
   return (
     <Pressable
@@ -133,38 +183,46 @@ export function Button({
       style={(state) => [
         styles.base,
         {
-          height: sizeStyle.height,
-          paddingHorizontal: sizeStyle.paddingHorizontal,
+          height: heightDial ?? sizeStyle.height,
+          paddingHorizontal: padXDial ?? sizeStyle.paddingHorizontal,
         },
         fillStyle,
-        state.pressed && !isDisabled && styles.pressed,
+        dialStyle,
+        state.pressed &&
+          !isDisabled &&
+          (pressedOpacityDial != null || pressedScaleDial != null
+            ? {
+                opacity: pressedOpacityDial ?? 0.85,
+                transform: [{ scale: pressedScaleDial ?? 1 }],
+              }
+            : styles.pressed),
         typeof style === 'function' ? style(state) : style,
       ]}
       {...rest}
     >
       {loading ? (
-        <ActivityIndicator color={textColor} />
+        <ActivityIndicator color={finalTextColor} />
       ) : icon ? (
-        <View style={styles.row}>
+        <View style={[styles.row, iconGapDial != null && { gap: iconGapDial }]}>
           {/* Sized from the title rather than a fixed number so it stays
               matched to the text at every ButtonSize. The row centres on one
               axis, so the glyph and the label share a baseline whichever side
               it sits on. */}
           {iconPosition === 'leading' ? (
-            <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={textColor} />
+            <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={finalTextColor} />
           ) : null}
           <Text
-            style={[styles.text, { fontSize: sizeStyle.fontSize, color: textColor }]}
+            style={[styles.text, { fontSize: sizeStyle.fontSize, color: finalTextColor }]}
             numberOfLines={1}
           >
             {title}
           </Text>
           {iconPosition === 'trailing' ? (
-            <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={textColor} />
+            <Ionicons name={icon} size={sizeStyle.fontSize + 1} color={finalTextColor} />
           ) : null}
         </View>
       ) : (
-        <Text style={[styles.text, { fontSize: sizeStyle.fontSize, color: textColor }]}>
+        <Text style={[styles.text, { fontSize: sizeStyle.fontSize, color: finalTextColor }]}>
           {title}
         </Text>
       )}

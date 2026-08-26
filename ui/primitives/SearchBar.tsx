@@ -21,7 +21,8 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { themedStyles, useThemeColors } from '../../lib/theme';
+import { glow, themedStyles, useThemeColors } from '../../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { voiceSearch, type VoiceSession } from '../../lib/voiceSearch';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
 
@@ -111,6 +112,52 @@ export function SearchBar({
   // every degraded case leaves the mic unrendered rather than disabled.
   const [voiceReady, setVoiceReady] = useState(false);
   const [listening, setListening] = useState(false);
+  // RUN S2 (C8) — focus is tracked only so the focus-border/glow dials have
+  // a state to attach to; with both at their defaults nothing changes.
+  const [inputFocused, setInputFocused] = useState(false);
+
+  // The search-field dials, each defaulting to today's shipped value.
+  const heightDial = useOverrideNumber('search.height');
+  const radiusDial = useOverrideNumber('search.radius');
+  const padXDial = useOverrideNumber('search.paddingX');
+  const gapDial = useOverrideNumber('search.gap');
+  const fillDial = useOverrideString('search.fill');
+  const borderDial = useOverrideString('search.border');
+  const borderAlphaDial = useOverrideNumber('search.borderAlpha');
+  const focusBorderDial = useOverrideString('search.focusBorder');
+  const focusGlowDial = useOverrideNumber('search.focusGlow');
+  const placeholderColorDial = useOverrideString('search.placeholderColor');
+  const placeholderAlphaDial = useOverrideNumber('search.placeholderAlpha');
+  const iconSizeDial = useOverrideNumber('search.iconSize');
+  const iconOffsetX = useOverrideNumber('search.iconOffsetX') ?? 0;
+  const iconOffsetY = useOverrideNumber('search.iconOffsetY') ?? 0;
+  const fieldDial = {
+    ...(heightDial != null ? { minHeight: heightDial } : null),
+    ...(radiusDial != null ? { borderRadius: radiusDial } : null),
+    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
+    ...(gapDial != null ? { gap: gapDial } : null),
+    ...(fillDial != null ? { backgroundColor: fillDial } : null),
+    ...(borderDial != null || borderAlphaDial != null
+      ? { borderColor: withAlpha(borderDial ?? colors.line, borderAlphaDial ?? 1) }
+      : null),
+  };
+  const focusDial = inputFocused
+    ? {
+        ...(focusBorderDial != null ? { borderColor: focusBorderDial } : null),
+        ...(focusGlowDial != null && focusGlowDial > 0
+          ? glow.halo(withAlpha(colors.emerald, focusGlowDial))
+          : null),
+      }
+    : null;
+  const iconGlyphSize = iconSizeDial ?? 18;
+  const iconDialStyle =
+    iconOffsetX || iconOffsetY
+      ? { transform: [{ translateX: iconOffsetX }, { translateY: iconOffsetY }] }
+      : undefined;
+  const placeholderInk =
+    placeholderColorDial != null || placeholderAlphaDial != null
+      ? withAlpha(placeholderColorDial ?? colors.muted, placeholderAlphaDial ?? 1)
+      : colors.muted;
   // The live session's provisional phrase — never query state. It paints the
   // field while listening and is cleared the moment the session ends, so the
   // field reverts to the parent-controlled value with nothing committed.
@@ -188,19 +235,24 @@ export function SearchBar({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={({ pressed }) => [styles.field, pressed && styles.pressed, style]}
+        style={({ pressed }) => [styles.field, fieldDial, pressed && styles.pressed, style]}
         accessibilityRole="search"
         accessibilityLabel={accessibilityLabel ?? placeholder}
       >
         {/* Masters 43 and 44 draw the search glyph cream, not gold (master 1's
             gold glyph is that screen's own gold-heavy treatment); light keeps
             its Heritage emerald. */}
-        <Ionicons name="search" size={18} color={isDark ? colors.ink : colors.emerald} />
+        <Ionicons
+          name="search"
+          size={iconGlyphSize}
+          color={isDark ? colors.ink : colors.emerald}
+          style={iconDialStyle}
+        />
         {/* Plain Text, not a disabled TextInput: a disabled input stays
             focusable on some platforms and reads as broken rather than as a
             button. */}
         <Text
-          style={[styles.value, !value && styles.placeholder]}
+          style={[styles.value, !value && styles.placeholder, !value && { color: placeholderInk }]}
           numberOfLines={1}
         >
           {value || placeholder}
@@ -211,16 +263,23 @@ export function SearchBar({
   }
 
   return (
-    <View style={[styles.field, style]}>
-      <Ionicons name="search" size={18} color={isDark ? colors.ink : colors.emerald} />
+    <View style={[styles.field, fieldDial, focusDial, style]}>
+      <Ionicons
+        name="search"
+        size={iconGlyphSize}
+        color={isDark ? colors.ink : colors.emerald}
+        style={iconDialStyle}
+      />
       <TextInput
         keyboardAppearance={isDark ? 'dark' : 'light'}
         style={[styles.input, showingInterim && styles.inputInterim]}
         value={displayValue}
         onChangeText={onChangeText}
         placeholder={placeholder}
-        placeholderTextColor={colors.muted}
+        placeholderTextColor={placeholderInk}
         onSubmitEditing={onSubmit}
+        onFocus={() => setInputFocused(true)}
+        onBlur={() => setInputFocused(false)}
         returnKeyType="search"
         autoFocus={autoFocus}
         autoCapitalize={autoCapitalize}

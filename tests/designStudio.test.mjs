@@ -84,7 +84,7 @@ const schemaModule = (async () => {
     )
     .replace(
       /import \{[\s\S]*?\} from '\.\/tokens';/,
-      'const { layout, navBar, radius: tokenRadius, spacing } = globalThis.__S2_TOKENS__;',
+      'const { controls, layout, navBar, radius: tokenRadius, spacing } = globalThis.__S2_TOKENS__;',
     );
   assert.doesNotMatch(
     stubbed,
@@ -703,6 +703,72 @@ test('[static] the sheet family and the menu wear their dials — and the menu w
     /material=|designOverrides|useOverride/,
     'DropMenu.motion120.tsx stays a pure animation driver — the shared file carries the material',
   );
+});
+
+// ---------------------------------------------------------------------------
+// Cards, Buttons/Pills and Inputs (S2 C8)
+// ---------------------------------------------------------------------------
+
+test('card, button and input dials: defaults mirror the shipped values, floors hold', async () => {
+  const schema = await schemaModule;
+  const tokens = await tokensModule;
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+  const ctx = await contextFor();
+  const light = { ...ctx, isDark: false };
+
+  assert.equal(byKey.get('card.paddingX').defaultValue(ctx), tokens.layout.cardPadding);
+  assert.equal(byKey.get('card.radius').defaultValue(ctx), tokens.radius.lg);
+  assert.equal(byKey.get('card.gap').defaultValue(ctx), tokens.spacing.md);
+  assert.equal(byKey.get('card.shadowOpacity').defaultValue(ctx), 0.5, 'dark: GROUND1 depth');
+  assert.equal(byKey.get('card.shadowOpacity').defaultValue(light), 0.08, 'light: §I depth');
+  assert.equal(byKey.get('card.borderWidth').defaultValue(ctx), 0, 'the card draws no ring today');
+  assert.equal(byKey.get('card.liftScale').defaultValue(ctx), 1, 'the wash ships at its calibration');
+
+  assert.equal(byKey.get('listRow.paddingX').defaultValue(ctx), tokens.layout.screenGutter);
+  assert.equal(byKey.get('listRow.minHeight').defaultValue(ctx), tokens.controls.minTouchTarget);
+
+  for (const variant of ['primary', 'secondary', 'ghost', 'destructive']) {
+    assert.equal(byKey.get(`button.${variant}.height`).defaultValue(ctx), 52, `${variant}: md height`);
+    assert.ok(byKey.get(`button.${variant}.height`).min >= 44, `${variant}: touch floor`);
+    assert.equal(byKey.get(`button.${variant}.radius`).defaultValue(ctx), 12, `${variant}: lib/theme radius.md`);
+  }
+  assert.equal(byKey.get('button.ghost.fill'), undefined, 'ghost has no fill to dial — it is bare text');
+  assert.equal(byKey.get('button.secondary.borderAlpha').defaultValue(ctx), 0.55, 'dark: the gold hairline tier');
+  assert.equal(byKey.get('button.secondary.borderAlpha').defaultValue(light), 1);
+  assert.equal(byKey.get('button.pressedOpacity').defaultValue(ctx), 0.85);
+  assert.equal(byKey.get('button.disabledOpacity').defaultValue(ctx), 1, 'decision 3 stays flat by default');
+
+  assert.equal(byKey.get('chip.radius').defaultValue(ctx), tokens.radius.pill);
+  assert.ok(byKey.get('chip.minHeight').min >= 44);
+  assert.equal(byKey.get('pill.paddingX').defaultValue(ctx), tokens.spacing.md);
+
+  assert.equal(byKey.get('search.height').defaultValue(ctx), tokens.controls.fieldHeight);
+  assert.ok(byKey.get('search.height').min >= 44, 'the tappable field keeps the touch floor');
+  assert.equal(byKey.get('search.focusGlow').defaultValue(ctx), 0, 'no focus glow ships today');
+  assert.equal(byKey.get('toggle.trackWidth').defaultValue(ctx), 52);
+});
+
+test('[static] every C8 wearer reads its dials through the override layer', async () => {
+  const wearers = [
+    ['ui/primitives/JobCard.tsx', ["'card.fill'", "'card.paddingX'", "'card.radius'", "'card.shadowOpacity'", "'card.gap'"]],
+    ['ui/primitives/LitSurface.tsx', ["'card.liftScale'"]],
+    ['ui/primitives/ListRow.tsx', ["'listRow.paddingX'", "'listRow.textGap'", "'listRow.fill'"]],
+    ['components/Button.tsx', ['`button.${variant}.height`', '`button.${variant}.fill`', "'button.iconGap'", "'button.pressedOpacity'", "'button.disabledOpacity'"]],
+    ['components/Chip.tsx', ["'chip.paddingX'", "'chip.radius'", "'chip.borderWidth'"]],
+    ['ui/primitives/StatusPill.tsx', ["'pill.paddingX'", "'pill.radius'"]],
+    ['ui/primitives/SearchBar.tsx', ["'search.height'", "'search.fill'", "'search.focusBorder'", "'search.focusGlow'", "'search.placeholderColor'", "'search.iconSize'"]],
+    ['ui/primitives/Toggle.tsx', ["'toggle.trackWidth'", "'toggle.knobSize'"]],
+  ];
+  for (const [path, keys] of wearers) {
+    const source = stripComments(await read(path));
+    for (const key of keys) {
+      assert.ok(source.includes(key), `${path} must read the ${key} dial`);
+    }
+  }
+  // The lit wash dial SCALES the caller's calibration — the pinned litFill
+  // call shape survives, so the litSurface fence and this one agree.
+  const lit = stripComments(await read('ui/primitives/LitSurface.tsx'));
+  assert.match(lit, /liftAlphaProp \* liftScale/);
 });
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { useThemeColors } from '../../lib/theme';
+import { useOverrideNumber } from '../../lib/designOverrides';
 
 /**
  * The enum-driven status pill (§I).
@@ -161,9 +162,21 @@ export function StatusPill(props: StatusPillProps) {
 
   const palette = tonesFor(colors)[tone];
 
+  // RUN S2 (C8) — the status pill's geometry dials; tones stay enum-driven.
+  const padXDial = useOverrideNumber('pill.paddingX');
+  const padYDial = useOverrideNumber('pill.paddingY');
+  const radiusDial = useOverrideNumber('pill.radius');
+  const borderWidthDial = useOverrideNumber('pill.borderWidth');
+  const pillDial = {
+    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
+    ...(padYDial != null ? { paddingVertical: padYDial } : null),
+    ...(radiusDial != null ? { borderRadius: radiusDial } : null),
+    ...(borderWidthDial != null ? { borderWidth: borderWidthDial } : null),
+  };
+
   return (
     <View
-      style={[styles.pill, { backgroundColor: palette.bg, borderColor: palette.border }]}
+      style={[styles.pill, { backgroundColor: palette.bg, borderColor: palette.border }, pillDial]}
       // The pill is the status, so it announces itself as text rather than
       // leaving a screen reader to infer meaning from a coloured shape.
       accessibilityRole="text"

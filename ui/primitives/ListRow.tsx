@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
 import { controls, layout, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -47,11 +48,26 @@ export function ListRow({
   const titleColor = tone === 'danger' ? colors.danger : colors.ink;
   const glyphColor = tone === 'danger' ? colors.danger : colors.emerald;
 
+  // RUN S2 (C8) — the list-row dials, each defaulting to today's shipped value.
+  const padXDial = useOverrideNumber('listRow.paddingX');
+  const padYDial = useOverrideNumber('listRow.paddingY');
+  const gapDial = useOverrideNumber('listRow.gap');
+  const textGapDial = useOverrideNumber('listRow.textGap');
+  const minHeightDial = useOverrideNumber('listRow.minHeight');
+  const fillDial = useOverrideString('listRow.fill');
+  const rowDial = {
+    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
+    ...(padYDial != null ? { paddingVertical: padYDial } : null),
+    ...(gapDial != null ? { gap: gapDial } : null),
+    ...(minHeightDial != null ? { minHeight: minHeightDial } : null),
+    ...(fillDial != null ? { backgroundColor: fillDial } : null),
+  };
+
   const content = (
     <>
       {icon ? <Ionicons name={icon} size={20} color={glyphColor} style={styles.icon} /> : null}
       {/* flex:1 is what makes the truncation above actually truncate. */}
-      <View style={styles.text}>
+      <View style={[styles.text, textGapDial != null && { gap: textGapDial }]}>
         <Text style={[styles.title, { color: titleColor }]} numberOfLines={1}>
           {title}
         </Text>
@@ -70,7 +86,7 @@ export function ListRow({
 
   // A row with no handler is a display row, not a button — rendering it as a
   // Pressable would announce a control to a screen reader that does nothing.
-  if (!onPress) return <View style={[styles.row, style]}>{content}</View>;
+  if (!onPress) return <View style={[styles.row, rowDial, style]}>{content}</View>;
 
   return (
     // MOTION1 (C1): one shared press spring, on the wrapper — see
@@ -80,7 +96,7 @@ export function ListRow({
         onPress={onPress}
         onPressIn={press.onPressIn}
         onPressOut={press.onPressOut}
-        style={({ pressed }) => [styles.row, pressed && styles.pressed, style]}
+        style={({ pressed }) => [styles.row, rowDial, pressed && styles.pressed, style]}
         accessibilityRole="button"
         accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
       >

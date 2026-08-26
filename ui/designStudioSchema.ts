@@ -11,7 +11,14 @@ import {
   type PaletteThemeKey,
   type StudioValue,
 } from '../lib/designOverrides';
-import { layout, navBar, radius as tokenRadius, spacing, type MaterialName } from './tokens';
+import {
+  controls,
+  layout,
+  navBar,
+  radius as tokenRadius,
+  spacing,
+  type MaterialName,
+} from './tokens';
 
 export type { StudioValue } from '../lib/designOverrides';
 
@@ -1005,6 +1012,269 @@ function menuDialEntries(): StudioEntry[] {
 }
 
 // ---------------------------------------------------------------------------
+// Cards, Buttons/Pills and Inputs (C8) — declared as compact tables. The
+// Home screen's Post-a-Job and search pills are SCREEN-LOCAL values and are
+// deliberately absent: the dispatch's continue-path defers screen-local
+// tokenisation to the sweep.
+// ---------------------------------------------------------------------------
+
+type DialRow = {
+  key: string;
+  label: string;
+  description: string;
+  tier: StudioTier;
+  scope: StudioScope;
+  kind?: StudioKind;
+  unit?: string;
+  min?: number;
+  max?: number;
+  step?: number;
+  defaultValue: StudioValue | ((ctx: StudioContext) => StudioValue);
+  contrastGround?: StudioEntry['contrastGround'];
+};
+
+function dialEntries(
+  category: StudioCategoryKey,
+  subcategory: string,
+  rows: DialRow[],
+): StudioEntry[] {
+  return rows.map((row) => {
+    const kind = row.kind ?? 'number';
+    const fallback = row.defaultValue;
+    return bagEntry({
+      key: row.key,
+      technicalKey: row.key,
+      plainLabel: row.label,
+      description: row.description,
+      category,
+      subcategory,
+      tier: row.tier,
+      kind,
+      scope: row.scope,
+      unit: row.unit ?? (kind === 'number' ? 'pt' : undefined),
+      min: row.min,
+      max: row.max,
+      step: row.step,
+      defaultValue: typeof fallback === 'function' ? fallback : () => fallback,
+      contrastGround: row.contrastGround,
+    });
+  });
+}
+
+const themePalette = (ctx: StudioContext) => (ctx.isDark ? ctx.appDark : ctx.appLight);
+const themeEmerald = (ctx: StudioContext) => (ctx.isDark ? ctx.emeraldDark : ctx.emeraldLight);
+const groundOf = (ctx: StudioContext) => ({
+  label: 'background',
+  hex: themePalette(ctx).background ?? '',
+});
+
+function cardDialEntries(): StudioEntry[] {
+  return [
+    ...dialEntries('cards', 'Job card', [
+      {
+        key: 'card.fill',
+        label: 'Fill',
+        description: 'The job card’s surface, in whichever theme is showing.',
+        tier: 'basic',
+        scope: 'token',
+        kind: 'color',
+        defaultValue: (ctx) => themeEmerald(ctx).surface ?? '',
+        contrastGround: (ctx) => ({ label: 'text', hex: themePalette(ctx).text ?? '' }),
+      },
+      { key: 'card.fillAlpha', label: 'Fill opacity', description: 'How solid the card’s surface paints.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 1 },
+      { key: 'card.paddingX', label: 'Side padding', description: 'Inside the card, left and right.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: layout.cardPadding },
+      { key: 'card.paddingY', label: 'Top/bottom padding', description: 'Inside the card, above and below.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: layout.cardPadding },
+      { key: 'card.radius', label: 'Corner roundness', description: 'The job card’s corners.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: tokenRadius.lg },
+      { key: 'card.borderWidth', label: 'Border width', description: 'A ring the card does not draw today — 0 keeps it off.', tier: 'advanced', scope: 'local', min: 0, max: 4, step: 1, defaultValue: 0 },
+      {
+        key: 'card.borderColor',
+        label: 'Border colour',
+        description: 'The ring’s ink, where a border width is set.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themeEmerald(ctx).line ?? '',
+      },
+      { key: 'card.borderAlpha', label: 'Border opacity', description: 'The ring’s opacity.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 1 },
+      { key: 'card.shadowOpacity', label: 'Shadow opacity', description: 'The card’s drop shadow (device; the web preview cannot show it).', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: (ctx) => (ctx.isDark ? 0.5 : 0.08) },
+      { key: 'card.shadowRadius', label: 'Shadow blur', description: 'How soft the card’s shadow spreads.', tier: 'advanced', scope: 'local', min: 0, max: 40, step: 1, defaultValue: (ctx) => (ctx.isDark ? 16 : 14) },
+      { key: 'card.shadowOffsetX', label: 'Shadow X offset', description: 'Moves the shadow sideways.', tier: 'advanced', scope: 'local', min: -20, max: 20, step: 1, defaultValue: 0 },
+      { key: 'card.shadowOffsetY', label: 'Shadow Y offset', description: 'Moves the shadow down.', tier: 'advanced', scope: 'local', min: -20, max: 20, step: 1, defaultValue: (ctx) => (ctx.isDark ? 6 : 5) },
+      { key: 'card.gap', label: 'Title-body gap', description: 'The vertical rhythm between the card’s rows.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, defaultValue: spacing.md },
+      { key: 'card.liftScale', label: 'Lift wash strength', description: 'Scales every lit surface’s diagonal wash — 1 is today’s calibration.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0, max: 3, step: 0.05, defaultValue: 1 },
+    ]),
+    ...dialEntries('cards', 'List row', [
+      { key: 'listRow.paddingX', label: 'Side padding', description: 'The settings/list row’s horizontal padding.', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: layout.screenGutter },
+      { key: 'listRow.paddingY', label: 'Top/bottom padding', description: 'The settings/list row’s vertical padding.', tier: 'basic', scope: 'token', min: 0, max: 32, step: 1, defaultValue: spacing.md },
+      { key: 'listRow.gap', label: 'Column gap', description: 'Between the glyph, the text block and the trailing control.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, defaultValue: spacing.md },
+      { key: 'listRow.textGap', label: 'Title-subtitle gap', description: 'Between a row’s title and its subtitle.', tier: 'advanced', scope: 'local', min: 0, max: 12, step: 1, defaultValue: 2 },
+      { key: 'listRow.minHeight', label: 'Row height', description: 'The row’s minimum height — never below the 44pt touch floor.', tier: 'advanced', scope: 'local', min: 44, max: 72, step: 1, defaultValue: controls.minTouchTarget },
+      {
+        key: 'listRow.fill',
+        label: 'Fill',
+        description: 'The row’s surface, in whichever theme is showing.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themeEmerald(ctx).surface ?? '',
+      },
+    ]),
+  ];
+}
+
+const BUTTON_VARIANTS = ['primary', 'secondary', 'ghost', 'destructive'] as const;
+
+function buttonDialEntries(): StudioEntry[] {
+  const entries: StudioEntry[] = [];
+  for (const variant of BUTTON_VARIANTS) {
+    const subcategory = `${variant.charAt(0).toUpperCase()}${variant.slice(1)} button`;
+    const tier: StudioTier = variant === 'primary' ? 'basic' : 'advanced';
+    const rows: DialRow[] = [
+      { key: `button.${variant}.height`, label: 'Height', description: `Replaces every size’s height for the ${variant} button.`, tier, scope: 'local', min: 44, max: 72, step: 1, defaultValue: 52 },
+      { key: `button.${variant}.padX`, label: 'Side padding', description: `The ${variant} button’s horizontal padding.`, tier: 'advanced', scope: 'local', min: 0, max: 32, step: 1, defaultValue: 16 },
+      // lib/theme's own radius scale (md = 12) — the button's shipped corner.
+      { key: `button.${variant}.radius`, label: 'Corner roundness', description: `The ${variant} button’s corners.`, tier, scope: 'local', min: 0, max: 36, step: 1, defaultValue: 12 },
+      {
+        key: `button.${variant}.text`,
+        label: 'Text colour',
+        description: `The ${variant} button’s label ink, in whichever theme is showing.`,
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => {
+          const palette = themePalette(ctx);
+          if (variant === 'destructive') return palette.danger ?? '';
+          if (variant === 'ghost') return (ctx.isDark ? palette.gold : palette.primary) ?? '';
+          if (variant === 'secondary') return (ctx.isDark ? palette.ink : palette.primary) ?? '';
+          return palette.onPrimary ?? '';
+        },
+        contrastGround: groundOf,
+      },
+    ];
+    if (variant !== 'ghost') {
+      rows.push(
+        {
+          key: `button.${variant}.fill`,
+          label: 'Fill',
+          description: `The ${variant} button’s fill, in whichever theme is showing.`,
+          tier,
+          scope: 'local',
+          kind: 'color',
+          defaultValue: (ctx) => {
+            const palette = themePalette(ctx);
+            if (variant === 'destructive') return palette.dangerBg ?? '';
+            if (variant === 'secondary') return palette.surface ?? '';
+            return palette.primary ?? '';
+          },
+          contrastGround: groundOf,
+        },
+        { key: `button.${variant}.fillAlpha`, label: 'Fill opacity', description: `How solid the ${variant} button’s fill paints.`, tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 1 },
+      );
+    }
+    if (variant === 'secondary' || variant === 'destructive') {
+      rows.push(
+        {
+          key: `button.${variant}.border`,
+          label: 'Border colour',
+          description: `The ${variant} button’s hairline.`,
+          tier: 'advanced',
+          scope: 'local',
+          kind: 'color',
+          defaultValue: (ctx) => {
+            const palette = themePalette(ctx);
+            if (variant === 'destructive') return palette.danger ?? '';
+            return (ctx.isDark ? palette.gold : palette.border) ?? '';
+          },
+        },
+        { key: `button.${variant}.borderAlpha`, label: 'Border opacity', description: `The ${variant} button’s hairline opacity.`, tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: (ctx) => (variant === 'secondary' && ctx.isDark ? 0.55 : 1) },
+      );
+    }
+    entries.push(...dialEntries('buttons', subcategory, rows));
+  }
+  entries.push(
+    ...dialEntries('buttons', 'All buttons', [
+      { key: 'button.iconGap', label: 'Icon-text gap', description: 'Between a button’s glyph and its label.', tier: 'advanced', scope: 'token', min: 0, max: 20, step: 1, defaultValue: spacing.sm },
+      { key: 'button.pressedOpacity', label: 'Pressed opacity', description: 'How a held button dims.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 0.85 },
+      { key: 'button.pressedScale', label: 'Pressed scale', description: 'How a held button shrinks — 1 is no scale.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0.8, max: 1.2, step: 0.02, defaultValue: 1 },
+      { key: 'button.disabledOpacity', label: 'Disabled opacity', description: 'Dims the flat disabled fill — 1 keeps decision 3’s flat treatment.', tier: 'advanced', scope: 'token', kind: 'decimal', min: 0.2, max: 1, step: 0.02, defaultValue: 1 },
+    ]),
+    ...dialEntries('buttons', 'Chip', [
+      { key: 'chip.paddingX', label: 'Side padding', description: 'Inside every chip, left and right.', tier: 'basic', scope: 'token', min: 0, max: 28, step: 1, defaultValue: 14 },
+      { key: 'chip.paddingY', label: 'Top/bottom padding', description: 'Inside every chip, above and below.', tier: 'basic', scope: 'token', min: 0, max: 20, step: 1, defaultValue: 10 },
+      { key: 'chip.radius', label: 'Corner roundness', description: 'Every chip’s corners — 999 is the full pill.', tier: 'advanced', scope: 'token', min: 0, max: 999, step: 2, defaultValue: tokenRadius.pill },
+      { key: 'chip.gap', label: 'Icon-text gap', description: 'Between a chip’s glyph and its label.', tier: 'advanced', scope: 'local', min: 0, max: 16, step: 1, defaultValue: 6 },
+      { key: 'chip.borderWidth', label: 'Border width', description: 'Every chip’s hairline weight.', tier: 'advanced', scope: 'token', min: 0, max: 3, step: 1, defaultValue: 1 },
+      { key: 'chip.minHeight', label: 'Tappable height', description: 'Interactive chips’ minimum height — never below the 44pt touch floor.', tier: 'advanced', scope: 'local', min: 44, max: 64, step: 1, defaultValue: 44 },
+    ]),
+    ...dialEntries('buttons', 'Status pill', [
+      { key: 'pill.paddingX', label: 'Side padding', description: 'Inside the status pill, left and right.', tier: 'advanced', scope: 'local', min: 0, max: 24, step: 1, defaultValue: spacing.md },
+      { key: 'pill.paddingY', label: 'Top/bottom padding', description: 'Inside the status pill, above and below.', tier: 'advanced', scope: 'local', min: 0, max: 16, step: 1, defaultValue: spacing.xs + 2 },
+      { key: 'pill.radius', label: 'Corner roundness', description: 'The status pill’s corners — 999 is the full pill.', tier: 'advanced', scope: 'local', min: 0, max: 999, step: 2, defaultValue: tokenRadius.pill },
+      { key: 'pill.borderWidth', label: 'Border width', description: 'The status pill’s hairline weight.', tier: 'advanced', scope: 'local', min: 0, max: 3, step: 1, defaultValue: 1 },
+    ]),
+  );
+  return entries;
+}
+
+function inputDialEntries(): StudioEntry[] {
+  return [
+    ...dialEntries('inputs', 'Search field', [
+      { key: 'search.height', label: 'Height', description: 'The search pill’s minimum height — never below the 44pt touch floor.', tier: 'basic', scope: 'token', min: 44, max: 64, step: 1, defaultValue: controls.fieldHeight },
+      { key: 'search.radius', label: 'Corner roundness', description: 'The search pill’s corners — 999 is the full pill.', tier: 'basic', scope: 'token', min: 0, max: 999, step: 2, defaultValue: tokenRadius.pill },
+      { key: 'search.paddingX', label: 'Side padding', description: 'Inside the search pill, left and right.', tier: 'advanced', scope: 'local', min: 0, max: 32, step: 1, defaultValue: spacing.lg },
+      { key: 'search.gap', label: 'Icon-text gap', description: 'Between the glyph, the text and the trailing controls.', tier: 'advanced', scope: 'local', min: 0, max: 20, step: 1, defaultValue: spacing.sm },
+      {
+        key: 'search.fill',
+        label: 'Fill',
+        description: 'The search pill’s surface, in whichever theme is showing.',
+        tier: 'basic',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themeEmerald(ctx).surface ?? '',
+      },
+      {
+        key: 'search.border',
+        label: 'Border colour',
+        description: 'The search pill’s resting hairline.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themeEmerald(ctx).line ?? '',
+      },
+      { key: 'search.borderAlpha', label: 'Border opacity', description: 'The resting hairline’s opacity.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 1 },
+      {
+        key: 'search.focusBorder',
+        label: 'Focus border colour',
+        description: 'The hairline while the field is focused — unset keeps the resting one.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themeEmerald(ctx).line ?? '',
+      },
+      { key: 'search.focusGlow', label: 'Focus glow', description: 'An emerald halo while the field is focused — 0 is off, today’s state.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 0 },
+      {
+        key: 'search.placeholderColor',
+        label: 'Placeholder colour',
+        description: 'The empty field’s hint ink.',
+        tier: 'advanced',
+        scope: 'local',
+        kind: 'color',
+        defaultValue: (ctx) => themeEmerald(ctx).muted ?? '',
+      },
+      { key: 'search.placeholderAlpha', label: 'Placeholder opacity', description: 'The hint ink’s opacity.', tier: 'advanced', scope: 'local', kind: 'decimal', min: 0, max: 1, step: 0.02, defaultValue: 1 },
+      { key: 'search.iconSize', label: 'Icon size', description: 'The magnifier glyph.', tier: 'advanced', scope: 'local', min: 12, max: 28, step: 1, defaultValue: 18 },
+      { key: 'search.iconOffsetX', label: 'Icon X offset', description: 'Nudges the magnifier sideways.', tier: 'advanced', scope: 'local', min: -12, max: 12, step: 1, defaultValue: 0 },
+      { key: 'search.iconOffsetY', label: 'Icon Y offset', description: 'Nudges the magnifier up or down.', tier: 'advanced', scope: 'local', min: -12, max: 12, step: 1, defaultValue: 0 },
+    ]),
+    ...dialEntries('inputs', 'Toggle', [
+      { key: 'toggle.trackWidth', label: 'Track width', description: 'The drawn toggle’s track.', tier: 'advanced', scope: 'local', min: 40, max: 80, step: 1, defaultValue: 52 },
+      { key: 'toggle.trackHeight', label: 'Track height', description: 'The drawn toggle’s track.', tier: 'advanced', scope: 'local', min: 24, max: 44, step: 1, defaultValue: 32 },
+      { key: 'toggle.knobSize', label: 'Knob size', description: 'The disc that carries the state.', tier: 'advanced', scope: 'local', min: 18, max: 36, step: 1, defaultValue: 26 },
+    ]),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // The registry. C1 seeds it with every dial the G1 studio already offered;
 // C5–C10 grow the categories. Order inside a category is display order.
 // ---------------------------------------------------------------------------
@@ -1016,6 +1286,9 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...navigationDialEntries(),
   ...sheetDialEntries(),
   ...menuDialEntries(),
+  ...cardDialEntries(),
+  ...buttonDialEntries(),
+  ...inputDialEntries(),
   {
     key: 'glow.alpha',
     plainLabel: 'Glow strength',

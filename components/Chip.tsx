@@ -16,6 +16,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { useOverrideNumber } from '../lib/designOverrides';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -125,10 +126,27 @@ export function Chip({
     </>
   );
 
+  // RUN S2 (C8) — the chip geometry dials; colours stay each variant's own.
+  const padXDial = useOverrideNumber('chip.paddingX');
+  const padYDial = useOverrideNumber('chip.paddingY');
+  const radiusDial = useOverrideNumber('chip.radius');
+  const gapDial = useOverrideNumber('chip.gap');
+  const borderWidthDial = useOverrideNumber('chip.borderWidth');
+  const minHeightDial = useOverrideNumber('chip.minHeight');
+  const chipDial = {
+    ...(padXDial != null ? { paddingHorizontal: padXDial } : null),
+    ...(padYDial != null ? { paddingVertical: padYDial } : null),
+    ...(radiusDial != null ? { borderRadius: radiusDial } : null),
+    ...(gapDial != null ? { gap: gapDial } : null),
+    ...(borderWidthDial != null ? { borderWidth: borderWidthDial } : null),
+    ...(minHeightDial != null && onPress ? { minHeight: minHeightDial } : null),
+  };
+
   const shape = [
     styles.chip,
     onPress && styles.chipInteractive,
     small && styles.chipSmall,
+    chipDial,
     // Dark service chips wear the masters' sage fill; light keeps the white
     // pill unchanged (no style, so the base chip shows through).
     variant === 'service' && isDark && styles.chipServiceDark,
