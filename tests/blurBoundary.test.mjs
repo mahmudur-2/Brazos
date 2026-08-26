@@ -88,10 +88,11 @@ test('[static] lib/blur is the only file in the tree that names expo-blur', () =
     'expo-blur must be reached through lib/blur.tsx, never imported directly'
   );
 
-  // THE TWO SURFACES C3 NAMES, and no third one added without a decision. The
-  // nav pill's fill, and the shared modal/dialog backdrops. Edit Budget is
-  // deliberately absent: it is its own dialog surface rather than one of the
-  // shared backdrops, and the operator's decision is that it stays opaque dim.
+  // THE SURFACES MOTION1 C3 NAMED — the nav bar and the shared modal/dialog
+  // backdrops — plus RUN G1 (C1)'s Surface primitive, which is how every
+  // glass MATERIAL reaches the blur from now on. Edit Budget is deliberately
+  // absent: it is its own dialog surface rather than one of the shared
+  // backdrops, and the operator's decision is that it stays opaque dim.
   assert.deepEqual(
     callers.sort(),
     [
@@ -100,8 +101,9 @@ test('[static] lib/blur is the only file in the tree that names expo-blur', () =
       'components/ConfirmDialog.tsx',
       'ui/primitives/BottomNav.tsx',
       'ui/primitives/Sheet.tsx',
+      'ui/primitives/Surface.tsx',
     ],
-    'the blur is the nav pill fill and the shared backdrops — nothing else'
+    'the blur is the nav bar, the shared backdrops, and the Surface primitive — nothing else'
   );
   assert.doesNotMatch(
     stripComments(read('components/EditBudgetDialog.tsx')),

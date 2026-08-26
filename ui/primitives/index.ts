@@ -78,6 +78,15 @@ export { Toggle } from './Toggle';
 export { LitSurface, litFill, litGradient } from './LitSurface';
 export type { LitFill, LitSurfaceProps } from './LitSurface';
 
+/**
+ * RUN G1 (C1) — beyond §I's enumerated 26 and deliberately not a 26th role:
+ * like LitSurface it is the FILL of surfaces that already exist. The emerald
+ * glass system's one wearer — three materials as data in ui/tokens.ts,
+ * rendered only through this component.
+ */
+export { Surface, SURFACE_GLOW_ALPHA } from './Surface';
+export type { SurfaceProps } from './Surface';
+
 export { StatusPill } from './StatusPill';
 export type { JobStatus, OfferStatus, PaymentStatus } from './StatusPill';
 export { MoneyText } from './MoneyText';

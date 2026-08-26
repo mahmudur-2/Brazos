@@ -436,6 +436,80 @@ export const glow = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Materials — the emerald glass system (RUN G1, C1)
+// ---------------------------------------------------------------------------
+
+/**
+ * The glass ink: the one deep emerald every material's scrim is mixed from.
+ * Declared once, consumed only through ui/primitives/Surface.tsx — a second
+ * spelling of this hex anywhere outside this file is a fence failure
+ * (tests/blurBoundary.test.mjs).
+ */
+const GLASS_SCRIM = '#071B15';
+
+export type MaterialName = 'chrome' | 'sheet' | 'menu';
+
+export type MaterialSpec = {
+  /** expo-blur intensity under the scrim — dark theme, native, transparency allowed. */
+  blur: number;
+  /** The scrim fill: `scrimColor` at `scrimAlpha`. The scrim carries
+   *  legibility; the blur is decoration over whatever shows through. */
+  scrimColor: string;
+  scrimAlpha: number;
+  /** The hairline: `borderColor` at `borderAlpha`. The colour is the brand
+   *  mint — the pale green that reads as a line on near-black glass. */
+  borderColor: string;
+  borderAlpha: number;
+  /** Scrim alpha when blur cannot render (web, and Reduce Transparency on
+   *  device). A deliberate deeper mix so the flat rendering still reads as a
+   *  designed surface — a decision recorded as data, not a degradation. */
+  fallbackScrimAlpha: number;
+  /** Default corner rounding; null = the caller supplies it (chrome). */
+  radius: number | null;
+  /** Sheets round their top corners only; everything else rounds all four. */
+  radiusTopOnly: boolean;
+};
+
+/**
+ * Three materials, as data. chrome is the nav bar's wear; sheet is the docked
+ * and floating dialog surfaces; menu is the densest glass, for anchored
+ * popovers. Consumed ONLY through ui/primitives/Surface.tsx, and tunable live
+ * through lib/designOverrides.ts (RUN G1 C2) — these are the launch defaults.
+ */
+export const materials: Record<MaterialName, MaterialSpec> = {
+  chrome: {
+    blur: 30,
+    scrimColor: GLASS_SCRIM,
+    scrimAlpha: 0.55,
+    borderColor: brand.mint,
+    borderAlpha: 0.2,
+    fallbackScrimAlpha: 0.85,
+    radius: null,
+    radiusTopOnly: false,
+  },
+  sheet: {
+    blur: 40,
+    scrimColor: GLASS_SCRIM,
+    scrimAlpha: 0.72,
+    borderColor: brand.mint,
+    borderAlpha: 0.16,
+    fallbackScrimAlpha: 0.92,
+    radius: 28,
+    radiusTopOnly: true,
+  },
+  menu: {
+    blur: 50,
+    scrimColor: GLASS_SCRIM,
+    scrimAlpha: 0.82,
+    borderColor: brand.mint,
+    borderAlpha: 0.14,
+    fallbackScrimAlpha: 0.95,
+    radius: 16,
+    radiusTopOnly: false,
+  },
+};
+
+// ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------
 
@@ -643,6 +717,7 @@ export const tokens = {
   brand,
   categoryAccents,
   constantAccents,
+  materials,
   spacing,
   layout,
   radius,

@@ -515,6 +515,86 @@ test('L-002 fence: the category accents moved to the token layer at unchanged va
 });
 
 // ---------------------------------------------------------------------------
+// RUN G1 (C1) — the materials table, and the legibility its fallbacks carry.
+//
+// The three glass materials are DATA in ui/tokens.ts, worn only through
+// ui/primitives/Surface.tsx. Two claims are made executable here:
+//
+//   1. The table is the dispatched one — blur, scrim mix, hairline mix and
+//      fallback mix per material, one shared scrim ink, the brand mint line.
+//   2. LEGIBILITY IS THE SCRIM'S JOB, and the worst case is provable: on web
+//      and under Reduce Transparency the surface is scrim-only at
+//      `fallbackScrimAlpha`, and the worst thing that scrim can sit on is
+//      pure white. Composited there, the app's dark ivory text must still
+//      clear WCAG 4.5:1 and the secondary text 3:1. The blurred dark-theme
+//      renders sit on darker grounds at deeper stacks, so the fallback is the
+//      floor — if this passes, no rendering of the material reads worse.
+// ---------------------------------------------------------------------------
+
+const MATERIALS_AS_DISPATCHED = {
+  chrome: { blur: 30, scrimAlpha: 0.55, borderAlpha: 0.2, fallbackScrimAlpha: 0.85, radius: null, radiusTopOnly: false },
+  sheet: { blur: 40, scrimAlpha: 0.72, borderAlpha: 0.16, fallbackScrimAlpha: 0.92, radius: 28, radiusTopOnly: true },
+  menu: { blur: 50, scrimAlpha: 0.82, borderAlpha: 0.14, fallbackScrimAlpha: 0.95, radius: 16, radiusTopOnly: false },
+};
+
+/** WCAG relative luminance of a #RRGGBB hex. */
+const luminanceOf = (hex) => {
+  const channel = (byte) => {
+    const c = byte / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+};
+
+/** WCAG contrast ratio between two #RRGGBB hexes. */
+const contrastOf = (a, b) => {
+  const [hi, lo] = [luminanceOf(a), luminanceOf(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+/** `hex` at `alpha`, composited over pure white, back to #RRGGBB. */
+const overWhite = (hex, alpha) => {
+  const mix = [1, 3, 5]
+    .map((at) => parseInt(hex.slice(at, at + 2), 16))
+    .map((byte) => Math.round(alpha * byte + (1 - alpha) * 255))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
+  return `#${mix}`;
+};
+
+test('G1 materials: the table is as dispatched, worn from one scrim ink and the brand mint', async () => {
+  const { materials, brand } = await tokensModule;
+  assert.deepEqual(Object.keys(materials), ['chrome', 'sheet', 'menu']);
+  for (const [name, expected] of Object.entries(MATERIALS_AS_DISPATCHED)) {
+    for (const [key, value] of Object.entries(expected)) {
+      assert.equal(materials[name][key], value, `materials.${name}.${key} moved off the dispatched value`);
+    }
+    assert.equal(materials[name].scrimColor, '#071B15', `materials.${name} left the one scrim ink`);
+    assert.equal(materials[name].borderColor, brand.mint, `materials.${name}'s hairline must be the brand mint`);
+  }
+});
+
+test('G1 materials: the web-fallback scrim on pure white keeps primary text ≥4.5:1 and secondary ≥3:1', async () => {
+  const { materials } = await tokensModule;
+  const { darkColors } = await themeModule;
+
+  for (const [name, spec] of Object.entries(materials)) {
+    const worstGround = overWhite(spec.scrimColor, spec.fallbackScrimAlpha);
+    const primary = contrastOf(darkColors.text, worstGround);
+    const secondary = contrastOf(darkColors.textMuted, worstGround);
+    assert.ok(
+      primary >= 4.5,
+      `${name}: primary text ${darkColors.text} over the fallback scrim on white is ${primary.toFixed(2)}:1 — below 4.5:1`,
+    );
+    assert.ok(
+      secondary >= 3,
+      `${name}: secondary text ${darkColors.textMuted} over the fallback scrim on white is ${secondary.toFixed(2)}:1 — below 3:1`,
+    );
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Resolver plumbing — 4D-4: preference + system resolution, native sync
 // ---------------------------------------------------------------------------
 
