@@ -972,10 +972,21 @@ test('D25/D26 · the boundary holds, and reduced motion gets the still artwork',
   // And the screen mounts the mark through the template's slot.
   const screen = flatten(read('screens/PostJobScreen.tsx'));
   assert.match(screen, /mark=\{<SuccessMark accessibilityLabel="Your job is published" \/>\}/);
+  // RUN MOTION1 (C2) staggered the template's own pieces, so the default glyph
+  // is an Animated.View carrying an entrance style. The guarantee this line
+  // makes is the `??`, and it is unchanged: a caller-supplied mark REPLACES the
+  // glyph, and only the glyph the template draws itself is animated here — the
+  // mark brings its own entrance through the motion120 boundary above.
   assert.match(
     flatten(read('ui/templates/SuccessScreen.tsx')),
-    /\{mark \?\? \( <View style=\{\[styles\.glyph, isDark && styles\.glyphDark\]\}>/,
+    /\{mark \?\? \( <Animated\.View style=\{\[styles\.glyph, isDark && styles\.glyphDark, glyphEntrance\]\}>/,
     'the mark REPLACES the default glyph rather than joining it'
+  );
+  // And the mark is never given a SECOND entrance by the template.
+  assert.doesNotMatch(
+    flatten(read('ui/templates/SuccessScreen.tsx')),
+    /Entrance\}?\]?\}?>\s*\{mark|\{mark\}[^]{0,40}Entrance/,
+    'a caller mark must not be wrapped in the template’s own entrance'
   );
 });
 

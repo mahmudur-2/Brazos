@@ -1,4 +1,4 @@
-import { Platform, View, type ViewProps, type ViewStyle } from 'react-native';
+import { Animated, Platform, type ViewProps, type ViewStyle } from 'react-native';
 import { withAlpha } from '../tokens';
 
 /**
@@ -123,10 +123,16 @@ export type LitSurfaceProps = ViewProps &
 /**
  * A View whose fill is lit rather than flat.
  *
- * `flat` renders `<View style={style}>` and nothing else — the same single
- * node, with the same styles, that the caller had before this primitive
- * existed. That is what keeps a light-mode render byte-identical while dark
- * gains the wash.
+ * `flat` renders one node with the caller's own styles and nothing else — the
+ * same single node the caller had before this primitive existed. That is what
+ * keeps a light-mode render byte-identical while dark gains the wash.
+ *
+ * RUN MOTION1 (C2): the node is an `Animated.View` rather than a `View`, so a
+ * caller can hand it hooks/useEntrance.ts's style in the same array it already
+ * hands the surface's own. react-native-web renders the two identically when
+ * no animated value is present — same element, same class, same box — so this
+ * is not a second node and not a second design; it is the one node, able to
+ * take a transform.
  */
 export function LitSurface({
   surface,
@@ -143,7 +149,7 @@ export function LitSurface({
 }: LitSurfaceProps) {
   const fill = litFill({ surface, lift, liftAlpha, highlight, highlightAlpha, flat });
   return (
-    <View
+    <Animated.View
       style={[
         style,
         // A lit surface still declares its flat colour: it is the gradient's
@@ -158,6 +164,6 @@ export function LitSurface({
       {...rest}
     >
       {children}
-    </View>
+    </Animated.View>
   );
 }

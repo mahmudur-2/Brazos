@@ -38,6 +38,7 @@ import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
 import { useShellGround } from '../lib/shellGround';
+import { useEntrance } from '../hooks/useEntrance';
 import {
   fonts,
   radius,
@@ -376,6 +377,14 @@ export function HomeScreen() {
   // inset; it was deleted and must not come back.
   const navClearance = useFloatingNavClearance();
 
+  // MOTION1 (C2): the three sections below the greeting arrive in reading
+  // order. The hook returns a STYLE, so each of these rides the node the
+  // screen already renders — no wrapper, no layout change, and nothing at all
+  // under reduced motion. Index 0 is the search field the chips sit under.
+  const chipsEntrance = useEntrance(1);
+  const cardEntrance = useEntrance(2);
+  const sectionEntrance = useEntrance(3);
+
   // home(2): the drape's box and the headline column it clears, both derived
   // from one fraction of the screen so they can never drift apart.
   const bDrape = useMemo(() => {
@@ -651,7 +660,7 @@ export function HomeScreen() {
             }
           />
 
-          <View style={styles.serviceRows}>
+          <Animated.View style={[styles.serviceRows, chipsEntrance]}>
             {HOME_SERVICE_ROWS.map((row, rowIndex) => (
               <View key={`service-row-${rowIndex}`} style={styles.serviceRow}>
                 {row.map((service) => (
@@ -694,7 +703,7 @@ export function HomeScreen() {
                 ) : null}
               </View>
             ))}
-          </View>
+          </Animated.View>
 
           {/* Master 44's promo card: dark is a hairlined surface card with the
               gold B drape and the screen's ONE conversion pill (decision 3).
@@ -705,7 +714,7 @@ export function HomeScreen() {
             // C4: the card shadow in the stylesheet is a light-palette shadow
             // and casts nothing on this ground. The dark token is ADDED rather
             // than swapped in, so light keeps exactly what it had.
-            style={[styles.heroCard, isDark && styles.heroCardDark, isDark && shadows.cardDark]}
+            style={[styles.heroCard, isDark && styles.heroCardDark, isDark && shadows.cardDark, cardEntrance]}
             surface={colors.surface}
             lift={colors.emerald}
             liftAlpha={CARD_LIFT_ALPHA}
@@ -764,7 +773,7 @@ export function HomeScreen() {
             />
           </LitSurface>
 
-          <View style={styles.section}>
+          <Animated.View style={[styles.section, sectionEntrance]}>
             <View style={styles.liveNearbyHeader}>
               <View style={styles.liveNearbyTitle}>
                 <View style={styles.liveIndicator} accessibilityLabel="Live nearby jobs">
@@ -826,7 +835,7 @@ export function HomeScreen() {
                 ))}
               </View>
             )}
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
 

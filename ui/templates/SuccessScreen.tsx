@@ -1,7 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Pressable, ScrollView, StyleSheet, Text } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps, ReactNode } from 'react';
+import { useEffect, type ComponentProps, type ReactNode } from 'react';
 import { useFloatingNavClearance } from '../primitives';
 import {
   controls,
@@ -13,6 +13,8 @@ import {
   type as typeScale,
 } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { useEntrance } from '../../hooks/useEntrance';
+import { confirm } from '../../lib/haptics';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -66,6 +68,28 @@ export function SuccessScreen({
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const navClearance = useFloatingNavClearance();
+
+  // MOTION1 (C2) — THE SUCCESS SURFACE ARRIVES IN ORDER, AND CONFIRMS ONCE.
+  //
+  // A caller-supplied 'mark' prop brings its own entrance (components/SuccessMark
+  // resolves the motion120 arrangement above this template and animates its
+  // disc, rings and sparkles on mount), so this staggers only what it owns
+  // itself: the default glyph, the copy, the detail slot and the actions.
+  // Extending that arrangement rather than replacing it is the whole point —
+  // two entrances on one mark would be two claims about the same arrival.
+  const glyphEntrance = useEntrance(0);
+  const copyEntrance = useEntrance(1);
+  const detailsEntrance = useEntrance(2);
+  const actionsEntrance = useEntrance(3);
+
+  // The success NOTIFICATION haptic, not the light press tap — an action
+  // completed. Empty deps: it fires when the surface mounts and never on a
+  // re-render, and lib/haptics is a no-op on web and on any binary without
+  // the native module.
+  useEffect(() => {
+    confirm();
+  }, []);
+
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>
       <ScrollView
@@ -80,19 +104,19 @@ export function SuccessScreen({
             keeps the disc and gains the masters' gold ring, with the glyph in
             the live-state emerald (the "green check circle" of 15/19/40). */}
         {mark ?? (
-          <View style={[styles.glyph, isDark && styles.glyphDark]}>
+          <Animated.View style={[styles.glyph, isDark && styles.glyphDark, glyphEntrance]}>
             <Ionicons name={icon} size={44} color={isDark ? colors.emerald : colors.forest} />
-          </View>
+          </Animated.View>
         )}
 
-        <View style={styles.copy}>
+        <Animated.View style={[styles.copy, copyEntrance]}>
           <Text style={styles.title}>{title}</Text>
           {body ? <Text style={styles.body}>{body}</Text> : null}
-        </View>
+        </Animated.View>
 
-        {details ? <View style={styles.details}>{details}</View> : null}
+        {details ? <Animated.View style={[styles.details, detailsEntrance]}>{details}</Animated.View> : null}
 
-        <View style={styles.actions}>
+        <Animated.View style={[styles.actions, actionsEntrance]}>
           {actions.map((action) => {
             const secondary = action.variant === 'secondary';
             return (
@@ -125,7 +149,7 @@ export function SuccessScreen({
               </Pressable>
             );
           })}
-        </View>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
