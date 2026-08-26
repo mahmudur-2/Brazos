@@ -11,6 +11,7 @@ import {
   type as typeScale,
 } from '../tokens';
 import { scrimInDark, themedStyles, useThemeColors } from '../../lib/theme';
+import { BlurLayer } from '../../lib/blur';
 
 /**
  * The generic bottom sheet / modal (§I).
@@ -65,7 +66,12 @@ export function Sheet({
           importantForAccessibility={dismissOnBackdropPress ? 'yes' : 'no-hide-descendants'}
           accessibilityRole={dismissOnBackdropPress ? 'button' : undefined}
           accessibilityLabel={dismissOnBackdropPress ? 'Close' : undefined}
-        />
+        >
+          {/* MOTION1 (C3): frosted over the scrim this backdrop already paints.
+              Absent on web and on any binary without expo-blur, where the
+              scrim alone is the backdrop it has always been. */}
+          <BlurLayer />
+        </Pressable>
         <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}>
           <View style={styles.handle} />
           {title ? (

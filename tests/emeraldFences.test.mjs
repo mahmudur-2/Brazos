@@ -418,11 +418,30 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
     /\{treeMode === 'worker' \? <WorkerRoot \/> : <CustomerRoot \/>\}/,
     'the ground must wrap the tree swap so it covers both modes at once'
   );
-  // …and it stays the ONLY painted surface in the bar row: the pill's own.
+  // …and the pill's own fill stays the ONLY painted surface in the bar row.
+  //
+  // RUN MOTION1 (C3): this used to ban the library's hook by name. The name was
+  // a proxy for the rule — no second GROUND — and what C3 puts through the hook
+  // paints no colour at all: lib/blur.tsx renders expo-blur's BlurView or null,
+  // and it is layered ON TOP of the pill's one fill rather than beside it. So
+  // the rule is asserted directly now, on both files, and it is stricter than
+  // the name ban was: a background introduced anywhere in the bar options or in
+  // the blur layer fails here, which the old line could not have caught.
+  const navBar = flatten(read('ui/primitives/BottomNav.tsx'));
+  assert.match(
+    navBar,
+    /tabBarBackground: \(\) => <BlurLayer \/>,/,
+    'the only thing the bar-background hook may render is the shared blur layer'
+  );
+  assert.equal(
+    (navBar.match(/tabBarBackground/g) ?? []).length,
+    1,
+    'the bar-background hook may be named exactly once'
+  );
   assert.doesNotMatch(
-    flatten(read('ui/primitives/BottomNav.tsx')),
-    /tabBarBackground/,
-    'no second ground may be introduced through the library’s own hook for one'
+    flatten(read('lib/blur.tsx')),
+    /backgroundColor/,
+    'the blur layer must paint no ground of its own'
   );
 });
 

@@ -11,6 +11,7 @@ import {
   type ColorPalette,
   scrimInDark,
 } from '../lib/theme';
+import { BlurLayer } from '../lib/blur';
 
 type AmountPromptProps = {
   visible: boolean;
@@ -65,6 +66,8 @@ export function AmountPrompt({
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
       <View style={[styles.backdrop, isDark && styles.backdropDark]}>
+        {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
+        <BlurLayer />
         <View style={styles.sheet}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}

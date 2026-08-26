@@ -12,6 +12,7 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
+import { BlurLayer } from '../lib/blur';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -69,6 +70,10 @@ export function ActionSheet({
         ]}
         onPress={onClose}
       >
+        {/* MOTION1 (C3): the frosted layer sits over the scrim this backdrop
+            already paints, and under the sheet. Absent on web and on any
+            binary without expo-blur, where the scrim alone is the backdrop. */}
+        <BlurLayer />
         {/* Empty onPress absorbs taps so they don't dismiss the sheet. */}
         <Pressable style={styles.sheet} onPress={() => {}}>
           {(title || subtitle) && (

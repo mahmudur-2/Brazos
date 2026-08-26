@@ -144,13 +144,45 @@ test('the bar row paints nothing but the pill (emerald D2)', async () => {
     'the bar options must declare one background — the pill'
   );
   assert.match(options, /backgroundColor: palette\.surface/);
-  // No second ground may be introduced through the library's own hook for one.
-  // Comments are stripped first — the D2 audit above this line in BottomNav.tsx
-  // NAMES that hook while recording that it is deliberately not used.
+  // No second GROUND may be introduced through the library's own hook for one.
+  // Comments are stripped first — the D2 audit in BottomNav.tsx NAMES that hook
+  // while recording what it may and may not carry.
   const codeOnly = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+  // RUN MOTION1 (C3) — THE HOOK IS USED ONCE, AND ONLY FOR THE BLUR.
+  //
+  // This assertion used to be a flat ban on the identifier. The ban was a
+  // proxy for the rule stated above it, and the rule is about a COLOUR: emerald
+  // D2's white band came from a second painted ground in the bar row, and the
+  // pill's `backgroundColor: palette.surface` — asserted as the only one, four
+  // lines up — is still the one and only fill there. What C3 puts through the
+  // hook paints no colour at all: lib/blur.tsx renders expo-blur's BlurView or
+  // null, never a background, and it sits ON TOP of that single fill rather
+  // than beside it.
+  //
+  // So the identifier is allowed exactly once, in exactly one file, bound to
+  // exactly that element — and the two trees still may not name it at all. A
+  // ground reintroduced through this hook fails here as loudly as it did
+  // before, and now a colour smuggled in through the blur layer fails too.
+  const navCode = codeOnly(bottomNav);
+  assert.equal(
+    (navCode.match(/tabBarBackground/g) ?? []).length,
+    1,
+    'the bar options may name tabBarBackground exactly once'
+  );
+  assert.match(
+    navCode.replace(/\s+/g, ' '),
+    /tabBarBackground: \(\) => <BlurLayer \/>,/,
+    'the only thing tabBarBackground may render is the shared blur layer'
+  );
+  const blur = codeOnly(await read('lib/blur.tsx'));
+  assert.doesNotMatch(
+    blur,
+    /backgroundColor/,
+    'the blur layer must paint no ground of its own — the pill has exactly one'
+  );
   for (const [path, source] of [
-    ['ui/primitives/BottomNav.tsx', bottomNav],
     ['navigation/CustomerRoot.tsx', customerRoot],
     ['navigation/WorkerRoot.tsx', workerRoot],
   ]) {

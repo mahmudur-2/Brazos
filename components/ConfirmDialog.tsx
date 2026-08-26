@@ -10,6 +10,7 @@ import {
   type ColorPalette,
   scrimInDark,
 } from '../lib/theme';
+import { BlurLayer } from '../lib/blur';
 
 type ConfirmDialogProps = {
   visible: boolean;
@@ -62,6 +63,8 @@ export function ConfirmDialog({
       }}
     >
       <View style={[styles.backdrop, isDark && styles.backdropDark]}>
+        {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
+        <BlurLayer />
         <View style={styles.centerWrap}>
           <View
             style={[

@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
+import { BlurLayer } from '../../lib/blur';
 
 /**
  * §I's `BottomNav` primitive — deferred from Phase 1, built here because Phase 2
@@ -397,6 +398,18 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
 
   return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
     headerShown: false,
+    // RUN MOTION1 (C3) — THE PILL'S FILL IS FROSTED, NOT REPLACED.
+    //
+    // BottomTabBar.js renders this element inside a pointerEvents="none"
+    // absoluteFill view that is the bar's FIRST child, so it lands ON TOP of
+    // the container's own background and UNDER every tab item. The opaque
+    // fallback is therefore the pill's existing surface fill below —
+    // untouched, and still the only colour the bar row paints.
+    // lib/blur.tsx renders nothing at all on web and on any binary
+    // without the native module, which is why the harness render does not move
+    // and why a build predating expo-blur still shows a solid pill rather than
+    // a hole.
+    tabBarBackground: () => <BlurLayer />,
     // Decision 4 — the ONE active rule that replaced the masters' five
     // competing treatments (manifest B-1): emerald active, navInactive rest.
     tabBarActiveTintColor: palette.emerald,
