@@ -43,7 +43,192 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Current state — after the 2026-08-25 category-search wording pass (RUN CS1)
+
+RUN S1 found that tapping a category on customer Home lands on a search that
+really is filtered, and says nothing about it: the one marker that existed —
+a 2pt gold ring on the selected tile — rendered at **x 596-704 in a 393pt
+viewport**, and four of the ten categories had no tile to ring at all. This run
+implemented the operator's fix. Both halves are now measured, not argued.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`b5afb37`|all ten tiles; the arriving tile scrolled into view|
+|C2|`4bcab05`|`resultHeading()` and a new `emptyResultTitle()` name the category|
+|C3|(this file)|the handoff|
+
+`npm run verify` exits 0 with **1071 pass / 0 fail** at baseline, after C1 and
+after C2. The count does not move because this run extended existing fences
+rather than adding new ones. No test was deleted, disabled, skipped or made
+conditional. Nothing was pushed; no database was contacted; no SQL was
+executed; no dependency was touched; no image file was opened.
+
+### C1 — THE RING IS ON SCREEN, AND EVERY CATEGORY HAS ONE
+
+`SUGGESTED_CATEGORIES` (`screens/WorkerSearchScreen.tsx:73`) was
+`SKILL_CATEGORIES.slice(0, 6)`; it is now `SKILL_CATEGORIES`, and its docblock
+no longer claims six. That closes the four-categories-with-no-tile hole —
+`errands`, `tv_mounting`, `painting`, `packing`, the second of which is behind
+Home's own visible "TV Mounting" pill.
+
+Widening the row would have pushed the selection further off screen, which is
+why it is paired with an aim rather than shipped alone. The horizontal
+`ScrollView` now carries `tileRowRef`; the arriving tile reports its own `x`
+through `onLayout`, and `revealArrivalTile()` calls
+`scrollTo({ x: Math.max(0, x), animated: false })`. `chipRow` has no leading
+padding — its content starts flush against the scroller's left edge — so the
+measured `x` IS the offset that lands the tile on the same inset the first tile
+occupies. **No tile width is assumed anywhere**, which is the part that would
+have rotted the moment the tile geometry changed.
+
+`arrivalCategory` is a ref seeded from `params.category` and cleared the moment
+the customer takes the row over — on a tile tap (`chooseCategory`) and on the
+first keystroke (the SearchBar's `onChangeText`, beside the existing pin
+clearing). So the aim can only ever fire on arrival: a tapped tile is already
+in view, and re-aiming under a thumb would fight the customer. The aim is also
+re-issued from `onContentSizeChange`, so a scroller that has not yet published
+its content size cannot swallow the only attempt.
+
+### THE MEASUREMENT — the whole point of the change
+
+Driven with Playwright against the same warm static export, through the same
+recipe, the same stubs and the same seed the shutter uses, at 393x852:
+
+|target|tiles rendered|ringed tile x|width|right edge|inside 0-393|
+|-|-|-|-|-|-|
+|`workersearch-category-dark`|10 of 10|**16**|108|**124**|yes|
+|`workersearch-category-light`|10 of 10|**16**|108|**124**|yes|
+
+Before this run, S1 measured that same tile at **x 596-704** — 203pt past the
+right edge. The mechanism in force is `scrollTo`; **C1's pinned-first
+continue-path was not taken and no second attempt was needed.** The ring on the
+measured tile computes to `2px` — `rgb(212, 162, 76)` in dark, `rgb(200, 161, 91)`
+in light — so the tile measured is demonstrably the ringed one and not a
+neighbour. Zero page errors in either theme.
+
+### C2 — THE WORDING NAMES THE CATEGORY, AND THE SCREEN STILL CANNOT WORD IT
+
+`resultHeading(mode, count, categoryLabel?)` appends ` · ` plus the label to
+every shape it already produced; called with two arguments it returns exactly
+what it always returned, which is asserted rather than assumed. Beside it,
+`emptyResultTitle(categoryLabel?)` is new and does the same job for the empty
+state — `No workers matched` bare, `No <label> workers matched` with one.
+
+Both live in `lib/workerSearch.ts` for the reason that file's own header gives:
+there is exactly one place that decides how a result reads. The screen passes
+`appliedCategoryLabel`, which is `skillCategoryLabel(pinnedCategory)` **only
+when a chip is pinned**. A typed query never names a category, because typing
+clears the pin — a keyword-derived category is the search's inference, not the
+customer's choice, and announcing it as a filter would be a claim nobody made.
+
+Rendered in both themes, confirmed on the DOM:
+`No Dog Walking/Pet Care workers matched`.
+
+A consequence the operator accepted in advance: Home's **"Plumbing"** pill is
+the `handyman` key, so it now reads **"Handyman/Repairs"** — matching its
+ringed tile. That is deliberate and is not special-cased.
+
+### THE HARNESS WAIT HAD TO MOVE, OR THE CAPTURE WOULD HANG
+
+`workersearch-category-{dark,light}` waited on the literal `No workers matched`.
+After C2 that surface renders `No Dog Walking/Pet Care workers matched`, which
+does not contain it. The wait is now the substring **`workers matched`** — a
+substring of BOTH wordings, so it survives whether or not a category is
+applied, and it still cannot appear until the search has run to completion, so
+the shutter can never photograph the spinner. The comment above it was rewritten
+to say so. The continue-path (`matched`) was not needed.
+
+### EVERY FENCE TOUCHED — all extended, none weakened
+
+- **`tests/workerMatching.test.mjs` "13 · Wording"** — the mirror and the
+  signature regex take the three-parameter form; three labelled shapes asserted
+  exactly (`3 matches · …`, `1 best match · …`, `Top 12 matches · …`); a loop
+  asserts every unlabelled output is identical to the pre-label output; every
+  existing `doesNotMatch` is untouched; `emptyResultTitle` gets a mirror and a
+  source assertion; and the "the screen must not word this itself" assertions
+  now point at the new call sites, plus a new one pinning `appliedCategoryLabel`
+  to the pinned chip so a typed query cannot start naming categories.
+- **`tests/workerMatching.test.mjs` test 11** — asserted `No workers matched`
+  against the SCREEN. That literal legitimately moved into the lib, so the
+  assertion followed it: the screen is asserted to render the state through
+  `emptyResultTitle(appliedCategoryLabel)`, and the lib is asserted to still
+  produce the bare wording. The invariant it guards — a true no-match is a real
+  state the screen still has to show — is unchanged. **This fence was outside
+  the dispatch's named read scope and is the one that caught the move.**
+- **`tests/shotHarness.test.mjs`** — a module-level `WORKER_SEARCH_WAIT` is now
+  the single source for the wait substring. The target assertion was rewritten
+  from a regex spanning two lines into a bounded slice of the target object, so
+  it now proves the recipe AND the wait belong to the *same* target rather than
+  merely both appearing in the file. The locator assertion follows the title
+  into the lib and additionally checks that **both** wordings contain the wait
+  substring — the check that would have caught this run's capture hang before
+  it happened.
+
+### THE RENDER GATE
+
+`node scripts/shots.mjs --build --only workersearch` — fresh export, exit 0.
+
+|artifact|time|
+|-|-|
+|C2 (`4bcab05`)|`2026-08-25T20:45:14-04:00`|
+|`.shots/workersearch-category-dark.png`|`2026-08-25T20:45:38-04:00`|
+|`.shots/workersearch-category-light.png`|`2026-08-25T20:45:42-04:00`|
+
+Both renders postdate the commit. `.shots/` is gitignored and stays
+uncommitted. No other target was rendered or compared. The measurement probe is
+`.audit-scratch/probe.mjs` — the harness verbatim with the screenshot replaced
+by a DOM read, so the drive is identical rather than merely similar. Nothing
+from it is committed.
+
+### A CORRECTION TO S1's "TRUNCATED VERIFY IS AN ARTIFACT" RULE
+
+S1 recorded that a `npm run verify` whose output truncates mid-stream at ~19KB
+with exit 1 is a tool-layer artifact rather than a red suite. **That is
+sometimes true, and it is not a test.** This run hit the identical truncation
+twice in a row after C2; redirecting to a file showed a REAL failure — 1070
+pass, **1 fail** — test 11, pinned to a string this run had just moved.
+
+The rule that actually holds: **a truncated non-zero exit proves nothing either
+way.** Re-run as `npm run verify *> file` and read the tally out of the file.
+Never conclude "artifact" from the truncation alone. S1's own advice to redirect
+before believing the exit code is the part worth keeping; its conclusion drawn
+from the truncation is not.
+
+### What was SKIPPED, and why
+
+- **Visual inspection of the two PNGs.** Blocked by the evidence guard and put
+  out of scope by the dispatch. Routed through the DOM measurement above, which
+  yields geometry and computed style rather than colour. The operator should
+  still look at the two files.
+- **Physical-device verification.** Only the operator can do it. Everything
+  above is react-native-web geometry; the `scrollTo` path on a native iOS
+  `ScrollView` has not been exercised on a device, which is precisely why the
+  `onContentSizeChange` re-aim is there.
+- **Archiving RUN W2's record** to `docs/handoff-archive/` — still outstanding
+  from H3 and S1, still blocked by the same guard, and explicitly out of scope
+  here. The per-run records were retitled one position each again.
+- Nothing else. C1, C2 and C3 all landed as specified, and no continue-path was
+  taken.
+
+### What a later run is most likely to undo
+
+**Re-slicing `SUGGESTED_CATEGORIES`.** S1 warned that widening the row pushes
+the selection off screen — true, and the reason the aim landed in the same
+commit. Narrowing the list again re-opens the four-categories-with-no-tile hole
+and fixes nothing.
+
+**Deriving the scroll offset from a tile width.** `108` and `spacing.sm` are
+right today and are exactly what `onLayout` exists to stop anyone hardcoding.
+
+**Prefilling the search field from the tapped category.** Unchanged from S1's
+warning and still the fastest way to break the pin-clearing rule at
+`screens/WorkerSearchScreen.tsx`'s `onChangeText`.
+
+**Passing `appliedCategoryLabel` on the typed path** "for consistency". That
+announces an inferred category as a chosen filter. The C2 fence fails if the
+label is sourced from anything but `pinnedCategory`.
+
+## The run before it — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -268,7 +453,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## The run before it — after the 2026-08-25 three corrections (RUN H3)
+## Two runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -443,7 +628,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Two runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Three runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -712,7 +897,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Three runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Four runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -863,7 +1048,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Four runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Five runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -924,7 +1109,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Five runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Six runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
