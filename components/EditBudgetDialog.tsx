@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Modal, StyleSheet, Text, View } from 'react-native';
+import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from './Button';
-import { TextField } from './TextField';
 import { validateOfferAmount } from './OfferComposer';
 import { dollarsToCents } from '../lib/jobs';
+import { LitSurface } from '../ui/primitives';
 import { moneyCeilingError } from '../lib/validation';
 import {
+  controls,
   radius,
   scrimInDark,
   shadows,
@@ -15,6 +16,12 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
+
+/**
+ * PUBLISH1 (C2): the sheet's wash, copied from the publish card's, which is
+ * copied from Home's promo card. One alpha for the language, not three.
+ */
+const DIALOG_LIFT_ALPHA = 0.04;
 
 /**
  * The posting wizard's one budget editor.
@@ -91,38 +98,71 @@ export function EditBudgetDialog({
     >
       <View style={[styles.backdrop, isDark && styles.backdropDark]}>
         <View style={styles.centerWrap}>
-          <View style={styles.sheet}>
+          <LitSurface
+            style={[styles.sheet, isDark && shadows.cardDark]}
+            // The sheet's OWN translucent fill is the wash's far stop, so the
+            // ground still reads through it exactly as it always did.
+            surface={withAlpha(colors.forest, 0.92)}
+            lift={colors.emerald}
+            liftAlpha={DIALOG_LIFT_ALPHA}
+            flat={!isDark}
+          >
             <Text style={[styles.title, { color: palette.onForest }]}>Edit Budget</Text>
             <Text style={[styles.message, { color: palette.onForest }]}>
               Set the maximum amount workers can bid up to.
             </Text>
 
+            {/* PUBLISH1 (C2) — THE LABEL IS GONE, NOT MOVED, and the field is
+                drawn here rather than through components/TextField.tsx.
+                "Maximum ($)" said in a caption what the message above already
+                says in a sentence, and what the "$" now says in a glyph:
+                three statements of one fact, stacked. TextField requires a
+                label and renders one, so a labelless field with a currency
+                prefix is not a configuration of it — and widening that shared
+                component for one dialog would change every form in the app. */}
             <View style={styles.field}>
-              <TextField
-                palette={palette}
-                label="Maximum ($)"
-                value={draft}
-                onChangeText={(text) => {
-                  setDraft(text);
-                  if (problem) setProblem(null);
-                }}
-                placeholder="e.g. 60"
-                keyboardType="numeric"
-                // iOS renders no return key on a numeric keyboard other than
-                // "done", and there is no "Save" key to ask for — so the blue
-                // Done key IS the Save action rather than a second outcome.
-                returnKeyType="done"
-                onSubmitEditing={handleSave}
-                error={problem}
-                autoFocus
-              />
+              <View style={[styles.amountRow, problem ? styles.amountRowError : null]}>
+                <Text style={styles.amountPrefix}>$</Text>
+                <TextInput
+                  keyboardAppearance={isDark ? 'dark' : 'light'}
+                  style={[styles.amountInput, { color: palette.onForest }]}
+                  value={draft}
+                  onChangeText={(text) => {
+                    setDraft(text);
+                    if (problem) setProblem(null);
+                  }}
+                  placeholder="e.g. 60"
+                  placeholderTextColor={withAlpha(palette.onForest, 0.45)}
+                  keyboardType="numeric"
+                  // iOS renders no return key on a numeric keyboard other than
+                  // "done", and there is no "Save" key to ask for — so the blue
+                  // Done key IS the Save action rather than a second outcome.
+                  // It is the KEYBOARD's own key: this dialog has never had a
+                  // floating InputAccessoryView, and there is none in the tree
+                  // to remove.
+                  returnKeyType="done"
+                  onSubmitEditing={handleSave}
+                  accessibilityLabel="Maximum budget in dollars"
+                  autoFocus
+                />
+              </View>
+              {problem ? <Text style={styles.amountError}>{problem}</Text> : null}
             </View>
 
+            {/* C2: one row, Save first. Two full-width buttons stacked read as
+                a list of choices; side by side they read as one decision with a
+                default, which is what this is. */}
             <View style={styles.actions}>
-              <Button title="Save" palette={palette} onPress={handleSave} />
-              <Button title="Cancel" variant="secondary" palette={palette} onPress={onCancel} />
+              <Button title="Save" palette={palette} onPress={handleSave} style={styles.action} />
+              <Button
+                title="Cancel"
+                variant="secondary"
+                palette={palette}
+                onPress={onCancel}
+                style={styles.action}
+              />
             </View>
-          </View>
+          </LitSurface>
         </View>
       </View>
     </Modal>
@@ -179,10 +219,53 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     field: {
       marginTop: spacing.lg,
+      gap: spacing.xs + 2,
     },
+    // PUBLISH1 (C2) — the amount row: a currency mark and a number, on the
+    // same hairline pill every field in this app wears. Its shape is
+    // TextField's own (`controls.fieldHeight`-tall pill, 1pt border) so the
+    // dialog does not introduce a second field geometry; what it drops is the
+    // label above it.
+    amountRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.lg,
+      minHeight: controls.fieldHeight,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: withAlpha(colors.emerald, 0.55),
+      backgroundColor: withAlpha(colors.background, 0.35),
+    },
+    amountRowError: {
+      borderColor: colors.danger,
+    },
+    // The same emerald "$" the publish card's Budget row draws (D19): a Text,
+    // not an Ionicon — there is no dollar glyph in the set that reads as a
+    // currency mark rather than a badge.
+    amountPrefix: {
+      fontSize: 19,
+      lineHeight: 22,
+      fontWeight: '800',
+      color: colors.emerald,
+    },
+    amountInput: {
+      flex: 1,
+      fontSize: 16,
+      paddingVertical: spacing.sm,
+    },
+    amountError: {
+      fontSize: 12,
+      color: colors.danger,
+    },
+    // C2: SIDE BY SIDE on one row, Save first, each half of the row.
     actions: {
+      flexDirection: 'row',
       gap: spacing.md,
       marginTop: spacing.lg,
+    },
+    action: {
+      flex: 1,
     },
   }),
 );

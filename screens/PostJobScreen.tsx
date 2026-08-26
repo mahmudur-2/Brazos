@@ -197,13 +197,6 @@ const POST_STEPS = [
  */
 const PUBLISH_CARD_LIFT_ALPHA = 0.04;
 
-/**
- * Home's own section rhythm — `sectionGap` in lib/homeDesignStudio.tsx, which
- * is what `screens/HomeScreen.tsx` gives every section of the page. The publish
- * surface's two cards take it for the same reason they take the wash.
- */
-const PUBLISH_SECTION_GAP = 20;
-
 export function PostJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -2077,14 +2070,22 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     gap: 2,
   },
-  // PUBLISH1 (C1) — the two cards are stacked at HOME'S rhythm, not the
-  // template's. `sectionGap` on customer Home is 20 and its content column
-  // uses the same 20 between sections; `spacing.md` was 12. The number is
-  // copied from Home rather than picked, for the same reason the wash's alpha
-  // is.
+  // PUBLISH1 (C1) — AND THE ONE PLACE HOME'S RHYTHM IS DELIBERATELY NOT TAKEN,
+  // measured rather than argued.
+  //
+  // Home gives every page SECTION 20 (`sectionGap`), and taking that here was
+  // tried: it moved the whole stack down 8pt and pushed "Back to Home" from
+  // partly clipped to entirely below the fold. These two are not two sections
+  // — they are one detail block inside the template's own `spacing.xl` (20)
+  // rhythm, which IS Home's number and is already applied between the mark,
+  // the copy, this block and the actions. So the block keeps its 12 and the
+  // surface keeps the 20 where Home puts it.
+  //
+  // Everything else here already matched: the card padding is `spacing.lg`
+  // (16), which is `heroBody`'s padding on Home's promo card.
   publishDetails: {
     width: '100%',
-    gap: PUBLISH_SECTION_GAP,
+    gap: spacing.md,
   },
   // D22 — what happens next, and it is a thing the app really does: phase20's
   // `bid_received` fires to the job's owner and `notification_prefs.bids`

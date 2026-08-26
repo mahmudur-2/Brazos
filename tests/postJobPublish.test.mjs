@@ -657,10 +657,28 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
     'the alpha stays the one value lib/theme pins'
   );
 
-  // L1 — flat fills only. No blur, no gradient, no library.
-  for (const banned of ['BlurView', 'blur', 'Gradient', 'gradient', 'Svg']) {
-    assert.ok(!flat.includes(banned), `${banned} must not appear — every fill here is flat`);
+  // L1 — NO LIBRARY, AND NO FILL DRAWN HERE.
+  //
+  // This was a ban on the words. RUN PUBLISH1 (C2) put the sheet on
+  // ui/primitives/LitSurface.tsx — the same wash Home's promo card wears,
+  // which is a `backgroundImage` STRING on one node and adds no dependency at
+  // all. What L1 protects is unchanged and is asserted directly now: no
+  // gradient, blur or SVG LIBRARY is imported, and this dialog writes no fill
+  // expression of its own — the wash arrives entirely from the shared
+  // primitive, whose own fence (tests/litSurface.test.mjs) owns its colours.
+  for (const banned of ['BlurView', 'linear-gradient', 'LinearGradient', 'Svg']) {
+    assert.ok(!flat.includes(banned), `${banned} must not appear — this dialog draws no fill`);
   }
+  assert.doesNotMatch(
+    dialog,
+    /^import .*(gradient|blur|svg)/im,
+    'no gradient, blur or SVG library may be imported here'
+  );
+  assert.match(
+    flat,
+    /import \{ LitSurface \} from '\.\.\/ui\/primitives';/,
+    'the wash comes from the shared primitive, not from an expression written here'
+  );
 
   // The contents, verbatim.
   assert.match(flat, />Edit Budget<\/Text>/);
@@ -668,8 +686,20 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   assert.match(flat, /keyboardType="numeric"/);
   assert.match(flat, /returnKeyType="done"/);
   assert.match(flat, /onSubmitEditing=\{handleSave\}/, 'the Done key IS Save, not a second outcome');
-  assert.match(flat, /<Button title="Save" palette=\{palette\} onPress=\{handleSave\} \/>/);
+  assert.match(
+    flat,
+    /<Button title="Save" palette=\{palette\} onPress=\{handleSave\} style=\{styles\.action\} \/>/
+  );
   assert.match(flat, /<Button title="Cancel" variant="secondary"/);
+  // RUN PUBLISH1 (C2): SIDE BY SIDE on one row, each half of it. Two
+  // full-width buttons stacked read as a list of choices; this is one decision
+  // with a default.
+  assert.match(flat, /actions: \{ flexDirection: 'row', gap: spacing\.md,/);
+  assert.match(flat, /action: \{ flex: 1, \}/);
+  // AND THE LABEL ABOVE THE FIELD IS GONE, not moved: the message says it in a
+  // sentence and the prefix says it in a glyph.
+  assert.ok(!flat.includes('Maximum ($)'), 'the "Maximum ($)" caption stays deleted');
+  assert.match(flat, /<Text style=\{styles\.amountPrefix\}>\$<\/Text>/, 'the "$" prefix is the label');
 
   // THE CEILING, COMPOSED FROM THE SHARED RULES and refusing before any RPC.
   assert.match(flat, /import \{ validateOfferAmount \} from '\.\/OfferComposer';/);
@@ -677,7 +707,21 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   assert.match(flat, /if \(!text\.trim\(\)\) return null;/, 'empty is legal and means no maximum');
   assert.match(flat, /return moneyCeilingError\(dollarsToCents\(text\)\);/);
   assert.match(flat, /if \(found\) \{ setProblem\(found\); return; \}/, 'a refusal blocks the save');
-  assert.match(flat, /error=\{problem\}/, 'and it is stated in writing on the field');
+  // RUN PUBLISH1 (C2) drew the field here instead of through TextField, so the
+  // refusal is rendered rather than handed to a component's `error` prop. The
+  // guarantee is unchanged and is now checked on both halves: the message is
+  // written under the field, and the field itself shows it is refused.
+  assert.match(
+    flat,
+    /\{problem \? <Text style=\{styles\.amountError\}>\{problem\}<\/Text> : null\}/,
+    'the refusal is stated in writing under the field'
+  );
+  assert.match(
+    flat,
+    /style=\{\[styles\.amountRow, problem \? styles\.amountRowError : null\]\}/,
+    'and the field itself carries the refusal'
+  );
+  assert.match(flat, /amountRowError: \{ borderColor: colors\.danger, \}/);
   // No RPC of any kind lives in this dialog — it hands text back and closes.
   assert.ok(!flat.includes('supabase'), 'the dialog contacts nothing');
   assert.ok(!flat.includes('createJob'), 'the dialog writes nothing');
