@@ -331,7 +331,7 @@ export const type = {
 // Shadow (§I: color #10261D, opacity 0.08, radius ~14, offset (0,5), elev ~3)
 // ---------------------------------------------------------------------------
 
-export const shadows: Record<'card', ViewStyle> = {
+export const shadows: Record<'card' | 'cardDark', ViewStyle> = {
   card: Platform.select({
     // boxShadow on web avoids RN-web's shadow* deprecation warnings, the same
     // way lib/theme.ts already handles it.
@@ -342,6 +342,51 @@ export const shadows: Record<'card', ViewStyle> = {
       shadowRadius: 14,
       shadowOffset: { width: 0, height: 5 },
       elevation: 3,
+    },
+  }) as ViewStyle,
+  /**
+   * RUN GROUND1 (C4) — THE SAME DEPTH, FOR A GROUND THAT IS NEARLY BLACK.
+   *
+   * `card` above is arithmetically incapable of casting a shadow in the dark
+   * palette, and this is not a matter of degree. Its colour is #10261D, whose
+   * relative luminance is 32.7/255; the dark page ground is #02110D at 13.5
+   * and the atmosphere raster over it measures about 11.5. Compositing 8% of
+   * something BRIGHTER than the surface it lands on does not darken that
+   * surface — it lifts it, by about a tenth of a level. Every card in dark has
+   * therefore been drawing a shadow that either does nothing or very slightly
+   * glows, and the promo card's edge has had nothing but its own hairline to
+   * separate it from the page.
+   *
+   * SO THE COLOUR IS BLACK AND THE OPACITY IS REAL. A shadow can only be
+   * darker than the thing it falls on, and on this ground the only colour that
+   * is darker is black. 0.5 over a ground at 11.5 leaves 5.8 directly under
+   * the card — a step of about 6/255 at full strength, and a measurable one at
+   * the edges where the blur has thinned it.
+   *
+   * AND IT IS DELIBERATELY NOT STRONGER. ui/primitives/BottomNav.tsx records
+   * an operator rejection of a black drop shadow on this same ground — 0.28 at
+   * radius 8 under the [ + ] tile "read as a hole punched under" it — and the
+   * lesson taken from that is about CONCENTRATION rather than about black:
+   * that shadow was tight enough to draw a second dark ring. 16 of blur under
+   * a 6pt offset spreads the same ink over roughly four times the area, so it
+   * reads as the card lifting rather than as a mark on the page.
+   *
+   * DARK ONLY, AND THAT IS A DEPARTURE. tests/themeTokens.test.mjs's parity
+   * fence holds that a theme decision may change a colour and nothing else —
+   * shadowOpacity and shadowRadius are on its list by name. This token changes
+   * both, per theme, on operator instruction (RUN GROUND1 C4), and it follows
+   * the shape the tree already uses for a dark-only depth treatment: `glow` is
+   * applied the same way, gated on isDark at its call sites. Light is
+   * untouched: every site keeps `card` and only ADDS this one in dark.
+   */
+  cardDark: Platform.select({
+    web: { boxShadow: '0 6px 16px rgba(0,0,0,0.5)' },
+    default: {
+      shadowColor: '#000000',
+      shadowOpacity: 0.5,
+      shadowRadius: 16,
+      shadowOffset: { width: 0, height: 6 },
+      elevation: 6,
     },
   }) as ViewStyle,
 };

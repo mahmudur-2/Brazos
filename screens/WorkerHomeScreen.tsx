@@ -402,7 +402,7 @@ export function WorkerHomeScreen() {
               "Offline", "Visible"/"Not Visible") is operator-authored — it
               renders the same phase53 accepting_work fact through the same
               toggle; nothing here is device presence. -------------------- */}
-          <View style={styles.summaryCard}>
+          <View style={[styles.summaryCard, isDark && shadows.cardDark]}>
             <View style={styles.summaryRow}>
               <View style={styles.availabilityHalf}>
                 <Text style={styles.summaryEyebrow}>AVAILABLE NOW</Text>

@@ -75,7 +75,7 @@ export function ChatBubble({
   replyToName,
   onLongPressAvatar,
 }: ChatBubbleProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const isUnsent = !!message.unsent_at;
 
@@ -252,6 +252,9 @@ export function ChatBubble({
             style={[
               styles.reactionBadge,
               isOwn ? styles.reactionBadgeOwn : styles.reactionBadgeOther,
+              // C4: the badge's card shadow cannot darken the dark ground it
+              // sits on; the dark token is added beside it, light untouched.
+              isDark && shadows.cardDark,
             ]}
           >
             {reactions.map((r) => (

@@ -99,6 +99,7 @@ export function WorkerJobCard({
       style={({ pressed }) => [
         styles.card,
         isDark && styles.cardDark,
+        isDark && shadows.cardDark,
         pressed && styles.cardPressed,
       ]}
       accessibilityRole="button"
@@ -223,10 +224,10 @@ export function WorkerJobCard({
 /** The same silhouette with nothing in it, so the feed does not jump when the
  *  data lands. */
 export function WorkerJobCardSkeleton() {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, isDark && shadows.cardDark]}>
       <Skeleton style={styles.thumb} />
       <View style={styles.info}>
         <Skeleton style={styles.skeletonLine} />

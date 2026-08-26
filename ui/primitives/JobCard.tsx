@@ -118,7 +118,7 @@ export function JobCard({
   return (
     <Pressable
       onPress={onPress}
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
+      style={({ pressed }) => [styles.card, isDark && shadows.cardDark, pressed && styles.cardPressed]}
       accessibilityRole="button"
       accessibilityLabel={job.title}
     >

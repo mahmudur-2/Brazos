@@ -34,8 +34,12 @@ export function Card({
   accessibilityHint,
   palette: paletteProp,
 }: CardProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
+  // C4: the stylesheet's card shadow is a light-palette shadow — its colour is
+  // brighter than the dark page ground, so it cannot darken it. The dark token
+  // is ADDED under the caller's own style, never in place of the light one.
+  const depth = isDark ? shadows.cardDark : null;
   const paletteStyle = {
     backgroundColor: palette.surface,
     borderColor: palette.border,
@@ -51,6 +55,7 @@ export function Card({
         style={({ pressed }) => [
           styles.card,
           paletteStyle,
+          depth,
           pressed && styles.pressed,
           style,
         ]}
@@ -59,7 +64,7 @@ export function Card({
       </Pressable>
     );
   }
-  return <View style={[styles.card, paletteStyle, style]}>{children}</View>;
+  return <View style={[styles.card, paletteStyle, depth, style]}>{children}</View>;
 }
 
 const styles = StyleSheet.create({

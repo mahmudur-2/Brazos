@@ -300,7 +300,7 @@ export function WorkerSearchScreen() {
               one did: onChangeText('') resets the run guard, the results and
               the pinned chip. */}
           <SearchBar
-            style={[styles.searchRow, isDark && styles.searchRowDark]}
+            style={[styles.searchRow, isDark && styles.searchRowDark, isDark && shadows.cardDark]}
             value={query}
             onChangeText={(text) => {
               runRef.current += 1;

@@ -73,10 +73,12 @@ const themeModule = (async () => {
     .replace(
       /import \{[^}]*\} from '\.\.\/ui\/tokens';/,
       // RUN H2 added `constantAccents` to what lib/theme.ts takes from the token
-      // module. The destructure here has to name everything that import names,
-      // or the executed module throws a ReferenceError at first use rather than
+      // module, and RUN GROUND1 (C4) added `shadows` — lib/theme surfaces the
+      // dark card shadow by reference rather than copying its numbers. The
+      // destructure here has to name everything that import names, or the
+      // executed module throws a ReferenceError at first use rather than
       // failing an assertion — so the stub is widened, never the assertions.
-      'const { brand, dark: emeraldDark, constantAccents, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      'const { brand, dark: emeraldDark, constantAccents, shadows: tokenShadows, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');

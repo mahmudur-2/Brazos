@@ -666,6 +666,11 @@ export function HomeScreen() {
                       // outline COLOUR over the Chip's shared 1pt border.
                       !isDark && styles.goldOutlineChip,
                       rowIndex === 1 ? styles.compactServiceChip : styles.serviceChip,
+                      // C4: these carried no depth at all. On the near-black
+                      // ground a chip's hairline was the only thing holding it
+                      // off the page; the dark card shadow gives the row the
+                      // same lift the cards below it have. Light is untouched.
+                      isDark && shadows.cardDark,
                     ]}
                     onPress={() => searchCategory(service.key)}
                     accessibilityHint={`Find ${service.label.toLowerCase()} help`}
@@ -680,6 +685,7 @@ export function HomeScreen() {
                       !isDark && styles.goldOutlineChip,
                       styles.compactServiceChip,
                       styles.otherChip,
+                      isDark && shadows.cardDark,
                     ]}
                     onPress={() => setMoreOpen(true)}
                     accessibilityLabel="Other services"
@@ -696,7 +702,10 @@ export function HomeScreen() {
               second design — its pill was a solid white fill with an invisible
               ring, and is now the outlined treatment dark draws. */}
           <LitSurface
-            style={[styles.heroCard, isDark && styles.heroCardDark]}
+            // C4: the card shadow in the stylesheet is a light-palette shadow
+            // and casts nothing on this ground. The dark token is ADDED rather
+            // than swapped in, so light keeps exactly what it had.
+            style={[styles.heroCard, isDark && styles.heroCardDark, isDark && shadows.cardDark]}
             surface={colors.surface}
             lift={colors.emerald}
             liftAlpha={CARD_LIFT_ALPHA}
@@ -784,7 +793,7 @@ export function HomeScreen() {
 
             {loading ? (
               <View style={styles.cardList}>
-                <View style={styles.skeletonCard}>
+                <View style={[styles.skeletonCard, isDark && shadows.cardDark]}>
                   <Skeleton style={styles.skeletonThumb} />
                   <View style={styles.skeletonText}>
                     <Skeleton style={styles.skeletonLine} />
@@ -871,6 +880,7 @@ function OpenJobCard({
       style={({ pressed }) => [
         styles.jobCard,
         isDark && styles.jobCardDark,
+        isDark && shadows.cardDark,
         { borderRadius: design.jobCardRadius },
         pressed && styles.jobCardPressed,
       ]}

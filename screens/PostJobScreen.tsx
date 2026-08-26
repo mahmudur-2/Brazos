@@ -1332,7 +1332,7 @@ export function PostJobScreen() {
                 </View>
               )}
 
-              <View style={styles.reviewCard}>
+              <View style={[styles.reviewCard, isDark && shadows.cardDark]}>
                 <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
                 <Text style={styles.reviewTitle}>{title.trim()}</Text>
                 <Text style={styles.reviewDescription} numberOfLines={4}>
@@ -1499,7 +1499,7 @@ export function PostJobScreen() {
               details={
                 <View style={styles.publishDetails}>
                 {publishedJob ? (
-                  <View style={styles.reviewCard}>
+                  <View style={[styles.reviewCard, isDark && shadows.cardDark]}>
                     <Text style={styles.reviewEyebrow}>PUBLISHED</Text>
                     <Text style={styles.reviewTitle} numberOfLines={2}>
                       {publishedJob.title}

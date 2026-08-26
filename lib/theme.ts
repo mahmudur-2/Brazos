@@ -1,5 +1,11 @@
 import { Platform, type TextStyle, type ViewStyle } from 'react-native';
-import { brand, dark as emeraldDark, constantAccents, withAlpha as alpha } from '../ui/tokens';
+import {
+  brand,
+  dark as emeraldDark,
+  constantAccents,
+  shadows as tokenShadows,
+  withAlpha as alpha,
+} from '../ui/tokens';
 
 // lib/theme.ts is the standard import surface for screens (CLAUDE.md): the
 // §I helpers below are re-exported here so no screen ever needs to import
@@ -305,7 +311,20 @@ export const typography = {
 } as const;
 
 /** Soft, grounded shadows. Uses boxShadow on web to avoid deprecation warnings. */
-export const shadows: Record<'card' | 'raised', ViewStyle> = {
+export const shadows: Record<'card' | 'raised' | 'cardDark', ViewStyle> = {
+  /**
+   * RUN GROUND1 (C4) — SURFACED HERE, DEFINED ONCE, IN ui/tokens.ts.
+   *
+   * lib/theme.ts is the standard import surface for screens (CLAUDE.md), and
+   * the files that spread a card shadow take `shadows` from here rather than
+   * from the token file. Re-exporting the whole record is not possible — this
+   * module owns a `shadows` of its own — so the one entry is surfaced by
+   * reference. Copying its numbers instead would put two sets of them in the
+   * tree, which is the specific failure the token exists to prevent.
+   *
+   * Its docblock in ui/tokens.ts carries the measurement and the reasoning.
+   */
+  cardDark: tokenShadows.cardDark,
   card: Platform.select({
     web: { boxShadow: '0 1px 3px rgba(31,46,34,0.07), 0 1px 2px rgba(31,46,34,0.05)' },
     default: {

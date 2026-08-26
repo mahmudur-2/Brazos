@@ -202,8 +202,13 @@ test('the summary card: surface fill, gold hairline, divided halves, chips insid
     'the summary row must hold availability, the divider, then earnings');
   // Both count chips sit INSIDE the summary card: walk the card's <View>
   // extent by tag balance and require the pill row before it closes.
-  const open = screen.indexOf('<View style={styles.summaryCard}>');
-  assert.ok(open > 0, 'the summary card container must exist');
+  // RUN GROUND1 (C4) added the dark card shadow beside the style key here, so
+  // the container is found by its style KEY rather than by the whole prop. The
+  // walk below is unchanged and still proves the pills sit inside it.
+  const keyAt = screen.indexOf('styles.summaryCard');
+  assert.ok(keyAt > 0, 'the summary card container must exist');
+  const open = screen.lastIndexOf('<View', keyAt);
+  assert.ok(open > 0, 'the summary card style must sit on a <View>');
   const tags = [...screen.slice(open).matchAll(/<View\b[^>]*\/>|<View\b|<\/View>/g)];
   let depth = 0;
   let end = -1;
