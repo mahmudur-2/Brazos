@@ -11,7 +11,7 @@ import {
   type PaletteThemeKey,
   type StudioValue,
 } from '../lib/designOverrides';
-import { layout, navBar, radius as tokenRadius, type MaterialName } from './tokens';
+import { layout, navBar, radius as tokenRadius, spacing, type MaterialName } from './tokens';
 
 export type { StudioValue } from '../lib/designOverrides';
 
@@ -212,6 +212,33 @@ function materialDial(
   };
 }
 
+type ColorMaterialProp = 'scrimColor' | 'borderColor';
+
+/** A material's two colour dials (C7) — same store, colour kind. */
+function materialColorDial(
+  material: MaterialName,
+  prop: ColorMaterialProp,
+  row: Pick<StudioEntry, 'plainLabel' | 'description' | 'tier'>,
+): StudioEntry {
+  return {
+    key: `material.${material}.${prop}`,
+    technicalKey: `materials.${material}.${prop}`,
+    category: 'blur',
+    subcategory: MATERIAL_SUBCATEGORY[material],
+    scope: 'token',
+    kind: 'color',
+    ...row,
+    defaultValue: (ctx) => ctx.staticMaterials[material][prop],
+    overrideValue: (ctx) => ctx.overrides.materials[material]?.[prop],
+    write: (value) => {
+      const patch: MaterialOverride = {};
+      patch[prop] = value as string | undefined;
+      patchMaterialOverride(material, patch);
+    },
+    contrastGround: (ctx) => ({ label: 'text', hex: ctx.appDark.text }),
+  };
+}
+
 function materialDials(material: MaterialName): StudioEntry[] {
   return [
     materialDial(material, 'blur', {
@@ -249,6 +276,16 @@ function materialDials(material: MaterialName): StudioEntry[] {
       min: 0,
       max: 1,
       step: 0.02,
+    }),
+    materialColorDial(material, 'scrimColor', {
+      plainLabel: 'Tint colour',
+      description: 'The emerald ink this glass is mixed from — its fill under the blur.',
+      tier: 'advanced',
+    }),
+    materialColorDial(material, 'borderColor', {
+      plainLabel: 'Edge line colour',
+      description: "The hairline on this surface's edge.",
+      tier: 'advanced',
     }),
   ];
 }
@@ -630,6 +667,344 @@ function navigationDialEntries(): StudioEntry[] {
 }
 
 // ---------------------------------------------------------------------------
+// The Sheets and Menus categories (C7). The cards' fill, blur and hairlines
+// are the sheet/menu MATERIALS' dials (Blur & Material); what lives here is
+// geometry, the backdrop scrim, the drag handle and the menu rows. No
+// spring/physics dials, by decision.
+// ---------------------------------------------------------------------------
+
+function sheetDialEntries(): StudioEntry[] {
+  const docked = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'sheets', subcategory: 'Docked sheet' });
+  const dialog = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'sheets', subcategory: 'Dialog cards' });
+  const backdrop = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'sheets', subcategory: 'Backdrop' });
+  const handle = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'sheets', subcategory: 'Drag handle' });
+  return [
+    docked({
+      key: 'sheet.topRadius',
+      plainLabel: 'Top corner roundness',
+      technicalKey: 'sheet.topRadius',
+      description: "The docked sheet's top corners.",
+      tier: 'basic',
+      kind: 'number',
+      scope: 'token',
+      unit: 'pt',
+      min: 0,
+      max: 48,
+      step: 1,
+      defaultValue: () => tokenRadius.xxl,
+    }),
+    docked({
+      key: 'sheet.maxHeightPct',
+      plainLabel: 'Max height',
+      technicalKey: 'sheet.maxHeightPct',
+      description: 'How much of the screen the docked sheet may grow to cover.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: '%',
+      min: 50,
+      max: 100,
+      step: 2,
+      defaultValue: () => 88,
+    }),
+    docked({
+      key: 'sheet.headerPad',
+      plainLabel: 'Header side padding',
+      technicalKey: 'sheet.headerPad',
+      description: "The sheet header row's horizontal padding.",
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: () => layout.screenGutter,
+    }),
+    docked({
+      key: 'sheet.contentPad',
+      plainLabel: 'Content padding',
+      technicalKey: 'sheet.contentPad',
+      description: "The sheet body's padding on every side.",
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: () => layout.screenGutter,
+    }),
+    docked({
+      key: 'sheet.footerPad',
+      plainLabel: 'Footer padding',
+      technicalKey: 'sheet.footerPad',
+      description: 'Padding under the sheet content, added to the safe-area inset.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: () => spacing.lg,
+    }),
+    docked({
+      key: 'sheet.sectionGap',
+      plainLabel: 'Section spacing',
+      technicalKey: 'sheet.sectionGap',
+      description: 'The gap between the rows and sections inside a sheet.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 32,
+      step: 1,
+      defaultValue: () => spacing.md,
+    }),
+    dialog({
+      key: 'sheet.dialogRadius',
+      plainLabel: 'Dialog corner roundness',
+      technicalKey: 'sheet.dialogRadius',
+      description: 'The floating action-sheet and confirm cards.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: () => tokenRadius.xl,
+    }),
+    dialog({
+      key: 'sheet.promptRadius',
+      plainLabel: 'Amount prompt roundness',
+      technicalKey: 'sheet.promptRadius',
+      description: "The amount prompt card's corners.",
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: () => tokenRadius.lg,
+    }),
+    backdrop({
+      key: 'sheet.backdropColor',
+      plainLabel: 'Background dimming colour',
+      technicalKey: 'sheet.backdropColor',
+      description:
+        'The scrim behind every sheet and dialog, replacing each surface’s own per-theme default.',
+      tier: 'advanced',
+      kind: 'color',
+      scope: 'token',
+      defaultValue: (ctx) => (ctx.isDark ? ctx.emeraldDark.bg : ctx.emeraldLight.ink) ?? '',
+    }),
+    backdrop({
+      key: 'sheet.backdropAlpha',
+      plainLabel: 'Background dimming',
+      technicalKey: 'sheet.backdropAlpha',
+      description: 'How deep the scrim behind every sheet and dialog dims the page.',
+      tier: 'basic',
+      kind: 'decimal',
+      scope: 'token',
+      min: 0,
+      max: 1,
+      step: 0.02,
+      defaultValue: (ctx) => (ctx.isDark ? 0.55 : 0.45),
+    }),
+    handle({
+      key: 'sheet.handleWidth',
+      plainLabel: 'Handle width',
+      technicalKey: 'sheet.handleWidth',
+      description: "The drag handle's width.",
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 16,
+      max: 80,
+      step: 2,
+      defaultValue: () => 40,
+    }),
+    handle({
+      key: 'sheet.handleHeight',
+      plainLabel: 'Handle height',
+      technicalKey: 'sheet.handleHeight',
+      description: "The drag handle's thickness.",
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 2,
+      max: 10,
+      step: 1,
+      defaultValue: () => 4,
+    }),
+    handle({
+      key: 'sheet.handleColor',
+      plainLabel: 'Handle colour',
+      technicalKey: 'sheet.handleColor',
+      description: "The drag handle's ink, in whichever theme is showing.",
+      tier: 'advanced',
+      kind: 'color',
+      scope: 'local',
+      defaultValue: (ctx) => (ctx.isDark ? ctx.emeraldDark.line : ctx.emeraldLight.line) ?? '',
+    }),
+    handle({
+      key: 'sheet.handleAlpha',
+      plainLabel: 'Handle opacity',
+      technicalKey: 'sheet.handleAlpha',
+      description: 'How solid the drag handle renders.',
+      tier: 'advanced',
+      kind: 'decimal',
+      scope: 'local',
+      min: 0,
+      max: 1,
+      step: 0.02,
+      defaultValue: () => 1,
+    }),
+    handle({
+      key: 'sheet.handleSpaceAbove',
+      plainLabel: 'Space above the handle',
+      technicalKey: 'sheet.handleSpaceAbove',
+      description: 'Between the sheet’s top edge and the handle.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 24,
+      step: 1,
+      defaultValue: () => spacing.sm,
+    }),
+    handle({
+      key: 'sheet.handleSpaceBelow',
+      plainLabel: 'Space below the handle',
+      technicalKey: 'sheet.handleSpaceBelow',
+      description: 'Between the handle and the sheet’s header.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 24,
+      step: 1,
+      defaultValue: () => spacing.sm,
+    }),
+  ];
+}
+
+function menuDialEntries(): StudioEntry[] {
+  const panel = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'menus', subcategory: 'Panel' });
+  const rows = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'menus', subcategory: 'Rows' });
+  return [
+    panel({
+      key: 'menu.minWidth',
+      plainLabel: 'Width',
+      technicalKey: 'menu.minWidth',
+      description: 'The anchored menu panel’s minimum width.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 160,
+      max: 320,
+      step: 4,
+      defaultValue: () => 208,
+    }),
+    panel({
+      key: 'menu.radius',
+      plainLabel: 'Corner roundness',
+      technicalKey: 'menu.radius',
+      description: 'The menu panel’s corners — the clip and the material move together.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 32,
+      step: 1,
+      defaultValue: (ctx) => ctx.staticMaterials.menu.radius ?? 0,
+    }),
+    panel({
+      key: 'menu.paddingY',
+      plainLabel: 'Panel padding',
+      technicalKey: 'menu.paddingY',
+      description: 'Vertical breathing room inside the panel, above and below the rows.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 24,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    rows({
+      key: 'menu.itemHeight',
+      plainLabel: 'Row height',
+      technicalKey: 'menu.itemHeight',
+      description: 'Each menu row’s minimum height — never below the 44pt touch floor.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 44,
+      max: 64,
+      step: 1,
+      defaultValue: () => 46,
+    }),
+    rows({
+      key: 'menu.itemPaddingX',
+      plainLabel: 'Row side padding',
+      technicalKey: 'menu.itemPaddingX',
+      description: 'Each menu row’s horizontal padding.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 32,
+      step: 1,
+      defaultValue: () => spacing.lg,
+    }),
+    rows({
+      key: 'menu.itemSpacing',
+      plainLabel: 'Row spacing',
+      technicalKey: 'menu.itemSpacing',
+      description: 'Extra space between the rows.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 16,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    rows({
+      key: 'menu.separators',
+      plainLabel: 'Separators',
+      technicalKey: 'menu.separators',
+      description: 'The hairline between rows.',
+      tier: 'basic',
+      kind: 'boolean',
+      scope: 'local',
+      defaultValue: () => true,
+    }),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // The registry. C1 seeds it with every dial the G1 studio already offered;
 // C5–C10 grow the categories. Order inside a category is display order.
 // ---------------------------------------------------------------------------
@@ -639,6 +1014,8 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...materialDials('sheet'),
   ...materialDials('menu'),
   ...navigationDialEntries(),
+  ...sheetDialEntries(),
+  ...menuDialEntries(),
   {
     key: 'glow.alpha',
     plainLabel: 'Glow strength',

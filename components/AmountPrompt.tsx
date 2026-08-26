@@ -10,7 +10,9 @@ import {
   withAlpha,
   type ColorPalette,
   scrimInDark,
+  SCRIM_DARK_ALPHA,
 } from '../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { BlurLayer } from '../lib/blur';
 import { Surface } from '../ui/primitives/Surface';
 
@@ -44,6 +46,19 @@ export function AmountPrompt({
   const styles = stylesFor(colors);
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // RUN S2 (C7) — the shared sheet-family dials: backdrop scrim, card radius.
+  const promptRadius = useOverrideNumber('sheet.promptRadius') ?? radius.lg;
+  const backdropColorDial = useOverrideString('sheet.backdropColor');
+  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
+  const backdropDial =
+    backdropColorDial != null || backdropAlphaDial != null
+      ? {
+          backgroundColor: withAlpha(
+            backdropColorDial ?? (isDark ? colors.background : colors.text),
+            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.45),
+          ),
+        }
+      : null;
 
   useEffect(() => {
     if (!visible) return;
@@ -66,14 +81,14 @@ export function AmountPrompt({
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
-      <View style={[styles.backdrop, isDark && styles.backdropDark]}>
+      <View style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}>
         {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
         <BlurLayer />
         {/* G1 (C5): the card wears the sheet material — in light this adds
             the material's hairline where the card had none (the parity rule
             keeps border weight shared between themes). Backdrop and
             mechanics untouched. */}
-        <Surface material="sheet" corners="all" radius={radius.lg} style={styles.sheet}>
+        <Surface material="sheet" corners="all" radius={promptRadius} style={styles.sheet}>
           <Text style={styles.title}>{title}</Text>
           {message ? <Text style={styles.message}>{message}</Text> : null}
 

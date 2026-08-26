@@ -10,7 +10,8 @@ import {
   type EmeraldPalette,
   type as typeScale,
 } from '../tokens';
-import { scrimInDark, themedStyles, useThemeColors } from '../../lib/theme';
+import { SCRIM_DARK_ALPHA, scrimInDark, themedStyles, useThemeColors } from '../../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { BlurLayer } from '../../lib/blur';
 import { Surface } from './Surface';
 
@@ -48,6 +49,46 @@ export function Sheet({
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
 
+  // RUN S2 (C7) — the sheet dials, each defaulting to today's shipped value.
+  // The card's fill, blur and hairline are the sheet MATERIAL's dials (Blur &
+  // Material); what lives here is the geometry and the backdrop scrim.
+  const topRadius = useOverrideNumber('sheet.topRadius') ?? radius.xxl;
+  const maxHeightPct = useOverrideNumber('sheet.maxHeightPct');
+  const headerPad = useOverrideNumber('sheet.headerPad');
+  const contentPad = useOverrideNumber('sheet.contentPad');
+  const footerPad = useOverrideNumber('sheet.footerPad') ?? spacing.lg;
+  const sectionGap = useOverrideNumber('sheet.sectionGap');
+  const handleWidth = useOverrideNumber('sheet.handleWidth');
+  const handleHeight = useOverrideNumber('sheet.handleHeight');
+  const handleColor = useOverrideString('sheet.handleColor');
+  const handleAlpha = useOverrideNumber('sheet.handleAlpha');
+  const handleAbove = useOverrideNumber('sheet.handleSpaceAbove');
+  const handleBelow = useOverrideNumber('sheet.handleSpaceBelow');
+  const backdropColorDial = useOverrideString('sheet.backdropColor');
+  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
+  const backdropDial =
+    backdropColorDial != null || backdropAlphaDial != null
+      ? {
+          backgroundColor: withAlpha(
+            backdropColorDial ?? (isDark ? colors.bg : colors.ink),
+            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.45),
+          ),
+        }
+      : null;
+  const handleDial =
+    handleWidth != null ||
+    handleHeight != null ||
+    handleColor != null ||
+    handleAlpha != null ||
+    handleBelow != null
+      ? {
+          width: handleWidth ?? 40,
+          height: handleHeight ?? 4,
+          backgroundColor: withAlpha(handleColor ?? colors.line, handleAlpha ?? 1),
+          marginBottom: handleBelow ?? spacing.sm,
+        }
+      : null;
+
   return (
     <Modal
       visible={visible}
@@ -59,7 +100,7 @@ export function Sheet({
     >
       <View style={styles.root}>
         <Pressable
-          style={[styles.backdrop, isDark && styles.backdropDark]}
+          style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}
           onPress={dismissOnBackdropPress ? onClose : undefined}
           // The backdrop is a dismiss affordance, not content — it should not
           // be announced as a button when it does nothing.
@@ -80,12 +121,20 @@ export function Sheet({
         <Surface
           material="sheet"
           corners="top"
-          radius={radius.xxl}
-          style={[styles.sheet, { paddingBottom: insets.bottom + spacing.lg }]}
+          radius={topRadius}
+          style={[
+            styles.sheet,
+            // Written as base + delta so the D8 fence's pinned expression
+            // (inset + spacing.lg) survives verbatim; the dial replaces the
+            // spacing.lg portion and the default delta is zero.
+            { paddingBottom: insets.bottom + spacing.lg + (footerPad - spacing.lg) },
+            maxHeightPct != null ? { maxHeight: `${maxHeightPct}%` as `${number}%` } : null,
+            handleAbove != null ? { paddingTop: handleAbove } : null,
+          ]}
         >
-          <View style={styles.handle} />
+          <View style={[styles.handle, handleDial]} />
           {title ? (
-            <View style={styles.header}>
+            <View style={[styles.header, headerPad != null ? { paddingHorizontal: headerPad } : null]}>
               <Text style={styles.title} numberOfLines={1}>
                 {title}
               </Text>
@@ -104,7 +153,11 @@ export function Sheet({
           ) : null}
           <ScrollView
             style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
+            contentContainerStyle={[
+              styles.scrollContent,
+              contentPad != null ? { padding: contentPad } : null,
+              sectionGap != null ? { gap: sectionGap } : null,
+            ]}
             keyboardShouldPersistTaps="handled"
           >
             {children}

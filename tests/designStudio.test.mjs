@@ -84,7 +84,7 @@ const schemaModule = (async () => {
     )
     .replace(
       /import \{[\s\S]*?\} from '\.\/tokens';/,
-      'const { layout, navBar, radius: tokenRadius } = globalThis.__S2_TOKENS__;',
+      'const { layout, navBar, radius: tokenRadius, spacing } = globalThis.__S2_TOKENS__;',
     );
   assert.doesNotMatch(
     stubbed,
@@ -597,6 +597,112 @@ test('[static] the bar reads every dial through the override layer, and the tree
       `${path} must subscribe to the bar-container dials`,
     );
   }
+});
+
+// ---------------------------------------------------------------------------
+// Sheets and Menus (S2 C7)
+// ---------------------------------------------------------------------------
+
+test('sheet and menu dials: defaults mirror the shipped values, and the wearers read them', async () => {
+  const schema = await schemaModule;
+  const tokens = await tokensModule;
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+  const ctx = await contextFor();
+
+  assert.equal(byKey.get('sheet.topRadius').defaultValue(ctx), tokens.radius.xxl);
+  assert.equal(byKey.get('sheet.dialogRadius').defaultValue(ctx), tokens.radius.xl);
+  assert.equal(byKey.get('sheet.promptRadius').defaultValue(ctx), tokens.radius.lg);
+  assert.equal(byKey.get('sheet.contentPad').defaultValue(ctx), tokens.layout.screenGutter);
+  assert.equal(byKey.get('sheet.sectionGap').defaultValue(ctx), tokens.spacing.md);
+  assert.equal(byKey.get('sheet.footerPad').defaultValue(ctx), tokens.spacing.lg);
+  assert.equal(byKey.get('sheet.maxHeightPct').defaultValue(ctx), 88);
+  assert.equal(byKey.get('sheet.backdropAlpha').defaultValue(ctx), 0.55, 'dark ctx: the D8 scrim');
+  assert.equal(byKey.get('sheet.backdropAlpha').defaultValue({ ...ctx, isDark: false }), 0.45);
+  assert.equal(byKey.get('sheet.handleWidth').defaultValue(ctx), 40);
+  assert.equal(byKey.get('sheet.handleColor').defaultValue(ctx), tokens.dark.line);
+
+  assert.equal(byKey.get('menu.minWidth').defaultValue(ctx), 208);
+  assert.equal(byKey.get('menu.radius').defaultValue(ctx), tokens.materials.menu.radius);
+  assert.equal(byKey.get('menu.itemHeight').defaultValue(ctx), 46);
+  assert.ok(byKey.get('menu.itemHeight').min >= 44, 'menu rows can never dial under the touch floor');
+  assert.equal(byKey.get('menu.separators').defaultValue(ctx), true);
+  assert.equal(byKey.get('menu.separators').kind, 'boolean');
+
+  // The material colour dials joined the Blur & Material category (C7):
+  // fill/tint and hairline colour per material, defaulting to the table.
+  for (const material of ['chrome', 'sheet', 'menu']) {
+    assert.equal(
+      byKey.get(`material.${material}.scrimColor`).defaultValue(ctx),
+      tokens.materials[material].scrimColor,
+    );
+    assert.equal(
+      byKey.get(`material.${material}.borderColor`).defaultValue(ctx),
+      tokens.materials[material].borderColor,
+    );
+  }
+});
+
+test('[static] the sheet family and the menu wear their dials — and the menu wears the MATERIAL', async () => {
+  const sheet = stripComments(await read('ui/primitives/Sheet.tsx'));
+  for (const key of [
+    "'sheet.topRadius'",
+    "'sheet.maxHeightPct'",
+    "'sheet.headerPad'",
+    "'sheet.contentPad'",
+    "'sheet.footerPad'",
+    "'sheet.sectionGap'",
+    "'sheet.handleWidth'",
+    "'sheet.handleHeight'",
+    "'sheet.handleColor'",
+    "'sheet.handleAlpha'",
+    "'sheet.handleSpaceAbove'",
+    "'sheet.handleSpaceBelow'",
+    "'sheet.backdropColor'",
+    "'sheet.backdropAlpha'",
+  ]) {
+    assert.ok(sheet.includes(key), `Sheet must read the ${key} dial`);
+  }
+  for (const [path, keys] of [
+    ['components/ActionSheet.tsx', ["'sheet.dialogRadius'", "'sheet.backdropColor'", "'sheet.backdropAlpha'"]],
+    // ConfirmDialog's RADIUS stays pinned at radius.xl by the D15 budget
+    // fence (not this run's to move) — its backdrop still dials.
+    ['components/ConfirmDialog.tsx', ["'sheet.backdropColor'", "'sheet.backdropAlpha'"]],
+    ['components/AmountPrompt.tsx', ["'sheet.promptRadius'", "'sheet.backdropColor'", "'sheet.backdropAlpha'"]],
+  ]) {
+    const source = stripComments(await read(path));
+    for (const key of keys) assert.ok(source.includes(key), `${path} must read the ${key} dial`);
+  }
+
+  // THE MENU WEARS THE MENU MATERIAL — through Surface, in the SHARED file
+  // both drivers render, so the category drives a real surface on both
+  // paths. The panel style itself paints nothing any more, and
+  // DropMenu.motion120.tsx is byte-untouched by this run.
+  const shared = stripComments(await read('components/DropMenu.shared.tsx'));
+  assert.match(shared, /<Surface\s+material="menu"/);
+  for (const key of [
+    "'menu.minWidth'",
+    "'menu.radius'",
+    "'menu.paddingY'",
+    "'menu.itemHeight'",
+    "'menu.itemPaddingX'",
+    "'menu.itemSpacing'",
+    "'menu.separators'",
+  ]) {
+    assert.ok(shared.includes(key), `DropMenu.shared must read the ${key} dial`);
+  }
+  const panelStyle = /panel: \{([^}]*)\}/.exec(shared.replace(/\s+/g, ' '));
+  assert.ok(panelStyle, 'the shared panel style must survive');
+  assert.doesNotMatch(
+    panelStyle[1],
+    /backgroundColor|borderColor|borderWidth/,
+    'fill and hairline are the menu material’s now — the panel is geometry and clip only',
+  );
+  const motion120 = stripComments(await read('components/DropMenu.motion120.tsx'));
+  assert.doesNotMatch(
+    motion120,
+    /material=|designOverrides|useOverride/,
+    'DropMenu.motion120.tsx stays a pure animation driver — the shared file carries the material',
+  );
 });
 
 // ---------------------------------------------------------------------------

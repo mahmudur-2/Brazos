@@ -9,7 +9,9 @@ import {
   withAlpha,
   type ColorPalette,
   scrimInDark,
+  SCRIM_DARK_ALPHA,
 } from '../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { BlurLayer } from '../lib/blur';
 import { Surface } from '../ui/primitives/Surface';
 
@@ -50,6 +52,21 @@ export function ConfirmDialog({
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
+  // RUN S2 (C7) — the shared sheet-family backdrop dials. The card RADIUS
+  // stays the pinned radius.xl: tests/postJobPublish.test.mjs D15 holds this
+  // card and the budget editor to one xl radius, and that fence is not this
+  // run's to move — the dialog-radius dial drives ActionSheet instead.
+  const backdropColorDial = useOverrideString('sheet.backdropColor');
+  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
+  const backdropDial =
+    backdropColorDial != null || backdropAlphaDial != null
+      ? {
+          backgroundColor: withAlpha(
+            backdropColorDial ?? (isDark ? colors.background : colors.text),
+            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.35),
+          ),
+        }
+      : null;
   return (
     <Modal
       visible={visible}
@@ -63,7 +80,7 @@ export function ConfirmDialog({
         if (!loading) onCancel();
       }}
     >
-      <View style={[styles.backdrop, isDark && styles.backdropDark]}>
+      <View style={[styles.backdrop, isDark && styles.backdropDark, backdropDial]}>
         {/* MOTION1 (C3): frosted over the scrim, under the panel. */}
         <BlurLayer />
         <View style={styles.centerWrap}>

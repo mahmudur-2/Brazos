@@ -12,6 +12,8 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
+import { SCRIM_DARK_ALPHA } from '../lib/theme';
+import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 import { BlurLayer } from '../lib/blur';
 import { Surface } from '../ui/primitives/Surface';
 
@@ -61,12 +63,27 @@ export function ActionSheet({
   const styles = stylesFor(colors);
   // ui/primitives/Sheet.tsx has always done this; this one never did.
   const insets = useSafeAreaInsets();
+  // RUN S2 (C7) — the shared sheet-family dials: backdrop scrim and the
+  // dialog-card radius. Fill, blur and hairline are the sheet MATERIAL's.
+  const dialogRadius = useOverrideNumber('sheet.dialogRadius') ?? radius.xl;
+  const backdropColorDial = useOverrideString('sheet.backdropColor');
+  const backdropAlphaDial = useOverrideNumber('sheet.backdropAlpha');
+  const backdropDial =
+    backdropColorDial != null || backdropAlphaDial != null
+      ? {
+          backgroundColor: withAlpha(
+            backdropColorDial ?? (isDark ? colors.background : colors.text),
+            backdropAlphaDial ?? (isDark ? SCRIM_DARK_ALPHA : 0.35),
+          ),
+        }
+      : null;
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable
         style={[
           styles.backdrop,
           isDark && styles.backdropDark,
+          backdropDial,
           { paddingBottom: insets.bottom + spacing.lg },
         ]}
         onPress={onClose}
@@ -81,7 +98,7 @@ export function ActionSheet({
             via the radius prop. The backdrop above and every open/close
             mechanic are byte-identical. */}
         <Pressable onPress={() => {}}>
-          <Surface material="sheet" corners="all" radius={radius.xl} style={styles.sheet}>
+          <Surface material="sheet" corners="all" radius={dialogRadius} style={styles.sheet}>
           {(title || subtitle) && (
             <View style={styles.header}>
               {title ? <Text style={styles.title}>{title}</Text> : null}

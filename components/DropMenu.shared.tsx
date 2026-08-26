@@ -9,6 +9,8 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { useOverrideNumber, useOverrideValue } from '../lib/designOverrides';
+import { Surface } from '../ui/primitives/Surface';
 
 /**
  * EVERYTHING BOTH DROPMENU PATHS SHARE — which is everything except the four
@@ -72,7 +74,25 @@ export function panelTravelFor(direction: 'up' | 'down'): number {
 
 export function useDropMenuStyles() {
   const { palette: colors } = useThemeColors();
-  return { colors, styles: stylesFor(colors) };
+  const base = stylesFor(colors);
+  // RUN S2 (C7) — the menu-panel dials. The dial values fold into the panel
+  // entry as a nested style array, so BOTH drivers (this file's consumers)
+  // pick them up without either being edited.
+  const minWidth = useOverrideNumber('menu.minWidth');
+  const panelRadius = useOverrideNumber('menu.radius');
+  const paddingY = useOverrideNumber('menu.paddingY');
+  const dial =
+    minWidth != null || panelRadius != null || paddingY != null
+      ? {
+          ...(minWidth != null ? { minWidth } : null),
+          ...(panelRadius != null ? { borderRadius: panelRadius } : null),
+          ...(paddingY != null ? { paddingVertical: paddingY } : null),
+        }
+      : null;
+  return {
+    colors,
+    styles: dial ? { ...base, panel: [base.panel, dial] as const } : base,
+  };
 }
 
 /**
@@ -112,8 +132,22 @@ export function DropMenuItems({
   onClose: () => void;
 }) {
   const { colors, styles } = useDropMenuStyles();
+  // RUN S2 (C7) — the menu WEARS THE MENU MATERIAL: the Surface underlay is
+  // the panel's fill, blur and hairline (the panel style itself paints
+  // nothing any more), so the studio's menu-material dials drive a real
+  // surface. Both drivers render these rows, so both paths wear it.
+  const menuRadius = useOverrideNumber('menu.radius');
+  const itemHeight = useOverrideNumber('menu.itemHeight');
+  const itemPaddingX = useOverrideNumber('menu.itemPaddingX');
+  const itemSpacing = useOverrideNumber('menu.itemSpacing') ?? 0;
+  const separators = useOverrideValue('menu.separators') !== false;
   return (
     <>
+      <Surface
+        material="menu"
+        radius={menuRadius}
+        style={[StyleSheet.absoluteFill, styles.panelMaterial]}
+      />
       {items.map((item, index) => (
         <Pressable
           key={item.key}
@@ -124,7 +158,10 @@ export function DropMenuItems({
           disabled={item.disabled}
           style={({ pressed }) => [
             styles.item,
-            index > 0 && styles.itemDivided,
+            itemHeight != null && { minHeight: itemHeight },
+            itemPaddingX != null && { paddingHorizontal: itemPaddingX },
+            index > 0 && separators && styles.itemDivided,
+            index > 0 && itemSpacing > 0 && { marginTop: itemSpacing },
             pressed && styles.itemPressed,
             item.disabled && styles.itemDisabled,
           ]}
@@ -160,15 +197,21 @@ export const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     backdropUp: { bottom: '100%' },
     backdropDown: { top: '100%' },
+    // S2 (C7): fill and hairline are the menu MATERIAL's now — the Surface
+    // underlay in DropMenuItems paints them, so the panel is only geometry
+    // and clip. (overflow already cancelled this shadow on iOS before the
+    // material arrived; behaviour is unchanged.) radius.lg here is 16 — the
+    // same 16 the menu material declares, so clip and surface agree.
     panel: {
       position: 'absolute',
       minWidth: 208,
       borderRadius: radius.lg,
-      borderWidth: 1,
-      borderColor: colors.border,
-      backgroundColor: colors.surface,
       overflow: 'hidden',
       ...shadows.raised,
+    },
+    // The material underlay must never intercept a row's tap.
+    panelMaterial: {
+      pointerEvents: 'none',
     },
     // 8pt clear of the control, in whichever direction it opens.
     panelUp: { bottom: '100%', marginBottom: spacing.sm },
