@@ -43,7 +43,83 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-26 publish pass (RUN PUBLISH1)
+## Current state — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
+
+The next redesign runs must be written against renders of the screens as they
+are today. The registry could photograph 16 surfaces; it now photographs
+**60**, and all 60 rendered from a fresh `--build` export after the last
+commit. **No app code and no appearance changed** — the whole diff is
+`scripts/shots.mjs`, `tests/shotHarness.test.mjs` and this file.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`3282955`|17 customer surfaces × dark/light join the registry, all render-proven|
+|C2|`cc39a3f`|5 worker surfaces × dark/light; the map tab skipped (see below)|
+|C3|—|no commit: `--build` over all 60 — every target rendered, none failed|
+|C4|(this file)|the handoff|
+
+### What is covered now
+
+Customer, beyond the 16 targets that existed: the browse tab root (idle
+state), the [ + ] creation sheet, the "Other services" sheet, the inbox, the
+job hub, the Profile root, profile details, account & safety, notification
+preferences, the notification feed, earnings, services & availability, saved
+& past workers, appearance, payment methods, the Terms document, and delete
+account. Worker: the services sheet, the open-jobs list, the job hub, the
+inbox, and the Profile root (which carries the worker-only completeness
+prompt). Every list-shaped surface photographs its honest EMPTY state — the
+harness invents no marketplace data — and each entry's comment names the
+state it captures.
+
+### What was skipped, and why
+
+| surface | reason |
+|-|-|
+|the worker map tab (and its cell drill-down)|`components/HotspotMap.web.tsx` fetches tiles from cartocdn / openstreetmap; ONE such request fails the harness's whole-run escape assertion, so photographing it means weakening that assertion — not done|
+|job detail, submit bid, chat, client job detail, compare bids, checkout, the whole lifecycle|need job/bid/conversation fixtures the harness does not seed, and inventing marketplace data is banned|
+|worker profile detail / profile reviews|worker rows and reviews come back empty, and "See all your reviews" is gated on `rating_count > 0`|
+|hidden chats|behind a device-authentication prompt|
+|admin reports|moderator-gated; the harness profile is not one|
+|the privacy document|same template as the photographed Terms document|
+|shared settings pages in worker mode|the same screens both modes mount, photographed once in customer mode; worker keeps frames only where the render differs (Profile, job hub, results)|
+
+### Three waits that could not be the obvious string
+
+* The browse tab root never runs a search on an empty query, so its resting
+  state is the IDLE prompt card, not the no-matches card — the wait is
+  "Describe what you need".
+* Worker results: worker Home spells both "Available Jobs" and the whole
+  empty-state copy itself, hidden but FIRST in DOM once the results screen is
+  pushed over it — and the harness's non-exact text match is case-insensitive,
+  so no substring of either could ever prove the pushed copy. The wait is a
+  distance chip ("10 mi"), which only the results screen draws.
+* The Profile root's wait is a Settings-row sub-line, because the bottom bar
+  spells "Profile" on every screen.
+
+### C3 — the full render
+
+`node scripts/shots.mjs --build`, fresh export, after C2 (`cc39a3f`,
+02:07:29): **all 60 targets produced a PNG, none timed out, no page errors,
+and the escape assertion held** — nothing addressed any host but the
+harness's own. Mtimes run 02:07:48 → 02:11:31, all after the commit. Both
+known noise sources (the worker-home glyph flicker, the clock-dependent
+light-mode greeting) are unchanged and nothing was gated on them.
+
+### Verification
+
+`npm run verify` exit 0 at the base gate and after each commit: **1079
+tests, 0 fail** every time. The fence gained its assertions (every new
+target name, count 16 → 50 → 60) inside its existing tests, so the tally did
+not move. No test was deleted, disabled, skipped or weakened. Every commit
+of this run was pushed to `origin mainexpo` after the final green verify.
+
+No database was contacted; no SQL was executed; no image was opened for
+viewing; no dependency was added; no app code was touched. `.gitignore`,
+`package.json`, `package-lock.json`, `app.json` and `eas.json` are
+untouched.
+
+
+## The run before it — after the 2026-08-26 publish pass (RUN PUBLISH1)
 
 The published-job screen and the budget editor were the two surfaces the
 Prestige language had not reached. Both now speak it — and the button that had
@@ -251,7 +327,7 @@ was opened for viewing; no dependency was added. No font, no bottom-nav change,
 no CTA green. `.gitignore`, `app.json` and `eas.json` are untouched.
 
 
-## The run before it — after the 2026-08-26 motion pass (RUN MOTION1)
+## Two runs back — after the 2026-08-26 motion pass (RUN MOTION1)
 
 Three native modules had been installed and none of them was called. This run
 gave all three a boundary and callers: press feedback with haptics on every
@@ -549,7 +625,7 @@ was opened for viewing; no dependency was added. `.gitignore`, `app.json` and
 `eas.json` are untouched.
 
 
-## Two runs back — after the 2026-08-26 ground pass (RUN GROUND1)
+## Three runs back — after the 2026-08-26 ground pass (RUN GROUND1)
 
 Three defects, one of which turned out not to exist. The atmosphere raster was
 banded and was believed to be far too bright; the nav pill sat in a flat
@@ -951,7 +1027,7 @@ expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
 differ from build 7's.**
 
 
-## Three runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Four runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -1149,7 +1225,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## Four runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Five runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -1237,7 +1313,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Five runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Six runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -1422,7 +1498,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Six runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Seven runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -1647,7 +1723,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Seven runs back — after the 2026-08-25 three corrections (RUN H3)
+## Eight runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -1822,7 +1898,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Eight runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Nine runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -2091,7 +2167,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Nine runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Ten runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -2242,7 +2318,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Ten runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Eleven runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -2303,7 +2379,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Eleven runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Twelve runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
