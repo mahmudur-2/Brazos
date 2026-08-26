@@ -112,6 +112,69 @@ test('[static] lib/blur is the only file in the tree that names expo-blur', () =
   );
 });
 
+// ---------------------------------------------------------------------------
+// RUN G1 (C7) — THE MATERIALS ARE A BOUNDARY TOO.
+//
+// The suite above keeps expo-blur behind lib/blur.tsx. These extend it:
+//
+//   (b) BlurView — the vendor's component NAME — appears nowhere but the
+//       boundary, so no file can even hold the handle a direct import would
+//       give it. Consumers render <BlurLayer /> or wear a <Surface material>.
+//   (c) the materials table is consumed only through Surface: the one
+//       production import of `materials` is lib/designOverrides.ts (the live
+//       resolver Surface reads), lib/theme.ts does not re-surface it, and
+//       the glass scrim ink #071B15 is spelled exactly once, in ui/tokens.ts
+//       — a second spelling anywhere is a surface inventing its own glass.
+//
+// Modal is deliberately NOT banned: the existing dialogs legitimately use it
+// this phase.
+// ---------------------------------------------------------------------------
+
+test('[static] BlurView is named nowhere but the boundary (G1 C7)', () => {
+  const files = [...ROOT_FILES];
+  for (const dir of SCAN_DIRS) files.push(...walk(dir));
+  const offenders = [];
+  for (const file of files) {
+    if (file === BOUNDARY) continue;
+    if (/\bBlurView\b/.test(stripComments(read(file)))) offenders.push(file);
+  }
+  assert.deepEqual(offenders, [], 'BlurView may be named only inside lib/blur.tsx');
+});
+
+test('[static] the glass is worn only through Surface (G1 C7)', () => {
+  const files = [...ROOT_FILES];
+  for (const dir of SCAN_DIRS) files.push(...walk(dir));
+
+  const scrimOffenders = [];
+  const importOffenders = [];
+  let surfaceWearers = 0;
+  for (const file of files) {
+    const code = stripComments(read(file));
+    if (file !== 'ui/tokens.ts' && /#071B15/i.test(code)) scrimOffenders.push(file);
+    if (
+      file !== 'lib/designOverrides.ts' &&
+      /import \{[^}]*\bmaterials\b[^}]*\} from '[^']*tokens'/.test(code)
+    ) {
+      importOffenders.push(file);
+    }
+    if (file !== 'ui/primitives/Surface.tsx' && /<Surface material=/.test(code)) {
+      surfaceWearers += 1;
+    }
+  }
+  assert.deepEqual(scrimOffenders, [], 'the glass scrim ink is spelled once, in ui/tokens.ts');
+  assert.deepEqual(
+    importOffenders,
+    [],
+    'the materials table is read only through lib/designOverrides.ts'
+  );
+  assert.doesNotMatch(
+    stripComments(read('lib/theme.ts')),
+    /\bmaterials\b/,
+    'lib/theme.ts must not re-surface the materials table — Surface is the wearer'
+  );
+  assert.ok(surfaceWearers >= 2, `the glass must actually be worn (saw ${surfaceWearers} wearers)`);
+});
+
 test('[static] every backdrop paints its scrim BEFORE the blur goes over it', () => {
   // The order is what makes the degraded case correct: the scrim is the
   // surface, the blur is a layer on top of it, and a binary without the native
