@@ -43,7 +43,139 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
+## Current state — after the 2026-08-26 emerald glass pass (RUN G1)
+
+The app gained one glass system: a `Surface` primitive wearing three
+materials held as DATA in `ui/tokens.ts`, a live in-memory override layer so
+the operator can tune the glass on the real device, a floating Design studio
+panel that drives it, and the nav bar re-cut in chrome and sitting FLUSH
+(the operator's direct complaint — the bar content sat too high — is the
+`max(inset − 16, 6)` bottom pad, dial-adjustable live).
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`39f0c68`|`ui/primitives/Surface.tsx` + the `materials` table; scrim-only fallbacks (web AND Reduce Transparency, subscribed); executed contrast fence|
+|C2|`3ac454e`|`lib/designOverrides.ts` — in-memory overrides merged at the token read point (`hooks/useThemeColors.ts`); identity when empty, executed fence|
+|C3|`5359923`|the Design studio: Appearance-screen row toggles a draggable solid-dark panel mounted in ModeShell over both trees; `hooks/useNavInset.ts` created here so the pad dial and the bar share ONE formula|
+|C4|`d663083`|the bar wears chrome via `tabBarBackground` (one painted layer, hairline from the material), sits flush on the pad formula/dial; active-tab glow rides the glow dial; tab presses + the centre [+] fire `tap()`|
+|C5|`15362be`|ActionSheet, Sheet, ConfirmDialog, AmountPrompt card surfaces wear `sheet` at their existing radii; backdrops/mechanics byte-identical; **Edit Budget skipped — its fence keeps it opaque dim**|
+|C6|`6b23e01`|`useFloatingNavClearance` delegates to `useNavInset` (content + pad + safe-area remainder, same override); fence: no bar-height literals or token arithmetic outside the hook|
+|C7|`246a300`|fences: `BlurView` is a name only `lib/blur.tsx` may carry; materials read only through `lib/designOverrides.ts`; the scrim ink `#071B15` spelled once, in tokens; the glass must actually be worn|
+|C8|(this file)|the handoff|
+
+### Recon (report-only, nothing depended on it)
+
+* `app.json` does NOT set `newArchEnabled` (no occurrence).
+* `react-native-reanimated` (~4.1.1) and `react-native-gesture-handler`
+  (~2.28.0) ARE in `package.json` dependencies.
+* The map library is `react-native-maps` (`components/HotspotMap.native.tsx`
+  imports MapView/Circle/Marker/Polygon from it).
+
+### The materials, as shipped (`ui/tokens.ts` `materials`)
+
+One scrim ink (`#071B15`), one hairline hue (`brand.mint` `#E5F1EC`):
+
+| material | blur | scrim α | border α | fallback α | radius |
+|-|-|-|-|-|-|
+|chrome|30|0.55|0.20|0.85|caller's (nav: 0 + the nav-radius dial)|
+|sheet|40|0.72|0.16|0.92|28 top (all four wearers pass their existing radii)|
+|menu|50|0.82|0.14|0.95|16|
+
+Light is NOT glass this run: `Surface` in light renders the solid theme
+surface with the ordinary hairline — no blur, no scrim.
+
+**Contrast (executed in `tests/themeTokens.test.mjs`, worst case = fallback
+scrim composited on pure white):** primary `#F1EDE1` — chrome 9.79:1, sheet
+12.35:1, menu 13.52:1 (floor 4.5); secondary `#93A096` — 4.21 / 5.31 /
+5.81:1 (floor 3). **No text token fell short; nothing was reworded down.**
+
+### The Design studio — STRIP BEFORE TESTFLIGHT
+
+Appearance (Profile → Account & safety → Appearance) carries a final
+"Design studio" row; the panel itself mounts in `navigation/ModeShell.tsx`
+ABOVE both trees, so it survives navigation and tunes any non-modal surface
+in place (open a Modal sheet and it covers the panel — tune, then reopen).
+Solid black in both themes — it never blurs or repaints with what it tunes —
+and vertically draggable by its header. Dials: material picker
+(chrome/sheet/menu); per material Blur (±2, 0–100), Scrim alpha (±0.02,
+0–1), Border alpha (±0.02, 0–1); global Glow alpha (±0.02, 0–1, launch
+0.55), Nav radius (±2, 0–40, launch 0), Nav bottom pad (±2, clamp 0–34,
+"(auto)" = the flush formula until first touched — the dial REPLACES the
+formula), Gold cycle (current → `#DCAB60` → `#DBAB5E` → `#D4A24C` →
+current), Card fill cycle (current → `#182725` → `#16241C` → `#0E1F18` →
+current; dark-only by definition). Header carries Reset (clears all
+overrides) and ✕. A "Values" section renders the override set as SELECTABLE
+monospace JSON. Everything is in-memory only; relaunch resets.
+
+**Strip before TestFlight:** delete the `<DesignStudioPanel />` mount in
+`navigation/ModeShell.tsx` (fence comment marks it), the Appearance row, and
+`components/DesignStudioPanel.tsx`. The override LAYER
+(`lib/designOverrides.ts`) may stay — with nothing writing it, it is an
+identity read.
+
+**The dial-to-token freeze process:** the operator tunes on device, long-
+presses/selects the Values JSON and sends it; the NEXT run writes those
+numbers into `ui/tokens.ts` (`materials`, and gold/cardFill into the dark
+palette; navBottomPad/navRadius into the nav's constants) and DELETES
+NOTHING — the dials keep working, now defaulting to the frozen values.
+
+### The nav, measured (harness renders, 393x852, inset 0)
+
+Bar box = 88 content + pad. Pad = `max(inset − 16, 6)`: harness 6 (box 94,
+top edge y758 — pixel-verified both themes), notched iPhone 18 (box 106;
+was 122 — the row sits 16pt lower, the flush fix). Chrome hairline in dark
+measured rgb(50,68,62) = mint @ 0.20 over the fallback scrim; fill
+rgb(6,25,19) = the scrim over the page ground; light bar renders solid
+white + standard border exactly as before, one hairline, square corners.
+Clearance (`useNavInset`) = content + pad + max(0, inset − pad): 94 on the
+harness (was 88), 122 on device (unchanged) — content never sinks into the
+home-indicator zone even when the dial shortens the bar.
+SuccessScreen's published-job action row measured y700..747 (primary pill
+x16..189, secondary from x201) against bar top y758 — fully visible, 11pt
+clear (was 16pt against y764; the bar grew 6px upward on the zero-inset
+harness). Every tab routes in both modes and hidden routes stay hidden
+(`tests/mode.test.mjs` re-verified green); the [+] posts and now taps.
+
+### Light-mode deltas (the parity fence requires shared geometry)
+
+AmountPrompt's card and Sheet's docked card gain a 1px hairline in light
+(they had none; border weight may not fork per theme). ConfirmDialog called
+with a caller palette (PostJob's send-offer, ReviewAndTip's tip) draws its
+light hairline in the standard border instead of emerald `mint2` — the card
+resolves through Surface now; the caller palette still colours copy and
+buttons. Everything else in light is unchanged by design.
+
+### Render gate
+
+`node scripts/shots.mjs --build`, fresh export, after C7 (`246a300`,
+14:04:23): **all 60 targets rendered, none failed, none timed out**; mtimes
+14:05:12 → 14:08:56, all after the commit. Broad change is EXPECTED and
+present: the bar changed on every screen (6px taller box on the zero-inset
+harness, chrome fallback scrim in dark), and the four dialog surfaces wear
+the sheet fallback scrim in dark. Web shows the scrim-only fallback BY
+DESIGN (`lib/blur.tsx` renders nothing on web); the true blur is
+device-only and UNVERIFIED until a device pass. Byte identity was not
+chased (per dispatch). Known noise unchanged: worker-home flicker,
+clock-dependent light greeting.
+
+### Verification
+
+Baseline `npm run verify` exit 0 at **1079 / 0 fail**; per-commit: C1 1081,
+C2 1083, C3 1083, C4 1083, C5 1083, C6 1084, C7 1086 — growth is new
+fences, every run green. Fences UPDATED to new truths (none weakened):
+blur caller list (+Surface, −BottomNav), the one-serif fence (a STUDIO_MONO
+allowance for the panel's JSON readout, one identifier in one file),
+layout's bar arithmetic/background/hairline pins, emeraldFences'
+tabBarBackground pin, mode's listener ban (now: exactly the shape-pinned
+haptics-only listener) and options-call pin, postJobPublish's ConfirmDialog
+card pin. No DB contact, no SQL, no dependency, no image opened;
+`.gitignore`, `package.json`, `package-lock.json`, `app.json`, `eas.json`
+untouched. Base-gate deviation recorded: a stale `verify.txt` (the prior
+run's own capture temp file) sat untracked at start — overwritten by this
+run's baseline capture and deleted, per the file's own create-read-delete
+contract.
+
+## The run before it — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
 
 Post-a-Job's first three steps were restructured and re-copied, the bottom
 nav became an ATTACHED full-width bar (a confirmed operator reversal of
