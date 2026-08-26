@@ -43,7 +43,145 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-26 emerald glass pass (RUN G1)
+## Current state — after the 2026-08-26 schema-driven design studio (RUN S2)
+
+The G1 tuning panel became a SCHEMA-DRIVEN design studio: every dial is one
+entry in a central registry (`ui/designStudioSchema.ts`), the panel renders
+entirely from that registry (zero hand-wired rows, fenced), and the studio is
+**PERMANENT and CHANNEL-GATED** — the old "strip before TestFlight"
+instruction is SUPERSEDED and the strip record in RUN G1's section below is
+RETIRED.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`a8058bf`|registry + schema types; `lib/designOverrides.ts` generalised (values bag, per-theme palette banks, per-slice subscriptions so a dial repaints only its readers); **THE CHANNEL GATE** (`lib/designStudioGate.ts`); gate + registry fences (`tests/designStudio.test.mjs`)|
+|C2|`ea760c4`|panel shell from the registry: collapsible categories w/ Ionicons + live counts, subsections, live search, favourites, Modified filter, Simple/Advanced, per-token modified indicator ("24 → 18"), per-token/section/global resets, technicalKey secondary text, info affordance|
+|C3|`7e821df`|ergonomics: `ui/designStudioLayout.ts` pure clamp (top ≥ safe-area top, bottom never over the nav, sides on-screen, height 180…full area, NaN-safe), applied on drag/resize/collapse/every frame change; vertical resize; collapse pill "Customizing — <category>" restoring height + scroll; NON-MODAL; session-persistent geometry|
+|C4|`ae77e3f`|undo/redo over every override change (bounded stack, floor 50; imports and preset loads are one step); presets in AsyncStorage `brazos.designstudio.presets.v1` (save/duplicate/rename/load/delete, fail-safe); Share export of MODIFIED values (grouped, technicalKey + scope); ONE validated import path (drops+lists junk, clamps to schema, atomic apply); raw editor; confirms on destructive acts only|
+|C5|`8c8fbbd`|Colors: BOTH palette surfaces enumerated AT RUNTIME per theme (Light/Dark toggle; a new token appears with no edit); HSL steppers (H ±2 wrap, S/L ±2), validated hex, alpha stepper where alpha exists, live swatch/hex, live WCAG contrast vs the token's own ground (`ui/colorMath.ts`, held equal to the G1 fence's formula); G1's gold/cardFill CYCLES retired|
+|C6|`f132ec1`|Navigation: TAB_ICON_SIZE/TAB_LABEL_FONT_SIZE → `ui/tokens.ts navBar` (fenced against return); bar height (every clearance follows live), per-side padding, spread, centre clearance; item dials incl. active/inactive colours/opacities/scale; label size is THE one font dial; the [+] fully independent (`create.*`, size ≥44)|
+|C7|`509d2bf`|Sheets (top radius, max height, paddings, section gap, drag handle ×6, backdrop colour+alpha on all four surfaces; ActionSheet dialog radius, AmountPrompt radius; ConfirmDialog radius stays pinned by the D15 fence — reported) + Menus (**DropMenu wears the menu MATERIAL** via a Surface underlay in the SHARED file; width, radius, panel padding, row height ≥44, row padding/spacing, separators); materials gain Tint/Edge-line colour dials|
+|C8|`2f1f2c6`|Cards (JobCard full depth+geometry set; LitSurface lift-wash SCALE; ListRow) + Buttons (per-variant height/padX/radius/fill+alpha/text; secondary/destructive border+alpha; shared iconGap/pressed/disabled) + Chip + StatusPill + SearchBar (incl. focus border/glow, defaults inert) + Toggle geometry|
+|C9|`8590fe8`|Layout (template page padding, content top spacing, per-template section gaps — 17 screens live) + Chrome (ScreenHeader paddings, min height, title-position enum, back size/offset, optional bottom hairline; StepHeader). SPACING multipliers/step-tokens and DIVIDERS deliberately absent (no live read point / no shared primitive — the sweep's work), fenced as deliberate|
+|C10|`1e31776`|Shadows & Glows per surface (card shadow colour+elevation; primary-CTA optional shadow, 0 today; dialog lift; [+] glow colour) + glow-on-selection (boolean, OFF today: the chosen chip lights in dark at the global glow strength); no spread dial (RN doesn't render it, fenced)|
+|C11|(this commit)|render gate + this live edge; removed the stale `screens/HomeScreen.tsx` LITERAL_FILE_ALLOWLIST entry (`tests/themeResolution.test.mjs`) — the fence stayed green: every hex in that file lives in comments|
+
+`npm run verify` exited 0 after every commit (1086 baseline → 1146 tests at
+C10; the studio suite is `tests/designStudio.test.mjs`).
+
+### THE GATE — permanent, channel-gated, fail closed
+
+`lib/designStudioGate.ts` reads the installed expo-updates' `channel`
+export through one lazy, caught require (the lib/blur.tsx boundary shape).
+`designStudioAvailable` = `__DEV__` (Metro) OR channel ∈ {`internal`,
+`development`}; `preview`, `production`, unknown and **null all FAIL
+CLOSED** (expo-updates reports null in Expo Go/dev builds — that is what the
+`__DEV__` arm is for; the operator's `share` build is a RELEASE build on
+channel `internal`, per eas.json). BOTH mounts read it: the Appearance row
+and the panel mount in `navigation/ModeShell.tsx`.
+`tests/designStudio.test.mjs` executes the whole truth table and pins both
+mounts — no future run may loosen it. Consequence: the shots harness
+(a production web export, channel null) no longer renders the Appearance
+screen's "Design studio" row — the ONLY expected render-gate delta beyond
+the two known noise sources, verified pixel-wise this run.
+
+### The studio, as shipped
+
+- **Registry** (`ui/designStudioSchema.ts`): 173 static entries — 53 basic
+  / 120 advanced — over chrome 12, navigation 27, sheets 16, menus 7,
+  cards 20, buttons 40, inputs 17, colors 2(+runtime), shadows 10, blur 18,
+  layout 4; PLUS 50 runtime-enumerated colour tokens per theme (app 32 +
+  emerald 18, both themes editable via the toggle). Each entry: key,
+  plainLabel, technicalKey (rendered under the label; the export key),
+  description (info affordance), category+subcategory, tier, kind
+  (number|decimal|color|boolean|enum|text), scope token|local, range/step,
+  token-derived default, read/write closures, optional contrastGround.
+- **Override layer** (`lib/designOverrides.ts`): G1's dials unchanged +
+  `values` bag + per-theme `palette` banks (`app.*`/`emerald.*`), per-slice
+  and per-key subscriptions (`useOverrideValue/Number/String`,
+  `useDesignDial`, `usePaletteOverrides`, `useOverrideFingerprint`), and a
+  change-listener feeding the undo stack. Empty still means byte-identical
+  identity.
+- **Persistence tiers**: LIVE (memory, dies on relaunch) / PRESET
+  (AsyncStorage `brazos.designstudio.presets.v1`) / DEFAULTS (code, changed
+  only by a freeze run). Relaunch with nothing loaded renders today's app
+  exactly. Panel geometry/favourites/filters are session state.
+- **Export/import**: RN `Share` (expo-clipboard deliberately unused — the
+  native module is absent from the installed binary); payload = modified
+  values only, grouped by category label, each
+  `{ technicalKey, scope, value, default }`; palette banks export as
+  `palette.<theme>.<ns>.<role>`. Import (paste field AND raw editor AND
+  preset loads) rides ONE sanitiser: unknown keys/invalid values dropped
+  and listed, numerics clamped to schema, atomic apply, never a crash.
+- **Confirms** (real iOS alert via `lib/dialog.ts confirmAsync`, which IS
+  `Alert.alert` on device with the web fallback the repo rule requires):
+  preset-load over changes, import, raw apply, reset section/everything,
+  preset delete. Dial changes apply live.
+
+### The dial-to-token FREEZE PROCESS (current)
+
+The operator tunes on device, opens **Export — modified values**, taps
+Share (or selects the monospace JSON) and sends it. The NEXT run writes
+those values into the token surfaces — each item's `technicalKey` names its
+home: `materials.*` → `ui/tokens.ts materials`; `nav.iconSize`/
+`nav.labelSize` → `navBar`; `glowAlpha` → SURFACE_GLOW_ALPHA;
+`palette.<theme>.app.*` → `lib/theme.ts` palettes;
+`palette.<theme>.emerald.*` → `ui/tokens.ts light/dark`; bag keys → the
+constant each wearer's `?? default` names. DELETE NOTHING: the dials keep
+working, now defaulting to the frozen values (registry defaults READ the
+tokens, so they follow automatically).
+
+### Remains non-editable, and why
+
+- SPACING scale multipliers + per-step token dials: spacing tokens are
+  consumed at stylesheet build time (`themedStyles` caches keyed on the
+  palette object) — no live read point; needs the theming-layer rebuild
+  (the sweep). Fenced: the category may hold no dead dials.
+- DIVIDERS: no shared primitive — each surface draws its own hairline
+  (menu separators and every material hairline ARE dialled). Same fence.
+- ConfirmDialog's card radius: pinned at `radius.xl` by the D15 budget
+  fence (`tests/postJobPublish.test.mjs`) — not this run's fence to move.
+- Header fill/material/shadow: the header paints no surface today; giving
+  it one is a design change, not a default-preserving dial.
+- Toggle track/knob COLOURS: state-entangled and pinned whole by the D5
+  fence (`tests/workerHome.test.mjs`); geometry IS dialled.
+- Home's Post-a-Job pill and search pill: SCREEN-LOCAL values — the
+  dispatch's continue-path defers screen-local tokenisation to the sweep.
+- Web preview cannot show native shadow dials (boxShadow path untouched).
+
+### Render gate (this run)
+
+Baseline captured at `17aef56` before any change; re-captured after C10
+(`--build` both times). 60/60 targets both times; 55/60 BYTE-identical.
+The five deltas, pixel-inspected:
+- customer-appearance-dark/light: the channel gate hiding the "Design
+  studio" row (the harness is a production export, channel null — the
+  mandated FAIL-CLOSED behaviour), diff box confined to the row's region
+  (y306..420); nothing else on either screen moved.
+- worker-home-dark: 4 px at x176..177 y441..461 — the KNOWN worker-home
+  one-glyph flicker.
+- customer-create-sheet-dark / customer-services-sheet-dark: 26 px each,
+  identical boxes, every pixel a ±1 single-channel wobble on glyph
+  anti-aliasing behind the translucent backdrop — rasteriser noise, not a
+  default (customer-home-dark, the same content unscrimmed, is
+  byte-identical). The light-greeting clock noise did not fire (both
+  captures fell in the same time-of-day bucket).
+
+### Standing gotchas added by this run
+
+- `lib/designOverrides.ts` may import ONLY from `react` and `../ui/tokens`
+  — the executed fences stub exactly those two; a third import fails
+  `tests/themeTokens.test.mjs` and `tests/designStudio.test.mjs`.
+- `ui/designStudioSchema.ts` imports are stubbed in
+  `tests/designStudio.test.mjs` (and `.shots/registry-count.mjs` mirrors
+  it); widening its token import means widening those stubs' destructures.
+- The blur-boundary wearer count matches `<Surface material=` ADJACENTLY —
+  keep a Surface's `material` prop on the same line as the tag.
+- `STUDIO_MONO` (the platform monospace) may exist only in
+  `components/DesignStudioPanel.tsx` — keep all studio JSON/hex inputs in
+  that one file.
+
+## The run before it — after the 2026-08-26 emerald glass pass (RUN G1)
 
 The app gained one glass system: a `Surface` primitive wearing three
 materials held as DATA in `ui/tokens.ts`, a live in-memory override layer so
@@ -89,7 +227,7 @@ scrim composited on pure white):** primary `#F1EDE1` — chrome 9.79:1, sheet
 12.35:1, menu 13.52:1 (floor 4.5); secondary `#93A096` — 4.21 / 5.31 /
 5.81:1 (floor 3). **No text token fell short; nothing was reworded down.**
 
-### The Design studio — STRIP BEFORE TESTFLIGHT
+### The Design studio — ~~STRIP BEFORE TESTFLIGHT~~ RETIRED: PERMANENT + CHANNEL-GATED (RUN S2)
 
 Appearance (Profile → Account & safety → Appearance) carries a final
 "Design studio" row; the panel itself mounts in `navigation/ModeShell.tsx`
@@ -107,11 +245,12 @@ current; dark-only by definition). Header carries Reset (clears all
 overrides) and ✕. A "Values" section renders the override set as SELECTABLE
 monospace JSON. Everything is in-memory only; relaunch resets.
 
-**Strip before TestFlight:** delete the `<DesignStudioPanel />` mount in
-`navigation/ModeShell.tsx` (fence comment marks it), the Appearance row, and
-`components/DesignStudioPanel.tsx`. The override LAYER
-(`lib/designOverrides.ts`) may stay — with nothing writing it, it is an
-identity read.
+**~~Strip before TestFlight~~ — RETIRED by RUN S2:** the studio is
+PERMANENT. `lib/designStudioGate.ts` decides where it may exist (Metro
+`__DEV__`, or update channel `internal`/`development`; FAIL CLOSED on
+`preview`, `production` and unknown/null), read at BOTH mounts and pinned by
+`tests/designStudio.test.mjs`. Nothing is deleted before TestFlight — the
+gate is what keeps release surfaces clean.
 
 **The dial-to-token freeze process:** the operator tunes on device, long-
 presses/selects the Values JSON and sends it; the NEXT run writes those
@@ -175,7 +314,7 @@ run's own capture temp file) sat untracked at start — overwritten by this
 run's baseline capture and deleted, per the file's own create-read-delete
 contract.
 
-## The run before it — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
+## Two runs back — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
 
 Post-a-Job's first three steps were restructured and re-copied, the bottom
 nav became an ATTACHED full-width bar (a confirmed operator reversal of
@@ -297,7 +436,7 @@ C4/C7/C9 — none deleted or weakened, tally unchanged). No database contact,
 no SQL, no dependency, no image opened for viewing; `.gitignore`,
 `package.json`, `package-lock.json`, `app.json`, `eas.json` untouched.
 
-## The run before it — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
+## Three runs back — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
 
 The next redesign runs must be written against renders of the screens as they
 are today. The registry could photograph 16 surfaces; it now photographs
@@ -373,7 +512,7 @@ viewing; no dependency was added; no app code was touched. `.gitignore`,
 untouched.
 
 
-## The run before it — after the 2026-08-26 publish pass (RUN PUBLISH1)
+## Four runs back — after the 2026-08-26 publish pass (RUN PUBLISH1)
 
 The published-job screen and the budget editor were the two surfaces the
 Prestige language had not reached. Both now speak it — and the button that had
@@ -581,7 +720,7 @@ was opened for viewing; no dependency was added. No font, no bottom-nav change,
 no CTA green. `.gitignore`, `app.json` and `eas.json` are untouched.
 
 
-## Two runs back — after the 2026-08-26 motion pass (RUN MOTION1)
+## Five runs back — after the 2026-08-26 motion pass (RUN MOTION1)
 
 Three native modules had been installed and none of them was called. This run
 gave all three a boundary and callers: press feedback with haptics on every
@@ -879,7 +1018,7 @@ was opened for viewing; no dependency was added. `.gitignore`, `app.json` and
 `eas.json` are untouched.
 
 
-## Three runs back — after the 2026-08-26 ground pass (RUN GROUND1)
+## Six runs back — after the 2026-08-26 ground pass (RUN GROUND1)
 
 Three defects, one of which turned out not to exist. The atmosphere raster was
 banded and was believed to be far too bright; the nav pill sat in a flat
@@ -1281,7 +1420,7 @@ expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
 differ from build 7's.**
 
 
-## Four runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Seven runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -1479,7 +1618,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## Five runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Eight runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -1567,7 +1706,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Six runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Nine runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -1752,7 +1891,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Seven runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Ten runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -1977,7 +2116,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Eight runs back — after the 2026-08-25 three corrections (RUN H3)
+## Eleven runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -2152,7 +2291,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Nine runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Twelve runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -2421,7 +2560,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Ten runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Thirteen runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -2572,7 +2711,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Eleven runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Fourteen runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -2633,7 +2772,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Twelve runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Fifteen runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,

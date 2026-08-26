@@ -249,7 +249,6 @@ const LITERAL_FILE_ALLOWLIST = {
   'screens/VerifyPhoneScreen.tsx': 'LOCKED screen',
   'screens/SetupScreen.tsx': 'LOCKED screen',
   'screens/LegalGateScreen.tsx': 'LOCKED screen',
-  'screens/HomeScreen.tsx': 'LOCKED screen (customer Home, atlas set)',
   // The mode-transition shimmer core pairs with the baked LIGHT transition
   // PNGs — the 4D-3.5 allowance, unchanged; migrates when the assets do.
   'components/ModeTransitionOverlay.tsx': 'shimmer tint paired with baked light PNGs',
