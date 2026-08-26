@@ -1,12 +1,12 @@
 import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
 import { tap } from '../../lib/haptics';
 import { useDesignOverrides } from '../../lib/designOverrides';
+import { useNavInset } from '../../hooks/useNavInset';
 import { Surface } from './Surface';
 
 /**
@@ -235,9 +235,12 @@ export const TAB_BAR_FLOAT_MARGIN = layout.floatingNavGap;
 // bar gap, the status-bar area and every other unpainted seam in one place.
 // This file deliberately did NOT grow a second ground of its own.
 
-/** Total vertical space the attached bar occupies on a device reporting this
- *  bottom inset — its content height plus the inset it carries inside as
- *  bottom padding (PJ1 C9). */
+/** The bar's STATIC no-dial footprint on a device reporting this bottom
+ *  inset — content height plus the whole inset (PJ1 C9). Since G1 (C4/C6)
+ *  the LIVE bar carries navBottomPad instead of the raw inset and the live
+ *  clearance is hooks/useNavInset.ts; this arithmetic equals that hook's
+ *  answer whenever no studio dial is set, and the motion model still reads
+ *  it as the in-flow bar's reserved box. */
 export function bottomNavHeight(insetBottom: number): number {
   return TAB_BAR_CONTENT_HEIGHT + insetBottom;
 }
@@ -258,10 +261,15 @@ export function bottomNavHeight(insetBottom: number): number {
  * Surfaces with their own bottom action footer or composer do NOT put this on
  * their scroll content: the footer sits below the scroller, so it is the FOOTER
  * that has to clear the bar, and the content then clears both.
+ *
+ * RUN G1 (C6): the implementation IS hooks/useNavInset.ts — bar content
+ * height + the live navBottomPad + the safe-area remainder, reading the same
+ * studio override the bar reads, so one dial moves the bar and every
+ * clearance at once. With no dial set the answer is exactly what this hook
+ * has always returned (content + inset).
  */
 export function useFloatingNavClearance(): number {
-  const insets = useSafeAreaInsets();
-  return bottomNavHeight(insets.bottom);
+  return useNavInset();
 }
 
 /**

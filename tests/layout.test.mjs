@@ -319,14 +319,15 @@ test('the floating-nav clearance is derived from the bar, in one place', async (
   assert.match(tokens, /floatingNavGap: FLOATING_NAV_GAP,/);
   assert.match(bottomNav, /export const TAB_BAR_CONTENT_HEIGHT = layout\.floatingNavHeight;/);
   assert.match(bottomNav, /export const TAB_BAR_FLOAT_MARGIN = layout\.floatingNavGap;/);
-  // The hook is the height plus the margin that floats it, read from the
-  // device — not a second copy of the arithmetic.
+  // G1 (C6): the hook's implementation IS the inset contract in
+  // hooks/useNavInset.ts — override-aware, one copy of the arithmetic.
   assert.match(
     bottomNav,
-    /export function useFloatingNavClearance\(\): number \{\s*const insets = useSafeAreaInsets\(\);\s*return bottomNavHeight\(insets\.bottom\);\s*\}/
+    /export function useFloatingNavClearance\(\): number \{\s*return useNavInset\(\);\s*\}/
   );
-  // PJ1 (C9): the attached bar's footprint is content height plus the inset
-  // it carries inside — no float margin term survives.
+  // PJ1 (C9): the STATIC no-dial footprint stays content height plus the
+  // inset — the motion model's reserved-box quantity, equal to the live
+  // clearance whenever no studio dial is set.
   assert.match(bottomNav, /return TAB_BAR_CONTENT_HEIGHT \+ insetBottom;/);
   assert.match(primitivesIndex, /useFloatingNavClearance,/);
 });
@@ -518,6 +519,52 @@ test('a PINNED footer takes its own padding, never the scroll clearance', async 
     /floatingNavClearance/,
     'the static clearance token must not return as a side effect of home(7)'
   );
+});
+
+test('the flush arithmetic lives in hooks/useNavInset.ts alone (G1 C6)', async () => {
+  // The inset contract: the bar's bottom padding is max(inset − 16, 6) — or
+  // the studio dial, which REPLACES the formula — and the height content must
+  // clear is content + pad + the safe-area remainder the pad no longer
+  // absorbs. One hook owns every number; the bar and all nineteen clearance
+  // consumers read it, so the dial moves everything at once.
+  const hook = await read('hooks/useNavInset.ts');
+  assert.match(hook, /export const NAV_FLUSH_TUCK = 16;/);
+  assert.match(hook, /export const NAV_FLUSH_MIN_PAD = 6;/);
+  assert.match(
+    hook,
+    /return override \?\? Math\.max\(insetBottom - NAV_FLUSH_TUCK, NAV_FLUSH_MIN_PAD\);/,
+    'the flush formula must stay the dial-replaceable one'
+  );
+  assert.match(
+    hook,
+    /return layout\.floatingNavHeight \+ pad \+ Math\.max\(0, insets\.bottom - pad\);/,
+    'the clearance must stay content + pad + safe-area remainder'
+  );
+
+  // No screen or template may restate the bar's footprint. The attached
+  // bar's derived numbers (106 and 122 with pad and inset folded in) may not
+  // appear as code anywhere a screen computes clearance, and nothing outside
+  // the bar and the hook may do arithmetic on the bar-height tokens.
+  const codeOf = (source) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  for (const [root, files] of [
+    ['screens', dir('screens').filter((name) => name.endsWith('.tsx'))],
+    ['ui/templates', dir('ui/templates').filter((name) => name.endsWith('.tsx'))],
+  ]) {
+    for (const name of files) {
+      const code = codeOf(await read(`${root}/${name}`));
+      assert.doesNotMatch(
+        code,
+        /\b(?:106|122)\b/,
+        `${root}/${name}: a bar-footprint literal — read useFloatingNavClearance() instead`
+      );
+      assert.doesNotMatch(
+        code,
+        /layout\.floatingNavHeight|TAB_BAR_CONTENT_HEIGHT/,
+        `${root}/${name}: bar-height arithmetic belongs to the hook, never a screen`
+      );
+    }
+  }
 });
 
 test('no screen skips the top inset the status bar needs', async () => {
