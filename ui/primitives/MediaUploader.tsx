@@ -173,6 +173,19 @@ export function MediaUploader({
 
   const atLimit = items.length >= maxItems;
 
+  // RUN PJ1 (C4) — ONE cap badge, both kinds, derived here and rendered by
+  // one block below: the video control reads the exact cap handed to the
+  // picker, the photo control reads the maxItems cap the add tile stops at.
+  // Sharing the element (not copying it) is what keeps the two visually
+  // identical if either is ever restyled. The photo glyph is the one the
+  // photo-nudge row already speaks ('image-outline').
+  const capBadge =
+    kind === 'video' && videoMaxDurationSec
+      ? { icon: 'time-outline' as const, text: `Up to ${videoMaxDurationSec} seconds` }
+      : kind === 'photo'
+        ? { icon: 'image-outline' as const, text: `Up to ${maxItems} photos` }
+        : null;
+
   async function handleAdd() {
     if (atLimit || uploading || disabled) return;
 
@@ -236,13 +249,14 @@ export function MediaUploader({
           {label} · {items.length}/{maxItems}
         </Text>
         {/* The cap, said out loud beside the counter, and READ FROM the value
-            actually handed to the picker — so the pill cannot promise a
-            different minute from the one the control enforces. */}
-        {kind === 'video' && videoMaxDurationSec ? (
+            actually enforced — the picker's own duration cap, or the add
+            tile's own item cap — so the badge cannot promise a different
+            limit from the one the control applies. */}
+        {capBadge ? (
           <View style={[styles.capPill, isDark && styles.capPillDark]}>
-            <Ionicons name="time-outline" size={12} color={lineWork} />
+            <Ionicons name={capBadge.icon} size={12} color={lineWork} />
             <Text style={[styles.capPillText, isDark && styles.capPillTextDark]}>
-              Up to {videoMaxDurationSec} sec
+              {capBadge.text}
             </Text>
           </View>
         ) : null}

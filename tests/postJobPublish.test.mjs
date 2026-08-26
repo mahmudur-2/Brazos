@@ -353,20 +353,27 @@ const clipDurationLabel = await (async () => {
   return (await import(url)).clipDurationLabel;
 })();
 
-test('D7 · the media advisory leads with the warning, on its own bold line', () => {
+test('D7/PJ1-C4 · the media advisory is one plain sentence, and the heading is deleted', () => {
   const flat = flatten(read('screens/PostJobScreen.tsx'));
 
-  // The two lines, verbatim and in order.
+  // The PJ1-C4 copy, verbatim, in the shared info-text treatment with its
+  // dark-ink override intact.
   assert.match(
     flat,
-    /<Text style=\{\[styles\.infoHeading, isDark && styles\.infoTextDark\]\}> Avoid Sensitive Information: <\/Text> <Text style=\{\[styles\.infoText, isDark && styles\.infoTextDark\]\}> faces, documents, license plates, address, or anything private <\/Text>/,
-    'the heading and the list are two separate lines, in that order'
+    /<Text style=\{\[styles\.infoText, isDark && styles\.infoTextDark\]\}> Avoid faces, documents, license plates, addresses, or any other personal information <\/Text>/,
+    'the advisory body is the exact PJ1-C4 sentence'
   );
-  // The heading is bold; the list is not.
-  assert.match(flat, /infoHeading: \{[^}]*fontWeight: '800',/);
-  assert.doesNotMatch(/infoText: \{([^}]*)\}/.exec(flat)?.[1] ?? '', /fontWeight/);
-  // The sentence it replaced is gone rather than left beside it.
-  assert.ok(!flat.includes('Media appears with your'), 'the old advisory sentence is retired');
+  // The heading is DELETED outright — text, style and column wrapper — and
+  // the old list went with it rather than surviving beside the new sentence.
+  assert.ok(!flat.includes('Avoid Sensitive Information'), 'the heading text is deleted');
+  assert.ok(!flat.includes('infoHeading'), 'the heading style is gone with its text');
+  assert.ok(!flat.includes('infoBody'), 'the two-line column wrapper is gone too');
+  assert.ok(
+    !flat.includes('or anything private'),
+    'the old list is replaced, not left beside the new sentence'
+  );
+  // And the sentence D7 itself replaced stays retired.
+  assert.ok(!flat.includes('Media appears with your'), 'the pre-D7 advisory sentence stays retired');
 });
 
 test('D8 · one remove control, inside the tile, on both kinds of media', () => {
@@ -454,27 +461,44 @@ test('D9 · [executed] the clip length is real or absent — never invented', ()
   }
 });
 
-test('D10 · the cap pill reads from the cap the picker is actually given', () => {
+test('D10/PJ1-C4 · both cap badges read the caps actually enforced, through ONE block', () => {
   const flat = flatten(read('ui/primitives/MediaUploader.tsx'));
   const screen = flatten(read('screens/PostJobScreen.tsx'));
 
-  // Beside the counter, on the video control only, with a clock glyph.
+  // ONE shared render: the badge element appears exactly once, fed by the
+  // per-kind derivation, so the photo and video badges cannot be restyled
+  // apart — restyle the block and both move together.
+  assert.equal(
+    (flat.match(/styles\.capPill,/g) ?? []).length,
+    1,
+    'there is exactly one cap-badge element; both kinds render through it'
+  );
   assert.match(
     flat,
-    /\{kind === 'video' && videoMaxDurationSec \? \( <View style=\{\[styles\.capPill, isDark && styles\.capPillDark\]\}> <Ionicons name="time-outline" size=\{12\}/
+    /kind === 'video' && videoMaxDurationSec \? \{ icon: 'time-outline' as const, text: `Up to \$\{videoMaxDurationSec\} seconds` \}/,
+    'the video badge spells "seconds" and reads the picker cap'
   );
-  assert.match(flat, /Up to \{videoMaxDurationSec\} sec/);
-  // ANTI-VACUITY: that prop is the SAME number handed to the picker, so the
-  // pill cannot promise a minute the control does not enforce.
+  assert.match(
+    flat,
+    /kind === 'photo' \? \{ icon: 'image-outline' as const, text: `Up to \$\{maxItems\} photos` \}/,
+    'the photo badge reads the item cap, with the photo-nudge row\'s own glyph'
+  );
+  assert.ok(!/\bsec\b/.test(flat), 'the abbreviated "sec" is retired');
+  // ANTI-VACUITY: the video figure is the SAME number handed to the picker,
+  // and the photo figure is the SAME cap the add tile stops at.
   assert.match(flat, /videoMaxDuration: kind === 'video' \? videoMaxDurationSec : undefined,/);
+  assert.match(flat, /const atLimit = items\.length >= maxItems;/);
   assert.match(screen, /videoMaxDurationSec=\{MAX_VIDEO_DURATION_MS \/ 1000\}/);
   assert.match(screen, /const MAX_VIDEO_DURATION_MS = 60_000;/);
+  assert.match(screen, /maxItems=\{isHiring \? 5 : MAX_PHOTOS\}/);
+  assert.match(screen, /const MAX_PHOTOS = 10;/);
 
-  // The paragraph under the tile stays — the pill is a glance, it is the
-  // explanation.
-  assert.match(
-    screen,
-    /Up to \{MAX_VIDEO_DURATION_MS \/ 1000\} seconds\. A short clip explains an awkward job faster than a paragraph\./
+  // The caption under the tile keeps ONLY the explanation — the badge says
+  // the minute now, so the duplicate first sentence is deleted.
+  assert.match(screen, /A short clip explains an awkward job faster than a paragraph\./);
+  assert.ok(
+    !screen.includes('seconds. A short clip'),
+    'the "Up to 60 seconds." sentence is deleted from the caption'
   );
 });
 

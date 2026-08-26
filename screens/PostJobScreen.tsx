@@ -1254,22 +1254,19 @@ export function PostJobScreen() {
             <View style={styles.stepFields}>
               {/* The privacy notice read forest-on-mint: one deep green on
                   another. Its body takes the cream ink in dark. */}
-              {/* D7 — the warning leads, on its own line, and the list of
-                  what it means follows. One sentence carrying both read as
-                  advice about media in general; the heading is what makes it
-                  read as a rule about THIS upload. */}
+              {/* PJ1 (C4) — one plain sentence, no heading: the heading D7
+                  added is deleted outright, and the body is the exact PJ1
+                  copy. At 393pt it wraps to two lines at the card's current
+                  padding (measured: the text column is ~259pt and the
+                  sentence needs ≥246 before it takes a third line), so no
+                  padding moved. */}
               <View style={[styles.infoCard, isDark && styles.infoCardDark]}>
                 <View style={styles.infoIcon}>
                   <Ionicons name="shield-checkmark-outline" size={20} color={colors.emerald} />
                 </View>
-                <View style={styles.infoBody}>
-                  <Text style={[styles.infoHeading, isDark && styles.infoTextDark]}>
-                    Avoid Sensitive Information:
-                  </Text>
-                  <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
-                    faces, documents, license plates, address, or anything private
-                  </Text>
-                </View>
+                <Text style={[styles.infoText, isDark && styles.infoTextDark]}>
+                  Avoid faces, documents, license plates, addresses, or any other personal information
+                </Text>
               </View>
 
               {/* The one canonical MediaUploader primitive (§O never-duplicate
@@ -1313,9 +1310,11 @@ export function PostJobScreen() {
                   videoMaxDurationSec={MAX_VIDEO_DURATION_MS / 1000}
                   onUploadError={(message) => void alertAsync('Video upload failed', message)}
                 />
+                {/* PJ1 (C4) — the badge beside the counter says the minute
+                    now, so the caption keeps only the explanation. It fits
+                    ONE line at 393pt (measured 322 of 345 at 12pt). */}
                 <Text style={styles.fieldHint}>
-                  Up to {MAX_VIDEO_DURATION_MS / 1000} seconds. A short clip explains an
-                  awkward job faster than a paragraph.
+                  A short clip explains an awkward job faster than a paragraph.
                 </Text>
               </View>
             </View>
@@ -2203,18 +2202,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surface,
-  },
-  // D7 — the heading and the list are two lines in one column, so the card
-  // still reads as one block while the warning owns its own line.
-  infoBody: {
-    flex: 1,
-    gap: 2,
-  },
-  infoHeading: {
-    fontSize: 13,
-    lineHeight: 19,
-    fontWeight: '800',
-    color: colors.forest,
   },
   infoText: {
     flex: 1,
