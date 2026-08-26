@@ -43,83 +43,93 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 dependency install attempt (RUN DEPS1)
+## Current state — after the 2026-08-25 dependency landing (RUN DEPS1)
 
-**RUN DEPS1 STOPPED AT C1 AND LANDED NOTHING OF ITS OWN.** No package was
-installed. `package.json`, `package-lock.json` and `node_modules` are exactly
-as the run found them, no `lib/haptics.ts` exists, and this file is the run's
-only tracked change.
+Three packages entered the manifest and one wrapper was written for one of
+them. Nothing calls the wrapper, and nothing renders differently.
 
-### The blocker is a hook, not a missing approval
+| # | commit | what landed |
+|-|-|-|
+|C1|`1adcb07`|`expo-blur`, `expo-haptics`, `expo-image` in `package.json` + `package-lock.json`|
+|C2|`5acd836`|`lib/haptics.ts` and `tests/haptics.test.mjs`|
+|C3|(this file)|the handoff|
 
-The operator approved `expo-blur`, `expo-haptics` and `expo-image` in the
-dispatch prompt. The active PreToolUse guard refuses the install before it
-reaches a shell:
+| package | manifest range | installed |
+|-|-|-|
+|`expo-blur`|`~15.0.8`|**15.0.8**|
+|`expo-haptics`|`~15.0.8`|**15.0.8**|
+|`expo-image`|`~3.0.11`|**3.0.11**|
 
-    npx expo install expo-blur expo-haptics expo-image
-    -> BLOCK GUARD-DEPS dependency-mutation
+**A native build is REQUIRED before any OTA carries code that imports these;
+the runtime that build prints is the target for every later eas update.
+package.json and package-lock.json changed, so the runtime WILL differ from
+build 7's.**
 
-That is rule 7 of `.claude/hooks/guard.ps1`, which matches `npx expo install`
-as a whole-token pair and independently matches the mutating subcommands of
-npm, yarn, pnpm and bun. No package-manager invocation is left that the guard
-permits, so there was no second form to try and none was tried.
+Nothing in the tree imports any of the three yet, so today's bundle is still
+safe to ship over the air. The moment a screen imports one, that stops being
+true and the build above is the gate.
 
-CLAUDE.md's autonomy contract names "a collision with an active hook or deny
-rule" as a stop, and the dispatch prompt repeats it verbatim as a GENUINE STOP.
-The same prompt states that it "never adds to, overrides, or restates CLAUDE.md
-or the deny matrix", so approving the three packages is not authorization to
-route around the guard. Hand-editing the manifest was excluded twice over: the
-prompt forbids hand-editing a version, and an edited manifest without an
-install leaves `node_modules` without the packages anyway.
+### The install was the operator's, and the guard was right to force that
 
-`.claude/` was not modified, weakened, or searched for a way through. The
-refusal was accepted on first contact.
+The first DEPS1 dispatch stopped at C1: the `expo install` invocation was
+refused with `BLOCK GUARD-DEPS dependency-mutation` from rule 7 of the
+PreToolUse guard. That block was correct and was not worked around, weakened,
+or re-attempted in another form. The operator then ran the install outside the
+session, and this run verified and committed what was on disk. It invoked no
+package manager in any mutating form.
 
-### What the base gate established before the stop
+The manifest diff was checked before anything was staged: `git diff --
+package.json` is three inserted lines and nothing else, and the lockfile diff
+is **40 insertions, 0 deletions**, so no other dependency's version moved in
+either file. `.gitignore`, `app.json`, `app.config.*`, `eas.json` and every
+native folder are untouched, as is the agent configuration tree.
 
-| gate | result |
-|-|-|
-|branch|`mainexpo`|
-|`git merge-base --is-ancestor origin/mainexpo HEAD`|exit 0|
-|`git status --porcelain`|only the two untracked `.claude/hooks/*.ps1` files|
-|verify|**EXIT=0 — 1071 pass / 0 fail / 0 skipped**, matching the expected BASELINE of 1071|
+### C2 — the wrapper is a boundary, not an import
 
-### The reads are done, and they are worth keeping for the re-dispatch
+`lib/haptics.ts` exports `tap()` (light impact), `confirm()` (success
+notification) and `select()` (selection tick). It is the same arrangement
+`lib/clipboard.ts` documents, tightened by one turn:
 
-**No test fence enumerates a closed set of dependencies.** Every `package.json`
-fence in `tests/` is a block-list or an existence check, never an allow-list,
-so none of them would have failed on three new entries:
+* **Web is short-circuited BEFORE the require, not after it.** The handle is
+  `Platform.OS === 'web' ? null : load()`, and `load()` is the only function
+  that names the vendor. On web the ternary resolves to `null` without calling
+  it, so no path on web executes `expo-haptics`, its
+  `requireOptionalNativeModule` call, or its web shim. The screenshot harness
+  renders on web, so this is the property that keeps the harness away from
+  native haptics rather than merely away from a buzz.
+* **Both failure shapes are swallowed.** The vendor's entry resolves to `null`
+  on a binary without the native module and its call sites then REJECT with
+  `UnavailabilityError` — a rejected promise, not a synchronous throw. `fire()`
+  catches the synchronous case and `.catch`es the asynchronous one. Neither is
+  logged: this fires on ordinary taps, and a build predating the package would
+  print once per interaction.
+* **No callers.** Grepped repo-wide: nothing imports it. It exists so the
+  screens that will call it do not each grow their own try/catch. The test
+  deliberately does NOT fence "no callers", because that fence would block the
+  very work it exists for.
 
-* `tests/liveLocation.test.mjs:534` rejects map libraries by name pattern and
-  pins `expo-document-picker` and `expo-location`.
-* `tests/sandboxCheckout.test.mjs:57` rejects payment providers by name.
-* `tests/pwa.test.mjs:171` pins `ol` and asserts `maplibre-gl` and `leaflet`
-  are absent.
-* `tests/voiceSearch.test.mjs:815` pins `expo-speech-recognition`.
-* `tests/liveLocation.test.mjs:632` and `tests/postJobPublish.test.mjs:1007`
-  check only that a touched file's imports appear in the manifest.
+`tests/haptics.test.mjs` is a static fence — the wrapper cannot be imported
+under `node --test` because it pulls `Platform` from `react-native`, which is
+why every other lib module in this suite is read the same way. Its three
+counting assertions (`expo-haptics` named exactly once outside comments,
+`load()` called exactly once, and that call site being the non-web ternary arm)
+fail on zero occurrences as loudly as on two, so a green result means the
+needles were actually found rather than silently missed.
 
-None of the three approved packages matches a banned pattern, so C1's "if a
-dependency fence fails, extend it" contingency would not have fired.
+### Verification
 
-**`lib/` contains no `haptic` at any casing**, as the prompt expected, so
-`lib/haptics.ts` would have been genuinely new with no existing caller.
+`npm run verify` exits 0 at BASELINE, after C1 and after C2.
 
-### What the operator has to do
+| point | tests | pass | fail | skipped |
+|-|-|-|-|-|
+|BASELINE|1071|1071|0|0|
+|after C1|1071|1071|0|0|
+|after C2|**1072**|**1072**|0|0|
 
-The install is operator-only work, outside an agent session. From the repo
-root, run the install for the three packages and then the compatibility check
-(`--check`). Then re-dispatch DEPS1. With the three packages already in
-`package.json` and `package-lock.json`, C1 collapses to a verify-and-commit
-step and C2 and C3 proceed as written.
-
-The other route — relaxing `GUARD-DEPS` so an agent may install — is a change
-to `.claude/`, operator-only under both `.claude/settings.local.json` and
-CLAUDE.md; this run neither made it nor recommends it.
-
-A native build is still required before any OTA carries code importing these
-three packages. That requirement is unchanged and untested by this run, because
-nothing in the tree imports them.
+The single added test is `tests/haptics.test.mjs`. No test was deleted,
+disabled, skipped or made conditional. Nothing was pushed; no database was
+contacted; no SQL was executed; no image file was opened; no archive work was
+done.
 
 ## The run before it — after the 2026-08-25 category-search wording pass (RUN CS1)
 
