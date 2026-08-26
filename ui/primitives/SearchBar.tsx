@@ -1,5 +1,6 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Animated,
   AppState,
   Pressable,
   StyleSheet,
@@ -22,6 +23,7 @@ import {
 } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
 import { voiceSearch, type VoiceSession } from '../../lib/voiceSearch';
+import { usePressFeedback } from '../../hooks/usePressFeedback';
 
 /**
  * The shared search field (§I).
@@ -98,6 +100,12 @@ export function SearchBar({
 }: SearchBarProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // MOTION1 (C1): three controls live in this one primitive — the whole field
+  // when it is a button, the clear glyph and the mic — so three instances of
+  // the one shared hook, never three copies of a spring.
+  const press = usePressFeedback();
+  const clearPress = usePressFeedback();
+  const micPress = usePressFeedback();
 
   // False until the boundary affirms on-device recognition on THIS binary;
   // every degraded case leaves the mic unrendered rather than disabled.
@@ -175,8 +183,11 @@ export function SearchBar({
   const displayValue = showingInterim ? interimTranscript : value;
   if (onPress) {
     return (
+      <Animated.View style={press.style}>
       <Pressable
         onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
         style={({ pressed }) => [styles.field, pressed && styles.pressed, style]}
         accessibilityRole="search"
         accessibilityLabel={accessibilityLabel ?? placeholder}
@@ -195,6 +206,7 @@ export function SearchBar({
           {value || placeholder}
         </Text>
       </Pressable>
+      </Animated.View>
     );
   }
 
@@ -216,35 +228,43 @@ export function SearchBar({
         accessibilityLabel={accessibilityLabel ?? placeholder}
       />
       {value.length > 0 && !disableClear ? (
-        <Pressable
-          onPress={() => onChangeText('')}
-          // The glyph is small; the hit area is not.
-          hitSlop={12}
-          accessibilityRole="button"
-          accessibilityLabel="Clear search"
-        >
-          <Ionicons name="close-circle" size={18} color={colors.navInactive} />
-        </Pressable>
+        <Animated.View style={clearPress.style}>
+          <Pressable
+            onPress={() => onChangeText('')}
+            onPressIn={clearPress.onPressIn}
+            onPressOut={clearPress.onPressOut}
+            // The glyph is small; the hit area is not.
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel="Clear search"
+          >
+            <Ionicons name="close-circle" size={18} color={colors.navInactive} />
+          </Pressable>
+        </Animated.View>
       ) : null}
       {voiceReady && !disableVoiceSearch ? (
-        <Pressable
-          // Tap-to-talk: one tap starts the bounded session, a second stops
-          // it. The session cannot outlive the boundary's silence detector or
-          // its 30s ceiling, which is what keeps the permission string true.
-          onPress={toggleVoiceSession}
-          // 20pt glyph + 4pt padding + 8pt slop lands on the 44pt floor.
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel={listening ? 'Stop listening' : 'Search by voice'}
-          accessibilityState={{ selected: listening }}
-          style={[styles.mic, listening && styles.micListening]}
-        >
-          <Ionicons
-            name={listening ? 'mic' : 'mic-outline'}
-            size={20}
-            color={listening ? colors.emerald : colors.navInactive}
-          />
-        </Pressable>
+        <Animated.View style={micPress.style}>
+          <Pressable
+            // Tap-to-talk: one tap starts the bounded session, a second stops
+            // it. The session cannot outlive the boundary's silence detector or
+            // its 30s ceiling, which is what keeps the permission string true.
+            onPress={toggleVoiceSession}
+            onPressIn={micPress.onPressIn}
+            onPressOut={micPress.onPressOut}
+            // 20pt glyph + 4pt padding + 8pt slop lands on the 44pt floor.
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={listening ? 'Stop listening' : 'Search by voice'}
+            accessibilityState={{ selected: listening }}
+            style={[styles.mic, listening && styles.micListening]}
+          >
+            <Ionicons
+              name={listening ? 'mic' : 'mic-outline'}
+              size={20}
+              color={listening ? colors.emerald : colors.navInactive}
+            />
+          </Pressable>
+        </Animated.View>
       ) : null}
       {trailing}
     </View>

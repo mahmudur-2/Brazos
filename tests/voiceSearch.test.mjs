@@ -768,9 +768,33 @@ test('[static] the opt-out prop suppresses the mic and defaults to present', () 
 });
 
 test('[static] tap-to-talk: one tap toggles, and every exit path ends the session', () => {
-  // The mic is a plain tap target now — the hold handlers are gone entirely.
+  // The mic is a plain tap target: one tap starts, a second stops.
   assert.match(searchBarCode, /onPress=\{toggleVoiceSession\}/);
-  assert.doesNotMatch(searchBarCode, /onPressIn=|onPressOut=/);
+
+  // RUN MOTION1 (C1) put the shared press spring on this primitive's controls,
+  // so the two handler NAMES are in the file again. Banning the names was
+  // never the guarantee — the HOLD DESIGN was: a session started on press-in
+  // and stopped on press-out, which made a slip of the finger a cancelled
+  // dictation. That is what must stay gone, so it is what is asserted now, and
+  // more precisely than a name ban could: every onPressIn/onPressOut in this
+  // file binds a press-feedback handler and nothing else, and the session
+  // toggle is reachable from onPress alone.
+  const pressHandlers = [...searchBarCode.matchAll(/onPress(?:In|Out)=\{([^}]*)\}/g)].map((hit) =>
+    hit[1].trim()
+  );
+  assert.ok(pressHandlers.length > 0, 'the press handlers must be found before they are judged');
+  for (const handler of pressHandlers) {
+    assert.match(
+      handler,
+      /^\w+\.onPress(In|Out)$/,
+      `onPressIn/onPressOut may carry press feedback and nothing else — saw ${handler}`
+    );
+  }
+  assert.doesNotMatch(
+    searchBarCode,
+    /onPress(In|Out)=\{[^}]*(toggleVoiceSession|sessionRef|beginSession)/,
+    'the voice session must never be driven by press-in or press-out'
+  );
   // Second tap: stop-and-commit through the boundary, never a re-start.
   assert.match(searchBarCode, /sessionRef\.current\.stop\(\);/);
   // Unmount, screen blur, and app backgrounding all cancel without

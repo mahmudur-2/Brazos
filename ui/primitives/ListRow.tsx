@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Animated, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps, ReactNode } from 'react';
 import { controls, layout, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { usePressFeedback } from '../../hooks/usePressFeedback';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -42,6 +43,7 @@ export function ListRow({
 }: ListRowProps) {
   const { emerald: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  const press = usePressFeedback();
   const titleColor = tone === 'danger' ? colors.danger : colors.ink;
   const glyphColor = tone === 'danger' ? colors.danger : colors.emerald;
 
@@ -71,14 +73,20 @@ export function ListRow({
   if (!onPress) return <View style={[styles.row, style]}>{content}</View>;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.row, pressed && styles.pressed, style]}
-      accessibilityRole="button"
-      accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
-    >
-      {content}
-    </Pressable>
+    // MOTION1 (C1): one shared press spring, on the wrapper — see
+    // hooks/usePressFeedback.ts for why it is not on the Pressable itself.
+    <Animated.View style={press.style}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={({ pressed }) => [styles.row, pressed && styles.pressed, style]}
+        accessibilityRole="button"
+        accessibilityLabel={subtitle ? `${title}. ${subtitle}` : title}
+      >
+        {content}
+      </Pressable>
+    </Animated.View>
   );
 }
 

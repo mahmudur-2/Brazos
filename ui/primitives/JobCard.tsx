@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useModePerspective } from '../../modes';
 import {
@@ -23,6 +23,7 @@ import {
   type as typeScale,
 } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
+import { usePressFeedback } from '../../hooks/usePressFeedback';
 
 /**
  * §I's mode-aware `JobCard` — deferred from Phase 1 because it requires
@@ -90,6 +91,10 @@ export function JobCard({
 }: JobCardProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // MOTION1 (C1): the card and the bid pill are two separate controls, so they
+  // take two separate springs — one hook, two instances, never two copies.
+  const press = usePressFeedback();
+  const bidPress = usePressFeedback();
   // The whole mode split, in one line. Nothing above can override it.
   const perspective = useModePerspective();
   const isWorker = perspective === 'worker';
@@ -116,12 +121,19 @@ export function JobCard({
   const showBreakTheIce = isWorker && bidCount === 0 && !isOwn;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.card, isDark && shadows.cardDark, pressed && styles.cardPressed]}
-      accessibilityRole="button"
-      accessibilityLabel={job.title}
-    >
+    // MOTION1 (C1): the press-scale rides an Animated.View WRAPPER, which is
+    // the arrangement components/AuthButton.tsx already uses — a Pressable's
+    // `style` is a function of `pressed`, and an Animated.Value inside a
+    // function style is never attached to the node.
+    <Animated.View style={press.style}>
+      <Pressable
+        onPress={onPress}
+        onPressIn={press.onPressIn}
+        onPressOut={press.onPressOut}
+        style={({ pressed }) => [styles.card, isDark && shadows.cardDark, pressed && styles.cardPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={job.title}
+      >
       <View style={styles.row}>
         {showImage ? (
           <Image
@@ -210,16 +222,21 @@ export function JobCard({
           from a prop the caller chose — a customer surface passing onBid still
           gets nothing. */}
       {isWorker && onBid && !isOwn ? (
-        <Pressable
-          onPress={onBid}
-          style={({ pressed }) => [styles.bidButton, pressed && styles.bidButtonPressed]}
-          accessibilityRole="button"
-          accessibilityLabel={`Place a bid on ${job.title}`}
-        >
-          <Text style={styles.bidButtonText}>Place a bid</Text>
-        </Pressable>
+        <Animated.View style={bidPress.style}>
+          <Pressable
+            onPress={onBid}
+            onPressIn={bidPress.onPressIn}
+            onPressOut={bidPress.onPressOut}
+            style={({ pressed }) => [styles.bidButton, pressed && styles.bidButtonPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Place a bid on ${job.title}`}
+          >
+            <Text style={styles.bidButtonText}>Place a bid</Text>
+          </Pressable>
+        </Animated.View>
       ) : null}
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
 }
 

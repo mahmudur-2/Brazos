@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
 import { glow, radius, useThemeColors, withAlpha } from '../../lib/theme';
 import { USE_NATIVE_DRIVER } from '../../lib/motion';
+import { usePressFeedback } from '../../hooks/usePressFeedback';
 
 /**
  * The one toggle. In dark: a NEUTRAL track that never changes colour, and a
@@ -67,6 +68,7 @@ type ToggleProps = {
 export function Toggle({ value, onValueChange, disabled = false, accessibilityLabel }: ToggleProps) {
   const { palette, isDark } = useThemeColors();
   const position = useRef(new Animated.Value(value ? 1 : 0)).current;
+  const press = usePressFeedback();
 
   useEffect(() => {
     Animated.timing(position, {
@@ -99,8 +101,14 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   const knobGlow = isDark && value ? glow.halo(withAlpha(palette.gold, 0.55)) : null;
 
   return (
+    // MOTION1 (C1): the shared press spring, on a wrapper so the track's own
+    // fixed geometry is untouched and the knob's translate stays independent
+    // of it.
+    <Animated.View style={press.style}>
     <Pressable
       onPress={() => onValueChange(!value)}
+      onPressIn={press.onPressIn}
+      onPressOut={press.onPressOut}
       disabled={disabled}
       hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
       accessibilityRole="switch"
@@ -130,6 +138,7 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
         ]}
       />
     </Pressable>
+    </Animated.View>
   );
 }
 
