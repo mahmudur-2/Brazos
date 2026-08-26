@@ -427,7 +427,11 @@ test('11 · an empty semantic result falls back rather than displaying a false n
 
   // A TRUE "no workers matched" now requires BOTH rankings to come back
   // empty — that is still a real state, and the screen still has to show it.
-  assert.match(screen, /No workers matched/);
+  // The wording moved into the lib so it could name the applied category, so
+  // this follows it: the screen renders the state, the lib words it, and the
+  // unfiltered wording is still exactly what it was.
+  assert.match(screen, /title=\{emptyResultTitle\(appliedCategoryLabel\)\}/);
+  assert.match(workerSearch, /: 'No workers matched';/);
 });
 
 test('embedded workers are actually returned when a relevant one exists', () => {
@@ -628,10 +632,13 @@ test('the embedding is normalised to a plain number array', () => {
 
 test('13 · "best matches" is claimed only when server ranking actually ran', () => {
   // Mirrors resultHeading(); the literals it depends on are asserted below.
-  const heading = (mode, count) => {
+  const heading = (mode, count, categoryLabel) => {
     const qualifier = mode === 'semantic' ? 'best ' : '';
-    if (count >= RESULT_LIMIT) return `Top ${RESULT_LIMIT} ${qualifier}matches`;
-    return `${count} ${qualifier}${count === 1 ? 'match' : 'matches'}`;
+    const base =
+      count >= RESULT_LIMIT
+        ? `Top ${RESULT_LIMIT} ${qualifier}matches`
+        : `${count} ${qualifier}${count === 1 ? 'match' : 'matches'}`;
+    return categoryLabel ? `${base} · ${categoryLabel}` : base;
   };
 
   assert.match(heading('semantic', 5), /best matches/);
@@ -642,11 +649,62 @@ test('13 · "best matches" is claimed only when server ranking actually ran', ()
   assert.equal(heading('fallback', 1), '1 match');
   assert.doesNotMatch(heading('fallback', RESULT_LIMIT), /best/);
 
-  assert.match(workerSearch, /export function resultHeading\(mode: RankingMode, count: number\)/);
+  // A filtered search names its filter, in every shape the heading has.
+  const LABEL = 'Dog Walking/Pet Care';
+  assert.equal(heading('fallback', 3, LABEL), `3 matches · ${LABEL}`);
+  assert.equal(heading('semantic', 1, LABEL), `1 best match · ${LABEL}`);
+  assert.equal(
+    heading('fallback', RESULT_LIMIT, LABEL),
+    `Top ${RESULT_LIMIT} matches · ${LABEL}`
+  );
+
+  // ...and an unlabelled call still returns exactly what it always returned,
+  // so the unfiltered wording cannot drift in behind the label.
+  for (const [mode, count] of [
+    ['semantic', 5],
+    ['semantic', 1],
+    ['semantic', RESULT_LIMIT],
+    ['fallback', 5],
+    ['fallback', 1],
+    ['fallback', RESULT_LIMIT],
+  ]) {
+    assert.equal(heading(mode, count, undefined), heading(mode, count));
+  }
+
+  assert.match(
+    workerSearch,
+    /export function resultHeading\(\s*mode: RankingMode,\s*count: number,\s*categoryLabel\?: string,?\s*\): string/
+  );
   assert.match(workerSearch, /const qualifier = mode === 'semantic' \? 'best ' : '';/);
 
-  // The screen must not be able to word this itself.
-  assert.match(screen, /resultHeading\(state\.mode, state\.matches\.length\)/);
+  // The empty state is worded in the same place, for the same reason: an
+  // empty result that does not name its filter is the one most likely to be
+  // read as a fault rather than an answer.
+  const emptyTitle = (categoryLabel) =>
+    categoryLabel ? `No ${categoryLabel} workers matched` : 'No workers matched';
+  assert.equal(emptyTitle(), 'No workers matched');
+  assert.equal(emptyTitle(LABEL), `No ${LABEL} workers matched`);
+  assert.match(
+    workerSearch,
+    /export function emptyResultTitle\(categoryLabel\?: string\): string/
+  );
+  assert.match(
+    workerSearch,
+    /return categoryLabel \? `No \$\{categoryLabel\} workers matched` : 'No workers matched';/
+  );
+
+  // The screen must not be able to word either of these itself.
+  assert.match(
+    screen,
+    /resultHeading\(state\.mode, state\.matches\.length, appliedCategoryLabel\)/
+  );
+  assert.match(screen, /title=\{emptyResultTitle\(appliedCategoryLabel\)\}/);
+  // And the label it hands over is only ever the pinned chip's: a category the
+  // typed text merely implied is never announced as one the customer chose.
+  assert.match(
+    screen,
+    /const appliedCategoryLabel = pinnedCategory\s*\?\s*skillCategoryLabel\(pinnedCategory\)\s*:\s*undefined;/
+  );
   assert.doesNotMatch(screen, /Top \$\{?WORKER_RESULT_LIMIT/);
   assert.doesNotMatch(screen, /\bAI\b|semantic|machine learning/i);
 });

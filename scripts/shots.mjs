@@ -233,15 +233,18 @@ const TARGETS = [
       // category it was handed, and a direct navigate would seed that param by
       // hand instead of proving the chip carries it.
       //
-      // The harness invents no marketplace data, so "No workers matched" is
-      // the EXPECTED end state here and says nothing about what staging holds.
-      // It is the `wait` precisely because it cannot appear until the search
-      // has run to completion, so the shutter never catches the spinner.
+      // The harness invents no marketplace data, so an empty result is the
+      // EXPECTED end state here and says nothing about what staging holds.
+      // The wait is the SUBSTRING 'workers matched' because that title now
+      // names the applied category — "No Dog Walking/Pet Care workers
+      // matched" — and the unlabelled "No workers matched" is still what an
+      // unfiltered search renders. It cannot appear until the search has run
+      // to completion either way, so the shutter never catches the spinner.
       name: `workersearch-category-${colorScheme}`,
       mode: 'customer',
       colorScheme,
       recipe: TO_WORKER_SEARCH,
-      wait: 'No workers matched',
+      wait: 'workers matched',
     },
   ]),
 ];

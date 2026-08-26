@@ -42,6 +42,7 @@ import { rebookStripItems, type RebookStripItem } from '../lib/rebook';
 import { fetchSavedWorkers } from '../lib/savedWorkers';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
+  emptyResultTitle,
   findWorkers,
   interpretQuery,
   matchReasonText,
@@ -255,6 +256,13 @@ export function WorkerSearchScreen() {
 
   const activeCategories =
     state.kind === 'results' ? state.categories : pinnedCategory ? [pinnedCategory] : [];
+
+  // Only the chip path names a category. Typing clears the pin, so a category
+  // the free text merely implied is never announced as a filter the customer
+  // chose — and the label that appears is the same one on the ringed tile.
+  const appliedCategoryLabel = pinnedCategory
+    ? skillCategoryLabel(pinnedCategory)
+    : undefined;
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -497,7 +505,7 @@ export function WorkerSearchScreen() {
             <SearchStateCard
               icon="search-outline"
               eyebrow="NO MATCHES YET"
-              title="No workers matched"
+              title={emptyResultTitle(appliedCategoryLabel)}
               message="We couldn’t find a relevant profile for this search. A public job lets workers who can help come to you."
             >
               <Button
@@ -525,7 +533,7 @@ export function WorkerSearchScreen() {
                     WORKERS TO CONSIDER
                   </Text>
                   <Text style={styles.resultCount} accessibilityLiveRegion="polite">
-                    {resultHeading(state.mode, state.matches.length)}
+                    {resultHeading(state.mode, state.matches.length, appliedCategoryLabel)}
                   </Text>
                   <Text style={styles.resultsHint}>
                     Open a profile to review real work, services, and feedback.

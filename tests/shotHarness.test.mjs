@@ -37,6 +37,11 @@ const SHOTS = fileURLToPath(new URL('../scripts/shots.mjs', import.meta.url));
 const codeOnly = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
+/** The substring the shutter waits on for the category target. It has to be a
+ *  substring of BOTH empty-state wordings — the plain one and the one naming
+ *  the applied category — or the capture hangs on whichever it is not. */
+const WORKER_SEARCH_WAIT = 'workers matched';
+
 /** `--list` returns before the export, the browser and the shutter, so this
  *  reads the REAL registry rather than a regex's opinion of it. */
 function registry() {
@@ -105,15 +110,26 @@ test('that target is reached by tapping a chip, never by naming the route', asyn
   // The shutter waits on the post-search state, so it can never photograph the
   // spinner and call it a result.
   assert.match(harness, /name: `workersearch-category-\$\{colorScheme\}`/);
-  assert.match(harness, /recipe: TO_WORKER_SEARCH,\s*\n\s*wait: 'No workers matched',/);
+  const targetStart = harness.indexOf('name: `workersearch-category-');
+  assert.ok(targetStart > -1, 'the category target is gone from the registry');
+  const categoryTarget = harness.slice(targetStart, harness.indexOf('},', targetStart));
+  assert.ok(
+    categoryTarget.includes('recipe: TO_WORKER_SEARCH,'),
+    'the category target no longer arrives by the chip recipe'
+  );
+  assert.ok(
+    categoryTarget.includes(`wait: '${WORKER_SEARCH_WAIT}',`),
+    `the category target's wait is not '${WORKER_SEARCH_WAIT}'`
+  );
 });
 
 test('every locator that recipe introduces is a string the app renders', async () => {
-  const [home, sheet, categories, search] = await Promise.all([
+  const [home, sheet, categories, search, lib] = await Promise.all([
     read('screens/HomeScreen.tsx'),
     read('components/ServicePickerSheet.tsx'),
     read('lib/skillCategories.ts'),
     read('screens/WorkerSearchScreen.tsx'),
+    read('lib/workerSearch.ts'),
   ]);
 
   // `press` matches an accessibility label; `expect`/`pressText` match rendered
@@ -121,7 +137,21 @@ test('every locator that recipe introduces is a string the app renders', async (
   assert.match(codeOnly(home), /accessibilityLabel="Other services"/);
   assert.match(codeOnly(home), /title="All services"/);
   assert.match(codeOnly(sheet), /accessibilityLabel=\{service\.label\}/);
-  assert.match(codeOnly(search), /title="No workers matched"/);
+  // The empty-state title IS the shutter's wait, and it is no longer a literal
+  // on the screen: the lib words it, with or without the applied category. So
+  // the fence follows it there and checks that BOTH wordings still contain the
+  // substring the shutter waits on — otherwise a labelled title would sail
+  // past this test and hang the capture instead.
+  assert.match(codeOnly(search), /title=\{emptyResultTitle\(appliedCategoryLabel\)\}/);
+  const emptyFn = codeOnly(lib).slice(codeOnly(lib).indexOf('export function emptyResultTitle'));
+  assert.ok(
+    emptyFn.startsWith('export function emptyResultTitle'),
+    'emptyResultTitle() is gone from lib/workerSearch.ts'
+  );
+  for (const wording of ['No workers matched', 'No ${categoryLabel} workers matched']) {
+    assert.ok(emptyFn.includes(wording), `emptyResultTitle no longer renders "${wording}"`);
+    assert.ok(wording.includes(WORKER_SEARCH_WAIT), `"${wording}" cannot satisfy the wait`);
+  }
 
   // The tapped row must still BE the dog-walking category, or the shot is of
   // some other search.

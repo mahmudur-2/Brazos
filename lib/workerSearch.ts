@@ -712,13 +712,33 @@ export async function findWorkers(args: SearchArgs): Promise<{
 /**
  * The list header. "Best matches" is only ever claimed when ranking actually
  * ran on the server; keyword results are plain "matches".
+ *
+ * `categoryLabel` names the filter the customer chose and is appended to
+ * every shape. A search that is filtered has to say so — the alternative is
+ * an honest result that reads as a broken screen. Called with two arguments
+ * the output is byte-identical to what it has always returned.
  */
-export function resultHeading(mode: RankingMode, count: number): string {
+export function resultHeading(
+  mode: RankingMode,
+  count: number,
+  categoryLabel?: string
+): string {
   const qualifier = mode === 'semantic' ? 'best ' : '';
-  if (count >= WORKER_RESULT_LIMIT) {
-    return `Top ${WORKER_RESULT_LIMIT} ${qualifier}matches`;
-  }
-  return `${count} ${qualifier}${count === 1 ? 'match' : 'matches'}`;
+  const base =
+    count >= WORKER_RESULT_LIMIT
+      ? `Top ${WORKER_RESULT_LIMIT} ${qualifier}matches`
+      : `${count} ${qualifier}${count === 1 ? 'match' : 'matches'}`;
+  return categoryLabel ? `${base} · ${categoryLabel}` : base;
+}
+
+/**
+ * The empty-state title, in the same shape and for the same reason: nothing
+ * else on that surface names the filter, so an empty result that stays silent
+ * about it is the one most likely to be read as a fault. Kept beside
+ * resultHeading() so the screen cannot word either of them itself.
+ */
+export function emptyResultTitle(categoryLabel?: string): string {
+  return categoryLabel ? `No ${categoryLabel} workers matched` : 'No workers matched';
 }
 
 /** Job categories and skill categories share most keys but not all; a job
