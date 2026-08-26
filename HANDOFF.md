@@ -43,7 +43,85 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Current state — after the 2026-08-25 dependency install attempt (RUN DEPS1)
+
+**RUN DEPS1 STOPPED AT C1 AND LANDED NOTHING OF ITS OWN.** No package was
+installed. `package.json`, `package-lock.json` and `node_modules` are exactly
+as the run found them, no `lib/haptics.ts` exists, and this file is the run's
+only tracked change.
+
+### The blocker is a hook, not a missing approval
+
+The operator approved `expo-blur`, `expo-haptics` and `expo-image` in the
+dispatch prompt. The active PreToolUse guard refuses the install before it
+reaches a shell:
+
+    npx expo install expo-blur expo-haptics expo-image
+    -> BLOCK GUARD-DEPS dependency-mutation
+
+That is rule 7 of `.claude/hooks/guard.ps1`, which matches `npx expo install`
+as a whole-token pair and independently matches the mutating subcommands of
+npm, yarn, pnpm and bun. No package-manager invocation is left that the guard
+permits, so there was no second form to try and none was tried.
+
+CLAUDE.md's autonomy contract names "a collision with an active hook or deny
+rule" as a stop, and the dispatch prompt repeats it verbatim as a GENUINE STOP.
+The same prompt states that it "never adds to, overrides, or restates CLAUDE.md
+or the deny matrix", so approving the three packages is not authorization to
+route around the guard. Hand-editing the manifest was excluded twice over: the
+prompt forbids hand-editing a version, and an edited manifest without an
+install leaves `node_modules` without the packages anyway.
+
+`.claude/` was not modified, weakened, or searched for a way through. The
+refusal was accepted on first contact.
+
+### What the base gate established before the stop
+
+| gate | result |
+|-|-|
+|branch|`mainexpo`|
+|`git merge-base --is-ancestor origin/mainexpo HEAD`|exit 0|
+|`git status --porcelain`|only the two untracked `.claude/hooks/*.ps1` files|
+|verify|**EXIT=0 — 1071 pass / 0 fail / 0 skipped**, matching the expected BASELINE of 1071|
+
+### The reads are done, and they are worth keeping for the re-dispatch
+
+**No test fence enumerates a closed set of dependencies.** Every `package.json`
+fence in `tests/` is a block-list or an existence check, never an allow-list,
+so none of them would have failed on three new entries:
+
+* `tests/liveLocation.test.mjs:534` rejects map libraries by name pattern and
+  pins `expo-document-picker` and `expo-location`.
+* `tests/sandboxCheckout.test.mjs:57` rejects payment providers by name.
+* `tests/pwa.test.mjs:171` pins `ol` and asserts `maplibre-gl` and `leaflet`
+  are absent.
+* `tests/voiceSearch.test.mjs:815` pins `expo-speech-recognition`.
+* `tests/liveLocation.test.mjs:632` and `tests/postJobPublish.test.mjs:1007`
+  check only that a touched file's imports appear in the manifest.
+
+None of the three approved packages matches a banned pattern, so C1's "if a
+dependency fence fails, extend it" contingency would not have fired.
+
+**`lib/` contains no `haptic` at any casing**, as the prompt expected, so
+`lib/haptics.ts` would have been genuinely new with no existing caller.
+
+### What the operator has to do
+
+The install is operator-only work, outside an agent session. From the repo
+root, run the install for the three packages and then the compatibility check
+(`--check`). Then re-dispatch DEPS1. With the three packages already in
+`package.json` and `package-lock.json`, C1 collapses to a verify-and-commit
+step and C2 and C3 proceed as written.
+
+The other route — relaxing `GUARD-DEPS` so an agent may install — is a change
+to `.claude/`, operator-only under both `.claude/settings.local.json` and
+CLAUDE.md; this run neither made it nor recommends it.
+
+A native build is still required before any OTA carries code importing these
+three packages. That requirement is unchanged and untested by this run, because
+nothing in the tree imports them.
+
+## The run before it — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -228,7 +306,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## The run before it — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Two runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -453,7 +531,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Two runs back — after the 2026-08-25 three corrections (RUN H3)
+## Three runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -628,7 +706,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Three runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Four runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -897,7 +975,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Four runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Five runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -1048,7 +1126,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Five runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Six runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -1109,7 +1187,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Six runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Seven runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
