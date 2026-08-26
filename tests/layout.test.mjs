@@ -21,12 +21,18 @@ test('main tab screens do not reserve redundant gaps above the safe tab bar', as
   for (const screen of [homeScreen, myJobs, messages, profile]) {
     assert.match(screen, /paddingBottom: 0/);
   }
-  // Prestige 0d: the pill floats by MARGIN (in normal layout flow, so the
-  // margins reserve real space); its height is the content height verbatim
-  // and the library's own insets.bottom padding is zeroed out.
-  assert.match(bottomNav, /const bottomMargin = Math\.max\(insetBottom, TAB_BAR_FLOAT_MARGIN\)/);
-  assert.match(bottomNav, /height: TAB_BAR_CONTENT_HEIGHT,\s*marginHorizontal: TAB_BAR_FLOAT_MARGIN,\s*marginBottom: bottomMargin,/);
-  assert.match(bottomNav, /paddingBottom: 0/);
+  // PJ1 (C9): the bar is ATTACHED — full width, flush to the bottom edge,
+  // with the safe-area inset carried INSIDE the bar as bottom padding, so
+  // the items always clear the home indicator and nothing floats by margin.
+  assert.match(
+    bottomNav,
+    /height: TAB_BAR_CONTENT_HEIGHT \+ insetBottom,\s*paddingBottom: insetBottom,/
+  );
+  assert.match(bottomNav, /marginHorizontal: 0,\s*marginBottom: 0,\s*borderRadius: 0,/);
+  assert.ok(
+    !bottomNav.includes('Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN)'),
+    'the float-margin arithmetic must not return — the bar no longer floats'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -214,10 +220,10 @@ test('the nav glyphs are D3 size and every slot still fits its label', async () 
   // and every screen that clears it read one number each.
   const geometry = (name) => numberIn(tokens, 'ui/tokens.ts', name);
 
-  // emerald D3's explicit values. Recorded as a 1pt REDUCTION from the 29/12
-  // that shipped, not an increase — see the constant's comment.
-  assert.equal(number('const TAB_ICON_SIZE'), 28);
-  assert.equal(number('const TAB_LABEL_FONT_SIZE'), 11);
+  // PJ1 (C9): emerald D3's 28/11 scaled in proportion with the bar's 25%
+  // content-height rise — 35pt glyphs, 14pt labels.
+  assert.equal(number('const TAB_ICON_SIZE'), 35);
+  assert.equal(number('const TAB_LABEL_FONT_SIZE'), 14);
 
   // The bar grows only as much as the content needs. Ionicons renders in a box
   // of about size + 3; the label adds its lineHeight (size + 2) plus a 2pt
@@ -241,10 +247,10 @@ test('the nav glyphs are D3 size and every slot still fits its label', async () 
 
   // Even distribution, and a ≥44pt target on the narrowest supported width.
   // Both bars draw five slots: the worker's five tabs, and the customer's four
-  // destinations plus the centre action.
-  const floatMargin = geometry('const FLOATING_NAV_GAP');
+  // destinations plus the centre action. PJ1 (C9): the attached bar spans the
+  // full width — no side insets subtract from the slots.
   const narrowestScreen = 320;
-  const slotWidth = (narrowestScreen - floatMargin * 2) / 5;
+  const slotWidth = narrowestScreen / 5;
   assert.ok(slotWidth >= 44, `slot width ${slotWidth} must clear the 44pt touch floor`);
   assert.ok(
     barHeight >= 44,
@@ -314,10 +320,9 @@ test('the floating-nav clearance is derived from the bar, in one place', async (
     bottomNav,
     /export function useFloatingNavClearance\(\): number \{\s*const insets = useSafeAreaInsets\(\);\s*return bottomNavHeight\(insets\.bottom\);\s*\}/
   );
-  assert.match(
-    bottomNav,
-    /return TAB_BAR_CONTENT_HEIGHT \+ Math\.max\(insetBottom, TAB_BAR_FLOAT_MARGIN\);/
-  );
+  // PJ1 (C9): the attached bar's footprint is content height plus the inset
+  // it carries inside — no float margin term survives.
+  assert.match(bottomNav, /return TAB_BAR_CONTENT_HEIGHT \+ insetBottom;/);
   assert.match(primitivesIndex, /useFloatingNavClearance,/);
 });
 

@@ -133,21 +133,14 @@ const TAB_BY_KEY = new Map(BOTTOM_NAV_TABS.map((tab) => [tab.key as string, tab]
 // None of those are exposed as constants to import, so they're reproduced here
 // from the installed source rather than guessed.
 //
-// Icon and label are deliberate design sizes. emerald D3 sets them EXPLICITLY
-// at 28pt and ~11pt, and those numbers are followed verbatim.
-//
-// RECORD THE DIRECTION, because the instruction and the effect disagree: D3 is
-// headed "NAV ICONS: LARGER", but the values here were already 29/12 — a
-// previous run had scaled them up from @react-navigation/bottom-tabs' own
-// defaults (25pt icon, 10pt label). So 28/11 is a 1pt REDUCTION from what
-// shipped, not an increase. It is applied anyway: an explicit number in the
-// dispatch outranks the adjective in its heading, and 1pt at glyph size is
-// imperceptible. What actually delivers D3's "larger and evenly spaced" is the
-// slot arithmetic, not the glyph: emerald D1 took the customer bar from six
-// drawn slots to five, so on the narrowest supported width (320pt) each slot
-// went from 49.3pt to 59.2pt — a real 20% more room per item.
-const TAB_ICON_SIZE = 28;
-const TAB_LABEL_FONT_SIZE = 11;
+// Icon and label are deliberate design sizes. emerald D3 set them EXPLICITLY
+// at 28pt and ~11pt; RUN PJ1 (C9) scales both in proportion with the bar's
+// 25% content-height rise (70 → 88): 28 × 1.25 = 35 and 11 × 1.25 = 13.75,
+// rounded to 14. The stack-fit arithmetic below (and its fence in
+// tests/layout.test.mjs) still derives from these numbers, so a future size
+// that overflows the slot fails there instead of clipping on device.
+const TAB_ICON_SIZE = 35;
+const TAB_LABEL_FONT_SIZE = 14;
 
 // BottomTabItem.js's tabVerticalUiKit style wraps whatever tabBarIcon renders
 // in 5px of padding on every side — not overridable — so the usable slot is
@@ -182,12 +175,14 @@ export const TAB_BAR_CONTENT_HEIGHT = layout.floatingNavHeight;
 const TAB_ICON_WRAPPER_HEIGHT = TAB_BAR_CONTENT_HEIGHT - 10;
 const TAB_BOTTOM_GAP = 3;
 
-// The pill's float gap (Prestige 0d, decision 4). Horizontally it is the
-// pill's inset from the screen edges; vertically it is the MINIMUM gap under
-// the pill. On a notched device the bottom margin grows to the full reported
-// inset (34) so the pill floats clear of the home indicator — the indicator
-// lives in the background gap now, never inside the bar, which retires the
-// docked era's fold-the-inset-into-the-height arithmetic.
+// RUN PJ1 (C9) — the bar is ATTACHED: flush to the bottom edge, full width,
+// no side insets, with the home-indicator inset folded INSIDE the bar as
+// bottom padding (the docked arithmetic the floating era retired, returned
+// on confirmed operator decision — this reverses the floating pill, 56ff86a).
+// This constant survives as the design QUANTITY the float gap named — the
+// breathing room a pinned footer keeps above the bar
+// (PINNED_FOOTER_BOTTOM_PADDING below) — and is no longer any margin of the
+// bar's own.
 export const TAB_BAR_FLOAT_MARGIN = layout.floatingNavGap;
 
 // Bar colours come from the RESOLVED palette (4D-4): bottomNavScreenOptions
@@ -238,32 +233,29 @@ export const TAB_BAR_FLOAT_MARGIN = layout.floatingNavGap;
 // bar gap, the status-bar area and every other unpainted seam in one place.
 // This file deliberately did NOT grow a second ground of its own.
 
-/** Total vertical space the floating pill occupies on a device reporting this
- *  bottom inset — the pill's height plus the margin that floats it. */
+/** Total vertical space the attached bar occupies on a device reporting this
+ *  bottom inset — its content height plus the inset it carries inside as
+ *  bottom padding (PJ1 C9). */
 export function bottomNavHeight(insetBottom: number): number {
-  return TAB_BAR_CONTENT_HEIGHT + Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
+  return TAB_BAR_CONTENT_HEIGHT + insetBottom;
 }
 
 /**
  * The bottom inset a scrolling surface inside the tab navigator must reserve
- * so its last row clears the floating pill — emerald(3)'s ONE shared solution.
+ * so its last row clears the bar — emerald(3)'s ONE shared solution.
  *
  * WHY A HOOK AND NOT A TOKEN. It used to be `layout.floatingNavClearance`, a
- * flat 68 from §I. The pill's real footprint is its HEIGHT plus the margin that
- * floats it, and that margin grows to the device's home-indicator inset — 34 on
- * a notched iPhone — so the true figure is 82 on a phone with no inset and 104
- * on one with. 68 was short of it on every notched device, which is exactly why
- * the surfaces that DID apply the old token (Notifications, Services &
- * availability, Delete account) still had content under the pill on the device
- * pass, while the ones that applied nothing at all were simply worse. A static
- * token cannot see the inset; this can.
+ * flat 68 from §I, which could not see the device's home-indicator inset. The
+ * attached bar's real footprint (PJ1 C9) is its content height plus the inset
+ * it carries inside — 88 on a phone with no inset, 122 on a notched iPhone —
+ * and a static token cannot see a runtime inset; this can.
  *
- * Derived from the bar's own two constants, so emerald(2)'s height change — or
- * any future one — moves the screens with it and cannot desynchronise them.
+ * Derived from the bar's own geometry, so a height change — C9's included —
+ * moves the screens with it and cannot desynchronise them.
  *
  * Surfaces with their own bottom action footer or composer do NOT put this on
  * their scroll content: the footer sits below the scroller, so it is the FOOTER
- * that has to clear the pill, and the content then clears both.
+ * that has to clear the bar, and the content then clears both.
  */
 export function useFloatingNavClearance(): number {
   const insets = useSafeAreaInsets();
@@ -377,24 +369,20 @@ export function isAtmosphereHomeRoute(route: { name: string }): boolean {
 }
 
 export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalette) {
-  // The floating pill (Prestige 0d). These MARGINS are what float it: 12 each
-  // side, and a bottom gap that grows to the full reported inset on a notched
-  // device so the home indicator lives in it.
+  // RUN PJ1 (C9) — THE ATTACHED BAR. Flush to the bottom edge, full screen
+  // width, no side insets and no float gap; the home-indicator inset rides
+  // INSIDE the bar as bottom padding, so the items always sit above the
+  // indicator. This reverses the floating pill (RUN GROUND1 / 56ff86a) on
+  // confirmed operator decision.
   //
   // IN FLOW EVERYWHERE EXCEPT THE TWO HOMES (RUN GROUND1, C3). BottomTabView
   // lays scenes and bar out in one column, so an in-flow bar reserves real
-  // space and the scene stops above it — which is exactly why the Home
-  // atmosphere stopped there too, leaving a flat rectangle of shell ground
-  // across the bar row that the operator photographed in dark. Taking the bar
-  // OUT of flow for those two routes gives their scene the full screen, and
-  // the atmosphere with it; the pill then floats over the layer instead of
-  // sitting in a band beside it. Its own geometry does not move: the margins
-  // and height below are unchanged, and `bottom: 0` puts its bottom edge where
-  // the column already put it. Everywhere else the bar stays in flow.
-  //
-  // The two homes reserve the space themselves with useFloatingNavClearance()
-  // — the derived hook, never a static token.
-  const bottomMargin = Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
+  // space and the scene stops above it. The two home routes still take the
+  // bar OUT of flow so their full-bleed atmosphere reaches the screen's
+  // bottom edge behind it, and they reserve the bar's box themselves with
+  // useFloatingNavClearance() — the derived hook, never a static token. The
+  // attached geometry is identical in both branches (`bottom: 0` on a
+  // flush bar is where the column puts it anyway).
 
   return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
     headerShown: false,
@@ -424,28 +412,24 @@ export function bottomNavScreenOptions(insetBottom: number, palette: ColorPalett
     tabBarIconStyle: { width: '100%', height: TAB_ICON_WRAPPER_HEIGHT },
     tabBarStyle: {
       // getTabBarHeight() (bottom-tabs internals) uses a custom height
-      // VERBATIM; the safe-area inset now lives in the float margin, not the
-      // height, so the content slot arithmetic above stays exact.
-      height: TAB_BAR_CONTENT_HEIGHT,
-      marginHorizontal: TAB_BAR_FLOAT_MARGIN,
-      marginBottom: bottomMargin,
-      borderRadius: radius.xl,
-      borderWidth: 1,
-      // BottomTabBar.tsx sets `borderTopWidth: StyleSheet.hairlineWidth` on its
-      // own style, BEFORE tabBarStyle is merged. A specific edge width beats
-      // the borderWidth shorthand, so the pill's top edge was drawing at 0.5
-      // while its other three drew at 1 — a visibly lighter arc across the top
-      // of a rounded pill. Restated explicitly so the ring is one weight.
+      // VERBATIM. C9: the box is content + inset, and the library's own
+      // `paddingBottom: insets.bottom` (which the floating era zeroed out) is
+      // now exactly what the design wants — restated explicitly so the item
+      // slots stay the content height whatever the library's default does.
+      height: TAB_BAR_CONTENT_HEIGHT + insetBottom,
+      paddingBottom: insetBottom,
+      // Full width, flush: no side margins, no bottom gap, no rounded pill.
+      marginHorizontal: 0,
+      marginBottom: 0,
+      borderRadius: 0,
+      borderWidth: 0,
+      // BottomTabBar.tsx sets `borderTopWidth: StyleSheet.hairlineWidth` on
+      // its own style, BEFORE tabBarStyle is merged; restated at full weight
+      // so the attached bar's ONE edge — the top hairline — draws at 1. In
+      // dark that token IS the dim-gold hairline; light keeps Heritage.
       borderTopWidth: 1,
-      // In dark this token IS the dim-gold hairline; light keeps its Heritage
-      // hairline. borderTopColor rides along because the library's base style
-      // sets it and a mismatched top edge would show on the rounded pill.
-      borderColor: palette.border,
       borderTopColor: palette.border,
       backgroundColor: palette.surface,
-      // Kills BottomTabBar.js's own `paddingBottom: insets.bottom` (tabBarStyle
-      // is merged last) — the float margin owns the home-indicator clearance.
-      paddingBottom: 0,
       elevation: 0,
       // C3: out of flow on the two homes only. tabBarStyle is the LAST entry
       // in BottomTabBar.js's style array, so this wins over the library's own
@@ -644,7 +628,6 @@ export function BottomNavPreview({
 }) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
-  const bottomMargin = Math.max(insetBottom, TAB_BAR_FLOAT_MARGIN);
 
   // A flat item list keeps every slot an equal flex column, exactly like the
   // real bar, where the action is one more Tab.Screen with its own button.
@@ -656,7 +639,12 @@ export function BottomNavPreview({
 
   return (
     <View
-      style={[styles.previewBar, { height: TAB_BAR_CONTENT_HEIGHT, marginBottom: bottomMargin }]}
+      // C9 — mirrors the attached bar: content height plus the simulated
+      // inset carried inside as bottom padding.
+      style={[
+        styles.previewBar,
+        { height: TAB_BAR_CONTENT_HEIGHT + insetBottom, paddingBottom: insetBottom },
+      ]}
       accessibilityRole="tablist"
     >
       {items.map((item) =>
@@ -780,13 +768,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // home(18): the transform moved to the call site with the lift, so the pressed
   // state cannot fall out of step with the resting one.
   createButtonPressed: { opacity: 0.88 },
+  // C9 — the attached bar's own vocabulary: full width, one top hairline.
   previewBar: {
     flexDirection: 'row',
     backgroundColor: colors.surface,
-    marginHorizontal: TAB_BAR_FLOAT_MARGIN,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
   },
   previewItem: {
     flex: 1,

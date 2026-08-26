@@ -173,16 +173,25 @@ export const spacing = {
 } as const;
 
 /**
- * The floating nav pill's geometry, declared ONCE (emerald D3/emerald(3)).
+ * The bottom nav bar's geometry, declared ONCE (emerald D3/emerald(3)).
  *
  * ui/primitives/BottomNav.tsx reads both of these for the bar it configures,
  * and every screen's bottom clearance below is derived from the same two
  * numbers — so a change to the bar's height can never desynchronise the
- * screens that have to clear it. Before this they were two hardcoded values
- * (a 70pt bar and a 68pt clearance) that happened to be close, and nothing
- * connected them.
+ * screens that have to clear it.
+ *
+ * RUN PJ1 (C9) — THE BAR IS ATTACHED AND LARGER, on confirmed operator
+ * decision, reversing the floating pill (56ff86a / RUN GROUND1 era): flush
+ * to the bottom edge, full width, no side insets, with the home-indicator
+ * inset carried INSIDE the bar as bottom padding. The content height rises
+ * 25% (70 → 88) with the glyphs and labels scaled in proportion — the newest
+ * Home master (44, 853x1844) still draws the ~65pt floating pill this
+ * decision reverses, so its bar proportions are recorded in the run report
+ * rather than matched. FLOATING_NAV_GAP survives as a design quantity, not a
+ * float: it is the breathing room a pinned footer or composer keeps above
+ * the bar (PINNED_FOOTER_BOTTOM_PADDING derives from it).
  */
-const FLOATING_NAV_HEIGHT = 70;
+const FLOATING_NAV_HEIGHT = 88;
 const FLOATING_NAV_GAP = 12;
 
 /** §I: "screen gutter 16; card padding 14; card gap 10". */
@@ -190,16 +199,17 @@ export const layout = {
   screenGutter: 16,
   cardPadding: 14,
   cardGap: 10,
-  /** The pill's own height. ui/primitives/BottomNav.tsx's
-   *  TAB_BAR_CONTENT_HEIGHT is this value. */
+  /** The bar's CONTENT height — the device's bottom inset rides inside the
+   *  bar as padding on top of this (PJ1 C9). ui/primitives/BottomNav.tsx's
+   *  TAB_BAR_CONTENT_HEIGHT is this value. The name keeps its history; the
+   *  bar no longer floats. */
   floatingNavHeight: FLOATING_NAV_HEIGHT,
   /**
-   * The pill's float gap — its inset from the screen edges, and the MINIMUM
-   * gap under it. ui/primitives/BottomNav.tsx's TAB_BAR_FLOAT_MARGIN is this
-   * value. A bottom action footer or composer uses it as extra bottom padding
-   * so its controls keep the same distance from the pill that the pill keeps
-   * from the screen edge, instead of the footer band and the pill reading as
-   * one continuous surface.
+   * A pinned footer or composer's breathing room above the bar
+   * (PINNED_FOOTER_BOTTOM_PADDING in ui/primitives/BottomNav.tsx), so its
+   * controls never sit flush against the bar's top hairline. PJ1 (C9): the
+   * bar itself no longer uses this as a margin — it is attached, full width,
+   * flush to the bottom edge. The name keeps its history.
    */
   floatingNavGap: FLOATING_NAV_GAP,
   /**

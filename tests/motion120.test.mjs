@@ -712,8 +712,8 @@ test('[executed] the chat column counts the pill once at rest and the keyboard o
   );
   assert.match(
     bottomNav,
-    /return TAB_BAR_CONTENT_HEIGHT \+ Math\.max\(insetBottom, TAB_BAR_FLOAT_MARGIN\);/,
-    'bottomNavHeight is the pill footprint this model uses'
+    /return TAB_BAR_CONTENT_HEIGHT \+ insetBottom;/,
+    'bottomNavHeight is the bar footprint this model uses (attached, PJ1 C9)'
   );
   assert.match(bottomNav, /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/);
 
@@ -737,7 +737,9 @@ test('[executed] the chat column counts the pill once at rest and the keyboard o
   for (const insetBottom of [34, 0]) {
     const screenH = 852;
     const keyboard = 336;
-    const navClearance = navHeight + Math.max(insetBottom, navGap);
+    // PJ1 (C9): the attached bar's footprint — content plus the inset it
+    // carries inside; the float-margin max() is gone with the float.
+    const navClearance = navHeight + insetBottom;
     // The scene the column lives in ALREADY stops at the pill's top edge.
     const sceneBottom = screenH - navClearance;
 
