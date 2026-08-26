@@ -66,9 +66,11 @@ import {
 } from '../lib/theme';
 import { SearchBar, useFloatingNavClearance } from '../ui/primitives';
 
-/** Chips offered before anything has been typed. The first six of the shared
- *  skill list — enough to cover the common asks without a wall of options. */
-const SUGGESTED_CATEGORIES = SKILL_CATEGORIES.slice(0, 6);
+/** Tiles offered before anything has been typed: the whole shared skill list,
+ *  in its own order. It was the first six, which left four categories able to
+ *  apply a filter this row could not mark at all — among them the one behind
+ *  Home's own "TV Mounting" pill. */
+const SUGGESTED_CATEGORIES = SKILL_CATEGORIES;
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -107,6 +109,25 @@ export function WorkerSearchScreen() {
   // Guards a slow response from overwriting a newer one — a fast second search
   // finishing first would otherwise leave the older results on screen.
   const runRef = useRef(0);
+
+  // The tile row scrolls horizontally, and the category a customer arrives
+  // with can sit well past the right edge — dog walking is sixth of ten — so
+  // the ring that marks it gets painted where nobody can see it, leaving a
+  // filtered search with no visible sign of its filter. Aim the row at that
+  // tile on arrival, from the tile's OWN measured x: the row's gap and padding
+  // make any width-derived guess wrong.
+  const tileRowRef = useRef<ScrollView>(null);
+  const arrivalCategory = useRef<string | null>(params?.category ?? null);
+  const arrivalTileX = useRef<number | null>(null);
+
+  const revealArrivalTile = useCallback(() => {
+    const x = arrivalTileX.current;
+    if (arrivalCategory.current === null || x === null) return;
+    // chipRow carries no leading padding — its content starts flush against
+    // the scroller's left edge — so the tile's own x IS the offset that lands
+    // it on the same inset the first tile occupies.
+    tileRowRef.current?.scrollTo({ x: Math.max(0, x), animated: false });
+  }, []);
 
   const loadRebook = useCallback(async () => {
     if (!user) {
@@ -218,6 +239,9 @@ export function WorkerSearchScreen() {
   function chooseCategory(key: string) {
     const next = pinnedCategory === key ? null : key;
     setPinnedCategory(next);
+    // The row now belongs to the customer: a tile they reached for is already
+    // in view, and re-aiming under their thumb would fight them.
+    arrivalCategory.current = null;
     Keyboard.dismiss();
     run(query, next);
   }
@@ -277,6 +301,7 @@ export function WorkerSearchScreen() {
               // Typing means the customer is describing the job themselves, so
               // stop forcing the chip they tapped earlier.
               if (pinnedCategory) setPinnedCategory(null);
+              arrivalCategory.current = null;
             }}
             onSubmit={submit}
             placeholder="What do you need help with?"
@@ -328,11 +353,13 @@ export function WorkerSearchScreen() {
                   label — not as pills. Same list, same chooseCategory tap;
                   only the shape and the paint moved. */}
               <ScrollView
+                ref={tileRowRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.chipRow}
                 style={styles.serviceScroll}
                 keyboardShouldPersistTaps="handled"
+                onContentSizeChange={revealArrivalTile}
               >
                 {SUGGESTED_CATEGORIES.map((category) => {
                   const selected = activeCategories.includes(category.key);
@@ -345,6 +372,13 @@ export function WorkerSearchScreen() {
                         selected && styles.serviceTileSelected,
                         pressed && styles.serviceTilePressed,
                       ]}
+                      onLayout={(event) => {
+                        // Only the tile the customer arrived on reports itself;
+                        // every other measurement is noise here.
+                        if (category.key !== arrivalCategory.current) return;
+                        arrivalTileX.current = event.nativeEvent.layout.x;
+                        revealArrivalTile();
+                      }}
                       accessibilityRole="button"
                       accessibilityState={{ selected }}
                       accessibilityLabel={category.label}
