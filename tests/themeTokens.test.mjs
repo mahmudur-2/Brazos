@@ -300,6 +300,13 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
         }
         continue;
       }
+      // RUN G1 (C3): the design studio's Values readout renders data in the
+      // PLATFORM monospace — one identifier, one file, and Menlo/monospace is
+      // no serif, no bundled face and no loader, so every claim this fence
+      // makes still holds. Anywhere else it is an offender like any other.
+      if (/^STUDIO_MONO\b/.test(rhs) && path === 'components/DesignStudioPanel.tsx') {
+        continue;
+      }
       if (!ALLOWED_FONT_FAMILY.test(rhs)) {
         offenders.push(`${path}: fontFamily: ${rhs.split('\n')[0].trim()}`);
       }

@@ -509,6 +509,15 @@ export const materials: Record<MaterialName, MaterialSpec> = {
   },
 };
 
+/**
+ * RUN G1 (C3) — the design studio's two colour cycles. Hexes live at the
+ * token layer by the literal contract (tests/themeResolution.test.mjs);
+ * the studio panel consumes them from here, and "the palette's own current
+ * value" (no override) leads each cycle.
+ */
+export const STUDIO_GOLD_CYCLE = ['#DCAB60', '#DBAB5E', '#D4A24C'] as const;
+export const STUDIO_CARD_FILL_CYCLE = ['#182725', '#16241C', '#0E1F18'] as const;
+
 // ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------

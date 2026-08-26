@@ -15,6 +15,7 @@ import {
 } from '../lib/theme';
 import { useFloatingNavClearance } from '../ui/primitives';
 import { THEME_PREFERENCES, type ThemePreference } from '../lib/themePreference';
+import { setDesignStudioOpen, useDesignStudioOpen } from '../lib/designOverrides';
 
 /**
  * Profile → Appearance (4D-4). Three options, the current one indicated; a
@@ -50,6 +51,10 @@ export function AppearanceScreen() {
   const styles = stylesFor(palette);
   // emerald(3): the floating pill's real footprint.
   const navClearance = useFloatingNavClearance();
+  // RUN G1 (C3): the design studio's toggle — the panel itself floats over
+  // the whole app from navigation/ModeShell.tsx, so it survives leaving this
+  // screen and can tune any surface. STRIP BEFORE TESTFLIGHT with the panel.
+  const studioOpen = useDesignStudioOpen();
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -93,6 +98,24 @@ export function AppearanceScreen() {
               </Pressable>
             );
           })}
+          <Pressable
+            style={({ pressed }) => [styles.row, styles.rowDivider, pressed && styles.rowPressed]}
+            onPress={() => setDesignStudioOpen(!studioOpen)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: studioOpen }}
+          >
+            <View style={[styles.rowGlyph, isDark && styles.rowGlyphDark]}>
+              <Ionicons
+                name="options-outline"
+                size={20}
+                color={isDark ? palette.gold : palette.primary}
+              />
+            </View>
+            <Text style={styles.label}>Design studio</Text>
+            <Text style={[styles.studioState, studioOpen && styles.studioStateOn]}>
+              {studioOpen ? 'On' : 'Off'}
+            </Text>
+          </Pressable>
         </Card>
       </ScrollView>
     </SafeAreaView>
@@ -150,6 +173,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontSize: 17,
       fontWeight: '700',
       color: colors.text,
+    },
+    studioState: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.textMuted,
+    },
+    studioStateOn: {
+      color: colors.emerald,
     },
   }),
 );

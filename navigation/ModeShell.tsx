@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { useMode } from '../modes';
 import { ShellGroundProvider, useShellGroundState } from '../lib/shellGround';
 import { useThemeColors } from '../lib/theme';
+import { DesignStudioPanel } from '../components/DesignStudioPanel';
 import { CustomerRoot } from './CustomerRoot';
 import { WorkerRoot } from './WorkerRoot';
 
@@ -128,6 +129,8 @@ export function ModeShell() {
       <View style={[styles.tree, { backgroundColor: treeGround }]}>
         {treeMode === 'worker' ? <WorkerRoot /> : <CustomerRoot />}
       </View>
+      {/* FENCE: DESIGN STUDIO (RUN G1 C3) — dev tuning overlay in every build FOR NOW; STRIP BEFORE TESTFLIGHT (delete this mount and components/DesignStudioPanel.tsx; HANDOFF.md records the process). Renders null until toggled on the Appearance screen. */}
+      <DesignStudioPanel />
     </ShellGroundProvider>
   );
 }
