@@ -54,6 +54,28 @@ type SuccessScreenProps = {
   details?: ReactNode;
   actions: readonly SuccessAction[];
   insideTabs?: boolean;
+  /**
+   * RUN PUBLISH1 (C1) — TWO FACTS THAT WERE ONE PROP.
+   *
+   * `insideTabs` was answering two different questions at once: which SAFE-AREA
+   * EDGES this surface owns, and whether its scroll content has to reserve the
+   * floating pill's footprint. They are not the same question, and on the
+   * published-job surface they have opposite answers.
+   *
+   * That surface renders inside PostJobScreen's absolutely positioned success
+   * overlay, which is bounded by the tab SCENE — and on every route but the two
+   * homes the bar sits in normal layout flow, so the scene already ends at the
+   * pill's top edge. Reserving the pill's footprint again inside it is the
+   * double count `PINNED_FOOTER_BOTTOM_PADDING` was created to stop, and it is
+   * what pushed "Back to Home" off the bottom of the surface: measured on the
+   * control render, the button's box ran y 751..798 against a pill whose top
+   * edge is y 770, so 29 of its 48 points were not on screen.
+   *
+   * It still owns only the TOP edge — the home indicator lives in the pill's
+   * own float margin, below this surface entirely — so `insideTabs` stays true
+   * and this says the other half.
+   */
+  clearsFloatingNav?: boolean;
 };
 
 export function SuccessScreen({
@@ -64,6 +86,7 @@ export function SuccessScreen({
   details,
   actions,
   insideTabs = true,
+  clearsFloatingNav = true,
 }: SuccessScreenProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -95,7 +118,7 @@ export function SuccessScreen({
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          insideTabs && { paddingBottom: navClearance },
+          clearsFloatingNav && { paddingBottom: navClearance },
         ]}
         showsVerticalScrollIndicator={false}
       >

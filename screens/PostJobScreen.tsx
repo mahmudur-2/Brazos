@@ -77,7 +77,12 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { MediaUploader, PINNED_FOOTER_BOTTOM_PADDING } from '../ui/primitives';
+import {
+  LitSurface,
+  MediaUploader,
+  MoneyText,
+  PINNED_FOOTER_BOTTOM_PADDING,
+} from '../ui/primitives';
 import { SuccessScreen } from '../ui/templates/SuccessScreen';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
@@ -181,6 +186,23 @@ const POST_STEPS = [
     subtitle: 'Check the details below. You can still go back without losing your work.',
   },
 ] as const;
+
+/**
+ * RUN PUBLISH1 (C1) — the publish surface's cards carry Home's wash.
+ *
+ * COPIED, NOT CHOSEN: 0.04 is `CARD_LIFT_ALPHA` in screens/HomeScreen.tsx, the
+ * value the lit promo card ships with. There is no master for the publish
+ * screen, so the design authority is the language already on Home, and a
+ * second alpha here would be a second decision about the same wash.
+ */
+const PUBLISH_CARD_LIFT_ALPHA = 0.04;
+
+/**
+ * Home's own section rhythm — `sectionGap` in lib/homeDesignStudio.tsx, which
+ * is what `screens/HomeScreen.tsx` gives every section of the page. The publish
+ * surface's two cards take it for the same reason they take the wash.
+ */
+const PUBLISH_SECTION_GAP = 20;
 
 export function PostJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -1489,6 +1511,13 @@ export function PostJobScreen() {
                without inventing certainty: bidding produces real bids as
                workers respond, and right now there are none. */
             <SuccessScreen
+              // PUBLISH1 (C1): this surface is inside `successOverlay`, which
+              // is bounded by the tab SCENE — and PostJob is not one of the two
+              // routes where the bar floats, so the scene already ends at the
+              // pill's top edge. Reserving the pill's footprint a second time
+              // inside it is what pushed "Back to Home" off the bottom. The
+              // template still owns only the top safe-area edge.
+              clearsFloatingNav={false}
               title="Your job is live."
               body="Workers can now see your job. Bids appear as workers respond, and you choose who gets it."
               // D23-D26 — the mark, and the only thing on this surface that
@@ -1499,7 +1528,23 @@ export function PostJobScreen() {
               details={
                 <View style={styles.publishDetails}>
                 {publishedJob ? (
-                  <View style={[styles.reviewCard, isDark && shadows.cardDark]}>
+                  // PUBLISH1 (C1) — THE PUBLISH CARD SPEAKS HOME'S LANGUAGE.
+                  //
+                  // There is no master for this surface, so nothing here is
+                  // designed: every part of it is copied from the language
+                  // already shipping on customer Home. The card is a LitSurface
+                  // with the same diagonal wash the promo card carries, over
+                  // the dark shadow token, at Home's own 22pt radius; the row
+                  // labels are Home's gold eyebrow; the category reads as one
+                  // of Home's sage service chips; and the money is MoneyText,
+                  // which is emerald in dark like every other amount in the app.
+                  <LitSurface
+                    style={[styles.reviewCard, isDark && shadows.cardDark]}
+                    surface={colors.surface}
+                    lift={colors.emerald}
+                    liftAlpha={PUBLISH_CARD_LIFT_ALPHA}
+                    flat={!isDark}
+                  >
                     <Text style={styles.reviewEyebrow}>PUBLISHED</Text>
                     <Text style={styles.reviewTitle} numberOfLines={2}>
                       {publishedJob.title}
@@ -1513,9 +1558,15 @@ export function PostJobScreen() {
                       </View>
                       <View style={styles.reviewText}>
                         <Text style={styles.reviewLabel}>Category</Text>
-                        <Text style={styles.reviewValue} numberOfLines={1}>
-                          {JOB_CATEGORY_LABELS[publishedJob.category]}
-                        </Text>
+                        {/* Home's service chip, in Home's `service` variant —
+                            the same sage pill, not a second one drawn here. */}
+                        <View style={styles.reviewChipRow}>
+                          <Chip
+                            label={JOB_CATEGORY_LABELS[publishedJob.category]}
+                            variant="service"
+                            size="sm"
+                          />
+                        </View>
                       </View>
                     </View>
 
@@ -1555,15 +1606,25 @@ export function PostJobScreen() {
                       </View>
                       <View style={styles.reviewText}>
                         <Text style={styles.reviewLabel}>Budget</Text>
-                        <Text style={styles.reviewValue}>
-                          {publishedJob.budget_cents != null ||
-                          publishedJob.budget_min_cents != null
-                            ? budgetRangeLabel(publishedJob)
-                            : 'No budget set'}
-                        </Text>
+                        {/* C1: MoneyText with NO state — this is an amount, not
+                            a payment. A state would attach a caption from the
+                            payment machine to a job that has not been paid for
+                            and is not meant to look as though it has. A RANGE
+                            still falls back to the shared label: MoneyText
+                            renders one figure, and budgetRangeLabel is the one
+                            place that knows how two are written. */}
+                        {publishedJob.budget_cents != null ? (
+                          <MoneyText cents={publishedJob.budget_cents} />
+                        ) : (
+                          <Text style={styles.reviewValue}>
+                            {publishedJob.budget_min_cents != null
+                              ? budgetRangeLabel(publishedJob)
+                              : 'No budget set'}
+                          </Text>
+                        )}
                       </View>
                     </View>
-                  </View>
+                  </LitSurface>
                 ) : null}
 
                 {/* D22 — VERIFIED BEFORE IT WAS WRITTEN. phase20 enqueues
@@ -1573,7 +1634,13 @@ export function PostJobScreen() {
                     notification_prefs.bids is `not null default true`. Both
                     halves are live, so this card promises something the app
                     actually does. */}
-                <View style={[styles.bidsCard, isDark && styles.bidsCardDark]}>
+                <LitSurface
+                  style={[styles.bidsCard, isDark && styles.bidsCardDark, isDark && shadows.cardDark]}
+                  surface={isDark ? colors.surface : colors.mint}
+                  lift={colors.emerald}
+                  liftAlpha={PUBLISH_CARD_LIFT_ALPHA}
+                  flat={!isDark}
+                >
                   <Ionicons name="notifications-outline" size={20} color={colors.emerald} />
                   <View style={styles.bidsCardText}>
                     <Text style={[styles.bidsCardTitle, isDark && styles.bidsCardTitleDark]}>
@@ -1583,7 +1650,7 @@ export function PostJobScreen() {
                       You&apos;ll be notified when a worker bids on this job.
                     </Text>
                   </View>
-                </View>
+                </LitSurface>
                 </View>
               }
               actions={[
@@ -2010,10 +2077,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flex: 1,
     gap: 2,
   },
-  // The publish surface's two cards, stacked with the template's own rhythm.
+  // PUBLISH1 (C1) — the two cards are stacked at HOME'S rhythm, not the
+  // template's. `sectionGap` on customer Home is 20 and its content column
+  // uses the same 20 between sections; `spacing.md` was 12. The number is
+  // copied from Home rather than picked, for the same reason the wash's alpha
+  // is.
   publishDetails: {
     width: '100%',
-    gap: spacing.md,
+    gap: PUBLISH_SECTION_GAP,
   },
   // D22 — what happens next, and it is a thing the app really does: phase20's
   // `bid_received` fires to the job's owner and `notification_prefs.bids`
@@ -2044,12 +2115,25 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     lineHeight: 18,
     color: colors.textMuted,
   },
+  // PUBLISH1 (C1) — the row label IS Home's eyebrow, and now says so in gold.
+  // `heroEyebrow` in screens/HomeScreen.tsx is 12/700 at letterSpacing 1.1 in
+  // `colors.gold`; this keeps its own 11pt because it labels a row rather than
+  // a card, and takes the tracking and the colour, which are what make an
+  // eyebrow read as one. `textMuted` was a caption's colour on a label that is
+  // structure — the eyebrow law (decision 6): structure is gold, money is
+  // emerald.
   reviewLabel: {
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 1.1,
     textTransform: 'uppercase',
-    color: colors.textMuted,
+    color: colors.gold,
+  },
+  // The category chip sits on its own line under the eyebrow, left-aligned:
+  // a chip stretched to the row's width would read as a button.
+  reviewChipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
   reviewValue: {
     fontSize: 14,

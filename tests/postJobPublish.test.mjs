@@ -271,8 +271,14 @@ test('D5 · the last step scroller clears its own footer, from the shared consta
     /contentWithFooter: \{ paddingBottom: spacing\.xl \+ PINNED_FOOTER_BOTTOM_PADDING, \}/,
     'the clearance is the content padding plus the SAME constant the footer applies'
   );
-  // ANTI-VACUITY: that constant is imported here and is the shared one.
-  assert.match(screen, /PINNED_FOOTER_BOTTOM_PADDING \} from '\.\.\/ui\/primitives'/);
+  // ANTI-VACUITY: that constant is imported here and is the shared one. RUN
+  // PUBLISH1 (C1) widened this import to a multi-line block when the publish
+  // surface took LitSurface and MoneyText, so the assertion reads the import
+  // BLOCK rather than one line of it — the guarantee is unchanged.
+  assert.match(
+    flatten(screen),
+    /import \{[^}]*PINNED_FOOTER_BOTTOM_PADDING,? *\} from '\.\.\/ui\/primitives'/
+  );
   assert.match(
     read('ui/primitives/BottomNav.tsx'),
     /export const PINNED_FOOTER_BOTTOM_PADDING = layout\.floatingNavGap;/
