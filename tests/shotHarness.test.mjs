@@ -76,10 +76,45 @@ test('the registry photographs where a category chip lands, in both schemes', ()
     'postjob-review-light',
     'postjob-budget-dialog-light',
     'postjob-published-light',
+    // RUN SHOTS1 — customer-mode coverage, both schemes.
+    'customer-discover-dark',
+    'customer-discover-light',
+    'customer-create-sheet-dark',
+    'customer-create-sheet-light',
+    'customer-services-sheet-dark',
+    'customer-services-sheet-light',
+    'customer-inbox-dark',
+    'customer-inbox-light',
+    'customer-myjobs-dark',
+    'customer-myjobs-light',
+    'customer-profile-dark',
+    'customer-profile-light',
+    'customer-profile-details-dark',
+    'customer-profile-details-light',
+    'customer-account-safety-dark',
+    'customer-account-safety-light',
+    'customer-notification-settings-dark',
+    'customer-notification-settings-light',
+    'customer-notification-feed-dark',
+    'customer-notification-feed-light',
+    'customer-earnings-dark',
+    'customer-earnings-light',
+    'customer-services-pricing-dark',
+    'customer-services-pricing-light',
+    'customer-saved-workers-dark',
+    'customer-saved-workers-light',
+    'customer-appearance-dark',
+    'customer-appearance-light',
+    'customer-payment-methods-dark',
+    'customer-payment-methods-light',
+    'customer-legal-terms-dark',
+    'customer-legal-terms-light',
+    'customer-delete-account-dark',
+    'customer-delete-account-light',
   ]) {
     assert.ok(names.includes(existing), `${existing} disappeared from the registry`);
   }
-  assert.equal(names.length, 16, `registry is ${names.length} targets, expected 16`);
+  assert.equal(names.length, 50, `registry is ${names.length} targets, expected 50`);
 });
 
 test('that target is reached by tapping a chip, never by naming the route', async () => {

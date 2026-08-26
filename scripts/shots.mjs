@@ -180,6 +180,27 @@ const TO_WORKER_SEARCH = [
   { press: 'Pet Sitting & Dog Walking' },
 ];
 
+/**
+ * Reaches the customer Profile tab root. The proof string is a Settings-card
+ * row's sub-line rather than the word "Profile", because the bottom bar spells
+ * "Profile" on every screen and could satisfy a wait without arriving.
+ */
+const TO_CUSTOMER_PROFILE = [
+  { expect: 'Take a task' },
+  { pressText: 'Profile' },
+  { expect: 'Choose which events can alert you.' },
+];
+
+/**
+ * …then the account & safety page behind the Settings card's "Account" chip.
+ * "Log out" lives only on that page, never on the Profile root.
+ */
+const TO_ACCOUNT_SAFETY = [
+  ...TO_CUSTOMER_PROFILE,
+  { press: 'Account and safety' },
+  { expect: 'Log out' },
+];
+
 const TARGETS = [
   { name: 'customer-home-dark', mode: 'customer', colorScheme: 'dark', wait: 'Take a task' },
   { name: 'customer-home-light', mode: 'customer', colorScheme: 'light', wait: 'Take a task' },
@@ -245,6 +266,170 @@ const TARGETS = [
       colorScheme,
       recipe: TO_WORKER_SEARCH,
       wait: 'workers matched',
+    },
+  ]),
+
+  // =========================================================================
+  // RUN SHOTS1 — customer-mode coverage. Every surface below is reached the
+  // way a customer reaches it, from where the app lands, with the fixtures
+  // the harness already seeds — so list-shaped screens photograph their
+  // honest EMPTY state, named per entry. No marketplace data is invented.
+  // =========================================================================
+  ...['dark', 'light'].flatMap((colorScheme) => [
+    {
+      // The browse tab root on a plain tab visit — no query, no category,
+      // keyboard down. Photographs the IDLE state ("Describe what you need"):
+      // an empty query never runs a search, so the no-matches card is not
+      // this surface's resting state and its prompt card is.
+      name: `customer-discover-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [{ expect: 'Take a task' }, { pressText: 'Discover' }],
+      wait: 'Describe what you need',
+    },
+    {
+      // The [ + ] creation sheet, open over customer Home.
+      name: `customer-create-sheet-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [{ expect: 'Take a task' }, { press: 'Create' }],
+      wait: 'What do you need?',
+    },
+    {
+      // Home's "Other" services sheet, open over customer Home.
+      name: `customer-services-sheet-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [{ expect: 'Take a task' }, { press: 'Other services' }],
+      wait: 'All services',
+    },
+    {
+      // The messages tab root. EMPTY state: no conversation fixtures exist.
+      name: `customer-inbox-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [{ expect: 'Take a task' }, { pressText: 'Inbox' }],
+      wait: 'No messages yet',
+    },
+    {
+      // The customer's job hub, by its standing customer path: the [ + ]
+      // sheet's "My jobs" action (the hub has no customer bar item). EMPTY
+      // state: no job fixtures exist.
+      name: `customer-myjobs-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [
+        { expect: 'Take a task' },
+        { press: 'Create' },
+        { pressText: 'My jobs' },
+      ],
+      wait: 'Nothing here yet',
+    },
+    {
+      // The Profile tab root. EMPTY-leaning state: a name, no reviews, no
+      // portfolio.
+      name: `customer-profile-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [{ expect: 'Take a task' }, { pressText: 'Profile' }],
+      wait: 'Choose which events can alert you.',
+    },
+    {
+      // Profile → the details page. "No bio yet" is that page's own honest
+      // empty value for the seeded profile, which carries a name and nothing
+      // else.
+      name: `customer-profile-details-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Profile details' }],
+      wait: 'No bio yet',
+    },
+    {
+      // Profile → the account & safety page ("Account" chip on the Settings
+      // card).
+      name: `customer-account-safety-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Account and safety' }],
+      wait: 'Log out',
+    },
+    {
+      // Profile → notification preferences. The wait is a preference row's
+      // own label, absent from the Profile root.
+      name: `customer-notification-settings-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Notifications' }],
+      wait: 'Bids on my jobs',
+    },
+    {
+      // Profile → the notification feed. EMPTY state: nothing has happened
+      // to the seeded account.
+      name: `customer-notification-feed-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Notification feed' }],
+      wait: 'Nothing yet',
+    },
+    {
+      // Profile → earnings. The wait is the header's own sandbox subtitle;
+      // the ledger below it photographs EMPTY.
+      name: `customer-earnings-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Earnings' }],
+      wait: 'Sandbox — no real money',
+    },
+    {
+      // Profile → services & availability. EMPTY state: no services are
+      // seeded, so the add-service form is the surface.
+      name: `customer-services-pricing-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Services & availability' }],
+      wait: 'Add service',
+    },
+    {
+      // Profile → saved & past workers. EMPTY state: no people fixtures.
+      name: `customer-saved-workers-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_CUSTOMER_PROFILE, { press: 'Saved & past workers' }],
+      wait: 'No one here yet',
+    },
+    {
+      // Account & safety → appearance. The wait is the page's own eyebrow.
+      name: `customer-appearance-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_ACCOUNT_SAFETY, { press: 'Appearance' }],
+      wait: 'THEME',
+    },
+    {
+      // Account & safety → payment methods, told honestly by the build.
+      name: `customer-payment-methods-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_ACCOUNT_SAFETY, { press: 'Payment methods' }],
+      wait: 'Honest by design.',
+    },
+    {
+      // Account & safety → the Terms document. The privacy document renders
+      // through the same template, so terms stands for both.
+      name: `customer-legal-terms-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_ACCOUNT_SAFETY, { press: 'Terms of Service' }],
+      wait: 'Last updated',
+    },
+    {
+      // Account & safety → delete account. Photographed at the explanation,
+      // before any confirmation.
+      name: `customer-delete-account-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      recipe: [...TO_ACCOUNT_SAFETY, { press: 'Delete account' }],
+      wait: 'What is removed',
     },
   ]),
 ];
