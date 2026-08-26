@@ -68,6 +68,16 @@ export { PhoneNumberInput } from '../../components/PhoneNumberInput';
  *  own colours. One drawn control replaces all three. */
 export { Toggle } from './Toggle';
 
+/**
+ * lit(2) — beyond §I's enumerated 26, and deliberately NOT a 26th role: it is
+ * the fill of a Card/Button that already exists, not a new component in the
+ * vocabulary. Master 44 lights the promo card and the Post-a-job pill with a
+ * diagonal wash the flat `backgroundColor` cannot express; this is the one
+ * place that wash is written, for both platforms.
+ */
+export { LitSurface, litFill, litGradient } from './LitSurface';
+export type { LitFill, LitSurfaceProps } from './LitSurface';
+
 export { StatusPill } from './StatusPill';
 export type { JobStatus, OfferStatus, PaymentStatus } from './StatusPill';
 export { MoneyText } from './MoneyText';
