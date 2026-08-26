@@ -10,6 +10,8 @@ import {
 } from '../lib/designOverrides';
 import type { MaterialName } from './tokens';
 
+export type { StudioValue } from '../lib/designOverrides';
+
 /**
  * RUN S2 (C1) — THE DESIGN STUDIO'S SCHEMA REGISTRY.
  *

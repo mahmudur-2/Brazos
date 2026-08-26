@@ -350,6 +350,43 @@ test('registry: every category icon is a real glyph in the installed Ionicons fo
 });
 
 // ---------------------------------------------------------------------------
+// The panel (S2 C2) — rendered from the registry alone
+// ---------------------------------------------------------------------------
+
+test('[static] the panel renders from the registry — zero hand-wired rows, no per-token literals', async () => {
+  const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
+
+  // The registry and category roster are the panel's ONLY source of rows.
+  assert.match(panel, /STUDIO_REGISTRY/, 'the panel must consume the registry');
+  assert.match(panel, /STUDIO_CATEGORIES/, 'the panel must render the category roster');
+  assert.match(panel, /entry\.write\(/, "every override write goes through the entry's own write");
+
+  // NO PER-TOKEN LITERALS. A token name appearing here would be a hand-wired
+  // row — the exact shape the registry exists to end. The store's per-key
+  // writers are banned too: the panel may reset everything, and nothing else.
+  for (const banned of [
+    /\bnavRadius\b/,
+    /\bnavBottomPad\b/,
+    /\bglowAlpha\b/,
+    /\bscrimAlpha\b/,
+    /\bborderAlpha\b/,
+    /\bfallbackScrimAlpha\b/,
+    /\bcardFill\b/,
+    /\bSTUDIO_GOLD_CYCLE\b/,
+    /\bSTUDIO_CARD_FILL_CYCLE\b/,
+    /\bpatchDesignOverrides\b/,
+    /\bpatchMaterialOverride\b/,
+    /\bsetOverrideValue\b/,
+    /\bsetPaletteTokenOverride\b/,
+    /'chrome'/,
+    /'sheet'/,
+    /'menu'/,
+  ]) {
+    assert.doesNotMatch(panel, banned, `the panel hand-wires a token: ${banned}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // The generalised override layer (S2 C1)
 // ---------------------------------------------------------------------------
 
