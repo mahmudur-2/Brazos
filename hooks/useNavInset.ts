@@ -1,6 +1,6 @@
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { layout } from '../ui/tokens';
-import { useDesignDial } from '../lib/designOverrides';
+import { useDesignDial, useOverrideNumber } from '../lib/designOverrides';
 
 /**
  * RUN G1 (C4/C6) — THE INSET CONTRACT, in one place.
@@ -52,10 +52,14 @@ export function useNavBottomPad(): number {
   return navBottomPadFor(insets.bottom, navBottomPad);
 }
 
-/** The height content must clear — see the header. */
+/** The height content must clear — see the header. RUN S2 (C6): the bar's
+ *  content height is dial-adjustable too, so the clearance follows the
+ *  `nav.barHeight` dial exactly as it follows the pad dial — one dial moves
+ *  the bar and every clearance at once. */
 export function useNavInset(): number {
   const insets = useSafeAreaInsets();
   const navBottomPad = useDesignDial('navBottomPad');
+  const barHeight = useOverrideNumber('nav.barHeight');
   const pad = navBottomPadFor(insets.bottom, navBottomPad);
-  return layout.floatingNavHeight + pad + Math.max(0, insets.bottom - pad);
+  return (barHeight ?? layout.floatingNavHeight) + pad + Math.max(0, insets.bottom - pad);
 }

@@ -4,8 +4,15 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
+import { navBar } from '../tokens';
 import { tap } from '../../lib/haptics';
-import { useDesignOverrides } from '../../lib/designOverrides';
+import {
+  getOverrideValue,
+  useDesignOverrides,
+  useOverrideFingerprint,
+  useOverrideNumber,
+  useOverrideString,
+} from '../../lib/designOverrides';
 import { useNavInset } from '../../hooks/useNavInset';
 import { Surface } from './Surface';
 
@@ -138,11 +145,12 @@ const TAB_BY_KEY = new Map(BOTTOM_NAV_TABS.map((tab) => [tab.key as string, tab]
 // Icon and label are deliberate design sizes. emerald D3 set them EXPLICITLY
 // at 28pt and ~11pt; RUN PJ1 (C9) scales both in proportion with the bar's
 // 25% content-height rise (70 → 88): 28 × 1.25 = 35 and 11 × 1.25 = 13.75,
-// rounded to 14. The stack-fit arithmetic below (and its fence in
-// tests/layout.test.mjs) still derives from these numbers, so a future size
-// that overflows the slot fails there instead of clipping on device.
-const TAB_ICON_SIZE = 35;
-const TAB_LABEL_FONT_SIZE = 14;
+// rounded to 14. RUN S2 (C6): the two numbers are TOKENS now — ui/tokens.ts
+// `navBar.iconSize` / `navBar.labelFontSize` — read live through the design
+// studio's override layer ('nav.iconSize' / 'nav.labelSize' dials), and the
+// old literals are fenced against returning here (tests/layout.test.mjs).
+// The stack-fit arithmetic and its fence derive from the tokens, so a size
+// that overflows the slot still fails there instead of clipping on device.
 
 // BottomTabItem.js's tabVerticalUiKit style wraps whatever tabBarIcon renders
 // in 5px of padding on every side — not overridable — so the usable slot is
@@ -315,9 +323,24 @@ export function BottomNavItem({
   const styles = stylesFor(colors);
   // G1 (C4): the studio's glow dial, when set, replaces the standing alpha.
   const { glowAlpha } = useDesignOverrides();
+  // RUN S2 (C6) — the item dials, each its own primitive subscription. The
+  // slot stays flex-driven: offsets are a transform on the CONTENT, so NO
+  // per-item X offsets and no per-pair gaps exist — the row's geometry is
+  // spread + centre clearance, responsively.
+  const iconSize = useOverrideNumber('nav.iconSize') ?? navBar.iconSize;
+  const labelSize = useOverrideNumber('nav.labelSize') ?? navBar.labelFontSize;
+  const iconLabelGap = useOverrideNumber('nav.iconLabelGap') ?? navBar.iconLabelGap;
+  const offsetX = useOverrideNumber('nav.itemOffsetX') ?? 0;
+  const offsetY = useOverrideNumber('nav.itemOffsetY') ?? 0;
+  const activeColor = useOverrideString('nav.activeColor');
+  const inactiveColor = useOverrideString('nav.inactiveColor');
+  const activeOpacity = useOverrideNumber('nav.activeOpacity') ?? 1;
+  const inactiveOpacity = useOverrideNumber('nav.inactiveOpacity') ?? 1;
+  const activeScale = useOverrideNumber('nav.activeScale') ?? 1;
   const tab = TAB_BY_KEY.get(routeName);
   const [active, inactive] = tab?.icons ?? (['ellipse', 'ellipse-outline'] as const);
   const label = tab?.label ?? routeName;
+  const tint = (focused ? activeColor : inactiveColor) ?? color;
   // Decision 4: the active glyph and label glow softly. A dark-Prestige
   // treatment — light keeps its flat Heritage bar; the shape lives at token
   // level (glow.text), only the colour is resolved here.
@@ -325,17 +348,35 @@ export function BottomNavItem({
     focused && isDark
       ? glow.text(withAlpha(colors.emerald, glowAlpha ?? ACTIVE_TAB_GLOW_ALPHA))
       : null;
+  const contentDials = {
+    opacity: focused ? activeOpacity : inactiveOpacity,
+    transform: [
+      { translateX: offsetX },
+      { translateY: offsetY },
+      { scale: focused ? activeScale : 1 },
+    ],
+  };
 
   return (
-    <View style={styles.tabItemContent}>
+    <View style={[styles.tabItemContent, contentDials]}>
       <Ionicons
         name={focused ? active : inactive}
-        size={TAB_ICON_SIZE}
-        color={color}
+        size={iconSize}
+        color={tint}
         style={activeGlow}
       />
       <Text
-        style={[styles.tabItemLabel, { color, fontWeight: focused ? '700' : '500' }, activeGlow]}
+        style={[
+          styles.tabItemLabel,
+          {
+            color: tint,
+            fontWeight: focused ? '700' : '500',
+            fontSize: labelSize,
+            lineHeight: labelSize + 2,
+            marginTop: iconLabelGap,
+          },
+          activeGlow,
+        ]}
         numberOfLines={1}
         // D3: no label may clip or truncate. The slot is wide enough for
         // "Messages" and "Discover" at 11pt down to a 320pt screen, but an
@@ -423,6 +464,32 @@ export const bottomNavScreenListeners = {
   },
 } as const;
 
+/**
+ * RUN S2 (C6) — the bar-container dials the screenOptions factory reads.
+ * `bottomNavScreenOptions` is a plain function (the catalog calls it), so it
+ * cannot subscribe; the TREES subscribe through `useNavBarContainerDials()`
+ * below and re-render, and the factory reads the store fresh on every call.
+ */
+const NAV_CONTAINER_DIAL_KEYS = [
+  'nav.barHeight',
+  'nav.padTop',
+  'nav.padLeft',
+  'nav.padRight',
+  'nav.spread',
+] as const;
+
+/** Subscribes a tree to the bar-container dials — the returned fingerprint
+ *  only exists to change when one of them does. */
+export function useNavBarContainerDials(): string {
+  return useOverrideFingerprint(NAV_CONTAINER_DIAL_KEYS);
+}
+
+/** A numeric bag dial, read non-reactively (the trees re-render for us). */
+function dialNumber(key: string, fallback: number): number {
+  const value = getOverrideValue(key);
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
 export function bottomNavScreenOptions(navBottomPad: number, palette: ColorPalette) {
   // RUN PJ1 (C9) — THE ATTACHED BAR. Flush to the bottom edge, full screen
   // width, no side insets and no float gap. RUN G1 (C4), THE FLUSH FIX: the
@@ -441,7 +508,12 @@ export function bottomNavScreenOptions(navBottomPad: number, palette: ColorPalet
   // attached geometry is identical in both branches (`bottom: 0` on a
   // flush bar is where the column puts it anyway).
 
-  return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => ({
+  return ({ route }: { route: { name: string } }): BottomTabNavigationOptions => {
+    // S2 (C6): the container dials — content height, per-side padding, and
+    // the symmetric spread that compresses the flex slots toward centre.
+    const barHeight = dialNumber('nav.barHeight', TAB_BAR_CONTENT_HEIGHT);
+    const spread = dialNumber('nav.spread', 0);
+    return {
     headerShown: false,
     // RUN G1 (C4) — THE BAR WEARS CHROME. BottomTabBar.js renders this
     // element inside a pointerEvents="none" absoluteFill view under every tab
@@ -465,15 +537,19 @@ export function bottomNavScreenOptions(navBottomPad: number, palette: ColorPalet
     // Wraps the whole icon+label block (see tabItemContent), not just the icon
     // — width:'100%' so longer labels like "Messages" have the full tab column
     // to lay out in, instead of the library's default 31px-wide icon-only box.
-    tabBarIconStyle: { width: '100%', height: TAB_ICON_WRAPPER_HEIGHT },
+    tabBarIconStyle: { width: '100%', height: barHeight - 10 },
     tabBarStyle: {
       // getTabBarHeight() (bottom-tabs internals) uses a custom height
       // VERBATIM. G1 (C4): the box is content + navBottomPad — the flush
       // formula's pad or the studio dial, resolved by the trees — restated
       // explicitly so the item slots stay the content height whatever the
-      // library's default does.
-      height: TAB_BAR_CONTENT_HEIGHT + navBottomPad,
+      // library's default does. S2 (C6): the content height is the
+      // 'nav.barHeight' dial, defaulting to the token.
+      height: barHeight + navBottomPad,
       paddingBottom: navBottomPad,
+      paddingTop: dialNumber('nav.padTop', 0),
+      paddingLeft: dialNumber('nav.padLeft', 0) + spread,
+      paddingRight: dialNumber('nav.padRight', 0) + spread,
       // Full width, flush: no side margins, no bottom gap, no rounded pill.
       marginHorizontal: 0,
       marginBottom: 0,
@@ -496,7 +572,8 @@ export function bottomNavScreenOptions(navBottomPad: number, palette: ColorPalet
         ? ({ position: 'absolute', left: 0, right: 0, bottom: 0 } as const)
         : null),
     },
-  });
+    };
+  };
 }
 
 /**
@@ -570,30 +647,28 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
  * argument: 60 fits inside the slot's own 67pt of usable height, so Yoga lays
  * it out without overflow and the transform only positions it.
  */
-/** home(18): the control's height as a share of the PILL's. */
-const CREATE_BUTTON_PILL_RATIO = 0.857;
-/** The glyph inside it, as a share of the control — 32 on 52, as it shipped. */
-const CREATE_GLYPH_RATIO = 0.615;
-
-/**
- * RUN H2 — OPERATOR DIAL #1: how strong the dark control's gold glow is.
- *
- * It REPLACES a black drop shadow (opacity 0.28, radius 8, offset 0/3) that
- * read as a hole punched under the tile on the near-black Prestige ground. The
- * alpha below is the only thing that sets the glow's strength: `glow.halo`
- * pins shadowOpacity at 1 on native precisely so the caller's alpha is the one
- * dilution, and the shape's radius is the shared 12.
- *
- * SHIPPED CONSERVATIVE at 0.25, and it is meant to be tuned live with Fast
- * Refresh rather than argued about here. Useful range 0.12 to 0.45: below 0.12
- * the halo stops being visible against #02110D at all, and above ~0.45 it
- * stops reading as depth and starts reading as a second gold ring.
- */
-const CREATE_BUTTON_GLOW_ALPHA = 0.25;
+// home(18)'s pill-share ratios and RUN H2's glow dial live in ui/tokens.ts
+// (`navBar.createSizeRatio` / `createGlyphRatio` / `createGlowAlpha`) since
+// RUN S2 (C6) — the schema registry reads the same defaults the control does.
 
 export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN S2 (C6) — THE [ + ] IS FULLY INDEPENDENT: size, radius, fill, ring,
+  // glow, glyph size/colour/offset are its own dials, inheriting nothing
+  // from the tab items. `nav.centerClearance` is the ROW's dial: margins on
+  // this flex slot push the neighbouring slots apart responsively.
+  const barHeight = useOverrideNumber('nav.barHeight') ?? TAB_BAR_CONTENT_HEIGHT;
+  const sizeDial = useOverrideNumber('create.size');
+  const radiusDial = useOverrideNumber('create.radius');
+  const fillDial = useOverrideString('create.fill');
+  const ringDial = useOverrideString('create.border');
+  const glowDial = useOverrideNumber('create.glowAlpha');
+  const glyphSizeDial = useOverrideNumber('create.glyphSize');
+  const glyphColorDial = useOverrideString('create.glyphColor');
+  const glyphOffsetX = useOverrideNumber('create.glyphOffsetX') ?? 0;
+  const glyphOffsetY = useOverrideNumber('create.glyphOffsetY') ?? 0;
+  const centerClearance = useOverrideNumber('nav.centerClearance') ?? 0;
 
   // Home parity 2026-08-22: ONE geometry in both themes — home(18)'s share of
   // the pill, centred inside it. Light's frozen 52pt square raised 14 above
@@ -618,14 +693,14 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
   // is what was asked for. The ring takes the theme-constant `goldDeep`
   // (ui/tokens.ts `constantAccents`) — one value on both sides of the palette
   // rather than a hex written here or a cross-palette reach.
-  const size = Math.round(TAB_BAR_CONTENT_HEIGHT * CREATE_BUTTON_PILL_RATIO);
+  const size = sizeDial ?? Math.round(barHeight * navBar.createSizeRatio);
   // The control CENTRES in the pill. The slot packs to flex-end with
   // TAB_BOTTOM_GAP beneath it, so lifting by half the slack minus that gap
   // leaves the same clearance above and below.
-  const raise = Math.round((TAB_BAR_CONTENT_HEIGHT - size) / 2) - TAB_BOTTOM_GAP;
+  const raise = Math.round((barHeight - size) / 2) - TAB_BOTTOM_GAP;
   // Derived rather than fixed so the plus keeps its proportion inside the
   // control at any size — a fixed 32 would read hollow in the larger box.
-  const glyph = Math.round(size * CREATE_GLYPH_RATIO);
+  const glyph = glyphSizeDial ?? Math.round(size * navBar.createGlyphRatio);
   // One transform, built once, so the pressed state cannot drop the control on
   // touch-down by forgetting the lift.
   const lift = (pressed: boolean) => ({
@@ -633,9 +708,14 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
       ? [{ translateY: -raise }, { scale: 0.96 }]
       : [{ translateY: -raise }],
   });
+  // The gold glow (RUN H2's operator dial, tokenised as navBar.createGlowAlpha
+  // and dial-replaceable): glow.halo pins shadowOpacity at 1 on native, so the
+  // alpha here is the one dilution. Applied inline, identically in both
+  // themes — the depth never forks, only colours do.
+  const halo = glow.halo(withAlpha(colors.gold, glowDial ?? navBar.createGlowAlpha));
 
   return (
-    <View style={styles.createSlot}>
+    <View style={[styles.createSlot, centerClearance ? { marginHorizontal: centerClearance } : null]}>
       <Pressable
         onPress={() => {
           // G1 (C4): the [ + ] acknowledges like every tab press. Its slot
@@ -652,7 +732,11 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
           // resolve through different properties, so "the later one wins" is
           // not a thing that can be relied on. One branch, one depth.
           isDark ? styles.createButtonDark : styles.createButtonLight,
+          halo,
           { width: size, height: size },
+          radiusDial != null ? { borderRadius: radiusDial } : null,
+          fillDial ? { backgroundColor: fillDial } : null,
+          ringDial ? { borderColor: ringDial } : null,
           pressed && styles.createButtonPressed,
           lift(pressed),
         ]}
@@ -663,7 +747,12 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         <Ionicons
           name="add"
           size={glyph}
-          color={isDark ? colors.postPillGreen : colors.gold}
+          color={glyphColorDial ?? (isDark ? colors.postPillGreen : colors.gold)}
+          style={
+            glyphOffsetX || glyphOffsetY
+              ? { transform: [{ translateX: glyphOffsetX }, { translateY: glyphOffsetY }] }
+              : undefined
+          }
         />
       </Pressable>
     </View>
@@ -743,10 +832,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: TAB_BOTTOM_GAP,
   },
   tabItemLabel: {
-    // fontWeight is set per-render (bold when focused) — see BottomNavItem.
-    fontSize: TAB_LABEL_FONT_SIZE,
-    lineHeight: TAB_LABEL_FONT_SIZE + 2,
-    marginTop: 2,
+    // fontWeight, size, lineHeight and the icon gap are set per-render from
+    // the nav dials (S2 C6) — see BottomNavItem. Nothing static remains but
+    // the role itself.
   },
   createSlot: {
     flex: 1,
@@ -784,8 +872,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     //
     // NOTHING HERE MAY EVER CLIP. On iOS `overflow: 'hidden'` cancels a shadow
     // on the SAME node, so this node and `createSlot` both stay unclipped; if a
-    // future clip is needed it goes on a child.
-    ...glow.halo(withAlpha(colors.gold, CREATE_BUTTON_GLOW_ALPHA)),
+    // future clip is needed it goes on a child. The gold glow itself is applied
+    // at render (S2 C6) so the create.glowAlpha dial replaces it live.
   },
   // home(8): filled palette gold with dark content. The FILL is the operator
   // reversal of decision 3's "no gold fills", and it survives RUN H2 untouched

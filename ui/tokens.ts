@@ -516,6 +516,33 @@ export const materials: Record<MaterialName, MaterialSpec> = {
 // thing. The gold and cardFill DIALS survive unchanged in
 // lib/designOverrides.ts — only the canned hex lists retired.
 
+/**
+ * RUN S2 (C6) — THE NAV BAR'S OWN DESIGN QUANTITIES, tokenised.
+ *
+ * TAB_ICON_SIZE and TAB_LABEL_FONT_SIZE lived as literals inside
+ * ui/primitives/BottomNav.tsx (35/14 — emerald D3's 28/11 scaled by PJ1
+ * C9's 25% bar rise); they are TOKENS now, read through the design studio's
+ * override layer, and tests/layout.test.mjs fences the literals against
+ * returning to the bar. The centre-button ratios and its glow strength move
+ * here for the same reason: the [ + ] is fully dial-driven and its defaults
+ * must be readable by the schema registry without importing a component.
+ *
+ * `labelFontSize` is the ONE font value any studio dial may touch — the
+ * narrow typography exception, held by tests/designStudio.test.mjs.
+ */
+export const navBar = {
+  iconSize: 35,
+  labelFontSize: 14,
+  /** The 2pt breath between the glyph and its label (label marginTop). */
+  iconLabelGap: 2,
+  /** home(18): the centre control's height as a share of the bar's. */
+  createSizeRatio: 0.857,
+  /** The glyph inside it, as a share of the control — 32 on 52, as shipped. */
+  createGlyphRatio: 0.615,
+  /** RUN H2's operator dial: the dark [ + ]'s gold-glow strength. */
+  createGlowAlpha: 0.25,
+} as const;
+
 // ---------------------------------------------------------------------------
 // Controls
 // ---------------------------------------------------------------------------

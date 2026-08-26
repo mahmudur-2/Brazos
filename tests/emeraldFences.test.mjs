@@ -1778,8 +1778,10 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // assertions pin is unchanged in KIND: the glyph is legible against its own
   // tile in both themes, the ring is never the fill's own colour, and no hue
   // is written as a hex at the call site. Only the values moved.
+  // S2 (C6): the glyph colour is its dial, DEFAULTING to the per-theme
+  // palette read — the fork and its tokens are pinned exactly as before.
   const glyphColour =
-    /<Ionicons name="add" size=\{glyph\} color=\{isDark \? colors\.(\w+) : colors\.(\w+)\} \/>/.exec(flat);
+    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? colors\.(\w+) : colors\.(\w+)\)\}/.exec(flat);
   assert.ok(
     glyphColour,
     'the glyph must read its colour per theme, off the resolved palette — a hex here would be a ' +
@@ -1827,14 +1829,19 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // than tidy: tests/themeTokens.test.mjs forbids a theme decision from
   // reaching depth at all, so a glow in the dark branch and a drop shadow in
   // the light one would be two designs rather than one design in two palettes.
-  // It still resolves per theme without a ternary, because `colors` inside the
-  // factory IS the resolved palette.
+  // It still resolves per theme without a ternary, because `colors` is the
+  // resolved palette. RUN S2 (C6): the glow is built ONCE at render — the
+  // same shared shape, the strength now the create.glowAlpha dial defaulting
+  // to the ui/tokens.ts navBar token — and applied in the one style array
+  // both themes share, so the depth still never forks.
   assert.match(
-    base[1],
-    /\.\.\.glow\.halo\(withAlpha\(colors\.gold, CREATE_BUTTON_GLOW_ALPHA\)\)/,
+    flat,
+    /const halo = glow\.halo\(withAlpha\(colors\.gold, glowDial \?\? navBar\.createGlowAlpha\)\);/,
     'the control lifts with a gold glow built from the shared glow shape'
   );
-  const glowAlpha = constantOf(bar, 'CREATE_BUTTON_GLOW_ALPHA');
+  const glowAlphaMatch = /createGlowAlpha: ([\d.]+),/.exec(stripComments(read('ui/tokens.ts')));
+  assert.ok(glowAlphaMatch, 'navBar.createGlowAlpha must be a plain number in ui/tokens.ts');
+  const glowAlpha = Number(glowAlphaMatch[1]);
   assert.ok(
     glowAlpha > 0 && glowAlpha < 1,
     `the glow alpha must be a real fraction (saw ${glowAlpha})`
@@ -1893,7 +1900,7 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   const gap = constantOf(bar, 'TAB_BOTTOM_GAP');
   assert.match(
     flat,
-    /const raise = Math\.round\(\(TAB_BAR_CONTENT_HEIGHT - size\) \/ 2\) - TAB_BOTTOM_GAP;/,
+    /const raise = Math\.round\(\(barHeight - size\) \/ 2\) - TAB_BOTTOM_GAP;/,
     'the lift must be DERIVED from the slack the pill leaves, never chosen — one lift, both themes'
   );
   const raise = Math.round((pillHeight - size) / 2) - gap;
@@ -1914,8 +1921,9 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   );
 
   // And the size expression itself is unconditional — the isDark fork must
-  // not come back around either the size or the lift.
-  assert.match(flat, /const size = Math\.round\(TAB_BAR_CONTENT_HEIGHT \* CREATE_BUTTON_PILL_RATIO\);/);
+  // not come back around either the size or the lift. S2 (C6): the size is
+  // its dial, defaulting to the token-ratio derivation.
+  assert.match(flat, /const size = sizeDial \?\? Math\.round\(barHeight \* navBar\.createSizeRatio\);/);
 });
 
 /**
@@ -1930,6 +1938,22 @@ function createButtonDarkSize(bar, flat) {
   if (ofPill) {
     const pill = constantOf(stripComments(read('ui/tokens.ts')), 'FLOATING_NAV_HEIGHT');
     return Math.round(pill * constantOf(bar, 'CREATE_BUTTON_PILL_RATIO'));
+  }
+  // RUN S2 (C6): the ratio is a TOKEN (ui/tokens.ts navBar.createSizeRatio)
+  // and the size is its dial's default — the derivation is unchanged, only
+  // its home moved, and with no dial set barHeight IS the pill height.
+  const dialled = /Math\.round\(barHeight \* navBar\.createSizeRatio\)/.test(flat);
+  if (dialled) {
+    assert.match(
+      flat,
+      /const barHeight = useOverrideNumber\('nav\.barHeight'\) \?\? TAB_BAR_CONTENT_HEIGHT;/,
+      "the [ + ]'s bar height must default to the pill's own token"
+    );
+    const tokensSource = stripComments(read('ui/tokens.ts'));
+    const pill = constantOf(tokensSource, 'FLOATING_NAV_HEIGHT');
+    const ratio = /createSizeRatio: ([\d.]+),/.exec(tokensSource);
+    assert.ok(ratio, 'navBar.createSizeRatio must be a plain number in ui/tokens.ts');
+    return Math.round(pill * Number(ratio[1]));
   }
   assert.fail('the dark control must derive its size from a declared ratio, never a pt literal');
 }
@@ -2241,7 +2265,7 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   // the LIGHT arm moved, and the dark arm is pinned BY NAME so a future edit
   // that "unifies" the two fails here rather than in a screenshot.
   const glyph =
-    /<Ionicons name="add" size=\{glyph\} color=\{isDark \? colors\.(\w+) : colors\.(\w+)\} \/>/.exec(bar);
+    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? colors\.(\w+) : colors\.(\w+)\)\}/.exec(bar);
   assert.ok(glyph, 'the [ + ] glyph must still take its colour per theme, off the resolved palette');
   assert.equal(glyph[1], 'postPillGreen', 'C1 is LIGHT ONLY — the dark glyph must not move');
   assert.equal(glyph[2], 'gold', "the light glyph is the LIGHT palette's gold");

@@ -12,7 +12,11 @@ import { SubmitBidScreen } from '../screens/SubmitBidScreen';
 import { WorkerHomeScreen } from '../screens/WorkerHomeScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerResultsScreen } from '../screens/WorkerResultsScreen';
-import { bottomNavScreenListeners, bottomNavScreenOptions } from '../ui/primitives/BottomNav';
+import {
+  bottomNavScreenListeners,
+  bottomNavScreenOptions,
+  useNavBarContainerDials,
+} from '../ui/primitives/BottomNav';
 import {
   MapStackNavigator,
   MessagesStackNavigator,
@@ -75,6 +79,9 @@ export function WorkerRoot() {
   // G1 (C4): the bar's resolved bottom padding — the flush formula, or the
   // design studio's dial (hooks/useNavInset.ts owns the arithmetic).
   const navBottomPad = useNavBottomPad();
+  // S2 (C6): re-render when a bar-container dial (height, padding, spread)
+  // moves, so the plain screenOptions factory reads fresh values.
+  useNavBarContainerDials();
   const { palette } = useThemeColors();
 
   return (

@@ -69,15 +69,23 @@ const overridesModule = (async () => {
   return import(toDataUrl(stubbed));
 })();
 
-/** ui/designStudioSchema.ts, executed against the executed override store. */
+/** ui/designStudioSchema.ts, executed against the executed override store
+ *  and token module. */
 const schemaModule = (async () => {
   const overrides = await overridesModule;
+  const tokens = await tokensModule;
   globalThis.__S2_OVERRIDES__ = overrides;
+  globalThis.__S2_TOKENS__ = tokens;
   const js = stripTypeScriptTypes(await read('ui/designStudioSchema.ts'), { mode: 'strip' });
-  const stubbed = js.replace(
-    /import \{[\s\S]*?\} from '\.\.\/lib\/designOverrides';/,
-    'const { STATIC_MATERIALS, getDesignOverrides, patchDesignOverrides, patchMaterialOverride, setOverrideValue, setPaletteTokenOverride } = globalThis.__S2_OVERRIDES__;',
-  );
+  const stubbed = js
+    .replace(
+      /import \{[\s\S]*?\} from '\.\.\/lib\/designOverrides';/,
+      'const { STATIC_MATERIALS, getDesignOverrides, patchDesignOverrides, patchMaterialOverride, setOverrideValue, setPaletteTokenOverride } = globalThis.__S2_OVERRIDES__;',
+    )
+    .replace(
+      /import \{[\s\S]*?\} from '\.\/tokens';/,
+      'const { layout, navBar, radius: tokenRadius } = globalThis.__S2_TOKENS__;',
+    );
   assert.doesNotMatch(
     stubbed,
     /from '(?:react|\.[^']*)'/,
@@ -109,8 +117,28 @@ const contextFor = async (overrides = {}) => {
   return {
     overrides: { ...o.getDesignOverrides(), ...overrides },
     staticMaterials: tokens.materials,
-    appLight: { gold: tokens.brand.gold, surface: '#FFFFFF', text: '#1F2E22', background: '#F4F1E8' },
-    appDark: { gold: tokens.dark.gold, surface: tokens.dark.surface, text: '#F1EDE1', background: '#02110D' },
+    appLight: {
+      gold: tokens.brand.gold,
+      surface: '#FFFFFF',
+      text: '#1F2E22',
+      background: '#F4F1E8',
+      emerald: tokens.brand.emerald,
+      navInactive: '#839087',
+      postPillGreen: tokens.brand.emerald,
+      goldDeep: '#A08149',
+      greetingSlate: '#526477',
+    },
+    appDark: {
+      gold: tokens.dark.gold,
+      surface: tokens.dark.surface,
+      text: '#F1EDE1',
+      background: '#02110D',
+      emerald: tokens.dark.emerald,
+      navInactive: '#7C8A80',
+      postPillGreen: tokens.brand.emerald,
+      goldDeep: '#A08149',
+      greetingSlate: '#526477',
+    },
     emeraldLight: tokens.light,
     emeraldDark: tokens.dark,
     isDark: true,
@@ -459,6 +487,116 @@ test('[static] the panel routes every gesture and frame change through the clamp
   // Content scrolls internally at every height: the body flexes inside the
   // sized panel rather than sizing it.
   assert.match(panel, /height: rect\.height/);
+});
+
+// ---------------------------------------------------------------------------
+// The Navigation category (S2 C6)
+// ---------------------------------------------------------------------------
+
+test('nav dials: defaults mirror the tokens, the [+] derives from the live bar, and writes round-trip', async () => {
+  const schema = await schemaModule;
+  const tokens = await tokensModule;
+  const o = await overridesModule;
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+  const ctx = await contextFor();
+
+  assert.equal(byKey.get('nav.barHeight').defaultValue(ctx), tokens.layout.floatingNavHeight);
+  assert.equal(byKey.get('nav.iconSize').defaultValue(ctx), tokens.navBar.iconSize);
+  assert.equal(byKey.get('nav.labelSize').defaultValue(ctx), tokens.navBar.labelFontSize);
+  assert.equal(byKey.get('nav.iconLabelGap').defaultValue(ctx), tokens.navBar.iconLabelGap);
+  assert.equal(byKey.get('create.glowAlpha').defaultValue(ctx), tokens.navBar.createGlowAlpha);
+  assert.equal(
+    byKey.get('create.size').defaultValue(ctx),
+    Math.round(tokens.layout.floatingNavHeight * tokens.navBar.createSizeRatio),
+    "the [+]'s default size is home(18)'s share of the bar",
+  );
+  assert.equal(
+    byKey.get('create.glyphSize').defaultValue(ctx),
+    Math.round(
+      Math.round(tokens.layout.floatingNavHeight * tokens.navBar.createSizeRatio) *
+        tokens.navBar.createGlyphRatio,
+    ),
+  );
+  assert.equal(byKey.get('nav.activeColor').defaultValue(ctx), tokens.dark.emerald, 'dark ctx');
+  assert.ok(byKey.get('create.size').min >= 44, 'the [+] can never dial under the touch floor');
+
+  try {
+    // The [+]'s derived defaults FOLLOW the live bar height.
+    byKey.get('nav.barHeight').write(100);
+    const live = await contextFor();
+    assert.equal(
+      byKey.get('create.size').defaultValue(live),
+      Math.round(100 * tokens.navBar.createSizeRatio),
+    );
+    // A bag write round-trips and clears.
+    byKey.get('nav.spread').write(24);
+    assert.equal(o.getDesignOverrides().values['nav.spread'], 24);
+    byKey.get('nav.spread').write(undefined);
+    byKey.get('nav.barHeight').write(undefined);
+    assert.equal('values' in o.getDesignOverrides(), false);
+  } finally {
+    o.resetDesignOverrides();
+  }
+
+  // NO per-item X offsets and NO per-pair gaps: the row dials are the ROW's.
+  const navKeys = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'navigation').map(
+    (entry) => entry.key,
+  );
+  assert.ok(!navKeys.some((key) => /item\d|perItem|pairGap/i.test(key)), 'the bar stays slot-based flex');
+  assert.ok(navKeys.includes('nav.spread') && navKeys.includes('nav.centerClearance'));
+});
+
+test('the narrow typography exception: nav label size is the ONLY font dial', async () => {
+  const schema = await schemaModule;
+  const fontDials = schema.STUDIO_REGISTRY.filter(
+    (entry) =>
+      /font/i.test(entry.technicalKey) ||
+      /font size|text size|label size/i.test(entry.plainLabel) ||
+      /labelSize/.test(entry.key),
+  ).map((entry) => entry.key);
+  assert.deepEqual(fontDials, ['nav.labelSize'], 'no other font property may grow a dial');
+});
+
+test('[static] the bar reads every dial through the override layer, and the trees subscribe', async () => {
+  const bottomNav = stripComments(await read('ui/primitives/BottomNav.tsx'));
+  // Item dials live in the item; container dials in the options factory; the
+  // [+] inherits nothing from tab items — its dials are its own create.* set.
+  for (const key of [
+    "'nav.iconSize'",
+    "'nav.labelSize'",
+    "'nav.iconLabelGap'",
+    "'nav.itemOffsetX'",
+    "'nav.itemOffsetY'",
+    "'nav.activeColor'",
+    "'nav.inactiveColor'",
+    "'nav.activeOpacity'",
+    "'nav.inactiveOpacity'",
+    "'nav.activeScale'",
+    "'nav.barHeight'",
+    "'nav.padTop'",
+    "'nav.padLeft'",
+    "'nav.padRight'",
+    "'nav.spread'",
+    "'nav.centerClearance'",
+    "'create.size'",
+    "'create.radius'",
+    "'create.fill'",
+    "'create.border'",
+    "'create.glowAlpha'",
+    "'create.glyphSize'",
+    "'create.glyphColor'",
+    "'create.glyphOffsetX'",
+    "'create.glyphOffsetY'",
+  ]) {
+    assert.ok(bottomNav.includes(key), `BottomNav must read the ${key} dial`);
+  }
+  for (const path of ['navigation/CustomerRoot.tsx', 'navigation/WorkerRoot.tsx']) {
+    assert.match(
+      stripComments(await read(path)),
+      /useNavBarContainerDials\(\);/,
+      `${path} must subscribe to the bar-container dials`,
+    );
+  }
 });
 
 // ---------------------------------------------------------------------------

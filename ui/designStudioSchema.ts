@@ -11,7 +11,7 @@ import {
   type PaletteThemeKey,
   type StudioValue,
 } from '../lib/designOverrides';
-import type { MaterialName } from './tokens';
+import { layout, navBar, radius as tokenRadius, type MaterialName } from './tokens';
 
 export type { StudioValue } from '../lib/designOverrides';
 
@@ -254,6 +254,382 @@ function materialDials(material: MaterialName): StudioEntry[] {
 }
 
 // ---------------------------------------------------------------------------
+// The Navigation category (C6). The bar-container dials are read by the
+// screenOptions factory (the trees subscribe through the fingerprint hook);
+// the item and centre-button dials are read live inside the components. The
+// bar stays SLOT-BASED FLEX: no per-item X offsets and no per-pair gaps —
+// spread and centre clearance reproduce that geometry responsively.
+// ---------------------------------------------------------------------------
+
+/** The live bar content height — the dial, or the token. */
+function liveNavBarHeight(ctx: StudioContext): number {
+  const dial = ctx.overrides.values?.['nav.barHeight'];
+  return typeof dial === 'number' ? dial : layout.floatingNavHeight;
+}
+
+/** The live centre-button size — its dial, or its share of the live bar. */
+function liveCreateSize(ctx: StudioContext): number {
+  const dial = ctx.overrides.values?.['create.size'];
+  return typeof dial === 'number' ? dial : Math.round(liveNavBarHeight(ctx) * navBar.createSizeRatio);
+}
+
+function navigationDialEntries(): StudioEntry[] {
+  const bar = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'navigation', subcategory: 'Bar container' });
+  const item = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'navigation', subcategory: 'Tab items' });
+  const create = (row: Omit<StudioEntry, 'overrideValue' | 'write' | 'category' | 'subcategory'>) =>
+    bagEntry({ ...row, category: 'navigation', subcategory: 'Centre [+]' });
+  return [
+    bar({
+      key: 'nav.barHeight',
+      plainLabel: 'Bar height',
+      technicalKey: 'nav.barHeight',
+      description:
+        "The bar's content height — every screen's bottom clearance follows it live.",
+      tier: 'basic',
+      kind: 'number',
+      scope: 'token',
+      unit: 'pt',
+      min: 56,
+      max: 140,
+      step: 2,
+      defaultValue: () => layout.floatingNavHeight,
+    }),
+    bar({
+      key: 'nav.padTop',
+      plainLabel: 'Padding above the icons',
+      technicalKey: 'nav.padTop',
+      description: "Space between the bar's top hairline and the icon row.",
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 20,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    bar({
+      key: 'nav.padLeft',
+      plainLabel: 'Left padding',
+      technicalKey: 'nav.padLeft',
+      description: "Space inside the bar's left edge, before the first slot.",
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    bar({
+      key: 'nav.padRight',
+      plainLabel: 'Right padding',
+      technicalKey: 'nav.padRight',
+      description: "Space inside the bar's right edge, after the last slot.",
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    bar({
+      key: 'nav.spread',
+      plainLabel: 'Tab spread',
+      technicalKey: 'nav.spread',
+      description:
+        'Pulls the tab slots toward the centre from both sides — the flex row re-lays out responsively.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 60,
+      step: 2,
+      defaultValue: () => 0,
+    }),
+    bar({
+      key: 'nav.centerClearance',
+      plainLabel: 'Centre-button clearance',
+      technicalKey: 'nav.centerClearance',
+      description: 'Extra room the neighbouring slots leave around the centre [+].',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 40,
+      step: 2,
+      defaultValue: () => 0,
+    }),
+    item({
+      key: 'nav.iconSize',
+      plainLabel: 'Icon size',
+      technicalKey: 'nav.iconSize',
+      description: 'Every tab glyph — tokenised as ui/tokens navBar.iconSize.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'token',
+      unit: 'pt',
+      min: 16,
+      max: 48,
+      step: 1,
+      defaultValue: () => navBar.iconSize,
+    }),
+    item({
+      key: 'nav.labelSize',
+      plainLabel: 'Label size',
+      technicalKey: 'nav.labelSize',
+      description:
+        'The tab labels — THE one font value any dial may touch (the narrow typography exception).',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'token',
+      unit: 'pt',
+      min: 8,
+      max: 20,
+      step: 1,
+      defaultValue: () => navBar.labelFontSize,
+    }),
+    item({
+      key: 'nav.iconLabelGap',
+      plainLabel: 'Icon-label gap',
+      technicalKey: 'nav.iconLabelGap',
+      description: 'The breath between each glyph and its label.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 12,
+      step: 1,
+      defaultValue: () => navBar.iconLabelGap,
+    }),
+    item({
+      key: 'nav.itemOffsetX',
+      plainLabel: 'Item row X offset',
+      technicalKey: 'nav.itemOffsetX',
+      description: 'Nudges every icon+label block sideways inside its slot — the slots themselves never move.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: -20,
+      max: 20,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    item({
+      key: 'nav.itemOffsetY',
+      plainLabel: 'Item row Y offset',
+      technicalKey: 'nav.itemOffsetY',
+      description: 'Nudges every icon+label block up or down inside the bar.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: -20,
+      max: 20,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    item({
+      key: 'nav.activeColor',
+      plainLabel: 'Active colour',
+      technicalKey: 'nav.activeColor',
+      description: 'The focused tab’s glyph and label tint, in whichever theme is showing.',
+      tier: 'basic',
+      kind: 'color',
+      scope: 'local',
+      defaultValue: (ctx) => (ctx.isDark ? ctx.appDark : ctx.appLight).emerald ?? '',
+      contrastGround: (ctx) => ({
+        label: 'background',
+        hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
+      }),
+    }),
+    item({
+      key: 'nav.inactiveColor',
+      plainLabel: 'Inactive colour',
+      technicalKey: 'nav.inactiveColor',
+      description: 'The resting tabs’ glyph and label tint, in whichever theme is showing.',
+      tier: 'basic',
+      kind: 'color',
+      scope: 'local',
+      defaultValue: (ctx) => (ctx.isDark ? ctx.appDark : ctx.appLight).navInactive ?? '',
+      contrastGround: (ctx) => ({
+        label: 'background',
+        hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
+      }),
+    }),
+    item({
+      key: 'nav.activeOpacity',
+      plainLabel: 'Active opacity',
+      technicalKey: 'nav.activeOpacity',
+      description: 'How solid the focused tab’s icon+label block renders.',
+      tier: 'advanced',
+      kind: 'decimal',
+      scope: 'local',
+      min: 0,
+      max: 1,
+      step: 0.02,
+      defaultValue: () => 1,
+    }),
+    item({
+      key: 'nav.inactiveOpacity',
+      plainLabel: 'Inactive opacity',
+      technicalKey: 'nav.inactiveOpacity',
+      description: 'How solid the resting tabs’ icon+label blocks render.',
+      tier: 'advanced',
+      kind: 'decimal',
+      scope: 'local',
+      min: 0,
+      max: 1,
+      step: 0.02,
+      defaultValue: () => 1,
+    }),
+    item({
+      key: 'nav.activeScale',
+      plainLabel: 'Active scale',
+      technicalKey: 'nav.activeScale',
+      description: 'Grows or shrinks the focused tab’s icon+label block.',
+      tier: 'advanced',
+      kind: 'decimal',
+      scope: 'local',
+      min: 0.8,
+      max: 1.5,
+      step: 0.02,
+      defaultValue: () => 1,
+    }),
+    create({
+      key: 'create.size',
+      plainLabel: 'Button size',
+      technicalKey: 'create.size',
+      description:
+        'The centre [+] tile’s square — by default its home(18) share of the live bar height. Never below the 44pt touch floor.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 44,
+      max: 96,
+      step: 1,
+      defaultValue: (ctx) => Math.round(liveNavBarHeight(ctx) * navBar.createSizeRatio),
+    }),
+    create({
+      key: 'create.radius',
+      plainLabel: 'Corner roundness',
+      technicalKey: 'create.radius',
+      description: 'The centre [+] tile’s corner radius.',
+      tier: 'basic',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 0,
+      max: 48,
+      step: 1,
+      defaultValue: () => tokenRadius.lg,
+    }),
+    create({
+      key: 'create.fill',
+      plainLabel: 'Fill',
+      technicalKey: 'create.fill',
+      description: 'The centre [+] tile’s own fill — it inherits nothing from the tab items.',
+      tier: 'basic',
+      kind: 'color',
+      scope: 'local',
+      defaultValue: (ctx) =>
+        ctx.isDark ? (ctx.appDark.gold ?? '') : (ctx.appLight.postPillGreen ?? ''),
+      contrastGround: (ctx) => ({
+        label: 'background',
+        hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
+      }),
+    }),
+    create({
+      key: 'create.border',
+      plainLabel: 'Ring',
+      technicalKey: 'create.border',
+      description: 'The centre [+] tile’s outline.',
+      tier: 'advanced',
+      kind: 'color',
+      scope: 'local',
+      defaultValue: (ctx) =>
+        ctx.isDark ? (ctx.appDark.greetingSlate ?? '') : (ctx.appLight.goldDeep ?? ''),
+    }),
+    create({
+      key: 'create.glowAlpha',
+      plainLabel: 'Glow strength',
+      technicalKey: 'create.glowAlpha',
+      description: 'The gold halo under the centre [+] (dark ground) — RUN H2’s operator dial.',
+      tier: 'advanced',
+      kind: 'decimal',
+      scope: 'local',
+      min: 0,
+      max: 1,
+      step: 0.02,
+      defaultValue: () => navBar.createGlowAlpha,
+    }),
+    create({
+      key: 'create.glyphSize',
+      plainLabel: 'Glyph size',
+      technicalKey: 'create.glyphSize',
+      description: 'The + glyph — by default its shipped share of the live button size.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: 16,
+      max: 64,
+      step: 1,
+      defaultValue: (ctx) => Math.round(liveCreateSize(ctx) * navBar.createGlyphRatio),
+    }),
+    create({
+      key: 'create.glyphColor',
+      plainLabel: 'Glyph colour',
+      technicalKey: 'create.glyphColor',
+      description: 'The + glyph’s ink, in whichever theme is showing.',
+      tier: 'advanced',
+      kind: 'color',
+      scope: 'local',
+      defaultValue: (ctx) =>
+        ctx.isDark ? (ctx.appDark.postPillGreen ?? '') : (ctx.appLight.gold ?? ''),
+    }),
+    create({
+      key: 'create.glyphOffsetX',
+      plainLabel: 'Glyph X offset',
+      technicalKey: 'create.glyphOffsetX',
+      description: 'Nudges the + glyph sideways inside the tile.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: -16,
+      max: 16,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+    create({
+      key: 'create.glyphOffsetY',
+      plainLabel: 'Glyph Y offset',
+      technicalKey: 'create.glyphOffsetY',
+      description: 'Nudges the + glyph up or down inside the tile.',
+      tier: 'advanced',
+      kind: 'number',
+      scope: 'local',
+      unit: 'pt',
+      min: -16,
+      max: 16,
+      step: 1,
+      defaultValue: () => 0,
+    }),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // The registry. C1 seeds it with every dial the G1 studio already offered;
 // C5–C10 grow the categories. Order inside a category is display order.
 // ---------------------------------------------------------------------------
@@ -262,6 +638,7 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...materialDials('chrome'),
   ...materialDials('sheet'),
   ...materialDials('menu'),
+  ...navigationDialEntries(),
   {
     key: 'glow.alpha',
     plainLabel: 'Glow strength',

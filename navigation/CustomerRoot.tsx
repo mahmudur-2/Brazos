@@ -20,6 +20,7 @@ import {
   bottomNavScreenOptions,
   CenterCreateButton,
   HIDDEN_TAB_ITEM_OPTIONS,
+  useNavBarContainerDials,
 } from '../ui/primitives/BottomNav';
 import {
   MapStackNavigator,
@@ -145,6 +146,9 @@ export function CustomerRoot() {
   // G1 (C4): the bar's resolved bottom padding — the flush formula, or the
   // design studio's dial (hooks/useNavInset.ts owns the arithmetic).
   const navBottomPad = useNavBottomPad();
+  // S2 (C6): re-render when a bar-container dial (height, padding, spread)
+  // moves, so the plain screenOptions factory reads fresh values.
+  useNavBarContainerDials();
   const { palette } = useThemeColors();
   const [createOpen, setCreateOpen] = useState(false);
 

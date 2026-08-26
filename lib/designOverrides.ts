@@ -268,6 +268,18 @@ export function useDesignDial(key: 'glowAlpha' | 'navRadius' | 'navBottomPad'): 
   );
 }
 
+/**
+ * A joined fingerprint of several bag keys. Strings compare by value under
+ * Object.is, so a component subscribing through this re-renders exactly when
+ * one of ITS dials moves — how the nav trees follow the bar-container dials
+ * without an object snapshot to cache.
+ */
+export function useOverrideFingerprint(keys: readonly string[]): string {
+  const readFingerprint = () =>
+    keys.map((key) => `${key}=${String(state.overrides.values?.[key])}`).join('|');
+  return useSyncExternalStore(subscribe, readFingerprint, readFingerprint);
+}
+
 const readPaletteSlice = () => paletteSlice;
 
 /** The palette dials only — what hooks/useThemeColors.ts subscribes to, so a

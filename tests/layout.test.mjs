@@ -26,9 +26,15 @@ test('main tab screens do not reserve redundant gaps above the safe tab bar', as
   // padding is navBottomPad — max(inset − 16, 6), or the studio dial — so
   // the row sits lower than the full inset used to put it; the arithmetic's
   // one home is hooks/useNavInset.ts and nothing floats by margin.
+  // S2 (C6): the content height is the 'nav.barHeight' dial, DEFAULTING to
+  // the token — the box is still content + navBottomPad.
   assert.match(
     bottomNav,
-    /height: TAB_BAR_CONTENT_HEIGHT \+ navBottomPad,\s*paddingBottom: navBottomPad,/
+    /const barHeight = dialNumber\('nav\.barHeight', TAB_BAR_CONTENT_HEIGHT\);/
+  );
+  assert.match(
+    bottomNav,
+    /height: barHeight \+ navBottomPad,\s*paddingBottom: navBottomPad,/
   );
   assert.match(bottomNav, /marginHorizontal: 0,\s*marginBottom: 0,\s*borderRadius: 0,/);
   assert.ok(
@@ -224,21 +230,43 @@ test('the nav glyphs are D3 size and every slot still fits its label', async () 
   // Since emerald(3) the pill's geometry lives in ui/tokens.ts, so both the bar
   // and every screen that clears it read one number each.
   const geometry = (name) => numberIn(tokens, 'ui/tokens.ts', name);
+  // S2 (C6): the glyph and label sizes are TOKENS too — ui/tokens.ts navBar —
+  // read live through the studio's override layer.
+  const navToken = (name) => {
+    const match = tokens.match(new RegExp(`${name}: (\\d+)`));
+    assert.ok(match, `navBar.${name} must be a plain number in ui/tokens.ts`);
+    return Number(match[1]);
+  };
 
   // PJ1 (C9): emerald D3's 28/11 scaled in proportion with the bar's 25%
-  // content-height rise — 35pt glyphs, 14pt labels.
-  assert.equal(number('const TAB_ICON_SIZE'), 35);
-  assert.equal(number('const TAB_LABEL_FONT_SIZE'), 14);
+  // content-height rise — 35pt glyphs, 14pt labels. S2 (C6): tokenised.
+  assert.equal(navToken('iconSize'), 35);
+  assert.equal(navToken('labelFontSize'), 14);
+
+  // FENCED AGAINST RETURN (S2 C6): the two sizes may never come back as
+  // literals in the bar — the token, read through the override layer, is the
+  // one home. Comment-stripped so the docblock recording the move may name
+  // the old constants.
+  const navCodeOnly = bottomNav
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '');
+  assert.doesNotMatch(
+    navCodeOnly,
+    /TAB_ICON_SIZE|TAB_LABEL_FONT_SIZE/,
+    'the icon/label size literals must not return to BottomNav — ui/tokens.ts navBar is the home'
+  );
+  assert.match(navCodeOnly, /navBar\.iconSize/);
+  assert.match(navCodeOnly, /navBar\.labelFontSize/);
 
   // The bar grows only as much as the content needs. Ionicons renders in a box
-  // of about size + 3; the label adds its lineHeight (size + 2) plus a 2pt
-  // margin; TAB_BOTTOM_GAP closes it. BottomTabItem's non-overridable 5pt
-  // padding costs 10 of the bar's height.
+  // of about size + 3; the label adds its lineHeight (size + 2) plus the
+  // icon-label gap; TAB_BOTTOM_GAP closes it. BottomTabItem's non-overridable
+  // 5pt padding costs 10 of the bar's height.
   const barHeight = geometry('const FLOATING_NAV_HEIGHT');
   const stack =
-    number('const TAB_ICON_SIZE') +
+    navToken('iconSize') +
     3 +
-    (number('const TAB_LABEL_FONT_SIZE') + 2 + 2) +
+    (navToken('labelFontSize') + 2 + navToken('iconLabelGap')) +
     number('const TAB_BOTTOM_GAP');
   assert.ok(
     stack <= barHeight - 10,
@@ -535,9 +563,11 @@ test('the flush arithmetic lives in hooks/useNavInset.ts alone (G1 C6)', async (
     /return override \?\? Math\.max\(insetBottom - NAV_FLUSH_TUCK, NAV_FLUSH_MIN_PAD\);/,
     'the flush formula must stay the dial-replaceable one'
   );
+  // S2 (C6): the content height follows the 'nav.barHeight' dial, defaulting
+  // to the token — the clearance is still content + pad + remainder.
   assert.match(
     hook,
-    /return layout\.floatingNavHeight \+ pad \+ Math\.max\(0, insets\.bottom - pad\);/,
+    /return \(barHeight \?\? layout\.floatingNavHeight\) \+ pad \+ Math\.max\(0, insets\.bottom - pad\);/,
     'the clearance must stay content + pad + safe-area remainder'
   );
 
