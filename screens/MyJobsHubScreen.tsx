@@ -32,6 +32,7 @@ import { effectiveOfferStatus, type PendingOffer } from '../lib/offers';
 import { draftHasContent, loadPostJobDraft, type PostJobDraft } from '../lib/postJobDraft';
 import type { MyJobsStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   fonts,
   radius,
@@ -74,8 +75,16 @@ function FilterTabs({
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C4) — the segmented bar is this screen's signature control, and
+  // both of its numbers were unreachable. They fall back to what this file
+  // drew, spelled here and nowhere else.
+  const tabsHeight = useDialNumber('myJobs.tabs.height') ?? 50;
+  const tabsRadius = useDialNumber('myJobs.tabs.radius') ?? radius.lg;
   return (
-    <View style={styles.tabs} accessibilityRole="tablist">
+    <View
+      style={[styles.tabs, { minHeight: tabsHeight, borderRadius: tabsRadius }]}
+      accessibilityRole="tablist"
+    >
       {FILTERS.map((option) => {
         const selected = option.value === value;
         return (
@@ -134,6 +143,11 @@ export function MyJobsHubScreen() {
   // 35/36/37 draw these accents gold.
   const accent = isDark ? colors.gold : colors.forest;
   const styles = stylesFor(colors);
+  // RUN T2 (C4) — this screen's own three, on the `theme.*` scale because this
+  // file imports spacing/radius from lib/theme.
+  const contentGap = useDialNumber('myJobs.content.gap') ?? spacing.xl;
+  const emptyPaddingY = useDialNumber('myJobs.empty.paddingY') ?? spacing.xxl;
+  const headerMarkSize = useDialNumber('myJobs.headerMark.size') ?? 48;
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { user } = useAuth();
   // Perspective comes from ModeContext — never a hand-passed prop (CLAUDE.md).
@@ -263,7 +277,13 @@ export function MyJobsHubScreen() {
       <View style={styles.header}>
         {/* Masters 35/36/37 ring the header's briefcase squircle in gold
             rather than filling it; light keeps the Heritage forest fill. */}
-        <View style={[styles.headerMark, isDark && styles.headerMarkDark]}>
+        <View
+          style={[
+            styles.headerMark,
+            { width: headerMarkSize, height: headerMarkSize },
+            isDark && styles.headerMarkDark,
+          ]}
+        >
           <Ionicons
             name="briefcase-outline"
             size={22}
@@ -292,7 +312,7 @@ export function MyJobsHubScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { gap: contentGap }]}
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
@@ -326,7 +346,7 @@ export function MyJobsHubScreen() {
 
           {isEmpty ? (
             error ? null : (
-              <View style={styles.empty}>
+              <View style={[styles.empty, { paddingVertical: emptyPaddingY }]}>
                 <View style={styles.emptyIcon}>
                   <Ionicons name="briefcase-outline" size={34} color={accent} />
                 </View>
@@ -562,8 +582,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: spacing.lg,
   },
   headerMark: {
-    width: 48,
-    height: 48,
     borderRadius: radius.lg,
     backgroundColor: colors.forest,
     alignItems: 'center',
@@ -607,11 +625,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 35 fills its active cell green instead (B-3); decision 5 names
   // the gold-bordered form as the rule, so that is what all three tabs use.
   tabs: {
-    minHeight: 50,
     flexDirection: 'row',
     gap: 3,
     padding: 3,
-    borderRadius: radius.lg,
     backgroundColor: colors.mint,
   },
   tab: {
@@ -666,7 +682,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // MainTabs already reserves the safe tab-bar height. Adding another
     // bottom inset here creates a visible dead strip above that bar.
     paddingBottom: 0,
-    gap: spacing.xl,
   },
   section: {
     gap: spacing.md,
@@ -702,7 +717,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   empty: {
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: spacing.xxl,
     paddingHorizontal: spacing.lg,
     borderWidth: 1,
     borderColor: colors.mint2,

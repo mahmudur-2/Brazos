@@ -96,6 +96,19 @@ const SCREENS = [
       { key: 'postJob.reviewCard.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'radius.xl' },
     ],
   },
+  {
+    subcategory: 'My Jobs',
+    file: 'screens/MyJobsHubScreen.tsx',
+    prefix: 'myJobs',
+    scale: 'theme',
+    dials: [
+      { key: 'myJobs.tabs.height', drew: 50, parent: null, fallback: '50' },
+      { key: 'myJobs.tabs.radius', drew: 16, parent: 'theme.radius.lg', fallback: 'radius.lg' },
+      { key: 'myJobs.content.gap', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
+      { key: 'myJobs.empty.paddingY', drew: 32, parent: 'theme.spacing.xxl', fallback: 'spacing.xxl' },
+      { key: 'myJobs.headerMark.size', drew: 48, parent: null, fallback: '48' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

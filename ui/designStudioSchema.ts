@@ -1867,6 +1867,70 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: THEME_RADIUS_DEFAULTS.xl,
       },
     ]),
+    // C4 — screens/MyJobsHubScreen.tsx. `theme.*` scale. Left undialled: the
+    // job cards themselves (JobCard's own dials reach every one of them), the
+    // status pills (StatusPill's), and the selected tab's 44pt minimum, which
+    // is CLAUDE.md's touch floor rather than a styling choice.
+    ...dialEntries('screens', 'My Jobs', [
+      {
+        key: 'myJobs.tabs.height',
+        label: 'Active/Review/Closed bar — height',
+        description: 'How tall the segmented filter bar stands under the header.',
+        tier: 'basic',
+        scope: 'local',
+        min: 44,
+        max: 72,
+        step: 1,
+        defaultValue: 50,
+      },
+      {
+        key: 'myJobs.tabs.radius',
+        label: 'Active/Review/Closed bar — corner roundness',
+        description: 'The filter bar’s outer corners; the selected tab inside it keeps its own.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.radius.lg',
+        defaultValue: THEME_RADIUS_DEFAULTS.lg,
+      },
+      {
+        key: 'myJobs.content.gap',
+        label: 'Section gap',
+        description: 'Between one titled group of jobs and the next.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.spacing.xl',
+        defaultValue: THEME_SPACING_DEFAULTS.xl,
+      },
+      {
+        key: 'myJobs.empty.paddingY',
+        label: 'Empty state — height',
+        description: 'Above and below the “nothing here yet” panel, which is what sets how tall it stands.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 64,
+        step: 1,
+        inheritsFrom: 'theme.spacing.xxl',
+        defaultValue: THEME_SPACING_DEFAULTS.xxl,
+      },
+      {
+        key: 'myJobs.headerMark.size',
+        label: 'Header mark — size',
+        description: 'The square glyph tile beside the screen title, width and height together.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 32,
+        max: 80,
+        step: 2,
+        defaultValue: 48,
+      },
+    ]),
   ];
 }
 
