@@ -88,7 +88,8 @@ const schemaModule = (async () => {
     )
     .replace(
       /import \{[\s\S]*?\} from '\.\/tokens';/,
-      'const { controls, layout, navBar, radius: tokenRadius, shadows: tokenShadows, spacing } = globalThis.__S2_TOKENS__;',
+      // T1 (C4): the divider dials read their defaults from DIVIDER_DEFAULTS.
+      'const { controls, DIVIDER_DEFAULTS, layout, navBar, radius: tokenRadius, shadows: tokenShadows, spacing } = globalThis.__S2_TOKENS__;',
     );
   assert.doesNotMatch(
     stubbed,
@@ -131,6 +132,7 @@ const contextFor = async (overrides = {}) => {
       postPillGreen: tokens.brand.emerald,
       goldDeep: '#A08149',
       greetingSlate: '#526477',
+      border: '#DDD6C4',
     },
     appDark: {
       gold: tokens.dark.gold,
@@ -142,6 +144,7 @@ const contextFor = async (overrides = {}) => {
       postPillGreen: tokens.brand.emerald,
       goldDeep: '#A08149',
       greetingSlate: '#526477',
+      border: '#55482E',
     },
     emeraldLight: tokens.light,
     emeraldDark: tokens.dark,
@@ -1316,13 +1319,58 @@ test('chrome and layout dials: defaults mirror the shipped values; spacing/divid
   assert.equal(byKey.get('layout.formSectionGap').defaultValue(ctx), tokens.spacing.lg);
   assert.equal(byKey.get('layout.detailSectionGap').defaultValue(ctx), tokens.spacing.xl);
 
-  // The honest absences: a spacing multiplier or per-step token dial would
-  // silently do nothing (the tokens are consumed at stylesheet build time),
-  // and dividers have no shared primitive — both wait for the sweep.
-  const spacingEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'spacing');
+  // S2 left this category honestly empty because there was no shared divider
+  // to dial. RUN T1 (C4) built one, so the assertion FLIPS: the category must
+  // now carry live dials rather than none.
   const dividerEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'borders');
+  assert.deepEqual(
+    dividerEntries.map((entry) => entry.key).sort(),
+    ['divider.color', 'divider.inset', 'divider.thickness'],
+    'Borders & Dividers must carry the Divider primitive’s dials',
+  );
+
+  // The remaining honest absence: a spacing multiplier or per-step token dial
+  // would silently do nothing while the tokens are consumed at stylesheet
+  // build time. C5 lands the live ones.
+  const spacingEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'spacing');
   assert.deepEqual(spacingEntries, [], 'no dead spacing dials — the omission is the report’s');
-  assert.deepEqual(dividerEntries, [], 'no dead divider dials — the omission is the report’s');
+});
+
+test('T1 (C4): the Divider ships the hairline three surfaces already agree on', async () => {
+  const schema = await schemaModule;
+  const tokens = await tokensModule;
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+  const ctx = await contextFor();
+
+  // Defaults are READ from the token surface, never restated here.
+  assert.equal(byKey.get('divider.thickness').defaultValue(ctx), tokens.DIVIDER_DEFAULTS.thickness);
+  assert.equal(byKey.get('divider.inset').defaultValue(ctx), tokens.DIVIDER_DEFAULTS.inset);
+  assert.equal(byKey.get('divider.color').defaultValue(ctx), ctx.appDark.border);
+  assert.equal(tokens.DIVIDER_DEFAULTS.thickness, 0, '0 is the platform hairline, not a zero-height rule');
+  assert.equal(tokens.DIVIDER_DEFAULTS.inset, 0, 'full bleed, as every surface draws it');
+
+  const source = await read('ui/primitives/Divider.tsx');
+  // 0 must mean the platform hairline at the ONE place that reads it, or the
+  // primitive draws nothing at its own default.
+  assert.match(source, /dialled > 0 \? dialled : StyleSheet\.hairlineWidth/);
+  for (const key of ["'divider.thickness'", "'divider.inset'", "'divider.color'"]) {
+    assert.ok(source.includes(key), `Divider must read the ${key} dial`);
+  }
+  assert.match(source, /palette\.border/, 'its colour is a palette role, resolved per theme');
+
+  // Exported from the barrel, which is the canonical import path.
+  const barrel = await read('ui/primitives/index.ts');
+  assert.match(barrel, /export \{ Divider \} from '\.\/Divider';/);
+  assert.match(barrel, /export type \{ DividerProps \} from '\.\/Divider';/);
+
+  // C4 SHIPS THE PRIMITIVE AND NOTHING ELSE. Repointing the four hand-drawn
+  // hairlines at it is a screen change; if this count moves, that conversion
+  // happened and this fence should be replaced, not relaxed.
+  const wearers = [];
+  for (const path of ['components/DropMenu.shared.tsx', 'components/ReportDialog.tsx', 'components/JobOwnerActions.tsx']) {
+    if (/\bDivider\b/.test(await read(path))) wearers.push(path);
+  }
+  assert.deepEqual(wearers, [], 'the divider sweep is T2’s, not this run’s');
 });
 
 test('[static] the chrome and templates read their dials through the override layer', async () => {

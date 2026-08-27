@@ -340,6 +340,32 @@ export const RADIUS_DEFAULTS = {
   xxl: 22,
 } as const;
 
+/**
+ * RUN T1 (C4/D8) — THE HAIRLINE, AS SHIPPED.
+ *
+ * Four surfaces in the tree draw a divider today and three of them agree
+ * exactly — components/DropMenu.shared.tsx's row separator, ReportDialog's
+ * block row and the Appearance screen's row rule are all
+ * `borderTopWidth: StyleSheet.hairlineWidth` over `colors.border`, with no
+ * inset. That is what ui/primitives/Divider.tsx defaults to. (The fourth,
+ * components/JobOwnerActions.tsx, draws a flat `1` instead; the three that
+ * agree win, and DropMenu is the most central of them.)
+ *
+ * THICKNESS 0 MEANS THE PLATFORM HAIRLINE. `StyleSheet.hairlineWidth` is a
+ * device quantity — 0.5 on a 2x screen, 0.33 on a 3x one — so it cannot BE a
+ * dial default without the studio showing a different number per phone. 0 is
+ * therefore "whatever this screen's hairline is", the same "automatic until
+ * touched" idiom `nav.bottomPad` already uses, and any positive value is that
+ * many points. The colour is not here: a divider's colour is a palette role
+ * (`border`), resolved per theme, not a constant.
+ */
+export const DIVIDER_DEFAULTS = {
+  /** 0 = the platform hairline. */
+  thickness: 0,
+  /** Indent from both ends — 0 is the full-bleed rule every surface draws. */
+  inset: 0,
+} as const;
+
 export const radius = metricGroup('radius', RADIUS_DEFAULTS, {
   /** Not a size and therefore not a dial: 999 is how a rounded rectangle is
    *  spelled as a CAPSULE in React Native. Turning it down would not make a

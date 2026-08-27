@@ -15,6 +15,7 @@ import {
 } from '../lib/designOverrides';
 import {
   controls,
+  DIVIDER_DEFAULTS,
   layout,
   navBar,
   radius as tokenRadius,
@@ -1333,6 +1334,54 @@ function chromeDialEntries(): StudioEntry[] {
   ];
 }
 
+// ---------------------------------------------------------------------------
+// Borders & Dividers (T1, C4) — the category S2 declared and left empty
+// ---------------------------------------------------------------------------
+
+/**
+ * ui/primitives/Divider.tsx's three dials. Nothing renders the Divider yet —
+ * repointing the four hand-drawn hairlines at it is a screen change — so
+ * these move the primitive and, from the run that converts them, every rule
+ * in the app at once.
+ */
+function dividerDialEntries(): StudioEntry[] {
+  return dialEntries('borders', 'Divider', [
+    {
+      key: 'divider.thickness',
+      label: 'Line thickness',
+      description:
+        'How heavy every hairline rule is. 0 is the platform hairline — the thinnest line the screen can draw, which is what the app draws today.',
+      tier: 'basic',
+      scope: 'token',
+      min: 0,
+      max: 4,
+      step: 0.5,
+      defaultValue: DIVIDER_DEFAULTS.thickness,
+    },
+    {
+      key: 'divider.color',
+      label: 'Line colour',
+      description: 'The rule’s ink — the palette’s border hue in each theme.',
+      tier: 'basic',
+      scope: 'token',
+      kind: 'color',
+      defaultValue: (ctx) => themePalette(ctx).border ?? '',
+      contrastGround: groundOf,
+    },
+    {
+      key: 'divider.inset',
+      label: 'Line indent',
+      description: 'How far every rule stops short of both ends. 0 is the full-bleed rule.',
+      tier: 'advanced',
+      scope: 'token',
+      min: 0,
+      max: 40,
+      step: 1,
+      defaultValue: DIVIDER_DEFAULTS.inset,
+    },
+  ]);
+}
+
 function layoutDialEntries(): StudioEntry[] {
   return dialEntries('layout', 'Template screens', [
     { key: 'layout.pagePadding', label: 'Page side padding', description: 'The horizontal gutter on every template screen (17 screens read it live).', tier: 'basic', scope: 'token', min: 0, max: 40, step: 1, defaultValue: layout.screenGutter },
@@ -1426,6 +1475,7 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...buttonDialEntries(),
   ...inputDialEntries(),
   ...chromeDialEntries(),
+  ...dividerDialEntries(),
   ...layoutDialEntries(),
   ...shadowDialEntries(),
   {

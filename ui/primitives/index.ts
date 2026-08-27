@@ -87,6 +87,15 @@ export type { LitFill, LitSurfaceProps } from './LitSurface';
 export { Surface, SURFACE_GLOW_ALPHA } from './Surface';
 export type { SurfaceProps } from './Surface';
 
+/**
+ * RUN T1 (C4) — beyond §I's enumerated 26 and deliberately not a 26th role:
+ * like LitSurface and Surface it is a piece of DRAWING, not a component in the
+ * vocabulary. Four surfaces each spelled the same hairline for themselves;
+ * this is that hairline written once, with its dials.
+ */
+export { Divider } from './Divider';
+export type { DividerProps } from './Divider';
+
 export { StatusPill } from './StatusPill';
 export type { JobStatus, OfferStatus, PaymentStatus } from './StatusPill';
 export { MoneyText } from './MoneyText';
