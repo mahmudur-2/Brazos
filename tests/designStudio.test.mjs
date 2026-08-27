@@ -1242,6 +1242,82 @@ test('presets: a broken store is swallowed, never thrown', async () => {
   assert.equal(await p.deleteDesignPreset('x'), false);
 });
 
+test('pins: the pinned set round-trips under its own versioned key, and a broken store is swallowed', async () => {
+  const store = new Map();
+  const p = await presetsModuleWith({
+    getItem: async (key) => (store.has(key) ? store.get(key) : null),
+    setItem: async (key, value) => {
+      store.set(key, String(value));
+    },
+  });
+  assert.equal(p.DESIGN_STUDIO_PINS_KEY, 'brazos.designstudio.pins.v1');
+
+  // Nothing stored yet reads as nothing pinned.
+  assert.deepEqual(await p.loadDesignPins(), []);
+  assert.equal(await p.saveDesignPins(['nav.barHeight', 'material.chrome.blur']), true);
+  assert.ok(store.has('brazos.designstudio.pins.v1'), 'pins live under their own versioned key');
+  assert.deepEqual(await p.loadDesignPins(), ['nav.barHeight', 'material.chrome.blur']);
+  // Unpinning everything is a write, not a delete — the empty set persists.
+  assert.equal(await p.saveDesignPins([]), true);
+  assert.deepEqual(await p.loadDesignPins(), []);
+  // Junk in storage reads as empty, never a crash — the presets posture.
+  store.set('brazos.designstudio.pins.v1', '{broken json');
+  assert.deepEqual(await p.loadDesignPins(), []);
+  store.set('brazos.designstudio.pins.v1', '{"not":"an array"}');
+  assert.deepEqual(await p.loadDesignPins(), []);
+  store.set('brazos.designstudio.pins.v1', '["ok", 7, null, ""]');
+  assert.deepEqual(await p.loadDesignPins(), ['ok'], 'non-string entries are dropped');
+
+  // The presets key is untouched by any of it.
+  assert.equal(store.has('brazos.designstudio.presets.v1'), false);
+
+  const broken = await presetsModuleWith({
+    getItem: async () => {
+      throw new Error('storage down');
+    },
+    setItem: async () => {
+      throw new Error('storage down');
+    },
+  });
+  assert.deepEqual(await broken.loadDesignPins(), []);
+  assert.equal(await broken.saveDesignPins(['x']), false);
+});
+
+test('[static] S3: stars are gone and the long-press pin chip replaces them', async () => {
+  const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
+  const flat = panel.replace(/\s+/g, ' ');
+
+  // D6 — STARS ARE GONE EVERYWHERE.
+  assert.doesNotMatch(panel, /'star'/, 'the star glyph must be gone');
+  assert.doesNotMatch(panel, /'star-outline'/, 'the star-outline glyph must be gone');
+  assert.doesNotMatch(panel, /favourite/i, 'the favourites state must be gone');
+
+  // The chip: raised by a LONG PRESS on the label block, reading "Pin
+  // control" or "Unpin control", clearing itself after 3 s or on tap.
+  assert.match(flat, /onLongPress=\{onRequestPin\}/, 'the label block raises the chip');
+  assert.match(flat, /'Unpin control' : 'Pin control'/, 'the chip names both directions');
+  assert.match(flat, /setTimeout\(\(\) => setPinChip\(null\), 3000\)/, 'the chip clears after 3 s');
+  assert.match(flat, /onPress=\{onTogglePin\}/, 'tapping the chip toggles the pin');
+
+  // Persistence rides the presets module — the studio's one storage boundary.
+  assert.match(panel, /loadDesignPins/, 'pins load on mount');
+  assert.match(panel, /saveDesignPins/, 'pins save on every change');
+  assert.match(flat, /void loadDesignPins\(\)\.then/, 'the load is fired once, on mount');
+  assert.doesNotMatch(panel, /AsyncStorage/, 'the panel never touches storage directly');
+
+  // The Pinned section: full rows, at the very top, absent when empty, and
+  // the entries stay in their categories (the registry map is untouched).
+  assert.match(flat, /const renderPinned = \(\) => \{ if \(!pinnedEntries\.length\) return null;/);
+  assert.match(flat, /\{renderPinned\(\)\} \{STUDIO_CATEGORIES\.map\(renderCategory\)\}/, 'Pinned renders FIRST');
+  assert.match(flat, />\s*Pinned\s*</, 'the section names itself');
+  // The Modified filter applies to the Pinned section too.
+  assert.match(
+    flat,
+    /return modifiedOnly \? list\.filter\(\(entry\) => isModified\(entry, ctx\)\) : list;/,
+    'the Modified filter narrows the Pinned section',
+  );
+});
+
 test('[static] the four destructive acts confirm; dial changes and per-token resets never do', async () => {
   const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
   for (const title of [

@@ -98,6 +98,43 @@ export async function renameDesignPreset(from: string, to: string): Promise<bool
   return writeAll(presets);
 }
 
+// ---------------------------------------------------------------------------
+// RUN S3 (C3) — PINNED CONTROLS, the studio's second persisted thing.
+//
+// Stars are gone; a pin is what survives. The set is a flat list of registry
+// keys under its own versioned key, loaded on mount and written on every
+// change, with exactly the fail-safe posture the presets above take: a broken
+// store costs the operator their pins, never a crash. It lives here rather
+// than in a second storage module because this file already IS the studio's
+// AsyncStorage boundary.
+// ---------------------------------------------------------------------------
+
+export const DESIGN_STUDIO_PINS_KEY = 'brazos.designstudio.pins.v1';
+
+/** The pinned registry keys, or an empty list if nothing is stored or the
+ *  store is unreadable. */
+export async function loadDesignPins(): Promise<string[]> {
+  try {
+    const raw = await AsyncStorage.getItem(DESIGN_STUDIO_PINS_KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((key): key is string => typeof key === 'string' && key.length > 0);
+  } catch {
+    return [];
+  }
+}
+
+/** Replace the pinned set. False on any storage failure, never a throw. */
+export async function saveDesignPins(keys: readonly string[]): Promise<boolean> {
+  try {
+    await AsyncStorage.setItem(DESIGN_STUDIO_PINS_KEY, JSON.stringify([...keys]));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Duplicate under "<name> copy", suffixing until the name is free. */
 export async function duplicateDesignPreset(name: string): Promise<boolean> {
   const presets = await readAll();

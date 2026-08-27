@@ -30,8 +30,10 @@ import {
   deleteDesignPreset,
   duplicateDesignPreset,
   listDesignPresets,
+  loadDesignPins,
   loadDesignPreset,
   renameDesignPreset,
+  saveDesignPins,
   saveDesignPreset,
   type StoredDesignPreset,
 } from '../lib/designStudioPresets';
@@ -407,8 +409,10 @@ function EntryRow({
   ctx,
   styles,
   colors,
-  favourite,
-  onToggleFavourite,
+  pinned,
+  chipOpen,
+  onRequestPin,
+  onTogglePin,
   infoOpen,
   onToggleInfo,
 }: {
@@ -416,8 +420,11 @@ function EntryRow({
   ctx: StudioContext;
   styles: PanelStyles;
   colors: ColorPalette;
-  favourite: boolean;
-  onToggleFavourite: () => void;
+  pinned: boolean;
+  /** S3 (D6): the long-press chip is showing on THIS row. */
+  chipOpen: boolean;
+  onRequestPin: () => void;
+  onTogglePin: () => void;
   infoOpen: boolean;
   onToggleInfo: () => void;
 }) {
@@ -438,26 +445,16 @@ function EntryRow({
   return (
     <View style={styles.entry}>
       <View style={styles.entryRow}>
-        <Pressable
-          onPress={onToggleFavourite}
-          accessibilityRole="button"
-          accessibilityLabel={
-            favourite ? `Unstar ${entry.plainLabel}` : `Star ${entry.plainLabel}`
-          }
-          hitSlop={6}
-          style={({ pressed }) => pressed && styles.pressed}
-        >
-          <Ionicons
-            name={favourite ? 'star' : 'star-outline'}
-            size={14}
-            color={favourite ? colors.gold : withAlpha(colors.white, 0.4)}
-          />
-        </Pressable>
+        {/* S3 (D6): stars are gone. A LONG PRESS on the label block raises the
+            pin chip in the reset glyph's place; a tap still opens the info. */}
         <Pressable
           onPress={onToggleInfo}
+          onLongPress={onRequestPin}
+          delayLongPress={400}
           style={({ pressed }) => [styles.labelBlock, pressed && styles.pressed]}
           accessibilityRole="button"
           accessibilityLabel={`${entry.plainLabel} details`}
+          accessibilityHint="Long press to pin or unpin this control"
         >
           <Text style={styles.rowLabel} numberOfLines={1}>
             {entry.plainLabel}
@@ -468,19 +465,32 @@ function EntryRow({
           </Text>
         </Pressable>
         {editor}
-        <Pressable
-          onPress={() => entry.write(undefined)}
-          disabled={!modified}
-          style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
-          accessibilityRole="button"
-          accessibilityLabel={`Reset ${entry.plainLabel}`}
-        >
-          <Ionicons
-            name="refresh-outline"
-            size={14}
-            color={modified ? colors.emerald : withAlpha(colors.white, 0.18)}
-          />
-        </Pressable>
+        {chipOpen ? (
+          <Pressable
+            onPress={onTogglePin}
+            style={({ pressed }) => [styles.pinChip, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`${pinned ? 'Unpin' : 'Pin'} ${entry.plainLabel}`}
+          >
+            <Text style={styles.pinChipLabel} numberOfLines={1}>
+              {pinned ? 'Unpin control' : 'Pin control'}
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            onPress={() => entry.write(undefined)}
+            disabled={!modified}
+            style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Reset ${entry.plainLabel}`}
+          >
+            <Ionicons
+              name="refresh-outline"
+              size={14}
+              color={modified ? colors.emerald : withAlpha(colors.white, 0.18)}
+            />
+          </Pressable>
+        )}
       </View>
       {entry.kind === 'color' ? <HslBlock entry={entry} ctx={ctx} styles={styles} /> : null}
       {modified ? (
@@ -526,7 +536,9 @@ export function DesignStudioPanel() {
   const [modifiedOnly, setModifiedOnly] = useState(false);
   const [tier, setTier] = useState<'simple' | 'advanced'>('simple');
   const [page, setPage] = useState<StudioPage | null>(null);
-  const [favourites, setFavourites] = useState<ReadonlySet<string>>(new Set());
+  // S3 (D6) — PINS replace stars, and unlike them they SURVIVE A RELAUNCH.
+  const [pins, setPins] = useState<ReadonlySet<string>>(new Set());
+  const [pinChip, setPinChip] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [infoKey, setInfoKey] = useState<string | null>(null);
   // C5 — which theme's colour tokens the Colors category edits.
@@ -574,6 +586,40 @@ export function DesignStudioPanel() {
   }, [rect, collapsed, lastCategory]);
 
   const scrollRef = useRef<ScrollView | null>(null);
+
+  // S3 (D6) — the pinned set is loaded once on mount and written on every
+  // change, fail-safe: an unreadable store simply pins nothing.
+  useEffect(() => {
+    void loadDesignPins().then((keys) => setPins(new Set(keys)));
+  }, []);
+
+  // The long-press chip is transient: it clears itself after 3 s, on tap, or
+  // when the panel unmounts — never leaving a stray timer behind.
+  const pinChipTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (pinChipTimer.current) clearTimeout(pinChipTimer.current);
+    },
+    [],
+  );
+  const clearPinChip = () => {
+    if (pinChipTimer.current) clearTimeout(pinChipTimer.current);
+    pinChipTimer.current = null;
+    setPinChip(null);
+  };
+  const requestPinChip = (key: string) => {
+    if (pinChipTimer.current) clearTimeout(pinChipTimer.current);
+    setPinChip(key);
+    pinChipTimer.current = setTimeout(() => setPinChip(null), 3000);
+  };
+  const togglePin = (key: string) => {
+    const next = new Set(pins);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setPins(next);
+    void saveDesignPins([...next]);
+    clearPinChip();
+  };
 
   const dragStart = useRef<PanelRect>(rect);
   const drag = useRef(
@@ -653,6 +699,16 @@ export function DesignStudioPanel() {
     }
     return grouped;
   }, [tier, modifiedOnly, ctx, colorEntries]);
+
+  // S3 (D6) — the Pinned section: full rows at the very top, absent when
+  // nothing is pinned, and the entries STAY in their own categories too. The
+  // Modified filter narrows it; the tier toggle deliberately does not, or
+  // pinning an Advanced dial would hide it the moment Simple came back.
+  const pinnedEntries = useMemo(() => {
+    if (!pins.size) return [] as StudioEntry[];
+    const list = [...STUDIO_REGISTRY, ...colorEntries].filter((entry) => pins.has(entry.key));
+    return modifiedOnly ? list.filter((entry) => isModified(entry, ctx)) : list;
+  }, [pins, colorEntries, modifiedOnly, ctx]);
 
   // C4 — history, presets, export, import and the raw editor.
   const history = useDesignHistoryCounts();
@@ -934,14 +990,47 @@ export function DesignStudioPanel() {
                   ctx={ctx}
                   styles={styles}
                   colors={colors}
-                  favourite={favourites.has(entry.key)}
-                  onToggleFavourite={() => toggleSet(favourites, entry.key, setFavourites)}
+                  pinned={pins.has(entry.key)}
+                  chipOpen={pinChip === entry.key}
+                  onRequestPin={() => requestPinChip(entry.key)}
+                  onTogglePin={() => togglePin(entry.key)}
                   infoOpen={infoKey === entry.key}
                   onToggleInfo={() => setInfoKey(infoKey === entry.key ? null : entry.key)}
                 />
               </View>
             ))
           : null}
+      </View>
+    );
+  };
+
+  /** S3 (D6) — the Pinned section, at the very top and absent when empty. */
+  const renderPinned = () => {
+    if (!pinnedEntries.length) return null;
+    return (
+      <View key="pinned" style={styles.category}>
+        <View style={styles.categoryHeader} accessibilityRole="header">
+          <Ionicons name="bookmark" size={15} color={colors.gold} />
+          <Text style={styles.categoryLabel} numberOfLines={1}>
+            Pinned
+          </Text>
+          <Text style={styles.categoryCount}>{pinnedEntries.length}</Text>
+        </View>
+        {pinnedEntries.map((entry) => (
+          <EntryRow
+            key={`pinned:${entry.key}`}
+            entry={entry}
+            ctx={ctx}
+            styles={styles}
+            colors={colors}
+            pinned
+            chipOpen={pinChip === entry.key}
+            onRequestPin={() => requestPinChip(entry.key)}
+            onTogglePin={() => togglePin(entry.key)}
+            infoOpen={infoKey === entry.key}
+            onToggleInfo={() => setInfoKey(infoKey === entry.key ? null : entry.key)}
+          />
+        ))}
       </View>
     );
   };
@@ -1184,7 +1273,12 @@ export function DesignStudioPanel() {
     if (page === 'export') return renderExportPage();
     if (page === 'import') return renderImportPage();
     if (page === 'raw') return renderRawPage();
-    return STUDIO_CATEGORIES.map(renderCategory);
+    return (
+      <>
+        {renderPinned()}
+        {STUDIO_CATEGORIES.map(renderCategory)}
+      </>
+    );
   };
 
   return (
@@ -1648,6 +1742,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       height: 26,
       alignItems: 'center',
       justifyContent: 'center',
+    },
+    // S3 (D6) — the long-press pin chip, drawn where the reset glyph sits.
+    pinChip: {
+      height: 26,
+      paddingHorizontal: 8,
+      borderRadius: 13,
+      borderWidth: 1,
+      borderColor: colors.gold,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    pinChipLabel: {
+      fontSize: 10,
+      fontWeight: '800',
+      color: colors.gold,
     },
     modifiedTrail: {
       fontSize: 10,
