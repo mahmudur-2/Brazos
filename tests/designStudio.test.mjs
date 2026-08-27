@@ -482,6 +482,155 @@ test('[static] S3: search is gone, the tier toggle is ONE pill, and the overflow
 });
 
 // ---------------------------------------------------------------------------
+// RUN S3 (C4) — direct entry, executed; and the compact row, fenced
+// ---------------------------------------------------------------------------
+
+/** ui/designStudioInput.ts — import-free, executed directly (the colorMath
+ *  shape). */
+const inputModule = (async () => {
+  const js = stripTypeScriptTypes(await read('ui/designStudioInput.ts'), { mode: 'strip' });
+  assert.doesNotMatch(js, /\bimport\b/, 'ui/designStudioInput.ts must stay import-free');
+  return import(toDataUrl(js));
+})();
+
+test('direct entry: every branch of parseDirectEntry, executed', async () => {
+  const { parseDirectEntry } = await inputModule;
+  const plain = { kind: 'number' };
+  const decimal = { kind: 'decimal' };
+
+  // ---- accepted shapes ---------------------------------------------------
+  assert.equal(parseDirectEntry('17.5', plain), 17.5, 'a decimal string');
+  assert.equal(parseDirectEntry('.25', plain), 0.25, 'a leading-dot decimal');
+  assert.equal(parseDirectEntry('-3', plain), -3, 'a negative');
+  assert.equal(parseDirectEntry('0', plain), 0, 'zero is a value, not an absence');
+  assert.equal(parseDirectEntry('  24  ', plain), 24, 'surrounding whitespace is trimmed');
+
+  // ---- rounding: TWO DECIMALS FOR BOTH KINDS, never a fork ---------------
+  assert.equal(parseDirectEntry('17.567', plain), 17.57, 'rounds up at the third decimal');
+  assert.equal(parseDirectEntry('1.004', decimal), 1, 'rounds down at the third decimal');
+  assert.equal(
+    parseDirectEntry('17.567', plain),
+    parseDirectEntry('17.567', decimal),
+    "'number' and 'decimal' round identically — kind never branches",
+  );
+  assert.equal(parseDirectEntry('-1.239', plain), -1.24, 'negatives round the same way');
+
+  // ---- clamping, and only where the schema declares a bound --------------
+  assert.equal(parseDirectEntry('900', { min: 0, max: 100, kind: 'number' }), 100, 'clamps to max');
+  assert.equal(parseDirectEntry('-900', { min: 0, max: 100, kind: 'number' }), 0, 'clamps to min');
+  assert.equal(parseDirectEntry('50', { min: 0, max: 100, kind: 'number' }), 50, 'inside the range is untouched');
+  assert.equal(parseDirectEntry('900', { min: 0, kind: 'number' }), 900, 'no max declared, no ceiling');
+  assert.equal(parseDirectEntry('-900', { max: 100, kind: 'number' }), -900, 'no min declared, no floor');
+  assert.equal(parseDirectEntry('0.556', { min: 0, max: 1, kind: 'decimal' }), 0.56, 'rounds THEN clamps');
+
+  // ---- null: the caller reverts, writes nothing and never crashes -------
+  for (const empty of ['', '   ', '\t\n']) {
+    assert.equal(parseDirectEntry(empty, plain), null, `empty input must revert: ${JSON.stringify(empty)}`);
+  }
+  for (const junk of ['abc', '12abc', '-', '.', '--3', '1.2.3']) {
+    assert.equal(parseDirectEntry(junk, plain), null, `unparseable input must revert: ${junk}`);
+  }
+  for (const wild of ['Infinity', '-Infinity', 'NaN']) {
+    assert.equal(parseDirectEntry(wild, plain), null, `non-finite input must revert: ${wild}`);
+  }
+  // A clamp can never rescue a null — the bounds are not consulted at all.
+  assert.equal(parseDirectEntry('', { min: 0, max: 100, kind: 'number' }), null);
+  assert.equal(parseDirectEntry('NaN', { min: 0, max: 100, kind: 'number' }), null);
+});
+
+test('[static] S3: compact rows, direct entry in the value slot, and nothing overflows 393pt', async () => {
+  const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
+  const flat = panel.replace(/\s+/g, ' ');
+  const styleBlock = (key) => {
+    const hit = new RegExp(`${key}: \\{([^}]*)\\}`).exec(flat);
+    assert.ok(hit, `the panel must declare a ${key} style`);
+    return hit[1];
+  };
+  const num = (block, key) => {
+    const hit = new RegExp(`${key}: (-?[\\d.]+)`).exec(block);
+    return hit ? Number(hit[1]) : null;
+  };
+
+  // ---- D7, the row's density --------------------------------------------
+  assert.ok(num(styleBlock('entryRow'), 'paddingVertical') <= 6, 'row vertical padding ≤ 6pt');
+  assert.ok(num(styleBlock('category'), 'gap') <= 2, '≤ 2pt between rows');
+  assert.ok(num(styleBlock('categoryHeader'), 'minHeight') <= 36, 'category header rows ≤ 36pt');
+  assert.equal(num(styleBlock('bodyContent'), 'paddingHorizontal'), 10, 'panel horizontal padding is 10pt');
+  const editorGap = num(styleBlock('editorRow'), 'gap');
+  assert.ok(editorGap >= 4 && editorGap <= 6, `the right cluster's gaps are 4–6pt (saw ${editorGap})`);
+
+  // ---- D13, nothing overflows and NOTHING IS RESERVED --------------------
+  assert.doesNotMatch(flat, /<ScrollView[^>]*\shorizontal/, 'no horizontal ScrollView in the panel');
+  assert.doesNotMatch(flat, /\shorizontal(=|\s|\/|>)/, 'nothing in the panel scrolls sideways');
+  for (const key of [
+    'rowValue',
+    'miniValue',
+    'editorRow',
+    'entryRow',
+    'colorEditor',
+    'colorEditorRow',
+    'hslRow',
+    'miniStepper',
+    'hexInput',
+    'directInput',
+    'presetInput',
+    'jsonInput',
+  ]) {
+    assert.doesNotMatch(
+      styleBlock(key),
+      /\bwidth: \d/,
+      `${key} must not reserve a fixed width — it is a value, cluster or input style`,
+    );
+  }
+  // The label block takes ALL remaining width and truncates rather than wraps.
+  assert.match(styleBlock('labelBlock'), /flex: 1/);
+  assert.match(styleBlock('labelBlock'), /minWidth: 0/);
+  assert.match(flat, /<Text style=\{styles\.rowLabel\} numberOfLines=\{1\}>/);
+  // A colour row's hex input flexes between the swatch and the row's [↺].
+  assert.match(styleBlock('hexInput'), /flex: 1/);
+  assert.doesNotMatch(styleBlock('hslRow'), /flexWrap/, 'line 2 may never wrap');
+
+  // ---- D9, line 2 fits on one line inside the 373pt content box ----------
+  // Advance width per character at these sizes, as a share of the font size:
+  // SF Pro's tabular figures are 0.5555em and Roboto's 0.57em, so 0.58 is a
+  // deliberate over-estimate; the cap letter of a mini label is ~0.72em.
+  const CHAR = 0.58;
+  const CAP = 0.72;
+  const miniStep = num(styleBlock('miniStep'), 'width');
+  const innerGap = num(styleBlock('miniStepper'), 'gap');
+  const outerGap = num(styleBlock('hslRow'), 'gap');
+  const valueSize = num(styleBlock('miniValue'), 'fontSize');
+  const labelSize = num(styleBlock('miniLabel'), 'fontSize');
+  assert.ok(miniStep >= 28, `D9: each mini glyph button is ≥ 28pt visual (saw ${miniStep})`);
+  assert.equal(outerGap, 4, 'D9: 4pt between the mini steppers');
+  const stepperWidth = (chars) =>
+    labelSize * CAP + innerGap + miniStep + innerGap + chars * valueSize * CHAR + innerGap + miniStep;
+  // Worst case: H "360", S "100", L "100" and an alpha reading "0.55".
+  const line = stepperWidth(3) * 3 + stepperWidth(4) + outerGap * 3;
+  const contentBox = 393 - 2 * num(styleBlock('bodyContent'), 'paddingHorizontal');
+  assert.equal(contentBox, 373);
+  assert.ok(
+    line <= contentBox,
+    `D9: H/S/L/A needs ${line.toFixed(1)}pt on one line and the content box is ${contentBox}pt`,
+  );
+  // The hit area: 36pt across (exactly tiling the 4pt gap, never overlapping
+  // a neighbour) and the full 44pt floor down, where there is no neighbour.
+  assert.match(flat, /hitSlop=\{\{ top: 8, bottom: 8, left: 4, right: 4 \}\}/);
+  assert.equal(miniStep + 4 + 4, 36, 'D9: hitSlop takes the glyph button to 36pt');
+
+  // ---- D8, the [✎] and what it swaps in ---------------------------------
+  assert.match(flat, /keyboardType="decimal-pad"/);
+  assert.match(flat, /autoFocus selectTextOnFocus/);
+  assert.match(flat, /onBlur=\{commit\} onSubmitEditing=\{commit\}/, 'commit on submit OR blur');
+  assert.match(flat, /parseDirectEntry\(draft, \{ min: entry\.min, max: entry\.max,/);
+  assert.match(flat, /if \(parsed == null\) return; entry\.write\(parsed\);/, 'null REVERTS — no write');
+  assert.match(flat, /\{draft != null && entry\.unit \?/, 'the unit is rendered OUTSIDE the field');
+  assert.match(flat, /from '\.\.\/ui\/designStudioInput'/, 'parsing lives in the pure module');
+  // ± still steps by the schema's own step, unchanged.
+  assert.match(flat, /clamp\(round2\(current \+ direction \* step\), min, max\)/);
+});
+
+// ---------------------------------------------------------------------------
 // Panel ergonomics (S2 C3) — the clamp, executed
 // ---------------------------------------------------------------------------
 

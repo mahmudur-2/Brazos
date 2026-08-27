@@ -71,6 +71,7 @@ import {
   type StudioValue,
 } from '../ui/designStudioSchema';
 import { contrastRatio, formatHex, hslToHex, parseHex, rgbToHsl } from '../ui/colorMath';
+import { parseDirectEntry } from '../ui/designStudioInput';
 
 // FENCE: DESIGN STUDIO (RUN S2 C1) — PERMANENT and CHANNEL-GATED. The old "strip before TestFlight" instruction is SUPERSEDED: the panel ships in every build and lib/designStudioGate.ts decides where it may exist (Metro __DEV__, or update channel internal/development; FAIL CLOSED elsewhere). Its mount in navigation/ModeShell.tsx reads that gate.
 
@@ -137,12 +138,28 @@ function StepperEditor({
 }) {
   const current = Number(currentValueOf(entry, ctx));
   const step = entry.step ?? 1;
+  // S3 (D8) — DIRECT ENTRY. [✎] swaps the value text for a decimal-pad field
+  // in the same slot; the unit stays OUTSIDE it, so what is typed is only
+  // ever a number. Committing on submit or blur runs the pure parser, and a
+  // null answer REVERTS: no write, no crash, no error to dismiss.
+  const [draft, setDraft] = useState<string | null>(null);
   const apply = (direction: 1 | -1) => {
     const min = entry.min ?? Number.NEGATIVE_INFINITY;
     const max = entry.max ?? Number.POSITIVE_INFINITY;
     const next = clamp(round2(current + direction * step), min, max);
     if (!Number.isFinite(next)) return;
     entry.write(next);
+  };
+  const commit = () => {
+    if (draft == null) return;
+    const parsed = parseDirectEntry(draft, {
+      min: entry.min,
+      max: entry.max,
+      kind: entry.kind === 'decimal' ? 'decimal' : 'number',
+    });
+    setDraft(null);
+    if (parsed == null) return;
+    entry.write(parsed);
   };
   return (
     <View style={styles.editorRow}>
@@ -151,19 +168,46 @@ function StepperEditor({
         style={({ pressed }) => [styles.step, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel={`${entry.plainLabel} minus`}
-        hitSlop={6}
+        hitSlop={7}
       >
         <Text style={styles.stepGlyph}>−</Text>
       </Pressable>
-      <Text style={styles.rowValue}>{formatValue(entry, current)}</Text>
+      {draft == null ? (
+        <Text style={styles.rowValue} numberOfLines={1}>
+          {formatValue(entry, current)}
+        </Text>
+      ) : (
+        <TextInput
+          value={draft}
+          onChangeText={setDraft}
+          keyboardType="decimal-pad"
+          autoFocus
+          selectTextOnFocus
+          autoCorrect={false}
+          onBlur={commit}
+          onSubmitEditing={commit}
+          style={styles.directInput}
+          accessibilityLabel={`${entry.plainLabel} value`}
+        />
+      )}
+      {draft != null && entry.unit ? <Text style={styles.unit}>{entry.unit}</Text> : null}
       <Pressable
         onPress={() => apply(1)}
         style={({ pressed }) => [styles.step, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel={`${entry.plainLabel} plus`}
-        hitSlop={6}
+        hitSlop={7}
       >
         <Text style={styles.stepGlyph}>+</Text>
+      </Pressable>
+      <Pressable
+        onPress={() => setDraft(entry.kind === 'decimal' ? current.toFixed(2) : String(current))}
+        style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel={`Type a value for ${entry.plainLabel}`}
+        hitSlop={9}
+      >
+        <Ionicons name="pencil-outline" size={13} style={styles.editGlyph} />
       </Pressable>
     </View>
   );
@@ -192,10 +236,13 @@ function ColorEditor({
     setDraft(null);
     entry.write(normalized);
   };
+  // S3 (D9) — line 1 of a colour row: [swatch] [hex input] and then the row's
+  // own [↺]. The input FLEXES between them, so nothing is reserved and the
+  // hex never has to scroll sideways to be read.
   return (
-    <View style={styles.editorRow}>
-      <View style={[styles.swatch, { backgroundColor: current }]} />
-      <View>
+    <View style={styles.colorEditor}>
+      <View style={styles.colorEditorRow}>
+        <View style={[styles.swatch, { backgroundColor: current }]} />
         <TextInput
           value={draft ?? current}
           onChangeText={(text) => {
@@ -209,8 +256,8 @@ function ColorEditor({
           style={[styles.hexInput, invalid && styles.hexInputInvalid]}
           accessibilityLabel={`${entry.plainLabel} hex value`}
         />
-        {invalid ? <Text style={styles.hexError}>Not a hex colour</Text> : null}
       </View>
+      {invalid ? <Text style={styles.hexError}>Not a hex colour</Text> : null}
     </View>
   );
 }
@@ -229,24 +276,30 @@ function MiniStepper({
   return (
     <View style={styles.miniStepper}>
       <Text style={styles.miniLabel}>{label}</Text>
+      {/* S3 (D9): a 28pt glyph button, taken to 36pt across by hitSlop —
+          exactly the 4pt gap to its neighbour, so the hit areas TILE rather
+          than overlap — and to the full 44pt floor vertically, where there
+          is no neighbour to steal from. */}
       <Pressable
         onPress={() => onStep(-1)}
         style={({ pressed }) => [styles.miniStep, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel={`${label} minus`}
-        hitSlop={4}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       >
-        <Text style={styles.stepGlyph}>−</Text>
+        <Text style={styles.miniGlyph}>−</Text>
       </Pressable>
-      <Text style={styles.miniValue}>{display}</Text>
+      <Text style={styles.miniValue} numberOfLines={1}>
+        {display}
+      </Text>
       <Pressable
         onPress={() => onStep(1)}
         style={({ pressed }) => [styles.miniStep, pressed && styles.pressed]}
         accessibilityRole="button"
         accessibilityLabel={`${label} plus`}
-        hitSlop={4}
+        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       >
-        <Text style={styles.stepGlyph}>+</Text>
+        <Text style={styles.miniGlyph}>+</Text>
       </Pressable>
     </View>
   );
@@ -483,6 +536,7 @@ function EntryRow({
             style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
             accessibilityRole="button"
             accessibilityLabel={`Reset ${entry.plainLabel}`}
+            hitSlop={9}
           >
             <Ionicons
               name="refresh-outline"
@@ -1571,12 +1625,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     body: {
       flex: 1,
     },
+    // S3 (D7/D13) — 10pt of panel side padding, so the content box at 393pt
+    // is 373 and every cluster below is sized to fit inside it.
     bodyContent: {
-      padding: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
       gap: 8,
     },
+    // ≤ 2pt between rows: this gap IS the row-to-row spacing, inside a
+    // category and inside the Pinned section alike.
     category: {
-      gap: 4,
+      gap: 2,
     },
     categoryHeader: {
       flexDirection: 'row',
@@ -1606,14 +1665,19 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     entry: {
       gap: 2,
     },
+    // S3 (D7) — a COMPACT row: ≤ 6pt of vertical padding, the label block
+    // taking every remaining point on the left and an intrinsic-width
+    // cluster on the right. No minHeight: the 30pt glyph buttons set the
+    // row's height, and nothing reserves space it does not use.
     entryRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      minHeight: 36,
+      gap: 4,
+      paddingVertical: 3,
     },
     labelBlock: {
       flex: 1,
+      minWidth: 0,
     },
     rowLabel: {
       fontSize: 13,
@@ -1630,17 +1694,41 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     editorRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
+      gap: 4,
     },
+    // Tabular figures, sized by their own content — no reserved column.
     rowValue: {
-      minWidth: 56,
-      textAlign: 'center',
+      textAlign: 'right',
+      paddingHorizontal: 2,
       fontSize: 13,
       fontWeight: '700',
+      fontVariant: ['tabular-nums'],
       color: colors.white,
     },
+    // S3 (D8) — the direct-entry field, in the value's own slot. minWidth
+    // rather than width: an empty TextInput has no intrinsic size in RN, and
+    // this floor applies only while the field is open — the resting row still
+    // reserves nothing.
+    directInput: {
+      minWidth: 64,
+      height: 28,
+      borderRadius: 6,
+      borderWidth: 1,
+      borderColor: colors.gold,
+      color: colors.white,
+      paddingHorizontal: 6,
+      paddingVertical: 0,
+      fontSize: 12,
+      fontVariant: ['tabular-nums'],
+    },
+    /** D8: the unit sits OUTSIDE the field, so only a number is ever typed. */
+    unit: {
+      fontSize: 11,
+      fontWeight: '700',
+      color: withAlpha(colors.white, 0.55),
+    },
     step: {
-      width: 32,
+      width: 30,
       height: 30,
       alignItems: 'center',
       justifyContent: 'center',
@@ -1653,12 +1741,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontWeight: '700',
       color: colors.white,
     },
+    editGlyph: {
+      color: withAlpha(colors.white, 0.7),
+    },
     cycle: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      paddingHorizontal: 10,
-      height: 30,
+      gap: 4,
+      paddingHorizontal: 8,
+      height: 28,
       borderRadius: 8,
       borderWidth: 1,
       borderColor: withAlpha(colors.white, 0.25),
@@ -1668,6 +1759,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontWeight: '700',
       color: colors.white,
     },
+    // S3 (D9) — a colour row's line 1. The cluster flexes so the hex input
+    // between the swatch and the row's [↺] can too.
+    colorEditor: {
+      flex: 1,
+      minWidth: 0,
+    },
+    colorEditorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+    },
     swatch: {
       width: 18,
       height: 18,
@@ -1676,13 +1778,14 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       borderColor: withAlpha(colors.white, 0.4),
     },
     hexInput: {
-      minWidth: 92,
-      height: 30,
+      flex: 1,
+      minWidth: 0,
+      height: 28,
       borderRadius: 8,
       borderWidth: 1,
       borderColor: withAlpha(colors.white, 0.25),
       color: colors.white,
-      paddingHorizontal: 8,
+      paddingHorizontal: 6,
       paddingVertical: 0,
       fontSize: 12,
       fontFamily: STUDIO_MONO,
@@ -1695,40 +1798,49 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.danger,
     },
     hslBlock: {
-      marginLeft: 22,
       gap: 2,
     },
+    // S3 (D9) — line 2: H / S / L (and A where alpha exists) on ONE tight
+    // line, 4pt between steppers, NO WRAP. Each stepper shrinks before the
+    // line could ever overflow the 373pt content box.
     hslRow: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 8,
-      flexWrap: 'wrap',
+      gap: 4,
     },
     miniStepper: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
+      gap: 2,
+      flexShrink: 1,
+      minWidth: 0,
     },
     miniLabel: {
-      fontSize: 10,
+      fontSize: 9,
       fontWeight: '800',
       color: withAlpha(colors.white, 0.55),
     },
     miniStep: {
-      width: 24,
-      height: 24,
+      width: 28,
+      height: 28,
       alignItems: 'center',
       justifyContent: 'center',
       borderRadius: 6,
       borderWidth: 1,
       borderColor: withAlpha(colors.white, 0.25),
     },
+    miniGlyph: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.white,
+    },
     miniValue: {
-      minWidth: 28,
       textAlign: 'center',
       fontSize: 11,
       fontWeight: '700',
+      fontVariant: ['tabular-nums'],
       color: colors.white,
+      flexShrink: 1,
     },
     contrast: {
       fontSize: 10,
@@ -1758,16 +1870,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontWeight: '800',
       color: colors.gold,
     },
+    // The two lines a row IS allowed to wrap on (D7/D13) — kept indented
+    // just enough to read as belonging to the row above them.
     modifiedTrail: {
       fontSize: 10,
       color: colors.emerald,
-      marginLeft: 22,
+      marginLeft: 4,
     },
     description: {
       fontSize: 11,
       lineHeight: 15,
       color: withAlpha(colors.white, 0.7),
-      marginLeft: 22,
+      marginLeft: 4,
     },
     presetRow: {
       flexDirection: 'row',
