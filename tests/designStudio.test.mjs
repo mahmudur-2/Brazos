@@ -853,6 +853,216 @@ test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster i
   assert.match(bar, /<Ionicons/, 'the marks are font glyphs');
 });
 
+// ---------------------------------------------------------------------------
+// RUN S3 (D12) — THE STATIC REGISTRY AUDIT.
+//
+// A dial nothing reads is worse than a missing one: the operator turns it,
+// the app does not move, and they cannot tell whether the dial is broken or
+// their eye is. So EVERY static registry key must be provably read by
+// production source, and this test is the proof rather than a claim.
+//
+// The five ways a key counts as READ — anything else is an ORPHAN:
+//   (a) its exact literal appears in single or double quotes;
+//   (b) its exact literal sits in a string-array constant a wearer feeds to
+//       useOverrideFingerprint (the nav's bar-container dials);
+//   (c) a TEMPLATE read brackets it — a `${...}` template with real static
+//       text on BOTH ends, so `button.${variant}.height` reads
+//       button.primary.height but `${ns}.${role}` brackets nothing;
+//   (d) it is a `material.<name>.<prop>` key and ui/primitives/Surface.tsx
+//       reads `spec.<prop>`, or lib/designOverrides.ts's resolver folds it;
+//   (e) it is one of the G1 dials, read through useDesignDial('...') or
+//       `overrides.<dial>` — including the palette pair, which fold inside
+//       lib/designOverrides.ts's exported resolver that hooks/useThemeColors
+//       consumes, the same shape (d) allows for the materials.
+//
+// The panel, the schema and the override layer are EXCLUDED from the search:
+// they are the studio talking about itself, and a dial that only the studio
+// mentions is exactly the orphan this looks for. Tests are excluded for the
+// same reason. Runtime-enumerated colour entries are out of scope — they are
+// generated from the live palettes and have no static key to audit.
+// ---------------------------------------------------------------------------
+
+test('registry audit: every static entry has a reader in production source — zero orphans', async () => {
+  const schema = await schemaModule;
+  const { readdirSync, statSync, readFileSync } = await import('node:fs');
+  const { join, dirname } = await import('node:path');
+  const { fileURLToPath } = await import('node:url');
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+
+  const EXCLUDED = new Set([
+    'components/DesignStudioPanel.tsx',
+    'ui/designStudioSchema.ts',
+    'lib/designOverrides.ts',
+  ]);
+  const sources = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(join(root, dir))) {
+      const rel = `${dir}/${entry}`;
+      if (statSync(join(root, rel)).isDirectory()) walk(rel);
+      else if (/\.tsx?$/.test(entry) && !/\.web\.tsx?$/.test(entry) && !EXCLUDED.has(rel)) {
+        sources.push([rel, readFileSync(join(root, rel), 'utf8')]);
+      }
+    }
+  };
+  for (const dir of ['components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui']) {
+    walk(dir);
+  }
+  assert.ok(sources.length > 100, `the audit must actually scan the tree (saw ${sources.length})`);
+
+  // (a)
+  const quoted = (key) =>
+    sources.find(([, code]) => code.includes(`'${key}'`) || code.includes(`"${key}"`))?.[0] ?? null;
+
+  // (b)
+  const fingerprinted = new Map();
+  for (const [path, code] of sources) {
+    for (const use of code.matchAll(/useOverrideFingerprint\((\w+)\)/g)) {
+      const decl = new RegExp(`const ${use[1]}\\s*=\\s*\\[([\\s\\S]*?)\\]`).exec(code);
+      if (!decl) continue;
+      for (const literal of decl[1].matchAll(/'([^']+)'/g)) fingerprinted.set(literal[1], path);
+    }
+  }
+
+  // (c)
+  const templates = [];
+  for (const [path, code] of sources) {
+    for (const hit of code.matchAll(/`([^`\\]*\$\{[^`]*?\}[^`\\]*)`/g)) {
+      const parts = hit[1].split(/\$\{[^}]*\}/);
+      if (!parts[0] || !parts[parts.length - 1]) continue; // brackets nothing
+      const pattern = parts
+        .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('[A-Za-z0-9_]+');
+      templates.push({ path, raw: hit[1], re: new RegExp(`^${pattern}$`) });
+    }
+  }
+
+  // (d)
+  const surfaceSource = sources.find(([path]) => path === 'ui/primitives/Surface.tsx')?.[1] ?? '';
+  assert.ok(surfaceSource, 'the material wearer must be in the scan');
+  const overrideLayer = await read('lib/designOverrides.ts');
+  const materialRead = (key) => {
+    const parts = /^material\.(\w+)\.(\w+)$/.exec(key);
+    if (!parts) return null;
+    if (new RegExp(`spec\\.${parts[2]}\\b`).test(surfaceSource)) {
+      return `ui/primitives/Surface.tsx (spec.${parts[2]})`;
+    }
+    if (new RegExp(`resolved\\[name\\][\\s\\S]{0,400}${parts[2]}`).test(overrideLayer)) {
+      return `lib/designOverrides.ts resolveMaterials (${parts[2]})`;
+    }
+    return null;
+  };
+
+  // (e)
+  const g1Read = (entry) => {
+    const dial = entry.technicalKey;
+    if (dial.includes('.')) return null;
+    for (const [path, code] of sources) {
+      if (
+        code.includes(`useDesignDial('${dial}')`) ||
+        new RegExp(`overrides\\.${dial}\\b`).test(code) ||
+        new RegExp(`\\{[^}]*\\b${dial}\\b[^}]*\\}\\s*=\\s*useDesignOverrides\\(\\)`).test(code)
+      ) {
+        return path;
+      }
+    }
+    // The palette dials fold inside the exported resolver a production hook
+    // consumes — the same shape (d) allows for resolveMaterials.
+    if (new RegExp(`overrides\\.${dial}\\b`).test(overrideLayer)) {
+      const consumer = sources.find(([, code]) => /applyPaletteOverrides/.test(code));
+      if (consumer) return `${consumer[0]} (via lib/designOverrides.ts overrides.${dial})`;
+    }
+    return null;
+  };
+
+  /** Which of the five readers claims this entry, or null for an orphan. */
+  const classify = (entry) => {
+    if (quoted(entry.key)) return 'quoted';
+    if (fingerprinted.has(entry.key)) return 'fingerprint';
+    if (templates.some((template) => template.re.test(entry.key))) return 'template';
+    if (materialRead(entry.key)) return 'material';
+    if (g1Read(entry)) return 'g1';
+    return null;
+  };
+
+  // THE AUDIT MUST HAVE TEETH. A fence that cannot fail proves nothing, so
+  // three keys nothing can possibly read are run through the same classifier
+  // first: one plain, one shaped like a material prop that no wearer reads,
+  // and one shaped like a G1 dial. All three must come back ORPHAN.
+  for (const fake of [
+    { key: 'nothing.reads.this', technicalKey: 'nothing.reads.this' },
+    { key: 'material.chrome.nosuchprop', technicalKey: 'materials.chrome.nosuchprop' },
+    { key: 'color.nosuchdial', technicalKey: 'nosuchdial' },
+  ]) {
+    assert.equal(classify(fake), null, `the audit must catch an orphan: ${fake.key}`);
+  }
+
+  const counts = { quoted: 0, fingerprint: 0, template: 0, material: 0, g1: 0, orphan: 0 };
+  const orphans = [];
+  for (const entry of schema.STUDIO_REGISTRY) {
+    const reader = classify(entry);
+    if (reader) counts[reader] += 1;
+    else {
+      counts.orphan += 1;
+      orphans.push(`${entry.key} (${entry.category}, ${entry.technicalKey})`);
+    }
+  }
+
+  console.log(
+    `  ℹ registry audit: ${schema.STUDIO_REGISTRY.length} static entries — ` +
+      `${counts.quoted} quoted literal, ${counts.template} template read, ` +
+      `${counts.material} material prop, ${counts.g1} G1 dial, ` +
+      `${counts.fingerprint} fingerprint array, ${counts.orphan} ORPHAN`,
+  );
+
+  assert.deepEqual(
+    orphans,
+    [],
+    'a dial no production file reads cannot change the app — delete the entry or wire a reader',
+  );
+  assert.equal(
+    counts.quoted + counts.fingerprint + counts.template + counts.material + counts.g1,
+    schema.STUDIO_REGISTRY.length,
+    'every static entry must land in exactly one classification',
+  );
+});
+
+test('[static] S3 D15: the active tab glows with a box to blur into, and composites in place', async () => {
+  const bar = stripComments(await read('ui/primitives/BottomNav.tsx'));
+  const flat = bar.replace(/\s+/g, ' ');
+
+  // The glow itself is UNCHANGED — same shape, same colour, same strength,
+  // same dial. This fence is about the box around it, not the light.
+  assert.match(
+    flat,
+    /glow\.text\(withAlpha\(colors\.emerald, glowAlpha \?\? ACTIVE_TAB_GLOW_ALPHA\)\)/,
+    'the glow keeps its colour and its dial',
+  );
+
+  // (a) THE BOX. The bleed is READ from the shape's own radius rather than
+  // restated, so the padding can never drift from the blur it contains.
+  assert.match(flat, /const bleed = activeGlow\?\.textShadowRadius \?\? 0;/);
+  assert.match(flat, /const glyphGlowBox = bleed \? \{ padding: bleed, margin: -bleed \} : null;/);
+  // Equal and opposite: the laid-out geometry is byte-identical.
+  assert.match(flat, /marginTop: iconLabelGap - bleed, marginBottom: -bleed, marginLeft: -bleed, marginRight: -bleed,/);
+  assert.match(flat, /style=\{\[activeGlow, glyphGlowBox\]\}/, 'the glyph wears the box');
+  assert.match(flat, /activeGlow, labelGlowBox,/, 'the label wears its own');
+  // Unfocused and light: bleed is 0, both boxes are null, nothing is declared.
+  assert.match(flat, /const labelGlowBox = bleed \?/);
+
+  // (b) IN PLACE. Identity dials are not declared at all, so an untouched bar
+  // never forces its subtree onto an offscreen layer.
+  assert.match(flat, /const moved = offsetX !== 0 \|\| offsetY !== 0 \|\| dialledScale !== 1;/);
+  assert.match(flat, /\.\.\.\(dialledOpacity !== 1 \? \{ opacity: dialledOpacity \} : null\),/);
+  assert.match(flat, /\.\.\.\(moved \? \{ transform: \[/);
+  // The dials themselves still exist and still default to identity.
+  assert.match(bar, /useOverrideNumber\('nav\.activeOpacity'\) \?\? 1/);
+  assert.match(bar, /useOverrideNumber\('nav\.activeScale'\) \?\? 1/);
+  assert.match(bar, /useOverrideNumber\('nav\.itemOffsetX'\) \?\? 0/);
+
+  // Nothing in the item's own chain may clip the blur back off again.
+  assert.doesNotMatch(bar, /overflow: 'hidden'/, 'the bar clips nothing');
+});
+
 test('the narrow typography exception: nav label size is the ONLY font dial', async () => {
   const schema = await schemaModule;
   const fontDials = schema.STUDIO_REGISTRY.filter(

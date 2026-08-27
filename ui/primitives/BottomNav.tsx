@@ -348,13 +348,60 @@ export function BottomNavItem({
     focused && isDark
       ? glow.text(withAlpha(colors.emerald, glowAlpha ?? ACTIVE_TAB_GLOW_ALPHA))
       : null;
+
+  // RUN S3 (D15) — THE SQUARE PATCH AROUND THE FOCUSED GLYPH, AND WHY.
+  //
+  // `glow.text` is a textShadow, which RN turns into an NSShadow attribute on
+  // the attributed string (Libraries/Text/RCTTextAttributes.mm, react-native
+  // 0.81.5), and the paragraph view DRAWS that string inside its own
+  // drawRect: — into `_layoutMetrics.getContentFrame()`, the box inside
+  // padding and border (React/Fabric/.../Text/RCTParagraphComponentView.mm).
+  // Drawing lands in the layer's own bounds-sized backing store, so with no
+  // padding the contentFrame IS the bounds and an 8pt blur is cut off flat at
+  // the glyph box's edge. That hard rectangular cut is the patch the operator
+  // photographed — it is not a stray view and not a colour.
+  //
+  // THE FIX IS A BOX, NOT A DIFFERENT GLOW: pad each glowing Text by exactly
+  // the shadow's own radius so the blur has somewhere to land, and take those
+  // points straight back out with equal NEGATIVE MARGINS, so the laid-out
+  // geometry is byte-identical — the outer box, including margins, is the
+  // size it always was, and the glyph sits at the same absolute point inside
+  // a larger backing store. The radius is READ from the shape rather than
+  // restated, so the two can never drift apart. No ancestor clips it: the
+  // library's item wrapper is `overflow: 'visible'` for every variant but
+  // 'material' (BottomTabItem.tsx), which this bar is not.
+  const bleed = activeGlow?.textShadowRadius ?? 0;
+  const glyphGlowBox = bleed ? { padding: bleed, margin: -bleed } : null;
+  const labelGlowBox = bleed
+    ? {
+        padding: bleed,
+        // The icon-label gap survives intact: only the bleed comes off it.
+        marginTop: iconLabelGap - bleed,
+        marginBottom: -bleed,
+        marginLeft: -bleed,
+        marginRight: -bleed,
+      }
+    : null;
+
+  // AND THE SECOND HALF: an untouched bar must composite IN PLACE. A non-unit
+  // opacity or a transform forces the subtree onto its own offscreen layer,
+  // whose edges are exactly where a blur gets cut. These dials are identity
+  // until the operator moves them, so at identity they are not declared at
+  // all rather than declared as no-ops.
+  const dialledOpacity = focused ? activeOpacity : inactiveOpacity;
+  const dialledScale = focused ? activeScale : 1;
+  const moved = offsetX !== 0 || offsetY !== 0 || dialledScale !== 1;
   const contentDials = {
-    opacity: focused ? activeOpacity : inactiveOpacity,
-    transform: [
-      { translateX: offsetX },
-      { translateY: offsetY },
-      { scale: focused ? activeScale : 1 },
-    ],
+    ...(dialledOpacity !== 1 ? { opacity: dialledOpacity } : null),
+    ...(moved
+      ? {
+          transform: [
+            { translateX: offsetX },
+            { translateY: offsetY },
+            { scale: dialledScale },
+          ],
+        }
+      : null),
   };
 
   return (
@@ -363,7 +410,7 @@ export function BottomNavItem({
         name={focused ? active : inactive}
         size={iconSize}
         color={tint}
-        style={activeGlow}
+        style={[activeGlow, glyphGlowBox]}
       />
       <Text
         style={[
@@ -376,6 +423,7 @@ export function BottomNavItem({
             marginTop: iconLabelGap,
           },
           activeGlow,
+          labelGlowBox,
         ]}
         numberOfLines={1}
         // D3: no label may clip or truncate. The slot is wide enough for
