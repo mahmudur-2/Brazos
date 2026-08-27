@@ -1050,7 +1050,14 @@ test('[static] the filter pills measure themselves, not their scroller', () => {
 
   const pill = /\n  pill: \{([^}]*)\}/.exec(screen);
   assert.ok(pill, 'the pill style must exist');
-  assert.match(pill[1], /height: FILTER_PILL_HEIGHT/, 'the pill takes the named height');
+  // RUN T2 (C6) put the pill's height on its own dial, so the wearer reads
+  // that dial and falls back to the named constant. The constant is still the
+  // single owner of the number — only the place it is consumed moved.
+  assert.match(
+    screen,
+    /useDialNumber\('messages\.filterPill\.height'\) \?\? FILTER_PILL_HEIGHT/,
+    'the pill takes the named height',
+  );
   assert.doesNotMatch(
     pill[1],
     /minHeight/,

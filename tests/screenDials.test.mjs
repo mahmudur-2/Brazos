@@ -122,6 +122,18 @@ const SCREENS = [
       { key: 'profile.content.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
     ],
   },
+  {
+    subcategory: 'Inbox',
+    file: 'screens/MessagesInboxScreen.tsx',
+    prefix: 'messages',
+    scale: 'theme',
+    dials: [
+      { key: 'messages.filterPill.height', drew: 34, parent: null, fallback: 'FILTER_PILL_HEIGHT' },
+      { key: 'messages.list.gap', drew: 12, parent: 'theme.spacing.md', fallback: 'spacing.md' },
+      { key: 'messages.list.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'messages.filterRow.gap', drew: 8, parent: 'theme.spacing.sm', fallback: 'spacing.sm' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -343,6 +355,17 @@ for (const screen of SCREENS) {
         source.includes(readsIt),
         `${screen.file} must read its own dial: ${readsIt}`,
       );
+
+      // 7b. A SCREEN THAT ALREADY OWNED ITS NUMBER AS A NAMED CONSTANT keeps
+      //     it there, and the constant must still be the value quoted above —
+      //     otherwise the fallback is a name pointing at something else.
+      if (/^[A-Z][A-Z0-9_]*$/.test(dial.fallback)) {
+        assert.match(
+          source,
+          new RegExp(`const ${dial.fallback} = ${dial.drew};`),
+          `${screen.file}: ${dial.fallback} must still be the ${dial.drew} this dial launches at`,
+        );
+      }
     }
 
     // 8. THE SCALE THE FILE ACTUALLY IMPORTS, re-read rather than trusted.

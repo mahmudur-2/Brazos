@@ -1998,6 +1998,61 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: THEME_SPACING_DEFAULTS.lg,
       },
     ]),
+    // C6 — screens/MessagesInboxScreen.tsx. `theme.*` scale. Left undialled:
+    // the conversation rows themselves, which are a shared component with its
+    // own dials; the sparse-list padding, which is a DIFFERENT set of numbers
+    // deliberately chosen for a list of three or fewer and would need its own
+    // four dials to be honest; and the empty-state medallion, whose corner is
+    // half its own size.
+    ...dialEntries('screens', 'Inbox', [
+      {
+        key: 'messages.filterPill.height',
+        label: 'Filter pill — height',
+        description: 'How tall the All/Unread/Requests pills above the list stand.',
+        tier: 'basic',
+        scope: 'local',
+        min: 24,
+        max: 56,
+        step: 1,
+        defaultValue: 34,
+      },
+      {
+        key: 'messages.list.gap',
+        label: 'Conversation gap',
+        description: 'Between one conversation row and the next.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 32,
+        step: 1,
+        inheritsFrom: 'theme.spacing.md',
+        defaultValue: THEME_SPACING_DEFAULTS.md,
+      },
+      {
+        key: 'messages.list.paddingX',
+        label: 'List gutter',
+        description: 'How far the conversation list keeps from the left and right edges.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'messages.filterRow.gap',
+        label: 'Filter pill gap',
+        description: 'Between one filter pill and the next along the row.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 24,
+        step: 1,
+        inheritsFrom: 'theme.spacing.sm',
+        defaultValue: THEME_SPACING_DEFAULTS.sm,
+      },
+    ]),
   ];
 }
 

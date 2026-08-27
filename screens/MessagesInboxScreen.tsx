@@ -57,6 +57,7 @@ import {
   unmuteUser,
 } from '../lib/moderation';
 import type { MessagesStackNavigation } from '../lib/navigation';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   ARCHIVE,
   CLEAR_CHAT,
@@ -116,6 +117,14 @@ type SheetTarget = ResolvedSheetTarget;
 export function MessagesInboxScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C6) — THE INBOX'S OWN FOUR. The filter pill's height keeps the
+  // named constant it has always had as its fallback, so the number 34 is
+  // still spelled exactly once in this file and the fence that prices it
+  // against the 32-36pt band still reads it there.
+  const filterPillHeight = useDialNumber('messages.filterPill.height') ?? FILTER_PILL_HEIGHT;
+  const filterRowGap = useDialNumber('messages.filterRow.gap') ?? spacing.sm;
+  const listGap = useDialNumber('messages.list.gap') ?? spacing.md;
+  const listPaddingX = useDialNumber('messages.list.paddingX') ?? spacing.lg;
   const navigation = useNavigation<MessagesStackNavigation>();
   const { user } = useAuth();
   const {
@@ -832,7 +841,7 @@ export function MessagesInboxScreen() {
         horizontal
         showsHorizontalScrollIndicator={false}
         style={styles.filterScroll}
-        contentContainerStyle={styles.filterRow}
+        contentContainerStyle={[styles.filterRow, { gap: filterRowGap }]}
         keyboardShouldPersistTaps="handled"
       >
         {INBOX_FILTERS.map((pill) => {
@@ -843,6 +852,7 @@ export function MessagesInboxScreen() {
               onPress={() => setFilter(pill.key)}
               style={({ pressed }) => [
                 styles.pill,
+                { height: filterPillHeight },
                 active && styles.pillActive,
                 pressed && styles.pillPressed,
               ]}
@@ -917,7 +927,7 @@ export function MessagesInboxScreen() {
                 // short list) makes it read as deliberately minimal.
               visibleRows.length <= 3
               ? styles.sparseContent
-              : styles.listContent
+              : [styles.listContent, { gap: listGap, paddingHorizontal: listPaddingX }]
           }
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
@@ -1016,7 +1026,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // the pills as tall as the scroller; centring is what makes each pill
     // measure itself instead of its container.
     alignItems: 'center',
-    gap: spacing.sm,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.md,
   },
@@ -1024,7 +1033,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // is a hairline on the page ground so the ACTIVE one is the only filled
   // thing in the row.
   pill: {
-    height: FILTER_PILL_HEIGHT,
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     borderRadius: radius.pill,
@@ -1076,10 +1084,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   listContent: {
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: 0,
-    gap: spacing.md,
   },
   sparseContent: {
     // No flexGrow/justifyContent — that centered the row group as a block,
