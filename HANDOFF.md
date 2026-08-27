@@ -43,7 +43,212 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-26 schema-driven design studio (RUN S2)
+## Current state — after the 2026-08-27 studio ergonomics + solid nav ground (RUN S3)
+
+The design studio was rebuilt around the operator's hand rather than around
+the registry's shape: edge-to-edge, vertical-only, search gone, everything
+that is not a dial moved behind one [•••], rows compacted, and numbers now
+TYPEABLE instead of only steppable. Beside it the nav bar's ground went
+SOLID, the centre [+]'s ring went champagne, and the square patch around the
+focused tab glyph was diagnosed and fixed. Nothing in the registry was
+deleted: the new audit proves every static entry already has a reader.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`8079225`|D1/D2 — edge-to-edge (`PANEL_MARGIN` 0, `panelWidthFor` = window width) and VERTICAL MOVEMENT ONLY: `clampPanelRect` now RETURNS x rather than clamping it, and the drag handler never reads dx|
+|C2|`79fcf99`|D3/D4/D5 — search removed completely; header = grip + title + [•••] [resize] [collapse] [✕]; toolbar = [undo] [redo] [ONE tier pill that flips] [Modified]; [•••] opens a panel-native overflow list whose four pages (Presets, Export, Import, Raw JSON) replace the body, plus Reset all|
+|C3|`48151f1`|D6 — stars gone; a LONG PRESS on a row's label raises a "Pin control" chip where the reset glyph sits (3 s, or tap); pinned entries get a "Pinned" section at the top AND stay in their category; pins persist under `brazos.designstudio.pins.v1`|
+|C4|`2143d94`|D7/D8/D9/D13 — compact rows with an intrinsic-width cluster [−] [value] [+] [✎] [↺]; [✎] is direct decimal-pad entry through the new pure `ui/designStudioInput.ts`; colour rows are two tight lines; nothing overflows 393pt and nothing is reserved|
+|C5|`46097f8`|D11/D14/D16 — `materials.chrome` goes opaque (blur 0, both scrims 1) and the BlurLayer mounts only where it can be seen; the dark [+]'s ring becomes `navBar.ringColorDark` `#E6D19A`; the no-raster-in-the-bar proof|
+|C6|`b5418c4`|D15 — the focused glyph and label get a box to blur into (padding = the shadow's own radius, taken back out with equal negative margins) and the wrapper's identity dials stop being declared; D12 — the static registry audit, zero orphans|
+|C7|(this commit)|final render gate + this live edge|
+
+`npm run verify` exited 0 after every commit (1123 tests at the baseline →
+1131 at C6; the studio suite is `tests/designStudio.test.mjs`).
+
+### The studio, as the operator now meets it
+
+- **Edge-to-edge and vertical-only.** The panel spans the window width, so
+  there is no horizontal freedom left to spend: `clampPanelRect` returns
+  `PANEL_MARGIN` for every rect fed in — a wild gesture, a restored session
+  rect, ±Infinity or NaN — and the fuzz fence asserts that over its whole x
+  set. Height, top, bottom and the non-modal contract are unchanged.
+- **Two chrome rows, 80pt total** (fenced ≤ 84). Row 1 is the drag grip and
+  the title, then [•••] [resize] [collapse ⌄] [✕]. Row 2 is [undo] [redo],
+  ONE tier pill reading "Simple" or "Advanced" that flips on tap, and the
+  Modified filter. The "All"/"Starred"/"Reset" pills are gone.
+- **Search is gone completely** — input, state, style and filtering branch.
+  Categories are the way through the list.
+- **[•••] holds everything that is not a dial**: Presets, Export, Import, Raw
+  JSON, Reset all. The first four open a PAGE inside the panel body with a
+  "‹ Design studio" row back; their behaviour is byte-identical to before.
+  The list is drawn in the panel's own solid rows — never DropMenu, never
+  Surface, because the studio must not wear what it tunes (fenced both ways).
+- **Pins replaced stars, and they survive a relaunch.** Long-press a row's
+  label to raise a "Pin control" / "Unpin control" chip in the reset glyph's
+  place; it clears after 3 s, on tap, or on unmount. Pinned entries render as
+  full rows in a "Pinned" section at the very top and ALSO stay in their
+  category. The Modified filter narrows that section; the tier toggle
+  deliberately does not, or pinning an Advanced dial would hide it the moment
+  Simple came back.
+- **Rows are compact and nothing is reserved.** The right cluster is
+  intrinsic-width, the value is tabular-nums sized by its own content (the
+  old 56pt column is gone), and the label block takes every remaining point
+  and truncates rather than wraps. Row padding 3pt, 2pt between rows, 10pt of
+  panel side padding — so the content box at 393pt is 373.
+- **[✎] is direct entry**: a decimal-pad field in the value's own slot, unit
+  outside it, committing on submit or blur. Parsing is the pure, import-free
+  `parseDirectEntry` in `ui/designStudioInput.ts`; null REVERTS (no write, no
+  crash) for empty, unparseable or non-finite input.
+
+### The nav bar's ground is SOLID now
+
+`materials.chrome` is `blur: 0, scrimAlpha: 1, fallbackScrimAlpha: 1`. The
+ink, the mint hairline, the border alpha and the radius contract did NOT move
+— the same material at a different mix — so the one-scrim-ink fence stays
+true and the contrast fence still passes on its own arithmetic. Sheet and menu
+are untouched and still blur under a translucent scrim.
+
+`ui/primitives/Surface.tsx` gained ONE guard: the BlurLayer mounts only when
+`isDark && !flat && spec.blur > 0 && scrimAlpha < 1`. A blur view under an
+opaque scrim is pure cost and zero pixels.
+
+The [+]'s dark ring is `navBar.ringColorDark` (`#E6D19A`) — the control's own
+line-work, so it lives on `navBar` rather than in a palette. Light keeps
+`goldDeep`. The studio's chrome dials and the `create.border` dial keep
+working and simply launch at the new defaults.
+
+### Why the focused tab had a square patch, and what fixed it
+
+`glow.text` is a textShadow. RN turns it into an NSShadow attribute on the
+attributed string (`Libraries/Text/RCTTextAttributes.mm`, react-native 0.81.5)
+and the paragraph view draws that string inside its own `drawRect:` — into
+`_layoutMetrics.getContentFrame()`, the box inside padding and border
+(`React/Fabric/.../Text/RCTParagraphComponentView.mm`). Drawing lands in the
+layer's bounds-sized backing store, so with no padding the contentFrame IS the
+bounds and an 8pt blur is cut off flat at the glyph box's edge.
+
+The fix is a BOX, not a different glow: each glowing Text is padded by exactly
+the shadow's own radius — READ off the returned shape, so the two cannot drift
+— and those points are taken straight back out with equal negative margins, so
+the laid-out geometry is byte-identical. The wrapper's opacity and transform
+are now declared only when they differ from identity, so an untouched bar
+composites in place. No ancestor clips it: the library's item wrapper is
+`overflow: 'visible'` for every variant but 'material'
+(`@react-navigation/bottom-tabs` `BottomTabItem.tsx`), which this bar is not.
+
+**`glow.text` has exactly ONE call site in the tree** (this one), so no sweep
+is left over for a later run.
+
+### The registry audit (D12) — 173 entries, ZERO orphans
+
+`tests/designStudio.test.mjs` now proves that every static `STUDIO_REGISTRY`
+key is read by production source (screens, components, ui, hooks, lib,
+navigation, modes — excluding the panel, the schema, the override layer and
+every test, because a dial only the studio mentions is exactly the orphan
+being hunted). The classification: **124 quoted literal, 26 bracketing
+template read, 18 material prop, 5 G1 dial, 0 fingerprint-array — 0 ORPHAN.**
+Nothing was deleted, because nothing needed deleting.
+
+The audit is self-verifying: three fabricated keys (a plain one, a
+material-shaped one and a G1-shaped one) are run through the same classifier
+first and must all come back ORPHAN, so a fence that could not fail cannot
+pass here either.
+
+### Render gate (this run)
+
+Baseline at `bd19a9a`, mid-gate after C4, final after C6 — `--build` all
+three times, 60/60 targets every time.
+
+**MID-GATE (C1–C4 vs baseline): 56/60 byte-identical, zero regressions.**
+The four deltas were all noise, and two of them were PROVEN so rather than
+assumed: a same-build re-shoot of `worker-profile-dark` (14 px, x31..361
+y254..255 — ±1/±2 on the two anti-aliased ENDS of a gold hairline, the middle
+of the line byte-identical) and of `customer-services-sheet-dark` (26 px,
+x235..372 y24..54) came back BYTE-IDENTICAL TO THE BASELINE, so both targets
+are bistable at unchanged source. The other two were the known worker-home
+one-glyph flicker (dark 8 px, light 6 px, y439..464). Statically: every module
+C1–C4 touched is reachable only through `components/DesignStudioPanel.tsx`,
+which mounts solely in `navigation/ModeShell.tsx` behind
+`designStudioAvailable` — false on the harness's production web export — so no
+app surface could have moved.
+
+**FINAL GATE (C5–C6 vs mid): 24/60 byte-identical, and every delta accounted.**
+- **Every LIGHT target has ZERO delta inside the nav bar.** Exactly as D11,
+  D14 and D15 predict: light reads no material, does not glow, and keeps its
+  own ring.
+- **24 dark targets differ ONLY inside the bar.** The measured minimum y of
+  any in-bar delta, across every target, is **exactly 758** — the top edge of
+  the bar's 94px footprint (88 + a 6px pad) in an 852px frame. Not one pixel
+  above the bar moved. The cause is D11: on web `flat` is true, so the bar's
+  ground goes from `#071B15` at 0.85 to fully opaque, which repaints the whole
+  bar (~30k px of a 393×94 region).
+- **D14 is proven pixel-wise**: in `customer-home-dark`, exactly 172 px of
+  `#526477` slate became exactly 172 px of `#E6D19A` champagne in a box at
+  x159..233 y764..838. The same count both sides — the ring changed colour
+  without moving a pixel, which is what D14 promised.
+- **D15 contributes nothing measurable here, by construction**: the padding
+  and the negative margins cancel exactly, and web draws text-shadow unclipped
+  both before and after. THE HARNESS CANNOT PROVE THE iOS FIX EITHER WAY.
+- **12 targets carry an above-the-bar delta, and every one of them is the
+  CLOCK.** The captures straddled midnight (baseline 23:29 and mid 23:54 on
+  2026-08-26, final 00:04 on 2026-08-27), so the time-of-day greeting flipped
+  "Good evening" → "Good morning" on both homes — and on the four sheet
+  targets that render a home behind their scrim — while `upcomingDates()` on
+  the Post-a-Job "Where and when?" step advanced every chip a day, shifting
+  its labels 3–4 px. Each dark target's above-bar box matches its LIGHT
+  counterpart's box (x70..143 y13..30 for the customer greeting, x57..118
+  y14..27 for the worker's, x304..368 y465..508 for the date chips), and since
+  light cannot be touched by any decision in this run, that shared box IS the
+  clock and nothing dark-only happened above the bar.
+
+### Standing gotchas added by this run
+
+- **`ui/designStudioInput.ts` must stay import-free** — the fence executes it
+  directly, the way `ui/colorMath.ts` is executed.
+- `parseDirectEntry`'s `kind` is recorded but never branched on: BOTH numeric
+  kinds round to two decimals, deliberately, so typing 17.5 and stepping to
+  17.5 land on the same number. A future run that makes `kind` fork breaks
+  that equivalence.
+- **The panel file must not contain the literals `'menu'`, `'sheet'` or
+  `'chrome'`** (the registry fence) — which is why the overflow state is named
+  `'overflow'` and its pages `'presets' | 'export' | 'import' | 'raw'`.
+- The H/S/L/A line is genuinely tight: 369pt of a 373pt content box under the
+  fence's own advance-width model. A larger mini glyph button, a wider value
+  or a bigger mini font will overflow it, and the fence will say so.
+- `greetingSlate` no longer has a direct call site — D14 took its last one. It
+  is KEPT deliberately: it is still a palette token, enumerated at runtime in
+  the studio's Colors category. Deleting it was outside this run's remit.
+- **The shots harness straddling midnight is a real noise source**, not just
+  the Home greeting: `upcomingDates()` in `screens/PostJobScreen.tsx` moves
+  `postjob-location-{dark,light}` too. Capture a baseline and its comparison
+  inside the same day, or expect both.
+- `worker-profile-dark` and `customer-services-sheet-dark` are BISTABLE in the
+  harness — the same source renders two rasterisations of the same hairline
+  ends / glyph edges. Proven this run by same-build re-shoots.
+
+### What only the operator can check — ON DEVICE, in this order
+
+1. **The focused tab's glow, dark mode.** Look at the Inbox tab head-on: the
+   glow must fade out smoothly on all four sides with NO square edge and no
+   visible patch bounds. Then look at the glyph, the label, their sizes,
+   spacing and colours — none of them may have moved a hair. This is the whole
+   point of D15 and the harness cannot see it.
+2. **The nav bar's ground.** It must read as SOLID emerald, not frosted —
+   nothing behind it should show through as it scrolls.
+3. **The [+]'s ring** must be warm champagne against the gold tile, not the
+   old cold slate; the tile, its size, its glyph and its glow must be
+   unchanged.
+4. **The studio's rows.** Open it: the panel should sit edge-to-edge, drag
+   only up and down, and the H/S/L(/A) line on a colour row must sit on ONE
+   line with nothing clipped at 393pt.
+5. **Direct entry.** Tap [✎] on a numeric dial: the keypad should be the
+   decimal pad, the text pre-selected, the unit outside the field. Type
+   nonsense and blur — the dial must revert, not jump to zero.
+6. **Long-press a row's label** to pin it; relaunch the app and confirm the
+   Pinned section came back.
+
+## The run before it — after the 2026-08-26 schema-driven design studio (RUN S2)
 
 The G1 tuning panel became a SCHEMA-DRIVEN design studio: every dial is one
 entry in a central registry (`ui/designStudioSchema.ts`), the panel renders
@@ -181,7 +386,7 @@ The five deltas, pixel-inspected:
   `components/DesignStudioPanel.tsx` — keep all studio JSON/hex inputs in
   that one file.
 
-## The run before it — after the 2026-08-26 emerald glass pass (RUN G1)
+## Two runs back — after the 2026-08-26 emerald glass pass (RUN G1)
 
 The app gained one glass system: a `Surface` primitive wearing three
 materials held as DATA in `ui/tokens.ts`, a live in-memory override layer so
@@ -314,7 +519,7 @@ run's own capture temp file) sat untracked at start — overwritten by this
 run's baseline capture and deleted, per the file's own create-read-delete
 contract.
 
-## Two runs back — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
+## Three runs back — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
 
 Post-a-Job's first three steps were restructured and re-copied, the bottom
 nav became an ATTACHED full-width bar (a confirmed operator reversal of
@@ -436,7 +641,7 @@ C4/C7/C9 — none deleted or weakened, tally unchanged). No database contact,
 no SQL, no dependency, no image opened for viewing; `.gitignore`,
 `package.json`, `package-lock.json`, `app.json`, `eas.json` untouched.
 
-## Three runs back — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
+## Four runs back — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
 
 The next redesign runs must be written against renders of the screens as they
 are today. The registry could photograph 16 surfaces; it now photographs
@@ -512,7 +717,7 @@ viewing; no dependency was added; no app code was touched. `.gitignore`,
 untouched.
 
 
-## Four runs back — after the 2026-08-26 publish pass (RUN PUBLISH1)
+## Five runs back — after the 2026-08-26 publish pass (RUN PUBLISH1)
 
 The published-job screen and the budget editor were the two surfaces the
 Prestige language had not reached. Both now speak it — and the button that had
@@ -720,7 +925,7 @@ was opened for viewing; no dependency was added. No font, no bottom-nav change,
 no CTA green. `.gitignore`, `app.json` and `eas.json` are untouched.
 
 
-## Five runs back — after the 2026-08-26 motion pass (RUN MOTION1)
+## Six runs back — after the 2026-08-26 motion pass (RUN MOTION1)
 
 Three native modules had been installed and none of them was called. This run
 gave all three a boundary and callers: press feedback with haptics on every
@@ -1018,7 +1223,7 @@ was opened for viewing; no dependency was added. `.gitignore`, `app.json` and
 `eas.json` are untouched.
 
 
-## Six runs back — after the 2026-08-26 ground pass (RUN GROUND1)
+## Seven runs back — after the 2026-08-26 ground pass (RUN GROUND1)
 
 Three defects, one of which turned out not to exist. The atmosphere raster was
 banded and was believed to be far too bright; the nav pill sat in a flat
@@ -1420,7 +1625,7 @@ expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
 differ from build 7's.**
 
 
-## Seven runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Eight runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -1618,7 +1823,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## Eight runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Nine runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -1706,7 +1911,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Nine runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Ten runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -1891,7 +2096,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Ten runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Eleven runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -2116,7 +2321,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Eleven runs back — after the 2026-08-25 three corrections (RUN H3)
+## Twelve runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -2291,7 +2496,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Twelve runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Thirteen runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -2560,7 +2765,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Thirteen runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Fourteen runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -2711,7 +2916,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Fourteen runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Fifteen runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -2772,7 +2977,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Fifteen runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Sixteen runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
