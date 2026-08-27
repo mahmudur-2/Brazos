@@ -54,6 +54,7 @@ import {
   uploadJobPhoto,
 } from '../lib/storage';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   fonts,
   radius,
@@ -85,6 +86,16 @@ function formatDuration(ms: number): string {
 export function WorkerJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C12) — THE WORKER'S ACTIVE JOB, ITS OWN FOUR. Each dial falls back
+  // to the value this file drew before it existed, spelled here and nowhere
+  // else; the two token-backed ones take the `theme.*` scale this file imports
+  // spacing/radius from. `photoHeight` reaches BOTH photo boxes — the one the
+  // worker just picked and the ones already sent — because they are the same
+  // proof at two moments and drew the same 180.
+  const contentPadding = useDialNumber('workerJob.content.padding') ?? spacing.lg;
+  const contentGap = useDialNumber('workerJob.content.gap') ?? spacing.lg;
+  const iconCircleSize = useDialNumber('workerJob.iconCircle.size') ?? 44;
+  const photoHeight = useDialNumber('workerJob.photo.height') ?? 180;
   // emerald(3): the floating pill's real footprint.
   const navClearance = useFloatingNavClearance();
   const navigation = useNavigation<MyJobsStackNavigation>();
@@ -344,7 +355,10 @@ export function WorkerJobScreen() {
         >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
+          contentContainerStyle={[
+            styles.content,
+            { padding: contentPadding, gap: contentGap, paddingBottom: navClearance },
+          ]}
           keyboardShouldPersistTaps="handled"
           // Swiping the list down puts the keyboard away, so it never has to
           // be dismissed by hunting for empty space to tap.
@@ -358,6 +372,7 @@ export function WorkerJobScreen() {
               <View
                 style={[
                   styles.iconCircle,
+                  { width: iconCircleSize, height: iconCircleSize },
                   isDark
                     ? styles.iconCircleDark
                     : { backgroundColor: categoryAccent(job.category).bg },
@@ -533,7 +548,7 @@ export function WorkerJobScreen() {
                   {donePhotos.map((url) => (
                     <View key={url} style={styles.photoWrap}>
                       <Pressable onPress={() => setViewerUri(url)}>
-                        <RemoteImage uri={url} style={styles.photo} />
+                        <RemoteImage uri={url} style={[styles.photo, { height: photoHeight }]} />
                       </Pressable>
                       <Pressable
                         style={styles.photoRemove}
@@ -596,7 +611,7 @@ export function WorkerJobScreen() {
                     >
                       {completionPhotosOf(job).map((url) => (
                         <Pressable key={url} onPress={() => setViewerUri(url)}>
-                          <RemoteImage uri={url} style={styles.donePhoto} />
+                          <RemoteImage uri={url} style={[styles.donePhoto, { height: photoHeight }]} />
                         </Pressable>
                       ))}
                     </ScrollView>
@@ -689,12 +704,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   content: {
-    padding: spacing.lg,
     // Extra clearance below the last card so that, once the review form has
     // been scrolled to the end with the keyboard open, Submit sits clear of
     // the keyboard's top edge rather than flush against it.
     paddingBottom: spacing.xxl,
-    gap: spacing.lg,
   },
   jobHeader: {
     flexDirection: 'row',
@@ -702,8 +715,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.md,
   },
   iconCircle: {
-    width: 44,
-    height: 44,
     borderRadius: radius.md,
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
@@ -800,9 +811,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // ScrollView, whose content container has no bounded width for a
     // percentage to resolve against — the just-uploaded completion photos
     // were laying out at zero width because of it. Matches donePhoto below
-    // so the preview and the saved gallery are the same size.
+    // so the preview and the saved gallery are the same size — RUN T2 (C12)
+    // keeps that true by pointing BOTH at the one height dial.
     width: 240,
-    height: 180,
     borderRadius: radius.md,
     backgroundColor: colors.border,
   },
@@ -819,7 +830,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   donePhoto: {
     width: 240,
-    height: 180,
     borderRadius: radius.md,
     backgroundColor: colors.border,
   },

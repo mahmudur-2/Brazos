@@ -208,6 +208,18 @@ const SCREENS = [
       { key: 'map.squircle.size', drew: 40, parent: null, fallback: '40' },
     ],
   },
+  {
+    subcategory: 'Active Job',
+    file: 'screens/WorkerJobScreen.tsx',
+    prefix: 'workerJob',
+    scale: 'theme',
+    dials: [
+      { key: 'workerJob.content.padding', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'workerJob.photo.height', drew: 180, parent: null, fallback: '180' },
+      { key: 'workerJob.content.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'workerJob.iconCircle.size', drew: 44, parent: null, fallback: '44' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

@@ -2351,6 +2351,62 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: 40,
       },
     ]),
+    // C12 — screens/WorkerJobScreen.tsx. `theme.*` scale. Left undialled: the
+    // stage cards and their buttons, which are shared surfaces with their own
+    // dials; the dashed "add a photo" tile, which is sized by its own padding
+    // and reads as a control rather than as furniture; and the photo REMOVE
+    // badge, whose corner is half its own size. `workerJob.photo.height` is
+    // read by both photo boxes — the one just picked and the ones already
+    // sent — because they are the same proof at two moments and the stylesheet
+    // already says they must match.
+    ...dialEntries('screens', 'Active Job', [
+      {
+        key: 'workerJob.content.padding',
+        label: 'Screen padding',
+        description: 'How far the whole column keeps from every edge of the screen.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'workerJob.photo.height',
+        label: 'Completion photo — height',
+        description: 'How tall the proof-of-work photos stand, both the one just picked and the ones already sent.',
+        tier: 'basic',
+        scope: 'local',
+        min: 100,
+        max: 320,
+        step: 2,
+        defaultValue: 180,
+      },
+      {
+        key: 'workerJob.content.gap',
+        label: 'Section gap',
+        description: 'Between the job header, the payment card and each stage below them.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'workerJob.iconCircle.size',
+        label: 'Category tile — size',
+        description: 'The square glyph tile beside the job title, width and height together.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 28,
+        max: 72,
+        step: 2,
+        defaultValue: 44,
+      },
+    ]),
   ];
 }
 
