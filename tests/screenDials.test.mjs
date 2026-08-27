@@ -82,6 +82,20 @@ const SCREENS = [
       { key: 'workerHome.modeSwitch.paddingX', drew: 13, parent: null, fallback: '13' },
     ],
   },
+  {
+    subcategory: 'Post a Job',
+    file: 'screens/PostJobScreen.tsx',
+    prefix: 'postJob',
+    scale: 'theme',
+    dials: [
+      { key: 'postJob.progress.height', drew: 4, parent: null, fallback: '4' },
+      { key: 'postJob.content.paddingX', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
+      { key: 'postJob.content.gap', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
+      { key: 'postJob.stepFields.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'postJob.description.height', drew: 110, parent: null, fallback: '110' },
+      { key: 'postJob.reviewCard.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'radius.xl' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

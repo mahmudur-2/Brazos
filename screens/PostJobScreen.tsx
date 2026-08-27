@@ -73,6 +73,7 @@ import {
 } from '../lib/storage';
 import type { PostJobRouteParamList } from '../lib/navigation';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   emeraldColorsFor,
   fonts,
@@ -294,6 +295,18 @@ function StepPane({
 export function PostJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C3) — POST A JOB'S OWN DIALS. Each falls back to the value this
+  // file drew before the dial existed, spelled here and nowhere else. The four
+  // that answer to a token take the `theme.*` scale, because this file imports
+  // `spacing`/`radius` from lib/theme; ui/tokens' bare `spacing.xl` is 20
+  // against theme's 24, so the wrong parent would move the gutter by four
+  // points the moment the operator turned it.
+  const contentPaddingX = useDialNumber('postJob.content.paddingX') ?? spacing.xl;
+  const contentGap = useDialNumber('postJob.content.gap') ?? spacing.xl;
+  const progressHeight = useDialNumber('postJob.progress.height') ?? 4;
+  const stepFieldsGap = useDialNumber('postJob.stepFields.gap') ?? spacing.lg;
+  const descriptionHeight = useDialNumber('postJob.description.height') ?? 110;
+  const reviewCardRadius = useDialNumber('postJob.reviewCard.radius') ?? radius.xl;
   // home(7): the Back/Continue footer is PINNED above the pill, not scrolled
   // under it, so it no longer takes useFloatingNavClearance() — that reserved
   // the bar's ~104pt footprint a second time and left a hand's width of empty
@@ -1083,7 +1096,11 @@ export function PostJobScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={[styles.content, isLastStep && styles.contentWithFooter]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingHorizontal: contentPaddingX, gap: contentGap },
+            isLastStep && styles.contentWithFooter,
+          ]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -1111,6 +1128,7 @@ export function PostJobScreen() {
                   <View
                     style={[
                       styles.progressSegment,
+                      { height: progressHeight },
                       index <= step && styles.progressSegmentActive,
                     ]}
                   />
@@ -1149,7 +1167,7 @@ export function PostJobScreen() {
           <StepPane key={`fields-${step}`} index={1} style={styles.stepPane}>
 
           {step === 0 && (
-            <View style={styles.stepFields}>
+            <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
               <TextField
                 palette={emeraldColors}
                 label="Title"
@@ -1172,7 +1190,7 @@ export function PostJobScreen() {
                 autoCapitalize="sentences"
                 multiline
                 numberOfLines={4}
-                style={styles.multiline}
+                style={[styles.multiline, { height: descriptionHeight }]}
               />
               {/* §3.3 — the floor is a disabled Continue plus this written
                   count, never a raw error and never a silently dead button. */}
@@ -1252,7 +1270,7 @@ export function PostJobScreen() {
           )}
 
           {step === 1 && (
-            <View style={styles.stepFields}>
+            <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
               {/* The privacy notice read forest-on-mint: one deep green on
                   another. Its body takes the cream ink in dark. */}
               {/* PJ1 (C4) — one plain sentence, no heading: the heading D7
@@ -1336,7 +1354,7 @@ export function PostJobScreen() {
           )}
 
           {step === 2 && (
-            <View style={styles.stepFields}>
+            <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
               <View style={styles.locationRow}>
                 <View style={styles.locationField}>
                   <TextField
@@ -1461,7 +1479,7 @@ export function PostJobScreen() {
           )}
 
           {step === 3 && (
-            <View style={styles.stepFields}>
+            <View style={[styles.stepFields, { gap: stepFieldsGap }]}>
               {isHiring ? (
                 // The direct-offer terms field is OfferComposer's shared one
                 // (Phase 5): bids, counters and this hire request present and
@@ -1518,7 +1536,7 @@ export function PostJobScreen() {
                 </View>
               )}
 
-              <View style={[styles.reviewCard, isDark && shadows.cardDark]}>
+              <View style={[styles.reviewCard, { borderRadius: reviewCardRadius }, isDark && shadows.cardDark]}>
                 <Text style={styles.reviewEyebrow}>JOB SUMMARY</Text>
                 <Text style={styles.reviewTitle}>{title.trim()}</Text>
                 <Text style={styles.reviewDescription} numberOfLines={4}>
@@ -1708,7 +1726,7 @@ export function PostJobScreen() {
                   // of Home's sage service chips; and the money is MoneyText,
                   // which is emerald in dark like every other amount in the app.
                   <LitSurface
-                    style={[styles.reviewCard, isDark && shadows.cardDark]}
+                    style={[styles.reviewCard, { borderRadius: reviewCardRadius }, isDark && shadows.cardDark]}
                     surface={colors.surface}
                     lift={colors.emerald}
                     liftAlpha={PUBLISH_CARD_LIFT_ALPHA}
@@ -1939,10 +1957,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'center',
   },
   content: {
-    paddingHorizontal: spacing.xl,
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
-    gap: spacing.xl,
   },
   // D5 — THE LAST STEP'S SCROLLER CLEARS ITS OWN FOOTER. Only the last step
   // has one, and the summary card is the tallest thing on the screen: without
@@ -1997,7 +2013,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
   },
   progressSegment: {
-    height: 4,
     borderRadius: radius.pill,
     backgroundColor: colors.mint2,
   },
@@ -2014,9 +2029,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '800',
   },
   progressLabelActiveDark: { color: colors.ink },
-  stepFields: {
-    gap: spacing.lg,
-  },
+  stepFields: {},
   hireBanner: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -2039,7 +2052,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   hireBannerTextDark: { color: colors.ink },
   multiline: {
-    height: 110,
     paddingTop: spacing.md,
     textAlignVertical: 'top',
   },
@@ -2227,7 +2239,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   reviewCard: {
     gap: spacing.md,
     padding: spacing.lg,
-    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.mint2,
     backgroundColor: colors.surface,

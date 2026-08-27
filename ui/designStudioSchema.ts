@@ -1789,6 +1789,84 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: 13,
       },
     ]),
+    // C3 — screens/PostJobScreen.tsx. `theme.*` scale. Left undialled: the
+    // step header, the fields and the footer buttons (ScreenHeader, Input and
+    // Button already dial every one of those, and this screen only configures
+    // them); the pinned footer's bottom padding, which is derived from the nav
+    // geometry and follows its own dial; and the success overlay, which a
+    // customer sees for two seconds after publishing and no one would tune.
+    ...dialEntries('screens', 'Post a Job', [
+      {
+        key: 'postJob.progress.height',
+        label: 'Step bar — thickness',
+        description: 'How heavy the four progress segments across the top of the wizard are.',
+        tier: 'basic',
+        scope: 'local',
+        min: 1,
+        max: 16,
+        step: 1,
+        defaultValue: 4,
+      },
+      {
+        key: 'postJob.content.paddingX',
+        label: 'Screen gutter',
+        description: 'How far the whole wizard column keeps from the left and right edges.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.xl',
+        defaultValue: THEME_SPACING_DEFAULTS.xl,
+      },
+      {
+        key: 'postJob.content.gap',
+        label: 'Section gap',
+        description: 'Between the wizard’s blocks — the intro, the step bar and the fields.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.spacing.xl',
+        defaultValue: THEME_SPACING_DEFAULTS.xl,
+      },
+      {
+        key: 'postJob.stepFields.gap',
+        label: 'Field gap',
+        description: 'Between one question and the next inside a step.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'postJob.description.height',
+        label: 'Description box — height',
+        description: 'How tall the “Describe what you need done” box stands before it scrolls.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 60,
+        max: 260,
+        step: 2,
+        defaultValue: 110,
+      },
+      {
+        key: 'postJob.reviewCard.radius',
+        label: 'Review card — corner roundness',
+        description: 'The last step’s summary card, where the job is read back before it is posted.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.radius.xl',
+        defaultValue: THEME_RADIUS_DEFAULTS.xl,
+      },
+    ]),
   ];
 }
 

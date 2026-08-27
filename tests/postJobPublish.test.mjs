@@ -263,7 +263,11 @@ test('D5 · the last step scroller clears its own footer, from the shared consta
 
   assert.match(
     flat,
-    /contentContainerStyle=\{\[styles\.content, isLastStep && styles\.contentWithFooter\]\}/,
+    // RUN T2 (C3) put this screen's gutter and section gap on their own dials,
+    // so a third member joins the array between the two named here. What this
+    // fence is for is unchanged and still exact: `contentWithFooter` is
+    // applied by `isLastStep` and by nothing else.
+    /contentContainerStyle=\{\[ styles\.content,[^\]]*isLastStep && styles\.contentWithFooter, \]\}/,
     'the clearance applies on the step that HAS a footer, and only there'
   );
   assert.match(
