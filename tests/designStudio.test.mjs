@@ -415,6 +415,73 @@ test('[static] the panel renders from the registry — zero hand-wired rows, no 
 });
 
 // ---------------------------------------------------------------------------
+// RUN S3 (C2) — the header, the overflow and its pages
+// ---------------------------------------------------------------------------
+
+test('[static] S3: search is gone, the tier toggle is ONE pill, and the overflow carries five rows', async () => {
+  const panel = stripComments(await read('components/DesignStudioPanel.tsx'));
+  const flat = panel.replace(/\s+/g, ' ');
+
+  // D3 — SEARCH IS REMOVED COMPLETELY: the input, its state, its style and
+  // its filtering branch. Gone, not hidden.
+  assert.doesNotMatch(panel, /placeholder="Search controls"/, 'the search input must be gone');
+  assert.doesNotMatch(panel, /\bsetSearch\b/, 'the search state must be gone');
+  assert.doesNotMatch(panel, /styles\.search\b/, 'the search style must be gone');
+  assert.doesNotMatch(panel, /haystack/, 'the search filtering branch must be gone');
+
+  // D4 — ONE tier toggle that flips, not a pair of pills; and the "All",
+  // "Starred" and toolbar "Reset" pills are gone.
+  assert.equal((panel.match(/'Simple'/g) ?? []).length, 1, 'exactly one Simple label');
+  assert.equal((panel.match(/'Advanced'/g) ?? []).length, 1, 'exactly one Advanced label');
+  assert.match(
+    flat,
+    /setTier\(tier === 'simple' \? 'advanced' : 'simple'\)/,
+    'the tier pill must FLIP on tap',
+  );
+  assert.doesNotMatch(panel, /'Starred'/, 'the Starred pill is removed');
+  assert.doesNotMatch(panel, /\['all', 'All'\]/, 'the All pill is removed');
+  assert.doesNotMatch(panel, /styles\.filterLabel}>Reset</, 'the toolbar Reset pill is removed');
+
+  // D4 — the header + toolbar box, computed from the panel's own numbers.
+  const styleBlock = (key) => new RegExp(`${key}: \\{([^}]*)\\}`).exec(flat)?.[1] ?? '';
+  const num = (block, key) => {
+    const hit = new RegExp(`${key}: (-?[\\d.]+)`).exec(block);
+    return hit ? Number(hit[1]) : 0;
+  };
+  const headerBox =
+    num(styleBlock('header'), 'paddingVertical') * 2 + num(styleBlock('dragZone'), 'minHeight');
+  const toolbarBox =
+    num(styleBlock('toolbar'), 'paddingTop') +
+    num(styleBlock('toolbar'), 'paddingBottom') +
+    num(styleBlock('filterChip'), 'height');
+  assert.ok(headerBox > 0 && toolbarBox > 0, 'the header and toolbar boxes must be readable');
+  assert.ok(
+    headerBox + toolbarBox <= 84,
+    `S3 D4: header ${headerBox}pt + toolbar ${toolbarBox}pt must stay within 84pt`,
+  );
+
+  // D5 — five overflow rows, four of them pages, and the naming trap: the
+  // state is 'overflow' and the pages are named, never 'menu'/'sheet'/'chrome'
+  // (the registry fence bans those three literals in this file outright).
+  for (const label of ['Presets', 'Export', 'Import', 'Raw JSON', 'Reset all']) {
+    assert.match(flat, new RegExp(`'${label}'|>\\s*${label}\\s*<`), `missing overflow row: ${label}`);
+  }
+  for (const page of ["'overflow'", "'presets'", "'export'", "'import'", "'raw'"]) {
+    assert.ok(flat.includes(page), `missing page name: ${page}`);
+  }
+  assert.match(flat, /‹ Design studio/, 'every page must carry the way back');
+  // The studio must not wear what it tunes: the overflow is the panel's own
+  // solid rows, never a shared popover or a glass Surface.
+  assert.doesNotMatch(panel, /DropMenu/, 'the overflow must not wear the shared popover');
+  assert.doesNotMatch(panel, /<Surface\b/, 'the studio never wears the material it tunes');
+  // Behaviour unchanged on the pages the overflow now holds.
+  assert.match(flat, /Share\.share\(\{ message: exportJson \}\)/);
+  for (const title of ['Reset everything?', 'Import overrides?', 'Apply raw overrides?']) {
+    assert.ok(panel.includes(title), `missing confirm: ${title}`);
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Panel ergonomics (S2 C3) — the clamp, executed
 // ---------------------------------------------------------------------------
 

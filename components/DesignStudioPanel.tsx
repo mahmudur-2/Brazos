@@ -493,7 +493,23 @@ function EntryRow({
   );
 }
 
-type StudioFilter = 'all' | 'favourites' | 'modified';
+/**
+ * RUN S3 (C2) — THE OVERFLOW AND ITS PAGES.
+ *
+ * Everything that is not a dial lives behind the header's [•••]: a plain
+ * list, drawn in the panel's own solid vocabulary rather than in any shared
+ * popover primitive — the studio must never wear what it tunes. Four of its
+ * five rows open a PAGE that replaces the list inside the same body, each
+ * with a "‹ Design studio" row back to the controls; the fifth resets.
+ */
+type StudioPage = 'overflow' | 'presets' | 'export' | 'import' | 'raw';
+
+const OVERFLOW_PAGES: readonly { page: StudioPage; label: string }[] = [
+  { page: 'presets', label: 'Presets' },
+  { page: 'export', label: 'Export' },
+  { page: 'import', label: 'Import' },
+  { page: 'raw', label: 'Raw JSON' },
+];
 
 export function DesignStudioPanel() {
   const open = useDesignStudioOpen();
@@ -504,9 +520,12 @@ export function DesignStudioPanel() {
   const window = useWindowDimensions();
   const navClearance = useFloatingNavClearance();
 
-  const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState<StudioFilter>('all');
+  // S3 (D3): search is GONE — the input, its state, its style and its
+  // filtering branch. The tier toggle and the Modified filter are the two
+  // narrowing controls the toolbar keeps.
+  const [modifiedOnly, setModifiedOnly] = useState(false);
   const [tier, setTier] = useState<'simple' | 'advanced'>('simple');
+  const [page, setPage] = useState<StudioPage | null>(null);
   const [favourites, setFavourites] = useState<ReadonlySet<string>>(new Set());
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [infoKey, setInfoKey] = useState<string | null>(null);
@@ -621,8 +640,6 @@ export function DesignStudioPanel() {
     [overrides, isDark, insets.bottom],
   );
 
-  const query = search.trim().toLowerCase();
-
   // C5 — the palette tokens, enumerated at runtime for the selected theme.
   const colorEntries = useMemo(() => colorTokenEntries(ctx, colorTheme), [ctx, colorTheme]);
 
@@ -631,19 +648,11 @@ export function DesignStudioPanel() {
     for (const category of STUDIO_CATEGORIES) grouped.set(category.key, []);
     for (const entry of [...STUDIO_REGISTRY, ...colorEntries]) {
       if (tier === 'simple' && entry.tier !== 'basic') continue;
-      if (filter === 'favourites' && !favourites.has(entry.key)) continue;
-      if (filter === 'modified' && !isModified(entry, ctx)) continue;
-      if (query) {
-        const category = STUDIO_CATEGORIES.find((c) => c.key === entry.category);
-        const haystack = `${entry.plainLabel} ${entry.technicalKey} ${category?.label ?? ''} ${
-          entry.subcategory ?? ''
-        }`.toLowerCase();
-        if (!haystack.includes(query)) continue;
-      }
+      if (modifiedOnly && !isModified(entry, ctx)) continue;
       grouped.get(entry.category)?.push(entry);
     }
     return grouped;
-  }, [tier, filter, favourites, query, ctx, colorEntries]);
+  }, [tier, modifiedOnly, ctx, colorEntries]);
 
   // C4 — history, presets, export, import and the raw editor.
   const history = useDesignHistoryCounts();
@@ -852,7 +861,7 @@ export function DesignStudioPanel() {
   const renderCategory = (category: StudioCategory) => {
     const entries = visibleByCategory.get(category.key) ?? [];
     if (!entries.length) return null;
-    const isOpen = query.length > 0 || expanded.has(category.key);
+    const isOpen = expanded.has(category.key);
     const modifiedCount = modifiedCountOf(entries);
     const rows: Array<{ subcategory: string | null; entry: StudioEntry }> = [];
     let lastSub: string | null = null;
@@ -937,6 +946,247 @@ export function DesignStudioPanel() {
     );
   };
 
+  /** The way back from any page to the controls list. */
+  const renderBackRow = () => (
+    <Pressable
+      onPress={() => setPage(null)}
+      style={({ pressed }) => [styles.backRow, pressed && styles.pressed]}
+      accessibilityRole="button"
+      accessibilityLabel="Back to the design studio controls"
+    >
+      <Text style={styles.backLabel} numberOfLines={1}>
+        ‹ Design studio
+      </Text>
+    </Pressable>
+  );
+
+  /** S3 (D5) — the [•••] list. Five rows: four open a page, the fifth resets
+   *  through the existing path. Plain solid rows in the panel's own
+   *  vocabulary — no shared popover primitive is worn here. */
+  const renderOverflowList = () => (
+    <View style={styles.overflowList}>
+      {OVERFLOW_PAGES.map((item) => (
+        <Pressable
+          key={item.page}
+          onPress={() => setPage(item.page)}
+          style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={item.label}
+        >
+          <Text style={styles.overflowLabel} numberOfLines={1}>
+            {item.label}
+          </Text>
+          <Ionicons name="chevron-forward" size={14} color={withAlpha(colors.white, 0.5)} />
+        </Pressable>
+      ))}
+      <Pressable
+        onPress={() => void onResetEverything()}
+        style={({ pressed }) => [styles.overflowRow, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Reset all overrides"
+      >
+        <Text style={[styles.overflowLabel, styles.overflowDestructive]} numberOfLines={1}>
+          Reset all
+        </Text>
+      </Pressable>
+    </View>
+  );
+
+  const renderPresetsPage = () => (
+    <View style={styles.page}>
+      {renderBackRow()}
+      <Text style={styles.sectionLabel}>Presets</Text>
+      <View style={styles.presetRow}>
+        <TextInput
+          value={presetName}
+          onChangeText={setPresetName}
+          placeholder={renameFrom ? `Rename “${renameFrom}”` : 'Preset name'}
+          placeholderTextColor={withAlpha(colors.white, 0.4)}
+          autoCorrect={false}
+          style={styles.presetInput}
+          accessibilityLabel="Preset name"
+        />
+        <Pressable
+          onPress={() => void onSavePreset()}
+          style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel={renameFrom ? 'Rename preset' : 'Save preset'}
+        >
+          <Text style={styles.filterLabel}>{renameFrom ? 'Rename' : 'Save'}</Text>
+        </Pressable>
+        {renameFrom ? (
+          <Pressable
+            onPress={() => {
+              setRenameFrom(null);
+              setPresetName('');
+            }}
+            style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel rename"
+          >
+            <Text style={styles.filterLabel}>Cancel</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {presets.map((preset) => (
+        <View key={preset.name} style={styles.presetItem}>
+          <Pressable
+            onPress={() => void onLoadPreset(preset)}
+            style={({ pressed }) => [styles.presetNameZone, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Load preset ${preset.name}`}
+          >
+            <Text style={styles.presetName} numberOfLines={1}>
+              {preset.name}
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void onDuplicatePreset(preset)}
+            style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Duplicate preset ${preset.name}`}
+          >
+            <Ionicons name="copy-outline" size={14} color={withAlpha(colors.white, 0.7)} />
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              setRenameFrom(preset.name);
+              setPresetName(preset.name);
+            }}
+            style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Rename preset ${preset.name}`}
+          >
+            <Ionicons name="pencil-outline" size={14} color={withAlpha(colors.white, 0.7)} />
+          </Pressable>
+          <Pressable
+            onPress={() => void onDeletePreset(preset)}
+            style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel={`Delete preset ${preset.name}`}
+          >
+            <Ionicons name="trash-outline" size={14} color={colors.danger} />
+          </Pressable>
+        </View>
+      ))}
+      {presetNotice ? <Text style={styles.notice}>{presetNotice}</Text> : null}
+    </View>
+  );
+
+  const renderExportPage = () => (
+    <View style={styles.page}>
+      {renderBackRow()}
+      <Text style={styles.sectionLabel}>Export — modified values</Text>
+      <View style={styles.filterRow}>
+        <Pressable
+          onPress={onShareExport}
+          style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Share the modified values as JSON"
+        >
+          <Text style={styles.filterLabel}>Share</Text>
+        </Pressable>
+      </View>
+      <Text selectable style={styles.json}>
+        {exportJson}
+      </Text>
+    </View>
+  );
+
+  const renderImportPage = () => (
+    <View style={styles.page}>
+      {renderBackRow()}
+      <Text style={styles.sectionLabel}>Import</Text>
+      <TextInput
+        value={importDraft}
+        onChangeText={(text) => {
+          setImportDraft(text);
+          setImportError(null);
+        }}
+        placeholder="Paste an export or a raw override object"
+        placeholderTextColor={withAlpha(colors.white, 0.4)}
+        multiline
+        autoCorrect={false}
+        autoCapitalize="none"
+        style={styles.jsonInput}
+        accessibilityLabel="Import JSON"
+      />
+      {importError ? <Text style={styles.hexError}>{importError}</Text> : null}
+      {importDropped ? (
+        <Text style={styles.notice}>
+          {importDropped.length ? `Dropped: ${importDropped.join(', ')}` : 'Imported clean'}
+        </Text>
+      ) : null}
+      <View style={styles.filterRow}>
+        <Pressable
+          onPress={() => void onImport()}
+          style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Apply the pasted JSON"
+        >
+          <Text style={styles.filterLabel}>Apply import</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  const renderRawPage = () => (
+    <View style={styles.page}>
+      {renderBackRow()}
+      <Text style={styles.sectionLabel}>Raw overrides</Text>
+      <TextInput
+        value={rawDraft ?? fullJson}
+        onChangeText={(text) => {
+          setRawDraft(text);
+          setRawError(null);
+        }}
+        multiline
+        autoCorrect={false}
+        autoCapitalize="none"
+        style={styles.jsonInput}
+        accessibilityLabel="Raw override object"
+      />
+      {rawError ? <Text style={styles.hexError}>{rawError}</Text> : null}
+      {rawDropped ? (
+        <Text style={styles.notice}>
+          {rawDropped.length ? `Dropped: ${rawDropped.join(', ')}` : 'Applied clean'}
+        </Text>
+      ) : null}
+      <View style={styles.filterRow}>
+        <Pressable
+          onPress={() => void onApplyRaw()}
+          style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+          accessibilityRole="button"
+          accessibilityLabel="Apply the raw override object"
+        >
+          <Text style={styles.filterLabel}>Apply raw</Text>
+        </Pressable>
+        {rawDraft != null ? (
+          <Pressable
+            onPress={() => {
+              setRawDraft(null);
+              setRawError(null);
+            }}
+            style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Discard raw edits"
+          >
+            <Text style={styles.filterLabel}>Discard</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+
+  const renderBody = () => {
+    if (page === 'overflow') return renderOverflowList();
+    if (page === 'presets') return renderPresetsPage();
+    if (page === 'export') return renderExportPage();
+    if (page === 'import') return renderImportPage();
+    if (page === 'raw') return renderRawPage();
+    return STUDIO_CATEGORIES.map(renderCategory);
+  };
+
   return (
     <View style={styles.overlay} pointerEvents="box-none">
       <View
@@ -950,6 +1200,19 @@ export function DesignStudioPanel() {
             <View style={styles.grip} />
             <Text style={styles.title}>Design studio</Text>
           </View>
+          <Pressable
+            onPress={() => setPage(page ? null : 'overflow')}
+            style={({ pressed }) => [styles.headerAction, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: page != null }}
+            accessibilityLabel="More studio actions"
+          >
+            <Ionicons
+              name="ellipsis-horizontal"
+              size={16}
+              color={page ? colors.gold : withAlpha(colors.white, 0.75)}
+            />
+          </Pressable>
           <View
             style={styles.headerAction}
             {...resize.panHandlers}
@@ -976,17 +1239,9 @@ export function DesignStudioPanel() {
           </Pressable>
         </View>
 
+        {/* S3 (D4) — ROW 2, and it holds four controls: undo, redo, the ONE
+            tier toggle (tap flips it) and the Modified filter. */}
         <View style={styles.toolbar}>
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Search controls"
-            placeholderTextColor={withAlpha(colors.white, 0.4)}
-            autoCorrect={false}
-            autoCapitalize="none"
-            style={styles.search}
-            accessibilityLabel="Search controls"
-          />
           <View style={styles.filterRow}>
             <Pressable
               onPress={undoDesignChange}
@@ -1014,53 +1269,39 @@ export function DesignStudioPanel() {
                 color={history.redo ? colors.white : withAlpha(colors.white, 0.25)}
               />
             </Pressable>
-            {(
-              [
-                ['all', 'All'],
-                ['favourites', 'Starred'],
-                ['modified', 'Modified'],
-              ] as const
-            ).map(([key, label]) => (
-              <Pressable
-                key={key}
-                onPress={() => setFilter(key)}
-                style={[styles.filterChip, filter === key && styles.filterChipActive]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: filter === key }}
-              >
-                <Text
-                  style={[styles.filterLabel, filter === key && styles.filterLabelActive]}
-                >
-                  {label}
-                </Text>
-              </Pressable>
-            ))}
-            <View style={styles.filterSpacer} />
-            {(
-              [
-                ['simple', 'Simple'],
-                ['advanced', 'Advanced'],
-              ] as const
-            ).map(([key, label]) => (
-              <Pressable
-                key={key}
-                onPress={() => setTier(key)}
-                style={[styles.filterChip, tier === key && styles.filterChipActive]}
-                accessibilityRole="button"
-                accessibilityState={{ selected: tier === key }}
-              >
-                <Text style={[styles.filterLabel, tier === key && styles.filterLabelActive]}>
-                  {label}
-                </Text>
-              </Pressable>
-            ))}
             <Pressable
-              onPress={() => void onResetEverything()}
-              style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
+              onPress={() => setTier(tier === 'simple' ? 'advanced' : 'simple')}
+              style={({ pressed }) => [
+                styles.filterChip,
+                tier === 'advanced' && styles.filterChipActive,
+                pressed && styles.pressed,
+              ]}
               accessibilityRole="button"
-              accessibilityLabel="Reset all overrides"
+              accessibilityLabel={`Showing ${tier} controls — tap to switch`}
             >
-              <Text style={styles.filterLabel}>Reset</Text>
+              <Text
+                style={[styles.filterLabel, tier === 'advanced' && styles.filterLabelActive]}
+                numberOfLines={1}
+              >
+                {tier === 'advanced' ? 'Advanced' : 'Simple'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setModifiedOnly(!modifiedOnly)}
+              style={({ pressed }) => [
+                styles.filterChip,
+                modifiedOnly && styles.filterChipActive,
+                pressed && styles.pressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: modifiedOnly }}
+            >
+              <Text
+                style={[styles.filterLabel, modifiedOnly && styles.filterLabelActive]}
+                numberOfLines={1}
+              >
+                Modified
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -1078,173 +1319,7 @@ export function DesignStudioPanel() {
             scrollRef.current?.scrollTo({ y: panelSession.scrollY, animated: false });
           }}
         >
-          {STUDIO_CATEGORIES.map(renderCategory)}
-
-          <Text style={styles.sectionLabel}>Presets</Text>
-          <View style={styles.presetRow}>
-            <TextInput
-              value={presetName}
-              onChangeText={setPresetName}
-              placeholder={renameFrom ? `Rename “${renameFrom}”` : 'Preset name'}
-              placeholderTextColor={withAlpha(colors.white, 0.4)}
-              autoCorrect={false}
-              style={styles.presetInput}
-              accessibilityLabel="Preset name"
-            />
-            <Pressable
-              onPress={() => void onSavePreset()}
-              style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel={renameFrom ? 'Rename preset' : 'Save preset'}
-            >
-              <Text style={styles.filterLabel}>{renameFrom ? 'Rename' : 'Save'}</Text>
-            </Pressable>
-            {renameFrom ? (
-              <Pressable
-                onPress={() => {
-                  setRenameFrom(null);
-                  setPresetName('');
-                }}
-                style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel rename"
-              >
-                <Text style={styles.filterLabel}>Cancel</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          {presets.map((preset) => (
-            <View key={preset.name} style={styles.presetItem}>
-              <Pressable
-                onPress={() => void onLoadPreset(preset)}
-                style={({ pressed }) => [styles.presetNameZone, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`Load preset ${preset.name}`}
-              >
-                <Text style={styles.presetName} numberOfLines={1}>
-                  {preset.name}
-                </Text>
-              </Pressable>
-              <Pressable
-                onPress={() => void onDuplicatePreset(preset)}
-                style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`Duplicate preset ${preset.name}`}
-              >
-                <Ionicons name="copy-outline" size={14} color={withAlpha(colors.white, 0.7)} />
-              </Pressable>
-              <Pressable
-                onPress={() => {
-                  setRenameFrom(preset.name);
-                  setPresetName(preset.name);
-                }}
-                style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`Rename preset ${preset.name}`}
-              >
-                <Ionicons name="pencil-outline" size={14} color={withAlpha(colors.white, 0.7)} />
-              </Pressable>
-              <Pressable
-                onPress={() => void onDeletePreset(preset)}
-                style={({ pressed }) => [styles.resetToken, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel={`Delete preset ${preset.name}`}
-              >
-                <Ionicons name="trash-outline" size={14} color={colors.danger} />
-              </Pressable>
-            </View>
-          ))}
-          {presetNotice ? <Text style={styles.notice}>{presetNotice}</Text> : null}
-
-          <Text style={styles.sectionLabel}>Export — modified values</Text>
-          <View style={styles.filterRow}>
-            <Pressable
-              onPress={onShareExport}
-              style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Share the modified values as JSON"
-            >
-              <Text style={styles.filterLabel}>Share</Text>
-            </Pressable>
-          </View>
-          <Text selectable style={styles.json}>
-            {exportJson}
-          </Text>
-
-          <Text style={styles.sectionLabel}>Import</Text>
-          <TextInput
-            value={importDraft}
-            onChangeText={(text) => {
-              setImportDraft(text);
-              setImportError(null);
-            }}
-            placeholder="Paste an export or a raw override object"
-            placeholderTextColor={withAlpha(colors.white, 0.4)}
-            multiline
-            autoCorrect={false}
-            autoCapitalize="none"
-            style={styles.jsonInput}
-            accessibilityLabel="Import JSON"
-          />
-          {importError ? <Text style={styles.hexError}>{importError}</Text> : null}
-          {importDropped ? (
-            <Text style={styles.notice}>
-              {importDropped.length ? `Dropped: ${importDropped.join(', ')}` : 'Imported clean'}
-            </Text>
-          ) : null}
-          <View style={styles.filterRow}>
-            <Pressable
-              onPress={() => void onImport()}
-              style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Apply the pasted JSON"
-            >
-              <Text style={styles.filterLabel}>Apply import</Text>
-            </Pressable>
-          </View>
-
-          <Text style={styles.sectionLabel}>Raw overrides</Text>
-          <TextInput
-            value={rawDraft ?? fullJson}
-            onChangeText={(text) => {
-              setRawDraft(text);
-              setRawError(null);
-            }}
-            multiline
-            autoCorrect={false}
-            autoCapitalize="none"
-            style={styles.jsonInput}
-            accessibilityLabel="Raw override object"
-          />
-          {rawError ? <Text style={styles.hexError}>{rawError}</Text> : null}
-          {rawDropped ? (
-            <Text style={styles.notice}>
-              {rawDropped.length ? `Dropped: ${rawDropped.join(', ')}` : 'Applied clean'}
-            </Text>
-          ) : null}
-          <View style={styles.filterRow}>
-            <Pressable
-              onPress={() => void onApplyRaw()}
-              style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
-              accessibilityRole="button"
-              accessibilityLabel="Apply the raw override object"
-            >
-              <Text style={styles.filterLabel}>Apply raw</Text>
-            </Pressable>
-            {rawDraft != null ? (
-              <Pressable
-                onPress={() => {
-                  setRawDraft(null);
-                  setRawError(null);
-                }}
-                style={({ pressed }) => [styles.filterChip, pressed && styles.pressed]}
-                accessibilityRole="button"
-                accessibilityLabel="Discard raw edits"
-              >
-                <Text style={styles.filterLabel}>Discard</Text>
-              </Pressable>
-            ) : null}
-          </View>
+          {renderBody()}
         </ScrollView>
       </View>
     </View>
@@ -1290,12 +1365,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.white,
       flexShrink: 1,
     },
+    // S3 (D4) — the header and the toolbar together must stay under 84pt, so
+    // the studio spends its height on dials rather than on chrome: this box
+    // is 8 + 30 + 8 = 46 and the toolbar's is 8 + 26 = 34.
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: 14,
-      paddingVertical: 10,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
       borderBottomWidth: 1,
       borderBottomColor: withAlpha(colors.white, 0.12),
     },
@@ -1304,7 +1382,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 8,
-      minHeight: 32,
+      minHeight: 30,
     },
     grip: {
       width: 24,
@@ -1319,11 +1397,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.white,
     },
     headerAction: {
-      minWidth: 36,
-      minHeight: 32,
+      minWidth: 34,
+      minHeight: 30,
       alignItems: 'center',
       justifyContent: 'center',
-      paddingHorizontal: 6,
+      paddingHorizontal: 5,
     },
     headerActionLabel: {
       fontSize: 13,
@@ -1331,19 +1409,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: withAlpha(colors.white, 0.75),
     },
     toolbar: {
-      paddingHorizontal: 12,
+      paddingHorizontal: 10,
       paddingTop: 8,
       gap: 6,
-    },
-    search: {
-      height: 32,
-      borderRadius: 8,
-      borderWidth: 1,
-      borderColor: withAlpha(colors.white, 0.25),
-      color: colors.white,
-      paddingHorizontal: 10,
-      paddingVertical: 0,
-      fontSize: 12,
     },
     filterRow: {
       flexDirection: 'row',
@@ -1370,8 +1438,41 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     filterLabelActive: {
       color: colors.gold,
     },
-    filterSpacer: {
+    // S3 (D5) — the overflow list and its pages, in the panel's own solid
+    // vocabulary. Nothing here wears a shared popover or glass primitive.
+    overflowList: {
+      gap: 2,
+    },
+    overflowRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      minHeight: 44,
+      paddingHorizontal: 4,
+      borderBottomWidth: 1,
+      borderBottomColor: withAlpha(colors.white, 0.1),
+    },
+    overflowLabel: {
       flex: 1,
+      minWidth: 0,
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.white,
+    },
+    overflowDestructive: {
+      color: colors.danger,
+    },
+    page: {
+      gap: 6,
+    },
+    backRow: {
+      minHeight: 34,
+      justifyContent: 'center',
+    },
+    backLabel: {
+      fontSize: 12,
+      fontWeight: '800',
+      color: colors.gold,
     },
     body: {
       flex: 1,
