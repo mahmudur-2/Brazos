@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
-import { fonts, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { fonts, metricStyles, radius, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -75,6 +75,7 @@ export function Button({
   style,
   ...rest
 }: ButtonProps) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const isDisabled = disabled || loading;
@@ -244,7 +245,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   base: {
     borderRadius: radius.md,
     alignItems: 'center',
@@ -263,4 +264,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
   },
-});
+}));

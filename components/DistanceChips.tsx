@@ -5,7 +5,7 @@ import {
   distanceChipLabel,
   type DistanceFilterMiles,
 } from '../lib/discoveryFilter';
-import { spacing } from '../lib/theme';
+import { metricStyles, spacing } from '../lib/theme';
 
 type DistanceChipsProps = {
   /** The applied filter; null = Any distance. */
@@ -22,6 +22,7 @@ type DistanceChipsProps = {
  * (lib/discoveryFilterStorage.ts) means one thing everywhere it appears.
  */
 export function DistanceChips({ value, onChange, includeAny = true }: DistanceChipsProps) {
+  const styles = stylesFor();
   const options: (DistanceFilterMiles | null)[] = includeAny
     ? [null, ...DISTANCE_FILTER_OPTIONS]
     : [...DISTANCE_FILTER_OPTIONS];
@@ -49,7 +50,7 @@ export function DistanceChips({ value, onChange, includeAny = true }: DistanceCh
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   row: {
     flexGrow: 0,
   },
@@ -58,4 +59,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     gap: spacing.sm,
   },
-});
+}));

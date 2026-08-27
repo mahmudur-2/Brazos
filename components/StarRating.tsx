@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { starColors, useThemeColors } from '../lib/theme';
+import { metricStyles, starColors, useThemeColors } from '../lib/theme';
 
 type StarRatingProps = {
   value: number;
@@ -9,6 +9,7 @@ type StarRatingProps = {
 };
 
 export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const starPaint = starColors(colors, isDark);
   const readOnly = !onChange;
@@ -46,7 +47,7 @@ export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     gap: 6,
@@ -54,4 +55,4 @@ const styles = StyleSheet.create({
   star: {
     padding: 2,
   },
-});
+}));

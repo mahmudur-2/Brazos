@@ -896,3 +896,77 @@ test('[static] MapKit tiles follow the resolved theme; no Google-only style ship
   }
   assert.deepEqual(mapFiles.sort(), ['components/HotspotMap.native.tsx']);
 });
+
+// ---------------------------------------------------------------------------
+// RUN T1 (C3/D6) — no colourless sheet is built at import any more
+// ---------------------------------------------------------------------------
+
+/**
+ * The files that keep a module-scope `StyleSheet.create`, each with the reason
+ * it is not eligible. Every one of them is a decision, not an omission — which
+ * is why the fence below asserts this list EXACTLY rather than merely
+ * tolerating it: a new module-scope sheet anywhere else fails, and deleting an
+ * excluded file's reason fails too.
+ */
+const MODULE_SCOPE_SHEET_EXCLUSIONS = {
+  'components/AuthBackdrop.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
+  'components/AuthButton.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
+  'components/AuthField.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
+  'components/AuthNotice.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
+  'components/AuthScaffold.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
+  'components/CountryPicker.tsx': 'auth surface — renders on the frozen lib/authTheme palette',
+  'components/HotspotMap.web.tsx': 'frozen web surface (CLAUDE.md) — a *.web.tsx file is never edited',
+};
+
+test('[static] T1 (D6): every eligible sheet is lazy, and the exclusions are named with a reason', async () => {
+  const roots = ['components', 'ui/primitives', 'ui/templates'];
+  const files = [];
+  for (const root of roots) {
+    const entries = await readdir(new URL(`../${root}/`, import.meta.url), {
+      withFileTypes: true,
+      recursive: true,
+    });
+    for (const entry of entries) {
+      if (!entry.isFile() || !/\.(ts|tsx)$/.test(entry.name)) continue;
+      files.push(
+        relative(fileURLToPath(new URL('../', import.meta.url)), join(entry.parentPath, entry.name)).replace(
+          /\\/g,
+          '/',
+        ),
+      );
+    }
+  }
+  assert.ok(files.length > 30, 'the scan must actually be reading the tree');
+
+  const eager = [];
+  const lazy = [];
+  for (const path of files.sort()) {
+    const source = await read(path);
+    if (/^const \w+ = StyleSheet\.create\(\{$/m.test(source)) eager.push(path);
+    if (/^const stylesFor = metricStyles\(\(\) => StyleSheet\.create\(\{$/m.test(source)) lazy.push(path);
+  }
+
+  // 1. WHAT STAYS EAGER IS EXACTLY THE DECLARED SET.
+  assert.deepEqual(
+    eager,
+    Object.keys(MODULE_SCOPE_SHEET_EXCLUSIONS).sort(),
+    'a module-scope StyleSheet.create freezes its metrics at import — convert it, or name it above with a reason',
+  );
+  for (const [path, reason] of Object.entries(MODULE_SCOPE_SHEET_EXCLUSIONS)) {
+    assert.ok(reason.length > 20, `${path} needs a real reason, not a shrug`);
+  }
+
+  // 2. AND WHAT WAS CONVERTED ACTUALLY READS THE SHEET AT USE TIME. A file
+  //    that wraps the factory but never calls it renders nothing.
+  assert.equal(lazy.length, 23, 'the D6 conversion set is 23 files');
+  for (const path of lazy) {
+    const source = await read(path);
+    assert.match(source, /^\s*const styles = stylesFor\(\);$/m, `${path} must read its sheet inside the component`);
+    assert.match(
+      source,
+      /import \{[\s\S]*?\bmetricStyles\b[\s\S]*?\} from '\.\.?\/(\.\.\/)?lib\/theme';/,
+      `${path} must take metricStyles from lib/theme`,
+    );
+    assert.doesNotMatch(source, /\bstylesFor\.\w/, `${path} must call stylesFor(), never index it`);
+  }
+});

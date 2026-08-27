@@ -1,6 +1,6 @@
 import { Image, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useThemeColors } from '../lib/theme';
+import { metricStyles, useThemeColors } from '../lib/theme';
 
 // Dark-only by standing decision, like everything else under assets/prestige.
 // It is an OPAQUE RGB raster (1290x2796 — PNG colour type 2, no alpha channel
@@ -86,6 +86,7 @@ const HOME_ATMOSPHERE = require('../assets/prestige/home-atmosphere-dark.png');
  * replaced it.
  */
 export function HomeAtmosphere() {
+  const styles = stylesFor();
   const { isDark } = useThemeColors();
   const insets = useSafeAreaInsets();
 
@@ -103,7 +104,7 @@ export function HomeAtmosphere() {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   // `top` is supplied at render from the live safe-area inset — see above.
   //
   // No `pointerEvents` is needed and the Image prop does not exist in this RN
@@ -116,4 +117,4 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
   },
-});
+}));

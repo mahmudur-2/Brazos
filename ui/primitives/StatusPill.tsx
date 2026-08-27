@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
-import { useThemeColors } from '../../lib/theme';
+import { metricStyles, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
 
 /**
@@ -152,6 +152,7 @@ type StatusPillProps =
   | { kind: 'payment'; status: PaymentStatus };
 
 export function StatusPill(props: StatusPillProps) {
+  const styles = stylesFor();
   const { emerald: colors } = useThemeColors();
   const { label, tone } =
     props.kind === 'job'
@@ -188,7 +189,7 @@ export function StatusPill(props: StatusPillProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   pill: {
     alignSelf: 'flex-start',
     borderWidth: 1,
@@ -203,4 +204,4 @@ const styles = StyleSheet.create({
     ...typeScale.sub,
     fontWeight: '700',
   },
-});
+}));

@@ -4,6 +4,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authSpacing } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { metricStyles } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -49,6 +50,7 @@ export function SetupRow({
   accessibilityLabel,
   accessibilityHint,
 }: SetupRowProps) {
+  const styles = stylesFor();
   const scale = useRef(new Animated.Value(1)).current;
 
   const animate = (to: number, duration: number) =>
@@ -102,7 +104,7 @@ export function SetupRow({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -161,4 +163,4 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
   },
-});
+}));

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { radius } from '../lib/theme';
+import { metricStyles, radius } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 /**
@@ -13,6 +13,7 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
  * component with the same values, not a shared import that could regress it.
  */
 export function PulseDot({ color, size = 10 }: { color: string; size?: number }) {
+  const styles = stylesFor();
   const reducedMotion = useReducedMotion();
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -70,8 +71,8 @@ export function PulseDot({ color, size = 10 }: { color: string; size?: number })
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   wrap: { alignItems: 'center', justifyContent: 'center' },
   halo: { position: 'absolute', borderRadius: radius.pill },
   dot: { borderRadius: radius.pill },
-});
+}));

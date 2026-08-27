@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   fonts,
+  metricStyles,
   radius,
   selectedInDark,
   spacing,
@@ -27,6 +28,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   palette: paletteProp,
 }: SegmentedControlProps<T>) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   // Prestige decision 5 — separated cells instead of a filled well; the
@@ -81,7 +83,7 @@ export function SegmentedControl<T extends string>({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   container: {
     flexDirection: 'row',
     gap: 6,
@@ -118,4 +120,4 @@ const styles = StyleSheet.create({
   pressed: {
     opacity: 0.78,
   },
-});
+}));

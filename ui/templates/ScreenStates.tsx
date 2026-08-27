@@ -1,7 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { EmptyState } from '../primitives';
 import { layout, radius, spacing } from '../tokens';
-import { useThemeColors } from '../../lib/theme';
+import { metricStyles, useThemeColors } from '../../lib/theme';
 import { Skeleton } from '../../components/Skeleton';
 
 /**
@@ -59,6 +59,7 @@ export function isReady(state: ScreenState | undefined): boolean {
 }
 
 export function ScreenStateView({ state }: { state: Exclude<ScreenState, { kind: 'ready' }> }) {
+  const styles = stylesFor();
   const { emerald: colors } = useThemeColors();
   switch (state.kind) {
     case 'loading':
@@ -128,7 +129,7 @@ export function ScreenStateView({ state }: { state: Exclude<ScreenState, { kind:
   }
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -144,4 +145,4 @@ const styles = StyleSheet.create({
     height: 78,
     borderRadius: radius.md,
   },
-});
+}));

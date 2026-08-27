@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { Animated, Easing, Image, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { colors } from '../lib/theme';
+import { colors, metricStyles } from '../lib/theme';
 import type { ModeDestination } from './modeTransitionAssets';
 import { LINE_GEOMETRY, SOURCE_ASPECT_RATIO, TRANSITION_IMAGES } from './modeTransitionAssets';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
@@ -104,6 +104,7 @@ export function useModeTransition(): ModeTransitionValue {
  * App.tsx — the overlay itself only exists while a switch is running.
  */
 export function ModeTransitionProvider({ children }: PropsWithChildren) {
+  const styles = stylesFor();
   const [request, setRequest] = useState<StartArgs | null>(null);
   // The ref is the actual double-tap guard: two taps in the same frame both
   // read the old state, but only the first sees a null ref.
@@ -153,6 +154,7 @@ type OverlayProps = {
  * between runs.
  */
 function ModeTransitionOverlay({ destination, onSwitch, onComplete }: OverlayProps) {
+  const styles = stylesFor();
   const { width } = useWindowDimensions();
   const reducedMotion = useReducedMotion();
 
@@ -384,7 +386,7 @@ function ModeTransitionOverlay({ destination, onSwitch, onComplete }: OverlayPro
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   root: {
     flex: 1,
   },
@@ -448,4 +450,4 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF3D6',
     opacity: 0.95,
   },
-});
+}));

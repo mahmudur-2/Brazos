@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { glow, withAlpha, type MaterialName } from '../tokens';
 import { useDesignOverrides, useMaterials } from '../../lib/designOverrides';
-import { useThemeColors } from '../../lib/theme';
+import { metricStyles, useThemeColors } from '../../lib/theme';
 import { BlurLayer } from '../../lib/blur';
 
 /**
@@ -104,6 +104,7 @@ export function Surface({
   glowColor,
   children,
 }: SurfaceProps) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const reduceTransparency = useReduceTransparency();
   // The static table with the studio's live dials folded in (C2) — an
@@ -151,9 +152,9 @@ export function Surface({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   // The blur alone needs clipping to the corners; the scrim is the outer
   // view's own background, which already respects its radius. Clipping the
   // OUTER view instead would cancel the optional glow on iOS.
   clip: { overflow: 'hidden' },
-});
+}));

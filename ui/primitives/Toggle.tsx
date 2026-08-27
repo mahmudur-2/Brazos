@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Pressable, StyleSheet } from 'react-native';
-import { glow, radius, useThemeColors, withAlpha } from '../../lib/theme';
+import { glow, metricStyles, radius, useThemeColors, withAlpha } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
 import { USE_NATIVE_DRIVER } from '../../lib/motion';
 import { usePressFeedback } from '../../hooks/usePressFeedback';
@@ -66,6 +66,7 @@ type ToggleProps = {
 };
 
 export function Toggle({ value, onValueChange, disabled = false, accessibilityLabel }: ToggleProps) {
+  const styles = stylesFor();
   const { palette, isDark } = useThemeColors();
   const position = useRef(new Animated.Value(value ? 1 : 0)).current;
   const press = usePressFeedback();
@@ -151,7 +152,7 @@ export function Toggle({ value, onValueChange, disabled = false, accessibilityLa
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   track: {
     width: TRACK_WIDTH,
     height: TRACK_HEIGHT,
@@ -171,4 +172,4 @@ const styles = StyleSheet.create({
   disabled: {
     opacity: 0.5,
   },
-});
+}));

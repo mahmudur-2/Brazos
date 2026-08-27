@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { fonts, useThemeColors, withAlpha } from '../lib/theme';
+import { fonts, metricStyles, useThemeColors, withAlpha } from '../lib/theme';
 
 /**
  * The serif "B" the golden masters place in a card's spare corner.
@@ -30,6 +30,7 @@ export function BrazosMonogram({
   size?: number;
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = stylesFor();
   const { palette } = useThemeColors();
   const shield = variant === 'shield';
   // The shield outline swallows some of the box, so the letter inside it is
@@ -63,7 +64,7 @@ export function BrazosMonogram({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   root: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -77,4 +78,4 @@ const styles = StyleSheet.create({
   letterInShield: {
     position: 'absolute',
   },
-});
+}));

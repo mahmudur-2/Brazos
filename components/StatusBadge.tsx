@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { formatStatus } from '../lib/jobStage';
 import {
+  metricStyles,
   radius,
   spacing,
   themedStyles,
@@ -55,6 +56,7 @@ type StatusBadgeProps = {
 };
 
 export function StatusBadge({ status, label }: StatusBadgeProps) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const { byStatus, fallback } = statusStylesFor(colors);
   const style = byStatus[status] ?? fallback;
@@ -88,7 +90,7 @@ export function StatusBadge({ status, label }: StatusBadgeProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   badge: {
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs,
@@ -100,4 +102,4 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-});
+}));

@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 import { formatClipDuration } from '../lib/messages';
 import {
+  metricStyles,
   radius,
   spacing,
   useThemeColors,
@@ -35,6 +36,7 @@ const BARS = [0.35, 0.6, 0.85, 0.5, 1, 0.7, 0.4, 0.9, 0.55, 0.75, 0.45, 0.65,
  * note keep its own position independently of the others.
  */
 export function VoiceNote({ url, durationMs, isOwn }: VoiceNoteProps) {
+  const styles = stylesFor();
   const { palette: colors } = useThemeColors();
   const player = useAudioPlayer({ uri: url });
   const status = useAudioPlayerStatus(player);
@@ -110,7 +112,7 @@ export function VoiceNote({ url, durationMs, isOwn }: VoiceNoteProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -147,4 +149,4 @@ const styles = StyleSheet.create({
     minWidth: 30,
     textAlign: 'right',
   },
-});
+}));

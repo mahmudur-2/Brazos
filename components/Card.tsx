@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import type { PropsWithChildren } from 'react';
 import {
+  metricStyles,
   radius,
   shadows,
   spacing,
@@ -34,6 +35,7 @@ export function Card({
   accessibilityHint,
   palette: paletteProp,
 }: CardProps) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   // C4: the stylesheet's card shadow is a light-palette shadow — its colour is
@@ -67,7 +69,7 @@ export function Card({
   return <View style={[styles.card, paletteStyle, depth, style]}>{children}</View>;
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   card: {
     borderRadius: radius.lg,
     borderWidth: 1,
@@ -78,4 +80,4 @@ const styles = StyleSheet.create({
     opacity: 0.9,
     transform: [{ scale: 0.997 }],
   },
-});
+}));

@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
-import { authSurface, useThemeColors } from '../lib/theme';
+import { authSurface, metricStyles, useThemeColors } from '../lib/theme';
 import { flagEmoji, type Country } from '../lib/countries';
 import {
   clampNational,
@@ -64,6 +64,7 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
     },
     ref
   ) {
+    const styles = stylesFor();
     const [pickerOpen, setPickerOpen] = useState(false);
     const focus = useRef(new Animated.Value(0)).current;
     const { palette, isDark } = useThemeColors();
@@ -191,7 +192,7 @@ export const PhoneNumberInput = forwardRef<TextInput, PhoneNumberInputProps>(
   }
 );
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   container: {
     gap: 6,
   },
@@ -267,4 +268,4 @@ const styles = StyleSheet.create({
     marginLeft: 2,
     marginTop: 2,
   },
-});
+}));

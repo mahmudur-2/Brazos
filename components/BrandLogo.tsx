@@ -7,6 +7,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { authShadows } from '../lib/authTheme';
+import { metricStyles } from '../lib/theme';
 
 // The supplied brand mark, with its opaque white app-icon backing replaced by
 // a squircle alpha mask so the emerald tile can sit on the emerald launch
@@ -52,6 +53,7 @@ type BrandLogoProps = {
  * asset later is a one-line change.
  */
 export function BrandLogo({ size, elevated = false, style, source, radius }: BrandLogoProps) {
+  const styles = stylesFor();
   return (
     <View
       style={[
@@ -74,9 +76,9 @@ export function BrandLogo({ size, elevated = false, style, source, radius }: Bra
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
   },
-});
+}));

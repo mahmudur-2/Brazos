@@ -4,6 +4,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { metricStyles } from '../lib/theme';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -50,6 +51,7 @@ export function SetupChoiceCard({
   onSelect,
   reducedMotion,
 }: SetupChoiceCardProps) {
+  const styles = stylesFor();
   const fade = useRef(new Animated.Value(selected ? 1 : 0)).current;
 
   useEffect(() => {
@@ -99,7 +101,7 @@ export function SetupChoiceCard({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   pressable: {
     // The pair splits the row evenly at every width.
     flex: 1,
@@ -144,4 +146,4 @@ const styles = StyleSheet.create({
     ...authType.note,
     color: authColors.muted,
   },
-});
+}));

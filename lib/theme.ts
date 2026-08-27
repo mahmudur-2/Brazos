@@ -591,4 +591,36 @@ export function themedStyles<P extends object, T>(
   };
 }
 
+/**
+ * RUN T1 (C3/D6) — THE SAME CACHING FOR A SHEET THAT CARRIES NO COLOUR.
+ *
+ * Twenty-three sheets across ui/primitives/, ui/templates/ and components/
+ * are built at module scope with `StyleSheet.create` because they never
+ * needed a palette — and that is exactly what puts their metrics out of
+ * reach: the sheet is created once, at import, from whatever `spacing` and
+ * `radius` held then, and `themedStyles` cannot help because there is no
+ * palette to key on. Wrapping the factory in this defers it to first use and
+ * keys the one cached result on the metric generation, so those sheets follow
+ * a dial for the same reason the themed ones do.
+ *
+ *   const stylesFor = metricStyles(() => StyleSheet.create({ … }));
+ *   // in the component:
+ *   const styles = stylesFor();
+ *
+ * A sheet that carries RESOLVED colour belongs in `themedStyles` above: this
+ * one takes no palette, so it cannot repaint on a theme change.
+ */
+export function metricStyles<T>(factory: () => T): () => T {
+  let generation = metricGeneration();
+  let cached: T | undefined;
+  return () => {
+    const current = metricGeneration();
+    if (cached === undefined || current !== generation) {
+      generation = current;
+      cached = factory();
+    }
+    return cached;
+  };
+}
+
 export const theme = { colors, spacing, radius, typography, fonts, shadows } as const;

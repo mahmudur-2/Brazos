@@ -1,5 +1,5 @@
 import { StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
-import { radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { metricStyles, radius, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 type TextFieldProps = {
   label: string;
@@ -40,6 +40,7 @@ export function FieldLabel({
   children: string;
   palette?: ColorPalette;
 }) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   return (
@@ -58,6 +59,7 @@ export function TextField({
   multiline,
   ...rest
 }: TextFieldProps) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   return (
@@ -93,7 +95,7 @@ export function TextField({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   container: {
     gap: spacing.xs + 2,
   },
@@ -125,4 +127,4 @@ const styles = StyleSheet.create({
   error: {
     fontSize: 12,
   },
-});
+}));

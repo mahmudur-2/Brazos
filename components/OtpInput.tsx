@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { authColors, authRadius, authSizes } from '../lib/authTheme';
 import { OTP_LENGTH } from '../lib/phoneAuth';
+import { metricStyles } from '../lib/theme';
 
 /**
  * The six-cell code field.
@@ -46,6 +47,7 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
   { value, onChangeText, invalid = false, editable = true, onSubmitEditing },
   ref
 ) {
+  const styles = stylesFor();
   const inputRef = useRef<TextInput>(null);
 
   useImperativeHandle(ref, () => ({ focus: () => inputRef.current?.focus() }), []);
@@ -116,7 +118,7 @@ export const OtpInput = forwardRef<OtpInputHandle, OtpInputProps>(function OtpIn
   );
 });
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   container: {
     position: 'relative',
   },
@@ -171,4 +173,4 @@ const styles = StyleSheet.create({
     // zero width is the supported way to say the same thing.
     outlineWidth: 0,
   },
-});
+}));

@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
-import { spacing, useThemeColors, type ColorPalette } from '../lib/theme';
+import { metricStyles, spacing, useThemeColors, type ColorPalette } from '../lib/theme';
 
 const STEPS = [
   { key: 'assigned', label: 'Assigned' },
@@ -16,6 +16,7 @@ export function JobProgress({
   status: string;
   palette?: ColorPalette;
 }) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   // Presentation over THE track (F-012): the raw status runs through the
@@ -94,7 +95,7 @@ export function JobProgress({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -131,4 +132,4 @@ const styles = StyleSheet.create({
     marginTop: 12,
     marginHorizontal: -12,
   },
-});
+}));

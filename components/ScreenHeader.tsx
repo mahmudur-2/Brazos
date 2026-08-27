@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { ReactNode } from 'react';
-import { fonts, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
+import { fonts, metricStyles, spacing, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../lib/designOverrides';
 
 type ScreenHeaderProps = {
@@ -80,6 +80,7 @@ export function ScreenHeader({
   rightDisabled = false,
   centerTitle = false,
 }: ScreenHeaderProps) {
+  const styles = stylesFor();
   const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   // Every dark master draws the back chevron in gold — it is the one piece of
@@ -233,7 +234,7 @@ export function ScreenHeader({
   );
 }
 
-const styles = StyleSheet.create({
+const stylesFor = metricStyles(() => StyleSheet.create({
   container: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -299,4 +300,4 @@ const styles = StyleSheet.create({
   right: {
     marginLeft: spacing.sm,
   },
-});
+}));
