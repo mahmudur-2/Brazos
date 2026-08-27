@@ -366,7 +366,25 @@ export function HomeScreen() {
   // the stylesheet: one place per value, so the studio's default and the
   // shipped pixel cannot drift apart.
   const promoCardRadius = useDialNumber('home.promoCard.radius') ?? 22;
-  const modeSwitchPaddingX = useDialNumber('home.modeSwitch.paddingX') ?? 10;
+  // THE ONE DIAL ON THIS SCREEN APPLIED CONDITIONALLY, and the render gate is
+  // why. Every other T2 dial resolves to `useDialNumber(key) ?? literal` and
+  // is applied unconditionally; on this control that cost 26 pixels.
+  //
+  // The mode pill's padding moved out of the registered stylesheet and into an
+  // inline object, which on React Native Web is the difference between an
+  // atomic CSS class and an inline style attribute. Home itself stayed
+  // byte-identical — the geometry never moved — but the SERVICES SHEET capture,
+  // where this pill is composited under the sheet's scrim, came back with 26
+  // pixels differing by one unit on one channel, every one of them on the
+  // pill's own ring arc (right edge x372, bottom y54, both corner radii).
+  //
+  // So the value stays in the stylesheet and the dial is applied only when the
+  // operator has actually turned it: `undefined` is dropped from a style array
+  // — no key, no node, no pixel — which is the same idiom `litFill`'s `flat`
+  // uses a few hundred lines below, and for the same reason. Clearing the
+  // override returns the pill to the stylesheet's own 10 by construction
+  // rather than by a number repeated here.
+  const modeSwitchPaddingX = useDialNumber('home.modeSwitch.paddingX');
 
   // RUN H3 (C3): this screen's page ground is `homeBackground`, not the
   // palette's `background`, and the floating nav pill's margins are painted by
@@ -595,7 +613,7 @@ export function HomeScreen() {
                   style={({ pressed }) => [
                     styles.modeSwitch,
                     isDark && styles.modeSwitchDark,
-                    { paddingHorizontal: modeSwitchPaddingX },
+                    modeSwitchPaddingX !== undefined && { paddingHorizontal: modeSwitchPaddingX },
                     pressed && styles.modeSwitchPressed,
                   ]}
                   accessibilityRole="button"
@@ -1069,6 +1087,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: 7,
     minHeight: 44,
+    paddingHorizontal: 10,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.gold,
