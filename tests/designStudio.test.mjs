@@ -376,7 +376,7 @@ test('registry: every category icon is a real glyph in the installed Ionicons fo
       'utf8',
     ),
   );
-  assert.equal(schema.STUDIO_CATEGORIES.length, 14, 'the fourteen dispatched categories');
+  assert.equal(schema.STUDIO_CATEGORIES.length, 15, "the fourteen dispatched categories, plus RUN T2's Screens");
   for (const category of schema.STUDIO_CATEGORIES) {
     assert.ok(category.label.trim().length > 0, `${category.key}: empty label`);
     assert.ok(

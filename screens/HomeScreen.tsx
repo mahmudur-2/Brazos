@@ -38,6 +38,7 @@ import { greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
+import { useDialNumber } from '../lib/designOverrides';
 import { useShellGround } from '../lib/shellGround';
 import { useEntrance } from '../hooks/useEntrance';
 import {
@@ -360,6 +361,12 @@ export function HomeScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { width: screenWidth } = useWindowDimensions();
+  // RUN T2 (C1) — HOME'S OWN DIALS. Each falls back to the number this file
+  // drew before the dial existed, which is why it is spelled here and not in
+  // the stylesheet: one place per value, so the studio's default and the
+  // shipped pixel cannot drift apart.
+  const promoCardRadius = useDialNumber('home.promoCard.radius') ?? 22;
+  const modeSwitchPaddingX = useDialNumber('home.modeSwitch.paddingX') ?? 10;
 
   // RUN H3 (C3): this screen's page ground is `homeBackground`, not the
   // palette's `background`, and the floating nav pill's margins are painted by
@@ -588,6 +595,7 @@ export function HomeScreen() {
                   style={({ pressed }) => [
                     styles.modeSwitch,
                     isDark && styles.modeSwitchDark,
+                    { paddingHorizontal: modeSwitchPaddingX },
                     pressed && styles.modeSwitchPressed,
                   ]}
                   accessibilityRole="button"
@@ -715,7 +723,13 @@ export function HomeScreen() {
             // C4: the card shadow in the stylesheet is a light-palette shadow
             // and casts nothing on this ground. The dark token is ADDED rather
             // than swapped in, so light keeps exactly what it had.
-            style={[styles.heroCard, isDark && styles.heroCardDark, isDark && shadows.cardDark, cardEntrance]}
+            style={[
+              styles.heroCard,
+              isDark && styles.heroCardDark,
+              isDark && shadows.cardDark,
+              { borderRadius: promoCardRadius },
+              cardEntrance,
+            ]}
             surface={colors.surface}
             lift={colors.emerald}
             liftAlpha={CARD_LIFT_ALPHA}
@@ -871,6 +885,13 @@ function OpenJobCard({
   const design = useHomeDesignSettings();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C1) — the Nearby card's four dials. `gap` inherits
+  // `theme.spacing.md` because this file imports `spacing` from lib/theme;
+  // the other three answer to no token and carry their own literal.
+  const jobCardPadding = useDialNumber('home.jobCard.padding') ?? 14;
+  const jobCardGap = useDialNumber('home.jobCard.gap') ?? spacing.md;
+  const jobThumbSize = useDialNumber('home.jobCard.thumbSize') ?? 104;
+  const jobMetaPaddingY = useDialNumber('home.jobCard.metaPaddingY') ?? 10;
   const accent = categoryAccent(job.category);
   const [thumbFailed, setThumbFailed] = useState(false);
   const thumbUrl = jobThumbnailUrl(job);
@@ -897,11 +918,11 @@ function OpenJobCard({
       accessibilityRole="button"
       accessibilityLabel={job.title}
     >
-      <View style={styles.jobBody}>
+      <View style={[styles.jobBody, { gap: jobCardGap, padding: jobCardPadding }]}>
         {showThumb ? (
           <RemoteImage
             uri={thumbUrl}
-            style={styles.jobThumb}
+            style={[styles.jobThumb, { width: jobThumbSize, height: jobThumbSize }]}
             contentFit="cover"
             onError={() => setThumbFailed(true)}
           />
@@ -912,6 +933,7 @@ function OpenJobCard({
             style={[
               styles.jobThumb,
               styles.jobThumbFallback,
+              { width: jobThumbSize, height: jobThumbSize },
               isDark ? styles.jobThumbFallbackDark : { backgroundColor: accent.bg },
             ]}
           >
@@ -963,7 +985,7 @@ function OpenJobCard({
         </View>
       </View>
       {similarToday > 0 ? (
-        <View style={styles.jobMeta}>
+        <View style={[styles.jobMeta, { paddingVertical: jobMetaPaddingY }]}>
           <View style={styles.demandRow}>
             <Ionicons
               name="trending-up"
@@ -1047,7 +1069,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: 7,
     minHeight: 44,
-    paddingHorizontal: 10,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.gold,
@@ -1258,7 +1279,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // colours differ.
   heroCard: {
     marginTop: 3,
-    borderRadius: 22,
     borderWidth: 1,
     borderColor: 'transparent',
     backgroundColor: colors.forest,
@@ -1453,8 +1473,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   jobCardDark: { borderColor: colors.border },
   jobCardPressed: { opacity: 0.9 },
-  jobBody: { flexDirection: 'row', gap: spacing.md, padding: 14 },
-  jobThumb: { width: 104, height: 104, borderRadius: radius.md, backgroundColor: colors.neutralBg },
+  jobBody: { flexDirection: 'row' },
+  jobThumb: { borderRadius: radius.md, backgroundColor: colors.neutralBg },
   jobThumbFallback: { alignItems: 'center', justifyContent: 'center' },
   jobThumbFallbackDark: { backgroundColor: colors.mint },
   jobMain: { flex: 1, gap: spacing.xs + 2 },
@@ -1477,7 +1497,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     justifyContent: 'space-between',
     gap: spacing.sm,
     paddingHorizontal: 14,
-    paddingVertical: 10,
     borderTopWidth: 1,
     borderTopColor: colors.border,
   },

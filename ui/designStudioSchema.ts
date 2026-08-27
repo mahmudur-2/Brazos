@@ -82,6 +82,7 @@ export type StudioCategoryKey =
   | 'shadows'
   | 'blur'
   | 'layout'
+  | 'screens'
   | 'advanced';
 
 export type StudioCategory = {
@@ -106,6 +107,7 @@ export const STUDIO_CATEGORIES: readonly StudioCategory[] = [
   { key: 'shadows', label: 'Shadows & Glows', icon: 'sunny-outline' },
   { key: 'blur', label: 'Blur & Material', icon: 'water-outline' },
   { key: 'layout', label: 'Layout', icon: 'grid-outline' },
+  { key: 'screens', label: 'Screens', icon: 'phone-portrait-outline' },
   { key: 'advanced', label: 'Advanced', icon: 'construct-outline' },
 ];
 
@@ -1605,6 +1607,125 @@ function shadowDialEntries(): StudioEntry[] {
 }
 
 // ---------------------------------------------------------------------------
+// Screens (RUN T2) — THE VALUES THAT LIVE IN ONE SCREEN'S OWN STYLESHEET.
+//
+// Every dial above this line moves a TOKEN or a shared primitive: turning it
+// moves every surface that reads it, which is exactly right for "the app's
+// card corner" and exactly wrong for "this screen's promo card". Twelve
+// screens carry furniture no shared dial can reach, because the number is
+// spelled in that screen's own `StyleSheet.create` and nowhere else. These
+// entries give the operator that reach, one screen at a time.
+//
+// FOUR RULES HOLD THE CATEGORY TOGETHER.
+//
+//  1. `scope: 'local'` — always. A screen dial is one surface's own value by
+//     definition; nothing else reads it.
+//  2. It INHERITS from the scale ITS OWN FILE imports, and the two scales are
+//     deliberately not aliased. A screen importing `spacing`/`radius` from
+//     lib/theme takes `theme.spacing.*` / `theme.radius.*` as its parent; a
+//     screen importing them from ui/tokens takes `spacing.*` / `radius.*`.
+//     `theme.spacing.xl` is 24 and `spacing.xl` is 20; `theme.radius.sm` is 8
+//     and `radius.sm` is 13. Pointing a child at the wrong one moves it the
+//     moment the operator turns the parent, and moves it by the difference.
+//     A value that matches no token in its file's scale is a plain dial with
+//     the literal as its default and no parent at all.
+//  3. The DEFAULT is the value the screen drew before the dial existed — so
+//     the studio launches every one of these at today's pixel and "reset"
+//     lands back on it. tests/screenDials.test.mjs quotes each of those
+//     values and re-reads the screen to prove nothing moved.
+//  4. TYPOGRAPHY IS NOT HERE. No size, weight, leading, tracking or family:
+//     the type is the operator's own and no dial in this category may reach
+//     it. The fence enumerates the forbidden property words and fails on any
+//     key carrying one.
+//
+// The ceiling is TWELVE per screen, and it is a ceiling rather than a target:
+// the panel is browsed by a human on a phone, and a screen with four values
+// worth tuning gets four.
+// ---------------------------------------------------------------------------
+
+function screenDialEntries(): StudioEntry[] {
+  return [
+    // C1 — screens/HomeScreen.tsx. Imports `spacing`/`radius` from lib/theme,
+    // so its parents are the `theme.*` scale. Left undialled on purpose: the
+    // search pill, the CTA's height and roundness, the screen padding, the
+    // section gap and the job card's corner (lib/homeDesignStudio.tsx already
+    // dials every one of those, and a second dial for the same pixel is worse
+    // than none) and the service chip row (tests/workerHome.test.mjs holds it
+    // byte-identical to Worker Home's, so a per-screen dial would break the
+    // invariant it exists to protect).
+    ...dialEntries('screens', 'Customer Home', [
+      {
+        key: 'home.promoCard.radius',
+        label: 'Promo card — corner roundness',
+        description: 'The “Describe the job” card’s corners. Home’s alone — the job cards below it keep their own.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        defaultValue: 22,
+      },
+      {
+        key: 'home.modeSwitch.paddingX',
+        label: 'Switch-to-Worker pill — side padding',
+        description: 'How much room the mode pill keeps either side of its label, which is what sets its width.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 28,
+        step: 1,
+        defaultValue: 10,
+      },
+      {
+        key: 'home.jobCard.padding',
+        label: 'Job card — inner padding',
+        description: 'The breathing room inside every card in the Nearby list.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 32,
+        step: 1,
+        defaultValue: 14,
+      },
+      {
+        key: 'home.jobCard.gap',
+        label: 'Job card — photo-to-text gap',
+        description: 'Between a Nearby card’s thumbnail and the title beside it.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 32,
+        step: 1,
+        inheritsFrom: 'theme.spacing.md',
+        defaultValue: THEME_SPACING_DEFAULTS.md,
+      },
+      {
+        key: 'home.jobCard.thumbSize',
+        label: 'Job card — photo size',
+        description: 'The square thumbnail on a Nearby card, width and height together.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 56,
+        max: 160,
+        step: 2,
+        defaultValue: 104,
+      },
+      {
+        key: 'home.jobCard.metaPaddingY',
+        label: 'Job card — demand strip height',
+        description: 'Above and below the “N similar jobs posted today” line under a card.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 24,
+        step: 1,
+        defaultValue: 10,
+      },
+    ]),
+  ];
+}
+
+// ---------------------------------------------------------------------------
 // The registry. C1 seeds it with every dial the G1 studio already offered;
 // C5–C10 grow the categories. Order inside a category is display order.
 // ---------------------------------------------------------------------------
@@ -1625,6 +1746,7 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...dividerDialEntries(),
   ...layoutDialEntries(),
   ...shadowDialEntries(),
+  ...screenDialEntries(),
   {
     key: 'glow.alpha',
     plainLabel: 'Glow strength',
