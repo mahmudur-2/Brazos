@@ -2242,6 +2242,60 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: 34,
       },
     ]),
+    // C10 — screens/WorkerSearchScreen.tsx. `theme.*` scale. Left undialled:
+    // the search row and its round submit control — the search pill's shape,
+    // height and roundness are the operator's standing rejection and no dial
+    // in this run may offer to move them; the worker result cards, which are a
+    // shared component; and the selected tile's two-point ring, which reads
+    // against the one-point resting ring and is a state, not a size.
+    ...dialEntries('screens', 'Discover', [
+      {
+        key: 'workerSearch.serviceTile.width',
+        label: 'Category tile — width',
+        description: 'How wide each tile in the scrolling row of services is, and so how many you see at once.',
+        tier: 'basic',
+        scope: 'local',
+        min: 72,
+        max: 200,
+        step: 2,
+        defaultValue: 108,
+      },
+      {
+        key: 'workerSearch.serviceTile.height',
+        label: 'Category tile — height',
+        description: 'How tall those tiles stand before their label wraps them taller.',
+        tier: 'basic',
+        scope: 'local',
+        min: 64,
+        max: 180,
+        step: 2,
+        defaultValue: 96,
+      },
+      {
+        key: 'workerSearch.serviceTile.radius',
+        label: 'Category tile — corner roundness',
+        description: 'The tiles’ corners.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.radius.lg',
+        defaultValue: THEME_RADIUS_DEFAULTS.lg,
+      },
+      {
+        key: 'workerSearch.chipRow.gap',
+        label: 'Category tile gap',
+        description: 'Between one tile and the next along the row.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 24,
+        step: 1,
+        inheritsFrom: 'theme.spacing.sm',
+        defaultValue: THEME_SPACING_DEFAULTS.sm,
+      },
+    ]),
   ];
 }
 

@@ -181,6 +181,18 @@ const SCREENS = [
       { key: 'compareBids.protectsGlyph.size', drew: 34, parent: null, fallback: '34' },
     ],
   },
+  {
+    subcategory: 'Discover',
+    file: 'screens/WorkerSearchScreen.tsx',
+    prefix: 'workerSearch',
+    scale: 'theme',
+    dials: [
+      { key: 'workerSearch.serviceTile.width', drew: 108, parent: null, fallback: '108' },
+      { key: 'workerSearch.serviceTile.height', drew: 96, parent: null, fallback: '96' },
+      { key: 'workerSearch.serviceTile.radius', drew: 16, parent: 'theme.radius.lg', fallback: 'radius.lg' },
+      { key: 'workerSearch.chipRow.gap', drew: 8, parent: 'theme.spacing.sm', fallback: 'spacing.sm' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

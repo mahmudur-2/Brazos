@@ -54,6 +54,7 @@ import type {
   CustomerHomeStackNavigation,
   WorkerSearchRouteParamList,
 } from '../lib/navigation';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   emeraldColorsFor,
   fonts,
@@ -86,6 +87,14 @@ type SearchState =
 export function WorkerSearchScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C10) — THE CATEGORY TILES ARE THIS SCREEN. Each dial falls back to
+  // the value this file drew before it existed, spelled here and nowhere else;
+  // the two token-backed ones take the `theme.*` scale this file imports
+  // spacing/radius from.
+  const serviceTileWidth = useDialNumber('workerSearch.serviceTile.width') ?? 108;
+  const serviceTileHeight = useDialNumber('workerSearch.serviceTile.height') ?? 96;
+  const serviceTileRadius = useDialNumber('workerSearch.serviceTile.radius') ?? radius.lg;
+  const chipRowGap = useDialNumber('workerSearch.chipRow.gap') ?? spacing.sm;
   // emerald(3): the floating pill's real footprint. This is the Discover tab's
   // root since emerald(1), so it is now a first-screen surface.
   const navClearance = useFloatingNavClearance();
@@ -364,7 +373,7 @@ export function WorkerSearchScreen() {
                 ref={tileRowRef}
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.chipRow}
+                contentContainerStyle={[styles.chipRow, { gap: chipRowGap }]}
                 style={styles.serviceScroll}
                 keyboardShouldPersistTaps="handled"
                 onContentSizeChange={revealArrivalTile}
@@ -377,6 +386,11 @@ export function WorkerSearchScreen() {
                       onPress={() => chooseCategory(category.key)}
                       style={({ pressed }) => [
                         styles.serviceTile,
+                        {
+                          width: serviceTileWidth,
+                          minHeight: serviceTileHeight,
+                          borderRadius: serviceTileRadius,
+                        },
                         selected && styles.serviceTileSelected,
                         pressed && styles.serviceTilePressed,
                       ]}
@@ -816,7 +830,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   chipRow: {
     flexDirection: 'row',
-    gap: spacing.sm,
     paddingRight: spacing.lg,
   },
   serviceScroll: {
@@ -826,12 +839,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // floor on both axes, selected marked by a heavier ring rather than a fill
   // (gold is line-work).
   serviceTile: {
-    width: 108,
-    minHeight: 96,
     justifyContent: 'space-between',
     gap: spacing.sm,
     padding: spacing.md,
-    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
