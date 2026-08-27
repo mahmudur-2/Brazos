@@ -193,6 +193,21 @@ const SCREENS = [
       { key: 'workerSearch.chipRow.gap', drew: 8, parent: 'theme.spacing.sm', fallback: 'spacing.sm' },
     ],
   },
+  {
+    subcategory: 'Map',
+    file: 'screens/MapScreen.tsx',
+    prefix: 'map',
+    scale: 'theme',
+    dials: [
+      // `themeRadius` is `radius` from lib/theme under an alias: the distance
+      // filter's own `radius` state shadows the token inside the component, so
+      // the fallback cannot name it directly. Same binding, same scale.
+      { key: 'map.headerWrap.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'themeRadius.xl' },
+      { key: 'map.footerBar.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'themeRadius.xl' },
+      { key: 'map.footerBar.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'map.squircle.size', drew: 40, parent: null, fallback: '40' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

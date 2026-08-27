@@ -45,6 +45,7 @@ import { userMessage } from '../lib/errorMessage';
 import { useMode } from '../modes';
 import type { MapStackNavigation } from '../lib/navigation';
 import { navigateAcrossTabs } from '../lib/navigationRef';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   fonts,
   radius,
@@ -55,6 +56,15 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
+
+/**
+ * RUN T2 (C11): `radius` is shadowed inside MapScreen by the distance-filter
+ * state — `const [radius, setRadius] = useState<DistanceFilterMiles ...>` — so
+ * the corner token cannot be named there at all, temporal dead zone or not.
+ * The alias is the token under a name the component can still see; it is the
+ * same binding, not a second definition.
+ */
+const themeRadius = radius;
 
 /** Matches HotspotMap.native's DEFAULT_REGION span — the pre-interaction zoom. */
 const INITIAL_LAT_DELTA = 0.08;
@@ -104,6 +114,14 @@ function MapRestingJob({
 export function MapScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C11) — THE TWO FLOATING BARS AND THE CONTROLS ON THEM. Each dial
+  // falls back to the value this file drew before it existed, spelled here and
+  // nowhere else; the three token-backed ones take the `theme.*` scale, named
+  // through `themeRadius` where the distance filter shadows `radius`.
+  const headerRadius = useDialNumber('map.headerWrap.radius') ?? themeRadius.xl;
+  const footerRadius = useDialNumber('map.footerBar.radius') ?? themeRadius.xl;
+  const footerPaddingX = useDialNumber('map.footerBar.paddingX') ?? spacing.lg;
+  const squircleSize = useDialNumber('map.squircle.size') ?? 40;
   // Master 33's chrome is gold line-work; light keeps the Heritage primary.
   const accent = isDark ? colors.gold : colors.primary;
   const navigation = useNavigation<MapStackNavigation>();
@@ -351,7 +369,7 @@ export function MapScreen() {
             a type backing (see `headerWrap` for what that let the alpha do).
             The distance control keeps its place at the right, inside the same
             capsule, with its behaviour unchanged. */}
-        <View style={styles.headerWrap}>
+        <View style={[styles.headerWrap, { borderRadius: headerRadius }]}>
           <View style={styles.searchRow}>
             <SearchBar
               value={query}
@@ -376,6 +394,7 @@ export function MapScreen() {
                 hitSlop={10}
                 style={({ pressed }) => [
                   styles.squircle,
+                  { width: squircleSize, height: squircleSize },
                   radius != null && styles.squircleLabeled,
                   pressed && styles.squirclePressed,
                 ]}
@@ -465,7 +484,12 @@ export function MapScreen() {
             see `footerBar`. The count is still the sum of the cells actually
             in view — never a placeholder, absent while loading. */}
         {!loading && !error ? (
-          <View style={styles.footerBar}>
+          <View
+            style={[
+              styles.footerBar,
+              { borderRadius: footerRadius, paddingHorizontal: footerPaddingX },
+            ]}
+          >
             <View style={styles.footerTopRow}>
               <Text style={styles.footerCount} numberOfLines={1}>
                 {visibleJobCount} open {visibleJobCount === 1 ? 'job' : 'jobs'}
@@ -701,7 +725,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // it still sets type on its own ground. See `footerBar`.
   headerWrap: {
     marginHorizontal: spacing.md,
-    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: withAlpha(colors.background, 0.55),
@@ -729,8 +752,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Master 33's gold-outline squircle control, at the header's right.
   squircle: {
-    width: 40,
-    height: 40,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
@@ -777,9 +798,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.sm,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
-    paddingHorizontal: spacing.lg,
     paddingVertical: spacing.sm,
-    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: withAlpha(colors.background, 0.72),

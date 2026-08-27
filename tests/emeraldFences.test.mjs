@@ -2092,10 +2092,10 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
   // that allows. The header being MORE transparent than the bottom row is the
   // fence, not an accident: if they ever converge, one of them is wrong.
   const GLASS = [
-    ['headerWrap', 'the header', '0\\.55'],
-    ['footerBar', 'the bottom row', '0\\.72'],
+    ['headerWrap', 'the header', '0\\.55', 'map\\.headerWrap\\.radius'],
+    ['footerBar', 'the bottom row', '0\\.72', 'map\\.footerBar\\.radius'],
   ];
-  for (const [key, label, alpha] of GLASS) {
+  for (const [key, label, alpha, cornerDial] of GLASS) {
     const style = new RegExp(`${key}: \{([^}]*)\}`).exec(flat.replace(/\{ width: 0, height: 3 \}/g, ''));
     assert.ok(style, `${label} must keep a plain, readable style object`);
     assert.match(
@@ -2108,7 +2108,17 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
       /marginHorizontal: spacing\.md/,
       `${label} must be INSET, or it is a full-width band however transparent it is`
     );
-    assert.match(style[1], /borderRadius: radius\.xl/, `${label} must be a capsule, not an edge-to-edge strip`);
+    // RUN T2 (C11) put each capsule's corner on its own screen dial, so the
+    // token is named at the WEARER and no longer inside the style block.
+    // `radius.xl` is still the value and still the only one — the alias exists
+    // because the distance filter's own `radius` state shadows the token
+    // inside the component. Only the address moved.
+    assert.match(
+      flat,
+      new RegExp(`useDialNumber\\('${cornerDial}'\\) \\?\\? themeRadius\\.xl`),
+      `${label} must be a capsule, not an edge-to-edge strip`,
+    );
+    assert.match(flat, /const themeRadius = radius;/, 'the alias must stay the token itself');
     assert.match(style[1], /borderWidth: 1, borderColor: colors\.border/, `${label} needs its hairline over busy tiles`);
   }
   // THE ORDERING, as arithmetic rather than as two independent constants: the

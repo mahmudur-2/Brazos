@@ -2296,6 +2296,61 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: THEME_SPACING_DEFAULTS.sm,
       },
     ]),
+    // C11 — screens/MapScreen.tsx. `theme.*` scale, named through a module
+    // alias inside the screen because the distance filter shadows `radius`.
+    // Left undialled: the search field on the header bar (the standing
+    // rejection), the two bars' translucency, which the litSurface fence
+    // prices as a pair — the footer must stay the less transparent of the two
+    // — and the map itself, which draws no styled box at all.
+    ...dialEntries('screens', 'Map', [
+      {
+        key: 'map.headerWrap.radius',
+        label: 'Top bar — corner roundness',
+        description: 'The floating search bar over the map, which is one of two boxes on this screen.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.radius.xl',
+        defaultValue: THEME_RADIUS_DEFAULTS.xl,
+      },
+      {
+        key: 'map.footerBar.radius',
+        label: 'Bottom bar — corner roundness',
+        description: 'The floating count-and-list bar at the bottom; free to differ from the top one.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.radius.xl',
+        defaultValue: THEME_RADIUS_DEFAULTS.xl,
+      },
+      {
+        key: 'map.footerBar.paddingX',
+        label: 'Bottom bar — side padding',
+        description: 'Inside the bottom bar, left and right of the job count and the List link.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'map.squircle.size',
+        label: 'Map control — size',
+        description: 'The square controls on the top bar — filter, locate — width and height together.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 28,
+        max: 64,
+        step: 2,
+        defaultValue: 40,
+      },
+    ]),
   ];
 }
 
