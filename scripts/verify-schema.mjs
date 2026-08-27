@@ -1654,6 +1654,66 @@ const MIGRATIONS = [
         checkRpc('mark_direct_thread_read', { p_thread_id: ZERO_UUID })],
     ],
   },
+  {
+    // -----------------------------------------------------------------------
+    // PHASE 78. public.areas (the closed neighbourhood list), public.properties
+    // (a place a customer owns), and the two optional links jobs gains to them.
+    //
+    // phase78 grants anon NOTHING — not a table, not a function — so every
+    // check below is written to the strongest verdict a publishable key can
+    // actually reach, and no further:
+    //
+    //   * BOTH TABLES ARE PROBED WITH checkColumnRevoked, where the DENIAL IS
+    //     THE ASSERTION. classifyRevokedResponse passes only on 403/42501 and
+    //     fails a 404 as "table missing, not denied", so one check proves two
+    //     things at once: the table exists, and anon cannot read it. Reaching
+    //     for checkColumn here would be wrong in both directions — it would
+    //     fail against a correctly hardened database and pass against one where
+    //     the revoke had been lost.
+    //
+    //   * ALL THREE FUNCTIONS USE checkRpc, NEVER checkRpcAllowed. Every one of
+    //     them is revoked from public and anon in the migration itself, so the
+    //     expected answer is a permission refusal — which still proves the
+    //     function exists. Only PGRST202 (no such function) counts as missing.
+    //     checkRpcAllowed demands a 2xx and would therefore fail precisely
+    //     BECAUSE phase78 is correctly locked down.
+    //
+    //   * THE TWO NEW jobs COLUMNS USE checkColumn, the positive probe, because
+    //     jobs is anon-readable and this script already leans on that: fourteen
+    //     other jobs columns are probed this way above, and main()'s control
+    //     check — the gate that decides whether the probe works at all — is
+    //     checkColumn('jobs', 'photos'). If jobs ever stops answering anon,
+    //     that control fails first and nothing below it is trusted anyway.
+    //
+    // What NO probe here can see, and what the sentinel therefore carries: the
+    // owner-scoped RLS policies on properties, the revoke of INSERT/UPDATE/
+    // DELETE on areas from authenticated, set_job_property()'s two ownership
+    // checks, area_for_point()'s ray-casting body, and the nullability of both
+    // new jobs columns. The sentinel installs last inside phase78's single
+    // transaction, after its own eight-group self-check has passed, so its
+    // presence is proof that all of it committed.
+    //
+    // phase78_areas_seed.sql is deliberately NOT a group of its own. It only
+    // inserts rows into public.areas, and anon cannot read that table by
+    // design — so there is nothing a publishable-key probe could honestly
+    // assert about it. Its own in-transaction do-block is what checks it, at
+    // apply time.
+    // -----------------------------------------------------------------------
+    file: 'phase78_properties_and_areas.sql',
+    sentinel: ['rpc phase78_properties_enabled()', () =>
+      checkRpc('phase78_properties_enabled', {})],
+    checks: [
+      ['jobs.property_id', () => checkColumn('jobs', 'property_id')],
+      ['jobs.area_code', () => checkColumn('jobs', 'area_code')],
+      ['areas not readable by anon', () => checkColumnRevoked('areas', 'code')],
+      ['properties not readable by anon', () =>
+        checkColumnRevoked('properties', 'id')],
+      ['rpc area_for_point()', () =>
+        checkRpc('area_for_point', { p_lat: 0, p_lng: 0 })],
+      ['rpc set_job_property()', () =>
+        checkRpc('set_job_property', { p_job_id: ZERO_UUID, p_property_id: null })],
+    ],
+  },
 ];
 
 const ZERO_UUID = '00000000-0000-0000-0000-000000000000';
