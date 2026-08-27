@@ -2176,6 +2176,72 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: 54,
       },
     ]),
+    // C9 — screens/CompareBidsScreen.tsx. `theme.*` scale. Left undialled: the
+    // header and "what this protects you from" cards, which draw the same
+    // radius.xl / mint2 box as the bid row and would be the same lever named
+    // twice; the "HIGHEST RATED" tag and the protected pill, both capsules
+    // sized by their own label; and the worker avatars, which are a shared
+    // component.
+    ...dialEntries('screens', 'Compare Bids', [
+      {
+        key: 'compareBids.row.radius',
+        label: 'Bid row — corner roundness',
+        description: 'Each worker’s bid, as a card in the list you are choosing from.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.radius.xl',
+        defaultValue: THEME_RADIUS_DEFAULTS.xl,
+      },
+      {
+        key: 'compareBids.rowHighest.borderWidth',
+        label: 'Best-rated bid — ring weight',
+        description: 'How heavily the highest-rated bid is ringed against the others. This is the whole comparison.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 6,
+        step: 1,
+        defaultValue: 2,
+      },
+      {
+        key: 'compareBids.row.padding',
+        label: 'Bid row — inner padding',
+        description: 'The breathing room inside each bid card.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'compareBids.list.gap',
+        label: 'Bid gap',
+        description: 'Between one bid and the next down the list.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 32,
+        step: 1,
+        inheritsFrom: 'theme.spacing.md',
+        defaultValue: THEME_SPACING_DEFAULTS.md,
+      },
+      {
+        key: 'compareBids.protectsGlyph.size',
+        label: 'Protection tile — size',
+        description: 'The three round glyphs on the “what this protects you from” card.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 24,
+        max: 64,
+        step: 2,
+        defaultValue: 34,
+      },
+    ]),
   ];
 }
 

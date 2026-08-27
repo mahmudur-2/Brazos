@@ -22,6 +22,7 @@ import { fetchWorkerJobStats } from '../lib/portfolio';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   fonts,
   radius,
@@ -59,6 +60,10 @@ const PROTECTS_TILES: { icon: IoniconName; title: string; sub: string }[] = [
 export function CompareBidsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C9) — the two this screen's own body owns. The bid rows have their
+  // own three, read in CompareRow below.
+  const listGap = useDialNumber('compareBids.list.gap') ?? spacing.md;
+  const protectsGlyphSize = useDialNumber('compareBids.protectsGlyph.size') ?? 34;
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'CompareBids'>>();
   const job = params.job;
@@ -157,7 +162,7 @@ export function CompareBidsScreen() {
         },
         {
           content: (
-            <View style={styles.list}>
+            <View style={[styles.list, { gap: listGap }]}>
               {sorted.map((bid) => (
                 <CompareRow
                   key={bid.id}
@@ -191,7 +196,13 @@ export function CompareBidsScreen() {
               <View style={styles.protectsRow}>
                 {PROTECTS_TILES.map((tile) => (
                   <View key={tile.title} style={styles.protectsTile}>
-                    <View style={[styles.protectsGlyph, isDark && styles.protectsGlyphDark]}>
+                    <View
+                      style={[
+                        styles.protectsGlyph,
+                        { width: protectsGlyphSize, height: protectsGlyphSize },
+                        isDark && styles.protectsGlyphDark,
+                      ]}
+                    >
                       <Ionicons
                         name={tile.icon}
                         size={18}
@@ -226,6 +237,11 @@ function CompareRow({
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C9) — the bid row's own three, on the `theme.*` scale this file
+  // imports spacing/radius from.
+  const rowPadding = useDialNumber('compareBids.row.padding') ?? spacing.lg;
+  const rowRadius = useDialNumber('compareBids.row.radius') ?? radius.xl;
+  const highestBorderWidth = useDialNumber('compareBids.rowHighest.borderWidth') ?? 2;
   const worker = bid.worker;
   const rating = knownRating(worker);
   const ratingCount = worker?.rating_count ?? 0;
@@ -236,8 +252,10 @@ function CompareRow({
       onPress={onPress}
       style={({ pressed }) => [
         styles.row,
+        { padding: rowPadding, borderRadius: rowRadius },
         isDark && styles.cardDark,
         highestRated && styles.rowHighest,
+        highestRated && { borderWidth: highestBorderWidth },
         pressed && styles.rowPressed,
       ]}
       accessibilityRole="button"
@@ -398,8 +416,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: colors.border,
   },
   protectsGlyph: {
-    width: 34,
-    height: 34,
     borderRadius: radius.pill,
     alignItems: 'center',
     justifyContent: 'center',
@@ -433,20 +449,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 12,
     color: colors.textMuted,
   },
-  list: {
-    gap: spacing.md,
-  },
+  list: {},
   row: {
     gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.mint2,
     backgroundColor: colors.surface,
   },
   rowHighest: {
     borderColor: colors.emerald,
-    borderWidth: 2,
   },
   rowPressed: {
     opacity: 0.8,

@@ -168,6 +168,19 @@ const SCREENS = [
       { key: 'jobDetail.iconCircle.size', drew: 54, parent: null, fallback: '54' },
     ],
   },
+  {
+    subcategory: 'Compare Bids',
+    file: 'screens/CompareBidsScreen.tsx',
+    prefix: 'compareBids',
+    scale: 'theme',
+    dials: [
+      { key: 'compareBids.row.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'radius.xl' },
+      { key: 'compareBids.rowHighest.borderWidth', drew: 2, parent: null, fallback: '2' },
+      { key: 'compareBids.row.padding', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'compareBids.list.gap', drew: 12, parent: 'theme.spacing.md', fallback: 'spacing.md' },
+      { key: 'compareBids.protectsGlyph.size', drew: 34, parent: null, fallback: '34' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------
