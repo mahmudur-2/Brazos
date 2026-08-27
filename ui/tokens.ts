@@ -159,6 +159,50 @@ export const dark = {
 export { withAlpha } from './colorAlpha';
 
 // ---------------------------------------------------------------------------
+// The live-metric bridge (RUN T1, C1)
+// ---------------------------------------------------------------------------
+
+/**
+ * RUN T1 — WHY THE METRIC SOURCE IS INSTALLED RATHER THAN IMPORTED.
+ *
+ * `spacing`, `radius`, `controls` and three of `layout`'s keys resolve their
+ * value through this slot on every read (C2), which is how a studio dial
+ * reaches all 102 `themedStyles` consumers without one of them being edited.
+ * The obvious spelling — importing `liveMetric` from lib/designOverrides.ts —
+ * is a module CYCLE: that file already imports `materials` from here at module
+ * scope, so whichever of the two the bundler evaluates first would read the
+ * other's `const` inside its temporal dead zone. This file therefore imports
+ * nothing new; lib/designOverrides.ts installs ITS `liveMetric` into the slot
+ * at load, and until it does every getter answers with its shipped default —
+ * which is exactly what "no override set" has to mean.
+ */
+export type MetricSource = {
+  /** One metric's override, keyed `<group>.<key>`; undefined at its default. */
+  read: (key: string) => number | undefined;
+  /** Monotonic, bumped on every metric write — what the style caches key on. */
+  generation: () => number;
+};
+
+let metricSource: MetricSource | null = null;
+
+/** Install the live override store. lib/designOverrides.ts is the one caller;
+ *  `null` uninstalls it, which is what an executed fence does between cases. */
+export function setMetricSource(source: MetricSource | null): void {
+  metricSource = source;
+}
+
+/** What a live token getter resolves to, or undefined when untouched. This is
+ *  lib/designOverrides.ts's `liveMetric` once that module has loaded. */
+export function liveMetric(key: string): number | undefined {
+  return metricSource ? metricSource.read(key) : undefined;
+}
+
+/** 0 until the first metric is written — the identity generation. */
+export function metricGeneration(): number {
+  return metricSource ? metricSource.generation() : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Spacing (§I: 4-base — 4/8/12/16/20/24/32)
 // ---------------------------------------------------------------------------
 

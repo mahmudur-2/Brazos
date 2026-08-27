@@ -1,5 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react';
-import { materials, type MaterialName, type MaterialSpec } from '../ui/tokens';
+import { materials, setMetricSource, type MaterialName, type MaterialSpec } from '../ui/tokens';
 
 /**
  * RUN G1 (C2), GENERALISED BY RUN S2 (C1) — THE LIVE THEME OVERRIDE LAYER.
@@ -75,6 +75,17 @@ export type DesignOverrides = {
   values?: Record<string, StudioValue>;
   /** S2 (C1): per-theme colour-token overrides, keys `app.*` / `emerald.*`. */
   palette?: Partial<Record<PaletteThemeKey, Record<string, string>>>;
+  /**
+   * T1 (C1): THE METRIC BAG — the live half of ui/tokens.ts's `spacing`,
+   * `radius`, `controls` and the three dialled `layout` keys, addressed
+   * `<group>.<key>` exactly as those getters spell it. It is a bag of its own
+   * rather than a corner of `values` for one reason: a metric write is the
+   * only kind that has to invalidate every cached stylesheet in the app, and
+   * keeping it separate is what lets `metricsGeneration()` bump on metric
+   * writes ALONE — a blur or colour dial leaves all 102 `themedStyles` caches
+   * standing.
+   */
+  metrics?: Record<string, number>;
 };
 
 export const EMPTY_DESIGN_OVERRIDES: DesignOverrides = { materials: {} };
@@ -91,6 +102,11 @@ type StoreState = {
 
 let state: StoreState = { overrides: EMPTY_DESIGN_OVERRIDES, studioOpen: false };
 const listeners = new Set<() => void>();
+
+/** T1 (C1) — the metric generation. 0 means "nothing has ever been dialled",
+ *  which is the state every style cache built before this layer existed was
+ *  implicitly keyed on. Bumped only in `setDesignOverrides` above. */
+let metricsGen = 0;
 
 /** The palette read point's slice — cached so a non-palette dial keeps its
  *  identity and useThemeColors' subscribers do not repaint. */
@@ -140,6 +156,12 @@ export function setDesignOverrides(next: DesignOverrides): void {
   const previous = state.overrides;
   if (next === previous) return;
   state = { ...state, overrides: next };
+  // T1 (C1) — THE GENERATION BUMPS HERE, not in the metric writer, for the
+  // same reason the undo listener hooks in here: this is the ONE funnel every
+  // override change passes through, so a preset load, a pasted import, a
+  // category reset and an undo all invalidate the style caches by
+  // construction rather than by each remembering to.
+  if (next.metrics !== previous.metrics) metricsGen += 1;
   changeListener?.(previous);
   const nextSlice = computePaletteSlice(next);
   if (
@@ -187,6 +209,134 @@ export function setOverrideValue(key: string, value: StudioValue | undefined): v
   }
   if (current && current[key] === value) return;
   setDesignOverrides({ ...state.overrides, values: { ...current, [key]: value } });
+}
+
+// ---------------------------------------------------------------------------
+// The live metrics (T1, C1)
+// ---------------------------------------------------------------------------
+
+/**
+ * One live metric's override, or undefined at its default.
+ *
+ * DELIBERATELY NOT A HOOK. ui/tokens.ts's getters call this from inside
+ * `themedStyles` / `metricStyles` factories — which run while a stylesheet is
+ * being built, not during render — so it has to be a plain read. What makes
+ * the result reach the screen is `metricsGeneration()` below: the caches key
+ * on it, and `useMetricsGeneration()` is what re-renders the wearers.
+ */
+export function liveMetric(key: string): number | undefined {
+  const value = state.overrides.metrics?.[key];
+  return typeof value === 'number' ? value : undefined;
+}
+
+/** The generation the style caches key on — see `setDesignOverrides`. */
+export function metricsGeneration(): number {
+  return metricsGen;
+}
+
+/** Set (or, with undefined, clear) one live metric. The bag is pruned when
+ *  its last key clears, so "no overrides" stays exactly one shape — the
+ *  identity the G1 fence asserts. */
+export function setMetricOverride(key: string, value: number | undefined): void {
+  const current = state.overrides.metrics;
+  if (value === undefined) {
+    if (!current || !(key in current)) return;
+    const next = { ...current };
+    delete next[key];
+    const { metrics: _dropped, ...rest } = state.overrides;
+    setDesignOverrides(Object.keys(next).length ? { ...rest, metrics: next } : rest);
+    return;
+  }
+  if (current && current[key] === value) return;
+  setDesignOverrides({ ...state.overrides, metrics: { ...current, [key]: value } });
+}
+
+// The install. ui/tokens.ts holds the slot and imports nothing to fill it —
+// see the MetricSource docblock there for why this direction and not the
+// other one.
+setMetricSource({ read: liveMetric, generation: metricsGeneration });
+
+// ---------------------------------------------------------------------------
+// Dial inheritance (T1, C1 — the mechanism ui/designStudioSchema.ts declares)
+// ---------------------------------------------------------------------------
+
+/**
+ * How deep a chain may go before the walk gives up. A cap and a visited set
+ * are two answers to two different malformations: the set catches an actual
+ * ring (a → b → a), the cap catches a chain that is merely absurd, and a
+ * registry typo can produce either.
+ */
+export const DIAL_INHERITANCE_DEPTH_CAP = 8;
+
+/**
+ * Child key → parent key, registered by ui/designStudioSchema.ts at load from
+ * the registry's `inheritsFrom` declarations.
+ *
+ * It lives HERE, as data, rather than being walked out of the registry
+ * directly, because the read hooks below have to resolve a chain and the
+ * registry imports this module — reaching the other way would be a cycle.
+ * The schema module stays the one place inheritance is DECLARED; this is only
+ * where it is stored.
+ */
+let dialParents: Readonly<Record<string, string>> = {};
+
+export function setDialInheritance(map: Readonly<Record<string, string>>): void {
+  dialParents = map;
+}
+
+export function getDialParent(key: string): string | undefined {
+  return dialParents[key];
+}
+
+/** One key's own override, whichever bag holds it. */
+function ownOverride(key: string): StudioValue | undefined {
+  return state.overrides.values?.[key] ?? state.overrides.metrics?.[key];
+}
+
+/**
+ * Walk key → parent → … and return the first override actually set.
+ * Undefined means the whole chain is untouched, and the caller falls back to
+ * its own token default — so an inheriting dial reads as its parent the
+ * moment the parent moves, and as itself until then.
+ */
+export function resolveInheritedOverride(key: string): StudioValue | undefined {
+  const seen = new Set<string>();
+  let current: string | undefined = key;
+  for (let depth = 0; current !== undefined && depth < DIAL_INHERITANCE_DEPTH_CAP; depth += 1) {
+    if (seen.has(current)) return undefined;
+    seen.add(current);
+    const own = ownOverride(current);
+    if (own !== undefined) return own;
+    current = dialParents[current];
+  }
+  return undefined;
+}
+
+/** One dial, live, inheritance resolved — re-renders when THAT chain moves. */
+export function useDialValue(key: string): StudioValue | undefined {
+  return useSyncExternalStore(
+    subscribe,
+    () => resolveInheritedOverride(key),
+    () => resolveInheritedOverride(key),
+  );
+}
+
+/** Typed numeric read of one dial, inheritance resolved. */
+export function useDialNumber(key: string): number | undefined {
+  const value = useDialValue(key);
+  return typeof value === 'number' ? value : undefined;
+}
+
+/** Typed string read of one dial, inheritance resolved. */
+export function useDialString(key: string): string | undefined {
+  const value = useDialValue(key);
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** The metric generation, live — what makes a themed component repaint when
+ *  a spacing or radius dial moves (hooks/useThemeColors.ts subscribes). */
+export function useMetricsGeneration(): number {
+  return useSyncExternalStore(subscribe, metricsGeneration, metricsGeneration);
 }
 
 /** Read one palette-token override (`app.*` / `emerald.*`) for one theme. */

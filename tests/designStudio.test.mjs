@@ -59,7 +59,9 @@ const overridesModule = (async () => {
     )
     .replace(
       /import \{[^}]*\} from '\.\.\/ui\/tokens';/,
-      'const { materials } = globalThis.__S2_TOKENS__;',
+      // T1 (C1): the store installs its live-metric reader into ui/tokens.ts's
+      // slot at load, so the executed module needs that binding too.
+      'const { materials, setMetricSource } = globalThis.__S2_TOKENS__;',
     );
   assert.doesNotMatch(
     stubbed,
@@ -80,7 +82,9 @@ const schemaModule = (async () => {
   const stubbed = js
     .replace(
       /import \{[\s\S]*?\} from '\.\.\/lib\/designOverrides';/,
-      'const { STATIC_MATERIALS, getDesignOverrides, patchDesignOverrides, patchMaterialOverride, setOverrideValue, setPaletteTokenOverride } = globalThis.__S2_OVERRIDES__;',
+      // T1 (C1/C5): the registry declares inheritance and writes the metric
+      // bag, so the executed module needs those bindings too.
+      'const { DIAL_INHERITANCE_DEPTH_CAP, STATIC_MATERIALS, getDesignOverrides, patchDesignOverrides, patchMaterialOverride, setDialInheritance, setMetricOverride, setOverrideValue, setPaletteTokenOverride } = globalThis.__S2_OVERRIDES__;',
     )
     .replace(
       /import \{[\s\S]*?\} from '\.\/tokens';/,
@@ -1968,4 +1972,135 @@ test('overrides: the legacy G1 dials keep last word over the banks', async () =>
   } finally {
     o.resetDesignOverrides();
   }
+});
+
+// ---------------------------------------------------------------------------
+// RUN T1 (C1) — the live metrics store and the inheritance mechanism
+// ---------------------------------------------------------------------------
+
+test('T1 metrics: unset reads as undefined, a metric write bumps the generation, nothing else does', async () => {
+  const o = await overridesModule;
+  const tokens = await tokensModule;
+  try {
+    assert.equal(o.liveMetric('spacing.lg'), undefined, 'an unset metric must read as undefined');
+    assert.equal('metrics' in o.getDesignOverrides(), false, 'the bag must not exist until it is used');
+
+    const start = o.metricsGeneration();
+    o.setMetricOverride('spacing.lg', 24);
+    assert.equal(o.liveMetric('spacing.lg'), 24);
+    assert.equal(o.metricsGeneration(), start + 1, 'a metric write bumps the generation');
+
+    o.setMetricOverride('spacing.lg', 24);
+    assert.equal(o.metricsGeneration(), start + 1, 'writing the same value again is not a write');
+
+    // THE POINT OF A SEPARATE BAG: a colour, blur or non-metric layout dial
+    // must not invalidate all 102 themedStyles caches, so it must not touch
+    // this counter.
+    o.setOverrideValue('menu.minWidth', 240);
+    o.patchDesignOverrides({ glowAlpha: 0.4 });
+    o.patchMaterialOverride('sheet', { blur: 30 });
+    o.setPaletteTokenOverride('dark', 'app.text', '#AABBCC');
+    assert.equal(o.metricsGeneration(), start + 1, 'a non-metric dial must leave the generation alone');
+
+    // ui/tokens.ts reads THIS store, through the installed slot — not a copy.
+    assert.equal(tokens.liveMetric('spacing.lg'), 24, 'the token bridge reads this store');
+    assert.equal(tokens.metricGeneration(), o.metricsGeneration());
+    assert.equal(tokens.liveMetric('spacing.nope'), undefined);
+
+    o.setMetricOverride('spacing.lg', undefined);
+    assert.equal(o.liveMetric('spacing.lg'), undefined, 'clearing returns the metric to its default');
+    assert.equal('metrics' in o.getDesignOverrides(), false, 'an emptied bag must dissolve');
+    assert.equal(o.metricsGeneration(), start + 2, 'clearing is a write too');
+  } finally {
+    o.resetDesignOverrides();
+  }
+  // The G1 contract, restated over the new field: empty is exactly one shape.
+  assert.deepEqual(o.getDesignOverrides(), { materials: {} }, 'reset must restore the empty shape');
+  assert.equal(o.liveMetric('spacing.lg'), undefined);
+});
+
+test('T1 inheritance: a chain resolves to its nearest set value; a ring and an absurd chain both terminate', async () => {
+  const o = await overridesModule;
+  const schema = await schemaModule;
+  try {
+    o.setDialInheritance({ child: 'parent', parent: 'grandparent' });
+    assert.equal(o.getDialParent('child'), 'parent');
+    assert.equal(o.resolveInheritedOverride('child'), undefined, 'an untouched chain is untouched');
+
+    o.setOverrideValue('grandparent', 7);
+    assert.equal(o.resolveInheritedOverride('child'), 7, 'a child follows a distant ancestor');
+    assert.equal(o.resolveInheritedOverride('parent'), 7);
+
+    o.setOverrideValue('parent', 5);
+    assert.equal(o.resolveInheritedOverride('child'), 5, 'the NEAREST set value wins');
+
+    // The walk reads both bags, so a metric dial and a values dial can sit on
+    // the same chain.
+    o.setMetricOverride('child', 3);
+    assert.equal(o.resolveInheritedOverride('child'), 3, 'a touched dial stops inheriting');
+    o.setMetricOverride('child', undefined);
+    o.setOverrideValue('parent', undefined);
+    o.setOverrideValue('grandparent', undefined);
+    assert.equal(o.resolveInheritedOverride('child'), undefined);
+
+    // A RING answers instead of spinning — and still finds a value on the way
+    // round, because the visited set stops the SECOND visit, not the first.
+    o.setDialInheritance({ a: 'b', b: 'c', c: 'a' });
+    assert.equal(o.resolveInheritedOverride('a'), undefined, 'a cycle must terminate');
+    o.setOverrideValue('c', 11);
+    assert.equal(o.resolveInheritedOverride('a'), 11);
+    o.setOverrideValue('c', undefined);
+
+    // A chain longer than the cap stops AT the cap: a value parked beyond it
+    // is deliberately unreachable, and one just inside it is still found.
+    const cap = o.DIAL_INHERITANCE_DEPTH_CAP;
+    assert.ok(Number.isInteger(cap) && cap >= 2, 'the depth cap must be a real bound');
+    const long = {};
+    for (let i = 0; i < cap + 4; i += 1) long['n' + i] = 'n' + (i + 1);
+    o.setDialInheritance(long);
+    o.setOverrideValue('n' + (cap + 2), 99);
+    assert.equal(o.resolveInheritedOverride('n0'), undefined, 'the depth cap holds');
+    o.setOverrideValue('n' + (cap - 1), 42);
+    assert.equal(o.resolveInheritedOverride('n0'), 42, 'everything inside the cap is still reached');
+  } finally {
+    o.resetDesignOverrides();
+    o.setDialInheritance(schema.DIAL_INHERITANCE);
+  }
+});
+
+test('T1 inheritance: every declared parent exists, ships at the same value, and resolves through the registry', async () => {
+  const schema = await schemaModule;
+  const o = await overridesModule;
+  const ctx = await contextFor();
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+
+  for (const entry of schema.STUDIO_REGISTRY) {
+    if (!entry.inheritsFrom) continue;
+    const parent = byKey.get(entry.inheritsFrom);
+    assert.ok(parent, entry.key + ' inherits from ' + entry.inheritsFrom + ', which is not a registered dial');
+    // D11's acceptance test, per chain: an inheriting dial must SHIP at what
+    // its parent ships at, or switching the mechanism on would itself have
+    // moved a rendered value.
+    assert.equal(
+      entry.defaultValue(ctx),
+      parent.defaultValue(ctx),
+      entry.key + ' and its parent ' + parent.key + ' must ship at the same value',
+    );
+    assert.equal(
+      schema.DIAL_INHERITANCE[entry.key],
+      entry.inheritsFrom,
+      'the registered map must mirror the registry',
+    );
+  }
+
+  // Untouched, every entry — inheriting or not — resolves to its own default.
+  for (const entry of schema.STUDIO_REGISTRY) {
+    assert.equal(
+      schema.resolveDialValue(entry.key, ctx),
+      entry.defaultValue(ctx),
+      entry.key + ' must resolve to its shipped default when nothing is set',
+    );
+    assert.equal(schema.inheritedFrom(entry, ctx) === null, !entry.inheritsFrom);
+  }
+  assert.equal(schema.resolveDialValue('no.such.dial', ctx), undefined, 'an unknown key resolves to nothing');
 });

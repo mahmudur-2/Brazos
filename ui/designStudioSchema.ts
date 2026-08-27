@@ -1,8 +1,10 @@
 import {
+  DIAL_INHERITANCE_DEPTH_CAP,
   STATIC_MATERIALS,
   getDesignOverrides,
   patchDesignOverrides,
   patchMaterialOverride,
+  setDialInheritance,
   setOverrideValue,
   setPaletteTokenOverride,
   type DesignOverrides,
@@ -157,9 +159,19 @@ export type StudioEntry = {
   contrastGround?: (ctx: StudioContext) => { label: string; hex: string } | null;
 };
 
-/** An entry's current value: the override when set, else the default. */
+/**
+ * An entry's current value: its own override when set, else — for an entry
+ * that declares a parent — whatever the chain resolves to, else its default.
+ *
+ * With no `inheritsFrom` anywhere in the registry this is the exact
+ * expression it has always been, which is why turning the mechanism on moved
+ * no value (T1, D9/D11).
+ */
 export function currentValueOf(entry: StudioEntry, ctx: StudioContext): StudioValue {
-  return entry.overrideValue(ctx) ?? entry.defaultValue(ctx);
+  const own = entry.overrideValue(ctx);
+  if (own !== undefined) return own;
+  if (entry.inheritsFrom) return resolveDialValue(entry.key, ctx) ?? entry.defaultValue(ctx);
+  return entry.defaultValue(ctx);
 }
 
 export function isModified(entry: StudioEntry, ctx: StudioContext): boolean {
@@ -1651,6 +1663,70 @@ const REGISTRY_BY_KEY: ReadonlyMap<string, StudioEntry> = new Map(
 const REGISTRY_BY_TECHNICAL: ReadonlyMap<string, StudioEntry> = new Map(
   STUDIO_REGISTRY.map((entry) => [entry.technicalKey, entry]),
 );
+
+// ---------------------------------------------------------------------------
+// Inheritance (T1, C1 — `inheritsFrom` stops being a declaration and starts
+// being a mechanism)
+// ---------------------------------------------------------------------------
+
+/**
+ * The declared chains, handed to the store so the live read hooks
+ * (`useDialNumber` / `useDialString`) can walk them without importing this
+ * module — which imports THEM, so the other direction would be a cycle. This
+ * module stays the one place inheritance is declared; lib/designOverrides.ts
+ * is only where it is kept.
+ */
+export const DIAL_INHERITANCE: Readonly<Record<string, string>> = Object.freeze(
+  Object.fromEntries(
+    STUDIO_REGISTRY.filter((entry) => entry.inheritsFrom).map((entry) => [
+      entry.key,
+      entry.inheritsFrom as string,
+    ]),
+  ),
+);
+
+setDialInheritance(DIAL_INHERITANCE);
+
+/**
+ * A key's EFFECTIVE value: its own override if set, else its parent's
+ * effective value, else its own token default.
+ *
+ * Two guards, because a registry typo can make two different malformations:
+ * a visited set catches an actual ring (a → b → a), and the depth cap catches
+ * a chain that is merely absurd. Either way the walk stops and answers with
+ * the starting entry's own default rather than throwing — a broken
+ * declaration must degrade to "no inheritance", never to a blank panel.
+ */
+export function resolveDialValue(key: string, ctx: StudioContext): StudioValue | undefined {
+  const start = REGISTRY_BY_KEY.get(key);
+  if (!start) return undefined;
+  const seen = new Set<string>();
+  let current: StudioEntry | undefined = start;
+  for (let depth = 0; current && depth < DIAL_INHERITANCE_DEPTH_CAP; depth += 1) {
+    if (seen.has(current.key)) break;
+    seen.add(current.key);
+    const own = current.overrideValue(ctx);
+    if (own !== undefined) return own;
+    if (!current.inheritsFrom) return current.defaultValue(ctx);
+    const parent: StudioEntry | undefined = REGISTRY_BY_KEY.get(current.inheritsFrom);
+    if (!parent) return current.defaultValue(ctx);
+    current = parent;
+  }
+  return start.defaultValue(ctx);
+}
+
+/**
+ * The parent an entry is CURRENTLY taking its value from, or null. Null both
+ * when the entry declares no parent and when it has its own override — an
+ * entry that has been touched is no longer inheriting, which is exactly what
+ * the panel's quiet "inherits …" line has to mean, and what its per-token
+ * reset returns it to.
+ */
+export function inheritedFrom(entry: StudioEntry, ctx: StudioContext): StudioEntry | null {
+  if (!entry.inheritsFrom) return null;
+  if (entry.overrideValue(ctx) !== undefined) return null;
+  return REGISTRY_BY_KEY.get(entry.inheritsFrom) ?? null;
+}
 
 /** #RGB, #RRGGBB or #RRGGBBAA, '#' optional, case-insensitive → #UPPER. */
 export function normalizeHex(raw: string): string | null {

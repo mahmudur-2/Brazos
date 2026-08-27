@@ -627,7 +627,9 @@ const designOverridesModule = (async () => {
     )
     .replace(
       /import \{[^}]*\} from '\.\.\/ui\/tokens';/,
-      'const { materials } = globalThis.__DESIGN_TOKENS__;',
+      // T1 (C1): the store installs its live-metric reader into ui/tokens.ts's
+      // slot at load, so the executed module needs that binding too.
+      'const { materials, setMetricSource } = globalThis.__DESIGN_TOKENS__;',
     );
   assert.doesNotMatch(
     stubbed,
