@@ -147,6 +147,18 @@ const SCREENS = [
       { key: 'clientJobDetail.iconCircle.size', drew: 36, parent: null, fallback: '36' },
     ],
   },
+  {
+    subcategory: 'Job Details',
+    file: 'screens/JobDetailScreen.tsx',
+    prefix: 'jobDetail',
+    scale: 'theme',
+    dials: [
+      { key: 'jobDetail.detailSurface.paddingX', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
+      { key: 'jobDetail.detailContent.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'jobDetail.detailSurface.paddingY', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'jobDetail.iconCircle.size', drew: 54, parent: null, fallback: '54' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

@@ -2121,6 +2121,61 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: 36,
       },
     ]),
+    // C8 — screens/JobDetailScreen.tsx. `theme.*` scale. Left undialled: the
+    // hero photo, whose height is computed from the viewport at render rather
+    // than declared; the back control and the photo counter over it, both held
+    // at the 44pt touch floor or sized to their own glyph; and the bid
+    // composer, which is a shared surface with its own dials. Four dials is
+    // what this screen honestly has.
+    ...dialEntries('screens', 'Job Details', [
+      {
+        key: 'jobDetail.detailSurface.paddingX',
+        label: 'Detail gutter',
+        description: 'How far the text under the photo keeps from the left and right edges.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.spacing.xl',
+        defaultValue: THEME_SPACING_DEFAULTS.xl,
+      },
+      {
+        key: 'jobDetail.detailContent.gap',
+        label: 'Section gap',
+        description: 'Between one block of job detail and the next down the page.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'jobDetail.detailSurface.paddingY',
+        label: 'Detail top/bottom padding',
+        description: 'Above and below the detail block, between it and the photo over it.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'jobDetail.iconCircle.size',
+        label: 'Category tile — size',
+        description: 'The square glyph tile beside the job’s category line, width and height together.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 32,
+        max: 80,
+        step: 2,
+        defaultValue: 54,
+      },
+    ]),
   ];
 }
 

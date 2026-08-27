@@ -78,6 +78,7 @@ import { maybePromptForPush } from '../lib/pushNotifications';
 import { formatTimeAgo } from '../lib/time';
 import { useShellGround } from '../lib/shellGround';
 import type { JobDetailRouteParamList } from '../lib/navigation';
+import { useDialNumber } from '../lib/designOverrides';
 import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
 import {
   fonts,
@@ -112,6 +113,14 @@ function payoutEstimateLabel(job: OpenJob): string | null {
 export function JobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C8) — THE WORKER'S VIEW OF A JOB, ITS OWN FOUR. Each falls back to
+  // the value this file drew before the dial existed, spelled here and nowhere
+  // else; the three token-backed ones take the `theme.*` scale this file
+  // imports spacing/radius from.
+  const detailPaddingX = useDialNumber('jobDetail.detailSurface.paddingX') ?? spacing.xl;
+  const detailPaddingY = useDialNumber('jobDetail.detailSurface.paddingY') ?? spacing.lg;
+  const detailGap = useDialNumber('jobDetail.detailContent.gap') ?? spacing.lg;
+  const iconCircleSize = useDialNumber('jobDetail.iconCircle.size') ?? 54;
   // RUN H3 (C3): the same declaration customer Home makes, and for the same
   // reason — this screen's page ground is `homeBackground`, so without it the
   // mode shell paints `background` in the floating pill's margins and a band
@@ -607,12 +616,18 @@ export function JobDetailScreen() {
             <ScreenHeader title="Job details" onBack={goBackOrHome} />
           )}
 
-          <View style={styles.detailContent}>
-            <View style={styles.detailSurface}>
+          <View style={[styles.detailContent, { gap: detailGap }]}>
+            <View
+              style={[
+                styles.detailSurface,
+                { paddingHorizontal: detailPaddingX, paddingVertical: detailPaddingY },
+              ]}
+            >
             <View style={styles.jobHeader}>
               <View
                 style={[
                   styles.iconCircle,
+                  { width: iconCircleSize, height: iconCircleSize },
                   isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
                 ]}
               >
@@ -1086,12 +1101,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '800',
   },
   detailContent: {
-    gap: spacing.lg,
     backgroundColor: colors.surface,
   },
   detailSurface: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
     backgroundColor: colors.surface,
   },
   jobHeader: {
@@ -1101,8 +1113,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     marginBottom: spacing.md,
   },
   iconCircle: {
-    width: 54,
-    height: 54,
     borderRadius: radius.lg,
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
