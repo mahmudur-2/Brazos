@@ -2053,6 +2053,74 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: THEME_SPACING_DEFAULTS.sm,
       },
     ]),
+    // C7 — screens/ClientJobDetailScreen.tsx. `theme.*` scale. Left undialled:
+    // every card below the hero (scope, timing, media and bids all draw the
+    // same radius.xl / mint2 box, so one dial each would be five dials saying
+    // the same thing, and the hero is the one the eye lands on); the status
+    // badge and the offer buttons, which are shared primitives with their own
+    // dials; and the extra bottom clearance, which exists so Submit clears an
+    // open keyboard rather than for looks.
+    ...dialEntries('screens', 'Job & Bids', [
+      {
+        key: 'clientJobDetail.jobHero.radius',
+        label: 'Job hero — corner roundness',
+        description: 'The card at the top carrying the title, the budget and the bid count.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.radius.xl',
+        defaultValue: THEME_RADIUS_DEFAULTS.xl,
+      },
+      {
+        key: 'clientJobDetail.jobHero.padding',
+        label: 'Job hero — inner padding',
+        description: 'The breathing room inside that card, on all four sides.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.spacing.xl',
+        defaultValue: THEME_SPACING_DEFAULTS.xl,
+      },
+      {
+        key: 'clientJobDetail.content.paddingX',
+        label: 'Screen gutter',
+        description: 'How far the whole column keeps from the left and right edges.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'clientJobDetail.content.gap',
+        label: 'Section gap',
+        description: 'Between the hero and each card below it — scope, timing, media, bids.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'clientJobDetail.iconCircle.size',
+        label: 'Category tile — size',
+        description: 'The square glyph tile beside the job’s category line, width and height together.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 24,
+        max: 64,
+        step: 2,
+        defaultValue: 36,
+      },
+    ]),
   ];
 }
 

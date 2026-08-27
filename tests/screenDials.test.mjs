@@ -134,6 +134,19 @@ const SCREENS = [
       { key: 'messages.filterRow.gap', drew: 8, parent: 'theme.spacing.sm', fallback: 'spacing.sm' },
     ],
   },
+  {
+    subcategory: 'Job & Bids',
+    file: 'screens/ClientJobDetailScreen.tsx',
+    prefix: 'clientJobDetail',
+    scale: 'theme',
+    dials: [
+      { key: 'clientJobDetail.jobHero.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'radius.xl' },
+      { key: 'clientJobDetail.jobHero.padding', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
+      { key: 'clientJobDetail.content.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'clientJobDetail.content.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'clientJobDetail.iconCircle.size', drew: 36, parent: null, fallback: '36' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

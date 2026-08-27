@@ -68,6 +68,7 @@ import {
   JOB_CATEGORY_LABELS,
 } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   emeraldColorsFor,
   fonts,
@@ -83,6 +84,15 @@ import { formatTimeAgo } from '../lib/time';
 export function ClientJobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C7) — THE CUSTOMER'S JOB PAGE, ITS OWN FIVE. Each falls back to
+  // the value this file drew before the dial existed, spelled here and nowhere
+  // else; the four token-backed ones take the `theme.*` scale this file
+  // imports spacing/radius from.
+  const jobHeroPadding = useDialNumber('clientJobDetail.jobHero.padding') ?? spacing.xl;
+  const jobHeroRadius = useDialNumber('clientJobDetail.jobHero.radius') ?? radius.xl;
+  const contentPaddingX = useDialNumber('clientJobDetail.content.paddingX') ?? spacing.lg;
+  const contentGap = useDialNumber('clientJobDetail.content.gap') ?? spacing.lg;
+  const iconCircleSize = useDialNumber('clientJobDetail.iconCircle.size') ?? 36;
   // emerald(3): the floating pill's real footprint. This is the "Job & bids"
   // surface the device pass caught scrolling under it.
   const navClearance = useFloatingNavClearance();
@@ -412,7 +422,10 @@ export function ClientJobDetailScreen() {
       >
         <ScrollView
           ref={scrollRef}
-          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingHorizontal: contentPaddingX, gap: contentGap, paddingBottom: navClearance },
+          ]}
           keyboardShouldPersistTaps="handled"
           // Swiping the list down puts the keyboard away, so it never has to
           // be dismissed by hunting for empty space to tap.
@@ -430,6 +443,7 @@ export function ClientJobDetailScreen() {
         <View
           style={[
             styles.jobHero,
+            { padding: jobHeroPadding, borderRadius: jobHeroRadius },
             isDark && styles.jobHeroDark,
             !canAccept && styles.jobHeroActive,
           ]}
@@ -451,6 +465,7 @@ export function ClientJobDetailScreen() {
             <View
               style={[
                 styles.iconCircle,
+                { width: iconCircleSize, height: iconCircleSize },
                 isDark ? styles.iconCircleDark : { backgroundColor: accent.bg },
               ]}
             >
@@ -1172,18 +1187,14 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     flex: 1,
   },
   content: {
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     // Extra clearance below the last card so that, once the review form has
     // been scrolled to the end with the keyboard open, Submit sits clear of
     // the keyboard's top edge rather than flush against it.
     paddingBottom: spacing.xxl,
-    gap: spacing.lg,
   },
   jobHero: {
-    padding: spacing.xl,
     gap: spacing.lg,
-    borderRadius: radius.xl,
     backgroundColor: colors.mint,
     borderWidth: 1,
     borderColor: colors.mint2,
@@ -1229,8 +1240,6 @@ const stylesFor = themedStyles((colors: ColorPalette) => {
     color: colors.emerald,
   },
   iconCircle: {
-    width: 36,
-    height: 36,
     borderRadius: radius.md,
     // backgroundColor set per-category inline — see JOB_CATEGORY_COLORS.
     alignItems: 'center',
