@@ -78,7 +78,9 @@ const themeModule = (async () => {
       // destructure here has to name everything that import names, or the
       // executed module throws a ReferenceError at first use rather than
       // failing an assertion — so the stub is widened, never the assertions.
-      'const { brand, dark: emeraldDark, constantAccents, shadows: tokenShadows, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      // RUN T1 (C2) added `metricGeneration` (themedStyles keys on it) and
+      // `metricGroup` (this file's own two scales are live too).
+      'const { brand, dark: emeraldDark, constantAccents, metricGeneration, metricGroup, shadows: tokenShadows, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');
@@ -679,6 +681,200 @@ test('G1 overrides: a dial moves only its own value, and reset restores the stat
   }
   assert.equal(o.resolveMaterials(o.getDesignOverrides()), materials, 'reset must restore identity');
   assert.equal(o.applyPaletteOverrides(darkColors, o.getDesignOverrides(), true), darkColors);
+});
+
+// ---------------------------------------------------------------------------
+// RUN T1 (C2) — the live token reads and the generation-keyed style caches
+// ---------------------------------------------------------------------------
+
+/** Every metric key that is LIVE, read from the executed token surfaces so
+ *  this can never drift from what the getters actually address. */
+const liveMetricKeys = (async () => {
+  const tokens = await tokensModule;
+  const theme = await themeModule;
+  return {
+    spacing: new Set([
+      ...Object.keys(tokens.SPACING_DEFAULTS),
+      ...Object.keys(theme.THEME_SPACING_DEFAULTS),
+    ]),
+    radius: new Set([
+      ...Object.keys(tokens.RADIUS_DEFAULTS),
+      ...Object.keys(theme.THEME_RADIUS_DEFAULTS),
+    ]),
+    emeraldRadius: new Set(Object.keys(tokens.RADIUS_DEFAULTS)),
+    controls: new Set(Object.keys(tokens.CONTROL_DEFAULTS)),
+    layout: new Set(Object.keys(tokens.LAYOUT_METRIC_DEFAULTS)),
+  };
+})();
+
+test('T1 tokens: a live metric resolves at READ time, and the fixed members are still fixed', async () => {
+  const tokens = await tokensModule;
+  const theme = await themeModule;
+  const o = await designOverridesModule;
+
+  // Untouched, every group answers with the table it is built from.
+  for (const [key, value] of Object.entries(tokens.SPACING_DEFAULTS)) {
+    assert.equal(tokens.spacing[key], value, `spacing.${key} must ship at ${value}`);
+  }
+  for (const [key, value] of Object.entries(tokens.RADIUS_DEFAULTS)) {
+    assert.equal(tokens.radius[key], value);
+  }
+  for (const [key, value] of Object.entries(tokens.CONTROL_DEFAULTS)) {
+    assert.equal(tokens.controls[key], value);
+  }
+  for (const [key, value] of Object.entries(tokens.LAYOUT_METRIC_DEFAULTS)) {
+    assert.equal(tokens.layout[key], value);
+  }
+  for (const [key, value] of Object.entries(theme.THEME_SPACING_DEFAULTS)) {
+    assert.equal(theme.spacing[key], value);
+  }
+  for (const [key, value] of Object.entries(theme.THEME_RADIUS_DEFAULTS)) {
+    assert.equal(theme.radius[key], value);
+  }
+
+  // The two scales are deliberately DIFFERENT and neither aliases the other:
+  // pointing one at the other would have moved pixels in 92 files.
+  assert.notEqual(tokens.spacing.xl, theme.spacing.xl, 'the Emerald and app scales differ at xl');
+  assert.equal(tokens.spacing.xl, 20);
+  assert.equal(theme.spacing.xl, 24);
+
+  try {
+    o.setMetricOverride('spacing.lg', 30);
+    o.setMetricOverride('theme.radius.md', 4);
+    o.setMetricOverride('controls.buttonHeight', 52);
+    o.setMetricOverride('layout.cardGap', 18);
+    assert.equal(tokens.spacing.lg, 30, 'the getter resolves at read time, not at import');
+    assert.equal(theme.radius.md, 4);
+    assert.equal(tokens.controls.buttonHeight, 52);
+    assert.equal(tokens.layout.cardGap, 18);
+    assert.equal(tokens.spacing.md, 12, 'an untouched key keeps its shipped value');
+    assert.equal(theme.spacing.lg, 16, 'and the two scales are addressed separately');
+
+    // FIXED MEMBERS ARE NOT DIALS. A capsule is a shape and the touch floor is
+    // non-negotiable, so neither answers to the bag at all.
+    o.setMetricOverride('radius.pill', 12);
+    o.setMetricOverride('controls.minTouchTarget', 10);
+    o.setMetricOverride('theme.radius.pill', 12);
+    o.setMetricOverride('layout.maxContentWidth', 100);
+    assert.equal(tokens.radius.pill, 999, 'pill is a shape, not a size');
+    assert.equal(theme.radius.pill, 999);
+    assert.equal(tokens.controls.minTouchTarget, 44, 'the touch floor cannot be dialled');
+    assert.equal(tokens.layout.maxContentWidth, 420, 'derived nav/layout geometry is not a dial');
+  } finally {
+    o.resetDesignOverrides();
+  }
+  assert.equal(tokens.spacing.lg, 16, 'reset returns every getter to its shipped default');
+  assert.equal(theme.radius.md, 12);
+});
+
+test('T1 cache: a stylesheet is the SAME OBJECT until a metric moves, and a fresh one after', async () => {
+  const tokens = await tokensModule;
+  const theme = await themeModule;
+  const o = await designOverridesModule;
+
+  const palette = { surface: '#0A1813' };
+  let builds = 0;
+  const stylesFor = theme.themedStyles((colors) => {
+    builds += 1;
+    return { card: { backgroundColor: colors.surface, padding: tokens.spacing.lg } };
+  });
+
+  const first = stylesFor(palette);
+  assert.equal(stylesFor(palette), first, 'identity, not deep equality — the pre-T1 contract');
+  assert.equal(builds, 1, 'and the factory ran exactly once');
+  assert.equal(first.card.padding, 16, 'carrying the shipped default');
+
+  try {
+    o.setMetricOverride('spacing.lg', 28);
+    const moved = stylesFor(palette);
+    assert.notEqual(moved, first, 'a metric write must produce a fresh stylesheet');
+    assert.equal(moved.card.padding, 28, 'carrying the new number');
+    assert.equal(moved.card.backgroundColor, '#0A1813', 'and the same colour');
+    assert.equal(builds, 2, 'exactly one rebuild');
+    assert.equal(stylesFor(palette), moved, 'which is then cached again');
+    assert.equal(builds, 2);
+  } finally {
+    o.resetDesignOverrides();
+  }
+  assert.equal(stylesFor(palette).card.padding, 16, 'reset returns the shipped default');
+
+  // A NON-metric dial must throw away nothing — this is what keeps a colour or
+  // blur dial from rebuilding all 102 cached sheets.
+  const settled = stylesFor(palette);
+  const settledBuilds = builds;
+  try {
+    o.patchDesignOverrides({ glowAlpha: 0.4 });
+    o.patchMaterialOverride('sheet', { blur: 30 });
+    assert.equal(stylesFor(palette), settled, 'a non-metric dial keeps every cached sheet');
+    assert.equal(builds, settledBuilds);
+  } finally {
+    o.resetDesignOverrides();
+  }
+
+  // A second palette is still cached per palette, exactly as before.
+  const other = { surface: '#FFFFFF' };
+  assert.notEqual(stylesFor(other), stylesFor(palette));
+  assert.equal(stylesFor(other), stylesFor(other));
+});
+
+test('[static] T1 (D7): no live metric is captured into a module-scope constant', async () => {
+  const keys = await liveMetricKeys;
+  const files = await filesUnder(['components', 'ui', 'screens', 'hooks', 'lib', 'navigation', 'modes']);
+  // The two definition files build the groups; they name the DEFAULT tables,
+  // never the getters, so they cannot capture anything.
+  const skip = new Set(['ui/tokens.ts', 'lib/theme.ts']);
+  // A declaration that defers its read is fine, whatever shape the deferral
+  // takes: an arrow, a function, or a lazily-built stylesheet.
+  const DEFERRED = /=>|\bfunction\b|StyleSheet\.create|metricStyles|themedStyles/;
+  const offenders = [];
+
+  for (const file of files) {
+    if (skip.has(file)) continue;
+    const source = stripComments(await read(file));
+    const lines = source.split('\n');
+    for (let i = 0; i < lines.length; i += 1) {
+      if (!/^(export\s+)?(const|let|var)\s/.test(lines[i])) continue;
+      // Take the whole declaration: from this line until the running bracket
+      // depth comes back to zero.
+      let depth = 0;
+      let text = '';
+      for (let j = i; j < lines.length; j += 1) {
+        text += lines[j] + '\n';
+        for (const ch of lines[j]) {
+          if (ch === '{' || ch === '(' || ch === '[') depth += 1;
+          else if (ch === '}' || ch === ')' || ch === ']') depth -= 1;
+        }
+        if (depth <= 0) break;
+      }
+      if (DEFERRED.test(text)) continue;
+      for (const [group, names] of Object.entries(keys)) {
+        const re = new RegExp(`\\b${group}\\.(\\w+)`, 'g');
+        let m;
+        while ((m = re.exec(text)) !== null) {
+          if (names.has(m[1])) offenders.push(`${file}:${i + 1} captures ${group}.${m[1]}`);
+        }
+      }
+    }
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'a live metric read into a module-scope constant is frozen at import — read it at use time instead',
+  );
+});
+
+test('[static] T1 (D7): the centred-header inset reads its spacing at use time', async () => {
+  const source = await read('components/ScreenHeader.tsx');
+  // The exact shape D7 names: `const X = spacing.xxl * 3` froze the answer at
+  // import. It is a function now, called where it is used.
+  assert.doesNotMatch(source, /const\s+CENTERED_TITLE_INSET\s*=/, 'the frozen capture must be gone');
+  assert.match(source, /const centeredTitleInset = \(\) => spacing\.xxl \* 3;/);
+  assert.equal(
+    (source.match(/centeredTitleInset\(\)/g) ?? []).length,
+    2,
+    'both edges must call it, not read a constant',
+  );
 });
 
 // ---------------------------------------------------------------------------

@@ -3,6 +3,8 @@ import {
   brand,
   dark as emeraldDark,
   constantAccents,
+  metricGeneration,
+  metricGroup,
   shadows as tokenShadows,
   withAlpha as alpha,
 } from '../ui/tokens';
@@ -225,7 +227,25 @@ export const darkColors: ColorPalette = {
   mediaChrome: '#0F1F17',
 } as const;
 
-export const spacing = {
+/**
+ * RUN T1 (C2) — THE SCALE THE SCREENS ACTUALLY READ, AND WHY IT IS LIVE TOO.
+ *
+ * D1 names ui/tokens.ts's `spacing` and `radius`, and those are live. But this
+ * file exports its OWN two scales — a different, older set of numbers
+ * (`xl` is 24 here and 20 there; `radius.sm` is 8 here and 13 there) — and a
+ * census of the tracked tree at the start of this run found 92 files importing
+ * `spacing`/`radius` from HERE against 17 from ui/tokens.ts. Turning only the
+ * Emerald scale live would have shipped a spacing dial that moves a sixth of
+ * the app while the operator watches the other five sixths sit still, so both
+ * surfaces resolve through the same slot, under their own keys
+ * (`theme.spacing.*` / `theme.radius.*`) and their own shipped defaults.
+ *
+ * The two scales are NOT merged and NOT aliased: their values genuinely
+ * differ, and pointing one at the other would have moved rendered pixels in
+ * every one of those 92 files. Merging them is a screen-by-screen migration,
+ * which is not this run.
+ */
+export const THEME_SPACING_DEFAULTS = {
   xs: 4,
   sm: 8,
   md: 12,
@@ -234,13 +254,19 @@ export const spacing = {
   xxl: 32,
 } as const;
 
-export const radius = {
+export const spacing = metricGroup('theme.spacing', THEME_SPACING_DEFAULTS, {});
+
+export const THEME_RADIUS_DEFAULTS = {
   sm: 8,
   md: 12,
   lg: 16,
   xl: 24,
-  pill: 999,
 } as const;
+
+export const radius = metricGroup('theme.radius', THEME_RADIUS_DEFAULTS, {
+  /** A capsule, not a size — see ui/tokens.ts's `radius.pill`. No dial. */
+  pill: 999,
+} as const);
 
 /**
  * The heading voice used for Emerald headlines (Home's "Take a task off your
@@ -535,12 +561,28 @@ export function typographyFor(palette: ColorPalette): Record<keyof typeof typogr
  * Nothing runs at import time; the factory runs once per palette (WeakMap
  * keyed on the palette object) and the result is shared by every instance,
  * so this costs what the module-scope StyleSheet it replaces cost.
+ *
+ * RUN T1 (C2) — GENERATION FIRST, PALETTE SECOND. The palette was the only
+ * key, which is precisely why colour was live and every METRIC a factory read
+ * was frozen at whatever the constant held: `spacing.lg` moving could not
+ * invalidate a cache keyed on an object that had not changed. The cache now
+ * keys on the metric generation first, so a spacing or radius dial rebuilds
+ * the sheet while an untouched generation still returns the SAME OBJECT it
+ * returned before this run — identity, not deep equality, and 102 consumers
+ * that were not edited to get it. The signature and the `stylesFor(palette)`
+ * call shape are deliberately unchanged.
  */
 export function themedStyles<P extends object, T>(
   factory: (colors: P) => T,
 ): (palette: P) => T {
-  const cache = new WeakMap<P, T>();
+  let generation = metricGeneration();
+  let cache = new WeakMap<P, T>();
   return (palette) => {
+    const current = metricGeneration();
+    if (current !== generation) {
+      generation = current;
+      cache = new WeakMap<P, T>();
+    }
     const cached = cache.get(palette);
     if (cached) return cached;
     const built = factory(palette);

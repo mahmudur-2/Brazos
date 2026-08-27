@@ -202,11 +202,47 @@ export function metricGeneration(): number {
   return metricSource ? metricSource.generation() : 0;
 }
 
+/**
+ * A token group whose named metrics are LIVE: every property is a getter that
+ * resolves through the slot above on each read and falls back to the shipped
+ * literal beside it. That is the whole reach mechanism — a consumer keeps
+ * writing `spacing.lg` and `radius.pill` and is never edited, because the
+ * READ moved rather than the call site.
+ *
+ * `fixed` members are plain values, not getters, and carry no dial: a group
+ * member that is a SHAPE (`radius.pill`) or a FLOOR (`controls.minTouchTarget`)
+ * is not a size someone should be able to turn, and `layout`'s remaining keys
+ * are derived nav geometry rather than design quantities. Their literal types
+ * survive, which is why `radius.pill` is still `999` and not `number`.
+ */
+export function metricGroup<L extends Record<string, number>, F extends Record<string, number>>(
+  group: string,
+  live: L,
+  fixed: F,
+): Readonly<Record<keyof L, number>> & Readonly<F> {
+  const out: Record<string, number> = {};
+  for (const key of Object.keys(live)) {
+    Object.defineProperty(out, key, {
+      enumerable: true,
+      get: () => liveMetric(`${group}.${key}`) ?? live[key],
+    });
+  }
+  for (const key of Object.keys(fixed)) {
+    Object.defineProperty(out, key, { enumerable: true, value: fixed[key] });
+  }
+  return out as Readonly<Record<keyof L, number>> & Readonly<F>;
+}
+
 // ---------------------------------------------------------------------------
 // Spacing (§I: 4-base — 4/8/12/16/20/24/32)
 // ---------------------------------------------------------------------------
 
-export const spacing = {
+/**
+ * The shipped scale, spelled ONCE. `spacing` below resolves through it, and
+ * the studio registry reads its defaults from it — so "reset" always lands on
+ * this table and a dialled value can never be mistaken for the shipped one.
+ */
+export const SPACING_DEFAULTS = {
   xs: 4,
   sm: 8,
   md: 12,
@@ -215,6 +251,8 @@ export const spacing = {
   xxl: 24,
   xxxl: 32,
 } as const;
+
+export const spacing = metricGroup('spacing', SPACING_DEFAULTS, {});
 
 /**
  * The bottom nav bar's geometry, declared ONCE (emerald D3/emerald(3)).
@@ -238,11 +276,18 @@ export const spacing = {
 const FLOATING_NAV_HEIGHT = 88;
 const FLOATING_NAV_GAP = 12;
 
-/** §I: "screen gutter 16; card padding 14; card gap 10". */
-export const layout = {
+/**
+ * §I: "screen gutter 16; card padding 14; card gap 10" — the three LIVE ones.
+ * Everything else `layout` carries is derived nav geometry, not a design
+ * quantity, so it stays a plain value below (T1, D1).
+ */
+export const LAYOUT_METRIC_DEFAULTS = {
   screenGutter: 16,
   cardPadding: 14,
   cardGap: 10,
+} as const;
+
+export const layout = metricGroup('layout', LAYOUT_METRIC_DEFAULTS, {
   /** The bar's CONTENT height — the device's bottom inset rides inside the
    *  bar as padding on top of this (PJ1 C9). ui/primitives/BottomNav.tsx's
    *  TAB_BAR_CONTENT_HEIGHT is this value. The name keeps its history; the
@@ -279,21 +324,28 @@ export const layout = {
    * Mirrors lib/authTheme.ts's existing maxContentWidth for the same reason.
    */
   maxContentWidth: 420,
-} as const;
+} as const);
 
 // ---------------------------------------------------------------------------
 // Radii (§I: xs 10 · sm 13 · md 14 · lg 17 · xl 20 · xxl 22 · pill 999)
 // ---------------------------------------------------------------------------
 
-export const radius = {
+/** The six SIZES, live and dialled. */
+export const RADIUS_DEFAULTS = {
   xs: 10,
   sm: 13,
   md: 14,
   lg: 17,
   xl: 20,
   xxl: 22,
-  pill: 999,
 } as const;
+
+export const radius = metricGroup('radius', RADIUS_DEFAULTS, {
+  /** Not a size and therefore not a dial: 999 is how a rounded rectangle is
+   *  spelled as a CAPSULE in React Native. Turning it down would not make a
+   *  smaller pill, it would make a rounded rectangle — a different shape. */
+  pill: 999,
+} as const);
 
 // ---------------------------------------------------------------------------
 // Typography (§I's scale)
@@ -619,7 +671,7 @@ export const navBar = {
  * rather than a number someone later "corrects" back into an accessibility
  * regression.
  */
-export const controls = {
+export const CONTROL_DEFAULTS = {
   /** §I reference: 38. Raised for the 44pt touch floor. */
   buttonHeight: 48,
   /** §I reference: 28. Raised to exactly the 44pt floor. */
@@ -628,9 +680,14 @@ export const controls = {
   fieldHeight: 48,
   /** Square icon-only controls. */
   iconButton: 44,
-  /** The minimum any tappable thing may be. CLAUDE.md, non-negotiable. */
-  minTouchTarget: 44,
 } as const;
+
+export const controls = metricGroup('controls', CONTROL_DEFAULTS, {
+  /** The minimum any tappable thing may be. CLAUDE.md, non-negotiable — so it
+   *  is a plain value with no dial, and the four heights above are floored at
+   *  it by their own schema ranges rather than by hoping nobody turns this. */
+  minTouchTarget: 44,
+} as const);
 
 /**
  * §I: "variants primary(forest/white), secondary(mint/forest), ghost,

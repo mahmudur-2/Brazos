@@ -629,7 +629,9 @@ test('[static+executed] the bubble cap resolves against the row, not against the
   // the fill instead.
   const imageWidth = Number(bubble.match(/image: \{\s*width: (\d+),/)[1]);
   assert.match(bubble, /paddingHorizontal: spacing\.md/, 'the bubble pads the photo with spacing.md');
-  const spacingBlock = read('ui/tokens.ts').match(/export const spacing = \{([^}]*)\}/)[1];
+  // RUN T1 (C2): `spacing` is a live getter group now; the shipped numbers
+  // moved one line up into the table it resolves through. Same values.
+  const spacingBlock = read('ui/tokens.ts').match(/export const SPACING_DEFAULTS = \{([^}]*)\}/)[1];
   const md = Number(spacingBlock.match(/md: (\d+),/)[1]);
   const measured = imageWidth + 2 * md;
   const paintedByASelfReferentialCap = 0.82 * measured;

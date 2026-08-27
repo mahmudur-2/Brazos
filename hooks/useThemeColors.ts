@@ -1,6 +1,10 @@
 import { useMemo } from 'react';
 import { useTheme, type ThemeColors } from '../lib/ThemeContext';
-import { applyPaletteOverrides, usePaletteOverrides } from '../lib/designOverrides';
+import {
+  applyPaletteOverrides,
+  useMetricsGeneration,
+  usePaletteOverrides,
+} from '../lib/designOverrides';
 
 /**
  * The single reactive palette read. Backed by lib/ThemeContext.tsx's
@@ -23,12 +27,19 @@ import { applyPaletteOverrides, usePaletteOverrides } from '../lib/designOverrid
 export function useThemeColors(): ThemeColors {
   const theme = useTheme();
   // RUN S2 (C1): the PALETTE SLICE, not the whole override set — a blur or
-  // spacing dial keeps this slice's identity, so it repaints nothing here.
+  // menu dial keeps this slice's identity, so it repaints nothing here.
   const overrides = usePaletteOverrides();
+  // RUN T1 (C2/D5) — AND THE METRIC GENERATION, which is how a spacing or
+  // radius dial reaches 102 files nobody edited. Every themed component calls
+  // this hook, so subscribing here re-renders all of them on a metric write;
+  // their `stylesFor(palette)` then sees the new generation and rebuilds. The
+  // palette object itself is untouched by a metric, so a theme change and a
+  // metric change stay two independent reasons to repaint.
+  const generation = useMetricsGeneration();
   return useMemo(() => {
     const palette = applyPaletteOverrides(theme.palette, overrides, theme.isDark, 'app');
     const emerald = applyPaletteOverrides(theme.emerald, overrides, theme.isDark, 'emerald');
     if (palette === theme.palette && emerald === theme.emerald) return theme;
     return { ...theme, palette, emerald };
-  }, [theme, overrides]);
+  }, [theme, overrides, generation]);
 }

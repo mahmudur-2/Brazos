@@ -56,8 +56,13 @@ type ScreenHeaderProps = {
  * The title truncates into it rather than sliding off centre, which is the
  * whole point of centring it — a title that recentres itself around a longer
  * link is exactly the wandering this avoids.
+ *
+ * RUN T1 (D7) — A FUNCTION, NOT A CONST. `spacing.xxl` is a live getter now,
+ * and `const X = spacing.xxl * 3` READS IT ONCE at import and freezes the
+ * answer, which is precisely the shape that would defeat the spacing dial in
+ * silence. Reading it at use time is the fix; the arithmetic is unchanged.
  */
-const CENTERED_TITLE_INSET = spacing.xxl * 3;
+const centeredTitleInset = () => spacing.xxl * 3;
 
 export function ScreenHeader({
   title,
@@ -262,8 +267,8 @@ const styles = StyleSheet.create({
   },
   centerTitles: {
     position: 'absolute',
-    left: CENTERED_TITLE_INSET,
-    right: CENTERED_TITLE_INSET,
+    left: centeredTitleInset(),
+    right: centeredTitleInset(),
     top: 0,
     bottom: 0,
     alignItems: 'center',
