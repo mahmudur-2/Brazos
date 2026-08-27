@@ -109,6 +109,19 @@ const SCREENS = [
       { key: 'myJobs.headerMark.size', drew: 48, parent: null, fallback: '48' },
     ],
   },
+  {
+    subcategory: 'Profile',
+    file: 'screens/ProfileScreen.tsx',
+    prefix: 'profile',
+    scale: 'theme',
+    dials: [
+      { key: 'profile.settingsRow.height', drew: 64, parent: null, fallback: '64' },
+      { key: 'profile.hubCard.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'radius.xl' },
+      { key: 'profile.hubCard.padding', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'profile.settingsGlyph.size', drew: 44, parent: null, fallback: '44' },
+      { key: 'profile.content.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

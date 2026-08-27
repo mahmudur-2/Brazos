@@ -48,6 +48,7 @@ import type {
   ProfileStackNavigation,
   ProfileStackParamList,
 } from '../lib/navigation';
+import { useDialNumber } from '../lib/designOverrides';
 import {
   emeraldRadius,
   fonts,
@@ -113,6 +114,16 @@ const HUB_SETTINGS: {
 export function ProfileScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C5) — PROFILE'S OWN DIALS. Each falls back to the value this file
+  // drew before the dial existed, spelled here and nowhere else. The three
+  // that answer to a token take the `theme.*` scale, because this file imports
+  // spacing/radius from lib/theme — `emeraldRadius` is the one name here that
+  // reaches the other scale, and nothing below is dialled through it.
+  const settingsRowHeight = useDialNumber('profile.settingsRow.height') ?? 64;
+  const settingsGlyphSize = useDialNumber('profile.settingsGlyph.size') ?? 44;
+  const hubCardRadius = useDialNumber('profile.hubCard.radius') ?? radius.xl;
+  const hubCardPadding = useDialNumber('profile.hubCard.padding') ?? spacing.lg;
+  const contentGap = useDialNumber('profile.content.gap') ?? spacing.lg;
   const navigation = useNavigation<ProfileStackNavigation>();
   const { params } = useRoute<RouteProp<ProfileStackParamList, 'ProfileMain'>>();
   const { user } = useAuth();
@@ -513,7 +524,7 @@ export function ProfileScreen() {
         </View>
       ) : (
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { gap: contentGap }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -521,7 +532,13 @@ export function ProfileScreen() {
               screen IS the edit surface (masters 29/30) and the identity
               block below is what is being edited. */}
           {!isEditing ? (
-            <View style={[styles.hubCard, isDark && styles.hubCardDark]}>
+            <View
+              style={[
+                styles.hubCard,
+                { padding: hubCardPadding, borderRadius: hubCardRadius },
+                isDark && styles.hubCardDark,
+              ]}
+            >
               {isDark ? <BrazosMonogram size={150} style={styles.hubMark} /> : null}
               <View style={styles.hubTopRow}>
                 <Text style={styles.hubEyebrow}>YOUR WORK</Text>
@@ -749,12 +766,22 @@ export function ProfileScreen() {
             {HUB_SETTINGS.map((row, index) => (
               <Pressable
                 key={row.route}
-                style={[styles.settingsRow, index > 0 && styles.settingsRowDivider]}
+                style={[
+                  styles.settingsRow,
+                  { minHeight: settingsRowHeight },
+                  index > 0 && styles.settingsRowDivider,
+                ]}
                 onPress={() => navigation.navigate(row.route)}
                 accessibilityRole="button"
                 accessibilityLabel={row.label}
               >
-                <View style={[styles.settingsGlyph, isDark && styles.settingsGlyphDark]}>
+                <View
+                  style={[
+                    styles.settingsGlyph,
+                    { width: settingsGlyphSize, height: settingsGlyphSize },
+                    isDark && styles.settingsGlyphDark,
+                  ]}
+                >
                   <Ionicons
                     name={row.icon}
                     size={20}
@@ -881,7 +908,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.lg,
     paddingBottom: 0,
-    gap: spacing.lg,
   },
   avatarRow: {
     alignItems: 'center',
@@ -1054,8 +1080,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 45's hub card and its chips.
   hubCard: {
     gap: spacing.sm,
-    padding: spacing.lg,
-    borderRadius: radius.xl,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -1141,7 +1165,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    minHeight: 64,
     paddingVertical: spacing.sm,
   },
   settingsRowDivider: {
@@ -1149,8 +1172,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderTopColor: colors.border,
   },
   settingsGlyph: {
-    width: 44,
-    height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',

@@ -1931,6 +1931,73 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: 48,
       },
     ]),
+    // C5 — screens/ProfileScreen.tsx. `theme.*` scale: `radius`/`spacing` come
+    // from lib/theme here, and `emeraldRadius` — the one name in this file that
+    // reaches the other scale — dresses the account popover, which is not
+    // dialled. Left undialled: the avatar and its camera badge (the badge's
+    // corner is half its own size, so a size dial would need a derivation this
+    // run does not make), every field and button (Input's and Button's dials
+    // reach those), and the delete row's 44pt minimum, which is the touch floor.
+    ...dialEntries('screens', 'Profile', [
+      {
+        key: 'profile.settingsRow.height',
+        label: 'Settings row — height',
+        description: 'How tall each row down the settings list stands — the whole list’s rhythm.',
+        tier: 'basic',
+        scope: 'local',
+        min: 44,
+        max: 96,
+        step: 1,
+        defaultValue: 64,
+      },
+      {
+        key: 'profile.hubCard.radius',
+        label: 'Hub card — corner roundness',
+        description: 'The gold-marked card at the top of Profile that names who you are here.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.radius.xl',
+        defaultValue: THEME_RADIUS_DEFAULTS.xl,
+      },
+      {
+        key: 'profile.hubCard.padding',
+        label: 'Hub card — inner padding',
+        description: 'The breathing room inside that card, on all four sides.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'profile.settingsGlyph.size',
+        label: 'Settings row — glyph tile size',
+        description: 'The square icon tile at the left of each settings row, width and height together.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 28,
+        max: 72,
+        step: 2,
+        defaultValue: 44,
+      },
+      {
+        key: 'profile.content.gap',
+        label: 'Section gap',
+        description: 'Between the avatar block, the hub card and the settings list.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+    ]),
   ];
 }
 
