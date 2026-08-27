@@ -43,7 +43,122 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-27 areas seed and the phase78 landing (RUN A1)
+## Current state — after the 2026-08-27 live metrics layer (RUN T1)
+
+Spacing, corner radius, control heights and the three layout metrics are LIVE
+in the design studio. RUN S2 shipped no spacing dial and said honestly why: a
+spacing dial "would silently do nothing", because every metric was a frozen
+`as const` read at stylesheet-build time and `themedStyles` cached on a WeakMap
+keyed by the palette object alone — so colour was live and metrics were not.
+That premise was re-verified at the start of this run and was correct. It is
+gone now: the tokens resolve at READ time through an installed slot, the style
+caches key on a metric generation, and 33 new dials reach the app without one
+consumer file being edited for them. With nothing dialled the app renders
+byte-identically — that was this run's own acceptance test, and it passed.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`a484e24`|the metric bag, the generation, `liveMetric`, the ui/tokens slot, and the inheritance resolver + read hooks|
+|C2|`3c921f2`|`spacing`/`radius`/`controls`/three `layout` keys become getters; `themedStyles` keys on the generation first; `useThemeColors` subscribes; the one module-scope capture fixed|
+|C3|`a1da277`|`metricStyles`, and the 23 colourless sheets that were built at import|
+|C4|`71f7b3f`|`ui/primitives/Divider.tsx` + its three dials|
+|C5|`5c2be6d`|30 metric dials, 31 inheritance chains, and the panel's "inherits …" line|
+|C6|(this commit)|the render gate and this live edge|
+
+`npm run verify` exited 0 after every commit: 1131 (baseline) → 1134 → 1138 →
+1139 → 1140 → **1142 pass, 0 fail**. Eleven executed fences added, four flipped.
+
+### THE RENDER GATE — 59/60 BYTE-IDENTICAL
+
+`node scripts/shots.mjs --build`, 60/60 captured, compared byte-wise against
+the pre-run set taken in the same hour. **59 of 60 are byte-identical.** The
+single delta is `worker-home-light.png` — 12 pixels in a 36×26 box at
+x142..177 y439..464 — which is the known one-glyph flicker that surface has
+carried across runs. No wall-clock delta appeared at all: the greeting string
+and the Post-a-Job date chips were identical because both captures fell inside
+the same hour. Nothing in the harness was overridden, so this is the proof that
+turning the tokens live moved nothing.
+
+### WHAT IS DIALABLE NOW, AND WHAT DELIBERATELY IS NOT
+
+33 new dials, every default READ from the shipped table rather than restated:
+
+|category|dials|shipped|
+|-|-|-|
+|Spacing › App scale|`theme.spacing` xs/sm/md/lg/xl/xxl|4 · 8 · 12 · 16 · 24 · 32|
+|Spacing › Emerald scale|`spacing` xs/sm/md/lg/xl/xxl/xxxl|4 · 8 · 12 · 16 · 20 · 24 · 32|
+|Spacing › Layout|`layout` screenGutter/cardPadding/cardGap|16 · 14 · 10|
+|Borders › App corners|`theme.radius` sm/md/lg/xl|8 · 12 · 16 · 24|
+|Borders › Emerald corners|`radius` xs/sm/md/lg/xl/xxl|10 · 13 · 14 · 17 · 20 · 22|
+|Borders › Divider|thickness / colour / inset|0 (= platform hairline) · palette `border` · 0|
+|Buttons|`controls` buttonHeight/buttonHeightSmall/iconButton|48 · 44 · 44|
+|Inputs|`controls` fieldHeight|48|
+
+Three things have NO dial, on purpose. `radius.pill` and `theme.radius.pill`
+are 999 because that is how a CAPSULE is spelled in React Native — turning it
+down makes a rounded rectangle, not a smaller pill. `controls.minTouchTarget`
+is CLAUDE.md's non-negotiable floor; instead of dialling it, all four
+control-height dials carry `min: 44`, which is fenced. `layout`'s remaining
+keys are derived nav geometry, not design quantities.
+
+### THIS REPO HAS TWO SPACING SCALES, AND BOTH HAD TO GO LIVE
+
+The dispatch named ui/tokens.ts. A census at the start of the run found **92
+files importing `spacing`/`radius` from lib/theme.ts against 17 from
+ui/tokens.ts** — and those are different numbers (`xl` is 24 in one and 20 in
+the other; `radius.sm` 8 against 13). Turning only the Emerald scale live would
+have shipped a dial that moves a sixth of the app. Both are live now, under
+their own keys and their own defaults.
+
+**They are NOT merged and NOT aliased.** Pointing one at the other would move
+rendered pixels in all 92 files. Reconciling them is a screen-by-screen
+migration and nothing in this run pretends otherwise. The NUMBERS for both now
+live in ui/tokens.ts (the token definition layer); lib/theme.ts keeps the live
+binding every screen imports.
+
+### THE MECHANISM, FOR THE RUN THAT USES IT
+
+- **The bridge is installed, not imported.** ui/tokens.ts declares a
+  `MetricSource` slot; lib/designOverrides.ts fills it at load. Importing the
+  other way is a module CYCLE — designOverrides already imports `materials`
+  from tokens at module scope — and it also keeps ui/tokens.ts importing
+  nothing, which is what lets the executed fences run it from a data URL.
+- **The metric bag is separate from the values bag** so `metricsGeneration()`
+  bumps on metric writes ALONE: a colour, blur or menu dial leaves all 102
+  `themedStyles` caches standing. The bump happens inside `setDesignOverrides`,
+  the one funnel every change passes through, so presets, imports, resets and
+  undo all invalidate by construction.
+- **`metricStyles(factory)`** is `themedStyles` without a palette, for a sheet
+  that carries no colour. 23 files converted; 7 excluded and named with a
+  reason in the fence (six auth surfaces on the frozen `lib/authTheme`, plus
+  `HotspotMap.web.tsx`, which is the frozen web surface).
+- **`const X = spacing.xxl * 3` is the shape that defeats all of it** — it
+  reads the getter once at import. One existed (ScreenHeader's centred-title
+  inset); it is a function now. A fence scans seven directories for the shape
+  and builds its key set from the executed default tables, so it cannot drift.
+- **Inheritance is real.** 31 chains are declared — every dial whose shipped
+  default IS another dial's token. An untouched child follows its parent the
+  moment the parent moves, touching it ends the inheritance, and its per-token
+  reset returns it to INHERITING rather than to a frozen number. The panel says
+  so in one quiet line.
+
+### WHAT THIS RUN DID NOT DO
+
+**No screen under `screens/` was edited**, by instruction. The Divider is
+shipped and exported but **converts nothing** — the four hand-drawn hairlines
+(`DropMenu.shared.tsx`, `ReportDialog.tsx`, `AppearanceScreen.tsx`,
+`JobOwnerActions.tsx`) still draw their own, and repointing them is the next
+run's work. A fence asserts none of them wears it yet, so that sweep cannot
+land here by accident. Typography was not touched: no font value became live
+and none gained a dial.
+
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
+
+Open the design studio and turn **Spacing › App scale (most screens) › Large
+gap** (`theme.spacing.lg`, ships at 16) — it is card padding, section gaps and
+screen gutters across 232 call sites, so the whole app reflows as you drag it.
+
+## The run before it — after the 2026-08-27 areas seed and the phase78 landing (RUN A1)
 
 BRAZOS now has a closed neighbourhood list. `phase78_properties_and_areas.sql`
 — already hand-applied to staging before this run began — is finally in
@@ -226,7 +341,7 @@ the operator's paste. No app code changed: nothing yet reads `areas` or
 untouched. No alias was invented. No grant was weakened to make the harness
 green. `npm run verify` stayed at 1131 pass / 0 fail throughout.
 
-## The run before it — after the 2026-08-27 studio ergonomics + solid nav ground (RUN S3)
+## Two runs back — after the 2026-08-27 studio ergonomics + solid nav ground (RUN S3)
 
 The design studio was rebuilt around the operator's hand rather than around
 the registry's shape: edge-to-edge, vertical-only, search gone, everything
@@ -431,7 +546,7 @@ app surface could have moved.
 6. **Long-press a row's label** to pin it; relaunch the app and confirm the
    Pinned section came back.
 
-## Two runs back — after the 2026-08-26 schema-driven design studio (RUN S2)
+## Three runs back — after the 2026-08-26 schema-driven design studio (RUN S2)
 
 The G1 tuning panel became a SCHEMA-DRIVEN design studio: every dial is one
 entry in a central registry (`ui/designStudioSchema.ts`), the panel renders
@@ -569,7 +684,7 @@ The five deltas, pixel-inspected:
   `components/DesignStudioPanel.tsx` — keep all studio JSON/hex inputs in
   that one file.
 
-## Three runs back — after the 2026-08-26 emerald glass pass (RUN G1)
+## Four runs back — after the 2026-08-26 emerald glass pass (RUN G1)
 
 The app gained one glass system: a `Surface` primitive wearing three
 materials held as DATA in `ui/tokens.ts`, a live in-memory override layer so
@@ -702,7 +817,7 @@ run's own capture temp file) sat untracked at start — overwritten by this
 run's baseline capture and deleted, per the file's own create-read-delete
 contract.
 
-## Four runs back — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
+## Five runs back — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
 
 Post-a-Job's first three steps were restructured and re-copied, the bottom
 nav became an ATTACHED full-width bar (a confirmed operator reversal of
@@ -824,7 +939,7 @@ C4/C7/C9 — none deleted or weakened, tally unchanged). No database contact,
 no SQL, no dependency, no image opened for viewing; `.gitignore`,
 `package.json`, `package-lock.json`, `app.json`, `eas.json` untouched.
 
-## Five runs back — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
+## Six runs back — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
 
 The next redesign runs must be written against renders of the screens as they
 are today. The registry could photograph 16 surfaces; it now photographs
@@ -900,7 +1015,7 @@ viewing; no dependency was added; no app code was touched. `.gitignore`,
 untouched.
 
 
-## Six runs back — after the 2026-08-26 publish pass (RUN PUBLISH1)
+## Seven runs back — after the 2026-08-26 publish pass (RUN PUBLISH1)
 
 The published-job screen and the budget editor were the two surfaces the
 Prestige language had not reached. Both now speak it — and the button that had
@@ -1108,7 +1223,7 @@ was opened for viewing; no dependency was added. No font, no bottom-nav change,
 no CTA green. `.gitignore`, `app.json` and `eas.json` are untouched.
 
 
-## Seven runs back — after the 2026-08-26 motion pass (RUN MOTION1)
+## Eight runs back — after the 2026-08-26 motion pass (RUN MOTION1)
 
 Three native modules had been installed and none of them was called. This run
 gave all three a boundary and callers: press feedback with haptics on every
@@ -1406,7 +1521,7 @@ was opened for viewing; no dependency was added. `.gitignore`, `app.json` and
 `eas.json` are untouched.
 
 
-## Eight runs back — after the 2026-08-26 ground pass (RUN GROUND1)
+## Nine runs back — after the 2026-08-26 ground pass (RUN GROUND1)
 
 Three defects, one of which turned out not to exist. The atmosphere raster was
 banded and was believed to be far too bright; the nav pill sat in a flat
@@ -1808,7 +1923,7 @@ expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
 differ from build 7's.**
 
 
-## Nine runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Ten runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -2006,7 +2121,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## Ten runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Eleven runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -2094,7 +2209,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Eleven runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Twelve runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -2279,7 +2394,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Twelve runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Thirteen runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -2504,7 +2619,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Thirteen runs back — after the 2026-08-25 three corrections (RUN H3)
+## Fourteen runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -2679,7 +2794,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Fourteen runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Fifteen runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -2948,7 +3063,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Fifteen runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Sixteen runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -3099,7 +3214,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Sixteen runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Seventeen runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -3160,7 +3275,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Seventeen runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Eighteen runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
