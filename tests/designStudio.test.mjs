@@ -421,9 +421,18 @@ test('[static] the panel renders from the registry — zero hand-wired rows, no 
 test('clamp: the header can never leave the safe interactive area, at min and max height', async () => {
   const js = stripTypeScriptTypes(await read('ui/designStudioLayout.ts'), { mode: 'strip' });
   const layout = await import(toDataUrl(js));
-  const { clampPanelRect, panelWidthFor, PANEL_MIN_HEIGHT, PANEL_COLLAPSED_HEIGHT } = layout;
+  const { clampPanelRect, panelWidthFor, PANEL_MARGIN, PANEL_MIN_HEIGHT, PANEL_COLLAPSED_HEIGHT } =
+    layout;
 
   assert.equal(PANEL_MIN_HEIGHT, 180, 'the dispatched resize floor');
+  // S3 (D1): edge-to-edge. The panel spans the whole window width, so the
+  // width function is the window's width and nothing subtracts a margin.
+  assert.equal(PANEL_MARGIN, 0, 'S3 D1: the panel has no side margin left');
+  assert.equal(
+    panelWidthFor({ windowWidth: 393, windowHeight: 852, topInset: 59, bottomInset: 122 }),
+    393,
+    'S3 D1: panelWidthFor is the window width',
+  );
 
   // A notched iPhone-ish frame: 393x852, status area 59, nav footprint 122.
   const frame = { windowWidth: 393, windowHeight: 852, topInset: 59, bottomInset: 122 };
@@ -435,9 +444,24 @@ test('clamp: the header can never leave the safe interactive area, at min and ma
   for (const collapsed of [false, true]) {
     for (const height of heights) {
       for (const y of positions) {
-        for (const x of [-10_000, -1, 0, 12, 24, 400, 10_000, Number.NaN]) {
+        for (const x of [
+          Number.NEGATIVE_INFINITY,
+          -10_000,
+          -1,
+          0,
+          12,
+          24,
+          400,
+          10_000,
+          Number.POSITIVE_INFINITY,
+          Number.NaN,
+        ]) {
           const next = clampPanelRect({ x, y, height }, frame, collapsed);
           const box = collapsed ? Math.min(PANEL_COLLAPSED_HEIGHT, available) : next.height;
+          // S3 (D2): VERTICAL MOVEMENT ONLY. x is an OUTPUT of the clamp, not
+          // an input — over the fuzz's WHOLE x set, including the two
+          // infinities and NaN, the left edge is PANEL_MARGIN and nothing else.
+          assert.equal(next.x, PANEL_MARGIN, `x must be pinned to the edge (from x=${x})`);
           assert.ok(next.y >= frame.topInset, `top edge above the status area: y=${next.y}`);
           assert.ok(
             next.y + box <= maxY,
@@ -480,6 +504,11 @@ test('[static] the panel routes every gesture and frame change through the clamp
   assert.match(panel, /useFloatingNavClearance\(\)/);
   assert.match(panel, /bottomInset: navClearance/);
   assert.match(panel, /pointerEvents="box-none"/, 'the overlay must pass touches through');
+  // S3 (D2) — VERTICAL MOVEMENT ONLY: the drag handler applies dy alone and
+  // never reads dx, so the edge-to-edge panel cannot be dragged sideways.
+  const dragBlock = panel.slice(panel.indexOf('const drag = useRef('), panel.indexOf('const resizeStart'));
+  assert.ok(dragBlock.length > 0, 'the drag responder must still exist');
+  assert.doesNotMatch(dragBlock, /gesture\.dx/, 'S3 D2: the drag never reads dx');
   // Collapse is its own affordance: the slim pill names the category and
   // restores height and scroll position.
   assert.match(panel, /Customizing — \{lastCategory\}/);

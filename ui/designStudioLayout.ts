@@ -19,10 +19,22 @@
  * Pure and import-free so tests/designStudio.test.mjs executes it directly:
  * the clamp fence proves the header can never leave the safe interactive
  * area at min and max height, whatever the gesture feeds in.
+ *
+ * RUN S3 (C1) — EDGE-TO-EDGE, AND VERTICAL MOVEMENT ONLY. The panel is the
+ * window's full width now: there is no side margin left to drag into, so the
+ * horizontal axis is not a degree of freedom the operator can spend. `x` is
+ * therefore an OUTPUT of this clamp rather than an input — PANEL_MARGIN for
+ * every rect fed in, however wild — and the panel's drag handler applies dy
+ * alone. The width function keeps its name and its call sites; only its
+ * answer moved.
  */
 
-/** The panel's side margin when the window allows it. */
-export const PANEL_MARGIN = 12;
+/**
+ * The panel's left edge. S3 (D1): the panel is edge-to-edge, so this is 0
+ * and the panel spans the whole window width. Kept as a named quantity
+ * because the clamp's x answer IS this value and the fence reads it here.
+ */
+export const PANEL_MARGIN = 0;
 
 /** The shortest the panel may be resized. */
 export const PANEL_MIN_HEIGHT = 180;
@@ -49,7 +61,7 @@ export type PanelFrame = {
 };
 
 export function panelWidthFor(frame: PanelFrame): number {
-  return Math.max(0, frame.windowWidth - 2 * PANEL_MARGIN);
+  return Math.max(0, frame.windowWidth);
 }
 
 export function clampPanelRect(
@@ -71,10 +83,8 @@ export function clampPanelRect(
   y = Math.min(y, maxY - box);
   y = Math.max(y, minY);
 
-  const maxX = Math.max(0, frame.windowWidth - panelWidthFor(frame));
-  let x = Number.isFinite(rect.x) ? rect.x : PANEL_MARGIN;
-  x = Math.min(x, maxX);
-  x = Math.max(x, 0);
-
-  return { x, y, height };
+  // S3 (D2): the panel is edge-to-edge, so there is nowhere horizontal to
+  // put it. Whatever a gesture, a restored session or a NaN feeds in, the
+  // left edge is PANEL_MARGIN — the rect's own x is not consulted at all.
+  return { x: PANEL_MARGIN, y, height };
 }

@@ -48,6 +48,7 @@ import {
 import { dark as emeraldDarkPalette, light as emeraldLightPalette } from '../ui/tokens';
 import { SURFACE_GLOW_ALPHA, useFloatingNavClearance } from '../ui/primitives';
 import {
+  PANEL_MARGIN,
   clampPanelRect,
   panelWidthFor,
   type PanelFrame,
@@ -106,7 +107,7 @@ const round2 = (value: number) => Math.round(value * 100) / 100;
 /** The session's panel arrangement — survives closing the studio, dies with
  *  the process. LIVE-tier state, exactly like the overrides it tunes. */
 const panelSession = {
-  rect: { x: 12, y: 72, height: 360 } as PanelRect,
+  rect: { x: PANEL_MARGIN, y: 72, height: 360 } as PanelRect,
   collapsed: false,
   scrollY: 0,
   category: 'All controls',
@@ -559,16 +560,18 @@ export function DesignStudioPanel() {
   const drag = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_event, gesture) =>
-        Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4,
+      onMoveShouldSetPanResponder: (_event, gesture) => Math.abs(gesture.dy) > 4,
       onPanResponderGrant: () => {
         dragStart.current = rectRef.current;
       },
       onPanResponderMove: (_event, gesture) => {
+        // S3 (D2): VERTICAL MOVEMENT ONLY. The panel is edge-to-edge, so dx
+        // has nowhere to go — the handler never reads it and the clamp
+        // returns PANEL_MARGIN for x whatever arrives.
         setRect(
           clampPanelRect(
             {
-              x: dragStart.current.x + gesture.dx,
+              x: dragStart.current.x,
               y: dragStart.current.y + gesture.dy,
               height: dragStart.current.height,
             },
