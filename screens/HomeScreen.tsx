@@ -366,25 +366,27 @@ export function HomeScreen() {
   // the stylesheet: one place per value, so the studio's default and the
   // shipped pixel cannot drift apart.
   const promoCardRadius = useDialNumber('home.promoCard.radius') ?? 22;
-  // THE ONE DIAL ON THIS SCREEN APPLIED CONDITIONALLY, and the render gate is
-  // why. Every other T2 dial resolves to `useDialNumber(key) ?? literal` and
-  // is applied unconditionally; on this control that cost 26 pixels.
+  // THE MODE PILL'S DIAL, AND THE TWENTY-SIX PIXELS IT WAS WRONGLY BLAMED FOR.
   //
-  // The mode pill's padding moved out of the registered stylesheet and into an
-  // inline object, which on React Native Web is the difference between an
-  // atomic CSS class and an inline style attribute. Home itself stayed
-  // byte-identical — the geometry never moved — but the SERVICES SHEET capture,
-  // where this pill is composited under the sheet's scrim, came back with 26
-  // pixels differing by one unit on one channel, every one of them on the
-  // pill's own ring arc (right edge x372, bottom y54, both corner radii).
+  // T2's render gate found one capture that would not go byte-identical:
+  // `customer-services-sheet-dark`, 26 pixels, every build and every capture,
+  // each differing by one unit on one channel. All 26 sit on THIS pill's ring
+  // — right edge x372, bottom y54, both bottom corner arcs — so this dial was
+  // the obvious suspect and was tried in three forms: applied unconditionally,
+  // applied only when set (so an untouched screen adds no style member at
+  // all), and removed outright with the pill restored byte-for-byte to
+  // 9d889bb. All three produced the SAME 26 pixels. The dial is not the cause,
+  // so it stands, in the same shape as every other dial in the run.
   //
-  // So the value stays in the stylesheet and the dial is applied only when the
-  // operator has actually turned it: `undefined` is dropped from a style array
-  // — no key, no node, no pixel — which is the same idiom `litFill`'s `flat`
-  // uses a few hundred lines below, and for the same reason. Clearing the
-  // override returns the pill to the stylesheet's own 10 by construction
-  // rather than by a number repeated here.
-  const modeSwitchPaddingX = useDialNumber('home.modeSwitch.paddingX');
+  // WHAT IS ACTUALLY KNOWN, recorded because the next run should not re-chase
+  // it: `customer-home-dark` and `customer-home-light` — the same pill, same
+  // screen, no scrim over it — are byte-identical against the pre-run baseline
+  // through every build, so no value on this screen moved. The rest of the
+  // dimmed area in the sheet capture is identical too, which rules out the
+  // scrim's own alpha. What is left is how the browser rasterises this one
+  // high-contrast ring beneath an overlay, and 26 pixels of 1/255 is the whole
+  // of it.
+  const modeSwitchPaddingX = useDialNumber('home.modeSwitch.paddingX') ?? 10;
 
   // RUN H3 (C3): this screen's page ground is `homeBackground`, not the
   // palette's `background`, and the floating nav pill's margins are painted by
@@ -613,7 +615,7 @@ export function HomeScreen() {
                   style={({ pressed }) => [
                     styles.modeSwitch,
                     isDark && styles.modeSwitchDark,
-                    modeSwitchPaddingX !== undefined && { paddingHorizontal: modeSwitchPaddingX },
+                    { paddingHorizontal: modeSwitchPaddingX },
                     pressed && styles.modeSwitchPressed,
                   ]}
                   accessibilityRole="button"
@@ -1087,7 +1089,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: 7,
     minHeight: 44,
-    paddingHorizontal: 10,
     borderRadius: radius.pill,
     borderWidth: 1,
     borderColor: colors.gold,

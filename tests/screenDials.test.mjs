@@ -62,16 +62,7 @@ const SCREENS = [
     scale: 'theme',
     dials: [
       { key: 'home.promoCard.radius', drew: 22, parent: null, fallback: '22' },
-      // The one CONDITIONAL wearer in the run. See `applied` below.
-      {
-        key: 'home.modeSwitch.paddingX',
-        drew: 10,
-        parent: null,
-        applied: 'conditional',
-        varName: 'modeSwitchPaddingX',
-        property: 'paddingHorizontal',
-        style: 'modeSwitch',
-      },
+      { key: 'home.modeSwitch.paddingX', drew: 10, parent: null, fallback: '10' },
       { key: 'home.jobCard.padding', drew: 14, parent: null, fallback: '14' },
       { key: 'home.jobCard.gap', drew: 12, parent: 'theme.spacing.md', fallback: 'spacing.md' },
       { key: 'home.jobCard.thumbSize', drew: 104, parent: null, fallback: '104' },
@@ -437,37 +428,11 @@ for (const screen of SCREENS) {
       // 7. THE WEARER READS IT, and falls back to the value it drew — which is
       //    spelled in the screen exactly once.
       //
-      //    TWO SHAPES, and the second exists for a measured reason. The normal
-      //    shape resolves the fallback in the read (`?? literal`) and applies
-      //    the result unconditionally. The CONDITIONAL shape leaves the shipped
-      //    value in the stylesheet and applies the dial only once the operator
-      //    has turned it, because on that one control the mere PRESENCE of an
-      //    inline style — an inline attribute rather than an atomic class, on
-      //    React Native Web — moved 26 pixels by one unit on one channel where
-      //    the pill is composited under the services sheet's scrim. An
-      //    `undefined` member is dropped from a style array: no key, no node,
-      //    no pixel. Either shape keeps the number spelled exactly once.
-      if (dial.applied === 'conditional') {
-        assert.ok(
-          source.includes(`const ${dial.varName} = useDialNumber('${row.key}');`),
-          `${screen.file}: a conditional wearer reads the dial raw, with no ?? fallback`,
-        );
-        assert.ok(
-          source.includes(
-            `${dial.varName} !== undefined && { ${dial.property}: ${dial.varName} }`,
-          ),
-          `${screen.file}: an untouched conditional dial must add no style member at all`,
-        );
-        const block = new RegExp(`\\n  ${dial.style}: \\{([^}]*)\\}`).exec(source);
-        assert.ok(block, `${screen.file}: ${dial.style} must stay a plain style object`);
-        assert.match(
-          block[1],
-          new RegExp(`${dial.property}: ${dial.drew},`),
-          `${screen.file}: ${dial.style} keeps the ${dial.drew} the dial launches at`,
-        );
-        continue;
-      }
-
+      //    ONE SHAPE, everywhere: the fallback is resolved in the read and the
+      //    result is applied unconditionally. T2 tried a second, conditional
+      //    shape on Customer Home's mode pill and it did not earn its keep —
+      //    see that screen's own note, and the mode pill's absence from the
+      //    table above.
       const readsIt = `useDialNumber('${row.key}') ?? ${dial.fallback}`;
       assert.ok(
         source.includes(readsIt),

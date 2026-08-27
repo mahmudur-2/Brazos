@@ -1650,7 +1650,7 @@ function screenDialEntries(): StudioEntry[] {
     // search pill, the CTA's height and roundness, the screen padding, the
     // section gap and the job card's corner (lib/homeDesignStudio.tsx already
     // dials every one of those, and a second dial for the same pixel is worse
-    // than none) and the service chip row (tests/workerHome.test.mjs holds it
+    // than none); the service chip row (tests/workerHome.test.mjs holds it
     // byte-identical to Worker Home's, so a per-screen dial would break the
     // invariant it exists to protect).
     ...dialEntries('screens', 'Customer Home', [
