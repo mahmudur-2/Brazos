@@ -43,7 +43,190 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## Current state — after the 2026-08-27 studio ergonomics + solid nav ground (RUN S3)
+## Current state — after the 2026-08-27 areas seed and the phase78 landing (RUN A1)
+
+BRAZOS now has a closed neighbourhood list. `phase78_properties_and_areas.sql`
+— already hand-applied to staging before this run began — is finally in
+version control, and beside it sits the generator that turns NYC DCP's 2020
+Neighborhood Tabulation Areas into the 197-row seed the operator still has to
+paste. Nothing in this run contacted a database, and nothing in the app reads
+either table yet: this is the data floor, not the feature.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`8e4570d`|`supabase/phase78_properties_and_areas.sql` committed byte-for-byte as found. APPLIED HISTORY — see the warning below|
+|C2|`5bfa004`|`scripts/build-areas-seed.mjs` (zero-dependency, Node stdlib only) and its output `supabase/phase78_areas_seed.sql` — 197 rows, 275,013 bytes|
+|C3|`985f1ca`|`scripts/verify-schema.mjs` gains the phase78 group: one sentinel and six checks|
+|C4|(this commit)|this live edge|
+
+`npm run verify` exited 0 after every commit — 1131 pass, 0 fail, unchanged
+from the baseline. This run added no test: it added no app code to test.
+
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
+
+Paste `supabase/phase78_areas_seed.sql` into the Supabase SQL editor against
+**staging**, then run `node scripts/verify-schema.mjs` to confirm phase78 reads
+green instead of PENDING.
+
+The seed is 275,013 bytes — one paste, comfortably inside the 1,500,000-byte
+budget the generator enforces for exactly this reason. It is one transaction
+and it is safe to run more than once.
+
+### phase78_properties_and_areas.sql IS APPLIED HISTORY — NEVER EDIT IT
+
+It was applied to staging by hand before this run. Committing it did not change
+a byte and nothing later may. If it is ever found to contain an error, the only
+legal fix is a NEW numbered corrective migration; editing this file would put
+version control and the live database permanently out of step. What it built:
+
+- **`public.areas`** — the closed neighbourhood list. Rings are plain `jsonb`
+  with a bounding box beside them, so point-in-polygon is ordinary SQL and the
+  migration needs no extension. PostGIS was considered and rejected (not
+  relocatable after install on Supabase; its types are invisible to PostgREST
+  unless everything is schema-qualified; at a few hundred static rows a spatial
+  index buys nothing). Created EMPTY — until the seed lands, `area_for_point()`
+  returns null for every point, which is a correct answer, not a failure.
+- **`public.properties`** — a place a customer owns, so a job attaches to a
+  unit instead of a retyped address string. One row per unit, address split
+  rather than free text, owner-scoped RLS on all four verbs, and a
+  case-insensitive uniqueness key over (owner, street, unit, city). No role
+  gate: any account may own one, consistent with one account / both
+  capabilities.
+- **`jobs.property_id` and `jobs.area_code`** — both NULLABLE, both ON DELETE
+  SET NULL, so every job posted before phase78 stays valid.
+- **`area_for_point()`** — even-odd ray casting over `areas.rings`, bounding-box
+  prefiltered, stable, never raising.
+- **`set_job_property()`** — the only path from a job to a property. SECURITY
+  DEFINER because jobs carries no client write grant, with its own two
+  ownership checks: the job must be the caller's and so must the property.
+
+It deliberately does NOT touch `create_job()`. That function's current
+definition was not in version-controlled reach, and rewriting a live RPC from
+an inferred signature is the mistake the migration discipline exists to
+prevent. **Exact street address still lives in `job_locations`** — properties
+is the customer's own saved list, not a second copy of that surface, and
+nothing here widens who can read an address.
+
+anon is granted nothing by phase78 — not a table, not a function. The sentinel
+`phase78_properties_enabled()` is created last inside the single transaction,
+so its presence proves the whole file committed.
+
+### The seed, and the generator that owns it
+
+`node scripts/build-areas-seed.mjs` is committed BECAUSE DCP republishes the
+layer: the next edition is a re-run, never a hand-edit of 197 rows of
+coordinates. It reads one local file and writes one `.sql`. It never contacts a
+database and it has no dependency.
+
+**Its input is not in the repository.** `.shots/nta2020.geojson` is gitignored
+scratch. Before re-running, re-download it: NYC Open Data dataset **4hft-v355**
+("2020 Neighborhood Tabulation Areas", Dept. of City Planning) → Export →
+GeoJSON → save at that path. A missing file exits non-zero saying the same.
+
+What this run's pass produced:
+
+| | |
+|-|-|
+|source|`.shots/nta2020.geojson`, 4,626,162 bytes, export date 2026-05-28|
+|features read|262|
+|property keys discovered|`nta2020` (code) · `ntaname` (name) · `boroname` (borough) · `ntatype` (type)|
+|excluded|65 non-residential (`ntatype <> "0"`) — Central Park, Green-Wood Cemetery, JFK, LaGuardia, Rikers Island, Sunnyside Yards and their kin|
+|rows emitted|197 — Bronx 37, Brooklyn 53, Manhattan 32, Queens 59, Staten Island 16|
+|tolerance|0.0002° (~22 m); the sweep never had to raise it|
+|max deviation|23.0 m (22.3 m simplification + 0.70 m rounding)|
+|geometry|7,516 coordinate pairs across 240 rings; 16 rings kept unsimplified; 0 dropped|
+|centroids|197 inside their own area; 11 needed the longest-scanline fallback|
+|aliases|none — see the gotcha below|
+|output|275,013 bytes of a 1,500,000 budget|
+
+**The key names are discovered, never assumed.** Borough is the only key whose
+whole value set is the five borough names; code is the only key both unique per
+feature and shaped like an NTA code; name is scored so the abbreviation column
+(`ntaabbrev`, "Grnpt") and the parent-district column cannot win. A republished
+layer that renames a column reports the mismatch instead of mis-parsing.
+
+**Exclusion fails safe.** The generator only excludes when one `ntatype` value
+is unambiguously dominant — at least 70% of features and the minority no more
+than 25%. This edition sits at 197/262 = 75.2% keep, 24.8% excluded: INSIDE the
+bound but close to it. If a future edition tips past 25%, the generator keeps
+EVERY feature and prints that the field was inconclusive. That is the correct
+direction — a park in the list is cosmetic, a missing neighbourhood is a hole
+in the marketplace — and it is loud, not silent.
+
+**Geometry, honestly measured.** Douglas-Peucker runs in a locally scaled space
+(x = lng · cos lat₀), so one tolerance means the same distance on both axes and
+"0.0002 degrees" really is ~22 m east-west as well as north-south. Rings are
+cut at their farthest-apart pair and simplified as two open polylines — the
+standard way to stop the algorithm collapsing a loop onto its start point. The
+reported deviation is MEASURED (Douglas-Peucker's own largest discarded
+perpendicular distance), not inferred from the tolerance.
+
+**Every centroid is inside its area.** The average of the vertices is tried
+first and re-tested after rounding; where it falls outside — crescents,
+horseshoes, two-part areas — the midpoint of the longest interior horizontal
+chord is used, and 11 areas needed that. The point-in-polygon test is a
+line-for-line mirror of `area_for_point()`, including toggling across all of an
+area's rings rather than per ring and treating a horizontal edge as no
+crossing. If the two ever drift apart, a seeded centroid could sit outside the
+area the database thinks it is in.
+
+**Verified, not asserted.** The emitted SQL was parsed back off disk and every
+claim re-proved against a fresh transcription of the even-odd rule: 197 rows,
+240 rings, every ring closed with ≥3 distinct vertices, every coordinate
+exactly five decimals, every stored bbox equal to the extent of its own rings
+with min < max on both axes, every `display_name` equal to its `name`, every
+borough one of the five, no duplicate code, 197/197 centroids inside. Longitude
+order is proved rather than trusted — every first ordinate lands in NYC's
+longitude window and every second in its latitude window, which a swapped pair
+fails on both counts.
+
+### Standing gotchas
+
+1. **The seed never deletes a row, and it never will.** Areas are referenced by
+   jobs and by properties; retiring one is an operator decision. An area DCP
+   drops simply stops being refreshed.
+2. **`display_name` and `aliases` are operator-owned.** The conflict branch
+   refreshes name, borough, centroid, bbox and rings and touches neither of
+   those two. Hand-edit them freely — a re-seed will not overwrite your work.
+   `display_name` is only *seeded* equal to `name`, as a starting value.
+3. **There are no aliases yet, and none were invented.** The generator will
+   build them from DCP's colloquial label points if `.shots/nhood_names.geojson`
+   is present; it was not, so none were emitted. Download that layer and re-run
+   if you want them — never type one in as a guess about what people call a
+   place.
+4. **`rings` is longitude-first**, `[lng, lat]`, matching GeoJSON and matching
+   what `area_for_point()` reads. Holes and detached parts are just more rings
+   under the even-odd rule. Swap the order and every lookup silently returns
+   null.
+5. **`phase78_areas_seed.sql` is deliberately absent from
+   `scripts/verify-schema.mjs`.** It only inserts rows into `public.areas`, and
+   anon cannot read that table by design, so there is nothing a publishable-key
+   probe could honestly assert about it. Its own in-transaction `do` block
+   checks it at apply time — row count within 10% of what the generator emitted,
+   and every bbox self-consistent. A green line for it in the harness would
+   have been a lie in the shape of a test.
+6. **The phase78 harness group is PENDING-safe.** Until the operator applies the
+   migration, the sentinel answers PGRST202, the six checks report PENDING
+   rather than passing, and PENDING still fails the run — so an unmigrated
+   database can never read green.
+7. **Both tables are probed by their DENIAL.** `checkColumnRevoked` passes only
+   on 403/42501 and fails a 404 as "table missing, not denied", so one check
+   proves the table exists AND that anon cannot read it. The three RPCs use
+   `checkRpc`, never `checkRpcAllowed`, because each is revoked from anon —
+   `checkRpcAllowed` would fail precisely BECAUSE phase78 is correctly locked
+   down. The two `jobs` columns use the positive `checkColumn`, matching the
+   fourteen other jobs columns probed that way and the script's own control
+   check.
+
+### What this run did NOT do
+
+No database was contacted, read or written — the seed is text on disk awaiting
+the operator's paste. No app code changed: nothing yet reads `areas` or
+`properties`, no screen offers a saved property, and `create_job()` is
+untouched. No alias was invented. No grant was weakened to make the harness
+green. `npm run verify` stayed at 1131 pass / 0 fail throughout.
+
+## The run before it — after the 2026-08-27 studio ergonomics + solid nav ground (RUN S3)
 
 The design studio was rebuilt around the operator's hand rather than around
 the registry's shape: edge-to-edge, vertical-only, search gone, everything
@@ -248,7 +431,7 @@ app surface could have moved.
 6. **Long-press a row's label** to pin it; relaunch the app and confirm the
    Pinned section came back.
 
-## The run before it — after the 2026-08-26 schema-driven design studio (RUN S2)
+## Two runs back — after the 2026-08-26 schema-driven design studio (RUN S2)
 
 The G1 tuning panel became a SCHEMA-DRIVEN design studio: every dial is one
 entry in a central registry (`ui/designStudioSchema.ts`), the panel renders
@@ -386,7 +569,7 @@ The five deltas, pixel-inspected:
   `components/DesignStudioPanel.tsx` — keep all studio JSON/hex inputs in
   that one file.
 
-## Two runs back — after the 2026-08-26 emerald glass pass (RUN G1)
+## Three runs back — after the 2026-08-26 emerald glass pass (RUN G1)
 
 The app gained one glass system: a `Surface` primitive wearing three
 materials held as DATA in `ui/tokens.ts`, a live in-memory override layer so
@@ -519,7 +702,7 @@ run's own capture temp file) sat untracked at start — overwritten by this
 run's baseline capture and deleted, per the file's own create-read-delete
 contract.
 
-## Three runs back — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
+## Four runs back — after the 2026-08-26 Post-a-Job pass (RUN PJ1)
 
 Post-a-Job's first three steps were restructured and re-copied, the bottom
 nav became an ATTACHED full-width bar (a confirmed operator reversal of
@@ -641,7 +824,7 @@ C4/C7/C9 — none deleted or weakened, tally unchanged). No database contact,
 no SQL, no dependency, no image opened for viewing; `.gitignore`,
 `package.json`, `package-lock.json`, `app.json`, `eas.json` untouched.
 
-## Four runs back — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
+## Five runs back — after the 2026-08-26 shot-coverage pass (RUN SHOTS1)
 
 The next redesign runs must be written against renders of the screens as they
 are today. The registry could photograph 16 surfaces; it now photographs
@@ -717,7 +900,7 @@ viewing; no dependency was added; no app code was touched. `.gitignore`,
 untouched.
 
 
-## Five runs back — after the 2026-08-26 publish pass (RUN PUBLISH1)
+## Six runs back — after the 2026-08-26 publish pass (RUN PUBLISH1)
 
 The published-job screen and the budget editor were the two surfaces the
 Prestige language had not reached. Both now speak it — and the button that had
@@ -925,7 +1108,7 @@ was opened for viewing; no dependency was added. No font, no bottom-nav change,
 no CTA green. `.gitignore`, `app.json` and `eas.json` are untouched.
 
 
-## Six runs back — after the 2026-08-26 motion pass (RUN MOTION1)
+## Seven runs back — after the 2026-08-26 motion pass (RUN MOTION1)
 
 Three native modules had been installed and none of them was called. This run
 gave all three a boundary and callers: press feedback with haptics on every
@@ -1223,7 +1406,7 @@ was opened for viewing; no dependency was added. `.gitignore`, `app.json` and
 `eas.json` are untouched.
 
 
-## Seven runs back — after the 2026-08-26 ground pass (RUN GROUND1)
+## Eight runs back — after the 2026-08-26 ground pass (RUN GROUND1)
 
 Three defects, one of which turned out not to exist. The atmosphere raster was
 banded and was believed to be far too bright; the nav pill sat in a flat
@@ -1625,7 +1808,7 @@ expo-blur, expo-haptics and expo-image were installed, so the runtime WILL
 differ from build 7's.**
 
 
-## Eight runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
+## Nine runs back — after the 2026-08-25 lit-surface pass (RUN LIT1)
 
 Master 44's promo card and its "Post a job" pill are lit — a soft wash down the
 135° diagonal, and a faint bright edge along the top of the pill. The app drew
@@ -1823,7 +2006,7 @@ Nothing was pushed; no database was contacted; no SQL was executed; no archive
 work was done. The one image read was
 `docs/mockups/44_customer_home_dark.png`, as script input only.
 
-## Nine runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
+## Ten runs back — after the 2026-08-25 dependency landing (RUN DEPS1)
 
 Three packages entered the manifest and one wrapper was written for one of
 them. Nothing calls the wrapper, and nothing renders differently.
@@ -1911,7 +2094,7 @@ disabled, skipped or made conditional. Nothing was pushed; no database was
 contacted; no SQL was executed; no image file was opened; no archive work was
 done.
 
-## Ten runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
+## Eleven runs back — after the 2026-08-25 category-search wording pass (RUN CS1)
 
 RUN S1 found that tapping a category on customer Home lands on a search that
 really is filtered, and says nothing about it: the one marker that existed —
@@ -2096,7 +2279,7 @@ warning and still the fastest way to break the pin-clearing rule at
 announces an inferred category as a chosen filter. The C2 fence fails if the
 label is sourced from anything but `pinnedCategory`.
 
-## Eleven runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
+## Twelve runs back — after the 2026-08-25 category-chip diagnosis (RUN S1)
 
 RUN S1 was sent to find out why tapping a category chip on customer Home lands
 on a worker search whose field is empty and which reports no matches. **It is
@@ -2321,7 +2504,7 @@ the selected tile further off screen; it treats the symptom's symptom.
 Use the two customer-Home targets, which do not.
 
 
-## Twelve runs back — after the 2026-08-25 three corrections (RUN H3)
+## Thirteen runs back — after the 2026-08-25 three corrections (RUN H3)
 
 RUN H3 carried three operator corrections to H2's Home pass. Two code commits,
 then this file. **Nothing was pushed**; no database was contacted; no SQL was
@@ -2496,7 +2679,7 @@ so that fails the day it is written — do not answer it by adding an exception.
 that reason.
 
 
-## Thirteen runs back — after the 2026-08-25 Home structure pass (RUN H2)
+## Fourteen runs back — after the 2026-08-25 Home structure pass (RUN H2)
 
 RUN H2 changed the customer Home surface, the nav primitive it shares with
 every screen, and the two records that had drifted off the files they
@@ -2765,7 +2948,7 @@ would silently paint both themes, or moving the glow into the dark branch,
 which the tree-wide depth rule forbids.
 
 
-## Fourteen runs back — after the 2026-08-25 screenshot registry (RUN H1)
+## Fifteen runs back — after the 2026-08-25 screenshot registry (RUN H1)
 
 RUN H1 built a capability and took one measurement. It changed **no app code
 and no appearance**: nothing under `screens/`, `components/`, `ui/`, `lib/`,
@@ -2916,7 +3099,7 @@ allow-list — the only host any request may address is the fake one. That is
 strictly stronger than looking for one hard-coded ref, and it is why no real
 project ref is spelled anywhere in the file.
 
-## Fifteen runs back — after the 2026-08-25 document-open fix (RUN F1)
+## Sixteen runs back — after the 2026-08-25 document-open fix (RUN F1)
 
 RUN F1 fixed ONE device-observed defect and did nothing else. Two commits, then
 this file. Nothing was pushed; no database was contacted; no SQL was executed;
@@ -2977,7 +3160,7 @@ fails through the honest error path rather than opening a browser, but nothing
 refreshes it — the user is told, and re-entering the thread re-signs. Building
 a refresh mechanism was out of scope and is unclaimed.
 
-## Sixteen runs back — the 2026-08-25 conversation-features run (RUN W2)
+## Seventeen runs back — the 2026-08-25 conversation-features run (RUN W2)
 
 RUN W2 shipped the two features `supabase/phase77_conversation_features.sql`
 declared and RUN W1 left: **DOCUMENTS** and **LIVE_LOCATION**. Five commits,
