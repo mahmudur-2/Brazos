@@ -80,7 +80,7 @@ const themeModule = (async () => {
       // failing an assertion — so the stub is widened, never the assertions.
       // RUN T1 (C2) added `metricGeneration` (themedStyles keys on it) and
       // `metricGroup` (this file's own two scales are live too).
-      'const { brand, dark: emeraldDark, constantAccents, metricGeneration, metricGroup, shadows: tokenShadows, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      'const { brand, dark: emeraldDark, constantAccents, metricGeneration, metricGroup, shadows: tokenShadows, THEME_RADIUS_DEFAULTS, THEME_SPACING_DEFAULTS, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');
@@ -695,11 +695,11 @@ const liveMetricKeys = (async () => {
   return {
     spacing: new Set([
       ...Object.keys(tokens.SPACING_DEFAULTS),
-      ...Object.keys(theme.THEME_SPACING_DEFAULTS),
+      ...Object.keys(tokens.THEME_SPACING_DEFAULTS),
     ]),
     radius: new Set([
       ...Object.keys(tokens.RADIUS_DEFAULTS),
-      ...Object.keys(theme.THEME_RADIUS_DEFAULTS),
+      ...Object.keys(tokens.THEME_RADIUS_DEFAULTS),
     ]),
     emeraldRadius: new Set(Object.keys(tokens.RADIUS_DEFAULTS)),
     controls: new Set(Object.keys(tokens.CONTROL_DEFAULTS)),
@@ -725,10 +725,10 @@ test('T1 tokens: a live metric resolves at READ time, and the fixed members are 
   for (const [key, value] of Object.entries(tokens.LAYOUT_METRIC_DEFAULTS)) {
     assert.equal(tokens.layout[key], value);
   }
-  for (const [key, value] of Object.entries(theme.THEME_SPACING_DEFAULTS)) {
+  for (const [key, value] of Object.entries(tokens.THEME_SPACING_DEFAULTS)) {
     assert.equal(theme.spacing[key], value);
   }
-  for (const [key, value] of Object.entries(theme.THEME_RADIUS_DEFAULTS)) {
+  for (const [key, value] of Object.entries(tokens.THEME_RADIUS_DEFAULTS)) {
     assert.equal(theme.radius[key], value);
   }
 

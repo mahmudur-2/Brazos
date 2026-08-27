@@ -255,6 +255,36 @@ export const SPACING_DEFAULTS = {
 export const spacing = metricGroup('spacing', SPACING_DEFAULTS, {});
 
 /**
+ * RUN T1 (C5) — THE OTHER SCALE, DECLARED HERE FOR THE SAME REASON `brand` IS.
+ *
+ * lib/theme.ts exports its own older spacing and radius scales — different
+ * numbers from §I's above (`xl` 24 against 20; `radius.sm` 8 against 13) — and
+ * they are what 92 of this tree's files import, against 17 for the Emerald
+ * scale. The two are NOT merged: pointing one at the other would move pixels
+ * in all 92, and reconciling them is a screen-by-screen migration.
+ *
+ * The VALUES live here anyway, because this file is the token definition layer
+ * (CLAUDE.md) and because the studio registry has to read both scales'
+ * defaults from one place. lib/theme.ts builds its live groups from these, so
+ * there is still exactly one spelling of each number.
+ */
+export const THEME_SPACING_DEFAULTS = {
+  xs: 4,
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+  xxl: 32,
+} as const;
+
+export const THEME_RADIUS_DEFAULTS = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 24,
+} as const;
+
+/**
  * The bottom nav bar's geometry, declared ONCE (emerald D3/emerald(3)).
  *
  * ui/primitives/BottomNav.tsx reads both of these for the bar it configures,

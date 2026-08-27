@@ -62,6 +62,7 @@ import {
   colorTokenEntries,
   currentValueOf,
   exportModifiedOverrides,
+  inheritedFrom,
   isModified,
   normalizeHex,
   sanitizeOverrides,
@@ -482,6 +483,12 @@ function EntryRow({
   onToggleInfo: () => void;
 }) {
   const modified = isModified(entry, ctx);
+  // RUN T1 (C5/D9) — WHERE AN UNTOUCHED VALUE IS COMING FROM. A dial that
+  // declares a parent shows its parent's value until it is touched, and a row
+  // showing a number with no explanation is how an operator concludes the
+  // dial above it did nothing. Null the moment the row has its own override,
+  // which is also what its reset returns it to.
+  const inherits = inheritedFrom(entry, ctx);
   const editor =
     entry.kind === 'color' ? (
       <ColorEditor entry={entry} ctx={ctx} styles={styles} />
@@ -550,6 +557,10 @@ function EntryRow({
       {modified ? (
         <Text style={styles.modifiedTrail}>
           {formatValue(entry, entry.defaultValue(ctx))} → {formatValue(entry, currentValueOf(entry, ctx))}
+        </Text>
+      ) : inherits ? (
+        <Text style={styles.inheritTrail} numberOfLines={1}>
+          inherits {inherits.plainLabel}
         </Text>
       ) : null}
       {infoOpen ? <Text style={styles.description}>{entry.description}</Text> : null}
@@ -1875,6 +1886,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     modifiedTrail: {
       fontSize: 10,
       color: colors.emerald,
+      marginLeft: 4,
+    },
+    /** Quiet by design: it says where an untouched value came from, and must
+     *  never compete with the emerald trail that says one was changed. */
+    inheritTrail: {
+      fontSize: 10,
+      color: withAlpha(colors.white, 0.38),
       marginLeft: 4,
     },
     description: {

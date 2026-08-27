@@ -88,8 +88,10 @@ const schemaModule = (async () => {
     )
     .replace(
       /import \{[\s\S]*?\} from '\.\/tokens';/,
-      // T1 (C4): the divider dials read their defaults from DIVIDER_DEFAULTS.
-      'const { controls, DIVIDER_DEFAULTS, layout, navBar, radius: tokenRadius, shadows: tokenShadows, spacing } = globalThis.__S2_TOKENS__;',
+      // T1 (C4/C5): the divider dials read DIVIDER_DEFAULTS, and every metric
+      // dial reads the shipped table its getter resolves through — never the
+      // live getter, which would report a dialled value as the default.
+      'const { CONTROL_DEFAULTS, controls, DIVIDER_DEFAULTS, layout, LAYOUT_METRIC_DEFAULTS, navBar, radius: tokenRadius, RADIUS_DEFAULTS, shadows: tokenShadows, spacing, SPACING_DEFAULTS, THEME_RADIUS_DEFAULTS, THEME_SPACING_DEFAULTS } = globalThis.__S2_TOKENS__;',
     );
   assert.doesNotMatch(
     stubbed,
@@ -981,12 +983,33 @@ test('registry audit: every static entry has a reader in production source — z
     return null;
   };
 
-  /** Which of the five readers claims this entry, or null for an orphan. */
+  // (f) RUN T1 — THE TOKEN GETTER IS ITSELF A READER, and the widest one in
+  // the app. A metric dial's key IS the address ui/tokens.ts's and
+  // lib/theme.ts's getters resolve through, so every consumer of that token
+  // reads it without naming it: `spacing.lg` reaches all 92 files that import
+  // `spacing`. The key space is derived from the `metricGroup('<group>', …)`
+  // calls in those two files crossed with the executed default tables, so a
+  // dial on a key no getter addresses is still an ORPHAN.
+  const tokenMetricKeys = await (async () => {
+    const tokens = await tokensModule;
+    const declaring = [await read('ui/tokens.ts'), await read('lib/theme.ts')].join('\n');
+    const keys = new Set();
+    for (const [, group, tableName] of declaring.matchAll(/metricGroup\('([^']+)', (\w+)/g)) {
+      const table = tokens[tableName];
+      if (!table) continue;
+      for (const key of Object.keys(table)) keys.add(`${group}.${key}`);
+    }
+    assert.ok(keys.size >= 20, 'the live token key space must actually have been read');
+    return keys;
+  })();
+
+  /** Which of the six readers claims this entry, or null for an orphan. */
   const classify = (entry) => {
     if (quoted(entry.key)) return 'quoted';
     if (fingerprinted.has(entry.key)) return 'fingerprint';
     if (templates.some((template) => template.re.test(entry.key))) return 'template';
     if (materialRead(entry.key)) return 'material';
+    if (tokenMetricKeys.has(entry.key)) return 'token';
     if (g1Read(entry)) return 'g1';
     return null;
   };
@@ -999,11 +1022,14 @@ test('registry audit: every static entry has a reader in production source — z
     { key: 'nothing.reads.this', technicalKey: 'nothing.reads.this' },
     { key: 'material.chrome.nosuchprop', technicalKey: 'materials.chrome.nosuchprop' },
     { key: 'color.nosuchdial', technicalKey: 'nosuchdial' },
+    // Shaped like a live metric dial, on a step no scale carries.
+    { key: 'spacing.nosuchstep', technicalKey: 'spacing.nosuchstep' },
+    { key: 'nosuchgroup.lg', technicalKey: 'nosuchgroup.lg' },
   ]) {
     assert.equal(classify(fake), null, `the audit must catch an orphan: ${fake.key}`);
   }
 
-  const counts = { quoted: 0, fingerprint: 0, template: 0, material: 0, g1: 0, orphan: 0 };
+  const counts = { quoted: 0, fingerprint: 0, template: 0, material: 0, token: 0, g1: 0, orphan: 0 };
   const orphans = [];
   for (const entry of schema.STUDIO_REGISTRY) {
     const reader = classify(entry);
@@ -1017,7 +1043,7 @@ test('registry audit: every static entry has a reader in production source — z
   console.log(
     `  ℹ registry audit: ${schema.STUDIO_REGISTRY.length} static entries — ` +
       `${counts.quoted} quoted literal, ${counts.template} template read, ` +
-      `${counts.material} material prop, ${counts.g1} G1 dial, ` +
+      `${counts.material} material prop, ${counts.token} live token getter, ${counts.g1} G1 dial, ` +
       `${counts.fingerprint} fingerprint array, ${counts.orphan} ORPHAN`,
   );
 
@@ -1027,7 +1053,7 @@ test('registry audit: every static entry has a reader in production source — z
     'a dial no production file reads cannot change the app — delete the entry or wire a reader',
   );
   assert.equal(
-    counts.quoted + counts.fingerprint + counts.template + counts.material + counts.g1,
+    counts.quoted + counts.fingerprint + counts.template + counts.material + counts.token + counts.g1,
     schema.STUDIO_REGISTRY.length,
     'every static entry must land in exactly one classification',
   );
@@ -1322,18 +1348,138 @@ test('chrome and layout dials: defaults mirror the shipped values; spacing/divid
   // S2 left this category honestly empty because there was no shared divider
   // to dial. RUN T1 (C4) built one, so the assertion FLIPS: the category must
   // now carry live dials rather than none.
-  const dividerEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'borders');
+  const borderEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'borders');
   assert.deepEqual(
-    dividerEntries.map((entry) => entry.key).sort(),
-    ['divider.color', 'divider.inset', 'divider.thickness'],
-    'Borders & Dividers must carry the Divider primitive’s dials',
+    borderEntries.map((entry) => entry.key).sort(),
+    [
+      'divider.color', 'divider.inset', 'divider.thickness',
+      'radius.lg', 'radius.md', 'radius.sm', 'radius.xl', 'radius.xs', 'radius.xxl',
+      'theme.radius.lg', 'theme.radius.md', 'theme.radius.sm', 'theme.radius.xl',
+    ],
+    'Borders & Dividers must carry both corner scales and the Divider’s dials',
   );
 
-  // The remaining honest absence: a spacing multiplier or per-step token dial
-  // would silently do nothing while the tokens are consumed at stylesheet
-  // build time. C5 lands the live ones.
-  const spacingEntries = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'spacing');
-  assert.deepEqual(spacingEntries, [], 'no dead spacing dials — the omission is the report’s');
+  // S2 held this category empty on an honest premise: a spacing dial "would
+  // silently do nothing" while every token was consumed at stylesheet-build
+  // time. T1 (C2) removed the premise — the tokens resolve at read time and
+  // the style caches key on the metric generation — so the assertion FLIPS
+  // here too. Both scales, because this repo carries two.
+  const spacingKeys = schema.STUDIO_REGISTRY.filter((entry) => entry.category === 'spacing').map(
+    (entry) => entry.key,
+  );
+  assert.deepEqual(
+    spacingKeys,
+    [
+      'theme.spacing.xs', 'theme.spacing.sm', 'theme.spacing.md',
+      'theme.spacing.lg', 'theme.spacing.xl', 'theme.spacing.xxl',
+      'spacing.xs', 'spacing.sm', 'spacing.md', 'spacing.lg',
+      'spacing.xl', 'spacing.xxl', 'spacing.xxxl',
+    ],
+    'Spacing must carry both live scales, app first — it is the one that moves the app',
+  );
+});
+
+test('T1 (C5): every metric dial mirrors its shipped table, floors hold, and pill has no dial', async () => {
+  const schema = await schemaModule;
+  const tokens = await tokensModule;
+  const o = await overridesModule;
+  const ctx = await contextFor();
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+
+  /** Every dial that writes the metric bag, and the table it must mirror. */
+  const TABLES = {
+    spacing: 'SPACING_DEFAULTS',
+    radius: 'RADIUS_DEFAULTS',
+    controls: 'CONTROL_DEFAULTS',
+    layout: 'LAYOUT_METRIC_DEFAULTS',
+    'theme.spacing': 'THEME_SPACING_DEFAULTS',
+    'theme.radius': 'THEME_RADIUS_DEFAULTS',
+  };
+
+  let checked = 0;
+  for (const [group, tableName] of Object.entries(TABLES)) {
+    const table = tokens[tableName];
+    assert.ok(table, `${tableName} must be exported from ui/tokens.ts`);
+    for (const [step, value] of Object.entries(table)) {
+      const entry = byKey.get(`${group}.${step}`);
+      assert.ok(entry, `${group}.${step} is live but carries no dial`);
+      assert.equal(entry.defaultValue(ctx), value, `${entry.key} must default to its shipped ${value}`);
+      assert.equal(entry.kind, 'number');
+      assert.equal(entry.scope, 'token', 'a token dial is never local');
+      assert.ok(entry.min != null && entry.max != null && entry.step != null, `${entry.key} needs a range`);
+      assert.ok(value >= entry.min && value <= entry.max, `${entry.key}'s default sits outside its own range`);
+      checked += 1;
+    }
+  }
+  assert.equal(checked, 30, 'all six live scales are dialled, end to end');
+
+  // THE TOUCH FLOOR IS NOT NEGOTIABLE (CLAUDE.md). No control-height dial may
+  // be turned below 44 — the schema range is the enforcement, because
+  // controls.minTouchTarget itself deliberately has no dial.
+  for (const key of ['controls.buttonHeight', 'controls.buttonHeightSmall', 'controls.fieldHeight', 'controls.iconButton']) {
+    assert.ok(byKey.get(key).min >= 44, `${key} must not be dialable below the 44pt touch floor`);
+  }
+  assert.equal(byKey.has('controls.minTouchTarget'), false, 'the floor itself is not a dial');
+
+  // A CAPSULE IS A SHAPE, NOT A SIZE.
+  assert.equal(byKey.has('radius.pill'), false, 'pill radius has no dial');
+  assert.equal(byKey.has('theme.radius.pill'), false);
+
+  // The write reaches the METRIC bag — which is what bumps the generation
+  // that rebuilds every cached stylesheet — and not the values bag.
+  try {
+    const gen = o.metricsGeneration();
+    byKey.get('theme.spacing.lg').write(22);
+    assert.equal(o.getDesignOverrides().metrics['theme.spacing.lg'], 22);
+    assert.equal(o.getDesignOverrides().values?.['theme.spacing.lg'], undefined, 'never the values bag');
+    assert.equal(o.metricsGeneration(), gen + 1);
+    assert.equal(o.liveMetric('theme.spacing.lg'), 22);
+    byKey.get('theme.spacing.lg').write(undefined);
+    assert.equal(o.liveMetric('theme.spacing.lg'), undefined, 'and reset clears it');
+  } finally {
+    o.resetDesignOverrides();
+  }
+});
+
+test('T1 (C5/D9): an untouched child follows its parent, and its reset returns it to inheriting', async () => {
+  const schema = await schemaModule;
+  const o = await overridesModule;
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+
+  const chains = schema.STUDIO_REGISTRY.filter((entry) => entry.inheritsFrom);
+  assert.ok(chains.length >= 20, 'the mechanism must carry real chains, not one demo');
+
+  const child = byKey.get('header.padX');
+  const parent = byKey.get('spacing.lg');
+  assert.equal(child.inheritsFrom, 'spacing.lg', 'the header padding is the Emerald large gap');
+
+  const base = await contextFor();
+  const shipped = parent.defaultValue(base);
+  try {
+    // 1. THE PARENT MOVES AND THE UNTOUCHED CHILD FOLLOWS.
+    parent.write(shipped + 6);
+    const moved = await contextFor();
+    assert.equal(schema.resolveDialValue(child.key, moved), shipped + 6);
+    assert.equal(schema.currentValueOf(child, moved), shipped + 6);
+    assert.equal(schema.isModified(child, moved), false, 'following a parent is not being modified');
+    assert.equal(schema.inheritedFrom(child, moved)?.plainLabel, parent.plainLabel);
+
+    // 2. TOUCHING THE CHILD ENDS THE INHERITANCE.
+    child.write(9);
+    const touched = await contextFor();
+    assert.equal(schema.currentValueOf(child, touched), 9, 'its own value wins');
+    assert.equal(schema.inheritedFrom(child, touched), null, 'and the panel stops claiming otherwise');
+
+    // 3. AND ITS RESET RETURNS IT TO INHERITING, NOT TO A FROZEN NUMBER.
+    child.write(undefined);
+    const back = await contextFor();
+    assert.equal(schema.inheritedFrom(back && child, back)?.key, parent.key);
+    assert.equal(schema.currentValueOf(child, back), shipped + 6, 'so it shows its parent again');
+  } finally {
+    o.resetDesignOverrides();
+  }
+  const clean = await contextFor();
+  assert.equal(schema.currentValueOf(child, clean), shipped, 'and a full reset lands on the shipped value');
 });
 
 test('T1 (C4): the Divider ships the hairline three surfaces already agree on', async () => {

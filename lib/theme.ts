@@ -6,6 +6,8 @@ import {
   metricGeneration,
   metricGroup,
   shadows as tokenShadows,
+  THEME_RADIUS_DEFAULTS,
+  THEME_SPACING_DEFAULTS,
   withAlpha as alpha,
 } from '../ui/tokens';
 
@@ -244,24 +246,12 @@ export const darkColors: ColorPalette = {
  * differ, and pointing one at the other would have moved rendered pixels in
  * every one of those 92 files. Merging them is a screen-by-screen migration,
  * which is not this run.
+ *
+ * The NUMBERS live in ui/tokens.ts beside §I's, because that file is the token
+ * definition layer and the studio registry has to read both scales' defaults
+ * from one place. What lives here is the live binding every screen imports.
  */
-export const THEME_SPACING_DEFAULTS = {
-  xs: 4,
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-  xxl: 32,
-} as const;
-
 export const spacing = metricGroup('theme.spacing', THEME_SPACING_DEFAULTS, {});
-
-export const THEME_RADIUS_DEFAULTS = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 24,
-} as const;
 
 export const radius = metricGroup('theme.radius', THEME_RADIUS_DEFAULTS, {
   /** A capsule, not a size — see ui/tokens.ts's `radius.pill`. No dial. */
