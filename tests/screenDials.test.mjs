@@ -69,6 +69,19 @@ const SCREENS = [
       { key: 'home.jobCard.metaPaddingY', drew: 10, parent: null, fallback: '10' },
     ],
   },
+  {
+    subcategory: 'Worker Home',
+    file: 'screens/WorkerHomeScreen.tsx',
+    prefix: 'workerHome',
+    scale: 'theme',
+    dials: [
+      { key: 'workerHome.summaryCard.radius', drew: 16, parent: 'theme.radius.lg', fallback: 'radius.lg' },
+      { key: 'workerHome.summaryCard.gap', drew: 14, parent: null, fallback: '14' },
+      { key: 'workerHome.content.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'workerHome.content.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
+      { key: 'workerHome.modeSwitch.paddingX', drew: 13, parent: null, fallback: '13' },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------------------

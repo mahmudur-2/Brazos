@@ -1722,6 +1722,73 @@ function screenDialEntries(): StudioEntry[] {
         defaultValue: 10,
       },
     ]),
+    // C2 — screens/WorkerHomeScreen.tsx. Also on the `theme.*` scale. Left
+    // undialled on purpose: the search field (its shape, height and roundness
+    // are the operator's standing rejection), the hero crop (same), the count
+    // pills and the summary divider (tests/workerHome.test.mjs prices the
+    // 4D-6 card term by term, and lifting those would cost the fence its
+    // arithmetic rather than one regex), and the service chip row (held
+    // byte-identical to Customer Home's by the same file).
+    ...dialEntries('screens', 'Worker Home', [
+      {
+        key: 'workerHome.summaryCard.radius',
+        label: 'Availability card — corner roundness',
+        description: 'The gold-ringed card holding the Online toggle and the potential earnings.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.radius.lg',
+        defaultValue: THEME_RADIUS_DEFAULTS.lg,
+      },
+      {
+        key: 'workerHome.summaryCard.gap',
+        label: 'Availability card — row gap',
+        description: 'Between the card’s two halves and the count pills below them.',
+        tier: 'basic',
+        scope: 'local',
+        min: 0,
+        max: 32,
+        step: 1,
+        defaultValue: 14,
+      },
+      {
+        key: 'workerHome.content.paddingX',
+        label: 'Screen gutter',
+        description: 'How far Worker Home’s whole column keeps from the left and right edges.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 40,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'workerHome.content.gap',
+        label: 'Section gap',
+        description: 'Between every block down the screen — hero, search, chips, card, feed.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 48,
+        step: 1,
+        inheritsFrom: 'theme.spacing.lg',
+        defaultValue: THEME_SPACING_DEFAULTS.lg,
+      },
+      {
+        key: 'workerHome.modeSwitch.paddingX',
+        label: 'Switch-to-Customer pill — side padding',
+        description: 'How much room the mode pill keeps either side of its label, which is what sets its width.',
+        tier: 'advanced',
+        scope: 'local',
+        min: 0,
+        max: 28,
+        step: 1,
+        defaultValue: 13,
+      },
+    ]),
   ];
 }
 

@@ -45,6 +45,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
+import { useDialNumber } from '../lib/designOverrides';
 import { SearchBar, Toggle, useFloatingNavClearance } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
@@ -84,6 +85,17 @@ type NearbyState = 'checking' | 'unavailable' | 'loading' | 'ready';
 export function WorkerHomeScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  // RUN T2 (C2) — WORKER HOME'S OWN DIALS. Each falls back to the number this
+  // file drew before the dial existed, spelled here and nowhere else. The two
+  // that answer to a token take the `theme.*` scale, because this file imports
+  // `spacing`/`radius` from lib/theme — ui/tokens' bare `radius.lg` is 17, not
+  // 16, and pointing a child at it would move the card the moment the operator
+  // turned the parent.
+  const summaryCardRadius = useDialNumber('workerHome.summaryCard.radius') ?? radius.lg;
+  const summaryCardGap = useDialNumber('workerHome.summaryCard.gap') ?? 14;
+  const contentPaddingX = useDialNumber('workerHome.content.paddingX') ?? spacing.lg;
+  const contentGap = useDialNumber('workerHome.content.gap') ?? spacing.lg;
+  const modeSwitchPaddingX = useDialNumber('workerHome.modeSwitch.paddingX') ?? 13;
   // RUN GROUND1 (C3): the nav pill is out of layout flow on this route, so this
   // scene is the whole screen and the atmosphere behind it reaches the bottom
   // edge instead of stopping at a band above the bar. The pill's footprint is
@@ -241,7 +253,10 @@ export function WorkerHomeScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: navClearance }]}
+          contentContainerStyle={[
+            styles.content,
+            { paddingHorizontal: contentPaddingX, gap: contentGap, paddingBottom: navClearance },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -275,7 +290,11 @@ export function WorkerHomeScreen() {
             <Pressable
               onPress={switchToCustomer}
               disabled={switching}
-              style={({ pressed }) => [styles.modeSwitch, pressed && styles.modeSwitchPressed]}
+              style={({ pressed }) => [
+                styles.modeSwitch,
+                { paddingHorizontal: modeSwitchPaddingX },
+                pressed && styles.modeSwitchPressed,
+              ]}
               accessibilityRole="button"
               accessibilityLabel="Switch to Customer"
               accessibilityHint="Returns to posting and managing your own jobs"
@@ -402,7 +421,13 @@ export function WorkerHomeScreen() {
               "Offline", "Visible"/"Not Visible") is operator-authored — it
               renders the same phase53 accepting_work fact through the same
               toggle; nothing here is device presence. -------------------- */}
-          <View style={[styles.summaryCard, isDark && shadows.cardDark]}>
+          <View
+            style={[
+              styles.summaryCard,
+              { gap: summaryCardGap, borderRadius: summaryCardRadius },
+              isDark && shadows.cardDark,
+            ]}
+          >
             <View style={styles.summaryRow}>
               <View style={styles.availabilityHalf}>
                 <Text style={styles.summaryEyebrow}>AVAILABLE NOW</Text>
@@ -592,7 +617,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   content: {
-    paddingHorizontal: spacing.lg,
     paddingTop: spacing.sm,
     // The column reserved the bar's height for every screen, so a second
     // bottom inset here was a visible dead strip above the pill. RUN GROUND1
@@ -601,7 +625,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // — and it is applied at the call site from useFloatingNavClearance(),
     // because it depends on the device inset and this object cannot see one.
     paddingBottom: 0,
-    gap: spacing.lg,
   },
   greetingRow: {
     flexDirection: 'row',
@@ -637,7 +660,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     gap: 7,
     minHeight: 44,
-    paddingHorizontal: 13,
     borderRadius: radius.pill,
     borderWidth: 1.25,
     borderColor: colors.gold,
@@ -705,8 +727,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // row 2 sits 14pt below row 1, both columns share one 6pt vertical rhythm.
   summaryCard: {
     padding: layout.cardPadding,
-    gap: 14,
-    borderRadius: radius.lg,
     borderWidth: 1,
     borderColor: colors.gold,
     backgroundColor: colors.surface,

@@ -317,8 +317,13 @@ test('4D-6 right column: serif emerald amount via formatBudget, "across N jobs"'
 test('4D-6 card geometry: padding 14, 14pt row gap, 1pt divider at 14pt margins, 6pt columns', () => {
   assert.match(
     code,
-    /summaryCard: \{\s*padding: layout\.cardPadding,\s*gap: 14,\s*borderRadius: radius\.lg,\s*borderWidth: 1,\s*borderColor: colors\.gold,\s*backgroundColor: colors\.surface,/
+    /summaryCard: \{\s*padding: layout\.cardPadding,\s*borderWidth: 1,\s*borderColor: colors\.gold,\s*backgroundColor: colors\.surface,/
   );
+  // RUN T2 (C2): the row gap and the corner are now the operator's, so they
+  // are spelled at the wearer instead of in the stylesheet — ONCE, as the
+  // fallback. Both numbers are still pinned here; only their address moved.
+  assert.match(code, /useDialNumber\('workerHome\.summaryCard\.gap'\) \?\? 14/);
+  assert.match(code, /useDialNumber\('workerHome\.summaryCard\.radius'\) \?\? radius\.lg/);
   assert.match(
     code,
     /summaryDivider: \{\s*width: 1,\s*alignSelf: 'stretch',\s*marginHorizontal: 14,\s*backgroundColor: colors\.border,\s*\}/
