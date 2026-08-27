@@ -791,6 +791,68 @@ test('nav dials: defaults mirror the tokens, the [+] derives from the live bar, 
   assert.ok(navKeys.includes('nav.spread') && navKeys.includes('nav.centerClearance'));
 });
 
+test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster in the bar', async () => {
+  const tokens = await tokensModule;
+  const schema = await schemaModule;
+  const bar = stripComments(await read('ui/primitives/BottomNav.tsx'));
+  const surface = stripComments(await read('ui/primitives/Surface.tsx'));
+
+  // ---- D11, SOLID NAV GROUND --------------------------------------------
+  assert.equal(tokens.materials.chrome.blur, 0, 'the chrome material no longer blurs');
+  assert.equal(tokens.materials.chrome.scrimAlpha, 1, 'the chrome scrim is opaque');
+  assert.equal(tokens.materials.chrome.fallbackScrimAlpha, 1, 'and opaque without blur too');
+  // The same material at a different mix — everything else is untouched.
+  assert.equal(tokens.materials.chrome.scrimColor, '#071B15');
+  assert.equal(tokens.materials.chrome.borderColor, tokens.brand.mint);
+  assert.equal(tokens.materials.chrome.borderAlpha, 0.2);
+  assert.equal(tokens.materials.chrome.radius, null);
+  assert.equal(tokens.materials.chrome.radiusTopOnly, false);
+  // Sheet and menu are NOT dragged along: both still blur under a
+  // translucent scrim, so this is the nav's ground and nothing else's.
+  for (const name of ['sheet', 'menu']) {
+    assert.ok(tokens.materials[name].blur > 0, `${name} must still blur`);
+    assert.ok(tokens.materials[name].scrimAlpha < 1, `${name}'s scrim must stay translucent`);
+  }
+  // The blur mounts ONLY where it can be seen.
+  assert.match(
+    surface.replace(/\s+/g, ' '),
+    /\{isDark && !flat && spec\.blur > 0 && scrimAlpha < 1 \?/,
+    'the BlurLayer must not mount behind an opaque scrim or at zero blur',
+  );
+  // The registry's chrome dials read the tokens, so they launch at the new
+  // values and keep working — a solid ground is a default, not a removal.
+  const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
+  const ctx = await contextFor();
+  assert.equal(byKey.get('material.chrome.blur').defaultValue(ctx), 0);
+  assert.equal(byKey.get('material.chrome.scrimAlpha').defaultValue(ctx), 1);
+  assert.equal(byKey.get('material.chrome.fallbackScrimAlpha').defaultValue(ctx), 1);
+
+  // ---- D14, THE [+] RING GOES CHAMPAGNE (dark only) ---------------------
+  assert.equal(tokens.navBar.ringColorDark, '#E6D19A');
+  assert.match(bar, /borderColor: navBar\.ringColorDark,/, 'the dark ring reads the token');
+  assert.doesNotMatch(bar, /#E6D19A/i, 'the hex belongs in ui/tokens.ts, never at the call site');
+  // The registry default follows the token; LIGHT is untouched.
+  assert.equal(byKey.get('create.border').defaultValue({ ...ctx, isDark: true }), '#E6D19A');
+  assert.equal(
+    byKey.get('create.border').defaultValue({ ...ctx, isDark: false }),
+    ctx.appLight.goldDeep,
+    "light keeps H3's deepened gold",
+  );
+  // Nothing else about the [+] moved.
+  assert.match(bar, /backgroundColor: colors\.gold,/, 'the fill stays');
+  assert.match(bar, /borderColor: colors\.goldDeep,/, "light's ring stays");
+
+  // ---- D16, NO RASTER IN THE BAR (a proof, not a change) ----------------
+  // Every mark in the bar is an Ionicons font glyph or a styled View, so it
+  // is resolution-independent on every device.
+  assert.doesNotMatch(bar, /\bfrom 'react-native'.*\bImage\b/, 'no Image import');
+  assert.doesNotMatch(bar, /<Image\b/, 'the bar renders no Image');
+  assert.doesNotMatch(bar, /\bImageBackground\b/, 'the bar renders no ImageBackground');
+  assert.doesNotMatch(bar, /require\(/, 'the bar bundles no asset');
+  assert.doesNotMatch(bar, /\ssource=/, 'nothing in the bar takes an image source');
+  assert.match(bar, /<Ionicons/, 'the marks are font glyphs');
+});
+
 test('the narrow typography exception: nav label size is the ONLY font dial', async () => {
   const schema = await schemaModule;
   const fontDials = schema.STUDIO_REGISTRY.filter(

@@ -889,9 +889,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // The DEPTH is on the shared style above, not here — see the note there.
   // These two branches differ in COLOUR and in nothing else, which is what
   // makes them a palette translation rather than two designs.
+  //
+  // RUN S3 (D14) — THE RING GOES CHAMPAGNE, dark only. `greetingSlate` was
+  // the light greeting grey borrowed across the palettes; a warm pale metal
+  // reads as a ring around the gold tile rather than as a cold seam. The hue
+  // lives in ui/tokens.ts (`navBar.ringColorDark`), which is where a new hex
+  // belongs, and this branch stays COLOUR-ONLY — the fill, the geometry and
+  // the depth are all untouched.
   createButtonDark: {
     backgroundColor: colors.gold,
-    borderColor: colors.greetingSlate,
+    borderColor: navBar.ringColorDark,
   },
   // RUN H2: light stops sharing dark's tile. It fills with the light Post-a-job
   // pill's own green. Still an OPAQUE fill, so the shared elevation cannot

@@ -539,7 +539,13 @@ test('L-002 fence: the category accents moved to the token layer at unchanged va
 // ---------------------------------------------------------------------------
 
 const MATERIALS_AS_DISPATCHED = {
-  chrome: { blur: 30, scrimAlpha: 0.55, borderAlpha: 0.2, fallbackScrimAlpha: 0.85, radius: null, radiusTopOnly: false },
+  // RUN S3 (D11) — SOLID NAV GROUND: the chrome material is opaque now
+  // (blur 0, both scrims at 1). The ink, the hairline hue, the border alpha
+  // and the radius contract did NOT move — this is the same material at a
+  // different mix — so the one-scrim-ink assertion below still holds, and the
+  // contrast assertion still passes on its own arithmetic (the worst-case
+  // ground simply becomes the pure scrim ink rather than a wash of it).
+  chrome: { blur: 0, scrimAlpha: 1, borderAlpha: 0.2, fallbackScrimAlpha: 1, radius: null, radiusTopOnly: false },
   sheet: { blur: 40, scrimAlpha: 0.72, borderAlpha: 0.16, fallbackScrimAlpha: 0.92, radius: 28, radiusTopOnly: true },
   menu: { blur: 50, scrimAlpha: 0.82, borderAlpha: 0.14, fallbackScrimAlpha: 0.95, radius: 16, radiusTopOnly: false },
 };

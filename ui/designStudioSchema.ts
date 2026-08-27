@@ -602,8 +602,9 @@ function navigationDialEntries(): StudioEntry[] {
       tier: 'advanced',
       kind: 'color',
       scope: 'local',
-      defaultValue: (ctx) =>
-        ctx.isDark ? (ctx.appDark.greetingSlate ?? '') : (ctx.appLight.goldDeep ?? ''),
+      // S3 (D14): dark's ring is the champagne token now; light keeps H3's
+      // deepened gold. The dial itself is unchanged — only its default moved.
+      defaultValue: (ctx) => (ctx.isDark ? navBar.ringColorDark : (ctx.appLight.goldDeep ?? '')),
     }),
     create({
       key: 'create.glowAlpha',

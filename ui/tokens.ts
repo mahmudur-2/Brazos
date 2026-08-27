@@ -477,13 +477,21 @@ export type MaterialSpec = {
  * through lib/designOverrides.ts (RUN G1 C2) — these are the launch defaults.
  */
 export const materials: Record<MaterialName, MaterialSpec> = {
+  // RUN S3 (D11) — SOLID NAV GROUND. The chrome material stops being glass:
+  // the scrim is opaque at 1 and the blur is 0, so the bar is a solid emerald
+  // ground rather than a translucent one. The ink, the hairline hue, the
+  // border alpha and the radius contract are untouched — this is the same
+  // material at a different mix, not a second material — and the studio's
+  // chrome dials keep working, now launching at these values. Light is
+  // unaffected by construction: ui/primitives/Surface.tsx's light path never
+  // reads the material at all.
   chrome: {
-    blur: 30,
+    blur: 0,
     scrimColor: GLASS_SCRIM,
-    scrimAlpha: 0.55,
+    scrimAlpha: 1,
     borderColor: brand.mint,
     borderAlpha: 0.2,
-    fallbackScrimAlpha: 0.85,
+    fallbackScrimAlpha: 1,
     radius: null,
     radiusTopOnly: false,
   },
@@ -541,6 +549,17 @@ export const navBar = {
   createGlyphRatio: 0.615,
   /** RUN H2's operator dial: the dark [ + ]'s gold-glow strength. */
   createGlowAlpha: 0.25,
+  /**
+   * RUN S3 (D14) — THE DARK [ + ]'s RING GOES CHAMPAGNE. It was
+   * `greetingSlate`, the light greeting grey borrowed across the palettes;
+   * a warm pale metal reads as a ring around the gold tile instead of as a
+   * cold seam. Declared HERE rather than in a palette because it is the
+   * control's own line-work, not a role either theme resolves — and because
+   * ui/tokens.ts is the one file a new hex may be spelled in.
+   *
+   * Dark only: light keeps `goldDeep` (RUN H3), untouched.
+   */
+  ringColorDark: '#E6D19A',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -684,8 +703,9 @@ export const constantAccents = {
    *  the light [ + ] and the DARK Post-a-job pill; draws the dark [ + ]'s
    *  glyph and the light greeting name. */
   postPillGreen: brand.emerald,
-  /** The light greeting grey — the value light's `homeSlate` carries. Rings
-   *  the dark [ + ] and draws the light [ + ]'s glyph. */
+  /** The light greeting grey — the value light's `homeSlate` carries. It rang
+   *  the dark [ + ] until RUN S3 (D14) gave that ring `navBar.ringColorDark`;
+   *  it stays a palette token, editable in the studio's Colors category. */
   greetingSlate: '#526477',
   /**
    * RUN H3 — one shade darker than LIGHT's `gold` (#C8A15B), and the light

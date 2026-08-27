@@ -135,7 +135,13 @@ export function Surface({
 
   return (
     <View style={[corner, hairline, fill, halo, style]}>
-      {isDark && !flat ? (
+      {/* RUN S3 (D11) — THE BLUR MOUNTS ONLY WHERE IT CAN BE SEEN. A material
+          with no blur, or with an opaque scrim over it, renders an expo-blur
+          view that nothing can show through: pure cost, zero pixels. The
+          chrome material is exactly that since D11 (blur 0, scrim 1), so the
+          nav bar stops mounting a BlurView it cannot use. Sheet and menu are
+          unaffected — both still blur under a translucent scrim. */}
+      {isDark && !flat && spec.blur > 0 && scrimAlpha < 1 ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, corner, styles.clip]}>
           <BlurLayer intensity={spec.blur} />
         </View>

@@ -1761,15 +1761,21 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
     /createButtonDark: \{ backgroundColor: colors\.gold,/,
     'the dark control must be FILLED with palette gold'
   );
-  const darkRing = /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: colors\.(\w+),/.exec(flat);
+  // RUN S3 (D14): the ring's hue moved from the palette to ui/tokens.ts's
+  // `navBar` — the control's own line-work rather than a role either theme
+  // resolves. What this pins is UNCHANGED IN KIND: the ring must still be a
+  // TOKEN READ, never a hex spelled at the call site, and never the fill's
+  // own colour. Only which token surface it comes from widened.
+  const darkRing =
+    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: (colors|navBar)\.(\w+),/.exec(flat);
   assert.ok(
     darkRing,
-    'the dark control must still declare a ring, and it must come from the palette — a raw hex ' +
-      'here would be a new colour, which the Prestige pass does not introduce'
+    'the dark control must still declare a ring, and it must come from a token surface — the ' +
+      'palette or ui/tokens.ts navBar — a raw hex here would be a new colour spelled at the call site'
   );
   // home(18) ADDS THE HALF home(11) COULD NOT, because it was red until now.
   assert.notEqual(
-    darkRing[1],
+    darkRing[2],
     'gold',
     'a gold ring on a gold fill is not a ring; it must be a dark token'
   );
@@ -2294,10 +2300,15 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
 
   // The DARK branch is asserted WHOLE, because "light only" is a claim about
   // dark every bit as much as it is a claim about light.
+  //
+  // RUN S3 (D14) moved the dark RING — and only the ring — to the champagne
+  // token `navBar.ringColorDark`. H3's claim is unaffected: the branch is
+  // still asserted whole here, and it still says the dark tile keeps its gold
+  // FILL, which is the half H3 was about. The slate is what changed.
   assert.match(
     bar,
-    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: colors\.greetingSlate, \}/,
-    'C1 is LIGHT ONLY — the dark tile keeps its gold fill and its slate ring'
+    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: navBar\.ringColorDark, \}/,
+    "H3 is LIGHT ONLY and the dark tile keeps its gold fill; S3 D14 owns the dark ring's hue"
   );
 
   // ---- the derivation, so "one shade down" cannot become a taste edit ------
