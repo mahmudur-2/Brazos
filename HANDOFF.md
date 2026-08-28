@@ -43,6 +43,66 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## THE LAST RUN STOPPED — RUN R1 (2026-08-28), config and release
+
+RUN R1 was to land the config-and-release batch: the pre-approved dependency
+batch (C1), a zod-validated `config/env.ts` plus both Supabase clients and the
+screenshot harness (C2), `app.config.ts` replacing `app.json` (C3), a rewritten
+`eas.json` and pre-install gate (C4), `lib/remoteConfig.ts` (C5), and scripts +
+CI (C6). **It stopped at C1 and no app code changed.** The "Current state"
+section below is still the accurate description of the app.
+
+**What landed:** one commit, `CLAUDE.md` only — decision D1, that Android is no
+longer deferred. "Target and trunk" now reads that Android is built, tested and
+shipped alongside iOS and that work may target it. No other section moved; the
+locked list and the deny matrix are untouched.
+
+**The blocker is an active hook, not a missing approval.**
+`.claude/hooks/guard.ps1` rule 7 — GUARD-DEPS — blocks every dependency
+mutation as a PreToolUse hook: the package-manager install / uninstall / update
+/ add / remove verbs for npm, yarn, pnpm and bun, and Expo's own install
+subcommand by name. Two probes were run; both returned
+`BLOCK GUARD-DEPS dependency-mutation`. The dispatch pre-approving the packages
+answers CLAUDE.md's "a required new dependency" stop — it cannot answer the
+guard, and it says so itself ("never adds to, overrides, or restates CLAUDE.md
+or the deny matrix"). Note GUARD-DEPS is hook-only: unlike the push and database
+prohibitions it has no second layer in `permissions.deny`.
+
+Every later R1 commit is downstream of that install — `config/env.ts` cannot
+typecheck without `zod`, and `app.config.ts` would declare plugins for packages
+that are not installed — so the run handed back with the tree otherwise clean
+rather than landing a half-migrated config.
+
+**To unblock, run these outside the agent session, then re-dispatch R1:**
+
+```
+npx expo install @stripe/stripe-react-native @sentry/react-native \
+  expo-localization @react-native-community/netinfo @shopify/flash-list \
+  posthog-react-native
+npm i @tanstack/react-query @tanstack/react-query-persist-client \
+  @tanstack/query-async-storage-persister i18next react-i18next zod
+npm i -D i18next-parser supabase
+npm uninstall react-native-dotenv expo-task-manager
+```
+
+`react-native-maps` stays at `1.20.1` — do not change it. Expo's installer falls
+back to latest for anything outside the SDK 54 versioned list. Removing
+`expo-task-manager` is verified safe: nothing imports it. Its only references
+are prose comments (`hooks/useLiveLocation.ts:27`, `lib/featureFlags.ts:56`
+`:65` `:68`) and two fences that assert its ABSENCE
+(`tests/liveLocation.test.mjs:372-373`, `tests/motion120.test.mjs:850`), which
+must pass unchanged. `@env` is imported by exactly two files — `lib/supabase.ts`
+and `lib/supabase.web.ts` — both of which C2/D3 rewrite, so dropping
+`react-native-dotenv` leaves no orphan import.
+
+**Two files R1's C6 was told to create already exist**, and a re-dispatch should
+preserve rather than replace them: `.nvmrc` (pins `24`, matching the installed
+Node v24.18.0) and `.github/workflows/ci.yml`.
+
+**Baseline at the stop:** `npm run verify` green — 1156 pass, 0 fail, exit 0 —
+at `f8bd87f`, and green again after the `CLAUDE.md` commit.
+
+
 ## Current state — after the 2026-08-27 screen-local dials (RUN T2)
 
 Twelve screens now offer the operator their own furniture. RUN T1 made the

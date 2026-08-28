@@ -21,14 +21,14 @@ implemented, the code wins and this file gets fixed.
 
 ## Target and trunk
 
-Expo / iOS native app. Android deferred — `app.json` carries a complete
-Android block and `npm run android` exists, but Android is not built, tested,
-or shipped, and no work should target it. Derive the Expo SDK from
-`package.json`; consult version-matched Expo docs only before changing
-behavior that depends on a version-sensitive Expo API — not for ordinary
-layout, styling, or app logic. Base branch is **`mainexpo`**: single trunk,
-all work lands there. Never switch or create a branch unless the dispatch
-prompt says so.
+Expo native app shipping on **iOS and Android**. Both are shipping targets:
+Android is built, tested and shipped alongside iOS, and work may target it.
+`app.json` carries a complete Android block and `npm run android` exists.
+Derive the Expo SDK from `package.json`; consult version-matched Expo docs
+only before changing behavior that depends on a version-sensitive Expo API —
+not for ordinary layout, styling, or app logic. Base branch is **`mainexpo`**:
+single trunk, all work lands there. Never switch or create a branch unless the
+dispatch prompt says so.
 
 ## Critical business invariants
 
