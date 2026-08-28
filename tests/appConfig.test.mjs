@@ -3,6 +3,9 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// Both refs come from the one module that defines them, so no project ref is
+// ever retyped into a test file.
+import { PRODUCTION_REF, STAGING_REF } from '../scripts/supabase-ref.mjs';
 
 // ===========================================================================
 // app.config.ts — the four deliberate changes it made to app.json, and the
@@ -118,6 +121,17 @@ test('all three variants point at the one icon that actually exists', () => {
   // be uncommented back into a broken build.
   assert.doesNotMatch(source, /app-icon-dev/);
   assert.doesNotMatch(source, /app-icon-beta/);
+});
+
+test('no project ref, URL or key is written into the app config', () => {
+  // app.config.ts is a BUILD CONFIGURATION FILE, and the rule that eas.json
+  // may name no project applies to it for the same reason: a ref committed
+  // into build configuration is a ref that ships wherever that configuration
+  // is read. The gate's own module is the single place either ref is spelled.
+  assert.equal(source.includes(PRODUCTION_REF), false, 'the production ref is in app.config.ts');
+  assert.equal(source.includes(STAGING_REF), false, 'the staging ref is in app.config.ts');
+  assert.doesNotMatch(source, /supabase\.(co|in)/i);
+  assert.doesNotMatch(source, /\beyJ|sb_publishable_|sb_pu_|sb_secret_/);
 });
 
 test('the config imports nothing at runtime, so it can never throw on a build machine', () => {
