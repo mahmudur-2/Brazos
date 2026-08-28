@@ -65,8 +65,8 @@
  * watchPositionAsync, no TaskManager task, no "Always" prompt. A share whose
  * updates stop because iOS suspended the app is an ACCEPTED outcome, because
  * the counterparty's honest upper bound is always the `expires_at` they
- * already hold and nothing can extend it. expo-task-manager stays in
- * package.json for its other users; this feature never touches it, and
+ * already hold and nothing can extend it. expo-task-manager has since been
+ * removed from package.json; this feature never used it, and
  * tests/liveLocation.test.mjs sweeps both files to keep it that way.
  *
  * A SHARE IS NOT A MESSAGE. `live_location_shares` has no row in `messages`,

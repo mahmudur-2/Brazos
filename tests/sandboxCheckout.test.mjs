@@ -55,9 +55,28 @@ test('payments availability is declared, never inferred from the build type', ()
 test('no real payment provider exists at any layer', async () => {
   const pkg = JSON.parse(await read('package.json'));
   const deps = Object.keys({ ...pkg.dependencies, ...pkg.devDependencies });
+
+  // THE ONE PERMITTED EXCEPTION, and it is named as an exact literal so the
+  // hole can never widen by accident. @stripe/stripe-react-native is the
+  // native CLIENT SDK: it tokenizes a card against a PUBLISHABLE key and can
+  // move no money by itself. It is not a provider here either — the resolver
+  // above still treats the string 'stripe' as garbage and fails closed, so
+  // the sandbox pair remains the only functional provider in the app.
+  const ALLOWED_PROVIDER_SDK = '@stripe/stripe-react-native';
+
+  // THE BARE SERVER SDK IS BANNED BY EXACT NAME, PERMANENTLY. `stripe` is the
+  // secret-key package, and a secret key inside a mobile bundle is the whole
+  // reason this fence exists. It gets its own assertion rather than relying on
+  // the substring sweep below, so narrowing that sweep can never quietly
+  // re-admit it.
+  assert.ok(
+    !deps.includes('stripe'),
+    'the bare `stripe` server SDK may never be a dependency'
+  );
+
   for (const banned of ['stripe', 'braintree', 'paypal', 'adyen', 'square']) {
     assert.ok(
-      !deps.some((d) => d.toLowerCase().includes(banned)),
+      !deps.some((d) => d !== ALLOWED_PROVIDER_SDK && d.toLowerCase().includes(banned)),
       `no ${banned} dependency may exist in Phase 5`
     );
   }
