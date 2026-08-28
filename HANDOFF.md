@@ -43,64 +43,95 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
-## THE LAST RUN STOPPED — RUN R1 (2026-08-28), config and release
+## RUN R1 COMPLETED (2026-08-28) — configuration and release
 
-RUN R1 was to land the config-and-release batch: the pre-approved dependency
-batch (C1), a zod-validated `config/env.ts` plus both Supabase clients and the
-screenshot harness (C2), `app.config.ts` replacing `app.json` (C3), a rewritten
-`eas.json` and pre-install gate (C4), `lib/remoteConfig.ts` (C5), and scripts +
-CI (C6). **It stopped at C1 and no app code changed.** The "Current state"
-section below is still the accurate description of the app.
+The config-and-release batch landed in full. The app no longer reads a virtual
+`@env` module, `app.json` is gone, `eas.json` carries no credentials, and three
+build variants can sit on one device. The earlier GUARD-DEPS stop is RESOLVED:
+the operator performed the dependency change and the one web-client edit by
+hand, outside any agent session, and this run installed nothing.
 
-**What landed:** one commit, `CLAUDE.md` only — decision D1, that Android is no
-longer deferred. "Target and trunk" now reads that Android is built, tested and
-shipped alongside iOS and that work may target it. No other section moved; the
-locked list and the deny matrix are untouched.
+| # | commit | what landed |
+|-|-|-|
+|C1|`c957711`|the installed dependencies, the payment-provider ban narrowed to fit, one stale flag comment|
+|C2|`17793db`|`config/env.ts`, the native DB client rewired, the Babel plugin removed, `env.d.ts` deleted, the shot harness given its own export environment|
+|C3|`25a3639`|`app.config.ts` replaces `app.json`; `tests/appConfig.test.mjs` is new|
+|C4|`b3fa9e3`|`eas.json` rewritten to four profiles; the pre-install gate reads the `EXPO_PUBLIC_` names|
+|C5|`e5c4e42`|`lib/remoteConfig.ts`, fallback-only until its table exists|
+|C6|(this commit)|the five package scripts and this live edge|
 
-**The blocker is an active hook, not a missing approval.**
-`.claude/hooks/guard.ps1` rule 7 — GUARD-DEPS — blocks every dependency
-mutation as a PreToolUse hook: the package-manager install / uninstall / update
-/ add / remove verbs for npm, yarn, pnpm and bun, and Expo's own install
-subcommand by name. Two probes were run; both returned
-`BLOCK GUARD-DEPS dependency-mutation`. The dispatch pre-approving the packages
-answers CLAUDE.md's "a required new dependency" stop — it cannot answer the
-guard, and it says so itself ("never adds to, overrides, or restates CLAUDE.md
-or the deny matrix"). Note GUARD-DEPS is hook-only: unlike the push and database
-prohibitions it has no second layer in `permissions.deny`.
+`npm run verify` exited 0 after every commit: 1156 (baseline, with one RED)
+→ 1156 → 1156 → 1163 → 1166 → 1166 → **1166 pass, 0 fail**. The baseline's one
+failure was the payment-provider fence rejecting the just-installed card SDK;
+C1 narrowed it and nothing has been red since.
 
-Every later R1 commit is downstream of that install — `config/env.ts` cannot
-typecheck without `zod`, and `app.config.ts` would declare plugins for packages
-that are not installed — so the run handed back with the tree otherwise clean
-rather than landing a half-migrated config.
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
 
-**To unblock, run these outside the agent session, then re-dispatch R1:**
+Create `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_KEY` in the EAS
+`development` and `production` environments (the old unprefixed names are no
+longer read by anything), and rename the same two keys in your local dotenv
+file — until you do, `expo start` builds an app that throws at launch naming
+the missing field.
 
-```
-npx expo install @stripe/stripe-react-native @sentry/react-native \
-  expo-localization @react-native-community/netinfo @shopify/flash-list \
-  posthog-react-native
-npm i @tanstack/react-query @tanstack/react-query-persist-client \
-  @tanstack/query-async-storage-persister i18next react-i18next zod
-npm i -D i18next-parser supabase
-npm uninstall react-native-dotenv expo-task-manager
-```
+### WHAT CHANGED ABOUT CONFIGURATION, IN ONE PLACE
 
-`react-native-maps` stays at `1.20.1` — do not change it. Expo's installer falls
-back to latest for anything outside the SDK 54 versioned list. Removing
-`expo-task-manager` is verified safe: nothing imports it. Its only references
-are prose comments (`hooks/useLiveLocation.ts:27`, `lib/featureFlags.ts:56`
-`:65` `:68`) and two fences that assert its ABSENCE
-(`tests/liveLocation.test.mjs:372-373`, `tests/motion120.test.mjs:850`), which
-must pass unchanged. `@env` is imported by exactly two files — `lib/supabase.ts`
-and `lib/supabase.web.ts` — both of which C2/D3 rewrite, so dropping
-`react-native-dotenv` leaves no orphan import.
+- **`config/env.ts` is the only module that reads `process.env` for app
+  configuration.** Eight `EXPO_PUBLIC_` variables, zod-validated at import,
+  throwing once with the failing field named. Each read is written out as its
+  own literal member expression: Metro substitutes only static ones, so a loop
+  or a destructure survives the transform as a lookup against an object that
+  does not exist on a device.
+- **Every variable gained the `EXPO_PUBLIC_` prefix.** The pre-install gate,
+  its fixtures and every reason string moved with them. `EXPO_PUBLIC_SUPABASE_URL`
+  CONTAINS the substring `SUPABASE_URL`, so a half-finished rename reads green;
+  a test now feeds the gate ONLY the old names and requires both absences.
+- **`app.config.ts` is a function of `APP_VARIANT`.** development and preview
+  suffix both `ios.bundleIdentifier` and `android.package` and carry their own
+  display names; production carries no suffix. `runtimeVersion` is `appVersion`
+  rather than a fingerprint, `supportsTablet` is false, and the Always-location
+  string and background mode are both gone.
+- **It imports a TYPE and nothing else, deliberately.** `config/env.ts` throws
+  on a malformed environment and the app config is evaluated by `expo start`,
+  `expo export` and every EAS build — a throw there breaks all three before
+  anything can report why. A fence asserts every import in the file is
+  type-only.
+- **`eas.json` holds no URL, no key and no project ref.** Credentials come from
+  the EAS environment each profile pins, and every profile pins one explicitly:
+  an absent `environment` does not mean "none", it means EAS picks a default
+  and lets its server-side variables override the file.
 
-**Two files R1's C6 was told to create already exist**, and a re-dispatch should
-preserve rather than replace them: `.nvmrc` (pins `24`, matching the installed
-Node v24.18.0) and `.github/workflows/ci.yml`.
+### THE `preview` NAME COLLISION IS NOW LIVE — READ BEFORE EDITING eas.json
 
-**Baseline at the stop:** `npm run verify` green — 1156 pass, 0 fail, exit 0 —
-at `f8bd87f`, and green again after the `CLAUDE.md` commit.
+The EAS **environment** named `preview` holds PRODUCTION credentials. There is
+now also a `preview` **build profile**, and it is pinned to STAGING. It
+therefore selects the `development` environment on purpose. That pairing looks
+like a typo and is not; "correcting" it to the matching name injects production
+credentials into a staging build. The gate would refuse the build, which is the
+point, but the fix is to leave it alone.
+
+### FOUR THINGS THE OPERATOR STILL OWNS
+
+1. **The EAS environment variables above.** Nothing builds correctly until they
+   exist under the new names.
+2. **`GOOGLE_MAPS_API_KEY`** is read for `android.config.googleMaps.apiKey` and
+   is never a literal. Unset resolves to undefined, which renders a blank
+   Android map rather than failing the build — an accepted interim state.
+   `react-native-maps` 1.20.1 ships no config plugin at all, so the native
+   config key is the only shape available.
+3. **`SENTRY_DISABLE_AUTO_UPLOAD` is `"true"` in every profile.** Without an
+   auth token, sentry-cli FAILS the build rather than skipping. R2 adds
+   `SENTRY_AUTH_TOKEN` and removes this.
+4. **Distinct dev and beta app icons.** All three variants point at
+   `assets/brand/app-icon-b-leaf.png`; the dev and beta files were specified but
+   never exported, and a variant pointed at a missing asset fails the build.
+
+### TWO SMALL THINGS THIS RUN LEFT DELIBERATELY
+
+- `CLAUDE.md` still references `app.json`, which no longer exists. Not fixed
+  here: `CLAUDE.md` was out of scope for this run.
+- `i18n:extract` runs the parser's own CLI, which looks for
+  `i18next-parser.config.js`. That file does not exist yet — the i18n run
+  creates it.
 
 
 ## Current state — after the 2026-08-27 screen-local dials (RUN T2)
