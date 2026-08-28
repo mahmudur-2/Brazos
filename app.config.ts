@@ -1,0 +1,206 @@
+import type { ConfigContext, ExpoConfig } from 'expo/config';
+
+/**
+ * THE APP CONFIG, replacing app.json so that three build variants can live on
+ * one device at once.
+ *
+ * IT IMPORTS NOTHING BUT A TYPE, AND THAT IS LOAD-BEARING. `import type` is
+ * erased at compile time, so this file pulls in no runtime module at all. In
+ * particular it must never import config/env.ts: that module validates the
+ * environment at import time and THROWS on a malformed one, and this file is
+ * evaluated by `expo start`, `expo export` and every EAS build. A throw here
+ * breaks all three before anything can report why. So the two variables below
+ * are read straight off process.env and nothing is validated.
+ *
+ * WHAT DECIDES A VARIANT is APP_VARIANT, a build-time variable set by the
+ * eas.json profile. It is deliberately NOT the EXPO_PUBLIC_ one: this file
+ * runs on the build machine, not in the bundle. eas.json sets both names to
+ * the same value, because the app reads EXPO_PUBLIC_APP_VARIANT at runtime
+ * (config/env.ts) and would otherwise think every build was a development one.
+ *
+ * AN UNKNOWN VARIANT RESOLVES TO development rather than to undefined. That is
+ * not validation — nothing here can throw — it just keeps a typo out of the
+ * bundle identifier, where it would produce a build whose identity is the
+ * string "undefined".
+ */
+
+const VARIANTS = ['development', 'preview', 'production'] as const;
+type Variant = (typeof VARIANTS)[number];
+
+const requested = process.env.APP_VARIANT;
+const VARIANT: Variant = (VARIANTS as readonly string[]).includes(requested ?? '')
+  ? (requested as Variant)
+  : 'development';
+
+/**
+ * Suffixes, so a developer build, a beta and the store build coexist on one
+ * device. Production carries NO suffix: its identifiers are the ones the App
+ * Store and Play Console already know, and changing either is a new app.
+ */
+const BUNDLE_SUFFIX: Record<Variant, string> = {
+  development: '.dev',
+  preview: '.preview',
+  production: '',
+};
+
+const DISPLAY_NAME: Record<Variant, string> = {
+  development: 'BRAZOS Dev',
+  preview: 'BRAZOS Beta',
+  production: 'BRAZOS',
+};
+
+/**
+ * ALL THREE VARIANTS SHARE ONE ICON, and that is a deliberate stop rather than
+ * an oversight. Distinct dev/beta icons were specified, but the two files they
+ * named do not exist in assets/brand/ and this run does not invent artwork.
+ * Shipping a variant pointed at a missing asset fails the build; shipping the
+ * real icon three times does not. Giving the dev and beta builds their own
+ * badge remains an operator task.
+ */
+const ICON: Record<Variant, string> = {
+  development: './assets/brand/app-icon-b-leaf.png',
+  preview: './assets/brand/app-icon-b-leaf.png',
+  production: './assets/brand/app-icon-b-leaf.png',
+};
+
+export default (_context: ConfigContext): ExpoConfig => ({
+  name: DISPLAY_NAME[VARIANT],
+  slug: 'BRAZOS',
+  version: '1.0.0',
+  // appVersion, not fingerprint: an OTA update is compatible with a binary
+  // when their `version` matches, which is a fact a human can read off this
+  // file. A fingerprint is recomputed from the whole native dependency graph,
+  // so an unrelated dependency bump silently orphans every installed build
+  // from its update channel.
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
+  orientation: 'portrait',
+  icon: ICON[VARIANT],
+  userInterfaceStyle: 'automatic',
+  scheme: 'brazos',
+  ios: {
+    // Phone-only. There is no tablet layout in this app, and declaring tablet
+    // support obliges every screen to work at iPad geometry.
+    supportsTablet: false,
+    bundleIdentifier: `app.brazos.mobile${BUNDLE_SUFFIX[VARIANT]}`,
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+      NSPhotoLibraryAddUsageDescription:
+        'Brazos saves job and work photos you choose to share to your photo library.',
+      NSFaceIDUsageDescription: 'Unlock hidden chats with Face ID.',
+      // NSLocationAlwaysAndWhenInUseUsageDescription and UIBackgroundModes are
+      // BOTH GONE, and they were removed together because they were one
+      // request. Live location sharing ships foreground-only by decision, not
+      // by omission (lib/featureFlags.ts LIVE_LOCATION records the refusal):
+      // it uses requestForegroundPermissionsAsync and watchPositionAsync, and
+      // defines no background task. Asking for Always, and declaring a
+      // location background mode, would have been asking for the most invasive
+      // permission iOS offers to support a case the feature deliberately does
+      // not serve — and App Review asks what uses them.
+    },
+  },
+  android: {
+    package: `com.brazos.app${BUNDLE_SUFFIX[VARIANT]}`,
+    adaptiveIcon: {
+      backgroundColor: '#082F27',
+      foregroundImage: './assets/icon.png',
+    },
+    predictiveBackGestureEnabled: false,
+    permissions: [
+      'android.permission.RECORD_AUDIO',
+      'android.permission.ACCESS_COARSE_LOCATION',
+      'android.permission.ACCESS_FINE_LOCATION',
+      'android.permission.MODIFY_AUDIO_SETTINGS',
+    ],
+    // ANDROID ONLY. iOS stays on Apple Maps — no PROVIDER_GOOGLE anywhere —
+    // so there is no iOS counterpart to this key and there must not be one.
+    // Never a literal: an unset variable resolves to undefined, which renders
+    // a blank Android map rather than failing the build. react-native-maps
+    // 1.20.1 ships no config plugin (no app.plugin.js in the package), so this
+    // native-config key is the only shape available.
+    config: {
+      googleMaps: {
+        apiKey: process.env.GOOGLE_MAPS_API_KEY,
+      },
+    },
+  },
+  // FROZEN WEB SURFACE — copied verbatim from app.json. `output: 'single'` is
+  // what makes the PWA a single-page app the service worker can cache.
+  web: {
+    favicon: './assets/favicon.png',
+    bundler: 'metro',
+    output: 'single',
+  },
+  // Carried over whole from app.json: same entries, same order, same usage
+  // strings to the byte. A usage string is what App Review reads out loud.
+  plugins: [
+    'expo-font',
+    [
+      'expo-image-picker',
+      {
+        photosPermission:
+          'BRAZOS uses your photo library so you can attach photos and videos to jobs, messages, reviews, and your profile.',
+        cameraPermission:
+          'BRAZOS uses the camera to take photos and videos of jobs, completed work, and your profile.',
+        microphonePermission:
+          'BRAZOS uses the microphone to record voice messages and job videos.',
+      },
+    ],
+    [
+      'expo-location',
+      {
+        locationWhenInUsePermission:
+          'BRAZOS uses your location to show nearby jobs and to place job locations on the map.',
+      },
+    ],
+    [
+      'expo-audio',
+      {
+        microphonePermission:
+          'BRAZOS uses the microphone to record voice messages and job videos.',
+      },
+    ],
+    [
+      'expo-notifications',
+      {
+        color: '#1F4D3A',
+      },
+    ],
+    [
+      'expo-speech-recognition',
+      {
+        microphonePermission:
+          'BRAZOS uses your microphone only while you are searching by voice, and stops listening when you finish speaking.',
+        speechRecognitionPermission:
+          'Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server.',
+      },
+    ],
+    'expo-video',
+    'expo-secure-store',
+    // AN EMPTY OPTIONS OBJECT, NOT A BARE STRING, and the difference is a
+    // crash. withStripeIos destructures props.merchantIdentifier, so a bare
+    // string passes undefined and `expo export` dies with a TypeError before
+    // Metro starts. Empty is also exactly the posture we want: an undefined
+    // merchant identifier writes NO Apple Pay entitlement, and enableGooglePay
+    // defaults to false, which actively REMOVES the Google Pay meta-data from
+    // the Android manifest. Neither wallet is enabled and neither may be — the
+    // merchant ID an Apple Pay entitlement would need does not exist in the
+    // developer account, and a missing one fails iOS code signing.
+    ['@stripe/stripe-react-native', {}],
+    // A bare string on purpose. R2 owns crash-reporting configuration and adds
+    // the organization, project and auth token then; the `/expo` plugin form
+    // wires a source-map upload that fails the build without a token.
+    '@sentry/react-native',
+    'expo-localization',
+  ],
+  extra: {
+    eas: {
+      projectId: 'c870820e-40cf-4367-9ae5-3eb2c6c8c481',
+    },
+  },
+  owner: 'mah_r2',
+  updates: {
+    url: 'https://u.expo.dev/c870820e-40cf-4367-9ae5-3eb2c6c8c481',
+  },
+});

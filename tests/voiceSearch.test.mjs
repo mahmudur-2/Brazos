@@ -687,9 +687,17 @@ test('[static] nothing outside lib/voiceSearch/index.ts touches expo-speech-reco
 // proven statically instead).
 // ===========================================================================
 
-test('[static] app.json registers the plugin with the two verbatim usage strings', () => {
-  const app = JSON.parse(read('app.json'));
-  const entry = app.expo.plugins.find(
+// app.json became app.config.ts when three build variants started needing
+// three bundle identifiers. The plugin list carried over whole, so the entry
+// and both usage strings are asserted at the same key path — one level
+// shallower, because the default export IS the expo config rather than a file
+// with an `expo` wrapper around it. The test is async only because the config
+// now has to be imported rather than parsed.
+test('[static] app.config.ts registers the plugin with the two verbatim usage strings', async () => {
+  const app = (await import(new URL('../app.config.ts', import.meta.url).href)).default({
+    config: {},
+  });
+  const entry = app.plugins.find(
     (plugin) => Array.isArray(plugin) && plugin[0] === 'expo-speech-recognition'
   );
   assert.ok(entry, 'the expo-speech-recognition config plugin must be registered');

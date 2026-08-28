@@ -2,16 +2,24 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { decode } from './pngGeometry.mjs';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const readBinary = (path) => readFile(new URL(`../${path}`, import.meta.url));
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
+// app.json is gone. app.config.ts replaces it so a dev build, a beta and the
+// store build can carry different bundle identifiers, and every key path this
+// file asserted still exists — minus the `expo` wrapper the static file needed,
+// because the default export IS the expo config. Imported with no transpiler,
+// the way tests/sandboxCheckout.test.mjs already imports a .ts module.
+const APP_CONFIG = pathToFileURL(join(root, 'app.config.ts')).href;
+const loadAppConfig = async () => (await import(APP_CONFIG)).default({ config: {} });
+
 test('web build is installable and receives hosted runtime configuration', async () => {
-  const [appConfig, manifest, html, serviceWorker, webSupabase, worker, buildPreparation] = await Promise.all([
-    read('app.json'),
+  const [app, manifest, html, serviceWorker, webSupabase, worker, buildPreparation] = await Promise.all([
+    loadAppConfig(),
     read('public/manifest.json'),
     read('public/index.html'),
     read('public/sw.js'),
@@ -20,10 +28,9 @@ test('web build is installable and receives hosted runtime configuration', async
     read('scripts/prepare-sites-build.mjs'),
   ]);
 
-  const app = JSON.parse(appConfig);
   const pwa = JSON.parse(manifest);
 
-  assert.equal(app.expo.web.output, 'single');
+  assert.equal(app.web.output, 'single');
   assert.equal(pwa.display, 'standalone');
   assert.equal(pwa.start_url, '/');
   assert.deepEqual(
@@ -70,7 +77,7 @@ test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web 
       read('components/HotspotMap.web.tsx'),
       read('screens/MapScreen.tsx'),
       read('package.json'),
-      read('app.json'),
+      loadAppConfig(),
     ]);
 
   // Still 1024x1024, and still shipped — as the ANDROID adaptive foreground
@@ -79,11 +86,8 @@ test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web 
   assert.deepEqual([appleIcon.readUInt32BE(16), appleIcon.readUInt32BE(20)], [180, 180]);
   assert.deepEqual([icon192.readUInt32BE(16), icon192.readUInt32BE(20)], [192, 192]);
   assert.deepEqual([icon512.readUInt32BE(16), icon512.readUInt32BE(20)], [512, 512]);
-  assert.equal(JSON.parse(appConfig).expo.icon, './assets/brand/app-icon-b-leaf.png');
-  assert.equal(
-    JSON.parse(appConfig).expo.android.adaptiveIcon.foregroundImage,
-    './assets/icon.png'
-  );
+  assert.equal(appConfig.icon, './assets/brand/app-icon-b-leaf.png');
+  assert.equal(appConfig.android.adaptiveIcon.foregroundImage, './assets/icon.png');
 
   // B4 — THE APP ICON IS THE B-LEAF EXPORT, AND TOTAL OPACITY IS STILL THE POINT.
   //
@@ -174,12 +178,11 @@ test('PWA ships the HD BRAZOS icon and a sharp rotatable privacy-preserving web 
 });
 
 test('TestFlight and EAS Update configuration remains present', async () => {
-  const [appConfig, easConfig] = await Promise.all([read('app.json'), read('eas.json')]);
-  const app = JSON.parse(appConfig);
+  const [app, easConfig] = await Promise.all([loadAppConfig(), read('eas.json')]);
   const eas = JSON.parse(easConfig);
 
-  assert.ok(app.expo.extra.eas.projectId);
-  assert.ok(app.expo.updates.url);
+  assert.ok(app.extra.eas.projectId);
+  assert.ok(app.updates.url);
   assert.equal(eas.build.testflight.channel, 'preview');
   assert.equal(eas.build.testflight.autoIncrement, true);
 });

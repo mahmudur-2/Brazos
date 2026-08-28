@@ -22,6 +22,12 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
+// app.json became app.config.ts (three build variants need three bundle
+// identifiers). userInterfaceStyle lives at the same key path, one level
+// shallower: the default export IS the expo config, with no `expo` wrapper.
+const loadAppConfig = async () =>
+  (await import(new URL('../app.config.ts', import.meta.url).href)).default({ config: {} });
+
 const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 
@@ -882,11 +888,11 @@ test('[static] T1 (D7): the centred-header inset reads its spacing at use time',
 // ---------------------------------------------------------------------------
 
 test('[static] the theme resolver honors preference and system, and syncs native surfaces', async () => {
-  const [hookSource, providerSource, app, appJson] = await Promise.all([
+  const [hookSource, providerSource, app, appConfig] = await Promise.all([
     read('hooks/useThemeColors.ts'),
     read('lib/ThemeContext.tsx'),
     read('App.tsx'),
-    read('app.json'),
+    loadAppConfig(),
   ]);
   // Comment-stripped: the docblocks legitimately NAME the APIs they explain;
   // only code is held to the contract.
@@ -921,7 +927,7 @@ test('[static] the theme resolver honors preference and system, and syncs native
 
   // 4D-4 flipped this to "automatic" (T1) — native surfaces follow the
   // trait, which Appearance.setColorScheme then steers per the preference.
-  assert.equal(JSON.parse(appJson).expo.userInterfaceStyle, 'automatic');
+  assert.equal(appConfig.userInterfaceStyle, 'automatic');
 });
 
 // ---------------------------------------------------------------------------
