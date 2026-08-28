@@ -255,13 +255,20 @@ test('evaluateGate treats inherited-member profile names as unknown', () => {
 // because EAS reads whether the key is present, not what it is set to — under
 // the name the rest of the tooling already uses.
 //
-// ITS CHANNEL IS `preview` AND ITS ENVIRONMENT IS `development`, which reads
-// like a mistake and is the opposite of one. The EAS *environment* named
-// `preview` holds PRODUCTION credentials; the preview build PROFILE is pinned
-// to staging. Naming the matching environment would inject production
-// credentials into a staging build. The gate would catch it — that is what
-// fail-closed is for — but the build would simply stop, so the pairing below
-// is deliberate and must not be "tidied up".
+// ITS CHANNEL AND ITS ENVIRONMENT ARE BOTH `preview` NOW, AND THE MISMATCH
+// THAT MADE THAT IMPOSSIBLE IS GONE. R1 pinned this profile — and `e2e-test`
+// beside it — to the EAS environment named `development`, because the one
+// named `preview` then held PRODUCTION credentials, and naming it would have
+// injected them into a staging build. The gate would have refused, which is
+// what fail-closed is for, but the build would simply have stopped.
+//
+// The operator has since overwritten that environment with staging values and
+// deleted the two stale unprefixed variable names, so the obvious pairing is
+// now also the correct one and both profiles take it. What did NOT move is the
+// expected-ref map in scripts/eas-build-pre-install.mjs: `preview` and
+// `e2e-test` still expect the staging project, and the test below still proves
+// that only `production` may reach the production one. Only the EAS
+// environment each profile selects changed.
 test('the preview profile is a standalone staging build on its own channel', () => {
   const configPath = fileURLToPath(new URL('../eas.json', import.meta.url));
   const text = readFileSync(configPath, 'utf8');
@@ -300,14 +307,22 @@ test('the preview profile is a standalone staging build on its own channel', () 
       `${name} must pin an EAS environment: an absent one lets EAS inject server-side variables, which is exactly how production credentials reached a tester build`
     );
   }
-  assert.equal(preview.environment, 'development');
+  assert.equal(preview.environment, 'preview');
+  assert.equal(eas.build['e2e-test'].environment, 'preview');
 
-  // BOTH variant variables, in every profile, set to the same value. §2.1
-  // reads APP_VARIANT at config time and config/env.ts reads
-  // EXPO_PUBLIC_APP_VARIANT at runtime; setting only the first leaves
-  // isProduction false on a production build. And source-map upload stays off
-  // until the auth token exists, or sentry-cli fails the build rather than
-  // skipping.
+  // BOTH variant variables, in every profile, set to the same value, AND
+  // NOTHING ELSE. §2.1 reads APP_VARIANT at config time and config/env.ts
+  // reads EXPO_PUBLIC_APP_VARIANT at runtime; setting only the first leaves
+  // isProduction false on a production build.
+  //
+  // The env block is pinned as an exact key set rather than as a list of
+  // things it must contain, which is what retires SENTRY_DISABLE_AUTO_UPLOAD
+  // without leaving a hole where it stood. That flag suppressed the source-map
+  // upload because sentry-cli had no token and would have failed the build
+  // rather than skipping; the operator has since created SENTRY_AUTH_TOKEN as
+  // a sensitive variable in all three EAS environments, so the upload is meant
+  // to run and the flag is gone from every profile. A build variable that is
+  // neither of the two variant names now has to be added here deliberately.
   for (const [name, profile] of Object.entries(eas.build)) {
     assert.ok(profile.env, `${name} declares no env block`);
     assert.equal(
@@ -316,7 +331,16 @@ test('the preview profile is a standalone staging build on its own channel', () 
       `${name} sets the two variant variables to different values`
     );
     assert.match(profile.env.APP_VARIANT, /^(development|preview|production)$/);
-    assert.equal(profile.env.SENTRY_DISABLE_AUTO_UPLOAD, 'true');
+    assert.deepEqual(
+      Object.keys(profile.env).sort(),
+      ['APP_VARIANT', 'EXPO_PUBLIC_APP_VARIANT'],
+      `${name} declares a build variable beyond the two variant names`
+    );
+    assert.equal(
+      profile.env.SENTRY_DISABLE_AUTO_UPLOAD,
+      undefined,
+      `${name} still disables source-map upload — the auth token exists now`
+    );
   }
   assert.equal(eas.build.production.env.APP_VARIANT, 'production');
 

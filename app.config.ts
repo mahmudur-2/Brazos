@@ -188,10 +188,33 @@ export default (_context: ConfigContext): ExpoConfig => ({
     // merchant ID an Apple Pay entitlement would need does not exist in the
     // developer account, and a missing one fails iOS code signing.
     ['@stripe/stripe-react-native', {}],
-    // A bare string on purpose. R2 owns crash-reporting configuration and adds
-    // the organization, project and auth token then; the `/expo` plugin form
-    // wires a source-map upload that fails the build without a token.
-    '@sentry/react-native',
+    // SOURCE-MAP UPLOAD IS ON NOW, which is the whole reason this stopped
+    // being a bare string. The plugin writes a sentry.properties the native
+    // build steps read, and without the three values below sentry-cli has no
+    // idea which project to upload to — an uploaded bundle whose source map
+    // never resolves is a stack trace of minified frames, which is the same as
+    // no crash reporting at all.
+    //
+    // THE AUTH TOKEN IS DELIBERATELY ABSENT. The plugin accepts an `authToken`
+    // prop and it must never be used: this file is committed, and the token is
+    // a credential. It lives as SENTRY_AUTH_TOKEN, a sensitive variable in
+    // each EAS environment, which is where sentry-cli looks for it anyway.
+    //
+    // `@sentry/react-native/expo` rather than the bare name, and the two are
+    // interchangeable by construction: the package ships no `exports` map, so
+    // the subpath resolves to its own expo.js, and app.plugin.js — what Expo
+    // loads for the bare name — is nothing but `require('./expo')`. Both
+    // spellings were resolved against the installed 7.2.0 and returned the
+    // identical module object. The explicit subpath is the one Sentry's Expo
+    // documentation uses, so it is the one that stays readable.
+    [
+      '@sentry/react-native/expo',
+      {
+        organization: 'brazos-32',
+        project: 'react-native',
+        url: 'https://sentry.io/',
+      },
+    ],
     'expo-localization',
   ],
   extra: {
