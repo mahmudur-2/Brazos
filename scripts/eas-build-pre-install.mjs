@@ -5,18 +5,24 @@
  * closed on anything it cannot prove.
  *
  * Why this can work at all: .env is gitignored and therefore never uploaded
- * to EAS, and react-native-dotenv (babel.config.js: safe:false) reads
- * process.env first — dotenv never overrides a variable that already exists —
- * so on a build worker the bundle's SUPABASE_URL / SUPABASE_KEY come from the
- * eas.json profile `env` block and the EAS environment the profile selects.
- * This hook runs on that same worker with those same variables, BEFORE
- * dependencies install (so it must stay dependency-free), and a non-zero
- * exit fails the whole build.
+ * to EAS, so on a build worker the bundle's EXPO_PUBLIC_SUPABASE_URL /
+ * EXPO_PUBLIC_SUPABASE_KEY come from the EAS environment the profile selects
+ * (eas.json itself now carries neither value). This hook runs on that same
+ * worker with those same variables, BEFORE dependencies install (so it must
+ * stay dependency-free), and a non-zero exit fails the whole build.
+ *
+ * THE VARIABLES ARE EXPO_PUBLIC_ AS OF R1, and the .env cross-check below
+ * matters MORE after that change, not less. It is tempting to read the file
+ * sweep as a defence against the Babel dotenv plugin, which is gone. It never
+ * was: the Expo CLI itself loads .env files into the process and inlines every
+ * EXPO_PUBLIC_ value at bundle time. A stray .env beside a local build runner
+ * (`eas build --local`) is still a live path from a developer's own project
+ * into a shipped binary, and it is the only path this gate can see.
  *
  * Fail-closed contract — exit 1 with a one-line named reason on stderr:
  *   - EAS_BUILD_PROFILE unset                  → "not an EAS build"
  *   - profile not in EXPECTED_REF              → "unknown profile"
- *   - SUPABASE_URL / SUPABASE_KEY absent       → named absence
+ *   - EXPO_PUBLIC_SUPABASE_URL / _KEY absent   → named absence
  *   - a ref-bearing source that parses to no
  *     project ref                              → named parse failure
  *   - sources disagreeing, or any source not equal to the profile's expected
@@ -24,16 +30,16 @@
  *   - a key that is neither a legacy eyJ… JWT nor a new-format publishable
  *     key (sb_secret_… included)               → named refusal
  *
- * THE URL IS THE AUTHORITATIVE REF SOURCE: refFromRestUrl(SUPABASE_URL) must
- * resolve and equal the profile's expected ref, or the build fails. Key
+ * THE URL IS THE AUTHORITATIVE REF SOURCE: refFromRestUrl of the URL variable
+ * must resolve and equal the profile's expected ref, or the build fails. Key
  * handling follows its format (keyKind in supabase-ref.mjs): a legacy eyJ…
  * key embeds the ref and is decoded and cross-checked; a new-format
  * sb_publishable_… / sb_pu_… key carries NO ref by design and is accepted as
  * a format — the app's own live control probe is what verifies key/project
- * pairing at runtime; anything else fails closed. Every dotenv-style file
- * react-native-dotenv could see in the build directory is checked the same
- * way — none should exist on an EAS worker, but a local runner (`eas build
- * --local`) has the developer's .env in view and it must agree too.
+ * pairing at runtime; anything else fails closed. Every dotenv-style file the
+ * Expo CLI could consult in the build directory is checked the same way —
+ * none should exist on an EAS worker, but a local runner has the developer's
+ * .env in view and it must agree too.
  * Refs only are ever compared and printed — never a URL or key value.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -48,37 +54,42 @@ import {
 } from './supabase-ref.mjs';
 
 /**
- * The one Supabase project each EAS BUILD PROFILE may build against. testflight
- * deliberately shares the production project — TestFlight binaries reach real
- * testers with real data — while development, preview and share stay on staging.
- * `share` is an ad hoc build for registered testers; its eas.json env already
- * carries the staging URL and key, and it must never be pinned to production.
- * A profile absent from this map is refused outright.
+ * The one Supabase project each EAS BUILD PROFILE may build against. Only
+ * `production` reaches the production project; development, preview and
+ * e2e-test stay on staging. A profile absent from this map is refused
+ * outright, and tests/buildGate.test.mjs asserts in BOTH directions that this
+ * map and eas.json's `build` block hold exactly the same keys — a profile that
+ * exists in one and not the other is how an unpinned build gets made.
  *
- * "preview" MEANS TWO DIFFERENT THINGS. Keys here are EAS_BUILD_PROFILE, i.e.
- * `eas.json`'s `build` block — which as of 2026-08-23 declares only
- * `development`, `share`, `testflight` and `production`. There is NO preview build
- * profile; the entry below is unreachable today and is kept only so adding one
- * cannot land unpinned. Separately, EAS *environments* are their own namespace,
- * and the environment named `preview` holds PRODUCTION credentials — it is what
- * the `testflight` profile selects (`"environment": "preview"` in eas.json).
- * So a testflight build is correctly pinned by EXPECTED_REF.testflight →
- * PRODUCTION_REF and never touches the `preview` row here. Reading the two
- * files together suggests preview means staging. It does not.
+ * `share` and `testflight` were deleted in R1. TestFlight is not a build kind;
+ * it is a distribution of a production build, so `production` is what
+ * `--auto-submit` targets and what EXPECTED_REF pins to PRODUCTION_REF.
+ *
+ * "preview" STILL MEANS TWO DIFFERENT THINGS, AND THE COLLISION IS NOW REAL.
+ * Keys here are EAS_BUILD_PROFILE — eas.json's `build` block. Separately, EAS
+ * *environments* are their own namespace, and the environment named `preview`
+ * holds PRODUCTION credentials. Until R1 that was merely confusing, because no
+ * preview BUILD profile existed. It now does, and it is pinned to STAGING —
+ * so it deliberately selects the `development` ENVIRONMENT, not the one that
+ * shares its name. Setting `"environment": "preview"` on the preview profile
+ * would inject production credentials into a staging build; this gate would
+ * catch it and fail the build, which is the point, but the fix is to leave the
+ * environment alone rather than to "correct" it to the matching name.
  */
 export const EXPECTED_REF = Object.freeze({
   development: STAGING_REF,
   preview: STAGING_REF,
-  share: STAGING_REF,
-  testflight: PRODUCTION_REF,
+  'e2e-test': STAGING_REF,
   production: PRODUCTION_REF,
 });
 
 /**
- * Every dotenv-style file react-native-dotenv (babel.config.js: path '.env',
- * safe:false) could consult for any mode this process could run under. The
- * fixed trio covers babel's defaults; APP_ENV / BABEL_ENV / NODE_ENV add
- * whatever mode the build actually selects.
+ * Every dotenv-style file the Expo CLI could consult for any mode this process
+ * could run under. The fixed pair plus the per-mode names are what the CLI's
+ * own env loading looks for; APP_ENV / BABEL_ENV / NODE_ENV add whatever mode
+ * the build actually selects. The list is unchanged by R1's move to
+ * EXPO_PUBLIC_ names — the FILES the CLI reads are the same files; only the
+ * variable names inside them changed.
  */
 export function envFileCandidates(env = {}) {
   const modes = new Set(['development', 'production', 'test']);
@@ -194,15 +205,18 @@ export function evaluateGate(env, envFiles = []) {
     }
   }
 
-  if (!env.SUPABASE_URL) {
-    problems.push('SUPABASE_URL is absent from the build environment');
+  if (!env.EXPO_PUBLIC_SUPABASE_URL) {
+    problems.push('EXPO_PUBLIC_SUPABASE_URL is absent from the build environment');
   } else {
-    sources.push({ name: 'env:SUPABASE_URL', ref: refFromRestUrl(env.SUPABASE_URL) });
+    sources.push({
+      name: 'env:EXPO_PUBLIC_SUPABASE_URL',
+      ref: refFromRestUrl(env.EXPO_PUBLIC_SUPABASE_URL),
+    });
   }
-  if (!env.SUPABASE_KEY) {
-    problems.push('SUPABASE_KEY is absent from the build environment');
+  if (!env.EXPO_PUBLIC_SUPABASE_KEY) {
+    problems.push('EXPO_PUBLIC_SUPABASE_KEY is absent from the build environment');
   } else {
-    addKeySource('env:SUPABASE_KEY', env.SUPABASE_KEY);
+    addKeySource('env:EXPO_PUBLIC_SUPABASE_KEY', env.EXPO_PUBLIC_SUPABASE_KEY);
   }
 
   for (const file of envFiles) {
@@ -214,11 +228,14 @@ export function evaluateGate(env, envFiles = []) {
       problems.push(`${file.name} exists but could not be read`);
       continue;
     }
-    if (file.vars.SUPABASE_URL !== undefined) {
-      sources.push({ name: `${file.name}:SUPABASE_URL`, ref: refFromRestUrl(file.vars.SUPABASE_URL) });
+    if (file.vars.EXPO_PUBLIC_SUPABASE_URL !== undefined) {
+      sources.push({
+        name: `${file.name}:EXPO_PUBLIC_SUPABASE_URL`,
+        ref: refFromRestUrl(file.vars.EXPO_PUBLIC_SUPABASE_URL),
+      });
     }
-    if (file.vars.SUPABASE_KEY !== undefined) {
-      addKeySource(`${file.name}:SUPABASE_KEY`, file.vars.SUPABASE_KEY);
+    if (file.vars.EXPO_PUBLIC_SUPABASE_KEY !== undefined) {
+      addKeySource(`${file.name}:EXPO_PUBLIC_SUPABASE_KEY`, file.vars.EXPO_PUBLIC_SUPABASE_KEY);
     }
   }
 

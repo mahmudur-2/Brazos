@@ -7,32 +7,57 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "environment": "development",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "SUPABASE_URL": "https://zzkumxcjtbqoselzptig.supabase.co",
-        "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6a3VteGNqdGJxb3NlbHpwdGlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODIxMzIsImV4cCI6MjEwMTg1ODEzMn0.2GONU_abrVoH4a4-k6IzfsBkgCU8hbJ0-nf9jXV204Q"
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_APP_VARIANT": "development",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
-    "share": {
+    "preview": {
       "distribution": "internal",
-      "channel": "internal",
+      "channel": "preview",
       "environment": "development",
       "autoIncrement": true,
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
-        "SUPABASE_URL": "https://zzkumxcjtbqoselzptig.supabase.co",
-        "SUPABASE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp6a3VteGNqdGJxb3NlbHpwdGlnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYyODIxMzIsImV4cCI6MjEwMTg1ODEzMn0.2GONU_abrVoH4a4-k6IzfsBkgCU8hbJ0-nf9jXV204Q"
+        "APP_VARIANT": "preview",
+        "EXPO_PUBLIC_APP_VARIANT": "preview",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
-    },
-    "testflight": {
-      "channel": "preview",
-      "environment": "preview",
-      "autoIncrement": true
     },
     "production": {
       "channel": "production",
-      "environment": "production"
+      "environment": "production",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "APP_VARIANT": "production",
+        "EXPO_PUBLIC_APP_VARIANT": "production",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
+    },
+    "e2e-test": {
+      "distribution": "internal",
+      "environment": "development",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "APP_VARIANT": "development",
+        "EXPO_PUBLIC_APP_VARIANT": "development",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+      }
     }
   },
   "submit": {
-    "testflight": {}
+    "production": {}
   }
 }

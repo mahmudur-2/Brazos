@@ -183,6 +183,12 @@ test('TestFlight and EAS Update configuration remains present', async () => {
 
   assert.ok(app.extra.eas.projectId);
   assert.ok(app.updates.url);
-  assert.equal(eas.build.testflight.channel, 'preview');
-  assert.equal(eas.build.testflight.autoIncrement, true);
+  // The `testflight` profile was deleted in R1. TestFlight is a distribution
+  // of a production build, not a build kind of its own, so `production` is the
+  // profile `--auto-submit` targets and the one that must declare a channel
+  // and auto-increment the build number — the two properties this test has
+  // always been about.
+  assert.equal(eas.build.production.channel, 'production');
+  assert.equal(eas.build.production.autoIncrement, true);
+  assert.deepEqual(Object.keys(eas.submit), ['production']);
 });
