@@ -218,7 +218,22 @@ test('[static] the gate is shaped to fail closed, and expo-updates stays behind 
   assert.match(gate.replace(/\s+/g, ' '), /if \(dev\) return true; if \(channel == null\) return false; return \(DESIGN_STUDIO_CHANNELS as readonly string\[\]\)\.includes\(channel\);/);
   assert.match(gate, /__DEV__ === true/);
 
-  // expo-updates is named ONLY here — the same boundary rule expo-blur has.
+  // expo-updates is named ONLY in the sanctioned seams — the same boundary
+  // rule expo-blur has.
+  //
+  // R2 ADDED THE SECOND SEAM, and the allow-list is why this is a re-point
+  // rather than a hole. lib/observability/sentry.ts tags every crash report
+  // with the OTA update actually running inside the binary; without it a stack
+  // trace names a release but not the update that broke it, and an update that
+  // only breaks on one channel is unattributable. It reads expo-updates
+  // through the IDENTICAL lazy caught require, and that shape is asserted
+  // below for both members rather than assumed — so being on this list buys an
+  // exemption from the walk, never from the boundary rule the walk enforces.
+  const SANCTIONED_UPDATES_READERS = [
+    'lib/designStudioGate.ts',
+    'lib/observability/sentry.ts',
+  ];
+
   const { readdirSync, statSync, readFileSync } = await import('node:fs');
   const { join, dirname } = await import('node:path');
   const { fileURLToPath } = await import('node:url');
@@ -229,7 +244,7 @@ test('[static] the gate is shaped to fail closed, and expo-updates stays behind 
       const rel = `${dir}/${entry}`;
       if (statSync(join(root, rel)).isDirectory()) walk(rel);
       else if (/\.tsx?$/.test(entry) && !/\.web\.tsx?$/.test(entry)) {
-        if (rel === 'lib/designStudioGate.ts') continue;
+        if (SANCTIONED_UPDATES_READERS.includes(rel)) continue;
         if (/expo-updates/.test(stripComments(readFileSync(join(root, rel), 'utf8')))) {
           offenders.push(rel);
         }
@@ -237,7 +252,30 @@ test('[static] the gate is shaped to fail closed, and expo-updates stays behind 
     }
   };
   for (const dir of ['components', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui']) walk(dir);
-  assert.deepEqual(offenders, [], 'expo-updates is read only by lib/designStudioGate.ts');
+  assert.deepEqual(
+    offenders,
+    [],
+    'expo-updates is read only by the sanctioned seams in SANCTIONED_UPDATES_READERS',
+  );
+
+  // NON-VACUITY, and the reason the allow-list cannot rot into a blanket
+  // exemption: every module on it must still exist, must still name
+  // expo-updates, and must still reach it through the caught require. An entry
+  // whose file was deleted or which stopped reading the module at all would
+  // otherwise sit here forever, silently widening the exemption.
+  for (const rel of SANCTIONED_UPDATES_READERS) {
+    const source = stripComments(readFileSync(join(root, rel), 'utf8')).replace(/\s+/g, ' ');
+    assert.match(
+      source,
+      /require\('expo-updates'\)/,
+      `${rel} is on the allow-list but no longer reads expo-updates`,
+    );
+    assert.match(
+      source,
+      /try \{[^}]*require\('expo-updates'\)[^}]*\} catch \{ return null; \}/,
+      `${rel} must reach expo-updates through one lazy, caught require that falls back to null`,
+    );
+  }
 });
 
 test('[static] BOTH mounts read the gate — the Appearance row and the ModeShell panel', async () => {
