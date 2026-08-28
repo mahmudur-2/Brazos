@@ -1,7 +1,8 @@
 import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
-import { SUPABASE_KEY as LOCAL_SUPABASE_KEY, SUPABASE_URL as LOCAL_SUPABASE_URL } from '@env';
+const LOCAL_SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const LOCAL_SUPABASE_KEY = process.env.EXPO_PUBLIC_SUPABASE_KEY;
 
 type BrazosRuntimeConfig = {
   SUPABASE_KEY?: string;

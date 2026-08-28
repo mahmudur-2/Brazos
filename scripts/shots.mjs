@@ -85,6 +85,16 @@ const HARNESS_HOST = 'harness.supabase.co';
 const HARNESS_URL = `https://${HARNESS_HOST}`;
 const HARNESS_SESSION_KEY = 'sb-harness-auth-token';
 
+/**
+ * The fabricated publishable key, in ONE place because it is now needed in
+ * two: seedPage() puts it in `__BRAZOS_CONFIG__`, and buildExport() puts it in
+ * the export's environment. It is deliberately long enough to satisfy the
+ * app's own configuration schema (config/env.ts requires twenty characters, a
+ * cheap way to catch a placeholder) and deliberately unmistakable for a real
+ * one. Nothing authenticates with it: every request is stubbed.
+ */
+const HARNESS_KEY = 'harness-anon-key-not-a-real-key';
+
 /** A stable synthetic account id. Nothing is written anywhere it could escape. */
 const USER_ID = '00000000-0000-4000-8000-000000000001';
 
@@ -511,10 +521,27 @@ function buildExport() {
   // which reports `status: null` with no output when it fails to.
   const cli = join(root, 'node_modules', 'expo', 'bin', 'cli');
   if (!existsSync(cli)) throw new Error(`expo CLI not found at ${cli}; run npm install`);
+  // THE EXPORT GETS ITS OWN ENVIRONMENT, and that is the point. The Expo CLI
+  // loads .env files and inlines every EXPO_PUBLIC_ value at bundle time, so a
+  // spawn that merely inherited the operator's shell would bake whatever
+  // project THEY happen to be pointed at into the bundle these screenshots are
+  // taken from — a different bundle on every machine, and a real project ref
+  // in a harness whose whole premise is that it reaches none. The two values
+  // below are the same fabricated pair seedPage() puts in __BRAZOS_CONFIG__:
+  // a host that resolves nowhere, and a key long enough to satisfy the app's
+  // own configuration schema without being mistaken for a real one.
   const run = spawnSync(
     process.execPath,
     [cli, 'export', '--platform', 'web', '--output-dir', exportDir, '--clear'],
-    { cwd: root, stdio: 'inherit' },
+    {
+      cwd: root,
+      stdio: 'inherit',
+      env: {
+        ...process.env,
+        EXPO_PUBLIC_SUPABASE_URL: HARNESS_URL,
+        EXPO_PUBLIC_SUPABASE_KEY: HARNESS_KEY,
+      },
+    },
   );
   if (run.error) throw run.error;
   if (run.status !== 0) throw new Error(`expo export failed with status ${run.status}`);
@@ -544,8 +571,8 @@ function serve(dir) {
  * only fills `__BRAZOS_CONFIG__` in when it is still unset. Supplies the web
  * build's runtime configuration and seeds the three AsyncStorage-backed gates.
  */
-function seedPage({ mode, url, sessionKey, userId }) {
-  globalThis.__BRAZOS_CONFIG__ = { SUPABASE_URL: url, SUPABASE_KEY: 'harness-anon-key' };
+function seedPage({ mode, url, key, sessionKey, userId }) {
+  globalThis.__BRAZOS_CONFIG__ = { SUPABASE_URL: url, SUPABASE_KEY: key };
 
   const now = Math.floor(Date.now() / 1000);
   window.localStorage.setItem(
@@ -787,6 +814,7 @@ async function main() {
       await context.addInitScript(seedPage, {
         mode: shot.mode,
         url: HARNESS_URL,
+        key: HARNESS_KEY,
         sessionKey: HARNESS_SESSION_KEY,
         userId: USER_ID,
       });

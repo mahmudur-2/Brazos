@@ -18,7 +18,9 @@
         "NSPhotoLibraryAddUsageDescription": "Brazos saves job and work photos you choose to share to your photo library.",
         "NSFaceIDUsageDescription": "Unlock hidden chats with Face ID.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Share your live location in a chat while a job is underway.",
-        "UIBackgroundModes": ["location"]
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -76,7 +78,13 @@
         }
       ],
       "expo-video",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "@stripe/stripe-react-native",
+        {}
+      ],
+      "@sentry/react-native",
+      "expo-localization"
     ],
     "extra": {
       "eas": {

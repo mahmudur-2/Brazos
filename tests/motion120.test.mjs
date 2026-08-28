@@ -1542,10 +1542,28 @@ test('[static] babel.config.js declares no reanimated or worklets plugin — the
     /presets: \['babel-preset-expo'\]/,
     'the assertion above rests on babel-preset-expo being the preset that adds the worklets plugin'
   );
-  assert.match(
+  // The second half used to be "babel.config.js still owns the dotenv
+  // plugin", which was true only while a plugin list existed. react-native-
+  // dotenv was removed when the app moved to EXPO_PUBLIC_ variables through
+  // config/env.ts, leaving no plugin to anchor on and no prospect of one —
+  // the whole point of the check above is that this file declares no plugins.
+  // So the anchor moves to the OTHER premise the claim rests on: the preset
+  // can only own the worklets transform if the package it looks for is
+  // actually installed. With neither package present, "the preset owns it"
+  // would be a statement about nothing.
+  const deps = JSON.parse(read('package.json')).dependencies;
+  assert.ok(
+    deps['react-native-worklets'] || deps['react-native-reanimated'],
+    'neither react-native-worklets nor react-native-reanimated is a dependency, so ' +
+      'babel-preset-expo adds no worklets plugin and the assertion above is vacuous'
+  );
+  // And the removed plugin cannot come back quietly. An '@env' import is a
+  // second configuration surface that config/env.ts exists to eliminate.
+  assert.doesNotMatch(
     config,
-    /'module:react-native-dotenv'/,
-    'babel.config.js still owns the dotenv plugin — an empty plugin list would pass the check above'
+    /react-native-dotenv/,
+    'react-native-dotenv is back in babel.config.js — the app reads EXPO_PUBLIC_ ' +
+      'variables through config/env.ts and must not regain a virtual @env module'
   );
 });
 
