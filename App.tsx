@@ -27,6 +27,17 @@ import { ScreenStateView } from './ui/templates';
 import { useLegalGate } from './hooks/useLegalGate';
 import { useSetupStatus } from './hooks/useSetupStatus';
 import { HomeDesignStudio } from './dev-tools/HomeDesignStudio';
+import { initSentry, wrapApp } from './lib/observability/sentry';
+
+/**
+ * ONCE, AT MODULE SCOPE, BEFORE ANY COMPONENT BELOW IS DEFINED — because a
+ * crash reporter initialised inside a component cannot report the crashes that
+ * happen on the way to rendering it, which are the ones that matter most.
+ *
+ * Inert by construction when the vendor module is absent or no DSN is
+ * configured; see lib/observability/sentry.ts.
+ */
+initSentry();
 
 const SHOW_HOME_DESIGN_STUDIO =
   __DEV__ &&
@@ -222,7 +233,7 @@ function ThemedNavigation() {
   );
 }
 
-export default function App() {
+function App() {
   /**
    * THE ONE URL THE WEB BUILD ANSWERS BEFORE THE NAVIGATOR.
    *
@@ -309,6 +320,20 @@ export default function App() {
     </MotionRoot>
   );
 }
+
+/**
+ * The registered root, wrapped for crash reporting.
+ *
+ * `wrapApp` is the null-safe seam, NOT `Sentry.wrap`: the vendor is a caught
+ * require and is null wherever it cannot load — a web export among them — and
+ * this returns `App` untouched in that case. So the component tree below is
+ * the same shape on every runtime, which is the property the whole boundary
+ * exists to buy.
+ *
+ * index.ts imports this default and hands it to registerRootComponent; that
+ * is unchanged and does not care which of the two it received.
+ */
+export default wrapApp(App);
 
 const styles = StyleSheet.create({
   // Positioning context for the launch layer, which is an absolute-fill

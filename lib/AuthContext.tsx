@@ -11,6 +11,8 @@ import type { AuthError, Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { fetchCurrentUserBanned, updateProfile } from './profiles';
 import { unregisterPushToken } from './pushNotifications';
+import { setSentryUser } from './observability/sentry';
+import { identify } from './observability/analytics';
 
 type AuthResult = { error: AuthError | null };
 
@@ -70,6 +72,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
 
     return () => listener.subscription.unsubscribe();
   }, []);
+
+  // Bind the observability identity to whoever is signed in — AN ID AND
+  // NOTHING ELSE, on both edges: a sign-in binds it, a sign-out clears it so
+  // the next person's events are not attributed to the person who just left.
+  //
+  // Kept as its own effect rather than folded into the ban check below, which
+  // reads the same key: that one returns early when there is no user, so the
+  // sign-out edge — the one that matters for not mixing two people's data —
+  // would never run. Both calls are no-ops when their vendor module is absent.
+  useEffect(() => {
+    const userId = session?.user?.id ?? null;
+    setSentryUser(userId);
+    identify(userId);
+  }, [session?.user?.id]);
 
   // Enforce bans on the client: a banned user is signed straight back out.
   // The database is the real gate (phase13 policies reject their writes even

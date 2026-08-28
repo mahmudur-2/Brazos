@@ -530,6 +530,25 @@ function buildExport() {
   // below are the same fabricated pair seedPage() puts in __BRAZOS_CONFIG__:
   // a host that resolves nowhere, and a key long enough to satisfy the app's
   // own configuration schema without being mistaken for a real one.
+  //
+  // THE OBSERVABILITY CREDENTIALS ARE BLANKED FOR THE SAME REASON, ONE LAYER
+  // LATER. R2 gave the app a crash reporter and a product-analytics client,
+  // both of which initialise from an EXPO_PUBLIC_ variable and start talking
+  // to a vendor the moment one is present. The operator's own dotenv has real
+  // values for both, so an inherited environment baked them into the bundle
+  // and the render reached out to three vendor hosts — caught, correctly, by
+  // the escaped-host check at the end of main(). Nothing had actually left the
+  // machine (every request is stubbed by the route handler above), but a
+  // harness whose premise is that it reaches nothing must not certify a run
+  // that tried.
+  //
+  // An EMPTY STRING rather than a deletion, because that is the spelling
+  // config/env.ts already normalises: `unset()` maps '' to undefined, both
+  // fields are optional, and an absent DSN or key is the documented "off"
+  // state for each. So this does not special-case the harness inside the app —
+  // it exercises the guards those two modules already have, which is the
+  // stronger arrangement: if either guard regressed, this export would start
+  // reaching vendor hosts again and the check below would fail.
   const run = spawnSync(
     process.execPath,
     [cli, 'export', '--platform', 'web', '--output-dir', exportDir, '--clear'],
@@ -540,6 +559,8 @@ function buildExport() {
         ...process.env,
         EXPO_PUBLIC_SUPABASE_URL: HARNESS_URL,
         EXPO_PUBLIC_SUPABASE_KEY: HARNESS_KEY,
+        EXPO_PUBLIC_SENTRY_DSN: '',
+        EXPO_PUBLIC_POSTHOG_KEY: '',
       },
     },
   );

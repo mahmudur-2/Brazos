@@ -1,6 +1,7 @@
 import { Component, Fragment, type ErrorInfo, type PropsWithChildren, type ReactNode } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { Sentry } from '../lib/observability/sentry';
 
 type AppErrorBoundaryState = {
   crashed: boolean;
@@ -49,6 +50,19 @@ export class AppErrorBoundary extends Component<PropsWithChildren, AppErrorBound
         info.componentStack
       );
     }
+
+    // IN EVERY BUILD, not just release. The console line above is invisible to
+    // anyone who is not attached to a Metro session, so without this the one
+    // crash that actually matters — the one on a tester's phone, which
+    // recovers into the fallback and leaves no trace — is a crash nobody ever
+    // hears about. The component stack goes in `extra`, where the scrubber in
+    // lib/observability/sentry.ts deep-scrubs it before it leaves the device.
+    //
+    // Optional-chained on the module, not on a flag: the vendor is a caught
+    // require and is null on any runtime that cannot load it, which is exactly
+    // what keeps this line from turning a caught render error into an
+    // uncaught one.
+    Sentry?.captureException(error, { extra: { componentStack: info.componentStack } });
   }
 
   private reset = (): void => {
