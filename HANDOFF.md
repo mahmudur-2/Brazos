@@ -43,6 +43,114 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R2 COMPLETED (2026-08-28) — observability and config corrections
+
+Crash reporting and product analytics exist as modules, are wired, and are
+fenced. Source-map upload is switched back on. The `preview` environment
+collision R1 worked around is resolved and both affected profiles now select
+the environment they always should have.
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`ba1b586`|the upload flag out of all four profiles, `preview`/`e2e-test` repointed, the crash-reporting config plugin given its options|
+|C2|`82e0f78`|`CLAUDE.md` stops naming `app.json`|
+|C3|`2860211`|`lib/observability/sentry.ts` and `analytics.ts`, plus `tests/observability.test.mjs`; nothing imported them yet|
+|C4|`f1dd168`|`metro.config.js`, the App/auth/boundary wiring, and the shot harness's export environment|
+
+`npm run verify` exited 0 after every commit: 1167 (baseline) → 1167 → 1167 →
+1178 → **1178 pass, 0 fail**. The +11 is `tests/observability.test.mjs`. No
+test file lost a test.
+
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
+
+Run one EAS build and check that its log contains a sentry-cli upload step
+that names a bundle and a source map — that is the only thing that proves
+`SENTRY_AUTH_TOKEN` is readable from the profile's environment and that
+`metro.config.js` stamped matching debug IDs.
+
+### WHAT THE OPERATOR STILL OWNS AFTER THIS RUN
+
+1. **`SENTRY_AUTH_TOKEN` must exist as a sensitive variable in all three EAS
+   environments.** This run removed the flag that was suppressing the upload,
+   on the operator's statement that the token now exists. It is deliberately
+   NOT in `app.config.ts` — that file is committed and the token is a
+   credential. If it is missing, sentry-cli FAILS the build rather than
+   skipping, which is the failure mode the flag existed to avoid.
+2. **`EXPO_PUBLIC_SENTRY_DSN` and `EXPO_PUBLIC_POSTHOG_KEY` are read by the app
+   now.** Both are optional and absent means "off", which is a valid
+   configuration — but until they exist in the EAS environments, builds ship
+   with crash reporting and analytics silently inert.
+3. **Nothing emits an analytics event yet, by design.** `track()` has no
+   callers; events belong to the mutation layer, which R8 builds. A fence
+   holds that.
+
+### THE `preview` NAME COLLISION IS RESOLVED — the workaround is gone
+
+The EAS environment named `preview` has been overwritten with staging values
+and the two stale unprefixed variable names deleted, so the `preview` and
+`e2e-test` build profiles now select `environment: "preview"` instead of
+borrowing `development`. **The expected-ref map in
+`scripts/eas-build-pre-install.mjs` did not move** — both profiles still expect
+the staging project, and only `production` may reach the production one. The
+R1 note that told you to leave the mismatch alone is obsolete; so is the fence
+comment that explained it, which C1 rewrote.
+
+### THE SHOT HARNESS NOW BLANKS TWO MORE VARIABLES, AND THAT IS A REAL FINDING
+
+The C4 gate exported and rendered both customer-Home surfaces successfully and
+then **refused the run**: the app had addressed three vendor hosts. The
+operator's local dotenv carries real values for the two observability
+variables, and the export inherited them, so the bundle initialised both
+vendors for real. Nothing left the machine — every request is stubbed by the
+route handler — but a harness whose premise is that it reaches nothing must
+not certify a run that tried.
+
+Fixed where the same problem was already solved: `buildExport()` already
+fabricates the backend URL/key pair so the operator's project is never baked
+into the screenshot bundle, and it now blanks the two new names as well. Empty
+string rather than deletion, because `config/env.ts` normalises `''` to absent
+— so this exercises the guards those two modules already have instead of
+special-casing the harness inside the app. **If either guard regresses, this
+export starts reaching vendor hosts again and the gate fails.**
+
+Re-run: exit 0. `customer-home-dark` 393×852, 14,811 distinct colours, 93.3%
+of pixels off the modal colour; `customer-home-light` 393×852, 14,888 distinct
+colours, 52.5% off. Measured by script through `tests/pngGeometry.mjs`'s own
+decoder — image reads are blocked for an agent run.
+
+### STANDING GOTCHAS THIS RUN ADDS
+
+- **Both vendors load through a caught `require`, never a static import**, and
+  the reason is the harness: whether either package survives
+  `expo export --platform web` is not something to bet the UI gate on. The
+  loaded module may be null and every use site tolerates it.
+  `lib/secureSessionStorage.ts`, `lib/motion120/vendor.ts` and
+  `lib/designStudioGate.ts` are the same shape.
+- **`lib/errorMessage.ts` was not touched and must not be.** It has NO imports
+  so `tests/errorMessage.test.mjs` can execute it under bare node; an import
+  there takes the whole test file down at load. The planned breadcrumb is
+  DEFERRED — when it returns it must arrive by dependency injection, an
+  exported observer setter, never a direct import.
+- **`expo-updates` now has two sanctioned readers**, not one.
+  `tests/designStudio.test.mjs` carries the allow-list and asserts the caught-
+  require shape for both members, so being on the list exempts a file from the
+  walk and never from the rule.
+- **The two observability modules cannot be executed by `node --test`.** Both
+  import `config/env` through an extensionless specifier that bare Node ESM
+  does not resolve. `tests/observability.test.mjs` is therefore entirely static
+  scans, and says so at the top rather than implying it ran the scrubber.
+
+### WHAT THIS RUN DID NOT DO
+
+- **The target-architecture document was NOT copied into `docs/`.** It is not
+  in the repository at any path — the only copy on this machine is under the
+  operator's `Downloads` folder, outside the repo. Copying it in is an operator
+  action; §3 was read from there to implement this run.
+- **`supabase/functions/_shared/sentry.ts` is untouched** — edge work, R5.
+- **The funnel union has FOURTEEN variants, not sixteen.** The dispatch said
+  sixteen; §3.2, the source it says to copy exactly, declares fourteen.
+  Inventing two events nothing emits is worse than reporting the gap.
+
 ## RUN R1 COMPLETED (2026-08-28) — configuration and release
 
 The config-and-release batch landed in full. The app no longer reads a virtual
@@ -100,14 +208,14 @@ the missing field.
   an absent `environment` does not mean "none", it means EAS picks a default
   and lets its server-side variables override the file.
 
-### THE `preview` NAME COLLISION IS NOW LIVE — READ BEFORE EDITING eas.json
+### THE `preview` NAME COLLISION — SUPERSEDED BY R2, kept for the reasoning
 
-The EAS **environment** named `preview` holds PRODUCTION credentials. There is
-now also a `preview` **build profile**, and it is pinned to STAGING. It
-therefore selects the `development` environment on purpose. That pairing looks
-like a typo and is not; "correcting" it to the matching name injects production
-credentials into a staging build. The gate would refuse the build, which is the
-point, but the fix is to leave it alone.
+At the time of R1 the EAS **environment** named `preview` held PRODUCTION
+credentials, while the new `preview` **build profile** was pinned to STAGING,
+so the profile selected the `development` environment on purpose and the
+mismatch had to be left alone. **R2 resolved this** — the environment was
+overwritten with staging values and both profiles now select `preview`. See
+the R2 section above; do not re-apply the workaround.
 
 ### FOUR THINGS THE OPERATOR STILL OWNS
 
@@ -118,17 +226,19 @@ point, but the fix is to leave it alone.
    Android map rather than failing the build — an accepted interim state.
    `react-native-maps` 1.20.1 ships no config plugin at all, so the native
    config key is the only shape available.
-3. **`SENTRY_DISABLE_AUTO_UPLOAD` is `"true"` in every profile.** Without an
-   auth token, sentry-cli FAILS the build rather than skipping. R2 adds
-   `SENTRY_AUTH_TOKEN` and removes this.
+3. ~~**`SENTRY_DISABLE_AUTO_UPLOAD` is `"true"` in every profile.**~~ DONE in
+   R2: the flag is gone from all four profiles and the upload is expected to
+   run. The token itself remains an operator responsibility — see the R2
+   section above.
 4. **Distinct dev and beta app icons.** All three variants point at
    `assets/brand/app-icon-b-leaf.png`; the dev and beta files were specified but
    never exported, and a variant pointed at a missing asset fails the build.
 
 ### TWO SMALL THINGS THIS RUN LEFT DELIBERATELY
 
-- `CLAUDE.md` still references `app.json`, which no longer exists. Not fixed
-  here: `CLAUDE.md` was out of scope for this run.
+- ~~`CLAUDE.md` still references `app.json`, which no longer exists.~~ Fixed in
+  R2 (`82e0f78`), one word, surgically — that file also carries the deny
+  sentinel the governance suite checks for.
 - `i18n:extract` runs the parser's own CLI, which looks for
   `i18next-parser.config.js`. That file does not exist yet — the i18n run
   creates it.
