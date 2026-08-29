@@ -450,6 +450,27 @@ this is the one line item in the plan with an unbounded meter.
 This is also your iOS-simulator screenshot source: `takeScreenshot` in a flow gives
 a real iOS render of any screen without a Mac, which the Playwright web export cannot.
 
+> **AMENDMENT — 2026-08-29, run A1. Dispatch only. Never a branch push.**
+>
+> The YAML above still shows `push: { branches: [mainexpo] }`, and the paragraph
+> above still reasons about pull requests. Both predate agent runs pushing their
+> own commits. `.eas/workflows/e2e-ios.yml` does not exist yet; when it is built,
+> **its trigger is `workflow_dispatch` only**, optionally plus a *tag* push —
+> never a branch push.
+>
+> The reason is arithmetic, not taste. A run now ends by pushing its own work,
+> and a single session can land several commits on `mainexpo`. Triggered on
+> branch push, this workflow would start one metered iOS simulator build **per
+> commit** — against the one line item in the plan with an unbounded meter, as
+> the paragraph above itself warns. "On merge, not on every PR" was the right
+> instinct; merges are simply no longer rare enough for it to be far enough.
+>
+> A tag push is the sanctioned automatic trigger if one is wanted later: tags
+> are cut deliberately, so they cannot arrive at commit frequency.
+>
+> Nothing else in §2.8 is amended — the job shape, the Maestro flow list and the
+> screenshot use above all stand.
+
 ### 2.9 `.maestro/smoke.yml`
 
 ```yaml
