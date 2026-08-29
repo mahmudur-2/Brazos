@@ -26,7 +26,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(73);
+select plan(74);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -278,12 +278,20 @@ select tests.authenticate_as(:'worker_a');
 select public.create_offer(p_amount_cents := 2500, p_job_id := :'job3', p_message := 'late-funding bid') as offer3 \gset
 select tests.authenticate_as(:'customer');
 select is(public.accept_offer(:'offer3'), :'job3'::uuid, 'I: the customer accepts on job3');
+-- R4 (D8) re-pointed this section: the held gate now refuses a start before
+-- checkout, so I1 proves the refusal and I2 proves the start lands once the
+-- late authorize + hold (which the section already performed) have landed.
+-- The phase58 retry regression keeps its own assertion after the start.
 select tests.authenticate_as(:'worker_a');
-select is((public.transition_job_status(:'job3', 'in_progress')).status::text, 'in_progress', 'I1: the worker starts BEFORE checkout — no payment exists yet');
-select is((public.transition_job_status(:'job3', 'in_progress')).status::text, 'in_progress', 'I2: a repeated transition returns the row instead of raising');
+select throws_ok($$ select public.transition_job_status((select v from fx where k = 'job3'), 'in_progress') $$,
+  'P0001', 'The customer hasn''t protected the payment yet. You''ll get a notification the moment it''s held.',
+  'I1: the worker cannot start BEFORE checkout — the held gate refuses while no payment exists');
 select tests.authenticate_as(:'customer');
 select is((public.sandbox_authorize_job_payment(:'job3')).status::text, 'authorized', 'I1: a late authorize still lands');
-select is((public.sandbox_hold_job_payment(:'job3')).status::text, 'held', 'I1: a late hold still lands — a job started before checkout can be funded');
+select is((public.sandbox_hold_job_payment(:'job3')).status::text, 'held', 'I1: a late hold still lands — a job refused at the gate can be funded');
+select tests.authenticate_as(:'worker_a');
+select is((public.transition_job_status(:'job3', 'in_progress')).status::text, 'in_progress', 'I2: the start succeeds once the payment is held');
+select is((public.transition_job_status(:'job3', 'in_progress')).status::text, 'in_progress', 'I2: a repeated transition returns the row instead of raising (phase58)');
 
 select tests.clear_auth();
 select * from finish();

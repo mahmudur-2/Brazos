@@ -149,9 +149,15 @@ select is(
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public'
       and (p.proname ilike '%release%payment%' or p.proname ilike '%payout%' or p.proname ilike '%cash_out%')
-      and p.proname not in ('sandbox_release_job_payment', 'sandbox_cash_out', 'sandbox_cash_out_enabled')),
+      -- R4 added the stripe-path successors of the sandbox release pair
+      -- (release_job_payment, auto_release_due_payments) and two functions
+      -- that only read/record the payouts_enabled flag and move no money
+      -- (my_payouts_enabled, set_payouts_enabled). The scan itself is unchanged.
+      and p.proname not in ('sandbox_release_job_payment', 'sandbox_cash_out', 'sandbox_cash_out_enabled',
+                            'release_job_payment', 'auto_release_due_payments',
+                            'my_payouts_enabled', 'set_payouts_enabled')),
   '',
-  'G: the only functions that can move money past held are the sanctioned release pair');
+  'G: the only functions that can move money past held are the sanctioned release pairs (sandbox and stripe)');
 
 -- ---------------------------------------------------------------------------
 -- E. NEGATIVE STATES — on a second job so job1's hire stays untouched

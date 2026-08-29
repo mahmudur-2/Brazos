@@ -41,7 +41,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(448);
+select plan(460);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -1090,12 +1090,26 @@ select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  'accept_bid, accept_legal_documents, accept_offer, account_deletion_blockers, account_deletion_enabled, admin_open_reports, ban_user, can_delete_own_job, client_job_stats, counter_offer, create_bid, create_job, create_job_request, create_offer, create_review, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_bid_count, job_bid_counts, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, job_request_parties_ok, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, match_workers_semantic, messaging_unlocked, my_pending_job_requests, my_pending_offers, open_job_dispute, phase68_deleted_at_authorization_enabled, phase69_execute_lockdown_enabled, phase70_unsend_message_authz_enabled, phase71_reviews_read_lockdown_enabled, phase72_storage_read_lockdown_enabled, phase76_rls_posture, profile_review_summary, profile_reviews, register_push_token, respond_job_request, sandbox_authorize_job_payment, sandbox_cash_out, sandbox_hold_job_payment, sandbox_release_job_payment, sandbox_tip_worker, set_active_mode, set_block, set_conversation_state, set_direct_thread_read_at, set_job_property, should_notify, start_live_location, stop_live_location, transition_job_status, unban_user, unsend_message, update_job_details, update_live_location, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
-  'the SECURITY DEFINER functions authenticated may execute are exactly this list');
+  'accept_bid, accept_legal_documents, accept_offer, account_deletion_blockers, account_deletion_enabled, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_bid, create_job, create_job_request, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_bid_count, job_bid_counts, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, job_request_parties_ok, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, match_workers_semantic, messaging_unlocked, my_payouts_enabled, my_pending_job_requests, my_pending_offers, open_job_dispute, phase68_deleted_at_authorization_enabled, phase69_execute_lockdown_enabled, phase70_unsend_message_authz_enabled, phase71_reviews_read_lockdown_enabled, phase72_storage_read_lockdown_enabled, phase76_rls_posture, profile_review_summary, profile_reviews, quote_job_price, register_push_token, release_job_payment, respond_job_request, sandbox_authorize_job_payment, sandbox_cash_out, sandbox_hold_job_payment, sandbox_release_job_payment, sandbox_tip_worker, set_active_mode, set_block, set_conversation_state, set_direct_thread_read_at, set_job_property, should_notify, start_live_location, stop_live_location, transition_job_status, unban_user, unsend_message, update_job_details, update_live_location, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
+  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, my_payouts_enabled, quote_job_price, release_job_payment)');
 select ok(has_function_privilege('service_role', 'public.claim_notification_batch(integer)', 'EXECUTE'), 'service_role may execute claim_notification_batch (positive control for the two refusals below)');
+-- R4: the service-role-only money functions, same pattern — the positive
+-- control is service_role's privilege, the proof is the stranger's refusal.
+select ok(has_function_privilege('service_role', 'public.apply_payment_event(text)', 'EXECUTE'), 'service_role may execute apply_payment_event (positive control)');
+select ok(has_function_privilege('service_role', 'public.attach_provider_ref(uuid, text)', 'EXECUTE'), 'service_role may execute attach_provider_ref (positive control)');
+select ok(has_function_privilege('service_role', 'public.set_payouts_enabled(text, boolean)', 'EXECUTE'), 'service_role may execute set_payouts_enabled (positive control)');
+select ok(has_function_privilege('service_role', 'public.resolve_job_dispute(uuid, text, text)', 'EXECUTE'), 'service_role may execute resolve_job_dispute (positive control)');
+select ok(has_function_privilege('service_role', 'public.expire_unfunded_payments()', 'EXECUTE'), 'service_role may execute expire_unfunded_payments (positive control)');
+select ok(has_function_privilege('service_role', 'public.auto_release_due_payments()', 'EXECUTE'), 'service_role may execute auto_release_due_payments (positive control)');
 select tests.authenticate_as(:'stranger');
 select throws_ok($$ select * from public.claim_notification_batch(1) $$, '42501', 'permission denied for function claim_notification_batch', 'stranger: cannot claim the push queue (service_role only)');
 select throws_ok($$ select public.resolve_notification(gen_random_uuid(), 'sent') $$, '42501', 'permission denied for function resolve_notification', 'stranger: cannot resolve queue rows (service_role only)');
+select throws_ok($$ select public.apply_payment_event('authz-forged') $$, '42501', 'permission denied for function apply_payment_event', 'stranger: cannot apply a provider event (service_role only)');
+select throws_ok($$ select public.attach_provider_ref(gen_random_uuid(), 'pi_forged') $$, '42501', 'permission denied for function attach_provider_ref', 'stranger: cannot attach a provider reference (service_role only)');
+select throws_ok($$ select public.set_payouts_enabled('acct_forged', true) $$, '42501', 'permission denied for function set_payouts_enabled', 'stranger: cannot flip payouts_enabled (service_role only)');
+select throws_ok($$ select public.resolve_job_dispute((select v from fx where k = 'j_done'), 'worker', 'forged') $$, '42501', 'permission denied for function resolve_job_dispute', 'stranger: cannot resolve an issue report (service_role only)');
+select throws_ok($$ select public.expire_unfunded_payments() $$, '42501', 'permission denied for function expire_unfunded_payments', 'stranger: cannot expire unfunded payments (service_role only)');
+select throws_ok($$ select public.auto_release_due_payments() $$, '42501', 'permission denied for function auto_release_due_payments', 'stranger: cannot run the auto-release clock (service_role only)');
 select throws_ok($$ select public.enqueue_notification((select v from fx where k = 'owner'), (select v from fx where k = 'stranger'), 'messages', 'message', 'forged', 'forged', '{}'::jsonb, 'authz-forged') $$,
   '42501', 'permission denied for function enqueue_notification', 'stranger: cannot enqueue a notification directly (the phase69 chain stays closed)');
 select throws_ok($$ select public.ensure_direct_thread((select v from fx where k = 'owner'), (select v from fx where k = 'stranger')) $$,
