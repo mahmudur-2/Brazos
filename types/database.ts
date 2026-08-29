@@ -2846,6 +2846,7 @@ export type Database = {
       delete_my_account: { Args: never; Returns: undefined }
       direct_thread_notifications_enabled: { Args: never; Returns: boolean }
       drain_notification_outbox: { Args: never; Returns: number }
+      drain_settlements: { Args: never; Returns: number }
       enqueue_notification: {
         Args: {
           p_actor: string
@@ -2948,7 +2949,9 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_payment_customer: { Args: { p_user_id: string }; Returns: string }
       hardening_fixes_enabled: { Args: never; Returns: boolean }
+      install_settlement_schedules: { Args: never; Returns: string }
       is_active_user: { Args: never; Returns: boolean }
       is_blocked_between: { Args: { a: string; b: string }; Returns: boolean }
       is_profile_active: { Args: { p_user: string }; Returns: boolean }
@@ -3224,6 +3227,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      pg_function_present: {
+        Args: { p_name: string; p_namespace: string }
+        Returns: boolean
       }
       phase68_deleted_at_authorization_enabled: {
         Args: never
@@ -3661,10 +3668,15 @@ export type Database = {
         Args: { p_job_id: string; p_property_id: string }
         Returns: undefined
       }
+      set_payment_customer: {
+        Args: { p_customer_id: string; p_user_id: string }
+        Returns: string
+      }
       set_payouts_enabled: {
         Args: { p_enabled: boolean; p_stripe_account_id: string }
         Returns: boolean
       }
+      settlement_schedules_enabled: { Args: never; Returns: boolean }
       should_notify: {
         Args: { p_actor: string; p_category: string; p_recipient: string }
         Returns: boolean
