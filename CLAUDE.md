@@ -134,11 +134,11 @@ task appears to require touching these, stop and explain the dependency.
 * Production (`avkighsiufeefyycbebf`) is never contacted, read or write —
 mechanically blocked. `.env` stays pointed at staging; never modify it
 during a run.
-* Never execute SQL against any database during a run. Schema changes are
-numbered `supabase/phaseNN\_\*.sql` files, hand-applied by the user; only a
-green `node scripts/verify-schema.mjs` counts as applied. That script needs
-`.env` and live staging, so it never runs inside an autonomous run.
-* Every new function needs `grant execute … to authenticated;` (phase32 revoked
+* Never contact a REMOTE Supabase project from a run. The local stack
+  (`supabase start`, 127.0.0.1) is the run's database: `supabase db reset`,
+  `supabase test db` and `npm run db:types` are expected in any schema run.
+  Remote projects are contacted only by the operator. The `--linked`,
+  `--db-url` and `--project-ref` flags are never used inside a run.* Every new function needs `grant execute … to authenticated;` (phase32 revoked
 the default) or it is unreachable from the app. Never weaken RLS, a policy,
 or a grant to make a feature work — add a narrow security definer function.
 * **Every new SECURITY DEFINER function in schema `public` carries explicit
