@@ -43,6 +43,185 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R3a COMPLETED (2026-08-29) — the local database stack and generated types
+
+The LOCAL stack (`supabase start`, 127.0.0.1) now reproduces staging from two
+committed migrations, a pgTAP harness runs against it end to end, a seed
+produces the three known identities, and `types/database.ts` is generated
+from the local schema. No remote database was contacted at any point: every
+database command this run issued carried `--local`, and the CLI form pinned
+by the tooling probe was `npx supabase` (the bare binary is not on the agent
+shell's PATH; the package-local one is).
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`d51923b`|`supabase/migrations/20260901000000_baseline.sql` and `…000001_roles.sql` (the operator's staging dump, 12 dump-artifact edits — see the ledger), `supabase/config.toml` with the local default privileges switched OFF, `supabase/.gitignore`, `supabase/tests/000_smoke.sql`|
+|C2|`651acef`|`supabase/seed.sql` — the three identities and their fixtures, adapted from `scripts/seed-phase-6.sql`|
+|C3|`2e45600`|`package.json`'s three database scripts (`db:reset`, `db:types`, `db:test`) pinned to the local stack; `types/database.ts` generated, 3,032 lines|
+|C4|(this commit)|this live edge|
+
+`npm run verify` exited 0 after every commit: 1178 (baseline) → 1178 → 1178 →
+1178 → **1178 pass, 0 fail**. No test file was touched and no assertion was
+re-pointed: no fence pinned the script list, the migrations directory or the
+absence of a types file.
+
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
+
+Commit your own four uncommitted files (`.claude/settings.json`,
+`.claude/hooks/guard.ps1`, `CLAUDE.md`, `docs/BRAZOS_TARGET_ARCHITECTURE_v2.md`
+— this run left them exactly as found), then run `npm run db:reset` followed by
+`npm run db:test` in your own shell: a `Result: PASS` there proves the harness
+is portable beyond this session.
+
+### THE RESET LEDGER — every edit to the two baseline files
+
+The first reset was NOT clean. It failed at statement 43 with
+`permission denied for schema storage (42501)` on `CREATE TYPE
+"storage"."buckettype"`: the local migration role `postgres` is **not a
+superuser** (probed: `rolsuper=false`), and the storage schema is the storage
+service's, created by the service itself during "Initialising schema…"
+before any migration runs. Twelve edits, all dump artifacts under D2:
+
+1. **Added** `CREATE EXTENSION IF NOT EXISTS "vector" WITH SCHEMA
+   "extensions";` — the dump emits no extension statements at all, and
+   `worker_semantic_docs.embedding` is `extensions.vector(384)`. `vector` is
+   available but not installed on a fresh local stack.
+2. **Removed** the storage schema pair (`CREATE SCHEMA IF NOT EXISTS
+   "storage"` + `ALTER SCHEMA "storage" OWNER TO "supabase_admin"`).
+3. **Removed** `CREATE TYPE "storage"."buckettype"` + its OWNER line — the
+   observed 42501 above.
+4. **Removed** the 17 `storage.*` functions and their OWNER lines.
+5. **Removed** the 8 `storage.*` tables, their OWNER lines and two `COMMENT ON
+   COLUMN`s.
+6. **Removed** the 9 `storage.*` primary-key / unique constraints.
+7. **Removed** the 8 `storage.*` indexes.
+8. **Removed** the 4 `storage.*` triggers.
+9. **Removed** the 5 `storage.*` foreign keys.
+10. **Removed** the 8 `ALTER TABLE "storage".* ENABLE ROW LEVEL SECURITY`
+    lines — the storage service enables RLS itself; probed after the reset,
+    every storage table reads `relrowsecurity=true`.
+11. **Removed** the three `GRANT … TO "postgres" WITH GRANT OPTION` lines on
+    schema `storage`, `storage.buckets` and `storage.objects` — observed on
+    the first: `grant options cannot be granted back to your own grantor
+    (0LP01)`; the other two are the same self-grant.
+12. **roles.sql:** removed `GRANT SET ON PARAMETER "log_min_messages" TO
+    "supabase_realtime_admin"` — observed `permission denied for parameter
+    log_min_messages (42501)`; a superuser-only GUC grant the platform makes,
+    not the app.
+
+**Byte-identical to the dump:** all 92 policies (77 public + 15 on
+`storage.objects`), all 139 public function bodies, every public constraint,
+all 21 `ALTER DEFAULT PRIVILEGES`, and all 248 GRANTs / 141 REVOKEs except the
+three self-circular ones above — including the storage grants to
+`supabase_storage_admin` and `dashboard_user`, which applied. Probed after the
+final reset: 30 tables, 139 functions, 77 policies, 19 triggers in `public`,
+exactly the dump's counts.
+
+**Line endings.** The operator's dump had 1,349 CRLF line ends, all inside 47
+public function bodies (Windows-authored phase files stored verbatim on
+staging). The file tools normalise to LF, and so would git: `.gitattributes`
+says `*.sql text eol=lf`. No string literal spans one of those line ends
+(every odd-quote line is a `--` comment with an apostrophe), so the bodies
+differ from staging by whitespace only.
+
+### `config.toml`: LOCAL DEFAULT PRIVILEGES ARE OFF, AND WHY
+
+`[api] auto_expose_new_tables = false`. A dump re-issues every GRANT staging
+holds and never a REVOKE. With the local default privileges on, every table
+and function the baseline creates ALSO received ALL for anon / authenticated /
+service_role at creation, and the legacy contract in
+`supabase/tests/phase29_security_contract.sql` caught it: "authenticated
+still has a protected profiles table write". With the default off the local
+ACLs are exactly the dump's — probed: `profiles` authenticated INSERT / UPDATE
+/ DELETE all false, 2 anon-executable functions of 139 (the two the dump
+grants), 0 tables INSERTable by anon. The baseline's own tail re-establishes
+the cloud default privileges, so later migrations behave as on staging.
+
+### THE HARNESS, VERBATIM
+
+`npm run db:test` → `/…/supabase/tests/000_smoke.sql .. ok` · `All tests
+successful.` · `Files=1, Tests=2` · `Result: PASS`. `pgtap` 1.3.3 is created
+by the smoke file's first line (outside its transaction, so it persists).
+
+**`db:test` names the smoke file on purpose.** A directory run includes
+`phase29_security_contract.sql`, which is a `do` block, not TAP (pg_prove:
+"No plan found in TAP output") and is also stale — past the privilege checks
+it dies on `create_job(text,text,job_category,…)`, a signature staging no
+longer has. Relocating or retiring it is a run of its own (D5); until then,
+new test files are appended to the script's path list.
+
+### THE SEED
+
+`supabase/seed.sql` is `scripts/seed-phase-6.sql` statement for statement,
+with three adaptations, each explained at the top of the file: psql
+meta-commands and the explicit transaction removed; the whole file in ONE
+`do` block (the CLI's loader prepares statements before executing them, so a
+temp table read would be parsed before its creation ran); and `profiles` rows
+inserted explicitly, because **the local stack has no trigger on
+`auth.users`** — the dump excludes the auth schema, so `handle_new_user` exists
+as a function with nothing firing it. A reset ends with 3 users / 3
+identities / 3 profiles / 3 jobs / 4 offers / 2 payments / 2 locations and
+raises if it would end half-seeded. The fixture password literal
+(`brazos-test-1234`) is the one the tracked staging script already carries.
+
+### pg_cron AND pg_net
+
+Both are **available and not installed** locally (probed via
+`pg_available_extensions`). The baseline contains no `cron.schedule` statement
+— the only mention is a comment that says "there is no cron" — so there was
+nothing to wrap. `pg_net` is referenced once, inside the body of
+`drain_notification_outbox` (`net.http_post`); with `check_function_bodies`
+off it creates cleanly and would fail only when called. Whether R3b installs
+`pg_net` locally is R3b's decision.
+
+### WHAT R3b WILL NEED THAT DOES NOT EXIST YET
+
+- A decision on `supabase/tests/phase29_security_contract.sql` (above).
+- The `auth.users` → `handle_new_user` trigger: not in the baseline, so
+  sign-up-creates-a-profile cannot be tested locally until the operator dumps
+  it (its exact definition was not guessed).
+- `supabase_realtime` publication membership: **none locally** (probed). The
+  dump carries no `ALTER PUBLICATION`; staging publishes messages, offers and
+  `live_location_shares`. Any live-feed test needs this dumped.
+- `pg_net`, `pg_cron` and `pg_graphql` are not installed locally
+  (`config.toml` still exposes `graphql_public`).
+- A typed client: `types/database.ts` exists and `lib/supabase.ts` does not
+  read it (D8, deliberately).
+- The phase files are still in `supabase/` (D5) and `scripts/verify-schema.mjs`
+  is still the only schema proof (D6); both are unchanged.
+- Every new pgTAP file should open with the same `create extension if not
+  exists pgtap with schema extensions;` line, or one migration should create
+  it — the smoke file only guarantees it when it runs first.
+
+### STANDING GOTCHAS THIS RUN ADDS
+
+- **This machine is `supabase link`ed to a remote project** (the operator
+  linked it to dump staging; `supabase/.temp/` is gitignored). That is why
+  every script carries `--local` and why a run must never drop it.
+- **Local `postgres` is not a superuser.** Anything that alters an object the
+  storage or auth service owns fails; keep service infrastructure out of
+  migrations.
+- **A dump-derived migration needs the default privileges OFF while it
+  applies** — see above. Do not flip `auto_expose_new_tables` back to true.
+- **The file tools rewrite line endings wholesale.** Harmless for `.sql`
+  (gitattributes), but snapshot any large mixed-ending file before editing it
+  and diff with CR ignored afterwards.
+- **Unit fences glob `supabase/*.sql` non-recursively.** `seed.sql` is now
+  among them (verify stayed green); files under `supabase/migrations/` and
+  `supabase/tests/` are not.
+- **Commit messages are command text to the guard.** The R2 convention holds:
+  no trailer, and none of the words the dispatch lists.
+
+### TWO CONTRADICTIONS THE OPERATOR SHOULD RESOLVE (agents cannot)
+
+- `CLAUDE.md` "Agent autonomy" still lists *"Any need to execute SQL or
+  contact any database"* as a stop, while its Supabase section now makes the
+  local stack the run's database. This run followed the Supabase section, as
+  the dispatch's gate instructed.
+- `.claude/rules/supabase.md` still describes the `supabase/phaseNN_*.sql`
+  hand-applied mechanics and the `verify-schema` proof; migrations now live in
+  `supabase/migrations/`.
+
 ## RUN R2 COMPLETED (2026-08-28) — observability and config corrections
 
 Crash reporting and product analytics exist as modules, are wired, and are
