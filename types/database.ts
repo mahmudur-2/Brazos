@@ -1418,6 +1418,7 @@ export type Database = {
           created_at: string
           payouts_checked_at: string | null
           payouts_enabled: boolean
+          payouts_status: string
           stripe_account_id: string | null
           stripe_customer_id: string | null
           updated_at: string
@@ -1427,6 +1428,7 @@ export type Database = {
           created_at?: string
           payouts_checked_at?: string | null
           payouts_enabled?: boolean
+          payouts_status?: string
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           updated_at?: string
@@ -1436,6 +1438,7 @@ export type Database = {
           created_at?: string
           payouts_checked_at?: string | null
           payouts_enabled?: boolean
+          payouts_status?: string
           stripe_account_id?: string | null
           stripe_customer_id?: string | null
           updated_at?: string
@@ -2673,6 +2676,7 @@ export type Database = {
           posted: number
         }[]
       }
+      connect_onboarding_enabled: { Args: never; Returns: boolean }
       conversation_parties: {
         Args: { p_direct_thread_id: string; p_job_id: string }
         Returns: Record<string, unknown>
@@ -2949,6 +2953,7 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_payment_account: { Args: { p_user_id: string }; Returns: string }
       get_payment_customer: { Args: { p_user_id: string }; Returns: string }
       hardening_fixes_enabled: { Args: never; Returns: boolean }
       install_settlement_schedules: { Args: never; Returns: string }
@@ -3165,6 +3170,7 @@ export type Database = {
         Returns: boolean
       }
       my_payouts_enabled: { Args: never; Returns: boolean }
+      my_payouts_status: { Args: never; Returns: string }
       my_pending_job_requests: {
         Args: never
         Returns: {
@@ -3668,12 +3674,20 @@ export type Database = {
         Args: { p_job_id: string; p_property_id: string }
         Returns: undefined
       }
+      set_payment_account: {
+        Args: { p_account_id: string; p_user_id: string }
+        Returns: string
+      }
       set_payment_customer: {
         Args: { p_customer_id: string; p_user_id: string }
         Returns: string
       }
       set_payouts_enabled: {
         Args: { p_enabled: boolean; p_stripe_account_id: string }
+        Returns: boolean
+      }
+      set_payouts_status: {
+        Args: { p_status: string; p_user_id: string }
         Returns: boolean
       }
       settlement_schedules_enabled: { Args: never; Returns: boolean }

@@ -152,10 +152,14 @@ select is(
       -- R4 added the stripe-path successors of the sandbox release pair
       -- (release_job_payment, auto_release_due_payments) and two functions
       -- that only read/record the payouts_enabled flag and move no money
-      -- (my_payouts_enabled, set_payouts_enabled). The scan itself is unchanged.
+      -- (my_payouts_enabled, set_payouts_enabled). R5b added their
+      -- payouts_status successors (my_payouts_status, set_payouts_status),
+      -- which likewise read/record the payout state and move no money. The
+      -- scan itself is unchanged.
       and p.proname not in ('sandbox_release_job_payment', 'sandbox_cash_out', 'sandbox_cash_out_enabled',
                             'release_job_payment', 'auto_release_due_payments',
-                            'my_payouts_enabled', 'set_payouts_enabled')),
+                            'my_payouts_enabled', 'set_payouts_enabled',
+                            'my_payouts_status', 'set_payouts_status')),
   '',
   'G: the only functions that can move money past held are the sanctioned release pairs (sandbox and stripe)');
 
