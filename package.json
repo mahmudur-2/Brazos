@@ -79,7 +79,7 @@
     "verify": "npm run lint && npm test",
     "db:reset": "npx supabase db reset --local",
     "db:types": "npx supabase gen types --local --lang typescript --schema public > types/database.ts",
-    "db:test": "npx supabase test db --local supabase/tests/000_smoke.sql",
+    "db:test": "npx supabase test db --local supabase/tests",
     "i18n:extract": "i18next",
     "fingerprint": "npx expo-updates fingerprint:generate",
     "export": "expo export --platform all",
