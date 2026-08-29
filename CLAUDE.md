@@ -95,12 +95,17 @@ A run may complete end to end without stopping, including:
 - Editing any source file (the locked list is empty).
 - Running `npm run verify`, type checks, and any read-only repo command.
 - Committing, by explicit path only.
-- `git push` to `mainexpo` — ONLY after `npm run verify` exits 0 in that same
-  run. A red or unrun suite means commit and report; never push.
+- Pushing its own work. A run that finishes with every commit green ends by
+  running `git push origin mainexpo` — that exact flag-free form is the one
+  permitted push, and a bare `git push` is blocked. The push happens ONLY
+  after `npm run verify` exits 0 in that same run; a red or unrun suite means
+  commit and report, never push.
 
 A run must STOP and hand back only for:
 - A required new dependency.
-- A destructive or schema migration awaiting operator approval.
+- A destructive migration awaiting operator approval. An ordinary schema
+  migration is NOT a stop: the run commits its migration file and pushes, and
+  the operator's trigger of the staging workflow is that file's approval gate.
 - Any need to execute SQL or contact any database.
 - Any need to touch production, `.env`, `start.ps1`, or the frozen web surface.
 - Any need to weaken a regression fence's logic rather than update its
@@ -133,7 +138,9 @@ task appears to require touching these, stop and explain the dependency.
 
 * Production (`avkighsiufeefyycbebf`) is never contacted, read or write —
 mechanically blocked. `.env` stays pointed at staging; never modify it
-during a run.
+during a run. Production migrations are hand-applied by the operator, always:
+no automation targets production, no workflow in this repository may be
+pointed at it, and none ever applies a migration to it.
 * Never contact a REMOTE Supabase project from a run. The local stack
   (`supabase start`, 127.0.0.1) is the run's database: `supabase db reset`,
   `supabase test db` and `npm run db:types` are expected in any schema run.
@@ -167,6 +174,15 @@ accepts, never block-list what it rejects.
 push tokens → `push\_tokens`; notifications → `notification\_outbox` +
 `notification\_prefs`. `completion\_records` and `job\_media` were never built —
 completion media lives on `jobs` as jsonb columns.
+* **Staging migrations are no longer hand-applied.** A run commits its
+migration file and pushes; the operator then triggers the `Migrate staging`
+workflow (`.github/workflows/db-push.yml`) from the Actions tab, and that job
+applies every pending file to staging. That trigger is the approval gate — the
+workflow answers to `workflow_dispatch` and nothing else, deliberately. A run
+must NEVER instruct the operator to paste SQL into the SQL Editor for staging,
+and a run still never contacts the remote project itself: the job is GitHub's,
+started by the operator's tap, which is how "remote projects are contacted only
+by the operator" is satisfied.
 * Migration mechanics: `.claude/rules/supabase.md`.
 
 ## Validation

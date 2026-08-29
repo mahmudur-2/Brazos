@@ -43,6 +43,88 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN A0 COMPLETED (2026-08-29) — the staging migration path, and runs push their own work
+
+Two commits, no schema and no app code. `.github/workflows/db-push.yml` gives
+staging an automated migration path, and CLAUDE.md now records that a green run
+pushes its own work. No database was contacted and no database command was run
+at all: the job this run adds executes in GitHub, on the operator's trigger,
+never inside a run. This was also the first unattended chain launch, so a clean
+finish was part of what it had to prove.
+
+| # | commit | what landed | verify |
+|-|-|-|-|
+|C1|`59e4738`|`.github/workflows/db-push.yml` — `workflow_dispatch` only; `permissions: contents: read`; concurrency `db-push-staging` with `cancel-in-progress: false`; one job, `ubuntu-latest`, `environment: staging`, 15-minute timeout; checkout pinned to ci.yml's own SHA; CLI from `npx --yes supabase@2.116.0`, no third-party action|1178/0|
+|C2|(this commit)|CLAUDE.md — the push form, the staging path, production stays hand-applied; this live edge|1178/0|
+
+The floor at run start was 1178, and it never moved: nothing this run touched
+can reach the suite. No pgTAP was run — this run wrote no SQL.
+
+### THE TRIGGER IS THE APPROVAL GATE, AND IT IS THE WHOLE DESIGN
+
+`on: workflow_dispatch:` and nothing else — no `push:`, no `pull_request:`, no
+`schedule:`. The operator's tap on "Run workflow" in the Actions tab is what
+approves a migration for staging; a `push:` trigger would apply whatever landed
+on mainexpo with nobody deciding to, so one must never be added for
+convenience. The job links the project, lists migrations (the BEFORE state),
+applies the pending ones, then lists again (the AFTER state) — those two
+listings are its evidence, and reading them against each other is how the
+operator sees exactly what was applied.
+
+Production is not in that file and never will be: it stays hand-applied by the
+operator, one migration at a time, in their own shell.
+
+### WHAT THE OPERATOR STILL OWNS — the workflow cannot run until this exists
+
+Only the operator can create these, and neither is in the repository:
+1. A GitHub environment named `staging`, restricted to the `mainexpo` branch.
+2. Three secrets on that environment — `SUPABASE_ACCESS_TOKEN` (a personal
+   access token), `SUPABASE_PROJECT_REF` (STAGING's ref; the workflow file
+   holds no literal ref anywhere) and `SUPABASE_DB_PASSWORD` (staging's
+   database password).
+
+Until both exist the workflow fails at its first step. Nothing else is
+outstanding.
+
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
+
+Create the `staging` environment and its three secrets, then — with these
+commits on the remote — run **Migrate staging** from the Actions tab to apply
+R4's payments migration, which is still the one pending file.
+
+### STANDING GOTCHAS THIS RUN ADDS
+
+- A migration that adds a new enum value must be split into its own file. Each
+  migration file runs as one transaction, and Postgres will not let a new enum
+  value be USED in the transaction that ADDED it. The workflow's header says so
+  too, because the workflow is where it will bite.
+- The CLI is pinned by version inside the workflow (`supabase@2.116.0`), the
+  same version the gate pins locally. Bump both together or neither.
+- No third-party action installs that CLI. The job receives database
+  credentials, and ci.yml's SHA-pinning note explains why a mutable reference
+  is unacceptable even where no credential is in reach.
+
+### HOW THE YAML WAS VALIDATED, WITHOUT INSTALLING ANYTHING
+
+`node_modules/.bin/js-yaml .github/workflows/db-push.yml` parses the file and
+prints its structure: `on` holds `workflow_dispatch` alone, `permissions` is
+`contents: read`, concurrency is `db-push-staging` / `cancel-in-progress:
+false`, and the one `migrate` job carries `environment: staging` over five
+steps. `grep -E '\b[a-z]{20}\b'` finds no project-ref-shaped literal in the
+file, and the checkout SHA is byte-identical to ci.yml's.
+
+### GUARD REFUSALS AND GATE DEVIATIONS
+
+Two refusals, both correct, both routed rather than worked around:
+- `GUARD-NESTED-CLAUDE` fired on a shell `ls` of the agent-config directory —
+  the guard matches raw command text, so that directory name cannot appear in
+  one. The listing was never needed: `git status` already named the two
+  operator-owned files there, and the dispatch forbids reading either.
+- `GUARD-PATH-ESCAPE` fired on a write into the session scratchpad — writes
+  outside the project directory are refused. The YAML check used the `js-yaml`
+  CLI already present in `node_modules/.bin`, so nothing was installed and no
+  temporary file was created inside the repository either.
+
 ## RUN R4 COMPLETED (2026-08-29) — payments schema and the lifecycle exits
 
 One migration, `supabase/migrations/20260905000000_stripe_foundation.sql`,
@@ -67,11 +149,13 @@ The floor at run start was 1178 / 609.
 
 ### THE OPERATOR'S NEXT STEP, IN ONE LINE
 
-Read THE PROOF LEDGER below; if every line reads "proven", hand-apply
-`supabase/migrations/20260905000000_stripe_foundation.sql` to staging as one
-transaction (it ends in `stripe_foundation_enabled()`, so its presence proves
-the whole file committed), then `npm run db:reset` and `npm run db:test` in
-your own shell (`Result: PASS`, `Files=7, Tests=921`) and push. The two
+SUPERSEDED BY RUN A0 — staging is no longer hand-applied. Read THE PROOF
+LEDGER below; if every line reads "proven", run **Migrate staging** from the
+Actions tab and that job applies
+`supabase/migrations/20260905000000_stripe_foundation.sql` for you (it ends in
+`stripe_foundation_enabled()`, so its appearance in the AFTER listing proves
+the whole file committed). Then `npm run db:reset` and `npm run db:test` in
+your own shell (`Result: PASS`, `Files=7, Tests=921`). The two
 `.claude/` files and `docs/audits/MARKETPLACE_PRODUCT_AUDIT_2026-08-29.md`
 are still yours, untouched and uncommitted.
 
