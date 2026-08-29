@@ -158,11 +158,19 @@ jobs:
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
 
       # ── THE SAFETY GATE ───────────────────────────────────────────────────
-      # Two halves: this step derives WHICH files are pending, and
-      # scripts/staging-scan.sh decides WHETHER they are safe. The scan lives in
-      # a repo script rather than inline here for one reason — it is proven by
-      # being EXECUTED against fixture files before it ships, and a proof is
-      # only a proof if it runs the same bytes CI runs.
+      # BOTH halves now live in scripts/staging-scan.sh: it derives WHICH files
+      # are pending AND decides WHETHER they are safe. This step only
+      # orchestrates. The scan lived in a repo script from the start for one
+      # reason — it is proven by being EXECUTED against fixture files before it
+      # ships, and a proof is only a proof if it runs the same bytes CI runs.
+      #
+      # The PARSE joined it after A1's first pipeline run failed at this exact
+      # seam. It was inline YAML here, and YAML cannot be run against a fixture
+      # without first being transcribed — at which point the thing proven is the
+      # transcription. So it shipped blind to the BACKTICKS the pinned CLI wraps
+      # every cell of its table in, and read zero pending versions out of a
+      # table that plainly held four. One source of truth for the parse now: the
+      # workflow orchestrates, the script decides.
       - name: Scan pending migrations for destructive shapes
         run: |
           set -euo pipefail
@@ -170,66 +178,41 @@ jobs:
           # THE PENDING SET COMES FROM THE DATABASE, NOT FROM THE GIT DIFF.
           # A diff would miss a migration added by an earlier push whose job
           # failed, and would misread a force push. The database is the only
-          # authority on what has actually been applied.
-          list="$(npx --yes supabase@2.116.0 migration list)"
+          # authority on what has actually been applied. The table goes straight
+          # into the proven parse: stdout is one resolved migration path per
+          # line and nothing else, every diagnostic goes to stderr, and a FATAL
+          # is a nonzero exit.
+          #
+          # THE STATUS IS CAPTURED EXPLICITLY, AND THAT IS THE POINT.
+          # `mapfile`/`readarray` fed by a process substitution report the
+          # BUILTIN's success, never the status of the command inside it, so a
+          # FATAL would vanish and hand the scan an EMPTY list — and an empty
+          # list is indistinguishable from "nothing pending". The pipeline would
+          # then apply nothing and report green: this gate failing open,
+          # silently, on a money path. Command substitution keeps the status
+          # visible, `pipefail` carries out a failure from either side of the
+          # pipe, and `|| status=$?` catches it instead of letting `set -e`
+          # unwind before it can be reported.
+          status=0
+          resolved="$(npx --yes supabase@2.116.0 migration list \
+            | bash scripts/staging-scan.sh --pending-files -)" || status=$?
 
-          # `migration list` prints three columns — LOCAL, REMOTE, TIME (UTC) —
-          # separated by U+2502. A row is PENDING when it carries a LOCAL
-          # version and an EMPTY remote cell. Normalise the box glyph to an
-          # ASCII pipe, then read the first two cells of every row. Header and
-          # rule rows fall out for free: neither has 14 digits in cell one.
-          rows="$(printf '%s\n' "$list" | sed 's/\xe2\x94\x82/|/g')"
-
-          pending_versions="$(printf '%s\n' "$rows" | awk -F'|' '
-            NF >= 2 {
-              local_v = $1; remote_v = $2
-              gsub(/[[:space:]]/, "", local_v)
-              gsub(/[[:space:]]/, "", remote_v)
-              if (local_v ~ /^[0-9]+$/ && length(local_v) == 14 && remote_v == "") {
-                print local_v
-              }
-            }')"
-
-          # FAIL LOUDLY ON AN UNEXPECTED FORMAT. If the pinned CLI ever changes
-          # its output and this parse reads nothing at all while migration files
-          # plainly exist, that must be a red job — never an empty pending set
-          # quietly waved through the gate.
-          readable="$(printf '%s\n' "$rows" | awk -F'|' '
-            NF >= 2 { v = $1; gsub(/[[:space:]]/, "", v); if (v ~ /^[0-9]+$/ && length(v) == 14) n++ }
-            END { print n + 0 }')"
-          local_count="$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)"
-
-          if [ "$readable" -eq 0 ] && [ "$local_count" -gt 0 ]; then
-            echo "FATAL: 'migration list' yielded no readable migration version, yet"
-            echo "${local_count} migration file(s) exist locally. The pinned CLI's output"
-            echo "format is not what this parse expects, and guessing what is pending is"
-            echo "exactly the mistake this gate exists to prevent. Raw output follows:"
-            printf '%s\n' "$list"
-            exit 1
+          if [ "$status" -ne 0 ]; then
+            echo "FATAL: resolving the pending set exited ${status}. NOTHING has been"
+            echo "applied. The parse prints its own diagnostics, including the raw"
+            echo "table, to stderr — they are in the log above this line."
+            exit "$status"
           fi
 
-          # Map each pending version to its file. Exactly one file per version,
-          # or this cannot know what to scan and says so.
+          # Only reachable on exit 0, so empty here means genuinely nothing
+          # pending: the parse exits 1 rather than returning an empty set when
+          # it cannot read the table or cannot match a version to a file. The
+          # resolved list has already been printed to stderr, above.
           pending_files=()
-          while IFS= read -r version; do
-            [ -n "$version" ] || continue
-            matches=(supabase/migrations/"${version}"_*.sql)
-            if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
-              echo "FATAL: staging reports ${version} pending, but"
-              echo "supabase/migrations/${version}_*.sql did not resolve to exactly one"
-              echo "existing file. Matched: ${matches[*]}"
-              echo "Cannot decide what to scan, and will not guess."
-              exit 1
-            fi
-            pending_files+=("${matches[0]}")
-          done < <(printf '%s\n' "$pending_versions")
-
-          echo "Pending migrations, resolved from the database:"
-          if [ "${#pending_files[@]}" -eq 0 ]; then
-            echo "  (none — staging is already at the committed head)"
-          else
-            printf '  %s\n' "${pending_files[@]}"
-          fi
+          while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            pending_files+=("$line")
+          done < <(printf '%s\n' "$resolved")
 
           bash scripts/staging-scan.sh "$ALLOW_DESTRUCTIVE" ${pending_files[@]+"${pending_files[@]}"}
         env:

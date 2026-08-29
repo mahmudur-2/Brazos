@@ -133,6 +133,21 @@ by reflex, which destroys the gate.
   or edit, so whether that file still describes the old hand-triggered flow is
   unknown. Worth one glance.
 
+**A1-WIRE (2026-08-29, this commit) — the live edge.** The first live run failed
+at the parse exactly as designed (the pinned CLI backticks every cell), so the
+migrate job no longer parses anything itself: it pipes `migration list` into
+`bash scripts/staging-scan.sh --pending-files -` — the entry point A1-FIX proved
+— and captures the status explicitly with `|| status=$?`, because `mapfile` fed
+by a process substitution reports the BUILTIN's success and would turn a FATAL
+into an empty pending set the apply step reads as "nothing pending"; both forms
+were run offline against the same FATAL fixture and the shipped one exits 1
+where `mapfile` exits 0. **The deploy job needed NO correction** — audited
+against all six requirements (its own access-token secret, `--project-ref` from
+the same secret reference the link step uses, every function, no `verify_jwt`
+flag, a `functions list` afterwards, `set -euo pipefail` in both steps) and it
+passed as written. It has still never executed: the operator's next tap is its
+first proof.
+
 ## RUN R5 COMPLETED (2026-08-29) — the money moves: three edge functions, the timers, and the signature
 
 Five commits. The database side is proven; the three Deno handlers are not, and
