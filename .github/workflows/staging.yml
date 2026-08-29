@@ -1,0 +1,317 @@
+name: Staging pipeline
+
+# ONE WORKFLOW, THREE ORDERED JOBS: verify → migrate → deploy.
+#
+# WHY ONE FILE. This replaces `.github/workflows/db-push.yml`, which it deletes
+# in the same commit. Two workflows triggered by the same push cannot be
+# ordered relative to each other — they start together and race — and ordering
+# is the entire reason this file exists:
+#
+#     An edge function deployed before the migration it depends on is a
+#     live 500, on real phones, immediately.
+#
+# Dependent jobs inside ONE workflow are the only construct GitHub offers that
+# orders those two steps, so the migration and the deployment became jobs of a
+# single pipeline rather than two files listening to the same event.
+#
+# WHAT "SAFE" MEANS HERE, WHICH IS NOT THE OBVIOUS THING. Staging is what the
+# operator's and the co-founder's TestFlight builds read. Production has no
+# users; staging effectively does. So safety here is not about protecting
+# production — it is about never leaving an installed build talking to a
+# database that no longer matches it. Additive SQL (new tables, columns,
+# functions) cannot break an installed build, which ignores what it does not
+# know about; removing or renaming something a build still reads breaks it the
+# moment it lands. Hence: additive migrations flow automatically, destructive
+# ones stop and wait for a human. See `scripts/staging-scan.sh`.
+#
+# PRODUCTION IS NEVER AUTOMATED. It stays hand-applied by the operator, in
+# their own shell, one migration at a time. No job in this repository targets
+# it and none ever should.
+#
+# The `staging` environment is restricted to the mainexpo branch and holds the
+# three secrets read below: SUPABASE_ACCESS_TOKEN, SUPABASE_PROJECT_REF and
+# SUPABASE_DB_PASSWORD. The project ref is one of them, so it appears here only
+# as a secret reference and never as a literal.
+#
+# A migration that adds a new enum value must be split into its own file. Each
+# migration file runs as one transaction, and Postgres will not let a new enum
+# value be USED in the transaction that ADDED it: the `alter type ... add
+# value` goes in one file, and everything referencing the new value in the next.
+
+on:
+  push:
+    branches: [mainexpo]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/functions/**'
+      # Not optional. `verify_jwt` lives in config.toml, the deploy job below is
+      # what makes that file take effect, and a config edit that never deploys
+      # is a silent security drift.
+      - 'supabase/config.toml'
+  workflow_dispatch:
+    inputs:
+      allow_destructive:
+        description: 'Apply a migration that the safety scan flagged, after a human has read it.'
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: read
+
+# Two pipelines against one database must never race, and a run that is already
+# applying must never be cancelled half-way.
+#
+# When several pushes land quickly, GitHub keeps only the NEWEST pending run and
+# marks the superseded pending ones cancelled. That is normal, and it is safe
+# precisely because of the design below: every run applies EVERYTHING pending
+# and deploys EVERYTHING, so the newest run always finishes the older runs' work.
+concurrency:
+  group: staging-pipeline
+  cancel-in-progress: false
+
+# THREE JOBS, STRICTLY ORDERED, ALL UNCONDITIONAL. No job below carries a path
+# condition, a changed-files check, or an `if` of any kind beyond the default
+# `needs` chain. Detecting "what actually changed" inside a workflow requires
+# either a third-party action — unacceptable in a workflow holding database
+# credentials — or diff logic that breaks on force pushes and on failed
+# predecessors. So every run does everything instead: `migrate` asks the
+# DATABASE what is pending and no-ops in seconds when the answer is nothing, and
+# `deploy` is idempotent by design. Nothing here has to know what changed.
+jobs:
+  # ── 1 of 3 ────────────────────────────────────────────────────────────────
+  # Nothing reaches staging until the offline suite is green.
+  #
+  # This duplicates ci.yml deliberately, and the duplication is the point:
+  # chaining across workflows with `workflow_run` is indirect and fails OPEN —
+  # a missed or misread completion event lets the pipeline proceed. A money
+  # pipeline must not depend on another workflow's success being correctly
+  # observed, so it re-runs the suite itself. The steps are copied from ci.yml
+  # verbatim, same action SHAs and same commands: this repository's suite is
+  # known to need exactly that invocation to pass on ubuntu, and re-deriving it
+  # is how that breaks.
+  verify:
+    name: lint + tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Third-party actions are pinned to a full commit SHA, not a tag: a tag
+      # is mutable and can be repointed at new code after review.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # .nvmrc is the single source for the Node major, shared with local
+          # development. Never hard-code a version here.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify
+        run: npm run verify
+
+  # ── 2 of 3 ────────────────────────────────────────────────────────────────
+  # The auth, link, list and apply steps are copied from the db-push.yml this
+  # file replaces — proven working against staging — with one addition: the
+  # safety scan between the listing and the apply. Every run block carries
+  # `set -euo pipefail` so a parse or link failure is a loud red job and never
+  # a silent skip.
+  migrate:
+    name: apply migrations to staging
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+
+    steps:
+      # The same action at the same SHA that ci.yml checks out with.
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # The CLI comes from npm, pinned to the exact version the operator runs
+      # locally — no third-party action installs it. A setup action is a
+      # mutable dependency that would receive this job's database credentials,
+      # and ci.yml's own note explains why a mutable reference is not
+      # acceptable even where no credential is in reach.
+      - name: Link the staging project
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 link --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # BEFORE: what staging has applied, and what is pending, as of now.
+      - name: List migrations (before)
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # ── THE SAFETY GATE ───────────────────────────────────────────────────
+      # Two halves: this step derives WHICH files are pending, and
+      # scripts/staging-scan.sh decides WHETHER they are safe. The scan lives in
+      # a repo script rather than inline here for one reason — it is proven by
+      # being EXECUTED against fixture files before it ships, and a proof is
+      # only a proof if it runs the same bytes CI runs.
+      - name: Scan pending migrations for destructive shapes
+        run: |
+          set -euo pipefail
+
+          # THE PENDING SET COMES FROM THE DATABASE, NOT FROM THE GIT DIFF.
+          # A diff would miss a migration added by an earlier push whose job
+          # failed, and would misread a force push. The database is the only
+          # authority on what has actually been applied.
+          list="$(npx --yes supabase@2.116.0 migration list)"
+
+          # `migration list` prints three columns — LOCAL, REMOTE, TIME (UTC) —
+          # separated by U+2502. A row is PENDING when it carries a LOCAL
+          # version and an EMPTY remote cell. Normalise the box glyph to an
+          # ASCII pipe, then read the first two cells of every row. Header and
+          # rule rows fall out for free: neither has 14 digits in cell one.
+          rows="$(printf '%s\n' "$list" | sed 's/\xe2\x94\x82/|/g')"
+
+          pending_versions="$(printf '%s\n' "$rows" | awk -F'|' '
+            NF >= 2 {
+              local_v = $1; remote_v = $2
+              gsub(/[[:space:]]/, "", local_v)
+              gsub(/[[:space:]]/, "", remote_v)
+              if (local_v ~ /^[0-9]+$/ && length(local_v) == 14 && remote_v == "") {
+                print local_v
+              }
+            }')"
+
+          # FAIL LOUDLY ON AN UNEXPECTED FORMAT. If the pinned CLI ever changes
+          # its output and this parse reads nothing at all while migration files
+          # plainly exist, that must be a red job — never an empty pending set
+          # quietly waved through the gate.
+          readable="$(printf '%s\n' "$rows" | awk -F'|' '
+            NF >= 2 { v = $1; gsub(/[[:space:]]/, "", v); if (v ~ /^[0-9]+$/ && length(v) == 14) n++ }
+            END { print n + 0 }')"
+          local_count="$(find supabase/migrations -maxdepth 1 -name '*.sql' | wc -l)"
+
+          if [ "$readable" -eq 0 ] && [ "$local_count" -gt 0 ]; then
+            echo "FATAL: 'migration list' yielded no readable migration version, yet"
+            echo "${local_count} migration file(s) exist locally. The pinned CLI's output"
+            echo "format is not what this parse expects, and guessing what is pending is"
+            echo "exactly the mistake this gate exists to prevent. Raw output follows:"
+            printf '%s\n' "$list"
+            exit 1
+          fi
+
+          # Map each pending version to its file. Exactly one file per version,
+          # or this cannot know what to scan and says so.
+          pending_files=()
+          while IFS= read -r version; do
+            [ -n "$version" ] || continue
+            matches=(supabase/migrations/"${version}"_*.sql)
+            if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
+              echo "FATAL: staging reports ${version} pending, but"
+              echo "supabase/migrations/${version}_*.sql did not resolve to exactly one"
+              echo "existing file. Matched: ${matches[*]}"
+              echo "Cannot decide what to scan, and will not guess."
+              exit 1
+            fi
+            pending_files+=("${matches[0]}")
+          done < <(printf '%s\n' "$pending_versions")
+
+          echo "Pending migrations, resolved from the database:"
+          if [ "${#pending_files[@]}" -eq 0 ]; then
+            echo "  (none — staging is already at the committed head)"
+          else
+            printf '  %s\n' "${pending_files[@]}"
+          fi
+
+          bash scripts/staging-scan.sh "$ALLOW_DESTRUCTIVE" ${pending_files[@]+"${pending_files[@]}"}
+        env:
+          # On a `push` event there are no inputs, and the gate must be ON.
+          # The script rejects anything that is not exactly true or false, so a
+          # mis-evaluated expression is a loud exit 2 rather than a free pass.
+          ALLOW_DESTRUCTIVE: ${{ inputs.allow_destructive == true && 'true' || 'false' }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      - name: Apply pending migrations
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 db push
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+      # AFTER: the same list again. The two are the job's evidence — read them
+      # against each other to see exactly what this run applied.
+      - name: List migrations (after)
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 migration list
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+  # ── 3 of 3 ────────────────────────────────────────────────────────────────
+  # `needs: migrate` is the whole safety property: functions reach staging only
+  # after the migration they may depend on has been applied. There is no custom
+  # `if` here, because the default `needs` semantics already say "only when
+  # migrate succeeded" and a hand-written condition is one more thing to get
+  # wrong. A destructive-flagged migration therefore also blocks that push's
+  # function deploy — correct, since the functions may depend on the blocked
+  # migration; the operator's override re-run performs both, still in order.
+  deploy:
+    name: deploy edge functions to staging
+    needs: migrate
+    runs-on: ubuntu-latest
+    environment: staging
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      # EVERY function is deployed, not only the changed ones. Deployment is
+      # idempotent, and a uniform deploy re-asserts what supabase/config.toml
+      # says about each function — which matters because a dashboard toggle can
+      # drift from the file, and stripe-webhook depends on `verify_jwt = false`
+      # being what actually takes effect.
+      #
+      # So send-push, translate and worker-search are redeployed on every run
+      # even though their source has not changed. That is intended and harmless
+      # — not a mistake to be "fixed" by narrowing this to changed functions.
+      #
+      # verify_jwt IS NEVER PASSED AS A FLAG HERE. supabase/config.toml is its
+      # single source, and a flag on this line would silently override a
+      # reviewed file. If the CLI turns out to ignore the config for some
+      # function, that is a finding for the operator — this workflow does not
+      # work around it.
+      #
+      # No link step and no database password: function deployment authenticates
+      # with the access token alone and names its target by ref.
+      - name: Deploy every edge function
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 functions deploy --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+
+      # The end state in the log, the way the migrate job lists migrations
+      # before and after.
+      - name: List deployed functions
+        run: |
+          set -euo pipefail
+          npx --yes supabase@2.116.0 functions list --project-ref "$SUPABASE_PROJECT_REF"
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
