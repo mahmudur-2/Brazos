@@ -2,22 +2,23 @@
 paths:
   - "supabase/**/*.sql"
 ---
-
 # Supabase migration mechanics
-
-- New file, next number: `supabase/phaseNN_short_name.sql`. Never edit an
-  already-deployed migration (phase29–32 in particular are deployed and
-  verified).
-- Migrations must be **idempotent** — safe to paste twice.
-- Changing an existing RPC's parameter list means `drop function` with the
-  full old signature, then create the new one, then re-grant.
-- Regenerate types after schema changes.
-- SQL Editor "success" is not proof — only a green
-  `node scripts/verify-schema.mjs` run counts as applied.
-
-## Audit note (docs/CLAUDE_MD_AUDIT.md §2)
-
-`transition_job_status` has stacked `create or replace` definitions across
-phase29 / 31 / 35 / 51 / 58, with an arity change mid-stream (phase35 dropped
-the 3-arg signature and recreated it 4-arg). Before touching it, read the
-latest definition (phase58) and confirm which signature is live.
+- New migration: `supabase/migrations/YYYYMMDDHHMMSS_short_name.sql`, timestamped after
+  every existing file there. The `supabase/phase*.sql` files are historical, superseded
+  by the 20260901 baseline — never edited, never extended, never authoritative. The
+  live definition of any function is the newest migration that defines it.
+- Never edit a migration applied anywhere shared. New evidence gets a new corrective
+  migration — never a rewrite that hides the discovery.
+- Prove locally before commit: `npm run db:reset` clean, `npm run db:test` fully green.
+  pgTAP assertions ride the same run as the migration they prove.
+- Regenerate `types/database.ts` (`npm run db:types`) whenever a typed table changes.
+- Staging: a migration reaches staging by commit + push to mainexpo. The staging
+  pipeline (.github/workflows/staging.yml) verifies, scans pending migrations for
+  destructive shapes, applies, then deploys edge functions — in that order, with no
+  operator step. A migration that drops or renames a database object stops the
+  pipeline; the operator applies it by hand or re-runs with allow_destructive.
+- Production: hand-applied by the operator, always. No automation targets production.
+- Proof of application is `node scripts/verify-schema.mjs` or the pipeline's
+  list-after step — never "SQL Editor success".
+- Changing an RPC's parameter list: `drop function` with the full old signature,
+  create the new one, re-grant — in a new migration.
