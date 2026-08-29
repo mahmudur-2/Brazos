@@ -43,6 +43,96 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN A1 COMPLETED (2026-08-29) — one staging pipeline: verify, migrate, deploy
+
+CI configuration only. No schema, no functions, no client code. Three commits.
+**No database was contacted, nothing was deployed, and `.github/workflows/ci.yml`
+was not modified.**
+
+| # | commit | what landed | verify |
+|-|-|-|-|
+|C1|`3a8e6a8`|`.github/workflows/staging.yml` + `scripts/staging-scan.sh` created, `.github/workflows/db-push.yml` deleted, in one commit|1188/0|
+|C2|`8e8368d`|`docs/BRAZOS_TARGET_ARCHITECTURE_v2.md` §2.8 amended to dispatch-only|1188/0|
+|C3|(this commit)|`CLAUDE.md` corrected, this live edge|1188/0|
+
+The floor at run start was 1188/0 and it never moved: this run changed no
+application code, so the suite could not regress and proves nothing either. No
+assertion was re-pointed, weakened or removed, and no fence fired.
+
+### WHAT REPLACED WHAT
+
+The manually-triggered `Migrate staging` workflow is gone. In its place, one
+pipeline fires on a push to `mainexpo` touching `supabase/migrations/**`,
+`supabase/functions/**` or `supabase/config.toml`, and runs three dependent
+jobs — `verify` → `migrate` (`needs: verify`) → `deploy` (`needs: migrate`).
+Two workflows answering the same push cannot be ordered against each other;
+dependent jobs in one workflow can, and ordering is the whole point: an edge
+function deployed before the migration it depends on is a live 500.
+
+Every run does everything, unconditionally — no path conditions, no
+changed-files detection, no `if` beyond the `needs` chain. `migrate` asks the
+database what is pending and no-ops in seconds when the answer is nothing;
+`deploy` is idempotent. That is also why a superseded pending run being
+cancelled by a newer push is safe: the newest run finishes the older run's work.
+
+### THE BOOTSTRAP — WHAT IS AND IS NOT LIVE
+
+**Nothing has run yet, and this run's own push does not start it.** The three
+commits touch `.github/`, `scripts/`, `docs/`, `CLAUDE.md` and `HANDOFF.md` —
+none of which is a trigger path. The pipeline stays dormant until either the
+next push that touches a trigger path, or the operator's one dispatch of it.
+
+So **R5's pending migration and all six edge functions reach staging via the
+operator's single dispatch** described at the end of the A1 run report: Actions
+tab → Staging pipeline → Run workflow on `mainexpo`, `allow_destructive`
+UNCHECKED. That first run is also the only live proof of the pending-set parse
+(see below), which is why it is worth watching rather than merely starting.
+
+### THE ONE SEAM THAT IS NOT PROVEN OFFLINE
+
+The safety scan itself is proven: `scripts/staging-scan.sh` was executed — the
+shipped bytes, not a transcription — against fourteen fixture cases plus the
+override, all passing, and against this repository's four real migration files,
+which scan clean.
+
+What is NOT proven against a live CLI is the step that decides WHICH files are
+pending: it runs `migration list` and takes every version with a local entry and
+an empty remote cell. That parse was exercised offline against a synthetic
+sample of the CLI's table format (correct pending set, correct fail-loud on a
+changed format, correct fail-loud on a version with no file), but a synthetic
+sample is not the CLI. **The first live run is what proves it**, and it fails
+loudly rather than guessing if the format has moved.
+
+### THE FALSE POSITIVE THE REAL MIGRATIONS CAUGHT
+
+Scanning the four committed migrations, not just the fixtures, was what found
+this. A bare `truncate` pattern fires on eleven lines of the baseline, all of
+this shape:
+
+```
+GRANT SELECT,REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."jobs" TO "authenticated";
+```
+
+TRUNCATE there is the NAME OF A PRIVILEGE. The statement grants a right and
+removes nothing. The rule is now anchored to statement position — start of line
+or just after a `;` — which separates the statement from the privilege with no
+exemption list. The same trap does not exist for DELETE: `DELETE,TRIGGER` in a
+grant has no `from` after it, so the two-word rule already excluded it. A gate
+that fires on ordinary migrations trains the operator to check the override box
+by reflex, which destroys the gate.
+
+### TWO STALE POINTERS THIS RUN COULD NOT FIX
+
+* `docs/BRAZOS_TARGET_ARCHITECTURE_v2.md` **§4.4 still documents
+  `.github/workflows/db-push.yml`**, the file C1 deleted, and still records
+  `workflow_dispatch` as the standing decision (ADR-0010). The dispatch scoped
+  this run's doc edit to §2.8 and said to change nothing else in that document,
+  so §4.4 was left alone. It is now stale and needs the operator's decision.
+* `CLAUDE.md` points at **`.claude/rules/supabase.md`** for migration
+  mechanics. `.claude/` is a protected control surface that a run may not read
+  or edit, so whether that file still describes the old hand-triggered flow is
+  unknown. Worth one glance.
+
 ## RUN R5 COMPLETED (2026-08-29) — the money moves: three edge functions, the timers, and the signature
 
 Five commits. The database side is proven; the three Deno handlers are not, and

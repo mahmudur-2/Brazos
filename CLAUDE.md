@@ -105,7 +105,11 @@ A run must STOP and hand back only for:
 - A required new dependency.
 - A destructive migration awaiting operator approval. An ordinary schema
   migration is NOT a stop: the run commits its migration file and pushes, and
-  the operator's trigger of the staging workflow is that file's approval gate.
+  the staging pipeline then verifies, applies it, and deploys the edge
+  functions — with no operator tap at all. A migration that DROPS or RENAMES a
+  database object is the exception: the pipeline's safety scan stops the run
+  before anything is applied, and the operator either applies that file by
+  hand or re-runs the pipeline with the override checked.
 - Any need to execute SQL or contact any database.
 - Any need to touch production, `.env`, `start.ps1`, or the frozen web surface.
 - Any need to weaken a regression fence's logic rather than update its
@@ -174,15 +178,33 @@ accepts, never block-list what it rejects.
 push tokens → `push\_tokens`; notifications → `notification\_outbox` +
 `notification\_prefs`. `completion\_records` and `job\_media` were never built —
 completion media lives on `jobs` as jsonb columns.
-* **Staging migrations are no longer hand-applied.** A run commits its
-migration file and pushes; the operator then triggers the `Migrate staging`
-workflow (`.github/workflows/db-push.yml`) from the Actions tab, and that job
-applies every pending file to staging. That trigger is the approval gate — the
-workflow answers to `workflow_dispatch` and nothing else, deliberately. A run
-must NEVER instruct the operator to paste SQL into the SQL Editor for staging,
-and a run still never contacts the remote project itself: the job is GitHub's,
-started by the operator's tap, which is how "remote projects are contacted only
-by the operator" is satisfied.
+* **Staging migrations are neither hand-applied nor hand-triggered.** A
+migration reaches staging by being committed and pushed. The push starts
+`.github/workflows/staging.yml`, one pipeline of three dependent jobs that runs
+in this order and no other: **verify** (the offline suite — nothing reaches
+staging until it is green), then **migrate** (apply every pending file), then
+**deploy** (the edge functions). There is no SQL Editor step for staging and no
+operator tap. A run must NEVER instruct the operator to paste SQL into the SQL
+Editor for staging.
+* **A destructive migration does not auto-apply.** Before applying anything,
+the pipeline runs `scripts/staging-scan.sh` over the files staging reports as
+pending. If one DROPS or RENAMES a database object — `drop table`,
+`drop column`, `drop schema`, `truncate`, `rename to`, `rename column`,
+`delete from` — the job stops before a single statement runs, and that push's
+function deploy stops with it. The operator then applies that file by hand, or
+re-runs the pipeline from the Actions tab with `allow_destructive` checked. The
+reason is not production, which has no users: staging is what the installed
+TestFlight builds read, and removing something a build still reads breaks it
+the moment it lands. Additive SQL cannot, so additive SQL flows on its own.
+* **Edge functions reach staging by the same push**, in the job AFTER the
+migration job and never before it. A function deployed ahead of the migration
+it depends on is a live 500. `supabase/config.toml` is the only source for
+`verify_jwt`; the workflow never passes it as a flag.
+* A run still never contacts the remote project itself and never holds a remote
+credential: the pipeline is GitHub's, running from the `staging` environment.
+What moved is where the gate sits — it was the operator's tap on Run workflow;
+it is now the verify job plus the destructive-shape scan, with the tap retained
+only for the override.
 * Migration mechanics: `.claude/rules/supabase.md`.
 
 ## Validation
