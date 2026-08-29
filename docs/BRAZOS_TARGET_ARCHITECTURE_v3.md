@@ -2,8 +2,8 @@
 
 **Supersedes `docs/BRAZOS_TARGET_ARCHITECTURE_v2.md` (revision 2, 2026-08-27).**
 Written 2026-08-29 by run V3 against reality snapshot **`edd7a89`** on `mainexpo`.
-Landed as V3 C1 `<C1-HASH>` (this file) and V3 C2 `<C2-HASH>` (the supersession
-pointers in v2, CLAUDE.md and HANDOFF.md). Inputs classified in Appendix A: the
+Landed as V3 C1 `462f5b3` (this file) and V3 C2, the next commit on `mainexpo` after it
+(the supersession pointers in v2, CLAUDE.md and HANDOFF.md). Inputs classified in Appendix A: the
 operator's forward-plan draft (`roadmap-proposal-v3-draft.md`, 2026-08-29) and the
 four operator-ratified addenda carried in the V3 dispatch. `roadmap-r2-r6-v1.md` and
 `roadmap-addenda.md` were absent at run time and are classified nowhere; the proposal
@@ -39,7 +39,7 @@ A future dispatch is written from this document plus CLAUDE.md and nothing else.
 |---|---|
 | Expo native app; iOS and Android are both shipping targets; single trunk `mainexpo`. | CLAUDE.md §Target and trunk |
 | `app.config.ts` is a function of `APP_VARIANT` (bundle-id suffixes per variant), carries the Android block (`package`, `googleMaps`) and mounts the card SDK as `['@stripe/stripe-react-native', {}]` — **no `merchantIdentifier` is set** (the file's own comment records that a bare one crashes the iOS plugin). No Time Sensitive notifications entitlement is declared. | VERIFIED `app.config.ts` (grep); HANDOFF.md R1 |
-| `config/env.ts` is the only reader of `process.env`: eight `EXPO_PUBLIC_*` variables, zod-validated at import, one literal member expression each. `eas.json`: four profiles (development / preview / production / e2e-test), no credentials; `preview` and `e2e-test` select the `preview` EAS environment (staging + test-mode keys). | VERIFIED HANDOFF.md R1, R2 |
+| `config/env.ts` is the only reader of `process.env`: eight `EXPO_PUBLIC_*` variables, zod-validated at import, one literal member expression each. `eas.json`: four profiles (development / preview / production / e2e-test), no credentials; `preview` and `e2e-test` select the `preview` EAS environment, which holds staging values. | VERIFIED HANDOFF.md R1, R2 |
 | Installed: `@stripe/stripe-react-native` 0.50.3, `@sentry/react-native`, `posthog-react-native`, `@tanstack/react-query` + `react-query-persist-client` + `query-async-storage-persister`, `@react-native-community/netinfo`, `@shopify/flash-list`, `i18next`, `react-i18next`, `zod`, `expo-localization`, `expo-blur`, `expo-haptics`, `expo-image`, `expo-document-picker`, `expo-local-authentication`, `react-native-maps` 1.20.1, `react-native-screens` ~4.16; dev: `i18next-parser`, `supabase` ^2.116.0. `react-native-dotenv` and `expo-task-manager` are gone. | VERIFIED `package.json` (grep) |
 | Observability: `lib/observability/sentry.ts` and `analytics.ts` exist and are wired; the funnel union has fourteen variants; `track()` has **no callers** by design — events belong to the mutation layer. | VERIFIED HANDOFF.md R2 |
 | `lib/remoteConfig.ts` reads `public.app_config` as `select key, value` (key/value rows). | VERIFIED HANDOFF.md R1 C5, R4 divergence 2 |

@@ -43,6 +43,103 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN V3 COMPLETED (2026-08-29) — reconciliation, and the target architecture v3
+
+Documentation only. No database was contacted — not local, not remote — no
+migration, function, workflow, script or client file was touched, and the
+proposal files that were this run's input were not committed. Two commits.
+
+| # | commit | what landed | verify |
+|-|-|-|-|
+|C1|`462f5b3`|`docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` — current state at `edd7a89`, standing constraints and decisions, the run queue, the backlog, and the reconciliation table as its appendix|1188/0|
+|C2|(this commit)|v2's supersession header, CLAUDE.md's roadmap pointer, this live edge|1188/0|
+
+The floor at run start was 1188/0 and it never moved: no fence fired and
+nothing was re-pointed.
+
+### WHAT v3 IS
+
+The single document a future dispatch is written from, beside CLAUDE.md.
+Every statement in it is labelled VERIFIED (file named), PLANNED (run named)
+or DECIDED (source named). It supersedes v2 explicitly — v2's §4.4 and
+ADR-0010, the hand-triggered migration workflow, are overtaken by the
+push-triggered pipeline, which v3 §1.4 describes as `staging.yml` and
+`scripts/staging-scan.sh` actually are. The four operator-ratified addenda
+land exactly as ratified: sealed bids is a standing decision (v3 D-1);
+exposure cold-start, failed-hire recovery and the retention metrics are
+mandatory bucket-(c) work, slotted into v1.1, R10 and R9 respectively.
+
+### THE RUN QUEUE, AS v3 RECORDS IT
+
+Operator step (the pipeline's first live run; the `translate` decision) →
+R5b Connect onboarding → R6 client wiring (Build A) → R7 truth sweep + client
+analytics → R8 reputation → R9 analytics ledger (Addendum 4) → R10
+money-conflict contract + failed-hire recovery (Addendum 3) → R11 trust &
+safety + exact-address rule → R12 server automation → R13 data layer → R14
+native batch (Build B) → R15 skeleton → U1–U8 → R16 process gate → launch
+gate → TestFlight → v1.1 (Addendum 2 at item 6). The numbers from R7 on are
+the draft's; v2's R8 / R10a / R10b / R11 map to R13 / R14+R15 / U1–U8 / R16
+(v3 §5) — so the R2 record's "which R8 builds", below, means v3's R13.
+
+### RECORDS IN THIS FILE THAT THE REPOSITORY HAS OVERTAKEN
+
+v3 records the files' truth; these lines stay as written, as history:
+- R5 "THE OPERATOR TEST PLAN" step 1 names a *Migrate staging* workflow that
+  A1 deleted, and steps 4–5 hand-deploy the three functions in order — the
+  pipeline's migrate and deploy jobs do all three now (v3 §1.7).
+- R4 and A0 "THE OPERATOR'S NEXT STEP" both point at that same deleted
+  workflow.
+- A1 "TWO STALE POINTERS": the first (v2 §4.4) is closed by this run's
+  supersession; the second (`.claude/rules/supabase.md`) was carried as an
+  uncommitted operator edit when this run started, and as loaded in this
+  session it already describes the pipeline — committing it closes the
+  pointer.
+- R5 "EVERY PROVIDER ENDPOINT" and "FOR R6" are current; v3 §1.3.2 carries
+  them in substance.
+
+### FINDINGS THE OPERATOR SHOULD READ (v3 carries each)
+
+- The deploy job deploys EVERY function directory, so the first push touching
+  `supabase/functions/**` — R5b's — deploys the `translate` DRAFT to staging
+  keyless, against its own header's instruction. Decide before that push
+  (v3 §1.3 and §3 row 0).
+- `scripts/staging-scan.sh` holds seven patterns while its prose says six;
+  the array is what runs, and CLAUDE.md lists all seven. Cosmetic.
+- CLAUDE.md's "There are NO generated Supabase database types" clause is
+  overtaken by `types/database.ts`; its operative claim — nothing is
+  compile-checked — still holds. Operator-owned text, not this run's.
+- Six open questions with their cheapest checks are v3 Appendix A.4 (E-1 to
+  E-6). E-1 — whether the pipeline has since applied the settlement file and
+  deployed the functions — is the one that gates how R5b reads staging.
+
+### GUARD REFUSALS AND GATE DEVIATIONS
+
+- The tree carried a fourth dirty path the dispatch's gate did not list:
+  `.claude/rules/supabase.md`, modified. CLAUDE.md's rule — a dirty tree is
+  not a blocker unless it overlaps the task's files — governed: it overlaps
+  nothing this run wrote, and it was never read, staged, edited or committed.
+- Of the three proposal files, only `roadmap-proposal-v3-draft.md` existed;
+  `roadmap-r2-r6-v1.md` (withdrawn by the draft's own preamble) and
+  `roadmap-addenda.md` were absent and are classified nowhere — the addenda
+  carried in the dispatch itself were classified regardless.
+- No hook or deny rule fired. Commit messages carry no trailer, per the
+  standing convention. No command carried `--linked`, `--db-url` or
+  `--project-ref`; no command touched a database.
+
+### WHAT THIS RUN DID NOT DO
+
+No migration, edge function, `config.toml`, workflow, scan script, seed,
+`.gitignore`, `.claude/`, `.env`, `start.ps1`, `screens/`, `components/`,
+`lib/`, `hooks/`, `tests/` or `types/database.ts` change. The write surface
+was exactly four files: the new v3, one header line in v2, CLAUDE.md's
+roadmap row, and this file.
+
+### ONE OPERATOR STEP
+
+Sync the project's GitHub source so v3 is the copy every future chat reads —
+or upload `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` to project knowledge and
+remove v2 there, if the sync is not yet configured.
+
 ## RUN A1 COMPLETED (2026-08-29) — one staging pipeline: verify, migrate, deploy
 
 CI configuration only. No schema, no functions, no client code. Three commits.

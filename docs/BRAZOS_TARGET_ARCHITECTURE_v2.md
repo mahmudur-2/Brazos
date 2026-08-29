@@ -1,5 +1,7 @@
 # BRAZOS — Target Architecture, file by file
 
+> **SUPERSEDED 2026-08-29 by `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` (run V3, commit `462f5b3`). Kept for history only: nothing below is authoritative, and where this file and v3 disagree, v3 wins.**
+
 **Revision 2 (2026-08-27).** Revision 1 is superseded. Evidence basis: the project
 bundles as uploaded (SNAPSHOT of `mainexpo`), read this session, plus a second-model
 review of revision 1 adjudicated point by point. Stripe, Supabase and Apple claims

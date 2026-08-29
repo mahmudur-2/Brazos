@@ -12,7 +12,7 @@ Each domain has one owner; never record another owner's facts here.
 |Permanent policy and invariants|**CLAUDE.md** (this file)|
 |Current operational context — what just happened, what is blocked|**HANDOFF.md**|
 |Implemented architecture|**docs/architecture.md**|
-|Roadmap and priorities|**BRAZOS\_MASTER\_PLAN.md** — intent only, never current state|
+|Roadmap and priorities|**docs/BRAZOS\_TARGET\_ARCHITECTURE\_v3.md** — the run queue and backlog; its state section is a snapshot at its named commit, never live state|
 |History|**docs/archive/** — never an authority for anything current|
 
 `docs/README.md` classifies every documentation surface. When this file and a
