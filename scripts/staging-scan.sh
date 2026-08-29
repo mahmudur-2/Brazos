@@ -36,6 +36,7 @@
 #
 # USAGE
 #   staging-scan.sh <allow_destructive: true|false> [migration file ...]
+#   staging-scan.sh --pending-files <migration-list output file | ->
 #
 #   Zero migration files is success: nothing pending is nothing to scan.
 #   exit 0 — safe; or flagged with allow_destructive=true, in which case every
@@ -49,7 +50,145 @@ set -euo pipefail
 
 if [ "$#" -lt 1 ]; then
   echo "staging-scan.sh: usage: staging-scan.sh <true|false> [migration file ...]" >&2
+  echo "staging-scan.sh:        staging-scan.sh --pending-files <migration-list output file | ->" >&2
   exit 2
+fi
+
+# ---------------------------------------------------------------------------
+# THE PENDING SET — added by run A1-FIX, 2026-08-29, because it broke in CI.
+#
+# WHY IT LIVES HERE NOW. A1's first pipeline run failed at this exact seam. The
+# pinned CLI wraps every cell of its migration table in BACKTICK characters,
+# the parse did not expect them, and so it read ZERO versions out of a table
+# that plainly held four. The parse could not be proven before it shipped for
+# one reason: it was embedded in workflow YAML, and YAML cannot be executed
+# against a fixture without first being transcribed — at which point the thing
+# proven is the transcription and not the thing that runs. That is the same
+# argument the header above makes about the scan itself, so the parse now sits
+# beside the scan, where a fixture runs the real bytes.
+#
+# NORMALISE, DO NOT SPECIAL-CASE. The CLI's table formatting is the thing that
+# just proved unstable, so a row is normalised before it is read rather than
+# patched for the one glyph that bit us: the U+2502 box drawing character
+# becomes an ASCII pipe, EVERY backtick is removed, and then each cell's
+# whitespace is stripped. A cell is EMPTY when nothing survives that. A row is
+# PENDING when its LOCAL cell holds a 14-digit version and its REMOTE cell is
+# empty. Header and rule rows fall out for free: neither has 14 digits in
+# cell one.
+#
+# WHAT DELIBERATELY DID NOT CHANGE. Both fail-loud paths stay exactly as strict
+# as they were, and they are the reason this fix took minutes instead of a
+# debugging session — the raw output the gate printed on its way down is what
+# diagnosed it:
+#
+#   * reading ZERO versions while migration files exist is FATAL, and the RAW
+#     output is printed;
+#   * a pending version that does not resolve to exactly one existing file is
+#     FATAL.
+#
+# Guessing what is pending is precisely the mistake this gate exists to
+# prevent, so neither path may ever soften into an empty pending set.
+#
+#   staging-scan.sh --pending-files <migration-list output file | ->
+#
+#   stdout — one resolved migration file path per line, ready to be handed
+#            straight back in as this script's scan arguments. Nothing else is
+#            ever written there, so the caller can read it directly.
+#   stderr — every diagnostic, including the resolved list as a human reads it.
+#   exit 0 — the pending set was resolved; it may legitimately be empty.
+#   exit 1 — FATAL: an unreadable table, or a version with no matching file.
+#   exit 2 — called wrongly (missing or unreadable input).
+# ---------------------------------------------------------------------------
+
+MIGRATIONS_DIR="supabase/migrations"
+
+# The normalisation step itself. Box glyph to pipe first, then every backtick
+# removed, so the per-cell whitespace strip below decides emptiness on what is
+# actually content.
+normalise_table() {
+  sed -e 's/\xe2\x94\x82/|/g' -e 's/`//g'
+}
+
+resolve_pending_files() {
+  local source="$1"
+  local list rows pending_versions readable local_count version
+  local matches=()
+  local pending=()
+
+  if [ "$source" = "-" ]; then
+    list="$(cat)"
+  elif [ -f "$source" ]; then
+    list="$(cat "$source")"
+  else
+    echo "staging-scan.sh: --pending-files: no such input file: ${source}" >&2
+    exit 2
+  fi
+
+  rows="$(printf '%s\n' "$list" | normalise_table)"
+
+  pending_versions="$(printf '%s\n' "$rows" | awk -F'|' '
+    NF >= 2 {
+      local_v = $1; remote_v = $2
+      gsub(/[[:space:]]/, "", local_v)
+      gsub(/[[:space:]]/, "", remote_v)
+      if (local_v ~ /^[0-9]+$/ && length(local_v) == 14 && remote_v == "") {
+        print local_v
+      }
+    }')"
+
+  readable="$(printf '%s\n' "$rows" | awk -F'|' '
+    NF >= 2 { v = $1; gsub(/[[:space:]]/, "", v); if (v ~ /^[0-9]+$/ && length(v) == 14) n++ }
+    END { print n + 0 }')"
+
+  local_count=0
+  if [ -d "$MIGRATIONS_DIR" ]; then
+    local_count="$(find "$MIGRATIONS_DIR" -maxdepth 1 -name '*.sql' | wc -l)"
+  fi
+
+  if [ "$readable" -eq 0 ] && [ "$local_count" -gt 0 ]; then
+    echo "FATAL: the migration table yielded no readable version, yet" >&2
+    echo "${local_count} migration file(s) exist locally. The pinned CLI's output" >&2
+    echo "format is not what this parse expects, and guessing what is pending is" >&2
+    echo "exactly the mistake this gate exists to prevent. Raw output follows:" >&2
+    printf '%s\n' "$list" >&2
+    exit 1
+  fi
+
+  # Map each pending version to its file. Exactly one file per version, or this
+  # cannot know what to scan and says so. Collected first and printed last, so
+  # a FATAL never leaves a half-written pending set on stdout.
+  while IFS= read -r version; do
+    [ -n "$version" ] || continue
+    matches=("$MIGRATIONS_DIR/${version}"_*.sql)
+    if [ "${#matches[@]}" -ne 1 ] || [ ! -f "${matches[0]}" ]; then
+      echo "FATAL: staging reports ${version} pending, but" >&2
+      echo "${MIGRATIONS_DIR}/${version}_*.sql did not resolve to exactly one" >&2
+      echo "existing file. Matched: ${matches[*]}" >&2
+      echo "Cannot decide what to scan, and will not guess." >&2
+      exit 1
+    fi
+    pending+=("${matches[0]}")
+  done < <(printf '%s\n' "$pending_versions")
+
+  echo "Pending migrations, resolved from the database:" >&2
+  if [ "${#pending[@]}" -eq 0 ]; then
+    echo "  (none — staging is already at the committed head)" >&2
+  else
+    printf '  %s\n' "${pending[@]}" >&2
+    printf '%s\n' "${pending[@]}"
+  fi
+
+  exit 0
+}
+
+if [ "$1" = "--pending-files" ]; then
+  shift
+  if [ "$#" -ne 1 ]; then
+    echo "staging-scan.sh: --pending-files takes exactly one argument: the file" >&2
+    echo "holding the migration table, or - to read it from stdin." >&2
+    exit 2
+  fi
+  resolve_pending_files "$1"
 fi
 
 allow_destructive="$1"
