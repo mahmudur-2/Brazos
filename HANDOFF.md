@@ -43,6 +43,177 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R3b COMPLETED (2026-08-29) — authorization proofs and the pgTAP conversion
+
+`npm run db:test` now runs the whole `supabase/tests/` directory: six files,
+**609 assertions, all green** after a clean `npm run db:reset`. The launch-gate
+file is `supabase/tests/040_authz.sql` (448 assertions): five identities plus a
+declared admin, three jobs built through the real RPCs, every denial paired
+with the positive control that proves the row exists. The two staging proof
+scripts and the phase29 contract are TAP now. No remote database was
+contacted: every database command was `npm run db:reset`, `npm run db:test`
+or `npx supabase test db --local …`; the CLI form pinned by the gate was
+`npx supabase` (2.116.0; the bare binary is not on the agent shell's PATH).
+
+| # | commit | what landed |
+|-|-|-|
+|C1|`3b79666`|`supabase/tests/_helpers.sql` — `tests.create_user` / `authenticate_as` / `authenticate_anon` / `clear_auth`, the helper ledger, an 8-assertion smoke test|
+|C2|`a0dda5f`|`supabase/tests/040_authz.sql` — the authorization matrix, 448 assertions|
+|C3|`983b5e8`|`supabase/tests/010_offers.sql` — phase5-proof.sql + the fixture half of phase6-proof.sql, 52 assertions|
+|C4|`41095bc`|`supabase/tests/020_lifecycle.sql` — lifecycle-proof.mjs + the lifecycle half of phase6-proof.sql, 73 assertions|
+|C5|`e2c941d`|`supabase/tests/phase29_security_contract.sql` converted (26 assertions, live signatures); `package.json` `db:test` runs the directory|
+|C6|`b3d3d42`|`CLAUDE.md` and `docs/BRAZOS_TARGET_ARCHITECTURE_v2.md` exactly as the operator left them|
+|C7|(this commit)|this live edge|
+
+`npm run verify` exited 0 after every commit: **1178 pass, 0 fail** throughout
+(no TypeScript or unit test was touched). Database tests per commit: 2 → 10 →
+458 → 510 → 583 → 609 → 609.
+
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
+
+Read THE ONE FINDING below and decide whether the `messages_insert_party`
+exemption gets a migration before launch; then `npm run db:reset` and
+`npm run db:test` in your own shell (`Result: PASS`, `Files=6, Tests=609`)
+and push. The two `.claude/` files are still yours and still uncommitted.
+
+### THE ONE FINDING — a thread party can fabricate an EMPTY negotiation event
+
+Not a data leak and not a stop under C-2: the boundary CLAUDE.md names
+(no free-form person-to-person messaging before assignment) holds, and
+040 §7 pins it — text cannot be smuggled through the exemption. But the
+policy's documented exemption ("structured negotiation events are exempt and
+payload-free") admits a DIRECT CLIENT INSERT by any party of the thread. A
+throwaway probe (deleted, not committed) showed, as the losing bidder in the
+owner–bidder pair thread:
+
+- an insert with `job_offer_id` = their own pending offer, `request_event =
+  'accepted'`, empty content → **accepted by the policy**;
+- the same with `job_offer_id` = the OTHER worker's offer id → **accepted**
+  (the exemption checks only that `job_offer_id` is non-null, not that the
+  offer belongs to this thread or this sender);
+- the same into the job thread → refused (not a party there).
+
+`job_offers` and `jobs` were untouched: a fabricated row is a chat card with
+nothing behind it. No client path writes such rows — `lib/messages.ts`
+`sendMessage()` never sets `job_offer_id`/`request_event`, and the RPC path
+(`create_offer`, `offer_post_event`) is SECURITY DEFINER and needs no
+exemption — so the exemption's only remaining effect is this spoof. A fix is
+one migration: drop the client exemption, or require the referenced offer's
+chain to be the thread pair's and `sender_id` to be its `author_id`. The
+operator decides; this run asserted neither direction.
+
+### THE HELPER LEDGER — what the tests do NOT prove about staging
+
+1. **Profiles are inserted explicitly** by `tests.create_user` (mirroring
+   `handle_new_user`'s columns: id, full_name, phone, role='both') because the
+   `auth.users` trigger is outside the baseline dump. Nothing proves the
+   trigger still does that on staging, nor that its `banned_phones` refusal
+   fires at sign-up.
+2. **No `auth.identities` row** is written; nothing proves the email/password
+   login path.
+3. **Identity is a transaction-local role switch plus `request.jwt.claims`** —
+   the mechanism the staging proofs used. It exercises RLS, grants and
+   SECURITY DEFINER bodies exactly as PostgREST does, but not PostgREST itself
+   (schema cache, JWT verification, the login-time `statement_timeout`).
+
+### THE COVERAGE LEDGER, IN SHORT (the file is the itemised version)
+
+**Tables.** Every table with an RLS policy is covered in 040 with all five
+identities on the same fixture rows: jobs, job_locations, job_offers, bids,
+messages, direct_threads, message_reads, message_reactions, the
+`conversations` view, conversation_states, live_location_shares,
+job_checklist_items, payments, job_disputes, reviews, profiles (column
+grants), notification_prefs, notification_outbox, push_tokens,
+legal_acceptances, saved_workers, mutes, blocks, properties, portfolio_items,
+worker_services, reports, banned_phones, plus the no-grant
+`worker_semantic_docs` and `v_bids_projection_drift`. Grant-level only (no
+sanctioned write path or no read policy exists, so no identity can be the
+positive control): job_requests (legacy), areas (anon), banned_phones (the
+runner is the positive control).
+
+**SECURITY DEFINER RPCs granted to authenticated (71).** Executed refusals
+with the exact body message: accept_offer, counter_offer, decline_offer,
+withdraw_offer, create_offer, create_bid, create_job_request, create_job
+(anon), update_job_details, set_job_property, can_delete_own_job,
+mark_worker_arrival, transition_job_status, open_job_dispute,
+withdraw_job_dispute, create_review, profile_reviews (anon),
+profile_review_summary, job_payment_state, sandbox_authorize_job_payment,
+sandbox_hold_job_payment, sandbox_release_job_payment, sandbox_tip_worker,
+sandbox_cash_out, update_my_profile, get_my_profile (anon), delete_my_account
+(anon), set_active_mode, get_my_active_mode, account_deletion_blockers,
+register_push_token, accept_legal_documents, set_block, set_conversation_state,
+unsend_message, mark_direct_thread_read, set_direct_thread_read_at (no-op
+proven), start_live_location, update_live_location, stop_live_location (no-op
+proven), messaging_unlocked, my_pending_offers, job_offer_count, ban_user,
+unban_user, admin_open_reports, jobs_within_radius, jobs_in_cell,
+job_hotspots, client_job_stats, worker_job_stats. Static only: accept_bid and
+respond_job_request (CLAUDE.md forbids calling them; their bodies are pinned
+to pure delegation with no assignment path of their own). Not executed:
+match_workers_semantic (AI, out of scope), should_notify, is_blocked_between,
+job_request_parties_ok, is_profile_active, is_active_user,
+current_user_is_admin, current_user_is_banned, job_bid_count(s),
+job_offer_counts, my_pending_job_requests, phase*_enabled flags,
+phase76_rls_posture, account_deletion_enabled. The whole 71-name allow-list
+and anon's one-name list are asserted, so a new grant fails the file.
+Service-role-only and internal functions: no anon/authenticated EXECUTE
+(the allow-list), with executed 42501s for claim_notification_batch,
+resolve_notification, enqueue_notification, ensure_direct_thread and
+drain_notification_outbox.
+
+**Observations, not findings:** should_notify / is_blocked_between /
+job_request_parties_ok / is_profile_active let any account learn another
+account's block, mute, ban or deletion status by id (policies need them);
+`blocks_select_involved` shows the blocked person the block (phase13
+design); TRUNCATE and TRIGGER are granted to authenticated on most public
+tables (the platform's GRANT ALL default, unreachable through PostgREST).
+
+### THE CONTRACT'S SIGNATURES, AS FOUND
+
+`create_bid(uuid, integer, text)` and `accept_bid(uuid, uuid)` were NOT stale.
+Stale and pinned to the live ones: `create_job` (fifteen parameters,
+phase49), `transition_job_status(uuid, text, jsonb, jsonb)` (phase35),
+`create_review(uuid, uuid, integer, text, jsonb)` (phase37). Every invariant
+holds locally. One cannot be evaluated here: the chat-media bucket rows are
+storage DATA the schema-only dump does not carry (`storage.buckets` is
+empty locally), so that assertion is an explicit pgTAP SKIP with the reason
+when the rows are absent and the real check when they exist. A
+`[storage.buckets.*]` block in `config.toml` would make it provable; not
+done, not in scope.
+
+### THE RUNNER, THREE FACTS THE ARCHITECTURE DOC'S EXAMPLE ASSUMED WRONGLY
+
+- pg_prove runs the directory in byte order and `_` sorts AFTER every digit,
+  so `_helpers.sql` would run last. Every numbered file therefore includes it
+  (`\set tests_included 1` then `\ir _helpers.sql`); the helper's own smoke
+  test runs only when pg_prove opens the helper directly.
+- psql does not interpolate `:'vars'` inside dollar quotes, so the ids the
+  `throws_ok` / `lives_ok` statements need live in a temp `fx` table.
+- `throws_ok`'s signature is `(text, character, text, text)`, and `INSERT …
+  RETURNING` under RLS must also pass the SELECT policy (a reporter cannot
+  RETURN the report they file; pinned in 040 §16).
+
+### GUARD REFUSALS AND GATE DEVIATIONS
+
+No guard or deny rule fired. One gate deviation, reported rather than
+stopped on: the tree carried a fifth dirty path the dispatch did not list,
+untracked `docs/audits/MARKETPLACE_PRODUCT_AUDIT_2026-08-29.md`. CLAUDE.md
+says a dirty tree alone is not a blocker unless it overlaps the task's
+files; it overlaps nothing, so it was never read, staged, edited or
+committed. It is still untracked.
+
+### STANDING GOTCHAS THIS RUN ADDS
+
+- **Stage a new numbered test file with the include header** or it runs
+  before the helper exists on a fresh stack.
+- **Ids in `throws_ok` bodies come from `fx`, never from `:'var'`.**
+- **`reports` are admin-read-only, including RETURNING** — a client insert
+  must use `return=minimal` (supabase-js does unless `.select()` is chained).
+- **Fixture coordinates are 10.1234 / 10.1234 (open water)** so no seeded
+  job can share a hotspot cell; the discovery assertions depend on that.
+- **`ban_user` cascades** (cancels in-flight jobs, posts a system message);
+  040 bans the losing bidder last and only because they hold nothing live.
+
+
 ## RUN R3a COMPLETED (2026-08-29) — the local database stack and generated types
 
 The LOCAL stack (`supabase start`, 127.0.0.1) now reproduces staging from two
