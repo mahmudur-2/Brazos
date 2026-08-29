@@ -424,6 +424,30 @@ verify_jwt = false
 # own token to the database.
 verify_jwt = true
 
+[functions.connect-onboarding]
+# Mints the worker's payout account and a single-use onboarding link for the
+# CALLER. Written explicitly, as create-payment's is: its first act is to
+# forward the caller's own token to the database, which is the real check.
+verify_jwt = true
+
+[functions.connect-status]
+# Reads the caller's payout state from the provider and records it. Same
+# shape, same reason.
+verify_jwt = true
+
+[functions.connect-return]
+# THE PROVIDER'S HOSTED ONBOARDING SENDS THE BROWSER HERE, WITH NO SUPABASE
+# JWT — as return_url and as refresh_url. Without this line the platform
+# answers 401 and the worker lands on an error page instead of back in the
+# app. The response is a CONSTANT bounce into the app scheme: no account id,
+# no token, nothing from the request, and it authenticates nobody — the app
+# calls connect-status on return for the truth. (R5b D4)
+#
+# AFTER EVERY DEPLOY: confirm the dashboard's per-function toggle for
+# connect-return still shows JWT verification OFF, exactly as for
+# stripe-webhook.
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327
