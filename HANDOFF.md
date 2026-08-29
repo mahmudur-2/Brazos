@@ -43,6 +43,312 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R5 COMPLETED (2026-08-29) — the money moves: three edge functions, the timers, and the signature
+
+Five commits. The database side is proven; the three Deno handlers are not, and
+this section says exactly which is which. Nothing was deployed, no secret was
+set, no remote database was contacted.
+
+| # | commit | what landed | verify | database |
+|-|-|-|-|-|
+|C1|`bea57bf`|`supabase/migrations/20260910000000_settlement_schedules.sql` — the corrected cron guard, `drain_settlements()`, the three schedules, the customer-reference pair, the provider-aware release copy; regenerated `types/database.ts`|1178/0|921|
+|C2|`7c2a77f`|`supabase/tests/050_settlements.sql` — 71 assertions, the six proof-ledger bullets|1178/0|992|
+|C3|`c83dbd6`|`stripe-webhook/verify.mjs`, `stripe-webhook/index.ts`, `tests/stripeWebhookSignature.test.mjs`|1188/0|992|
+|C4|`464fdad`|`create-payment/index.ts`, `process-settlements/index.ts`, the `config.toml` `[functions]` entries|1188/0|992|
+|C5|(this commit)|this live edge|1188/0|992|
+
+The floor at run start was 1178 and the database floor 921. Both only rose: the
+Node suite gained the ten verifier cases (1188), the database suite gained
+seventy-one assertions (992). **No existing assertion was re-pointed, weakened
+or removed, and no fence fired.**
+
+### THE BUG THIS RUN CORRECTED — no money timer had ever been created
+
+R4's section 22 guarded its schedules with
+`if to_regproc('cron.schedule') is null then ... return`. `pg_cron` ships
+`cron.schedule` with TWO overloads, and `to_regproc()` returns NULL for an
+AMBIGUOUS name as well as an absent one. On staging — where pg_cron is
+installed and `cron.job` already holds `brazos-drain-push` — that guard read
+NULL as "pg_cron is not installed" and returned. **Not one of the money timers
+was ever created.** The applied migration is not rewritten; the corrective file
+replaces the resolver test with a catalog test that two overloads cannot
+confuse.
+
+### THE PROOF LEDGER
+
+|C-2|claim|status|
+|-|-|-|
+|1|the corrected guard resolves with two overloads present, and skips with a notice when `cron` is absent|**PROVEN, both halves, with one gap named.** A real two-overload function in schema `tests_cron_sim` reproduces the bug (`to_regproc` → NULL) and the shipped `pg_function_present()` sees it, on the identical fixture. A one-overload control shows the two agree when unambiguous, and an absent name shows the probe is not always-true. The skip branch is EXECUTED: `install_settlement_schedules()` does not raise and returns `skipped: pg_cron absent`, twice identically. **Gap: pg_cron is not installed locally, so no assertion creates or reads a real `cron.job` row.**|
+|2|`drain_settlements` executable by `service_role`, not by `authenticated`|**PROVEN.** `has_function_privilege` positive control for `service_role`; `authenticated` and `anon` both false; and both roles actually refused, 42501 with the message `permission denied for function drain_settlements` pinned.|
+|3|it raises its named exception when either Vault value is missing|**PROVEN in all four states.** Neither present → `P0001 drain_settlements: vault secrets missing`; URL alone → same; key alone → same; the baseline `drain_notification_outbox` fails the same named way as the reference control. Positive control: with both present the named guard STOPS refusing. **Gap: pg_net is not installed locally, so that control stops at `net.http_post` (`3F000`) — asserted as such rather than dressed up as a successful POST.**|
+|4|`notify_on_payment_release` is provider-aware, everything else unchanged|**PROVEN.** Sandbox row → the baseline sentence byte-for-byte. Stripe row → `Your payment has been released and is on its way to your bank.`, asserted to contain no digit and no dollar sign. Recipient is the payee and the payer gets nothing; type/category, tap target, title rule and dedupe key all asserted unchanged; `pg_get_triggerdef` asserted byte-for-byte; a non-release UPDATE enqueues nothing; a second release still de-duplicates to one.|
+|5|exactly the three D5 names, `brazos-drain-push` untouched|**PROVEN out of the shipped function's own definition.** Exactly three `cron.schedule(` calls; each name asserted with its interval; `brazos-drain-push` named nowhere in the installer; the unschedule-by-jobid step asserted present. All three called functions are executable by `service_role`. **Gap: `cron.job` itself cannot be read locally — that it lands is staging's to show.**|
+|6|the customer reference is not client-writable|**PROVEN.** Neither client role may EXECUTE `get_payment_customer` or `set_payment_customer` (grants, plus actual 42501 refusals with messages pinned, as `stranger` and as `anon`); neither may INSERT, UPDATE or SELECT `payment_accounts` directly; RLS is on and the table still carries ZERO policies. Positive control on the service-role path: reads null, writes once, reads back, and a racing second write returns the STORED id rather than replacing it. The four pre-existing `030_payments.sql` §14 assertions on that table still pass.|
+
+D6b's verifier assertions — all **RUN**, inside `npm run verify`, ten cases: a
+correct header passes; one changed body byte fails; a different key fails; 301s
+old fails while 300s and 299s pass; a future timestamp passes; a garbage `v0`
+beside a valid `v1` passes; a `v0` alone fails; unrecognised keys beside a valid
+`v1` pass; either of two rotated `v1` values may match; null / empty /
+no-timestamp / no-signature / non-numeric-timestamp / garbage headers all fail;
+an empty key never authenticates. Every expected value is computed
+independently with `node:crypto`, never by asking the verifier for its own
+answer.
+
+### THE RESPONSE TABLE AS IMPLEMENTED IN `stripe-webhook`
+
+|condition|response|
+|-|-|
+|signature invalid, missing, or the check threw|**400**, `{"error":"invalid signature"}`, no side effects, no detail about why|
+|event type outside the seven-event set|**200**, `{"ok":true,"ignored":<type>}`, NOT recorded|
+|`payment_events` insert returns 409 (23505)|not an error — already STORED, not already APPLIED; falls through and applies|
+|`payment_events` insert fails any other way|**500**|
+|`apply_payment_event` returns `ok:true`|**200**|
+|`ok:false` and `attempts >= 5`|**200**, row stays visible as unprocessed|
+|`ok:false` and `attempts < 5` (or unreadable)|**500**, so the provider retries|
+|the RPC itself is unreachable, or anything throws|**500**|
+
+**WHICH `ok:false` BRANCH THE EVIDENCE DICTATED, AND WHY.** D6c expected an
+unresolvable event to surface as `ok:false`. **The repo says otherwise, and the
+repo wins.** `apply_payment_event` resolves the ledger row, and when nothing
+matches it still runs
+`update payment_events set processed_at = now(), payment_id = v_payment.id` and
+returns `jsonb_build_object('ok', true, 'payment_id', v_payment.id)` — so a
+dashboard-triggered synthetic intent with no `metadata.payment_id` returns
+**`ok:true` with a null `payment_id` and a SET `processed_at`**, and is answered
+200 long before the split. `ok:false` is reachable only from `'unknown event'`
+(the row vanished) and the exception branch's `'apply failed'`, and the return
+value cannot tell a transient failure from a deterministic one. So the attempts
+bound in D6c is what shipped, and the exact rule is:
+
+> After an `ok:false`, read `attempts` for that event id. At or above 5 → 200
+> (stop asking; the row stays recorded with `processed_at` null and appears in
+> the signal query). Below 5, or the row cannot be read → 500, so the provider
+> retries.
+
+**A CONSEQUENCE THE OPERATOR MUST KNOW:** because an unresolvable event is
+marked processed, it does **not** appear in the `processed_at is null` query.
+The second query below is what finds it.
+
+### THE OPERATOR SIGNAL QUERIES
+
+Recorded but not applied — what the 200-at-the-bound rule leaves behind, and the
+reason that rule is safe:
+
+```sql
+select id, type, attempts, error, received_at
+  from public.payment_events
+ where processed_at is null
+ order by received_at desc;
+```
+
+Applied but matched to no ledger row — the synthetic and orphan events. Run this
+one too; nothing else surfaces them:
+
+```sql
+select id, type, received_at
+  from public.payment_events
+ where processed_at is not null
+   and payment_id is null
+ order by received_at desc;
+```
+
+### THE CUSTOMER REFERENCE — WHERE IT LANDED AND WHY
+
+`public.payment_accounts.stripe_customer_id`, the column
+`20260905000000_stripe_foundation.sql` §5 already created for exactly this.
+`user_id` is the primary key, so there is exactly one per user; the table has
+RLS on, **zero policies** and no grants to `anon` or `authenticated`, so no
+client role reaches it under any policy. `profiles` was rejected: it carries a
+legacy `stripe_account_id`, an owner UPDATE policy, and is readable by every
+authenticated user. A new table was unnecessary — §5 already declared this the
+home for provider identity, "never on profiles".
+
+The migration adds only the narrow access pair, in the shape
+`set_payouts_enabled` already set for R5: `get_payment_customer(uuid)` and
+`set_payment_customer(uuid, text)`, both `revoke all … from public, anon,
+authenticated` then `grant execute … to service_role`. The edge function needs
+no table access at all. `set_payment_customer` is **first-writer-wins**: it
+returns the EFFECTIVE id, so two concurrent checkouts converge on one customer
+instead of orphaning one. Client-writability is proven by six grant assertions
+and six actual refusals in `050_settlements.sql` §6 plus the four pre-existing
+`030_payments.sql` §14 assertions.
+
+### `supabase/config.toml` — THE `[functions]` ENTRIES AS LANDED
+
+The file had **no `[functions]` section at all**, so this run created one.
+
+```toml
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.create-payment]
+verify_jwt = true
+```
+
+`process-settlements` has **no entry**, mirroring `send-push`, which has none
+either and works over the same `net.http_post`-plus-Bearer path.
+
+**THE DASHBOARD CAN OVERRIDE THIS FILE, AND A CLI REDEPLOY CAN RESET THE
+DASHBOARD. After every deploy of `stripe-webhook`, confirm its per-function
+toggle shows JWT verification OFF.** If it is on, the provider gets a 401 before
+the code runs, counts every delivery as failed, and eventually disables the
+destination.
+
+### EVERY PROVIDER ENDPOINT, WITH ITS IDEMPOTENCY KEY
+
+|function|endpoint|idempotency key|
+|-|-|-|
+|create-payment|`POST /v1/customers`|`brazos-customer-<user id>` — a short-window double-tap guard only; durable reuse comes from the stored reference|
+|create-payment|`POST /v1/ephemeral_keys`|**none, deliberately** — the key is short-lived and a replay must mint a fresh one, not return an expired one|
+|create-payment|`POST /v1/payment_intents`|`brazos-intent-<payment id>`|
+|process-settlements|`POST /v1/transfers`|`tr:<payment id>:<transfer_attempts>`|
+|process-settlements|`POST /v1/refunds`|`rf:<payment id>` — there is no refund attempt column on `payments`, so the payment id alone is the key|
+
+The **only** `Stripe-Version` header in the run is on `/v1/ephemeral_keys`:
+`2026-08-26.dahlia`. No `/v2/` path appears anywhere in the code written.
+
+### THE OPERATOR TEST PLAN — verifying this in test mode
+
+1. **Apply the migration.** Actions tab → *Migrate staging* → Run workflow. Read
+   the before/after migration listings;
+   `20260910000000_settlement_schedules.sql` should appear in the after list and
+   not the before.
+2. **Confirm the timers exist.** In the SQL editor:
+   `select jobname, schedule from cron.job order by jobname;` — expect four
+   rows: `auto-release-due-payments`, `brazos-drain-push`,
+   `brazos-process-settlements`, `expire-unfunded-payments`. *If only
+   `brazos-drain-push` is there, the migration did not apply — stop here.* This
+   is the one thing no test in this repository could show.
+3. **Confirm the two provider values are present** (do not set them; both were
+   already there): the edge-function settings page should list
+   `STRIPE_WEBHOOK_SECRET` and `STRIPE_SECRET_KEY`.
+4. **Deploy `stripe-webhook` FIRST**, before anything can generate an event.
+   Then open its per-function settings and **confirm JWT verification is OFF**.
+   Nothing else works until that reads OFF.
+5. **Deploy `process-settlements`, then `create-payment`.**
+6. **Send the first test event from the provider dashboard: a
+   `payment_intent.succeeded`.** This is a *synthetic* event — it belongs to no
+   real payment. **THE EXPECTED OUTCOME IS: delivery shows 200, and the second
+   signal query above returns one row with a null `payment_id`. That is correct,
+   not a failure.** It proves the endpoint is reachable, the signature verified,
+   and the event was recorded — the only thing it cannot prove is a ledger move,
+   because there is no ledger row to move.
+7. **Then a real flow, in the app**, and watch the `payments` row after each
+   step:
+   - after checkout starts: `provider_ref` is set to a `pi_…` id, `status` is
+     still `unfunded`, `funding_due_at` is ~24h out.
+   - after the card is paid: `status` is `held` and `held_at` is set. *If it is
+     still `unfunded`, the webhook is not arriving — check delivery attempts.*
+   - after the customer releases: `release_requested_at` and `transfer_cents`
+     are set and `status` is still `held`. Within five minutes the settlement
+     drain runs; then `transfer.created` lands and `status` becomes `released`
+     with `transfer_ref` set. **The worker must have a connected payout account
+     or the transfer cannot be sent — that is R5b's work, and until it exists
+     the row waits in the queue and `process-settlements` reports it under
+     `blocked`.**
+   - on a cancellation: `refund_cents` and `refund_reason` are set; the drain
+     refunds; `charge.refunded` then sets `refund_ref` and moves `status` to
+     `refunded` or `partially_refunded`.
+8. **Read the drain's own summary** in the function logs: it returns
+   `{ok, limit, transfers:{attempted,succeeded,failed,defects,blocked},
+   refunds:{…}}` every five minutes. `defects` is never expected to be non-zero
+   — it means a row reached a queue with a null or non-positive amount.
+
+### WHAT IS UNPROVEN — read this before trusting anything above
+
+- **The three handlers were not executed by any test in this repository.** They
+  are Deno; `npm run verify` runs Node and cannot load them, and no test was
+  written that merely asserts a file exists. Their logic has been reasoned
+  against the schema and the provider's documentation, and nothing more.
+- **The verifier's proof covers the scheme as read, not the provider's actual
+  bytes.** The first real test-mode event is what closes that.
+- **pg_cron is absent from the local stack**, so nothing here proved a
+  `cron.job` row is created — only that the corrected probe sees a two-overload
+  function where `to_regproc` does not, and that the skip branch runs without
+  raising. Step 2 of the test plan is the real proof.
+- **pg_net is absent from the local stack**, so `drain_settlements` was proven
+  up to the POST and no further.
+- Nothing was deployed and no value was set: both are denied to a run and both
+  are the operator's.
+
+### FOR R6 — THE CLIENT
+
+- **`create-payment` request:** `POST` with a Supabase user token, body
+  `{"jobId":"<uuid>"}` (`job_id` also accepted).
+- **`create-payment` response, 200:**
+  `{"paymentId","customerId","clientSecret","ephemeralKeySecret"}` — four
+  strings and nothing else. **No amount is returned on purpose:** the client
+  displays `charge_amount_cents` from the `payments` row, never a number an edge
+  function handed it.
+- **Failures pass R4's own words through.** A 4xx body is
+  `{"error":"<the message begin_job_payment raised>"}` — *"Payments are paused
+  right now. Please try again shortly."*, *"Accept an offer before protecting a
+  payment"*, *"Job not found"*. Show them as they are; they were written to be
+  read. 401 means no session, 409 means the row has no amount yet, 502 means the
+  provider is down.
+- **THE EPHEMERAL KEY VERSION LINE.** `create-payment` pins
+  `Stripe-Version: 2026-08-26.dahlia` on `/v1/ephemeral_keys` only, taken from
+  the account's configured version. The mobile SDK may require *its own* version
+  string there instead. **If the payment sheet rejects the key, that one header
+  line is the fix** — the SDK publishes the version it expects; no other call in
+  the run pins a version.
+- The intent is created with `amount`, `currency=usd`, `customer` and
+  `metadata[payment_id]` and nothing else — no `automatic_payment_methods`. If
+  the sheet needs it, that is a deliberate, separate decision.
+- `payments.status` is what the UI reads. It is `unfunded` until the webhook
+  lands `payment_intent.succeeded`, so the client must not claim "held in
+  protection" off a successful sheet — it must re-read the row.
+
+### GUARD REFUSALS AND GATE DEVIATIONS
+
+- **`BLOCK GUARD-NESTED-CLAUDE nested-claude-session`** fired once, on C1's
+  first `git commit -m`, because the message carried the two agent trailers. The
+  dispatch's A2 already answers it — a commit message is command text and may
+  not contain that word — and no commit in this repository's history carries
+  them. Routed by dropping the trailers; the commit then landed unchanged in
+  every other respect.
+- **`BLOCK GUARD-PATH-ESCAPE outside-project-dir`** fired once, on a draft
+  written to the session scratchpad. Routed by drafting this section directly
+  into `HANDOFF.md` instead. Nothing outside the repository was written at any
+  point in the run.
+- No other hook or deny rule fired. No command carried `--linked`, `--db-url` or
+  `--project-ref`. The CLI form is `npx supabase` (2.116.0).
+
+### STANDING GOTCHAS THIS RUN ADDS
+
+- **`to_regproc()` is not an existence test.** It is a resolver, and it answers
+  NULL for an ambiguous name. Use `public.pg_function_present(namespace, name)`
+  — this is exactly how R4 lost every money timer.
+- **The local stack has `vault` but not `pg_net` and not `pg_cron`.** Any proof
+  that reaches `net.http_post` or `cron.job` stops there and must say so.
+- **An unresolvable provider event is `ok:true`, not `ok:false`**, and gets a
+  `processed_at`. The `processed_at is null` query will never show it.
+- **A transfer without `metadata[payment_id]` is unattributable.**
+  `apply_payment_event` has no fallback for a `transfer.*` event, so such a
+  transfer produces an event that matches no row, is marked processed, and
+  leaves the payment `held` forever.
+- **`.mjs` inside `supabase/functions/` is loadable by both runtimes.**
+  `tsconfig.json` excludes `supabase/functions`, so nothing there is
+  typechecked; a `.mjs` file with no imports is the only way to put edge
+  function logic under `node --test`.
+- **`030_payments.sql:332`'s description is now stale** — it says the
+  sandbox-ledger copy "is parked for R5". It is not; C1 landed it. The assertion
+  itself is unaffected and was deliberately not edited (no unrelated cleanup).
+
+### WHAT THIS RUN DID NOT DO
+
+Worker payout-account creation and Connect onboarding (R5b — Accounts v2 pins an
+exact API version per request and parts of the onboarding-link flow are on
+preview versions); the client (R6); `open_job_dispute`'s release-window gap,
+still open and still R4's finding; any schema change beyond the corrective
+migration. No `/v2/` path is referenced anywhere. Untouched: the two baseline
+migrations, `20260905000000_stripe_foundation.sql`, `seed.sql`, `.gitignore`,
+`.claude/`, `.github/`, `start.ps1`, the frozen web surface, every
+`phase*_*.sql`, `screens/`, `components/`, `lib/`, `hooks/`, the three existing
+edge functions, and `types/database.ts` except by regeneration.
+
+
 ## RUN A0 COMPLETED (2026-08-29) — the staging migration path, and runs push their own work
 
 Two commits, no schema and no app code. `.github/workflows/db-push.yml` gives
