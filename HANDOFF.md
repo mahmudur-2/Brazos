@@ -43,6 +43,335 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R4 COMPLETED (2026-08-29) — payments schema and the lifecycle exits
+
+One migration, `supabase/migrations/20260905000000_stripe_foundation.sql`,
+applied to NOTHING but the local stack, and `supabase/tests/030_payments.sql`
+(299 assertions) proving it. `npm run db:test` runs seven files: **921
+assertions, all green** after a clean `npm run db:reset`. No remote database
+was contacted: every database command was `npm run db:reset`, `npm run
+db:test` or `npm run db:types`, none carried `--linked`, `--db-url` or
+`--project-ref`, and the CLI form pinned by the gate was `npx supabase`
+(2.116.0). Nothing was pushed (the dispatch said not to). pg_cron is absent
+locally, so the migration's section 22 raised its notice and scheduled
+nothing — on staging it schedules `auto-release-due-payments` every 10 min.
+
+| # | commit | what landed | verify | db tests |
+|-|-|-|-|-|
+|C1|`09e1f98`|the migration; `020_lifecycle.sql` §I re-pointed (73→74); `040_authz.sql` §17 re-pointed (448→460); `010_offers.sql` G's money-mover allow-list widened (52)|1178/0|622|
+|C2|`34b64ce`|`supabase/tests/030_payments.sql`, 298 assertions, C-2 bullets 1–14|1178/0|920|
+|C3|`7a149e0`|`types/database.ts` regenerated through `npm run db:types` (never hand-edited)|1178/0|920|
+|C4|(this commit)|this live edge; the D5 measurement as a 299th assertion|1178/0|921|
+
+The floor at run start was 1178 / 609.
+
+### THE OPERATOR'S NEXT STEP, IN ONE LINE
+
+Read THE PROOF LEDGER below; if every line reads "proven", hand-apply
+`supabase/migrations/20260905000000_stripe_foundation.sql` to staging as one
+transaction (it ends in `stripe_foundation_enabled()`, so its presence proves
+the whole file committed), then `npm run db:reset` and `npm run db:test` in
+your own shell (`Result: PASS`, `Files=7, Tests=921`) and push. The two
+`.claude/` files and `docs/audits/MARKETPLACE_PRODUCT_AUDIT_2026-08-29.md`
+are still yours, untouched and uncommitted.
+
+### THE PROOF LEDGER — C-2 bullets 1–14, read this before applying
+
+1. **proven** — `apply_payment_event` under one event id three times: one
+   ledger move, `already:true` twice; a payload with `metadata.payment_id =
+   'not-a-uuid'` returns `ok:false`, records the error and `attempts`, and a
+   retry counts again; an unknown id is reported, not raised (§1 of the file).
+2. **proven** — release refused not-completed / open report / `chargeback_at`
+   (set and cleared by `charge.dispute.created` / `.closed won`) / not held
+   (manufactured `authorized` on a completed job, declared) / worker /
+   stranger, each with code and message; positive control releases; a second
+   call after `release_requested_at` returns the row with a REWOUND timestamp
+   unchanged (an idempotent return, not a refusal).
+3. **proven** — the held gate refuses with D8's sentence while unfunded
+   (stripe) and while only authorized (sandbox); the start lands once held on
+   both paths.
+4. **proven** — `payment_intent.canceled` voids the unfunded row and a fresh
+   `begin_job_payment` row exists (the first assertion PASSED — no stop); a
+   refunded row on a cancelled job refuses a second `job_payment` with 23505
+   on `payments_one_active_per_job_kind`.
+5. **proven** — the stripe tip is born `unfunded` and reaches `released` only
+   on `payment_intent.succeeded`; the trigger refuses above the ratio ("A tip
+   on this job can be at most $25.00") and above $1,000 ("…$1,000.00") on the
+   stripe path (`begin_tip_payment`) and on the sandbox path
+   (`sandbox_tip_worker` for the ratio; a direct runner insert for the
+   $1,000 cap, which `sandbox_tip_worker`'s own check pre-empts); positive
+   controls at 2500 / 100000 on both paths; `platform_fee_cents <> 0` on a
+   tip is refused.
+6. **proven** — `transfer.reversed`: held, `released_at` null, `transfer_ref`
+   null, `release_requested_at` PRESERVED (rewound first so preservation is
+   distinguishable from now()), `transfer_reversed_at` set, absent from
+   `transfers_due`; the customer's second release changes nothing; D7 in the
+   worker's favour clears the park, `transfer_attempts` 0→1, the row
+   reappears in `transfers_due`.
+7. **proven** — `quote_job_price` at 10000 / 5000 / 1000 / 100 / 1;
+   `charge_amount_cents = amount + customer fee + tax` on every stripe row the
+   file funded; a future-dated `fee_schedule` row does not apply today and
+   does apply at a later `p_at` with its tax line in the total; after a row
+   effective now (1000 bps) the funded rows keep 375, the snapshot keeps its
+   terms, and a checkout begun AFTER the change on a job hired BEFORE it is
+   charged the snapshot's 375, not 500.
+8. **proven** — free outside the window; free within 15 minutes of
+   acceptance inside the window; fee inside the window (floors at $15);
+   fee once `in_progress` with no date (caps at $35, sandbox finalizes
+   `partially_refunded` with `released_at`); fee never exceeds the price
+   ($10 job → $10, protection fee refunded); worker cancellation refunds in
+   full; no `scheduled_date` → free; unfunded → voided (an open job has no
+   row to void); completed → refused; losing bidder / stranger / wrong-role
+   reasons / unknown reason / second cancel refused; pending offers declined
+   by `jobs_settle_offers_on_cancel`; the other party notified exactly once
+   with the right screen and no amount in the copy; `refunds_due` carries the
+   stripe refund.
+9. **proven** — the four no-show gates each refused individually (not
+   assigned / no `arrived_at` / no `scheduled_date` / window not passed) with
+   the positive control; the claim moves no money; the `job_disputes` row is
+   `no_show`, open, worker-opened, on the held payment; the CUSTOMER gets one
+   `dispute_opened` on ClientJobDetail with the no-show copy, the worker
+   none, and no `job_cancelled` is sent; D7 then applies the fee (worker) or
+   refunds in full (customer); a withdrawn claim refunds in full by trigger
+   with no resolver call, and the withdrawer is opener-only.
+10. **proven** — `partially_refunded` whether `transfer.created` (J6) or
+    `charge.refunded` (J8) lands first; `refunded` for a full refund (J4 via
+    the `charge.*` → `provider_ref` resolution with no metadata; J9).
+11. **proven** — `authenticated` gets 42501; `service_role` has EXECUTE and
+    actually executes it (the session switched to `service_role`); nothing to
+    resolve on a completed job with no report and no park; the five outcomes
+    (completed+worker, completed+customer, no-show+worker, no-show+customer,
+    cancelled-by-raw-UPDATE + held + no claim: worker refused, customer
+    refunded); a second resolve refused; the outcome is binary.
+12. **proven** — written once for a marketplace bid and for a direct offer
+    with price, fees, tax, total, cancellation terms, policy version, schedule
+    and scope; a repeated accept writes nothing and leaves `accepted_at`;
+    UPDATE raises for the runner; a client DELETE / UPDATE is 42501;
+    `service_role` holds neither; both parties read, bidder and stranger read
+    zero, anon is refused.
+13. **proven** — `job_payment_state` auto-releases a sandbox row after 72h
+    and never a stripe row; `auto_release_due_payments` releases 0 while the
+    `job_completed` outbox row is `pending`, exactly 1 once it is `sent`,
+    then 0 again.
+14. **proven** — `has_table_privilege` false for authenticated
+    INSERT/UPDATE/DELETE on the five tables and both views (and SELECT on
+    fee_schedule, payment_events, payment_accounts, the views); refused
+    statements for each; RLS on all five; anon 42501 everywhere except
+    `app_config` (5 rows); `authenticated` cannot execute the six
+    service-role functions nor the two internal helpers; the kill switch
+    pauses on `false`, on the string `"true"`, and enables when absent.
+
+Also measured: **zero** jobs hired without an agreement snapshot on the
+local stack (D5; the seed's two hires got theirs from the trigger). Staging's
+number is the operator's to read.
+
+### THE DIVERGENCE LEDGER — where §5.2 did not survive the live shape or Section B
+
+1. The provider constraint is `payments_provider_known`, not §5.2's
+   `payments_provider_check`; dropped and recreated by the live name.
+2. `app_config` is `(key text primary key, value jsonb, updated_at)`, one row
+   per setting, because `lib/remoteConfig.ts` reads `select key, value` —
+   §5.2's single-row table would never have been read. Seeded
+   `maintenanceMode` false, `maintenanceMessage` "", `minimumSupportedVersion`
+   "0.0.0", `postingEnabled` true, `paymentsEnabled` true. `begin_job_payment`
+   and `begin_tip_payment` read `paymentsEnabled`: absent = enabled; ONLY the
+   jsonb boolean `true` enables (fails closed on any other value).
+3. No `job_completions` table and no completion-photo guard (D8): they ride
+   R6 with the client change. `transition_job_status` gained exactly the held
+   gate.
+4. `account.updated` is not parsed in `apply_payment_event`;
+   `set_payouts_enabled(p_stripe_account_id text, p_enabled boolean)` →
+   boolean, service_role only, is R5's entry.
+5. `transfer.reversed` PRESERVES `release_requested_at`, clears `released_at`
+   and `transfer_ref`, sets `transfer_reversed_at`; only `resolve_job_dispute`
+   clears the park and increments `transfer_attempts`. §5.2 nulled
+   `release_requested_at` (re-opening the release button) and would have
+   re-queued the row through its index.
+6. `payments_release_queue_idx` predicate is `provider = 'stripe' and
+   release_requested_at is not null and transfer_ref is null and
+   transfer_reversed_at is null and transfer_cents > 0`.
+7. `transfers_due` ALSO excludes rows whose job has an open `job_disputes`
+   row (a report opened in the minute between the release request and
+   `transfer.created` would otherwise be toothless); `refunds_due` ALSO
+   excludes `status = 'refunded'` (a hand refund without a recorded ref is
+   not refunded twice). Both beyond D11's literal predicates, both documented
+   in the view comments.
+8. `job_payment_state` keeps its on-read 72h branch, restricted to
+   `provider = 'sandbox'`; §5.2 removed it. `auto_release_due_payments` is
+   stripe-only and gated on `notification_outbox.status = 'sent'` for
+   `type = 'job_completed'` with `data->>'jobId'` — §5.2's `'%complet%'`,
+   `data->>'job_id'` and one-hour age test are gone (closes its UNKNOWN).
+9. `auto_release_due_payments` is granted to `service_role` (§5.2 revoked
+   without granting anything).
+10. `fee_schedule` carries `tax_bps` 0, `cancel_fee_bps` 2000,
+    `cancel_fee_min_cents` 1500, `cancel_fee_max_cents` 3500, `tip_max_bps`
+    5000, `tip_max_cents` 100000 beside 750/750/100/750. `current_fee()`
+    returns `id`, `effective_from` and every rate. `quote_job_price()`
+    returns `tax_cents` (computed on price + protection fee — a shape
+    decision, the rate is 0) and `total_cents` includes it; the worker-side
+    fee is capped at the price so `worker_receives_cents` cannot go negative.
+11. One terms lookup, `job_terms(job, amount)` (internal): the agreement
+    snapshot when it exists and its price matches, else `current_fee()` /
+    `quote_job_price()`. `begin_job_payment` freezes fees from it;
+    `cancellation_fee_cents(job, amount)` (internal) is the one fee formula.
+12. `begin_tip_payment(p_job_id, p_amount_cents)` added (§5.2 had no stripe
+    tip entry); `enforce_tip_ceiling` (BEFORE INSERT, `kind = 'tip'`) enforces
+    `tip_max_cents`, `tip_max_bps` of the job's active payment, and
+    `platform_fee_cents = 0`, naming the dollar limit.
+13. `release_job_payment` sets `transfer_cents = amount − platform fee`,
+    finalizes sandbox rows immediately (D3), and refuses rows already
+    directed to a refund or parked ("This payment is being refunded and cannot
+    be released"). `expire_unfunded_payments` is restricted to stripe rows.
+14. Of §5.2 §14 only `payments_payee_status_idx` was created:
+    `payments_job_kind_idx` duplicates the baseline's `payments_job_idx`
+    (job_id, kind) and `job_disputes_job_open_idx` is covered by the unique
+    `job_disputes_one_open_per_job`.
+15. `cancel_job`'s no-show branch sends NO `job_cancelled` notification: the
+    customer's notice is the claim's own `dispute_opened` (the D6 customer
+    copy "refunded in full" would be untrue while the claim is open).
+16. `notify_on_dispute` gained the worker-opened branch (D6 copy, to the
+    customer); the customer-opened branch is byte-for-byte the baseline's.
+17. The sentinel is `stripe_foundation_enabled()` (IMMUTABLE, not SECURITY
+    DEFINER, executable by authenticated/service_role like phase50's marker).
+18. §5.2's rewrite of `tests/paymentsMode.test.mjs` was NOT done: it is
+    client-side (R6), and no unit fence scans `supabase/migrations/` or
+    `types/database.ts` for "stripe" — verify stayed 1178 throughout.
+
+### THE CONSTRAINT LEDGER — before → after
+
+- `payments_provider_known`: `provider = 'sandbox'` → `provider in ('sandbox', 'stripe')`.
+- `payments_release_reason_known`: (approved, auto_approved) → + cancellation_fee, dispute_resolved.
+- NEW checks on payments: `payments_customer_fee_not_negative`,
+  `payments_tax_not_negative`, `payments_transfer_cents_not_negative`,
+  `payments_refund_cents_bounded` (0 ≤ refund ≤ amount + fee + tax),
+  `payments_transfer_attempts_not_negative`, `payments_refund_reason_known`
+  (customer_cancelled_free, customer_cancelled_late, worker_cancelled,
+  no_show_withdrawn, customer_no_show, dispute_refund).
+- `payments_one_active_per_job_kind`: UNCHANGED, now commented with why.
+- NEW payments columns: customer_fee_bps, customer_fee_cents (0),
+  worker_fee_bps, tax_cents (0), transfer_ref, refund_ref,
+  release_requested_at, funding_due_at, chargeback_ref, chargeback_at,
+  last_error, transfer_cents, refund_cents, refund_reason,
+  transfer_reversed_at, transfer_attempts (0); `charge_amount_cents`
+  generated as amount + customer fee + tax.
+- NEW indexes: `payments_release_queue_idx` (partial, above),
+  `payments_funding_window_idx`, `payments_provider_ref_uniq` (unique on
+  provider, provider_ref where not null), `payments_payee_status_idx`,
+  `payment_events_unprocessed_idx`.
+- jobs: NEW `cancelled_at`, `cancelled_by` (→ profiles, on delete set null),
+  `cancel_reason` + `jobs_cancel_reason_known` (null or the three reasons).
+- NEW tables: `fee_schedule` (RLS, no policies, no client grants, sequence
+  revoked), `app_config` (RLS + "app_config is world-readable" SELECT for
+  anon/authenticated), `payment_events` (RLS, service_role only),
+  `payment_accounts` (RLS, service_role only), `job_agreements` (RLS +
+  `job_agreements_select_parties`; SELECT only for authenticated AND
+  service_role — no role holds INSERT/UPDATE/DELETE).
+- NEW views: `transfers_due`, `refunds_due` (SELECT to service_role only).
+- NEW triggers: `jobs_snapshot_agreement` (AFTER UPDATE OF accepted_offer_id,
+  null → value), `job_agreements_immutable` (BEFORE UPDATE, raises for every
+  role), `payments_tip_ceiling` (BEFORE INSERT when kind = 'tip'),
+  `job_disputes_refund_on_withdrawn` (AFTER UPDATE OF status, open → withdrawn).
+- Enums: none changed (every needed label already existed).
+- NEW functions, authenticated: `begin_job_payment`, `begin_tip_payment`,
+  `cancel_job`, `current_fee`, `my_payouts_enabled`, `quote_job_price`,
+  `release_job_payment` (+ the non-secdef sentinel). service_role only:
+  `apply_payment_event`, `attach_provider_ref`, `set_payouts_enabled`,
+  `resolve_job_dispute`, `expire_unfunded_payments`,
+  `auto_release_due_payments`. Internal (no grants): `job_terms`,
+  `cancellation_fee_cents`, and the four trigger functions.
+- EDITED functions (ACL preserved): `transition_job_status` (the held gate,
+  nothing else), `job_payment_state` (sandbox-only clock), `notify_on_dispute`
+  (worker-opened branch).
+
+### THE RE-POINT LEDGER
+
+- `020_lifecycle.sql` I1 — old: "the worker starts BEFORE checkout — no
+  payment exists yet"; new: the start is REFUSED with D8's sentence; why: D8
+  by design. I2 — old: "a repeated transition returns the row"; new: the
+  start succeeds once the late authorize + hold landed; the phase58 retry
+  assertion was kept as a further line. plan 73 → 74.
+- `040_authz.sql` §17 — the pinned authenticated allow-list gained the seven
+  functions above, alphabetically; six service-role-only functions joined the
+  refusal block with six positive controls. plan 448 → 460.
+- `010_offers.sql` G (test 41) — NOT pre-decided; classified C-5(b): the
+  name-scan (`%release%payment%`, `%payout%`, `%cash_out%`) allow-list gained
+  `release_job_payment`, `auto_release_due_payments` (the stripe release
+  pair) and `my_payouts_enabled`, `set_payouts_enabled` (they only read/record
+  a flag). The scan is unchanged; plan stays 52.
+
+No assertion count decreased; no assertion was weakened or deleted.
+
+### FOR R5
+
+- `transfers_due` = payments where provider = 'stripe' and
+  release_requested_at is not null and transfer_ref is null and
+  transfer_reversed_at is null and coalesce(transfer_cents, 0) > 0 and no
+  open job_disputes row for the job, ordered by release_requested_at.
+  Transfer exactly `transfer_cents`; idempotency key
+  `'tr:' || id || ':' || transfer_attempts` (a reversal keeps the counter, D7
+  increments it, so a retry never returns the reversed transfer).
+- `refunds_due` = payments where provider = 'stripe' and
+  coalesce(refund_cents, 0) > 0 and refund_ref is null and status <>
+  'refunded', ordered by updated_at. Refund exactly `refund_cents` against
+  the charge; `charge.refunded` settles the status and records `refund_ref`
+  from `refunds.data[0].id`.
+- `set_payouts_enabled(p_stripe_account_id, p_enabled)` → true when a
+  `payment_accounts` row matched. R5 parses the account object itself.
+- `apply_payment_event(p_event_id)` reads `data.object`: `metadata.payment_id`
+  first, else `payment_intent.*` by `object.id = provider_ref`, else
+  `charge.*` by `object.payment_intent = provider_ref`; `charge.refunded`
+  reads `amount_refunded`; `charge.dispute.*` reads `id` and `status`;
+  `transfer.*` reads `id`. Insert the `payment_events` row, call it, turn
+  `ok:false` into a 5xx so the provider retries.
+- PARKED: `notify_on_payment_release` still says "The payment is released to
+  you in the sandbox ledger." and fires on status → released for job_payment
+  rows — it fired once for J1's `transfer.created` in the proofs. R5 makes it
+  provider-aware when it lands `transfer.created`.
+- A gap for R5/R6 to close: `open_job_dispute` still admits a report while a
+  stripe release is requested but not yet transferred (status held,
+  `release_requested_at` set). `transfers_due` now honours that freeze;
+  `open_job_dispute` itself was not touched this run.
+
+### GUARD REFUSALS AND GATE DEVIATIONS
+
+No guard or deny rule fired. No command carried a remote flag. The one
+non-pre-decided fence (`010_offers.sql` G) was classified under C-5(b), not
+stopped on.
+
+### STANDING GOTCHAS THIS RUN ADDS
+
+- **`job_agreements` is immutable for the runner too.** A fixture that must
+  age `accepted_at` disables `job_agreements_immutable` for one UPDATE and
+  re-enables it (`tests.r4_age_agreement`); nothing else may.
+- **The runner can become `service_role`** with `set_config('role',
+  'service_role', true)` — `postgres` is a member — and returns with
+  `set_config('role', 'none', true)`. `tests.clear_auth()` is not reachable
+  from `service_role` (no USAGE on schema `tests`).
+- **The agreement trigger fires on the seed's direct
+  `update jobs set accepted_offer_id`**, so seeded hires carry snapshots; a
+  seed that inserts `accepted_offer_id` in the INSERT itself would not.
+- **`now()` is constant inside a test transaction**: every "unchanged
+  timestamp" proof rewinds the column first, and every 15-minute-grace proof
+  ages the snapshot.
+- **Bodies containing `$` use a tagged quote** (`$tip$`) — a `$$` inside a
+  `$$` body ends it.
+- **The two clocks:** sandbox rows auto-release inside `job_payment_state`;
+  stripe rows only through `auto_release_due_payments` (cron on staging,
+  absent locally).
+
+### WHAT THIS RUN DID NOT DO (D15/D16)
+
+The review reveal window, the rating role-split, the `messages_insert_party`
+exemption (`recompute_profile_rating`, `profile_reviews`,
+`messages_insert_party` untouched); the completion-photo guard and
+`job_completions`; edge functions; the client; the `notify_on_payment_release`
+copy. The two baseline migrations, `seed.sql`, `config.toml`, `.claude/`,
+`.github/`, `.env`, `start.ps1`, `supabase/functions/`, every `phase*_*.sql`,
+`screens/`, `components/`, `lib/` were not touched. The two contradictions
+R3a recorded (CLAUDE.md's "execute SQL" stop vs. the local-stack section;
+`.claude/rules/supabase.md`'s phase-file mechanics) still stand.
+
+
 ## RUN R3b COMPLETED (2026-08-29) — authorization proofs and the pgTAP conversion
 
 `npm run db:test` now runs the whole `supabase/tests/` directory: six files,

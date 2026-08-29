@@ -45,7 +45,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(298);
+select plan(299);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -162,6 +162,13 @@ begin
 end $$;
 
 select ok(public.stripe_foundation_enabled(), 'the sentinel exists: the whole migration committed');
+-- D5's measurement, taken before this file hires anything: a job hired
+-- before the migration has no snapshot and no 15-minute grace. Locally the
+-- seed's two hires set accepted_offer_id after the migration, so the trigger
+-- wrote theirs; on staging the operator reads this number by hand.
+select is((select count(*) from public.jobs j where j.accepted_offer_id is not null
+             and not exists (select 1 from public.job_agreements a where a.job_id = j.id)), 0::bigint,
+  'D5: zero jobs hired without an agreement snapshot on this stack');
 
 -- ===========================================================================
 -- §12. job_agreements — written once at acceptance, immutable, party-readable
