@@ -394,6 +394,36 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# ---------------------------------------------------------------------------
+# Per-function settings. The platform runs its own JWT check BEFORE a function
+# executes; it defaults to ON, and a request it rejects gets a 401 without the
+# function's code ever running.
+#
+# Only functions that need a NON-DEFAULT answer are listed. send-push and
+# worker-search and translate have no entry and work over the default, so
+# process-settlements has none either — it is woken by pg_cron through
+# net.http_post carrying the service-role key as a Bearer token, and its own
+# first statement compares that token to the service-role key regardless.
+# ---------------------------------------------------------------------------
+[functions.stripe-webhook]
+# THE PROVIDER SENDS NO SUPABASE JWT. Without this line the platform answers
+# 401, the function never runs, and the provider counts every delivery as
+# failed — which, repeated, disables the destination. The signature check
+# inside the function is this endpoint's authentication, and the database
+# GRANTs are its real defence.
+#
+# AFTER EVERY DEPLOY: confirm the dashboard's per-function toggle for
+# stripe-webhook still shows JWT verification OFF. The dashboard can override
+# this file, and a CLI redeploy can reset the dashboard.
+verify_jwt = false
+
+[functions.create-payment]
+# Written explicitly, though it is also the default, so that no later blanket
+# edit can turn it off without deleting a line that says why it is here. This
+# function starts a real charge and its first act is to forward the caller's
+# own token to the database.
+verify_jwt = true
+
 [analytics]
 enabled = true
 port = 54327
