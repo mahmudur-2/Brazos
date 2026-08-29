@@ -9,6 +9,24 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      app_config: {
+        Row: {
+          key: string
+          updated_at: string
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          value?: Json
+        }
+        Relationships: []
+      }
       areas: {
         Row: {
           aliases: string[]
@@ -267,6 +285,159 @@ export type Database = {
           },
         ]
       }
+      fee_schedule: {
+        Row: {
+          cancel_fee_bps: number
+          cancel_fee_max_cents: number
+          cancel_fee_min_cents: number
+          created_at: string
+          customer_bps: number
+          effective_from: string
+          id: number
+          tax_bps: number
+          tip_customer_bps: number
+          tip_max_bps: number
+          tip_max_cents: number
+          worker_bps: number
+          worker_min_fee_cents: number
+        }
+        Insert: {
+          cancel_fee_bps?: number
+          cancel_fee_max_cents?: number
+          cancel_fee_min_cents?: number
+          created_at?: string
+          customer_bps: number
+          effective_from: string
+          id?: never
+          tax_bps?: number
+          tip_customer_bps?: number
+          tip_max_bps?: number
+          tip_max_cents?: number
+          worker_bps: number
+          worker_min_fee_cents?: number
+        }
+        Update: {
+          cancel_fee_bps?: number
+          cancel_fee_max_cents?: number
+          cancel_fee_min_cents?: number
+          created_at?: string
+          customer_bps?: number
+          effective_from?: string
+          id?: never
+          tax_bps?: number
+          tip_customer_bps?: number
+          tip_max_bps?: number
+          tip_max_cents?: number
+          worker_bps?: number
+          worker_min_fee_cents?: number
+        }
+        Relationships: []
+      }
+      job_agreements: {
+        Row: {
+          accepted_at: string
+          agreed_price_cents: number
+          arrival_end_hour: number | null
+          arrival_start_hour: number | null
+          cancel_fee_bps: number
+          cancel_fee_max_cents: number
+          cancel_fee_min_cents: number
+          category: string
+          customer_fee_cents: number
+          customer_id: string
+          description: string | null
+          fee_schedule_id: number
+          job_id: string
+          offer_id: string
+          scheduled_date: string | null
+          tax_cents: number
+          title: string
+          total_cents: number
+          worker_fee_cents: number
+          worker_id: string
+        }
+        Insert: {
+          accepted_at?: string
+          agreed_price_cents: number
+          arrival_end_hour?: number | null
+          arrival_start_hour?: number | null
+          cancel_fee_bps: number
+          cancel_fee_max_cents: number
+          cancel_fee_min_cents: number
+          category: string
+          customer_fee_cents: number
+          customer_id: string
+          description?: string | null
+          fee_schedule_id: number
+          job_id: string
+          offer_id: string
+          scheduled_date?: string | null
+          tax_cents: number
+          title: string
+          total_cents: number
+          worker_fee_cents: number
+          worker_id: string
+        }
+        Update: {
+          accepted_at?: string
+          agreed_price_cents?: number
+          arrival_end_hour?: number | null
+          arrival_start_hour?: number | null
+          cancel_fee_bps?: number
+          cancel_fee_max_cents?: number
+          cancel_fee_min_cents?: number
+          category?: string
+          customer_fee_cents?: number
+          customer_id?: string
+          description?: string | null
+          fee_schedule_id?: number
+          job_id?: string
+          offer_id?: string
+          scheduled_date?: string | null
+          tax_cents?: number
+          title?: string
+          total_cents?: number
+          worker_fee_cents?: number
+          worker_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_agreements_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_agreements_fee_schedule_id_fkey"
+            columns: ["fee_schedule_id"]
+            isOneToOne: false
+            referencedRelation: "fee_schedule"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_agreements_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_agreements_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_agreements_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_checklist_items: {
         Row: {
           created_at: string
@@ -362,6 +533,20 @@ export type Database = {
             columns: ["payment_id"]
             isOneToOne: false
             referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_disputes_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_disputes_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_due"
             referencedColumns: ["id"]
           },
         ]
@@ -659,6 +844,9 @@ export type Database = {
           budget_cents: number | null
           budget_max_cents: number | null
           budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           category: Database["public"]["Enums"]["job_category"]
           client_id: string
           completed_at: string | null
@@ -692,6 +880,9 @@ export type Database = {
           budget_cents?: number | null
           budget_max_cents?: number | null
           budget_min_cents?: number | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           category?: Database["public"]["Enums"]["job_category"]
           client_id: string
           completed_at?: string | null
@@ -725,6 +916,9 @@ export type Database = {
           budget_cents?: number | null
           budget_max_cents?: number | null
           budget_min_cents?: number | null
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
           category?: Database["public"]["Enums"]["job_category"]
           client_id?: string
           completed_at?: string | null
@@ -772,6 +966,13 @@ export type Database = {
           {
             foreignKeyName: "jobs_assigned_worker_id_fkey"
             columns: ["assigned_worker_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_cancelled_by_fkey"
+            columns: ["cancelled_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1212,15 +1413,118 @@ export type Database = {
           },
         ]
       }
+      payment_accounts: {
+        Row: {
+          created_at: string
+          payouts_checked_at: string | null
+          payouts_enabled: boolean
+          stripe_account_id: string | null
+          stripe_customer_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          payouts_checked_at?: string | null
+          payouts_enabled?: boolean
+          stripe_account_id?: string | null
+          stripe_customer_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          payouts_checked_at?: string | null
+          payouts_enabled?: boolean
+          stripe_account_id?: string | null
+          stripe_customer_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payment_events: {
+        Row: {
+          account_id: string | null
+          attempts: number
+          error: string | null
+          id: string
+          payload: Json
+          payment_id: string | null
+          processed_at: string | null
+          received_at: string
+          type: string
+        }
+        Insert: {
+          account_id?: string | null
+          attempts?: number
+          error?: string | null
+          id: string
+          payload: Json
+          payment_id?: string | null
+          processed_at?: string | null
+          received_at?: string
+          type: string
+        }
+        Update: {
+          account_id?: string | null
+          attempts?: number
+          error?: string | null
+          id?: string
+          payload?: Json
+          payment_id?: string | null
+          processed_at?: string | null
+          received_at?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payment_events_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "refunds_due"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payment_events_payment_id_fkey"
+            columns: ["payment_id"]
+            isOneToOne: false
+            referencedRelation: "transfers_due"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       payments: {
         Row: {
           amount_cents: number
           authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
           created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
           held_at: string | null
           id: string
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
           offer_id: string | null
           paid_out_at: string | null
           payee_id: string
@@ -1228,20 +1532,37 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
           release_reason: string | null
+          release_requested_at: string | null
           released_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
           updated_at: string
+          worker_fee_bps: number | null
         }
         Insert: {
           amount_cents: number
           authorized_at?: string | null
+          charge_amount_cents?: number | null
+          chargeback_at?: string | null
+          chargeback_ref?: string | null
           created_at?: string
+          customer_fee_bps?: number | null
+          customer_fee_cents?: number
+          funding_due_at?: string | null
           held_at?: string | null
           id?: string
           job_id: string
           kind?: Database["public"]["Enums"]["payment_kind"]
+          last_error?: string | null
           offer_id?: string | null
           paid_out_at?: string | null
           payee_id: string
@@ -1249,20 +1570,37 @@ export type Database = {
           platform_fee_cents: number
           provider?: string
           provider_ref?: string | null
+          refund_cents?: number | null
+          refund_reason?: string | null
+          refund_ref?: string | null
           release_reason?: string | null
+          release_requested_at?: string | null
           released_at?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id?: string | null
+          tax_cents?: number
+          transfer_attempts?: number
+          transfer_cents?: number | null
+          transfer_ref?: string | null
+          transfer_reversed_at?: string | null
           updated_at?: string
+          worker_fee_bps?: number | null
         }
         Update: {
           amount_cents?: number
           authorized_at?: string | null
+          charge_amount_cents?: number | null
+          chargeback_at?: string | null
+          chargeback_ref?: string | null
           created_at?: string
+          customer_fee_bps?: number | null
+          customer_fee_cents?: number
+          funding_due_at?: string | null
           held_at?: string | null
           id?: string
           job_id?: string
           kind?: Database["public"]["Enums"]["payment_kind"]
+          last_error?: string | null
           offer_id?: string | null
           paid_out_at?: string | null
           payee_id?: string
@@ -1270,11 +1608,21 @@ export type Database = {
           platform_fee_cents?: number
           provider?: string
           provider_ref?: string | null
+          refund_cents?: number | null
+          refund_reason?: string | null
+          refund_ref?: string | null
           release_reason?: string | null
+          release_requested_at?: string | null
           released_at?: string | null
           status?: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id?: string | null
+          tax_cents?: number
+          transfer_attempts?: number
+          transfer_cents?: number | null
+          transfer_ref?: string | null
+          transfer_reversed_at?: string | null
           updated_at?: string
+          worker_fee_bps?: number | null
         }
         Relationships: [
           {
@@ -1792,6 +2140,298 @@ export type Database = {
         }
         Relationships: []
       }
+      refunds_due: {
+        Row: {
+          amount_cents: number | null
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
+          created_at: string | null
+          customer_fee_bps: number | null
+          customer_fee_cents: number | null
+          funding_due_at: string | null
+          held_at: string | null
+          id: string | null
+          job_id: string | null
+          kind: Database["public"]["Enums"]["payment_kind"] | null
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string | null
+          payer_id: string | null
+          platform_fee_cents: number | null
+          provider: string | null
+          provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"] | null
+          stripe_payment_intent_id: string | null
+          tax_cents: number | null
+          transfer_attempts: number | null
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          updated_at: string | null
+          worker_fee_bps: number | null
+        }
+        Insert: {
+          amount_cents?: number | null
+          authorized_at?: string | null
+          charge_amount_cents?: number | null
+          chargeback_at?: string | null
+          chargeback_ref?: string | null
+          created_at?: string | null
+          customer_fee_bps?: number | null
+          customer_fee_cents?: number | null
+          funding_due_at?: string | null
+          held_at?: string | null
+          id?: string | null
+          job_id?: string | null
+          kind?: Database["public"]["Enums"]["payment_kind"] | null
+          last_error?: string | null
+          offer_id?: string | null
+          paid_out_at?: string | null
+          payee_id?: string | null
+          payer_id?: string | null
+          platform_fee_cents?: number | null
+          provider?: string | null
+          provider_ref?: string | null
+          refund_cents?: number | null
+          refund_reason?: string | null
+          refund_ref?: string | null
+          release_reason?: string | null
+          release_requested_at?: string | null
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          stripe_payment_intent_id?: string | null
+          tax_cents?: number | null
+          transfer_attempts?: number | null
+          transfer_cents?: number | null
+          transfer_ref?: string | null
+          transfer_reversed_at?: string | null
+          updated_at?: string | null
+          worker_fee_bps?: number | null
+        }
+        Update: {
+          amount_cents?: number | null
+          authorized_at?: string | null
+          charge_amount_cents?: number | null
+          chargeback_at?: string | null
+          chargeback_ref?: string | null
+          created_at?: string | null
+          customer_fee_bps?: number | null
+          customer_fee_cents?: number | null
+          funding_due_at?: string | null
+          held_at?: string | null
+          id?: string | null
+          job_id?: string | null
+          kind?: Database["public"]["Enums"]["payment_kind"] | null
+          last_error?: string | null
+          offer_id?: string | null
+          paid_out_at?: string | null
+          payee_id?: string | null
+          payer_id?: string | null
+          platform_fee_cents?: number | null
+          provider?: string | null
+          provider_ref?: string | null
+          refund_cents?: number | null
+          refund_reason?: string | null
+          refund_ref?: string | null
+          release_reason?: string | null
+          release_requested_at?: string | null
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          stripe_payment_intent_id?: string | null
+          tax_cents?: number | null
+          transfer_attempts?: number | null
+          transfer_cents?: number | null
+          transfer_ref?: string | null
+          transfer_reversed_at?: string | null
+          updated_at?: string | null
+          worker_fee_bps?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_payee_id_fkey"
+            columns: ["payee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transfers_due: {
+        Row: {
+          amount_cents: number | null
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
+          created_at: string | null
+          customer_fee_bps: number | null
+          customer_fee_cents: number | null
+          funding_due_at: string | null
+          held_at: string | null
+          id: string | null
+          job_id: string | null
+          kind: Database["public"]["Enums"]["payment_kind"] | null
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string | null
+          payer_id: string | null
+          platform_fee_cents: number | null
+          provider: string | null
+          provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"] | null
+          stripe_payment_intent_id: string | null
+          tax_cents: number | null
+          transfer_attempts: number | null
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          updated_at: string | null
+          worker_fee_bps: number | null
+        }
+        Insert: {
+          amount_cents?: number | null
+          authorized_at?: string | null
+          charge_amount_cents?: number | null
+          chargeback_at?: string | null
+          chargeback_ref?: string | null
+          created_at?: string | null
+          customer_fee_bps?: number | null
+          customer_fee_cents?: number | null
+          funding_due_at?: string | null
+          held_at?: string | null
+          id?: string | null
+          job_id?: string | null
+          kind?: Database["public"]["Enums"]["payment_kind"] | null
+          last_error?: string | null
+          offer_id?: string | null
+          paid_out_at?: string | null
+          payee_id?: string | null
+          payer_id?: string | null
+          platform_fee_cents?: number | null
+          provider?: string | null
+          provider_ref?: string | null
+          refund_cents?: number | null
+          refund_reason?: string | null
+          refund_ref?: string | null
+          release_reason?: string | null
+          release_requested_at?: string | null
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          stripe_payment_intent_id?: string | null
+          tax_cents?: number | null
+          transfer_attempts?: number | null
+          transfer_cents?: number | null
+          transfer_ref?: string | null
+          transfer_reversed_at?: string | null
+          updated_at?: string | null
+          worker_fee_bps?: number | null
+        }
+        Update: {
+          amount_cents?: number | null
+          authorized_at?: string | null
+          charge_amount_cents?: number | null
+          chargeback_at?: string | null
+          chargeback_ref?: string | null
+          created_at?: string | null
+          customer_fee_bps?: number | null
+          customer_fee_cents?: number | null
+          funding_due_at?: string | null
+          held_at?: string | null
+          id?: string | null
+          job_id?: string | null
+          kind?: Database["public"]["Enums"]["payment_kind"] | null
+          last_error?: string | null
+          offer_id?: string | null
+          paid_out_at?: string | null
+          payee_id?: string | null
+          payer_id?: string | null
+          platform_fee_cents?: number | null
+          provider?: string | null
+          provider_ref?: string | null
+          refund_cents?: number | null
+          refund_reason?: string | null
+          refund_ref?: string | null
+          release_reason?: string | null
+          release_requested_at?: string | null
+          released_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          stripe_payment_intent_id?: string | null
+          tax_cents?: number | null
+          transfer_attempts?: number | null
+          transfer_cents?: number | null
+          transfer_ref?: string | null
+          transfer_reversed_at?: string | null
+          updated_at?: string | null
+          worker_fee_bps?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_offer_id_fkey"
+            columns: ["offer_id"]
+            isOneToOne: false
+            referencedRelation: "job_offers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_payee_id_fkey"
+            columns: ["payee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_bids_projection_drift: {
         Row: {
           drift: string | null
@@ -1841,6 +2481,7 @@ export type Database = {
           status: string
         }[]
       }
+      apply_payment_event: { Args: { p_event_id: string }; Returns: Json }
       apply_worker_embeddings: {
         Args: { p_model: string; p_rows: Json }
         Returns: number
@@ -1849,9 +2490,108 @@ export type Database = {
         Args: { p_lat: number; p_lng: number }
         Returns: string
       }
+      attach_provider_ref: {
+        Args: { p_payment_id: string; p_ref: string }
+        Returns: undefined
+      }
+      auto_release_due_payments: { Args: never; Returns: number }
       ban_user: {
         Args: { p_report_id?: string; p_target: string }
         Returns: undefined
+      }
+      begin_job_payment: {
+        Args: { p_job_id: string }
+        Returns: {
+          amount_cents: number
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
+          created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
+          held_at: string | null
+          id: string
+          job_id: string
+          kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string
+          payer_id: string
+          platform_fee_cents: number
+          provider: string
+          provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          updated_at: string
+          worker_fee_bps: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      begin_tip_payment: {
+        Args: { p_amount_cents: number; p_job_id: string }
+        Returns: {
+          amount_cents: number
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
+          created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
+          held_at: string | null
+          id: string
+          job_id: string
+          kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string
+          payer_id: string
+          platform_fee_cents: number
+          provider: string
+          provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          updated_at: string
+          worker_fee_bps: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       bids_projection_enabled: { Args: never; Returns: boolean }
       bids_projection_v2_enabled: { Args: never; Returns: boolean }
@@ -1864,6 +2604,55 @@ export type Database = {
         }[]
       }
       can_delete_own_job: { Args: { p_job_id: string }; Returns: boolean }
+      cancel_job: {
+        Args: { p_job_id: string; p_reason: string }
+        Returns: {
+          accepted_bid_id: string | null
+          accepted_offer_id: string | null
+          area_code: string | null
+          arrival_end_hour: number | null
+          arrival_start_hour: number | null
+          arrived_at: string | null
+          assigned_worker_id: string | null
+          budget_cents: number | null
+          budget_max_cents: number | null
+          budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          category: Database["public"]["Enums"]["job_category"]
+          client_id: string
+          completed_at: string | null
+          completion_photo_url: string | null
+          completion_photos: Json
+          completion_videos: Json
+          created_at: string
+          description: string | null
+          en_route_at: string | null
+          final_amount_cents: number | null
+          id: string
+          location: string | null
+          location_text: string | null
+          photos: Json
+          property_id: string | null
+          scheduled_date: string | null
+          scheduled_for: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          title: string
+          videos: Json
+          visibility: Database["public"]["Enums"]["job_visibility"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "jobs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      cancellation_fee_cents: {
+        Args: { p_amount_cents: number; p_job_id: string }
+        Returns: number
+      }
       claim_notification_batch: {
         Args: { p_limit?: number }
         Returns: {
@@ -1942,6 +2731,9 @@ export type Database = {
           budget_cents: number | null
           budget_max_cents: number | null
           budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           category: Database["public"]["Enums"]["job_category"]
           client_id: string
           completed_at: string | null
@@ -2030,6 +2822,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      current_fee: {
+        Args: { p_at?: string }
+        Returns: {
+          cancel_fee_bps: number
+          cancel_fee_max_cents: number
+          cancel_fee_min_cents: number
+          customer_bps: number
+          effective_from: string
+          id: number
+          tax_bps: number
+          tip_customer_bps: number
+          tip_max_bps: number
+          tip_max_cents: number
+          worker_bps: number
+          worker_min_fee_cents: number
+        }[]
+      }
       current_user_is_admin: { Args: never; Returns: boolean }
       current_user_is_banned: { Args: never; Returns: boolean }
       deactivate_push_token: { Args: { p_token: string }; Returns: undefined }
@@ -2057,6 +2866,53 @@ export type Database = {
       expire_offer_if_stale: {
         Args: { p_offer: Database["public"]["Tables"]["job_offers"]["Row"] }
         Returns: boolean
+      }
+      expire_unfunded_payments: {
+        Args: never
+        Returns: {
+          amount_cents: number
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
+          created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
+          held_at: string | null
+          id: string
+          job_id: string
+          kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string
+          payer_id: string
+          platform_fee_cents: number
+          provider: string
+          provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          updated_at: string
+          worker_fee_bps: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "payments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       get_my_active_mode: { Args: never; Returns: string }
       get_my_profile: {
@@ -2131,11 +2987,18 @@ export type Database = {
         Returns: {
           amount_cents: number
           authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
           created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
           held_at: string | null
           id: string
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
           offer_id: string | null
           paid_out_at: string | null
           payee_id: string
@@ -2143,11 +3006,21 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
           release_reason: string | null
+          release_requested_at: string | null
           released_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
           updated_at: string
+          worker_fee_bps: number | null
         }
         SetofOptions: {
           from: "*"
@@ -2159,6 +3032,23 @@ export type Database = {
       job_request_parties_ok: {
         Args: { p_a: string; p_b: string }
         Returns: boolean
+      }
+      job_terms: {
+        Args: { p_amount_cents: number; p_job_id: string }
+        Returns: {
+          accepted_at: string
+          cancel_fee_bps: number
+          cancel_fee_max_cents: number
+          cancel_fee_min_cents: number
+          customer_fee_bps: number
+          customer_fee_cents: number
+          fee_schedule_id: number
+          from_snapshot: boolean
+          tax_cents: number
+          total_cents: number
+          worker_fee_bps: number
+          worker_fee_cents: number
+        }[]
       }
       jobs_in_cell: {
         Args: { p_ilat: number; p_ilng: number }
@@ -2209,6 +3099,9 @@ export type Database = {
           budget_cents: number | null
           budget_max_cents: number | null
           budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           category: Database["public"]["Enums"]["job_category"]
           client_id: string
           completed_at: string | null
@@ -2268,6 +3161,7 @@ export type Database = {
         Args: { p_direct_thread_id?: string; p_job_id?: string }
         Returns: boolean
       }
+      my_payouts_enabled: { Args: never; Returns: boolean }
       my_pending_job_requests: {
         Args: never
         Returns: {
@@ -2379,6 +3273,17 @@ export type Database = {
       }
       push_notifications_enabled: { Args: never; Returns: boolean }
       push_scheduler_enabled: { Args: never; Returns: boolean }
+      quote_job_price: {
+        Args: { p_amount_cents: number; p_at?: string }
+        Returns: {
+          customer_fee_cents: number
+          job_price_cents: number
+          tax_cents: number
+          total_cents: number
+          worker_fee_cents: number
+          worker_receives_cents: number
+        }[]
+      }
       refresh_worker_semantic_doc: {
         Args: { p_worker: string }
         Returns: undefined
@@ -2386,6 +3291,100 @@ export type Database = {
       register_push_token: {
         Args: { p_platform?: string; p_token: string }
         Returns: undefined
+      }
+      release_job_payment: {
+        Args: { p_job_id: string }
+        Returns: {
+          amount_cents: number
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
+          created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
+          held_at: string | null
+          id: string
+          job_id: string
+          kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string
+          payer_id: string
+          platform_fee_cents: number
+          provider: string
+          provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          updated_at: string
+          worker_fee_bps: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      resolve_job_dispute: {
+        Args: { p_in_favour_of: string; p_job_id: string; p_note?: string }
+        Returns: {
+          amount_cents: number
+          authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
+          created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
+          held_at: string | null
+          id: string
+          job_id: string
+          kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
+          offer_id: string | null
+          paid_out_at: string | null
+          payee_id: string
+          payer_id: string
+          platform_fee_cents: number
+          provider: string
+          provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
+          release_reason: string | null
+          release_requested_at: string | null
+          released_at: string | null
+          status: Database["public"]["Enums"]["payment_status"]
+          stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
+          updated_at: string
+          worker_fee_bps: number | null
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payments"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       resolve_notification: {
         Args: { p_error?: string; p_outbox_id: string; p_status: string }
@@ -2405,11 +3404,18 @@ export type Database = {
         Returns: {
           amount_cents: number
           authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
           created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
           held_at: string | null
           id: string
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
           offer_id: string | null
           paid_out_at: string | null
           payee_id: string
@@ -2417,11 +3423,21 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
           release_reason: string | null
+          release_requested_at: string | null
           released_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
           updated_at: string
+          worker_fee_bps: number | null
         }
         SetofOptions: {
           from: "*"
@@ -2435,11 +3451,18 @@ export type Database = {
         Returns: {
           amount_cents: number
           authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
           created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
           held_at: string | null
           id: string
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
           offer_id: string | null
           paid_out_at: string | null
           payee_id: string
@@ -2447,11 +3470,21 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
           release_reason: string | null
+          release_requested_at: string | null
           released_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
           updated_at: string
+          worker_fee_bps: number | null
         }[]
         SetofOptions: {
           from: "*"
@@ -2466,11 +3499,18 @@ export type Database = {
         Returns: {
           amount_cents: number
           authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
           created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
           held_at: string | null
           id: string
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
           offer_id: string | null
           paid_out_at: string | null
           payee_id: string
@@ -2478,11 +3518,21 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
           release_reason: string | null
+          release_requested_at: string | null
           released_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
           updated_at: string
+          worker_fee_bps: number | null
         }
         SetofOptions: {
           from: "*"
@@ -2497,11 +3547,18 @@ export type Database = {
         Returns: {
           amount_cents: number
           authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
           created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
           held_at: string | null
           id: string
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
           offer_id: string | null
           paid_out_at: string | null
           payee_id: string
@@ -2509,11 +3566,21 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
           release_reason: string | null
+          release_requested_at: string | null
           released_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
           updated_at: string
+          worker_fee_bps: number | null
         }
         SetofOptions: {
           from: "*"
@@ -2527,11 +3594,18 @@ export type Database = {
         Returns: {
           amount_cents: number
           authorized_at: string | null
+          charge_amount_cents: number | null
+          chargeback_at: string | null
+          chargeback_ref: string | null
           created_at: string
+          customer_fee_bps: number | null
+          customer_fee_cents: number
+          funding_due_at: string | null
           held_at: string | null
           id: string
           job_id: string
           kind: Database["public"]["Enums"]["payment_kind"]
+          last_error: string | null
           offer_id: string | null
           paid_out_at: string | null
           payee_id: string
@@ -2539,11 +3613,21 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_cents: number | null
+          refund_reason: string | null
+          refund_ref: string | null
           release_reason: string | null
+          release_requested_at: string | null
           released_at: string | null
           status: Database["public"]["Enums"]["payment_status"]
           stripe_payment_intent_id: string | null
+          tax_cents: number
+          transfer_attempts: number
+          transfer_cents: number | null
+          transfer_ref: string | null
+          transfer_reversed_at: string | null
           updated_at: string
+          worker_fee_bps: number | null
         }
         SetofOptions: {
           from: "*"
@@ -2577,6 +3661,10 @@ export type Database = {
         Args: { p_job_id: string; p_property_id: string }
         Returns: undefined
       }
+      set_payouts_enabled: {
+        Args: { p_enabled: boolean; p_stripe_account_id: string }
+        Returns: boolean
+      }
       should_notify: {
         Args: { p_actor: string; p_category: string; p_recipient: string }
         Returns: boolean
@@ -2595,6 +3683,7 @@ export type Database = {
         Args: { p_direct_thread_id?: string; p_job_id?: string }
         Returns: undefined
       }
+      stripe_foundation_enabled: { Args: never; Returns: boolean }
       transition_job_status: {
         Args: {
           p_completion_photos?: Json
@@ -2613,6 +3702,9 @@ export type Database = {
           budget_cents: number | null
           budget_max_cents: number | null
           budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           category: Database["public"]["Enums"]["job_category"]
           client_id: string
           completed_at: string | null
@@ -2674,6 +3766,9 @@ export type Database = {
           budget_cents: number | null
           budget_max_cents: number | null
           budget_min_cents: number | null
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
           category: Database["public"]["Enums"]["job_category"]
           client_id: string
           completed_at: string | null
