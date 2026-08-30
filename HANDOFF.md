@@ -43,6 +43,314 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R6c COMPLETED (2026-08-30) — the rest of the money path: payouts, tips, completion photos
+
+Seven commits: ONE migration, ONE edge function changed, the client. C1
+`28db405` (schema), C2 `d072e82` (create-payment tip branch), C3 `15b70df`
+(the card tip), C4 `bfaf770` (payouts), C5 `c5143c5` (the deep link), C6
+`6ce4fae` (completion photos + the worker's take), C7 (this record). No
+dependency added; `supabase/config.toml`, `.github/`, `transfers_due`,
+`refunds_due` untouched; `.claude/` untouched. Base gate at start: `npm run
+verify` 1241/0 (the recorded count), pgTAP 1225 PASS. At the end: verify
+**1266/0**, pgTAP **1295 PASS** (1225 + 69 new in `080_job_completions.sql` +
+1 in `020_lifecycle.sql`).
+
+### WHAT CLOSED
+
+- **D-14 is in the database.** `transition_job_status()` refuses
+  `in_progress -> completed` unless `p_completion_photos` carries at least one
+  element — `At least one photo of the finished work is required to mark this
+  job complete` — and writes one `job_completions` row per completed job. The
+  worker's complete flow never calls the RPC with an empty gallery; it says
+  why and offers the same picker.
+- **Tipping works on the card path.** `create-payment` mints a TIP row
+  through `begin_tip_payment` when the body carries `tipAmountCents`; the same
+  payment sheet takes the card; ReviewAndTip polls the tip row for exactly
+  released / gone / timed out. The dollar figure the customer confirms is the
+  tip ROW's `charge_amount_cents`.
+- **A worker can set up payouts and get back.** `screens/PayoutsScreen.tsx`
+  over `my_payouts_status()` / `connect-onboarding` / `connect-status`, reached
+  from Earnings in stripe mode and by `brazos://payouts?from=return|refresh`
+  through the existing dispatch machinery with the cross-mode gate.
+- **The worker's figures are the take.** `workerTakeCents(row)` =
+  `amount_cents − platform_fee_cents`, the ONE arithmetic site; Earnings'
+  buckets and rows and the worker's job card read it; the job card shows
+  Customer paid / Brazos Protection / You receive off the row's columns.
+
+### THE MIGRATION — `20260925000000_job_completions.sql`, section by section
+
+- **§0 pre-flight** raises by name if `transition_job_status(uuid, text,
+  jsonb, jsonb)` is not the live signature, if `settlement_retry_enabled()`
+  (20260920) is absent, if `is_profile_active(uuid)` is absent, or if
+  `jobs.completion_photos` is missing.
+- **§1 `job_completions`**: `id uuid pk`, `job_id uuid` (fk → jobs, cascade,
+  UNIQUE — one completion per job), `completed_by uuid` (fk → profiles),
+  `photos text[] not null`, `created_at`. RLS ON. `revoke all … from public,
+  anon, authenticated`; `grant select … to authenticated` and nothing else —
+  no INSERT/UPDATE/DELETE for any client role, no policy for any of them. ONE
+  policy, `job_completions_parties_select`, FOR SELECT TO authenticated:
+  the job's `client_id` or `assigned_worker_id` is `auth.uid()`.
+  **A finding on the way:** the dispatch's `check (array_length(photos, 1)
+  >= 1)` does NOT refuse an empty array — `array_length('{}', 1)` is NULL and
+  a NULL CHECK passes; the first local run admitted `array[]::text[]`. The
+  constraint is `check (cardinality(photos) >= 1)`, and 080 §4 proves the
+  empty array refused.
+- **§2 `transition_job_status()` replaced whole.** The diff against
+  20260905 §17 is exactly two added blocks and nothing else (`diff -u` over
+  the two function bodies: +6 lines, +9 lines, 0 removed, 0 changed):
+  (a) after the photo shape checks, before the video checks —
+  `if p_status = 'completed' and jsonb_array_length(v_photos) = 0 then raise
+  exception 'At least one photo …'` (v_photos is `coalesce(p_completion_photos,
+  '[]')`, already proven an array, so null and `[]` are one case);
+  (b) after the `update … returning * into v_job` — `if p_status =
+  'completed' then insert into public.job_completions (job_id, completed_by,
+  photos) select p_job_id, v_user, array_agg(photo.value #>> '{}' order by
+  photo.ord) from jsonb_array_elements(v_photos) with ordinality …`. The held
+  gate, the phase58 retry (which returns BEFORE the insert, so a repeated
+  call cannot collide on the unique job_id), the shape checks, the update and
+  the ACL (`create or replace` preserves it; 080 §0 asserts authenticated
+  still executes and anon still cannot) are unchanged.
+- **§3 sentinel** `job_completions_enabled()`, last inside the transaction,
+  revoke/grant like the three before it.
+
+### THE PROOF — `080_job_completions.sql`, 69 assertions, all green locally
+
+§0 sentinel + ACLs + the table's shape and privilege posture (`policies_are`,
+`policy_cmd_is`, `policy_roles_are`, `table_privs_are` for anon `{}` and
+authenticated `{SELECT}`); §2 the guard on the stripe path — null, `[]`, and
+a video-only payload each refused with the sentence (P0001 + message), the
+unchanged shape check still first on a non-array, the job left in_progress
+with no row and no notification; §3 one photo completes exactly as 020/030
+expect (completed_at, the cover photo, ONE `job_completed` outbox row for the
+customer), one `job_completions` row naming the worker and the photo, the
+retry returns the row and writes nothing; §4 the runner's constraints
+(duplicate 23505, empty array 23514, null 23502); §5 RLS as customer/worker
+(read 1), losing bidder/stranger (0), anon (42501 on the table, on
+`transition_job_status`, on the sentinel), nobody inserts/updates/deletes
+directly, service reads; §6 the sandbox path refuses and records identically;
+§7 five photos keep their order, six still hit the unchanged cap; §8
+`release_job_payment` on the guarded completion still requests the transfer
+(D23). **Repointed fence:** `020_lifecycle.sql` G — its `lives_ok`
+completing job2 WITHOUT photos is now a `throws_ok` for the refusal followed
+by a `lives_ok` with a photo (plan 74 → 75); every other completion in 020,
+030 and 040 already passed a photo and is untouched.
+
+### create-payment — THE TIP BRANCH, and the proof the job branch is unchanged
+
+`tipAmountCents` (or `tip_amount_cents`) in the body, validated BEFORE any
+RPC — not a number, not an integer, or ≤ 0 is a 400 `A tip must be a whole
+number of cents greater than zero.` Present → `begin_tip_payment(p_job_id,
+p_amount_cents)` with the caller's own token and the anon key, exactly as
+`begin_job_payment` is called; absent → the job call, whose fetch is the same
+bytes (`tests/tipCheckout.test.mjs` pins the flattened call site and the one
+ternary on `tipAmountCents`). Everything after step 1 is shared: the stored
+customer, the ephemeral key, the intent for the row's `charge_amount_cents`
+under `brazos-intent-<payment id>` (a tip row has its own id — no key change),
+`attach_provider_ref`, the same four-string 200 with no amount. RPC 4xx text
+passes through verbatim; the log line names which RPC refused. Deno is not
+executed by any harness here — the seven raw-text assertions are the proof.
+
+### THE TIP AS BUILT (ReviewAndTip, stripe mode)
+
+Two steps, because the figure shown must be the row's: tap `Send $X tip by
+card` → `paymentProvider.beginTipCheckout` (create-payment mints the unfunded
+tip row) → `fetchJobTip` → the confirm dialog reads **`Charge $Y to your
+card?`** where Y is `charge_amount_cents`, its message naming the row's
+`customer_fee_cents` (and tax if non-zero) → `Pay & send tip` → the sheet →
+the poll. `classifyTipPoll` (lib/payments.ts, executed by
+`tests/payouts.test.mjs`): `released` / `paid_out` → success; `failed` /
+`voided` / a seen row now null → gone; else pending, 2 s / 30 s. The three
+terminal branches, with their copy: **released** — the tip card shows the
+amount and `Your tip went to <worker> on top of the job payment. Your card
+was charged $Y — the tip plus its protection fee.`; **gone** — `The tip did
+not go through. Nothing was charged for it — you can try again below.` with
+the controls back; **timed out** — `The card was charged, but the app hasn’t
+seen the tip confirm yet. Check again shortly — once it confirms, the tip
+shows here as sent.` with ONE `Check again` (a re-read, never a second tip). A
+dismissed sheet is not an error: the unfunded row keeps its 24 h window and
+the screen says `A $X tip is started but not sent — nothing has been
+charged. Finish it below, or choose another amount.` (begin_tip_payment is
+idempotent on that row). Before release lands on an approved row the card
+says the RPC's own sentence: `The job payment releases first — then a tip can
+be added. Your approved payment is on its way to the worker.` The RPC's other
+refusals (`A tip was already added to this job`, the job's dollar ceiling)
+arrive verbatim through the alert. No client ceiling pre-check on the card
+path, on purpose. Sandbox tip copy and flow: byte-unchanged
+(`Send $X tip (sandbox)`, the same dialog). The adapter's `STRIPE_TIP_MESSAGE`
+(the one-step `tipWorker` refusal in stripe mode) now reads `Card tips are
+sent through the payment sheet — nothing was recorded or charged.`
+
+### PAYOUTS — THE FOUR STATES, EXACT RENDERED COPY
+
+`payoutsCta()` in lib/payments.ts, executed over the four strings:
+
+| status | headline | body | CTA |
+|---|---|---|---|
+| `none` | Payouts aren’t set up yet | Set up payouts to receive what you earn. It’s a short setup in your browser, and you’re brought back here when it’s done. | **Set up payouts** |
+| `action_needed` | Payout setup isn’t finished | Something is still needed before payouts can start. Pick up where you left off — the setup resumes in your browser. | **Finish setting up payouts** |
+| `under_review` | Payouts under review | Nothing more is needed from you right now. The review finishes on its own — tap Refresh to check. | none; `Refresh` offered |
+| `enabled` | Payouts are set up | Approved payments are transferred to you on the provider’s schedule. There is nothing to trigger here. | none |
+
+Both CTAs call `connect-onboarding` and open `url` with `Linking.openURL` —
+**expo-web-browser is NOT installed** (checked `package.json`), so the system
+browser is reached through `Linking`, never a WebView, no dependency added.
+First render reads `my_payouts_status()`; the header Refresh, every
+foreground return while focused (`AppState` inside the focus effect) and
+`?from=return` call `connect-status` and THEN re-read `my_payouts_status()`;
+the onboarding response's status is not trusted either — the stored state is
+re-read. `?from=refresh` calls `connect-onboarding` immediately and says
+`That setup link had expired, so a fresh one was requested — continue below.`
+No sentence says "verified"; no user-facing string names the provider. Outside
+the card path the screen is a permission-denied state (`Payouts are on the
+card path only`). The Earnings action slot in stripe mode (dead space until
+now) leads to Payouts, titled by the stored status when readable; the sandbox
+cash-out arm is byte-unchanged. **Where the reads live:** `payoutsCta`,
+`PAYOUTS_STATUSES`, the two response validators in lib/payments.ts;
+`fetchMyPayoutsStatus`, `beginPayoutsOnboarding`, `refreshPayoutsStatus` in
+lib/payments/stripe.ts beside `createPaymentSession` — the cheap read moved
+there mid-run because `tests/sandboxCheckout.test.mjs` forbids ANY
+`.rpc('…payout…')` in lib/payments.ts; the fence was not touched.
+
+### THE DEEP LINK — the path chosen, and why the repo decided it
+
+`NavigationContainer` has never carried a `linking` prop; push routing is a
+listener feeding `navigationRef` (`navigateWhenReady`, `canNavigateTo`,
+`navigateAcrossTabs`) with the cross-mode gate in `lib/notificationRoutes.ts`.
+So the deep link is the same shape, not a second system: `resolveAppLink()` +
+`handleAppLink()` in lib/navigation.ts (pure resolver; the dispatcher's one
+runtime import is `navigateAcrossTabs`), and the listener in App.tsx's
+`RootNavigator` beside `usePushNotifications` — `Linking.getInitialURL()`
+once per process, `Linking.addEventListener('url')` for warm arrivals, native
+only. `brazos://payouts` (host case-insensitive, trailing slash tolerated,
+`from` outside return|refresh dropped) → `Profile / Payouts { from, at }`,
+mode-owned by **worker**: a customer-mode arrival asks through
+`bridge.switchMode('worker', { confirm: PAYOUTS_LINK_CONFIRM })` and routes
+only on true; null mode (cold start) stands down; every other `brazos://`
+path is ignored silently — no alert, no navigation. Executed with bridge and
+navigator doubles in `tests/payouts.test.mjs` (tests 9–11).
+
+### FENCES RE-POINTED (constants only)
+
+- `tests/stripePayments.test.mjs`: `STRIPE_TIP_MESSAGE` sentence (before:
+  `Tipping arrives in the next update. Your approved payment is on its way to
+  the worker.` → after: the sentence above); the stripe provider's
+  `stripeReady()` count 6 → 7 (`beginTipCheckout` added); the ReviewAndTip
+  pin `\) : stripe \? \(…Tipping arrives in the next update` → `…!paymentsEnabled \?`
+  plus `tip by card`. Its `doesNotMatch(adapter, /begin_tip_payment/)` stands
+  as written — the adapter's comments were worded around it.
+- `supabase/tests/020_lifecycle.sql` G (above): plan 74 → 75.
+- No other existing fence moved. New: `tests/tipCheckout.test.mjs` (7),
+  `tests/payouts.test.mjs` (11), `tests/jobCompletions.test.mjs` (7),
+  `supabase/tests/080_job_completions.sql` (69).
+
+### INTERPRETATION CALLS — read these before re-litigating
+
+- **The three-line breakdown is on the worker's job card
+  (`WorkerJobScreen`), not on Earnings' ledger rows.** Earnings' rows come
+  from `fetchMyEarnings` in `lib/earnings.ts`, whose column list carries no
+  `charge_amount_cents` / `customer_fee_cents`, and that file is outside this
+  run's write surface. The worker's per-job view reads the full row through
+  `job_payment_state()`, so the breakdown lives there — shown only on a held /
+  released / paid_out stripe row (never "Customer paid" on an unfunded one).
+  Earnings shows the take in every bucket and row.
+- **Two functions, one arithmetic.** `workerTakeCents` is the one subtraction;
+  `brazosFeeCents` (`platform_fee_cents + customer_fee_cents`, the "Brazos
+  Protection" line) sits beside it in the same module. No screen carries fee
+  arithmetic or a rate — `tests/jobCompletions.test.mjs` §5 sweeps every
+  client file for it.
+- The worker job card's headline `MoneyText` now shows the take too. Sandbox
+  rows carry `platform_fee_cents = 0`, so every sandbox figure is unchanged.
+- The tip's confirm dialog opens AFTER create-payment mints the row (so the
+  figure is the row's). Cancelling leaves the unfunded row, which the screen
+  then names honestly.
+
+### GUARD REFUSALS AND GATE DEVIATIONS
+
+Two guard fires, both routed, neither in the write surface: GUARD-DYNEXEC on
+a `node -e` used to print package.json scripts (replaced by `grep`);
+GUARD-CLAUDEDIR on a `cat .claude/rules/*.md` chained in one command with a
+`sed -n` over package.json (the guard saw `.claude/` beside a mutating token;
+re-issued as a pure `cat`). No gate deviated: branch/HEAD matched, the dirty
+paths were `.claude/**` and `docs/audits/**` only, both suites green at start.
+
+### WHAT IS UNPROVEN
+
+Nothing here ran on a device or against staging. Deno is not executed by any
+harness: create-payment's tip branch, connect-onboarding and connect-status
+are text-pinned, not run. The payment sheet, the tip poll, the deep-link
+bounce and the foreground refresh are walk #1's to prove. The shots harness
+is NOT extended for the new money screens (D8): they need staging-shaped
+fixtures, and the device walk is their gate.
+
+### RESIDUES THIS RUN DOES NOT FIX — R7's, by decision
+
+- `formatBudget`'s trailing zero.
+- The customer-facing held amounts on JobConfirmed / ClientJobDetail /
+  ApproveOrDispute that show `amount_cents` where the customer's figure is
+  `charge_amount_cents`; ApproveOrDispute's "Approving releases this payment"
+  in stripe mode (approving REQUESTS the release — D23); the job-detail bid
+  card stating its price three times; the remaining BRAZOS-in-prose sites.
+- Earnings' per-row breakdown: needs `lib/earnings.ts`'s select to carry
+  `charge_amount_cents` / `customer_fee_cents` (outside this write surface).
+- The shots registry entries for Payouts, the card tip and the worker card.
+
+### THE PUSH
+
+This push touches `supabase/migrations/**` and `supabase/functions/**`, so it
+starts `.github/workflows/staging.yml`: **verify → migrate → deploy**. The
+migrate job applies `20260925000000_job_completions.sql` (additive: `create
+table`, `create policy`, `create or replace function` — the destructive scan
+does not stop on it) and the deploy job redeploys EVERY function directory
+from current source, `create-payment` with its tip branch among them;
+`stripe-webhook`'s JWT toggle is the thing a redeploy can reset.
+
+### OPERATOR NEXT STEPS
+
+(1) Watch the Actions run: `20260925000000_job_completions.sql` pending →
+    applied, deploy green.
+(2) SQL editor: `select public.job_completions_enabled();` → true.
+(3) WALK #1, two phones (A = the worker, B = the customer), Build A,
+    ~15 minutes, in this order:
+    a. A, worker mode: Profile → Earnings. The action slot reads the stored
+       payout state (a fresh worker: `Set up payouts`). Tap it → Payouts. The
+       status card reads `Payouts aren’t set up yet`.
+    b. A: tap `Set up payouts` → the SYSTEM browser opens the hosted
+       onboarding (not an in-app view). Finish it with test details.
+    c. The provider bounces to `brazos://payouts?from=return` → the app
+       comes to the front on Payouts and the status refreshes
+       (connect-status, then the re-read): `Payout setup isn’t finished`,
+       `Payouts under review`, or `Payouts are set up` — whichever the
+       provider reports. Tap the header Refresh once more and note what it
+       says. (If the browser served the refresh page instead: the app opens
+       with `That setup link had expired, so a fresh one was requested —
+       continue below.` and `Finish setting up payouts`; tap it.) Transfers
+       need `Payouts are set up` before step g can land.
+    d. B, customer mode: post a job, accept A's offer, Checkout → pay by
+       card (4242 …) → JobConfirmed reads held.
+    e. A: My Jobs → the job → `Start job`. Then `Mark complete` WITHOUT a
+       photo → the dialog `Add a photo of the finished work` — `Not yet` →
+       the job is still in progress and the caption says a photo is required.
+       Add one photo → `Mark complete` → completed. (The RPC's own refusal
+       sentence is not reachable from the app because the client refuses
+       first; 080 proves it on the server.)
+    f. B: the job → Finished work → `Approve & release` → ReviewAndTip. The
+       payment card reads `APPROVED · PAYOUT ON ITS WAY`; the tip card reads
+       `The job payment releases first — then a tip can be added…`.
+    g. Wait for the settlement tick (≤ 5 min) and re-open ReviewAndTip: the
+       card reads `PAYMENT RELEASED` and the tip controls appear. Pick `$5`
+       → `Send $5 tip by card` → the dialog reads `Charge $5.xx to your
+       card?` (the tip row's own total) → `Pay & send tip` → the sheet →
+       `Confirming your tip…` → the tip card reads `$5` with `Your tip went
+       to … Your card was charged $5.xx — the tip plus its protection fee.`
+       If it reads `Still confirming` instead, tap `Check again` once.
+    h. A: the job screen shows `PAYMENT RELEASED` with the take as the
+       headline and the three lines Customer paid / Brazos Protection / You
+       receive; Earnings' AVAILABLE shows the take and the tip row shows the
+       full $5; the Earnings action slot now reads `Payouts are set up`.
+(4) Report back the walk results; anything off is the corrective's input,
+    not a reason to re-run this dispatch.
+
+
 ## RUN R6b COMPLETED (2026-08-30) — the settlement corrective: server only
 
 Five commits. ONE migration, TWO edge functions, NO client change: not one
