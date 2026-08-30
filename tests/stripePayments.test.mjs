@@ -346,6 +346,56 @@ test('[static] the pure rules modules carry no runtime import, and the boundary 
 });
 
 // ---------------------------------------------------------------------------
+// 6b. The adapter (D3, D4, D19) — three providers, one boundary
+// ---------------------------------------------------------------------------
+
+test('[static] the adapter selects three ways, and the stripe provider refuses what has no stripe meaning', () => {
+  const adapter = stripComments(read('lib/adapters/payments.ts'));
+  const flat = flatten(read('lib/adapters/payments.ts'));
+  // Three-way selection at module load, still declared from the env var.
+  assert.match(flat, /resolution\.mode === 'sandbox' \? createSandboxPaymentProvider\(\) : resolution\.mode === 'stripe' \? createStripePaymentProvider\(\) : createDisabledPaymentProvider\(/);
+  assert.match(adapter, /configured: process\.env\.EXPO_PUBLIC_PAYMENTS_MODE/);
+  // D4: the interface gained beginJobCheckout, and every provider answers it.
+  assert.match(adapter, /beginJobCheckout\(jobId: string\): Promise<CheckoutSessionResult>;/);
+  assert.equal((adapter.match(/beginJobCheckout: async/g) ?? []).length, 3, 'sandbox, stripe and disabled each carry an arm');
+  // The stripe provider reaches the card path through the one boundary and
+  // never names the SDK itself.
+  assert.match(adapter, /from '\.\.\/payments\/stripe'/);
+  assert.doesNotMatch(adapter, /stripe-react-native/);
+  assert.match(adapter, /return createPaymentSession\(jobId\);/);
+  // Stripe release is release_job_payment; the sandbox pair is untouched.
+  assert.match(adapter, /rpc\('release_job_payment', \{ p_job_id: jobId \}\)/);
+  assert.match(adapter, /sandbox_release_job_payment/);
+  assert.match(adapter, /sandbox_authorize_job_payment/);
+  assert.match(adapter, /sandbox_hold_job_payment/);
+  // D3: stripe tip refuses (no begin_tip_payment intent exists) and never says paid.
+  assert.match(adapter, /tipWorker: async \(\) => \(stripeReady\(\) \? refuse\(STRIPE_TIP_MESSAGE\)/);
+  assert.match(adapter, /STRIPE_TIP_MESSAGE =\s*'Tipping arrives in the next update\. Your approved payment is on its way to the worker\.'/);
+  assert.doesNotMatch(adapter, /begin_tip_payment/);
+  // D19: stripe cash-out refuses and never calls sandbox_cash_out.
+  assert.match(flat, /cashOut: async \(\) => \(\{ data: \[\], error: \{ message: stripeReady\(\) \? STRIPE_CASH_OUT_MESSAGE : STRIPE_UNAVAILABLE_MESSAGE \},? \}\)/);
+  assert.equal((adapter.match(/sandbox_cash_out/g) ?? []).length, 1, 'only the sandbox provider calls sandbox_cash_out');
+  // D4: the sandbox two-step is refused in stripe mode; the sheet is refused in sandbox mode.
+  assert.match(adapter, /authorizeJobPayment: async \(\) =>\s*stripeReady\(\) \? refuse\(STRIPE_NO_TWO_STEP_MESSAGE\) : unavailable\(\)/);
+  assert.match(adapter, /protectJobPayment: async \(\) =>\s*stripeReady\(\) \? refuse\(STRIPE_NO_TWO_STEP_MESSAGE\) : unavailable\(\)/);
+  assert.match(adapter, /beginJobCheckout: async \(\) => \(\{ data: null, error: \{ message: SANDBOX_NO_SHEET_MESSAGE \} \}\)/);
+  // The SDK-absent / key-absent refusal guards every stripe method.
+  const stripeProvider = adapter.slice(
+    adapter.indexOf('function createStripePaymentProvider'),
+    adapter.indexOf('function createDisabledPaymentProvider')
+  );
+  assert.equal((stripeProvider.match(/stripeReady\(\)/g) ?? []).length, 6, 'all six stripe methods consult stripeReady()');
+  for (const message of ['STRIPE_TIP_MESSAGE', 'STRIPE_CASH_OUT_MESSAGE', 'STRIPE_NO_TWO_STEP_MESSAGE', 'SANDBOX_NO_SHEET_MESSAGE']) {
+    const value = adapter.match(new RegExp(`${message} =\\s*'([^']+)'`));
+    assert.ok(value, `${message} must be a literal sentence`);
+    assert.doesNotMatch(value[1], /\bpaid\b/i, `${message} must never say paid`);
+  }
+  // The disabled provider still refuses everything.
+  assert.match(adapter, /releaseJobPayment: refuse/);
+  assert.match(adapter, /tipWorker: refuse/);
+});
+
+// ---------------------------------------------------------------------------
 // 7. The kill switch's fallback (D15) — executed
 // ---------------------------------------------------------------------------
 
