@@ -46,6 +46,22 @@
 //
 // WHY plain fetch: same reason as send-push. No SDK, no import map, no version
 // drift. Every provider call here is form-encoded.
+//
+// ---------------------------------------------------------------------------
+// THE TIP (R6c, D4) — the same function, one extra body field
+// ---------------------------------------------------------------------------
+// A body carrying tipAmountCents (or tip_amount_cents), an integer number of
+// cents greater than zero, starts a TIP instead of the job payment: the one
+// difference is which RPC the database decides with — begin_tip_payment(),
+// called AS THE CALLER exactly as begin_job_payment() is, with the caller's
+// own token and the anon key. begin_tip_payment() enforces the kill switch,
+// ownership, that the job is completed, that the job payment released first,
+// one tip per job and both tip ceilings — and its refusals are passed through
+// verbatim, as the job path's are. Everything after step 1 is shared and
+// unchanged: the customer, the ephemeral key, the intent for the tip row's
+// own charge_amount_cents under brazos-intent-<its own id>, the provider ref,
+// and the same four-string response. A body without the field is the job
+// path, byte for byte. A malformed tip amount is a 400 before any RPC call.
 // ============================================================================
 
 const STRIPE_API = 'https://api.stripe.com';
@@ -128,9 +144,24 @@ Deno.serve(async (req) => {
   }
 
   let jobId = '';
+  // R6c (D4): present → a tip; absent → the job payment. Validated before any
+  // RPC call; the database, not this function, decides everything else.
+  let tipAmountCents: number | null = null;
   try {
-    const body = (await req.json()) as { jobId?: string; job_id?: string };
+    const body = (await req.json()) as {
+      jobId?: string;
+      job_id?: string;
+      tipAmountCents?: unknown;
+      tip_amount_cents?: unknown;
+    };
     jobId = body.jobId ?? body.job_id ?? '';
+    const rawTip = body.tipAmountCents ?? body.tip_amount_cents;
+    if (rawTip !== undefined && rawTip !== null) {
+      if (typeof rawTip !== 'number' || !Number.isInteger(rawTip) || rawTip <= 0) {
+        return json({ error: 'A tip must be a whole number of cents greater than zero.' }, 400);
+      }
+      tipAmountCents = rawTip;
+    }
   } catch {
     return json({ error: 'Malformed request.' }, 400);
   }
@@ -142,7 +173,15 @@ Deno.serve(async (req) => {
     // enforces the paymentsEnabled kill switch, that this user owns this job,
     // that a worker is assigned, and that an agreed amount exists — and it
     // returns the unfunded row, creating it if this is the first attempt.
-    const begun = await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_job_payment`, {
+    // With a tip amount, begin_tip_payment() decides instead — same token,
+    // same key — and returns the unfunded TIP row (R6c, D4).
+    const begun = tipAmountCents != null
+      ? await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_tip_payment`, {
+          method: 'POST',
+          headers: { apikey: ANON_KEY, Authorization: auth, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_job_id: jobId, p_amount_cents: tipAmountCents }),
+        })
+      : await fetch(`${SUPABASE_URL}/rest/v1/rpc/begin_job_payment`, {
       method: 'POST',
       headers: { apikey: ANON_KEY, Authorization: auth, 'Content-Type': 'application/json' },
       body: JSON.stringify({ p_job_id: jobId }),
@@ -154,7 +193,7 @@ Deno.serve(async (req) => {
       const detail = (await begun.json().catch(() => ({}))) as { message?: string };
       const message = detail.message ?? 'Could not start this payment.';
       const status = begun.status >= 400 && begun.status < 500 ? begun.status : 500;
-      console.error(`create-payment: begin_job_payment ${begun.status}: ${message}`);
+      console.error(`create-payment: ${tipAmountCents != null ? 'begin_tip_payment' : 'begin_job_payment'} ${begun.status}: ${message}`);
       return json({ error: message }, status);
     }
 
