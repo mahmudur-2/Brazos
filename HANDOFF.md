@@ -43,6 +43,195 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN TIER A COMPLETED (2026-08-30) — the truth & money-display sweep: client only
+
+Seven commits of eight dispatched — C4 was SKIPPED with evidence (below).
+C1 `395e437` formatBudget, C2 `089a054` the customer's held figure, C3
+`86e83ee` the approve sentence, C5 `7630173` the brand out of prose, C6
+`15d34bc` the unprovable copy + the seeded range dark, C7 `dc5bffa` the launch
+posting allowlist, C8 (this record). No file under `supabase/`, `.github/`,
+`.claude/`; no dependency; no database contact. Base gate: R6c landed
+(`screens/PayoutsScreen.tsx` and `20260925000000_job_completions.sql`
+present), `npm run verify` **1266/0 — this run's floor**; at the end
+**1283/0**, never lower. Every existing fence touched is a CONSTANT change,
+listed below.
+
+### THE ADVERSARIAL PRE-READ — what the repo confirmed, what it contradicted
+
+- C1 confirmed: `formatBudget` used `minimumFractionDigits: 0`, so 10750
+  rendered `$107.5`.
+- C2 confirmed: JobConfirmed:125, ClientJobDetail:1000/1016/1041 and
+  ApproveOrDispute:236 (CTA), 320 (card), 458 (dialog title) all read
+  `amount_cents`.
+- C3 confirmed: one instance of "releases this payment" (ApproveOrDispute,
+  stripe branch). The dialog MESSAGE says "releases the payment to the
+  worker … shows as released when the transfer lands" — not the grep target,
+  self-qualifying, left as is.
+- **C4 CONTRADICTED → SKIPPED.** The dispatch says the price appears three
+  times on the bid card: eyebrow, a "You'll offer $X" headline, the button.
+  The card (`screens/JobDetailScreen.tsx` 960–990) reads: eyebrow **`Take it
+  at the listed price`** (no figure), headline `You’ll offer
+  {formatBudget(job.budget_cents)}`, button `I’ll do it for
+  {formatBudget(job.budget_cents)}` — the price is on the card TWICE, not
+  three times, and the eyebrow the deletion was to lean on carries no price.
+  Deleting the headline would leave the button as the card's only figure, a
+  product call the dispatch made on a premise the file does not hold. Nothing
+  changed; the "Accept job" wording was never at risk (the button says "I’ll
+  do it for $X"). The other two mentions of the budget on that screen are the
+  Est. payout card (a different figure) and the `Send a $X bid?` dialog.
+- C5 confirmed at the three named sites, plus two more mid-sentence uses the
+  grep found (below). The rest is chrome.
+- C6 confirmed: "Verified workers" (Welcome), "Jobs with a photo get more
+  bids." (PostJob), "Book at listed price" (WorkerProfile), "POTENTIAL
+  EARNINGS" (WorkerHome), and the seeded ranges DO exist —
+  `lib/priceGuidance.ts`, rendered on PostJob's budget step as "Suggested
+  starting range: $60–$120 / A guide, not a quote."
+- **C7 contradicted on its keys, confirmed on its mechanism.** The map's
+  eleven keys are `dog_walking, cleaning, moving, yard_work, handyman,
+  errands, furniture_assembly, tv_mounting, painting, packing, other` — no
+  plumbing, electrical or home-improvement key exists. The mechanism (a
+  constant beside the map, one filter at the posting picker) is built with an
+  EMPTY list; see the C7 outcome.
+
+### EVERY COPY CHANGE, old → new
+
+| Site | Old | New |
+|---|---|---|
+| `lib/jobs.ts` formatBudget (C1) | `$107.5` / `$92.5` / `$7.5` | `$107.50` / `$92.50` / `$7.50`; `$1,000`, `$125`, `$0`, `No budget set` unchanged |
+| JobConfirmed, ClientJobDetail ×3, ApproveOrDispute card + CTA + dialog (C2) | `amount_cents` | `customerChargeCents(payment)` = the row's `charge_amount_cents` (a column read; `?? amount_cents` only for a row that lacks the column) |
+| ApproveOrDispute stripe note (C3) | Approving releases this payment to the worker. … | Approving sends this payment on its way to the worker. If something isn’t right, report the issue instead — release waits while a report is open. |
+| PostJob publish/save note (C5) | …for workers browsing BRAZOS. / …visible to workers browsing BRAZOS. | …for workers nearby. / …visible to workers nearby. |
+| JobDetail + MarketJobPreview poster fallback (C5) | `'BRAZOS customer'` | `'Customer'` — capitalised because it stands in a name slot under "Posted by" |
+| AccountSafety Privacy Policy row (C5) | How BRAZOS protects your data. | How your data is protected. |
+| DeleteAccount alert (C5, found by the grep) | Your BRAZOS account has been deleted. … | Your account has been deleted. … |
+| Welcome "Continue with phone" hint (C5, found by the grep) | Create a BRAZOS account | Create an account |
+| Welcome badge (C6) | Verified workers | Local workers |
+| PostJob photo nudge (C6) | Jobs with a photo get more bids. | Add photos so workers can see the work. |
+| WorkerProfile service CTA (C6) | Book at listed price | Request at listed price |
+| WorkerHome eyebrow (C6) | POTENTIAL EARNINGS | NEARBY DEMAND (the pair beneath — summed open-job budgets, `across N jobs` — is a fetched fact and stays) |
+| PostJob budget step (C6) | Suggested starting range card rendered | rendered OFF behind `PRICE_GUIDANCE = false` |
+
+Brand chrome KEPT, by name: Launch wordmark; Welcome `BRAZOS MARKETPLACE`;
+SignIn / EmailSignIn `Sign in to BRAZOS` (a heading naming the app);
+Home hero `Describe the job. BRAZOS handles the rest.` (a tagline);
+CompareBids eyebrow `BRAZOS PROTECTS`; PublicProfile wordmark, `Open this link
+in BRAZOS, or sign in here…` (the app as a destination on a page for
+strangers), `Get the app — BRAZOS, for getting things done.`; BrandLogo's
+accessibility label. `tests/copyTruth.test.mjs` pins the mid-sentence
+patterns absent and this chrome list as the only files naming the brand.
+Sandbox copy: byte-unchanged everywhere (the sandbox sentences are pinned
+present).
+
+### THE C7 OUTCOME
+
+`LAUNCH_EXCLUDED_CATEGORIES: readonly JobCategory[] = []` beside
+`JOB_CATEGORY_LABELS` in `lib/jobs.ts`; `POSTABLE_CATEGORIES =
+JOB_CATEGORIES.filter((c) => !LAUNCH_EXCLUDED_CATEGORIES.includes(c))` is the
+ONE filter site, at module scope in `screens/PostJobScreen.tsx`, and every
+enumeration there reads it (the pills, the measurement pass, the packing,
+the Other sheet's rows, the sheet's pick). The map, its keys and labels,
+search, browse, worker services, Home tiles and existing rows are untouched;
+no test naming a category key changed. **For the operator:** three keys
+MERGE licensed and unlicensed work and were left out by rule — `handyman`
+(general repairs), `painting` (residential painting over $200 is HIC-licensed;
+a touch-up is not), `moving` (a moving company is DOT-licensed; a pair of
+hands is not). Adding any of them is one line; `tests/launchCategories.test.mjs`
+proves every listed key still exists in the map and is absent from the
+picker.
+
+### THE FLAG ROSTER CHANGED (the fence asks that this be said here)
+
+`PRICE_GUIDANCE = false as boolean` joins `lib/featureFlags.ts` — DARK.
+WAITS ON: an attributed source for every range in `lib/priceGuidance.ts`, or
+BRAZOS's own accepted-offer data once enough exists. Guard site:
+`screens/PostJobScreen.tsx` (`guidanceLines` is null while it is false, so
+the card never mounts). `lib/priceGuidance.ts` and its executing fence
+(`tests/conversion.test.mjs` §3.2) are unchanged. Roster: twelve flags, nine
+live, three dark (`DELIVERED_TICKS`, `PRICE_GUIDANCE`, `TRANSLATION`).
+
+### FENCES — constants only, and the new ones
+
+- `tests/conversion.test.mjs`: the nudge sentence; the guidance line now
+  `isFreshPost && PRICE_GUIDANCE ?`; `'Request at listed price'`.
+- `tests/workerHome.test.mjs`: `>NEARBY DEMAND</Text>`.
+- `tests/motion120.test.mjs`: the roster count 11 → 12, `PRICE_GUIDANCE` in
+  the roster and in DARK.
+- `tests/stripePayments.test.mjs` NOT touched: it pins the four-name
+  re-export block in `lib/payments.ts`, and `tests/platformFee.test.mjs`
+  re-points the FIRST `from './paymentRules'` line — so `customerChargeCents`
+  is imported by the three screens from `lib/paymentRules` directly rather
+  than re-exported, and `lib/payments.ts` is byte-identical to R6c's end.
+- New: `tests/moneyFormat.test.mjs` (5, the real function extracted),
+  `tests/customerCharge.test.mjs` (3, the helper executed),
+  `tests/copyTruth.test.mjs` (5), `tests/launchCategories.test.mjs` (4, the
+  real constants executed).
+
+### THE connect-return CORRECTION, stated once
+
+R6b's record called the `text/plain` Content-Type on `connect-return` a
+"stale artifact" and asked for a re-probe. It is not an artifact: it is
+Supabase's documented platform restriction — HTML served from
+`*.supabase.co` is rewritten to `text/plain` by design (the Edge Functions
+docs, "Development tips"). No redeploy changes it and no further code at that
+function is queued. The fix is two static pages on the operator's domain plus
+a `return_url` / `refresh_url` change in `connect-onboarding`, riding the
+launch-gate run. The page's "Back to BRAZOS" is SERVER text (`page.mjs`) and
+rides that same domain fix — out of this client-only run's scope.
+
+### THE SHOTS HARNESS — re-rendered, as the gate asks
+
+Screens this run changed that carry a registered target: PostJob (ten
+`postjob-*` targets), WorkerHome, AccountSafety, DeleteAccount,
+WorkerProfile, and — through `formatBudget` — every money surface, Earnings
+among them. `node scripts/shots.mjs --build --only postjob` ran first (a
+fresh `expo export` with every commit through C7 in it, ten captures),
+`--only worker-home` next on that export (two), then the WHOLE registry on
+the same export: **60 of 60 targets captured, exit 0**, all sixty PNGs
+fresh in `.shots/` (gitignored; nothing to commit). The two worker-Home
+targets remain render-nondeterministic (the greeting follows the clock —
+§4.5), which is unchanged by this run. No image was opened; the captures
+are the operator's comparison aid, not a check this run read.
+
+### GUARD REFUSALS AND GATE DEVIATIONS
+
+None. No hook fired; branch, tree and floor matched.
+
+### INTERPRETATION CALLS
+
+- ApproveOrDispute's confirm title keeps its wording (`Release $X to the
+  worker?`) with the charge figure — the product's own framing of approval,
+  the same as the C3 sentence; only the figure moved.
+- Two mid-sentence brand uses beyond the named three were changed
+  (DeleteAccount's alert, Welcome's accessibility hint); the app-as-destination
+  and heading uses were kept as chrome, listed above.
+- `'Customer'` capitalised in the name slot (the dispatch wrote "customer").
+- `NEARBY DEMAND` chosen over the real count as the label: the count is
+  already the caption beneath the figure.
+
+### v3
+
+§4.5 carries no row for these residues (they were tracked in §3 row 2b's
+scope text and R6b's record), so §4.5 is unchanged. Row 2b's residue note
+now records them fixed by this run, with the C4 skip.
+
+### THE PUSH
+
+`supabase/` is untouched, and `.github/workflows/staging.yml` triggers only
+on `supabase/migrations/**` and `supabase/functions/**` — so this push does
+NOT start the staging pipeline. Nothing to migrate, nothing to deploy; the
+change reaches devices with the next build.
+
+### OPERATOR NEXT STEPS
+
+(1) Decide the three merged category keys (`handyman`, `painting`, `moving`)
+    for `LAUNCH_EXCLUDED_CATEGORIES` — a one-line edit each, fenced.
+(2) The connect-return domain fix (two static pages + `return_url`) rides
+    the launch-gate run; nothing further at the function.
+(3) R6c's WALK #1 still stands as written below; on this build the held
+    figures read as the card statement does (`$107.50`), the customer's card
+    reads the charge, and the worker's reads the take.
+
+
 ## RUN R6c COMPLETED (2026-08-30) — the rest of the money path: payouts, tips, completion photos
 
 Seven commits: ONE migration, ONE edge function changed, the client. C1
