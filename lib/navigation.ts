@@ -1,7 +1,10 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { AppMode } from '../modes/types';
 import type { Job, JobCategory, OpenJob } from './jobs';
 import type { ChatTarget } from './messages';
+import { navigateAcrossTabs } from './navigationRef';
+import type { NotificationModeBridge } from './notificationRoutes';
 import type { Offer } from './offers';
 import type { PhoneAuthIntent, PhoneProfileDraft } from './phoneAuth/types';
 
@@ -614,3 +617,88 @@ export type PostJobRouteParamList = {
       }
     | undefined;
 };
+
+// ===========================================================================
+// R6c (D2) — the app-scheme deep link: brazos://payouts?from=return|refresh
+// ===========================================================================
+//
+// THE ONE INBOUND LINK THE NATIVE APP ANSWERS. connect-return (R5b) bounces
+// the provider's hosted onboarding back into the app on this URL, and nothing
+// else in the app produces a brazos:// link today. It rides the EXISTING
+// dispatch machinery — navigateAcrossTabs parks through navigateWhenReady
+// (a cold-start URL is delivered before the container mounts), asks the live
+// navigator through canNavigateTo, and lands on the Profile tab's Payouts
+// route — and the same cross-mode gate lib/notificationRoutes.ts applies:
+// payouts are worker-owned, so a customer-mode arrival asks for the switch
+// through ModeProvider's own switchMode() (confirmation mandatory) and routes
+// only after it resolves true. Declining drops the navigation. While mode
+// resolution is pending (cold start) the gate stands down: Profile is mounted
+// in both trees, so the destination resolves either way.
+//
+// An unknown brazos:// path is ignored silently — no alert, no navigation —
+// which is the difference from a tapped notification: a bounce the app does
+// not recognise is nothing the user asked for.
+//
+// The listener lives in App.tsx (RootNavigator, beside usePushNotifications)
+// — not a `linking` prop on NavigationContainer, which this app has never
+// carried; one dispatch system, not two.
+
+/** app.config.ts's `scheme`, as the resolver matches it. */
+export const APP_LINK_SCHEME = 'brazos';
+
+export type AppLinkTarget = {
+  tab: 'Profile';
+  screen: 'Payouts';
+  /** The mode that OWNS the destination — the cross-mode gate's input. */
+  mode: AppMode;
+  params: { from?: PayoutsLinkFrom };
+};
+
+/**
+ * Pure: reads the URL, touches neither the network nor the navigator.
+ * Returns null for anything that is not brazos://payouts — including every
+ * other brazos:// path, any http(s) URL, and an empty string. A `from` value
+ * outside return|refresh is dropped, not guessed.
+ */
+export function resolveAppLink(url: string): AppLinkTarget | null {
+  const match = new RegExp(`^${APP_LINK_SCHEME}://payouts/?(?:\\?(.*))?$`, 'i').exec(url.trim());
+  if (!match) return null;
+  let from: PayoutsLinkFrom | undefined;
+  for (const pair of (match[1] ?? '').split('&')) {
+    const [key, value] = pair.split('=');
+    if (key?.toLowerCase() !== 'from') continue;
+    const bounce = value?.toLowerCase();
+    if (bounce === 'return' || bounce === 'refresh') from = bounce;
+  }
+  return { tab: 'Profile', screen: 'Payouts', mode: 'worker', params: from ? { from } : {} };
+}
+
+/** The cross-mode prompt for a payouts arrival in customer mode. */
+export const PAYOUTS_LINK_CONFIRM = {
+  title: 'Switch to Worker Mode?',
+  message:
+    'Payouts are part of your worker side. Viewing them means switching to Worker Mode — your posted jobs stay exactly where they are.',
+  confirmText: 'Switch',
+} as const;
+
+export type AppLinkOutcome = 'navigated' | 'declined' | 'ignored';
+
+/**
+ * Routes an inbound app-scheme URL, with the cross-mode gate. Both arrivals
+ * come through here: the cold-start URL (Linking.getInitialURL) and the warm
+ * one (the 'url' event). `at` is stamped on the params so a repeated bounce
+ * is a distinct param change for the screen's arrival effect.
+ */
+export async function handleAppLink(url: string, bridge: NotificationModeBridge): Promise<AppLinkOutcome> {
+  const target = resolveAppLink(url);
+  if (!target) return 'ignored';
+
+  const currentMode = bridge.getMode();
+  if (currentMode && currentMode !== target.mode) {
+    const switched = await bridge.switchMode(target.mode, { confirm: PAYOUTS_LINK_CONFIRM });
+    if (!switched) return 'declined';
+  }
+
+  navigateAcrossTabs(target.tab, target.screen, { ...target.params, at: Date.now() });
+  return 'navigated';
+}

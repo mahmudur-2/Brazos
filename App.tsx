@@ -1,14 +1,16 @@
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useState, type PropsWithChildren } from 'react';
-import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState, type PropsWithChildren } from 'react';
+import { ActivityIndicator, Linking, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DarkTheme, DefaultTheme, NavigationContainer } from '@react-navigation/native';
 import { setAudioModeAsync } from 'expo-audio';
 import { AuthProvider } from './lib/AuthContext';
 import { useAuth } from './hooks/useAuth';
+import { useNotificationModeBridge } from './hooks/useNotificationModeBridge';
 import { usePushNotifications } from './hooks/usePushNotifications';
 import { useThemeColors } from './hooks/useThemeColors';
 import { configurePushHandling } from './lib/pushNotifications';
+import { handleAppLink } from './lib/navigation';
 import { flushPendingNavigation, navigationRef } from './lib/navigationRef';
 import { ThemeProvider } from './lib/ThemeContext';
 import { LaunchCompleteContext } from './lib/launchContext';
@@ -67,6 +69,33 @@ function RootNavigator() {
   // Lives inside NavigationContainer so a tapped notification always has a
   // mounted container to route through.
   usePushNotifications();
+
+  // R6c (D2): the app-scheme deep link — brazos://payouts?from=return|refresh,
+  // the bounce connect-return serves after the provider's hosted onboarding.
+  // Same seat as the push listener, same dispatch machinery, same cross-mode
+  // gate (lib/navigation.ts handleAppLink): the cold-start URL is read once
+  // and parked through navigateWhenReady; a warm arrival comes through the
+  // 'url' event. Unknown brazos:// paths are ignored silently.
+  const linkBridge = useNotificationModeBridge();
+  const handledInitialUrl = useRef(false);
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    let active = true;
+    const dispatch = (url: string | null) => {
+      if (active && url) void handleAppLink(url, linkBridge);
+    };
+    if (!handledInitialUrl.current) {
+      handledInitialUrl.current = true;
+      Linking.getInitialURL()
+        .then(dispatch)
+        .catch((err) => console.error('[link] getInitialURL failed', err));
+    }
+    const subscription = Linking.addEventListener('url', ({ url }) => dispatch(url));
+    return () => {
+      active = false;
+      subscription.remove();
+    };
+  }, [linkBridge]);
 
   // Both gates are resolved before anything authenticated renders. Letting
   // either answer arrive late is what would show Home for a frame and then

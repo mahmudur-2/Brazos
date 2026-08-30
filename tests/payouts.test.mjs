@@ -252,6 +252,160 @@ test('[static] 7 · Earnings leads to Payouts in stripe mode only, and the sandb
   assert.equal((code.match(/paymentProvider\.cashOut\(\)/g) ?? []).length, 1);
 });
 
+// ---------------------------------------------------------------------------
+// R6c (D2) — the deep link, EXECUTED: lib/navigation.ts's resolver and its
+// gated dispatcher, with the one runtime import (navigateAcrossTabs) replaced
+// by a double before the module loads.
+// ---------------------------------------------------------------------------
+
+const navCalls = [];
+globalThis.__payouts_navigateAcrossTabs = (...args) => {
+  navCalls.push(args);
+};
+let navJs = stripTypeScriptTypes(read('lib/navigation.ts'), { mode: 'strip' });
+const navImport = "import { navigateAcrossTabs } from './navigationRef';";
+assert.ok(navJs.includes(navImport), 'the dispatcher reaches the navigator through navigateAcrossTabs alone');
+// Forwarded on every call, so a test can re-point the double after the module loads.
+navJs = navJs.replace(
+  navImport,
+  'const navigateAcrossTabs = (...args) => globalThis.__payouts_navigateAcrossTabs(...args);'
+);
+assert.ok(!navJs.includes("'./navigationRef'"), 'the runtime import is stubbed before the module loads');
+const { APP_LINK_SCHEME, PAYOUTS_LINK_CONFIRM, handleAppLink, resolveAppLink } = await import(toDataUrl(navJs));
+
+/** A controllable bridge double: mode fixed, the switch scripted. */
+function makeBridge(mode, script) {
+  const bridge = {
+    switchCalls: [],
+    getMode: () => mode,
+    switchMode: async (target, options) => {
+      bridge.switchCalls.push({ target, options });
+      return script();
+    },
+  };
+  return bridge;
+}
+
+test('9 · the scheme is app.config.ts’s, and the resolver answers brazos://payouts and nothing else', () => {
+  assert.equal(APP_LINK_SCHEME, 'brazos');
+  assert.match(read('app.config.ts'), /scheme: 'brazos',/, 'the literal the deep link matches');
+
+  const target = { tab: 'Profile', screen: 'Payouts', mode: 'worker' };
+  assert.deepEqual(resolveAppLink('brazos://payouts'), { ...target, params: {} });
+  assert.deepEqual(resolveAppLink('brazos://payouts?from=return'), { ...target, params: { from: 'return' } });
+  assert.deepEqual(resolveAppLink('brazos://payouts/?from=refresh'), { ...target, params: { from: 'refresh' } });
+  assert.deepEqual(resolveAppLink('BRAZOS://payouts?from=Return'), { ...target, params: { from: 'return' } });
+  assert.deepEqual(resolveAppLink('brazos://payouts?x=1&from=return'), { ...target, params: { from: 'return' } });
+  assert.deepEqual(resolveAppLink('  brazos://payouts?from=refresh  '), { ...target, params: { from: 'refresh' } });
+  // A `from` outside the two bounces is dropped, not guessed.
+  assert.deepEqual(resolveAppLink('brazos://payouts?from=bogus'), { ...target, params: {} });
+  assert.deepEqual(resolveAppLink('brazos://payouts?from='), { ...target, params: {} });
+  // Everything else is nothing.
+  for (const other of [
+    '',
+    'brazos://',
+    'brazos://jobs/123',
+    'brazos://payouts/extra',
+    'brazos://payoutsx',
+    'https://brazos.app/payouts?from=return',
+    'exp://127.0.0.1:8081/--/payouts',
+    'mailto:payouts@example.com',
+  ]) {
+    assert.equal(resolveAppLink(other), null, `ignored: ${JSON.stringify(other)}`);
+  }
+  // A case-different host and a trailing & (an empty pair) still resolve.
+  assert.deepEqual(resolveAppLink('brazos://Payouts?from=return&'), { ...target, params: { from: 'return' } });
+});
+
+test('10 · the dispatcher: unknown links are ignored silently; a worker-mode arrival routes; the cross-mode gate asks first and drops on decline', async () => {
+  // Unknown: nothing happens — no switch, no navigation, no alert (there is
+  // no alert import to stub, by construction).
+  navCalls.length = 0;
+  const idle = makeBridge('customer', () => true);
+  assert.equal(await handleAppLink('brazos://jobs/123', idle), 'ignored');
+  assert.equal(await handleAppLink('https://brazos.app/payouts', idle), 'ignored');
+  assert.deepEqual(idle.switchCalls, []);
+  assert.deepEqual(navCalls, []);
+
+  // Worker mode: straight through, on the Profile tab, with the bounce and an arrival stamp.
+  navCalls.length = 0;
+  const worker = makeBridge('worker', () => {
+    throw new Error('no switch is asked for in worker mode');
+  });
+  assert.equal(await handleAppLink('brazos://payouts?from=return', worker), 'navigated');
+  assert.equal(navCalls.length, 1);
+  const [tab, screen, params] = navCalls[0];
+  assert.equal(tab, 'Profile');
+  assert.equal(screen, 'Payouts');
+  assert.equal(params.from, 'return');
+  assert.equal(typeof params.at, 'number');
+  assert.deepEqual(worker.switchCalls, []);
+
+  // Customer mode, declined: the gate asked with the payouts copy, and nothing routed.
+  navCalls.length = 0;
+  const declined = makeBridge('customer', () => false);
+  assert.equal(await handleAppLink('brazos://payouts?from=refresh', declined), 'declined');
+  assert.equal(declined.switchCalls.length, 1);
+  assert.equal(declined.switchCalls[0].target, 'worker');
+  assert.deepEqual(declined.switchCalls[0].options, { confirm: PAYOUTS_LINK_CONFIRM });
+  assert.deepEqual(navCalls, []);
+
+  // Customer mode, accepted: the switch resolves first, then the route.
+  navCalls.length = 0;
+  const order = [];
+  const accepted = makeBridge('customer', () => {
+    order.push('switch');
+    return true;
+  });
+  globalThis.__payouts_navigateAcrossTabs = (...args) => {
+    order.push('navigate');
+    navCalls.push(args);
+  };
+  assert.equal(await handleAppLink('brazos://payouts?from=refresh', accepted), 'navigated');
+  assert.deepEqual(order, ['switch', 'navigate']);
+  assert.equal(navCalls[0][2].from, 'refresh');
+
+  // Mode not yet resolved (cold start): the gate stands down; the route
+  // resolves in either tree because Profile is mounted in both.
+  navCalls.length = 0;
+  const pending = makeBridge(null, () => {
+    throw new Error('no switch while mode resolution is pending');
+  });
+  assert.equal(await handleAppLink('brazos://payouts', pending), 'navigated');
+  assert.equal(navCalls.length, 1);
+  assert.equal(navCalls[0][2].from, undefined);
+
+  // The confirm copy: the same shape notificationRoutes uses, and honest.
+  assert.equal(PAYOUTS_LINK_CONFIRM.title, 'Switch to Worker Mode?');
+  assert.equal(PAYOUTS_LINK_CONFIRM.confirmText, 'Switch');
+  assert.match(PAYOUTS_LINK_CONFIRM.message, /Worker Mode/);
+  assert.doesNotMatch(PAYOUTS_LINK_CONFIRM.message, /verif|\bpaid\b/i);
+});
+
+test('[static] 11 · App.tsx listens for the URL beside the push listener, reads the cold-start URL once, and carries no linking prop', () => {
+  const app = read('App.tsx');
+  const code = stripComments(app);
+  const rootStart = code.indexOf('function RootNavigator()');
+  const rootEnd = code.indexOf('function LaunchGate(');
+  const rootNavigator = code.slice(rootStart, rootEnd);
+  assert.ok(rootStart > 0 && rootEnd > rootStart);
+  // Same seat as the push listener — inside the container, in RootNavigator.
+  assert.match(rootNavigator, /usePushNotifications\(\);/);
+  assert.match(rootNavigator, /const linkBridge = useNotificationModeBridge\(\);/);
+  assert.match(rootNavigator, /Linking\.getInitialURL\(\)/);
+  assert.match(rootNavigator, /Linking\.addEventListener\('url', \(\{ url \}\) => dispatch\(url\)\);/);
+  assert.match(rootNavigator, /void handleAppLink\(url, linkBridge\);/);
+  // The cold-start URL is consumed once per process.
+  assert.match(rootNavigator, /const handledInitialUrl = useRef\(false\);/);
+  assert.match(rootNavigator, /if \(!handledInitialUrl\.current\) \{\s*handledInitialUrl\.current = true;/);
+  // Native only, and the subscription is removed on cleanup.
+  assert.match(rootNavigator, /if \(Platform\.OS === 'web'\) return;/);
+  assert.match(rootNavigator, /subscription\.remove\(\);/);
+  // One dispatch system: no `linking` prop on the container, then or now.
+  assert.doesNotMatch(code, /linking=\{/);
+  assert.match(app, /import \{ handleAppLink \} from '\.\/lib\/navigation';/);
+});
+
 test('[static] 8 · the route is registered on the shared profile stack and typed in lib/navigation.ts', () => {
   const stacks = read('navigation/sharedStacks.tsx');
   assert.match(stacks, /import \{ PayoutsScreen \} from '\.\.\/screens\/PayoutsScreen';/);
