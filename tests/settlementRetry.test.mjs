@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
@@ -215,4 +216,54 @@ test('12 · every result carries both flags as booleans, a code that is null or 
     assert.equal(typeof verdict.message, 'string');
     assert.ok(verdict.message.length > 0);
   }
+});
+
+// ---------------------------------------------------------------------------
+// The drain itself, as raw text — this repository's normal fence shape for a
+// Deno handler nothing here can load.
+// ---------------------------------------------------------------------------
+test('13 · the drain (raw text): refunds_due select names refund_attempts, both keys carry their counter, classify.mjs is imported by relative path, and the recorder runs in both passes', () => {
+  const src = readFileSync(new URL('../supabase/functions/process-settlements/index.ts', import.meta.url), 'utf8');
+
+  // The refunds query reads the counter the key is built from; the transfers
+  // query still reads its own.
+  assert.match(src, /refunds_due\?select=id,provider_ref,refund_cents,refund_attempts&/, 'refunds_due select names refund_attempts');
+  assert.match(src, /transfers_due\?select=id,payee_id,transfer_cents,transfer_attempts&/, 'transfers_due select still names transfer_attempts');
+
+  // Both idempotency keys carry their counter, and the counter-less refund
+  // key — the one that could not be rotated even by hand — is gone.
+  assert.match(src, /`tr:\$\{row\.id\}:\$\{row\.transfer_attempts \?\? 0\}`/, 'the transfer key is tr:<id>:<transfer_attempts>');
+  assert.match(src, /`rf:\$\{row\.id\}:\$\{row\.refund_attempts \?\? 0\}`/, 'the refund key is rf:<id>:<refund_attempts>');
+  assert.ok(!/`rf:\$\{row\.id\}`/.test(src), 'the counter-less refund key is gone');
+
+  // The classifier is the sibling this file executes, imported by relative
+  // path, and it is what decides rotate and deferred.
+  assert.match(src, /^import \{ classifySettlementFailure \} from '\.\/classify\.mjs';$/m, 'classify.mjs is imported by relative path');
+  assert.match(src, /const verdict = classifySettlementFailure\(outcome\);/, 'and its verdict is the one the drain acts on');
+  assert.match(src, /await recordAttempt\(kind, paymentId, verdict\.rotate, verdict\.message\)/, 'rotate comes from the verdict, never from the drain');
+
+  // record_settlement_attempt is called through the one recorder, and the
+  // recorder runs in both passes — on a refusal and on a throw alike.
+  assert.match(src, /serviceRpc\('record_settlement_attempt', \{/, 'the recorder calls record_settlement_attempt through serviceRpc');
+  assert.match(src, /p_payment_id: paymentId,\s*p_kind: kind,\s*p_rotate: rotate,\s*p_error: error,/, 'with the four arguments the RPC declares');
+  const one = src.indexOf('// Pass one:');
+  const two = src.indexOf('// Pass two:');
+  const serve = src.indexOf('Deno.serve(');
+  assert.ok(one > -1 && two > one && serve > two, 'the two pass sections and the handler are found, in order');
+  const passOne = src.slice(one, two);
+  const passTwo = src.slice(two, serve);
+  assert.match(passOne, /await recordFailure\(counts, 'transfer', row\.id, failure\);/, 'pass one records every non-success as a transfer');
+  assert.match(passTwo, /await recordFailure\(counts, 'refund', row\.id, failure\);/, 'pass two records every non-success as a refund');
+  assert.equal((passOne.match(/failure = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass one turns a throw into a recorded failure');
+  assert.equal((passTwo.match(/failure = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass two turns a throw into a recorded failure');
+  assert.match(src, /if \(!recorded\) counts\.defects\+\+;/, 'a row that could not be recorded counts as a defect');
+
+  // The tally the operator reads.
+  assert.match(src, /\(\): Tally => \(\{ attempted: 0, succeeded: 0, deferred: 0, failed: 0, defects: 0, blocked: 0 \}\)/, 'the tally is { attempted, succeeded, deferred, failed, defects, blocked }');
+
+  // Success still writes nothing back — said at both success sites, and no
+  // ref is written from a response anywhere in the file.
+  assert.equal((src.match(/SUCCESS WRITES NOTHING BACK/g) ?? []).length, 2, 'both success branches say nothing is written back');
+  assert.ok(!/attach_provider_ref/.test(src.replace(/\/\/[^\n]*/g, '')), 'no ref is attached from here');
+  assert.ok(!/transfer_ref|refund_ref/.test(src.replace(/\/\/[^\n]*/g, '')), 'and neither ref column is named outside a comment');
 });
