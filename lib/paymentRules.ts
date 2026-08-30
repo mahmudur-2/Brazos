@@ -104,3 +104,18 @@ export function canOfferJobFunding({
   }
   return false;
 }
+
+/**
+ * Tier A (C2, v3 D-4): THE customer's held figure — the row's own
+ * charge_amount_cents (agreed price + protection fee + tax, generated in the
+ * database), never amount_cents. Read off the column; the `??` is null-safety
+ * for a row the type allows to lack it, not arithmetic. Sandbox rows write a
+ * zero fee and zero tax, so their charge equals the amount and no sandbox
+ * figure changes. Every customer-facing "held in protection" amount —
+ * JobConfirmed, ClientJobDetail, ApproveOrDispute and its CTA — reads this.
+ */
+export function customerChargeCents(
+  payment: Pick<Payment, 'amount_cents' | 'charge_amount_cents'>
+): number {
+  return payment.charge_amount_cents ?? payment.amount_cents;
+}

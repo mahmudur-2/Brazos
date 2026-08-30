@@ -9,6 +9,7 @@ import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
 import { paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
+import { customerChargeCents } from '../lib/paymentRules';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
@@ -122,7 +123,9 @@ export function JobConfirmedScreen() {
           ) : null}
 
           <View style={styles.paymentBlock}>
-            <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
+            {/* Tier A (C2, D-4): the customer's held figure is the row's own
+                charge_amount_cents — what the card was charged. */}
+            <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
             <StatusPill kind="payment" status={payment.status} />
             {/* D16: the sandbox note renders only in sandbox mode; the card
                 path states the money fact — the row reads held, which is the

@@ -44,6 +44,7 @@ import {
   isReleaseRequested,
   type Payment,
 } from '../lib/payments';
+import { customerChargeCents } from '../lib/paymentRules';
 import { paymentsMode } from '../lib/adapters/payments';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
@@ -997,7 +998,10 @@ export function ClientJobDetailScreen() {
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
                   {paymentsMode === 'sandbox' ? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'}
                 </Text>
-                <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
+                {/* Tier A (C2, D-4): the customer's held figure is the row's
+                    charge_amount_cents — the agreed price is said beside the
+                    title; this is what the card was charged. */}
+                <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
                 <Text style={styles.paymentNote}>
                   {paymentsMode === 'sandbox'
                     ? 'Funds stay held until you approve the finished work. Sandbox build — no real money moves.'
@@ -1013,7 +1017,7 @@ export function ClientJobDetailScreen() {
                   <Ionicons name="shield-outline" size={22} color={colors.gold} />
                 </View>
                 <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>FUNDING WINDOW CLOSED</Text>
-                <MoneyText cents={payment.amount_cents} state={payment.status} />
+                <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
                 <Text style={styles.paymentNote}>
                   The window to protect this payment closed before a card was
                   charged. A fresh checkout will be available shortly — check
@@ -1038,7 +1042,7 @@ export function ClientJobDetailScreen() {
                       ? 'APPROVED · PAYOUT ON ITS WAY'
                       : 'PAYMENT'}
                 </Text>
-                <MoneyText cents={payment.amount_cents} state={payment.status} />
+                <MoneyText cents={customerChargeCents(payment)} state={payment.status} />
               </Card>
             ) : null}
 

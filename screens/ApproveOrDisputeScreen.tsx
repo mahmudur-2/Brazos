@@ -24,6 +24,7 @@ import {
   isReleaseRequested,
   type Payment,
 } from '../lib/payments';
+import { customerChargeCents } from '../lib/paymentRules';
 import {
   DISPUTE_REASONS,
   DISPUTE_REASON_LABELS,
@@ -233,7 +234,7 @@ export function ApproveOrDisputeScreen() {
       ? 'Withdraw report'
       : held
         ? releaseAllowed
-          ? `Approve & release ${formatBudget(payment?.amount_cents ?? null)}`
+          ? `Approve & release ${formatBudget(payment ? customerChargeCents(payment) : null)}`
           : undefined
         : settled
           ? stripe
@@ -317,7 +318,9 @@ export function ApproveOrDisputeScreen() {
                     ? 'APPROVED · PAYOUT ON ITS WAY'
                     : 'HELD PAYMENT'}
             </Text>
-            <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
+            {/* Tier A (C2, D-4): the customer's held figure is the row's own
+                charge_amount_cents, in the card, the CTA and the dialog alike. */}
+            <MoneyText cents={customerChargeCents(payment)} state={payment.status} size="lg" />
             <Text style={styles.paymentNote}>
               {paymentsMode === 'sandbox'
                 ? released
@@ -455,7 +458,7 @@ export function ApproveOrDisputeScreen() {
 
       <ConfirmDialog
         visible={confirmApprove}
-        title={`Release ${formatBudget(payment?.amount_cents ?? null)} to the worker?`}
+        title={`Release ${formatBudget(payment ? customerChargeCents(payment) : null)} to the worker?`}
         message={
           paymentsMode === 'sandbox'
             ? 'This approves the finished work and releases the held sandbox funds to the worker. It can’t be undone. No real money moves in this build.'
