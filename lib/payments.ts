@@ -250,6 +250,35 @@ export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
 }
 
 /**
+ * R6c (D3): the tip poll's three terminal branches, decided from one read of
+ * the tip row — the tip's mirror of stripeRules' classifyCheckoutPoll:
+ *   'released' — payment_intent.succeeded landed; a tip has no held stop, so
+ *                released (or, swept later, paid_out) IS success.
+ *   'gone'     — fetchJobTip filters failed and voided, so a row that was
+ *                seen and now reads null is the failed/voided signal; a row
+ *                that reads failed or voided outright says the same thing.
+ *   'pending'  — anything else (unfunded). Keep polling until the deadline;
+ *                the deadline is the screen's third branch, not a state here.
+ *
+ * `seen` starts true from the paymentId create-payment returned — a row that
+ * never existed is not "gone", it is not yet there.
+ */
+export type TipPollState = 'released' | 'gone' | 'pending';
+
+export function classifyTipPoll({
+  status,
+  seen,
+}: {
+  status: string | null | undefined;
+  seen: boolean;
+}): TipPollState {
+  if (status === 'released' || status === 'paid_out') return 'released';
+  if (status === 'failed' || status === 'voided') return 'gone';
+  if (status == null) return seen ? 'gone' : 'pending';
+  return 'pending';
+}
+
+/**
  * The job's tip row (kind='tip'), or null when none was given. Same RLS as
  * the job payment: only the two parties can see it.
  */

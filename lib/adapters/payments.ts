@@ -30,9 +30,12 @@ import { moneyCeilingError, TIP_CEILING_CENTS } from '../validation';
  *               that loads the card SDK; the row reads held only when the
  *               provider's webhook lands. Release is release_job_payment,
  *               which requests the transfer and leaves the row held until
- *               transfer.created (D23). Tips and cash-out refuse here: a tip
- *               intent is an edge-function change (R6b), and payouts run on
- *               the provider's own schedule.
+ *               transfer.created (D23). A tip is a second checkout session
+ *               (beginTipCheckout, R6c): create-payment mints the tip row
+ *               through the database's tip RPC, the same sheet takes the
+ *               card, and payment_intent.succeeded releases it — a tip has
+ *               no held stop. Cash-out refuses: payouts run on the provider's
+ *               own schedule.
  *   disabled  — fail-closed. Every call refuses with the same message, so a
  *               build without a payment mode cannot half-work.
  *
@@ -82,9 +85,19 @@ export type PaymentProvider = {
    * the transfer lands (D23).
    */
   releaseJobPayment(jobId: string): Promise<PaymentResult>;
-  /** One review-time tip per completed job, only after release. Stripe
-   *  refuses in this build (D3 — R6b owns the tip intent). */
+  /** One review-time tip per completed job, only after release — the
+   *  sandbox's one-step tip. Stripe refuses: a card tip is beginTipCheckout
+   *  plus the sheet (R6c, D3). */
   tipWorker(jobId: string, amountCents: number): Promise<PaymentResult>;
+  /**
+   * R6c (D3/D4): mint the stripe TIP row and its payment intent through the
+   * same create-payment function (tipAmountCents in the body), returning what
+   * the payment sheet needs. The row is `unfunded` until the webhook lands and
+   * has no held stop: payment_intent.succeeded releases it. The RPC's own
+   * refusals (one tip per job, release first, the ceiling's dollar sentence)
+   * come back verbatim. Sandbox and disabled refuse it.
+   */
+  beginTipCheckout(jobId: string, amountCents: number): Promise<CheckoutSessionResult>;
   /**
    * Sweep the caller's released rows to paid_out (phase55's simulated
    * cash-out). Returns the swept rows; an empty array is the honest answer
@@ -111,9 +124,10 @@ export const SANDBOX_NO_SHEET_MESSAGE =
 /** D4: the sandbox's two steps have no stripe meaning. */
 export const STRIPE_NO_TWO_STEP_MESSAGE =
   'Card payments are taken in one step through checkout — nothing is authorized or protected separately.';
-/** D3: never the word "paid" — the payment is approved and on its way. */
+/** R6c (D3): the one-step tip has no card meaning — a card tip is a checkout
+ *  session through the sheet. Never the word "paid". */
 export const STRIPE_TIP_MESSAGE =
-  'Tipping arrives in the next update. Your approved payment is on its way to the worker.';
+  'Card tips are sent through the payment sheet — nothing was recorded or charged.';
 /** D19: nothing for the worker to trigger. */
 export const STRIPE_CASH_OUT_MESSAGE =
   'Payouts arrive on the provider’s own schedule once payout setup is complete — there is nothing to trigger here.';
@@ -145,6 +159,7 @@ function createSandboxPaymentProvider(): PaymentProvider {
       if (error) return { data: null, error: { message: error.message } };
       return { data: (data ?? null) as Payment | null, error: null };
     },
+    beginTipCheckout: async () => ({ data: null, error: { message: SANDBOX_NO_SHEET_MESSAGE } }),
     cashOut: async () => {
       const { data, error } = await supabase.rpc('sandbox_cash_out');
       if (error) return { data: [], error: { message: error.message } };
@@ -188,6 +203,13 @@ function createStripePaymentProvider(): PaymentProvider {
       return { data: (data ?? null) as Payment | null, error: null };
     },
     tipWorker: async () => (stripeReady() ? refuse(STRIPE_TIP_MESSAGE) : unavailable()),
+    // R6c (D3): no client ceiling check here on purpose — the tip RPC's own
+    // sentences (the job-specific dollar ceiling among them) are the ones the
+    // customer reads, verbatim, passed through create-payment.
+    beginTipCheckout: async (jobId, amountCents) => {
+      if (!stripeReady()) return { data: null, error: { message: STRIPE_UNAVAILABLE_MESSAGE } };
+      return createPaymentSession(jobId, { tipAmountCents: amountCents });
+    },
     cashOut: async () => ({
       data: [],
       error: { message: stripeReady() ? STRIPE_CASH_OUT_MESSAGE : STRIPE_UNAVAILABLE_MESSAGE },
@@ -207,6 +229,7 @@ function createDisabledPaymentProvider(message: string): PaymentProvider {
     beginJobCheckout: async () => ({ data: null, error: { message } }),
     releaseJobPayment: refuse,
     tipWorker: refuse,
+    beginTipCheckout: async () => ({ data: null, error: { message } }),
     cashOut: async () => ({ data: [], error: { message } }),
   };
 }

@@ -153,11 +153,23 @@ async function readInvokeErrorBody(error: unknown): Promise<string | null> {
  * a FunctionsHttpError whose sentence lives in the body (D6); it is read,
  * extracted and routed through userMessage(), which passes plain sentences
  * through.
+ *
+ * R6c (D3/D4): with `tipAmountCents` the same function mints the job's TIP
+ * row instead (begin_tip_payment, as the caller) and the body carries the
+ * amount — integer cents — as `tipAmountCents`. Nothing else differs: the
+ * same four strings come back, and the amount the sheet charges is the tip
+ * row's own charge_amount_cents, which the screen reads off the row.
  */
-export async function createPaymentSession(jobId: string): Promise<CheckoutSessionResult> {
+export async function createPaymentSession(
+  jobId: string,
+  options?: { tipAmountCents?: number }
+): Promise<CheckoutSessionResult> {
+  const tipAmountCents = options?.tipAmountCents;
   let invoked: { data: unknown; error: unknown };
   try {
-    invoked = await supabase.functions.invoke('create-payment', { body: { jobId } });
+    invoked = await supabase.functions.invoke('create-payment', {
+      body: tipAmountCents != null ? { jobId, tipAmountCents } : { jobId },
+    });
   } catch (error) {
     invoked = { data: null, error };
   }

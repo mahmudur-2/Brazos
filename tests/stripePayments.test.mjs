@@ -368,9 +368,10 @@ test('[static] the adapter selects three ways, and the stripe provider refuses w
   assert.match(adapter, /sandbox_release_job_payment/);
   assert.match(adapter, /sandbox_authorize_job_payment/);
   assert.match(adapter, /sandbox_hold_job_payment/);
-  // D3: stripe tip refuses (no begin_tip_payment intent exists) and never says paid.
+  // D3 (R6c): the one-step tipWorker still refuses in stripe mode — a card tip
+  // is beginTipCheckout + the sheet — and never says paid.
   assert.match(adapter, /tipWorker: async \(\) => \(stripeReady\(\) \? refuse\(STRIPE_TIP_MESSAGE\)/);
-  assert.match(adapter, /STRIPE_TIP_MESSAGE =\s*'Tipping arrives in the next update\. Your approved payment is on its way to the worker\.'/);
+  assert.match(adapter, /STRIPE_TIP_MESSAGE =\s*'Card tips are sent through the payment sheet — nothing was recorded or charged\.'/);
   assert.doesNotMatch(adapter, /begin_tip_payment/);
   // D19: stripe cash-out refuses and never calls sandbox_cash_out.
   assert.match(flat, /cashOut: async \(\) => \(\{ data: \[\], error: \{ message: stripeReady\(\) \? STRIPE_CASH_OUT_MESSAGE : STRIPE_UNAVAILABLE_MESSAGE \},? \}\)/);
@@ -384,7 +385,7 @@ test('[static] the adapter selects three ways, and the stripe provider refuses w
     adapter.indexOf('function createStripePaymentProvider'),
     adapter.indexOf('function createDisabledPaymentProvider')
   );
-  assert.equal((stripeProvider.match(/stripeReady\(\)/g) ?? []).length, 6, 'all six stripe methods consult stripeReady()');
+  assert.equal((stripeProvider.match(/stripeReady\(\)/g) ?? []).length, 7, 'all seven stripe methods consult stripeReady() (R6c added beginTipCheckout)');
   for (const message of ['STRIPE_TIP_MESSAGE', 'STRIPE_CASH_OUT_MESSAGE', 'STRIPE_NO_TWO_STEP_MESSAGE', 'SANDBOX_NO_SHEET_MESSAGE']) {
     const value = adapter.match(new RegExp(`${message} =\\s*'([^']+)'`));
     assert.ok(value, `${message} must be a literal sentence`);
@@ -514,8 +515,10 @@ test('[static] a held row with release_requested_at cannot bounce between Review
   assert.match(review, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
   assert.match(approve, /const releaseAllowed = paymentsMode !== 'disabled' && paymentsEnabled;/);
   assert.match(approve, /held\s*\?\s*releaseAllowed\s*\?\s*`Approve & release/);
-  // D3: stripe mode hides the tip controls and keeps the review section.
-  assert.match(review, /\) : stripe \? \([\s\S]{0,400}Tipping arrives in the next update/);
+  // D3 (R6c): stripe mode shows the CARD tip controls behind the kill switch
+  // and the release gate, and keeps the review section.
+  assert.match(review, /\) : stripe \? \([\s\S]{0,400}!paymentsEnabled \?/);
+  assert.match(review, /tip by card/);
   assert.match(review, /<ReviewSection/);
   assert.doesNotMatch(review, /paymentsMode !== 'sandbox'/);
   // D16: the sandbox strings are verbatim and gated on the resolved mode.
