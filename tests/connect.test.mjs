@@ -218,3 +218,23 @@ test('10 · the scheme literal in connect-return is the one app.config.ts declar
   assert.equal(bounce[1], appConfig[1], 'the two literals are equal');
   assert.equal(bounce[1], SCHEME, 'and this file tests that literal');
 });
+
+test('11 · the bounce hands PAGE_HEADERS to the Response as a constructed Headers object, and that object still says text/html', () => {
+  // R6b D9: the DEPLOYED function was probed on 2026-08-30 serving the
+  // correct body as text/plain — Deno's default when no Content-Type reaches
+  // the Response — while PAGE_HEADERS in source has said text/html since R5b
+  // (test 8). The one code-side variable, a plain-object spread of a frozen
+  // object as header init, is replaced by a constructed Headers object.
+  // Executed: that construction, under node's Headers.
+  const headers = new Headers(PAGE_HEADERS);
+  assert.equal(headers.get('content-type'), 'text/html; charset=utf-8');
+  assert.equal(headers.get('cache-control'), 'no-store');
+  assert.equal([...headers.keys()].length, 2, 'and nothing else');
+  // Raw text: index.ts constructs Headers from PAGE_HEADERS and no longer
+  // spreads it.
+  const read = (relative) => readFileSync(new URL(relative, import.meta.url), 'utf8');
+  const bounce = read('../supabase/functions/connect-return/index.ts');
+  assert.match(bounce, /headers: new Headers\(PAGE_HEADERS\),/, 'index.ts constructs a Headers object from PAGE_HEADERS');
+  assert.ok(!/\{\s*\.\.\.PAGE_HEADERS\s*\}/.test(bounce), 'and no longer spreads it into a plain object');
+  assert.match(bounce, /text\/plain/, 'and names the live text/plain observation it answers');
+});

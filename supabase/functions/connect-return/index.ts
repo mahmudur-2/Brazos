@@ -42,8 +42,9 @@ Deno.serve((req) => {
   }
 
   const refresh = new URL(req.url).searchParams.get('refresh');
+  // A Headers object, not a spread: probed 2026-08-30, the DEPLOYED function served this body as text/plain while PAGE_HEADERS in source says text/html (R6b D9).
   return new Response(bouncePage(refresh, APP_SCHEME), {
     status: 200,
-    headers: { ...PAGE_HEADERS },
+    headers: new Headers(PAGE_HEADERS),
   });
 });
