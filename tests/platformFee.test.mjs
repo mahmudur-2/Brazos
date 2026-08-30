@@ -85,7 +85,11 @@ test('the three fee surfaces all read the shared constant', async () => {
   // Comments stripped: the docblock explains the constant this screen no
   // longer owns, and that history is worth keeping.
   assert.doesNotMatch(stripComments(jobDetail), /ESTIMATED_PLATFORM_FEE_RATE/);
-  assert.match(checkout, /platformFeeCents\(amountCents/);
+  // R6a (D10): checkout reads its figures off the ledger row / the price
+  // quote and computes no fee of its own.
+  assert.doesNotMatch(stripComments(checkout), /platformFeeCents|PLATFORM_FEE_RATE|workerPayoutCents/);
+  assert.match(checkout, /charge_amount_cents/);
+  assert.match(checkout, /payment\.platform_fee_cents/);
   assert.match(earnings, /PLATFORM_FEE_RATE/);
 });
 

@@ -396,6 +396,91 @@ test('[static] the adapter selects three ways, and the stripe provider refuses w
 });
 
 // ---------------------------------------------------------------------------
+// 6c. CheckoutScreen's stripe branch (D4, D5, D6, D7, D13, D14, D15, D18, D22)
+// ---------------------------------------------------------------------------
+
+test('[static] CheckoutScreen takes the card through the adapter and the boundary, and polls before it claims held', () => {
+  const src = read('screens/CheckoutScreen.tsx');
+  const code = stripComments(src);
+  // D18: the gate is disabled-only — stripe is not locked out.
+  assert.match(code, /paymentsMode === 'disabled'/);
+  assert.doesNotMatch(code, /paymentsMode !== 'sandbox'/);
+  // D4: the SDK-absent / key-absent screen state is the one sentence, as a
+  // permissionDenied state — never a spinner.
+  assert.match(code, /stripe && !stripeReady\(\)[\s\S]{0,300}kind: 'permissionDenied'[\s\S]{0,200}STRIPE_UNAVAILABLE_MESSAGE/);
+  // D5: create-payment through the adapter, the sheet through the boundary,
+  // then the poll; the sandbox two-step is never called in stripe mode.
+  assert.match(code, /paymentProvider\.beginJobCheckout\(job\.id\)/);
+  assert.match(code, /presentCheckoutSheet\(session\.data\)/);
+  assert.match(code, /from '\.\.\/lib\/payments\/stripe'/);
+  assert.doesNotMatch(code, /stripe-react-native/);
+  assert.doesNotMatch(code, /\.rpc\(|\.from\(|functions\.invoke/);
+  assert.match(code, /onConfirm=\{stripe \? fundByCard : fundProtection\}/);
+  // A dismissed sheet: no alert, no poll, one re-read.
+  assert.match(code, /sheet\.outcome === 'dismissed'[\s\S]{0,200}await loadPayment\(\);\s*return;/);
+  assert.doesNotMatch(code, /dismissed'[\s\S]{0,120}alertAsync/);
+  // D7: the poll — the classifier, the two constants, seen initialised true,
+  // and JobConfirmed only off a row that reads held.
+  assert.match(code, /classifyCheckoutPoll\(\{ status: data\?\.status \?\? null, seen \}\)/);
+  assert.match(code, /let seen = true;/);
+  assert.match(code, /Date\.now\(\) - startedAt < CHECKOUT_POLL_TIMEOUT_MS/);
+  assert.match(code, /await sleep\(CHECKOUT_POLL_INTERVAL_MS\)/);
+  assert.match(code, /outcome === 'held'[\s\S]{0,120}navigation\.replace\('JobConfirmed'/);
+  assert.match(code, /outcome === 'gone'[\s\S]{0,80}setPhase\('gone'\)/);
+  assert.match(code, /if \(activeRef\.current\) setPhase\('timeout'\);/);
+  // The sheet's success never navigates by itself: JobConfirmed is reached
+  // only from the poll, the recheck, or the sandbox hold.
+  const successPaths = code.match(/navigation\.replace\('JobConfirmed'/g) ?? [];
+  assert.equal(successPaths.length, 4, 'held-continue, sandbox hold, the poll, and the recheck');
+  assert.doesNotMatch(code, /outcome === 'completed'[\s\S]{0,200}JobConfirmed/);
+  // The confirming state: the template's spinner, the words in the header,
+  // and no action bar (DetailScreen drops it while the state is not ready).
+  assert.match(code, /phase === 'confirming'\s*\?[\s\S]{0,200}\{ kind: 'loading', variant: 'spinner' \}/);
+  assert.match(src, /subtitle=\{phase === 'confirming' \? 'Confirming your payment…' : job\.title\}/);
+  // The third branch never says failed and never offers a second payment.
+  const timeoutBlock = src.slice(src.indexOf("phase === 'timeout'\n            ? ["), src.indexOf("stripe && windowClosed"));
+  assert.ok(timeoutBlock.length > 0, 'the timeout section exists');
+  assert.doesNotMatch(timeoutBlock, /\bfail/i);
+  assert.match(timeoutBlock, /hasn’t seen it\s+confirm yet/);
+  assert.match(code, /phase === 'timeout' \|\| windowClosed \? \(\s*<Button title="Check again"/);
+  // D13 / D22: the all-in total is the headline — the row's charge_amount_cents
+  // or the quote's total_cents — and the bare agreed price is never the total.
+  assert.match(code, /quoteJobPrice\(amountCents\)/);
+  assert.match(code, /total: payment\.charge_amount_cents/);
+  assert.match(code, /total: quote\.total_cents/);
+  assert.match(code, /Total charged to your card/);
+  assert.match(code, /`Protect \$\{formatBudget\(figures\.total\)\} by card`/);
+  assert.match(code, /`Charge \$\{formatBudget\(figures\?\.total \?\? null\)\} to your card\?`/);
+  assert.match(code, /disabled=\{funding \|\| !figures \|\| state\.kind !== 'ready'\}/);
+  assert.match(code, /quoteError && !figures/);
+  // D10: no client-side fee arithmetic — the sandbox fee row reads the ledger.
+  assert.doesNotMatch(code, /platformFeeCents|PLATFORM_FEE_RATE|workerPayoutCents|\* 0\.|\/ 100 \*/);
+  assert.match(code, /payment\.platform_fee_cents > 0/);
+  // D14: the countdown reuses the one formatter; a closed window has no CTA.
+  assert.match(code, /releaseCountdownLabel\(fundingDueMs as number, nowMs\)/);
+  assert.match(code, /canOfferJobFunding\(\{ viewerId: user\?\.id, job, payment, nowMs \}\)/);
+  assert.match(code, /windowClosed = hasWindow && nowMs >= /);
+  // D15: the kill switch is read on focus and hides the CTA in every mode.
+  assert.match(code, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
+  assert.match(code, /!paymentsEnabled \? undefined/);
+  // D16: every sandbox string is behind the resolved mode; none renders in
+  // stripe mode. The sandbox strings themselves are verbatim.
+  assert.match(code, /SANDBOX — no real money moves\. No real money is charged/);
+  assert.match(code, /'None in sandbox'/);
+  assert.match(code, /Total \(sandbox\)/);
+  assert.match(code, /Finish protecting funds \(sandbox\)/);
+  assert.match(code, /This authorizes the sandbox amount and places it in protected\/held state/);
+  // The stripe copy never says paid, and the sheet's success is never "held".
+  const stripeCopy = [
+    'Your card is charged the all-in total now, through the secure payment sheet.',
+    'The payment was taken, but the app hasn’t seen it',
+    'Nothing is held for this job.',
+  ];
+  for (const sentence of stripeCopy) assert.ok(src.includes(sentence), `missing: ${sentence}`);
+  assert.doesNotMatch(code, /\bpaid\b(?! early)/i);
+});
+
+// ---------------------------------------------------------------------------
 // 7. The kill switch's fallback (D15) — executed
 // ---------------------------------------------------------------------------
 

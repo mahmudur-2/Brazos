@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -13,7 +13,21 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { fetchJobPayment, platformFeeCents, type Payment } from '../lib/payments';
+import {
+  canOfferJobFunding,
+  fetchJobPayment,
+  quoteJobPrice,
+  type JobPriceQuote,
+  type Payment,
+} from '../lib/payments';
+import { presentCheckoutSheet, stripeReady, STRIPE_UNAVAILABLE_MESSAGE } from '../lib/payments/stripe';
+import {
+  CHECKOUT_POLL_INTERVAL_MS,
+  CHECKOUT_POLL_TIMEOUT_MS,
+  classifyCheckoutPoll,
+} from '../lib/payments/stripeRules';
+import { releaseCountdownLabel } from '../lib/jobLifecycle';
+import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { fetchProfileById } from '../lib/profiles';
 import { arrivalWindowLabel, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
@@ -23,18 +37,47 @@ import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from
  * Screen 31 — Protected Checkout, over the payment ADAPTER
  * (lib/adapters/payments.ts), never the RPCs directly.
  *
- * SANDBOX, and it says so on screen — the VerifyPhoneScreen "MOCK MODE"
- * banner precedent (06_DEFERRED_INTEGRATIONS: every dev surface visibly
- * labeled, not just documented). What is NOT fake: the ledger row is real
- * Supabase state, authorize -> held are real audited transitions, and the
- * money vocabulary is §H.3's — authorized means authorized, held means held,
- * and nothing on this screen (or anywhere) can say released or paid.
+ * TWO FUNCTIONAL MODES, ONE SCREEN (R6a).
  *
- * One decision, stated before the tap; both provider calls are idempotent,
- * so a retry after a dropped response continues from wherever the ledger
- * truthfully is instead of double-charging (the DB's partial unique index is
- * the second lock on that door).
+ * SANDBOX says so on screen — the VerifyPhoneScreen "MOCK MODE" banner
+ * precedent (06_DEFERRED_INTEGRATIONS: every dev surface visibly labeled, not
+ * just documented). What is NOT fake: the ledger row is real Supabase state,
+ * authorize -> held are real audited transitions, and the money vocabulary is
+ * §H.3's — authorized means authorized, held means held, and nothing on this
+ * screen (or anywhere) can say released or paid. One decision, stated before
+ * the tap; both provider calls are idempotent, so a retry after a dropped
+ * response continues from wherever the ledger truthfully is instead of
+ * double-charging (the DB's partial unique index is the second lock).
+ *
+ * STRIPE takes the card (D5): create-payment mints the ledger row and the
+ * intent → the payment sheet takes the card → the screen POLLS the row until
+ * it reads held (D7). The row is `unfunded` until the provider's webhook
+ * lands, and a successful sheet is never presented as "held". The price shown
+ * is the ALL-IN total (D13): the row's charge_amount_cents once a row exists,
+ * quote_job_price() before it (D22) — never the bare agreed price as what the
+ * card is charged, and never a fee this client computed (D10).
+ *
+ * Every checkout CTA also answers to the payments kill switch (D15) and, on a
+ * stripe row, to its funding window (D9, D14): a lapsed window is never
+ * extended, so it is never offered a charge.
  */
+
+const stripe = paymentsMode === 'stripe';
+
+/** D7's three terminal branches, plus idle. */
+type CheckoutPhase = 'idle' | 'confirming' | 'gone' | 'timeout';
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** The customer's figures — the same four numbers from either source (D22). */
+type CustomerFigures = {
+  total: number;
+  price: number;
+  fee: number;
+  tax: number;
+  source: 'row' | 'quote';
+};
+
 export function CheckoutScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
@@ -50,22 +93,92 @@ export function CheckoutScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [funding, setFunding] = useState(false);
   const fundingRef = useRef(false);
+  // The pre-row price (D22) — stripe only; sandbox never asks for it.
+  const [quote, setQuote] = useState<JobPriceQuote | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  // The kill switch (D15): read on focus; a failed read falls back to true.
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
+  const [phase, setPhase] = useState<CheckoutPhase>('idle');
+  // One clock reading per load (and one per minute while a funding window is
+  // showing), so the countdown and the D9 gate agree with each other.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const activeRef = useRef(true);
 
   const amountCents = job.final_amount_cents ?? job.budget_cents;
   const isOwner = !!user && user.id === job.client_id;
 
-  const loadPayment = useCallback(async () => {
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+
+  const loadPayment = useCallback(async (): Promise<Payment | null> => {
     setPaymentError(null);
     const { data, error } = await fetchJobPayment(job.id);
-    if (error) setPaymentError(userMessage(error));
-    else setPayment(data);
+    setNowMs(Date.now());
+    if (error) {
+      setPaymentError(userMessage(error));
+      setPaymentLoaded(true);
+      return null;
+    }
+    setPayment(data);
     setPaymentLoaded(true);
+    return data;
   }, [job.id]);
+
+  /**
+   * D22: with no ledger row the all-in total comes from quote_job_price(),
+   * the database's own schedule. A failed quote disables the CTA with the
+   * read's error and a retry — a bare agreed price is never presented as
+   * what the card is charged.
+   */
+  const loadQuote = useCallback(async () => {
+    if (!stripe) return;
+    setQuoteError(null);
+    if (amountCents == null) {
+      setQuote(null);
+      setQuoteError('This job has no agreed amount to charge yet.');
+      return;
+    }
+    setQuoteLoading(true);
+    const { data, error } = await quoteJobPrice(amountCents);
+    setQuoteLoading(false);
+    if (error || !data) {
+      setQuote(null);
+      setQuoteError(userMessage(error, 'The price could not be worked out right now.'));
+      return;
+    }
+    setQuote(data);
+  }, [amountCents]);
 
   useFocusEffect(
     useCallback(() => {
-      void loadPayment();
-    }, [loadPayment])
+      let active = true;
+      (async () => {
+        const row = await loadPayment();
+        if (!active) return;
+        // The row's own figures replace the quote the moment a row exists.
+        if (stripe && (!row || row.charge_amount_cents == null)) await loadQuote();
+      })();
+      return () => {
+        active = false;
+      };
+    }, [loadPayment, loadQuote])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      fetchRemoteConfig().then((config) => {
+        if (active) setPaymentsEnabled(config.paymentsEnabled);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
   );
 
   useFocusEffect(
@@ -81,6 +194,21 @@ export function CheckoutScreen() {
     }, [job.assigned_worker_id])
   );
 
+  // D14: an unfunded stripe row's funding window, as a deadline in epoch ms.
+  const fundingDueMs =
+    payment?.status === 'unfunded' && payment.funding_due_at
+      ? Date.parse(payment.funding_due_at)
+      : null;
+  const hasWindow = fundingDueMs != null && Number.isFinite(fundingDueMs);
+  const windowOpen = hasWindow && nowMs < (fundingDueMs as number);
+  const windowClosed = hasWindow && nowMs >= (fundingDueMs as number);
+
+  useEffect(() => {
+    if (!windowOpen) return;
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, [windowOpen]);
+
   const state: ScreenState = missing
     ? {
         kind: 'empty',
@@ -89,43 +217,80 @@ export function CheckoutScreen() {
         actionLabel: 'Back',
         onAction: goBackOrHome,
       }
-    : paymentsMode !== 'sandbox'
+    : paymentsMode === 'disabled'
       ? {
           kind: 'permissionDenied',
           title: 'Payments are off in this build',
           body: 'No payment mode is switched on, so nothing can be authorized or held. Your accepted offer is unaffected.',
         }
-      : !isOwner
+      : stripe && !stripeReady()
         ? {
+            // D4: a binary predating the native module, or a build without
+            // the publishable key — the one honest sentence, never a spinner.
             kind: 'permissionDenied',
-            title: 'Only the job’s owner can check out',
-            body: 'The person who posted this job funds its protected payment.',
+            title: 'Card payments need an update',
+            body: `${STRIPE_UNAVAILABLE_MESSAGE} Your accepted offer is unaffected.`,
           }
-        : job.status !== 'assigned' && job.status !== 'in_progress' && job.status !== 'completed'
+        : !isOwner
           ? {
-              kind: 'empty',
-              title: 'Nothing to check out yet',
-              body: 'Accept an offer first — checkout protects the payment for an accepted offer.',
-              actionLabel: 'Back to the job',
-              onAction: goBackOrHome,
+              kind: 'permissionDenied',
+              title: 'Only the job’s owner can check out',
+              body: 'The person who posted this job funds its protected payment.',
             }
-          : !paymentLoaded
-            ? { kind: 'loading', variant: 'spinner' }
-            : paymentError
-              ? {
-                  kind: 'error',
-                  message: paymentError,
-                  onRetry: () => void loadPayment(),
-                }
-              : { kind: 'ready' };
+          : job.status !== 'assigned' && job.status !== 'in_progress' && job.status !== 'completed'
+            ? {
+                kind: 'empty',
+                title: 'Nothing to check out yet',
+                body: 'Accept an offer first — checkout protects the payment for an accepted offer.',
+                actionLabel: 'Back to the job',
+                onAction: goBackOrHome,
+              }
+            : !paymentLoaded
+              ? { kind: 'loading', variant: 'spinner' }
+              : paymentError
+                ? {
+                    kind: 'error',
+                    message: paymentError,
+                    onRetry: () => void loadPayment(),
+                  }
+                : phase === 'confirming'
+                  ? // D7: a spinner and the words in the header, and NO
+                    // control that could imply the charge was undone.
+                    { kind: 'loading', variant: 'spinner' }
+                  : { kind: 'ready' };
 
   const held = payment?.status === 'held';
   const authorizedOnly = payment?.status === 'authorized';
+  // D9 / D14: THE one derivation of whether checkout may be offered on this
+  // row — an unfunded row inside its window is, a lapsed one never is.
+  const canFund = canOfferJobFunding({ viewerId: user?.id, job, payment, nowMs });
+
+  // D13 / D22: the customer's all-in figures — the row's once a row exists,
+  // the quote before it. Sandbox keeps its own rows below, untouched.
+  const figures: CustomerFigures | null = !stripe
+    ? null
+    : payment && payment.charge_amount_cents != null
+      ? {
+          total: payment.charge_amount_cents,
+          price: payment.amount_cents,
+          fee: payment.customer_fee_cents ?? 0,
+          tax: payment.tax_cents ?? 0,
+          source: 'row',
+        }
+      : quote
+        ? {
+            total: quote.total_cents,
+            price: quote.job_price_cents,
+            fee: quote.customer_fee_cents,
+            tax: quote.tax_cents,
+            source: 'quote',
+          }
+        : null;
 
   /**
-   * The one funding action. Runs whichever half is still missing — both
-   * calls are idempotent, so a retry after a half-completed attempt picks up
-   * from the ledger's real state.
+   * The one sandbox funding action. Runs whichever half is still missing —
+   * both calls are idempotent, so a retry after a half-completed attempt
+   * picks up from the ledger's real state.
    */
   async function fundProtection() {
     if (fundingRef.current) return;
@@ -161,11 +326,133 @@ export function CheckoutScreen() {
     }
   }
 
+  /**
+   * D7: poll fetchJobPayment every 2 seconds for up to 30 seconds after a
+   * successful sheet. "Seen" starts true — create-payment returned the row's
+   * id — so a row that reads null now IS the failed/voided signal.
+   */
+  async function confirmPayment() {
+    setPhase('confirming');
+    const startedAt = Date.now();
+    let seen = true;
+    while (activeRef.current && Date.now() - startedAt < CHECKOUT_POLL_TIMEOUT_MS) {
+      const { data, error } = await fetchJobPayment(job.id);
+      if (!activeRef.current) return;
+      if (!error) {
+        const outcome = classifyCheckoutPoll({ status: data?.status ?? null, seen });
+        if (data) {
+          seen = true;
+          setPayment(data);
+        }
+        if (outcome === 'held') {
+          setPhase('idle');
+          navigation.replace('JobConfirmed', { job });
+          return;
+        }
+        if (outcome === 'gone') {
+          setPayment(null);
+          setPhase('gone');
+          void loadQuote();
+          return;
+        }
+      }
+      await sleep(CHECKOUT_POLL_INTERVAL_MS);
+    }
+    if (activeRef.current) setPhase('timeout');
+  }
+
+  /** The stripe funding action (D5): create-payment → sheet → poll. */
+  async function fundByCard() {
+    if (fundingRef.current) return;
+    fundingRef.current = true;
+    setFunding(true);
+    setConfirmVisible(false);
+    try {
+      const session = await paymentProvider.beginJobCheckout(job.id);
+      if (session.error || !session.data) {
+        await alertAsync(
+          'Could not start the payment',
+          `${userMessage(session.error, 'Check your connection and try again.')}\n\nYour accepted offer is unchanged — nothing was charged.`
+        );
+        await loadPayment();
+        return;
+      }
+      const sheet = await presentCheckoutSheet(session.data);
+      if (sheet.outcome === 'dismissed') {
+        // D5: not an error and no poll. The row create-payment minted stays
+        // unfunded; the CTA returns with its funding window (D14).
+        await loadPayment();
+        return;
+      }
+      if (sheet.outcome === 'failed') {
+        await alertAsync(
+          'The card was not charged',
+          `${userMessage(sheet.error, 'The card could not be charged.')}\n\nYour accepted offer is unchanged — you can try again.`
+        );
+        await loadPayment();
+        return;
+      }
+      await confirmPayment();
+    } finally {
+      fundingRef.current = false;
+      setFunding(false);
+      setConfirmVisible(false);
+    }
+  }
+
+  /**
+   * The manual re-read D7's third branch and D14's closed window offer —
+   * one read, never a second payment.
+   */
+  async function recheck() {
+    const row = await loadPayment();
+    if (row?.status === 'held') {
+      setPhase('idle');
+      navigation.replace('JobConfirmed', { job });
+      return;
+    }
+    if (phase === 'timeout' && row == null) setPhase('gone');
+    if (stripe && (!row || row.charge_amount_cents == null)) await loadQuote();
+  }
+
+  const stripeCtaTitle = figures
+    ? `Protect ${formatBudget(figures.total)} by card`
+    : quoteLoading
+      ? 'Working out the price…'
+      : 'Protect payment by card';
+
+  const actionBar = held ? (
+    <Button
+      title="Continue — job confirmed"
+      onPress={() => navigation.replace('JobConfirmed', { job })}
+    />
+  ) : !paymentsEnabled ? undefined : !stripe ? (
+    <Button
+      title={
+        authorizedOnly
+          ? 'Finish protecting funds (sandbox)'
+          : `Authorize & protect ${formatBudget(amountCents)} (sandbox)`
+      }
+      onPress={() => setConfirmVisible(true)}
+      loading={funding}
+      disabled={funding || state.kind !== 'ready'}
+    />
+  ) : phase === 'timeout' || windowClosed ? (
+    <Button title="Check again" onPress={() => void recheck()} disabled={funding} />
+  ) : canFund ? (
+    <Button
+      title={stripeCtaTitle}
+      onPress={() => setConfirmVisible(true)}
+      loading={funding}
+      disabled={funding || !figures || state.kind !== 'ready'}
+    />
+  ) : undefined;
+
   return (
     <>
       <DetailScreen
         title="Protected checkout"
-        subtitle={job.title}
+        subtitle={phase === 'confirming' ? 'Confirming your payment…' : job.title}
         onBack={goBackOrHome}
         state={state}
         sections={[
@@ -193,6 +480,67 @@ export function CheckoutScreen() {
                 },
               ]
             : []),
+          ...(!paymentsEnabled
+            ? [
+                {
+                  content: (
+                    <View style={styles.paymentState}>
+                      <Text style={styles.explainText}>
+                        Payments are paused right now. Your accepted offer is
+                        unchanged — check back shortly to protect the payment.
+                      </Text>
+                    </View>
+                  ),
+                },
+              ]
+            : []),
+          ...(phase === 'gone'
+            ? [
+                {
+                  title: 'The payment did not go through',
+                  content: (
+                    <View style={styles.paymentState}>
+                      <Text style={styles.explainText}>
+                        Nothing is held for this job. Your accepted offer is
+                        unchanged — you can check out again below.
+                      </Text>
+                    </View>
+                  ),
+                },
+              ]
+            : []),
+          ...(phase === 'timeout'
+            ? [
+                {
+                  title: 'Still confirming',
+                  content: (
+                    <View style={styles.paymentState}>
+                      <Text style={styles.explainText}>
+                        The payment was taken, but the app hasn’t seen it
+                        confirm yet. Check back shortly — once it confirms, the
+                        funds show as held here and on the job.
+                      </Text>
+                    </View>
+                  ),
+                },
+              ]
+            : []),
+          ...(stripe && windowClosed && phase === 'idle'
+            ? [
+                {
+                  title: 'Funding window closed',
+                  content: (
+                    <View style={styles.paymentState}>
+                      <Text style={styles.explainText}>
+                        The window to protect this payment closed before a card
+                        was charged. A fresh checkout will be available shortly
+                        — tap Check again below.
+                      </Text>
+                    </View>
+                  ),
+                },
+              ]
+            : []),
           {
             title: 'What you’re protecting',
             content: (
@@ -204,8 +552,10 @@ export function CheckoutScreen() {
                   </Text>
                 </View>
                 <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Agreed amount</Text>
-                  <Text style={styles.summaryValue}>{formatBudget(amountCents)}</Text>
+                  <Text style={styles.summaryLabel}>{stripe ? 'Agreed price' : 'Agreed amount'}</Text>
+                  <Text style={styles.summaryValue}>
+                    {formatBudget(stripe && figures ? figures.price : amountCents)}
+                  </Text>
                 </View>
                 {arrivalWindowLabel(job) ? (
                   <View style={styles.summaryRow}>
@@ -213,20 +563,59 @@ export function CheckoutScreen() {
                     <Text style={styles.summaryValue}>{arrivalWindowLabel(job)}</Text>
                   </View>
                 ) : null}
-                <View style={styles.summaryRow}>
-                  <Text style={styles.summaryLabel}>Platform fee</Text>
-                  {/* Derived, not asserted: the same constant the worker's
-                      payout figure on Job details reads. */}
-                  <Text style={styles.summaryValue}>
-                    {platformFeeCents(amountCents ?? 0) > 0
-                      ? formatBudget(platformFeeCents(amountCents ?? 0))
-                      : 'None in sandbox'}
-                  </Text>
-                </View>
-                <View style={[styles.summaryRow, styles.totalRow]}>
-                  <Text style={styles.totalLabel}>Total (sandbox)</Text>
-                  <Text style={styles.totalValue}>{formatBudget(amountCents)}</Text>
-                </View>
+                {stripe ? (
+                  <>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Protection fee</Text>
+                      <Text style={styles.summaryValue}>
+                        {figures ? formatBudget(figures.fee) : quoteLoading ? '…' : '—'}
+                      </Text>
+                    </View>
+                    {figures && figures.tax > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Tax</Text>
+                        <Text style={styles.summaryValue}>{formatBudget(figures.tax)}</Text>
+                      </View>
+                    ) : null}
+                    <View style={[styles.summaryRow, styles.totalRow]}>
+                      <Text style={styles.totalLabel}>Total charged to your card</Text>
+                      <Text style={styles.totalValue}>
+                        {figures ? formatBudget(figures.total) : quoteLoading ? '…' : '—'}
+                      </Text>
+                    </View>
+                    {windowOpen ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Funding window</Text>
+                        <Text style={styles.summaryValue}>
+                          closes in {releaseCountdownLabel(fundingDueMs as number, nowMs)}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {quoteError && !figures ? (
+                      <>
+                        <Text style={styles.explainText}>{quoteError}</Text>
+                        <Button title="Retry" onPress={() => void loadQuote()} loading={quoteLoading} />
+                      </>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Platform fee</Text>
+                      {/* Read off the ledger row, never computed here (D10):
+                          sandbox rows are written with a zero fee. */}
+                      <Text style={styles.summaryValue}>
+                        {payment && payment.platform_fee_cents > 0
+                          ? formatBudget(payment.platform_fee_cents)
+                          : 'None in sandbox'}
+                      </Text>
+                    </View>
+                    <View style={[styles.summaryRow, styles.totalRow]}>
+                      <Text style={styles.totalLabel}>Total (sandbox)</Text>
+                      <Text style={styles.totalValue}>{formatBudget(amountCents)}</Text>
+                    </View>
+                  </>
+                )}
               </View>
             ),
           },
@@ -234,11 +623,19 @@ export function CheckoutScreen() {
             title: 'How protection works',
             content: (
               <View style={styles.explainer}>
-                <ExplainRow
-                  icon="card-outline"
-                  strong="Authorize"
-                  text="confirms the amount against your sandbox payment method. Nothing is charged."
-                />
+                {stripe ? (
+                  <ExplainRow
+                    icon="card-outline"
+                    strong="Pay by card"
+                    text="charges the all-in total shown above through the secure payment sheet. Nothing is charged until you confirm in the sheet."
+                  />
+                ) : (
+                  <ExplainRow
+                    icon="card-outline"
+                    strong="Authorize"
+                    text="confirms the amount against your sandbox payment method. Nothing is charged."
+                  />
+                )}
                 <ExplainRow
                   icon="lock-closed-outline"
                   strong="Hold in protection"
@@ -267,35 +664,25 @@ export function CheckoutScreen() {
               ]
             : []),
         ]}
-        actionBar={
-          held ? (
-            <Button
-              title="Continue — job confirmed"
-              onPress={() => navigation.replace('JobConfirmed', { job })}
-            />
-          ) : (
-            <Button
-              title={
-                authorizedOnly
-                  ? 'Finish protecting funds (sandbox)'
-                  : `Authorize & protect ${formatBudget(amountCents)} (sandbox)`
-              }
-              onPress={() => setConfirmVisible(true)}
-              loading={funding}
-              disabled={funding || state.kind !== 'ready'}
-            />
-          )
-        }
+        actionBar={actionBar}
       />
 
       <ConfirmDialog
         visible={confirmVisible}
-        title={`Protect ${formatBudget(amountCents)} for this job?`}
-        message="This authorizes the sandbox amount and places it in protected/held state. No real money is being charged — this is sandbox. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done."
-        confirmText="Authorize & protect"
+        title={
+          stripe
+            ? `Charge ${formatBudget(figures?.total ?? null)} to your card?`
+            : `Protect ${formatBudget(amountCents)} for this job?`
+        }
+        message={
+          stripe
+            ? 'Your card is charged the all-in total now, through the secure payment sheet. Once the payment confirms, the funds are held in protection until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
+            : 'This authorizes the sandbox amount and places it in protected/held state. No real money is being charged — this is sandbox. Funds stay held until you approve the finished work — releasing them is a separate, deliberate step after the job is done.'
+        }
+        confirmText={stripe ? 'Pay & protect' : 'Authorize & protect'}
         cancelText="Not now"
         loading={funding}
-        onConfirm={fundProtection}
+        onConfirm={stripe ? fundByCard : fundProtection}
         onCancel={() => setConfirmVisible(false)}
       />
     </>
