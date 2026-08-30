@@ -655,8 +655,12 @@ export function dollarsToCents(input: string): number | null {
 export function formatBudget(cents: number | null): string {
   if (cents == null) return 'No budget set';
   const dollars = cents / 100;
+  // Tier A (C1): a whole-dollar amount keeps its bare form ("$125", "$1,000");
+  // anything with cents renders exactly two decimals ("$107.50", never
+  // "$107.5") — money reads the way the card statement prints it.
+  const minimumFractionDigits = cents % 100 === 0 ? 0 : 2;
   return `$${dollars.toLocaleString('en-US', {
-    minimumFractionDigits: 0,
+    minimumFractionDigits,
     maximumFractionDigits: 2,
   })}`;
 }
