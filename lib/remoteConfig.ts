@@ -18,12 +18,13 @@ import { supabase } from './supabase';
  * the user has done anything worth losing. There is no throw path in this
  * module and there must never be one.
  *
- * NOTHING CONSUMES IT YET, AND FALLBACK IS THE ONLY PATH THAT EXECUTES TODAY.
- * `app_config` does not exist in any schema in supabase/ — a later run creates
- * it — so today every call takes the catch and returns FALLBACK. That is the
- * intended interim state, not a bug: the module exists so the surfaces that
- * will read it can be written against a stable shape, and so the table can
- * land without a client change. It is deliberately wired into no screen.
+ * THE FIRST CONSUMER IS THE PAYMENTS KILL SWITCH (R6a, D15). `paymentsEnabled`
+ * is seeded in `app_config` and read on focus by every screen that offers a
+ * checkout, tip or release CTA; when it is false those CTAs are hidden in every
+ * payments mode. The database refuses regardless — this is the second lock,
+ * never the only one — which is why a FAILED read falls back to true rather
+ * than locking a paying customer out. The other three values are still
+ * consumed by nothing.
  *
  * THE EXPECTED TABLE SHAPE is one row per setting — `key` text primary key,
  * `value` jsonb — read with an anonymous-safe SELECT policy, because this is
@@ -54,6 +55,13 @@ export type RemoteConfig = {
    * in the schema, where it can be reasoned about.
    */
   postingEnabled: boolean;
+  /**
+   * The payments kill switch (R6a, D15). False hides every checkout, tip and
+   * release CTA in every mode; the database's own switch refuses the RPCs
+   * regardless. Fallback true: an unreadable config must never lock a paying
+   * customer out.
+   */
+  paymentsEnabled: boolean;
 };
 
 /**
@@ -66,6 +74,7 @@ export const FALLBACK: RemoteConfig = {
   maintenanceMessage: '',
   minimumSupportedVersion: '0.0.0',
   postingEnabled: true,
+  paymentsEnabled: true,
 };
 
 /** Narrowing helpers — a value of the wrong type is ignored, never coerced. */
@@ -95,6 +104,7 @@ function merge(rows: ConfigRow[]): RemoteConfig {
       FALLBACK.minimumSupportedVersion
     ),
     postingEnabled: asBoolean(byKey.get('postingEnabled'), FALLBACK.postingEnabled),
+    paymentsEnabled: asBoolean(byKey.get('paymentsEnabled'), FALLBACK.paymentsEnabled),
   };
 }
 
@@ -107,8 +117,8 @@ export async function fetchRemoteConfig(): Promise<RemoteConfig> {
   try {
     const { data, error } = await supabase.from('app_config').select('key, value');
     if (error || !Array.isArray(data)) {
-      // Expected today: the table does not exist yet. Logged at debug volume
-      // rather than as an error, so it does not read as a fault in the app.
+      // Logged at debug volume rather than as an error, so an absent table or
+      // policy does not read as a fault in the app.
       console.log('[remoteConfig] using fallback:', error?.message ?? 'no rows returned');
       return FALLBACK;
     }

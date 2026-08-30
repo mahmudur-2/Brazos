@@ -7,7 +7,7 @@ import {
   fetchSettledOffersByWorker,
   type PendingOffer,
 } from '../lib/offers';
-import { fetchJobPaymentStatusesByJobIds, type Payment } from '../lib/payments';
+import { fetchJobPaymentStatusesByJobIds, type PaymentStatusSummary } from '../lib/payments';
 import { fetchProfilesByIds } from '../lib/profiles';
 import { fetchMyReviewedJobIds } from '../lib/reviews';
 import { useAuth } from './useAuth';
@@ -29,7 +29,9 @@ export function useMyJobsHub() {
   const [working, setWorking] = useState<Job[]>([]);
   const [pendingBids, setPendingBids] = useState<PendingOffer[]>([]);
   const [settledBids, setSettledBids] = useState<PendingOffer[]>([]);
-  const [payments, setPayments] = useState<Record<string, Pick<Payment, 'status'>>>({});
+  // Status plus release_requested_at and provider (R6a, D23): the derivation
+  // needs all three to bucket an approved stripe job as closed.
+  const [payments, setPayments] = useState<Record<string, PaymentStatusSummary>>({});
   const [openDisputeJobIds, setOpenDisputeJobIds] = useState<Set<string>>(new Set());
   const [reviewedJobIds, setReviewedJobIds] = useState<Set<string>>(new Set());
   const [names, setNames] = useState<Record<string, string | null>>({});

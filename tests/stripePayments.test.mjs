@@ -325,10 +325,64 @@ test('[static] lib/payments/stripe.ts is the only app-source file that names the
   assert.match(boundary, /can’t take card payments yet\. Update the app/);
 });
 
-test('[static] the pure rules module carries no runtime import, and the boundary imports it', () => {
+test('[static] the pure rules modules carry no runtime import, and the boundary imports its rules', () => {
   const pure = stripComments(read('lib/payments/stripeRules.ts'));
   assert.doesNotMatch(pure, /^\s*import\s/m, 'lib/payments/stripeRules.ts must have no imports at all');
   assert.doesNotMatch(pure, /require\(/);
   const boundary = stripComments(read(BOUNDARY));
   assert.match(boundary, /from '\.\/stripeRules'/);
+  // lib/paymentRules.ts (D24): type-only imports are erased; a value import
+  // would drag the supabase client in and make the node suite scan instead
+  // of execute.
+  const paymentRules = stripComments(read('lib/paymentRules.ts'));
+  assert.doesNotMatch(paymentRules, /^\s*import\s+(?!type\b)/m, 'lib/paymentRules.ts may import types only');
+  assert.doesNotMatch(paymentRules, /require\(/);
+  // And lib/payments.ts re-exports the four names, so no importer moved.
+  const payments = stripComments(read('lib/payments.ts'));
+  assert.match(
+    payments,
+    /export \{\s*canOfferJobFunding,\s*isHeld,\s*isReleased,\s*isReleaseRequested,?\s*\} from '\.\/paymentRules';/
+  );
+});
+
+// ---------------------------------------------------------------------------
+// 7. The kill switch's fallback (D15) — executed
+// ---------------------------------------------------------------------------
+
+test('D15 · paymentsEnabled falls back to true, and a failed config read never locks a customer out', async () => {
+  // lib/remoteConfig.ts imports the supabase client, so it is executed the
+  // way tests/fundingPath.test.mjs used to execute lib/payments.ts: types
+  // stripped, the one value import stubbed to null. The stub THROWS inside
+  // fetchRemoteConfig's try, which is exactly the failed-read path.
+  const { stripTypeScriptTypes } = await import('node:module');
+  const js = stripTypeScriptTypes(read('lib/remoteConfig.ts'), { mode: 'strip' });
+  const stubbed = js.replace(/import \{ supabase \} from '\.\/supabase';/, 'const supabase = null;');
+  assert.notEqual(stubbed, js, 'the supabase import must be found and stubbed');
+  const url = 'data:text/javascript;charset=utf-8;base64,' + Buffer.from(stubbed, 'utf8').toString('base64');
+  const config = await import(url);
+
+  assert.equal(config.FALLBACK.paymentsEnabled, true, 'the permissive fallback: never lock a paying customer out');
+  assert.deepEqual(Object.keys(config.FALLBACK).sort(), [
+    'maintenanceMessage',
+    'maintenanceMode',
+    'minimumSupportedVersion',
+    'paymentsEnabled',
+    'postingEnabled',
+  ]);
+
+  const log = console.log;
+  console.log = () => {};
+  try {
+    const result = await config.fetchRemoteConfig();
+    assert.deepEqual(result, config.FALLBACK, 'a failed read resolves to FALLBACK, never rejects');
+    assert.equal(result.paymentsEnabled, true);
+  } finally {
+    console.log = log;
+  }
+
+  // The merge honours a seeded false and ignores a wrongly-typed value — as
+  // source, since merge() is not exported.
+  const source = stripComments(read('lib/remoteConfig.ts'));
+  assert.match(source, /paymentsEnabled: asBoolean\(byKey\.get\('paymentsEnabled'\), FALLBACK\.paymentsEnabled\)/);
+  assert.match(source, /paymentsEnabled: boolean;/);
 });

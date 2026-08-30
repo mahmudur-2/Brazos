@@ -37,6 +37,15 @@ export type JobLifecycleState =
   | 'cancelled'
   | 'unknown';
 
+/**
+ * What the derivation needs of the payment row: the status, plus (R6a, D23)
+ * whether release was requested and which provider wrote the row. Both are
+ * optional so a status-only caller still compiles; a full Payment satisfies
+ * it.
+ */
+export type LifecyclePayment = Pick<Payment, 'status'> &
+  Partial<Pick<Payment, 'release_requested_at' | 'provider'>>;
+
 export type JobLifecycleInput = {
   job: {
     status: string;
@@ -46,7 +55,7 @@ export type JobLifecycleInput = {
     completed_at?: string | null;
   };
   /** The job's active job_payment row, or null when checkout never ran. */
-  payment: Pick<Payment, 'status'> | null;
+  payment: LifecyclePayment | null;
   /**
    * true = an open report exists, false = the read said there is none.
    * 'unknown' = the dispute read FAILED — which is a different fact from
@@ -100,15 +109,26 @@ export function deriveJobLifecycle(
     case 'completed': {
       if (payment?.status === 'held') {
         if (hasOpenDispute) return 'disputed';
+        // D23 (R6a): a stripe row the customer approved — or the 72h cron
+        // requested — keeps status held until the provider's transfer lands,
+        // with release_requested_at set. The decision is made: the job is
+        // completed (the hub buckets it as closed), and the money copy says
+        // approved / on its way, never released (isReleased stays false).
+        if (payment.release_requested_at) return 'completed';
         // phase51's release is checked ON READ (there is no cron): a held
-        // payment past its 72h deadline releases the moment
+        // SANDBOX payment past its 72h deadline releases the moment
         // job_payment_state() next looks at it. Rendering it as completed
         // here is the same on-read honesty as effectiveOfferStatus() —
         // showing the truth early, never inventing state. The dispute branch
         // above mirrors the server, which refuses to auto-release while an
-        // open report exists.
-        const deadline = releaseDeadlineMs(job);
-        if (deadline !== null && nowMs >= deadline) return 'completed';
+        // open report exists. The mirror is SANDBOX-ONLY: a stripe row past
+        // 72h without a request is still awaiting approval until the gated
+        // cron requests it, and a row whose provider is unknown is never
+        // advanced early.
+        if (payment.provider === 'sandbox') {
+          const deadline = releaseDeadlineMs(job);
+          if (deadline !== null && nowMs >= deadline) return 'completed';
+        }
         return 'awaiting_approval';
       }
       // Released / paid out — or a legacy job with no payment row at all.

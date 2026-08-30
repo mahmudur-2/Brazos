@@ -11,7 +11,18 @@ import { supabase } from './supabase';
  * from screens, and land in SECURITY DEFINER RPCs — payments carries SELECT
  * for its two parties and nothing else (phase50). Reads here are plain RLS
  * table reads: payer or payee, enforced by the database.
+ *
+ * The pure predicates (isHeld, isReleased, isReleaseRequested,
+ * canOfferJobFunding) live in lib/paymentRules.ts (R6a, D24) so the node
+ * suite executes them; they are re-exported here so no importer changed.
  */
+
+export {
+  canOfferJobFunding,
+  isHeld,
+  isReleased,
+  isReleaseRequested,
+} from './paymentRules';
 
 /**
  * Mirrors the Postgres payment_status enum as Phase 5 writes it — §H.3's
@@ -45,10 +56,14 @@ export type Payment = {
   payer_id: string;
   payee_id: string;
   kind: PaymentKind;
+  /** The agreed price — what the worker's payout is computed from. */
   amount_cents: number;
-  /** Always PLATFORM_FEE_RATE of amount_cents, i.e. 0 — see that constant. */
+  /** What the platform keeps from amount_cents. Sandbox rows write 0; a
+   *  stripe row carries the ledger's own figure. The worker's take is
+   *  amount_cents - platform_fee_cents, read off the row, never computed
+   *  from a client rate (D10). */
   platform_fee_cents: number;
-  /** 'sandbox' is the only value the database accepts (phase50 CHECK). */
+  /** 'sandbox' (phase50) or 'stripe' (R4's foundation). */
   provider: string;
   provider_ref: string | null;
   status: PaymentStatus;
@@ -65,6 +80,25 @@ export type Payment = {
   paid_out_at: string | null;
   created_at: string;
   updated_at: string;
+  // --- R6a (D12): the stripe ledger's figures. Every one optional/nullable so
+  // a sandbox row that never carried them still parses. ---
+  /** The customer's ALL-IN total — agreed price + protection fee + tax. The
+   *  headline everywhere the customer is shown what they pay (D13). */
+  charge_amount_cents?: number | null;
+  /** The customer's protection fee, part of charge_amount_cents. */
+  customer_fee_cents?: number | null;
+  /** Tax on the charge; shown only when non-zero. */
+  tax_cents?: number | null;
+  /** An unfunded stripe row's funding window; a lapsed one is never extended
+   *  (D9, D14). */
+  funding_due_at?: string | null;
+  /** D23: set by release_job_payment / auto_release_due_payments on a stripe
+   *  row while its status stays held — approved, payout pending. */
+  release_requested_at?: string | null;
+  /** What release requested be transferred to the worker. */
+  transfer_cents?: number | null;
+  refund_cents?: number | null;
+  refund_reason?: string | null;
 };
 
 /**
@@ -105,62 +139,56 @@ export function workerPayoutCents(amountCents: number): number {
 }
 
 const PAYMENT_COLUMNS =
-  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at';
-
-/** True once funds are protected. §H.3: "held" is the ONLY state the app may
- *  describe as protected. Since phase51, approval (or the 72h clock) can move
- *  a held payment to released — see isReleased. */
-export function isHeld(payment: Pick<Payment, 'status'>): boolean {
-  return payment.status === 'held';
-}
-
-/** True once funds have left protection toward the worker — released or
- *  already paid out. The ONLY states the app may describe as released. */
-export function isReleased(payment: Pick<Payment, 'status'>): boolean {
-  return payment.status === 'released' || payment.status === 'paid_out';
-}
+  'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, charge_amount_cents, customer_fee_cents, tax_cents, funding_due_at, release_requested_at, transfer_cents, refund_cents, refund_reason';
 
 /**
- * Whether the funding CTA (Checkout) may be offered for this job — THE one
- * derivation for every surface that can show it (AUD-P1-02; the lifecycle
- * derivation drifted into a duplicate once already, so this predicate exists
- * exactly once). It mirrors the server contract of
- * sandbox_authorize_job_payment (phase58): the job's owner, an accepted
- * assignment, status assigned/in_progress/completed — the worker starting or
- * even finishing must never destroy the customer's path to fund.
- *
- * The payment side is a strict WHITELIST: offer only on
- *   - no active row (checkout never ran; failed/voided rows read as null), or
- *   - an 'authorized' row (checkout stopped before the hold).
- * held, released, paid_out, refunded, partially_refunded, the legacy
- * 'pending', and anything unrecognized mean money already moved — or a state
- * this client cannot positively classify — and the answer is NO for all of
- * them: a wrongly-shown checkout here is a double-charge surface. An open
- * dispute also suppresses the offer; it exists to freeze money movement.
+ * quote_job_price(p_amount_cents)'s row — the ONLY price arithmetic in the
+ * marketplace (D-4). Read before a ledger row exists (D11, D22); once a row
+ * exists its own charge_amount_cents / customer_fee_cents / tax_cents replace
+ * the quote.
  */
-export function canOfferJobFunding({
-  viewerId,
-  job,
-  payment,
-  hasOpenDispute = false,
-}: {
-  viewerId: string | null | undefined;
-  job: { client_id: string; status: string; assigned_worker_id: string | null };
-  payment: Pick<Payment, 'status'> | null;
-  hasOpenDispute?: boolean;
-}): boolean {
-  if (!viewerId || viewerId !== job.client_id) return false;
-  if (!job.assigned_worker_id) return false;
-  if (
-    job.status !== 'assigned' &&
-    job.status !== 'in_progress' &&
-    job.status !== 'completed'
-  ) {
-    return false;
+export type JobPriceQuote = {
+  job_price_cents: number;
+  customer_fee_cents: number;
+  tax_cents: number;
+  total_cents: number;
+  worker_fee_cents: number;
+  worker_receives_cents: number;
+};
+
+const QUOTE_FIELDS: (keyof JobPriceQuote)[] = [
+  'job_price_cents',
+  'customer_fee_cents',
+  'tax_cents',
+  'total_cents',
+  'worker_fee_cents',
+  'worker_receives_cents',
+];
+
+const QUOTE_INCOMPLETE = 'The price could not be worked out right now. Try again.';
+
+/**
+ * The all-in price for an agreed amount, from the database's own schedule.
+ * authenticated may execute it; the second parameter defaults server-side.
+ * The result is validated field by field — a missing figure is an error,
+ * never a number this client makes up.
+ */
+export async function quoteJobPrice(
+  amountCents: number
+): Promise<{ data: JobPriceQuote | null; error: { message: string } | null }> {
+  const { data, error } = await supabase.rpc('quote_job_price', { p_amount_cents: amountCents });
+  if (error) return { data: null, error: { message: error.message } };
+  const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null | undefined;
+  if (!row || typeof row !== 'object') return { data: null, error: { message: QUOTE_INCOMPLETE } };
+  const quote: Partial<JobPriceQuote> = {};
+  for (const field of QUOTE_FIELDS) {
+    const value = row[field];
+    if (typeof value !== 'number' || !Number.isFinite(value)) {
+      return { data: null, error: { message: QUOTE_INCOMPLETE } };
+    }
+    quote[field] = value;
   }
-  if (hasOpenDispute) return false;
-  if (payment == null) return true;
-  return payment.status === 'authorized';
+  return { data: quote as JobPriceQuote, error: null };
 }
 
 /**
@@ -200,6 +228,13 @@ export async function fetchJobPaymentState(jobId: string) {
 }
 
 /**
+ * What the hub's bucketing needs of each job's active payment: the status,
+ * plus (D23) whether release was requested and which provider wrote the row,
+ * so an approved stripe job buckets as closed rather than review.
+ */
+export type PaymentStatusSummary = Pick<Payment, 'status' | 'release_requested_at' | 'provider'>;
+
+/**
  * The active job_payment STATUS for each of a list of jobs, in one query —
  * the My Jobs hub's bucketing read (Review means completed + held). Same
  * filters as fetchJobPayment; RLS scopes rows to payer/payee, and every job
@@ -208,23 +243,34 @@ export async function fetchJobPaymentState(jobId: string) {
  * This is a plain table read: it does NOT run phase51's on-read release
  * clock (that is job_payment_state(), one job per call — N round trips for a
  * list). deriveJobLifecycle() mirrors the elapsed-clock case client-side
- * instead, so a held row past its deadline still buckets as closed.
+ * instead — for sandbox rows only — so a held sandbox row past its deadline
+ * still buckets as closed; a stripe row buckets as closed once
+ * release_requested_at is set (D23).
  */
 export async function fetchJobPaymentStatusesByJobIds(jobIds: string[]) {
   if (jobIds.length === 0) {
-    return { data: {} as Record<string, Pick<Payment, 'status'>>, error: null };
+    return { data: {} as Record<string, PaymentStatusSummary>, error: null };
   }
 
   const { data, error } = await supabase
     .from('payments')
-    .select('job_id, status')
+    .select('job_id, status, release_requested_at, provider')
     .in('job_id', jobIds)
     .eq('kind', 'job_payment')
     .not('status', 'in', '(failed,voided)');
 
-  const byJob: Record<string, Pick<Payment, 'status'>> = {};
-  for (const row of (data ?? []) as { job_id: string; status: PaymentStatus }[]) {
-    byJob[row.job_id] = { status: row.status };
+  const byJob: Record<string, PaymentStatusSummary> = {};
+  for (const row of (data ?? []) as {
+    job_id: string;
+    status: PaymentStatus;
+    release_requested_at: string | null;
+    provider: string;
+  }[]) {
+    byJob[row.job_id] = {
+      status: row.status,
+      release_requested_at: row.release_requested_at ?? null,
+      provider: row.provider,
+    };
   }
   return { data: byJob, error };
 }

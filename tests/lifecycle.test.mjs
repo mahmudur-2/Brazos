@@ -99,9 +99,10 @@ test('the 72h clock is mirrored on read: an elapsed hold reads as completed', ()
     deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline - HOUR),
     'awaiting_approval'
   );
-  // Past the window: the hold has effectively released.
+  // Past the window: the hold has effectively released. (R6a, D23: the mirror
+  // is sandbox-only, so the row says which provider wrote it.)
   assert.equal(
-    deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline + HOUR),
+    deriveJobLifecycle({ job: done, payment: { status: 'held', provider: 'sandbox' } }, deadline + HOUR),
     'completed'
   );
   // An open dispute freezes release — the server refuses the auto-release
@@ -117,9 +118,50 @@ test('the 72h clock is mirrored on read: an elapsed hold reads as completed', ()
   const legacy = { ...done, completed_at: null };
   assert.equal(releaseDeadlineMs(legacy), null);
   assert.equal(
-    deriveJobLifecycle({ job: legacy, payment: { status: 'held' } }, deadline + HOUR),
+    deriveJobLifecycle({ job: legacy, payment: { status: 'held', provider: 'sandbox' } }, deadline + HOUR),
     'awaiting_approval'
   );
+});
+
+test('D23 · a held row with release_requested_at is approved (completed); the clock mirror is sandbox-only', () => {
+  // release_job_payment (and the 72h auto_release_due_payments) set
+  // release_requested_at on a STRIPE row and leave its status held until the
+  // provider's transfer.created lands. That row is decided: completed, closed
+  // in the hub — never awaiting approval, never bounced back to the approve
+  // screen — and never "released" either (isReleased stays false; the copy
+  // says approved / on its way).
+  const HOUR = 3_600_000;
+  const completedAt = '2026-08-01T00:00:00Z';
+  const deadline = Date.parse(completedAt) + 72 * HOUR;
+  const done = { status: 'completed', en_route_at: null, arrived_at: null, completed_at: completedAt };
+  const requested = { status: 'held', provider: 'stripe', release_requested_at: '2026-08-02T00:00:00Z' };
+
+  // stripe held + release_requested_at → completed, inside and past the window.
+  assert.equal(deriveJobLifecycle({ job: done, payment: requested }, deadline - HOUR), 'completed');
+  assert.equal(deriveJobLifecycle({ job: done, payment: requested }, deadline + HOUR), 'completed');
+  assert.equal(deriveMyJobsTab(deriveJobLifecycle({ job: done, payment: requested }, deadline - HOUR)), 'closed');
+  // An open report still freezes it: the dispute outranks the request.
+  assert.equal(
+    deriveJobLifecycle({ job: done, payment: requested, hasOpenDispute: true }, deadline - HOUR),
+    'disputed'
+  );
+
+  // stripe held past the deadline WITHOUT a request → still awaiting approval:
+  // only the gated cron may request the release, and this client never
+  // pretends it did.
+  const stripeHeld = { status: 'held', provider: 'stripe', release_requested_at: null };
+  assert.equal(deriveJobLifecycle({ job: done, payment: stripeHeld }, deadline - HOUR), 'awaiting_approval');
+  assert.equal(deriveJobLifecycle({ job: done, payment: stripeHeld }, deadline + HOUR), 'awaiting_approval');
+  assert.equal(deriveMyJobsTab(deriveJobLifecycle({ job: done, payment: stripeHeld }, deadline + HOUR)), 'review');
+
+  // sandbox held past the deadline → completed (unchanged: phase51's on-read
+  // clock releases it the moment job_payment_state() looks).
+  const sandboxHeld = { status: 'held', provider: 'sandbox', release_requested_at: null };
+  assert.equal(deriveJobLifecycle({ job: done, payment: sandboxHeld }, deadline - HOUR), 'awaiting_approval');
+  assert.equal(deriveJobLifecycle({ job: done, payment: sandboxHeld }, deadline + HOUR), 'completed');
+
+  // A row whose provider is unknown is never advanced early — the whitelist.
+  assert.equal(deriveJobLifecycle({ job: done, payment: { status: 'held' } }, deadline + HOUR), 'awaiting_approval');
 });
 
 test('the hub tabs bucket exactly as the 4D-1a mapping says', () => {
