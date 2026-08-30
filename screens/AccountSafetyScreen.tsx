@@ -93,7 +93,7 @@ export function AccountSafetyScreen() {
     {
       icon: 'lock-closed-outline',
       label: 'Privacy Policy',
-      sub: 'How BRAZOS protects your data.',
+      sub: 'How your data is protected.',
       onPress: () => navigation.navigate('LegalDocument', { document: 'privacy' }),
     },
   ];

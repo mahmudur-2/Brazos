@@ -237,7 +237,7 @@ export function WelcomeScreen() {
           title="Continue with phone"
           themed
           onPress={() => navigation.navigate('CreateAccount')}
-          accessibilityHint="Create a BRAZOS account"
+          accessibilityHint="Create an account"
         />
         <AuthButton
           title="I already have an account"

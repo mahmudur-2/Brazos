@@ -1630,8 +1630,8 @@ export function PostJobScreen() {
                   {isHiring
                     ? `Only ${hireWorkerName} receives this request.`
                     : isEditing
-                      ? 'Saving updates this existing job for workers browsing BRAZOS.'
-                    : 'Publishing makes this job visible to workers browsing BRAZOS.'}
+                      ? 'Saving updates this existing job for workers nearby.'
+                    : 'Publishing makes this job visible to workers nearby.'}
                 </Text>
               </View>
             </View>

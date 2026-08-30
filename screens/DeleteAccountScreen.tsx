@@ -134,7 +134,7 @@ export function DeleteAccountScreen() {
     navigation.popToTop();
     void alertAsync(
       'Account deleted',
-      'Your BRAZOS account has been deleted. Reviews you wrote or received stay on the marketplace, attributed to “Deleted user”.'
+      'Your account has been deleted. Reviews you wrote or received stay on the marketplace, attributed to “Deleted user”.'
     );
   }
 

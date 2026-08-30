@@ -908,7 +908,7 @@ export function JobDetailScreen() {
                     <Avatar name={poster.full_name} uri={poster.avatar_url} size={48} />
                     <View style={styles.posterCopy}>
                       <Text style={styles.posterName} numberOfLines={1}>
-                        {poster.full_name ?? 'BRAZOS customer'}
+                        {poster.full_name ?? 'Customer'}
                       </Text>
                       {posterStats ? (
                         <Text style={styles.posterMeta}>

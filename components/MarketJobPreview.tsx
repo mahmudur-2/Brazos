@@ -153,7 +153,7 @@ export function MarketJobPreview({ job, poster, onBack }: MarketJobPreviewProps)
                   <View style={styles.posterRow}>
                     <Avatar name={poster.full_name} uri={poster.avatar_url} size={44} />
                     <Text style={styles.posterName} numberOfLines={1}>
-                      {poster.full_name ?? 'BRAZOS customer'}
+                      {poster.full_name ?? 'Customer'}
                     </Text>
                   </View>
                 ),
