@@ -36,6 +36,12 @@
 import { Platform } from 'react-native';
 import { env } from '../../config/env';
 import { userMessage } from '../errorMessage';
+import {
+  validatePayoutsOnboardingResponse,
+  validatePayoutsStatusResponse,
+  type PayoutsOnboarding,
+  type PayoutsStatus,
+} from '../payments';
 import { supabase } from '../supabase';
 import {
   classifySheetError,
@@ -179,6 +185,79 @@ export async function createPaymentSession(
     return { data: null, error: { message: userMessage(message) } };
   }
   return validateCheckoutResponse(invoked.data);
+}
+
+// ---------------------------------------------------------------------------
+// R6c (D1) — the two Connect calls the payouts screen makes. Same shape as
+// createPaymentSession: the user's token rides every functions call, a
+// non-2xx arrives as a FunctionsHttpError whose sentence lives in the body,
+// and the 200 body is validated field by field (lib/payments.ts). Neither
+// touches the card SDK; they live here because this is the provider boundary
+// and the one place that reads an invoke error's body.
+// ---------------------------------------------------------------------------
+
+/**
+ * The cheap read: my_payouts_status() — the caller's own STORED state, 'none'
+ * when no payout account exists. Validated through the same rule the
+ * connect-status body is: a value outside the four strings is an error,
+ * never a state this client makes up.
+ */
+export async function fetchMyPayoutsStatus(): Promise<{
+  data: PayoutsStatus | null;
+  error: { message: string } | null;
+}> {
+  const { data, error } = await supabase.rpc('my_payouts_status');
+  if (error) return { data: null, error: { message: error.message } };
+  return validatePayoutsStatusResponse({ status: data });
+}
+
+/**
+ * connect-onboarding: mint (or resume) the caller's payout account and a
+ * single-use hosted onboarding link. Returns the STORED status at the time of
+ * the call and the url the screen opens in a system browser session. The
+ * status it returns is never "enabled" by this call's doing — only
+ * connect-status moves it.
+ */
+export async function beginPayoutsOnboarding(): Promise<{
+  data: PayoutsOnboarding | null;
+  error: { message: string } | null;
+}> {
+  let invoked: { data: unknown; error: unknown };
+  try {
+    invoked = await supabase.functions.invoke('connect-onboarding', { body: {} });
+  } catch (error) {
+    invoked = { data: null, error };
+  }
+  if (invoked.error) {
+    const body = await readInvokeErrorBody(invoked.error);
+    const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
+    return { data: null, error: { message: userMessage(message) } };
+  }
+  return validatePayoutsOnboardingResponse(invoked.data);
+}
+
+/**
+ * connect-status: ask the provider for the caller's payout state and record
+ * it — the ONLY way payouts_status moves after onboarding (R5b D3). The
+ * screen re-reads my_payouts_status() afterwards rather than trusting this
+ * body alone; the returned status is the same stored value.
+ */
+export async function refreshPayoutsStatus(): Promise<{
+  data: PayoutsStatus | null;
+  error: { message: string } | null;
+}> {
+  let invoked: { data: unknown; error: unknown };
+  try {
+    invoked = await supabase.functions.invoke('connect-status', { body: {} });
+  } catch (error) {
+    invoked = { data: null, error };
+  }
+  if (invoked.error) {
+    const body = await readInvokeErrorBody(invoked.error);
+    const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
+    return { data: null, error: { message: userMessage(message) } };
+  }
+  return validatePayoutsStatusResponse(invoked.data);
 }
 
 export type SheetOutcome =

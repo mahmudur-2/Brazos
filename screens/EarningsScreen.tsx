@@ -1,6 +1,6 @@
 import { useCallback, useState, type ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -12,9 +12,11 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { isReleaseRequested } from '../lib/payments';
+import { isReleaseRequested, payoutsCta, type PayoutsStatus } from '../lib/payments';
+import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
+import type { ProfileStackNavigation } from '../lib/navigation';
 import { formatTimeAgo } from '../lib/time';
 import {
   fonts,
@@ -41,11 +43,16 @@ export function EarningsScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const { user } = useAuth();
+  const navigation = useNavigation<ProfileStackNavigation>();
 
   const [summary, setSummary] = useState<EarningsSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [confirmCashOut, setConfirmCashOut] = useState(false);
   const [cashingOut, setCashingOut] = useState(false);
+  // R6c (D1): the stored payout state, read on the card path only, so the
+  // entry below can say where setup stands. A failed read is null — the
+  // entry then just says "Payouts"; it never guesses a state.
+  const [payouts, setPayouts] = useState<PayoutsStatus | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -53,6 +60,10 @@ export function EarningsScreen() {
     const { data, error } = await fetchMyEarnings(user.id);
     if (error) setLoadError(userMessage(error));
     else setSummary(data);
+    if (paymentsMode === 'stripe') {
+      const payoutsRes = await fetchMyPayoutsStatus();
+      setPayouts(payoutsRes.data);
+    }
   }, [user]);
 
   useFocusEffect(
@@ -201,6 +212,16 @@ export function EarningsScreen() {
               onPress={() => setConfirmCashOut(true)}
               disabled={s.availableCents === 0 || cashingOut}
               loading={cashingOut}
+            />
+          ) : s && paymentsMode === 'stripe' ? (
+            // R6c (D1): the card path has no cash-out, so this slot leads to
+            // the payout state instead — titled by the stored status when it
+            // was readable (the same status → CTA mapping the screen uses).
+            <Button
+              title={payouts ? payoutsCta(payouts).cta ?? payoutsCta(payouts).headline : 'Payouts'}
+              variant={payouts && payoutsCta(payouts).cta ? 'primary' : 'secondary'}
+              icon="chevron-forward"
+              onPress={() => navigation.navigate('Payouts')}
             />
           ) : undefined
         }

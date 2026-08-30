@@ -20,6 +20,10 @@ export type ChatTargetParams =
   | (ChatTarget & { counterpartyId?: undefined })
   | { counterpartyId: string; jobId?: undefined; directThreadId?: undefined };
 
+/** The two bounces connect-return serves: the worker came back, or the
+ *  single-use link had expired unused (R5b "FOR R6"). */
+export type PayoutsLinkFrom = 'return' | 'refresh';
+
 // The signed-out flow. Not a tab: it replaces the whole tab bar until there is
 // a session, so it is its own stack rooted at Welcome. The branded launch
 // layer is not a route here — it renders above everything (see LaunchGate in
@@ -414,6 +418,16 @@ export type ProfileStackParamList = {
   PaymentMethods: undefined;
   /** Screens 59+60 (Phase 11): the ledger-derived wallet + simulated cash-out. */
   Earnings: undefined;
+  /**
+   * R6c (D1/D2) — the worker's payout state over connect-onboarding /
+   * connect-status. Reached from Earnings in stripe mode and by the
+   * brazos://payouts?from=return|refresh deep link: `from` is the bounce the
+   * provider's browser took, `at` the arrival time so a repeated bounce is a
+   * distinct param change. Registered on the SHARED profile stack (it is
+   * mounted in both trees); the deep link's cross-mode gate treats it as
+   * worker-owned.
+   */
+  Payouts: { from?: PayoutsLinkFrom; at?: number } | undefined;
   /** Screen 42 (Phase 12): the in-app event feed over the phase20/56 outbox. */
   Notifications: undefined;
   /** Phase 9 — SavedWorkers surfaces other users, so WorkerProfile and the

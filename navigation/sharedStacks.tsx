@@ -30,6 +30,7 @@ import { NotificationSettingsScreen } from '../screens/NotificationSettingsScree
 import { NotificationsScreen } from '../screens/NotificationsScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
 import { PaymentMethodsScreen } from '../screens/PaymentMethodsScreen';
+import { PayoutsScreen } from '../screens/PayoutsScreen';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { AccountSafetyScreen } from '../screens/AccountSafetyScreen';
 import { ProfileDetailsScreen } from '../screens/ProfileDetailsScreen';
@@ -159,6 +160,10 @@ export function ProfileStackNavigator() {
       <ProfileStack.Screen name="SavedWorkers" component={SavedWorkersScreen} />
       <ProfileStack.Screen name="PaymentMethods" component={PaymentMethodsScreen} />
       <ProfileStack.Screen name="Earnings" component={EarningsScreen} />
+      {/* R6c — the worker's payout state. On the shared profile stack, like
+          Earnings, so the brazos://payouts bounce resolves in either tree;
+          the deep link's cross-mode gate is what makes it worker-owned. */}
+      <ProfileStack.Screen name="Payouts" component={PayoutsScreen} />
       <ProfileStack.Screen name="Notifications" component={NotificationsScreen} />
       <ProfileStack.Screen name="WorkerProfile" component={WorkerProfileScreen} />
       <ProfileStack.Screen name="PostJob" component={PostJobScreen} />

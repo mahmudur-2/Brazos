@@ -293,3 +293,107 @@ export async function fetchJobTip(jobId: string) {
 
   return { data: data as Payment | null, error };
 }
+
+// ---------------------------------------------------------------------------
+// R6c (D1) — payouts: the worker's payout state, in the vocabulary
+// 20260915000000_connect_onboarding.sql speaks and HANDOFF.md R5b "FOR R6"
+// contracts. Status truth is on-demand: my_payouts_status() is the cheap read
+// of the STORED state; connect-status (lib/payments/stripe.ts) is the refresh
+// that asks the provider and moves it. Nothing here claims a state the
+// database does not hold.
+// ---------------------------------------------------------------------------
+
+/** The four app-facing payout states, exactly as payment_accounts.payouts_status stores them. */
+export const PAYOUTS_STATUSES = Object.freeze(['none', 'action_needed', 'under_review', 'enabled'] as const);
+
+export type PayoutsStatus = (typeof PAYOUTS_STATUSES)[number];
+
+export function isPayoutsStatus(value: unknown): value is PayoutsStatus {
+  return typeof value === 'string' && (PAYOUTS_STATUSES as readonly string[]).includes(value);
+}
+
+/** What the payouts screen renders for each state — the R5b contract, verbatim
+ *  where it names a string. `cta` is the one button; null means no call to
+ *  action. `refresh` is whether a refresh is the thing to offer instead. No
+ *  sentence here says "verified" or claims identity — payouts_enabled is not
+ *  identity verification. */
+export type PayoutsView = {
+  headline: string;
+  body: string;
+  cta: 'Set up payouts' | 'Finish setting up payouts' | null;
+  refresh: boolean;
+};
+
+const PAYOUTS_VIEWS: Record<PayoutsStatus, PayoutsView> = {
+  none: {
+    headline: 'Payouts aren’t set up yet',
+    body: 'Set up payouts to receive what you earn. It’s a short setup in your browser, and you’re brought back here when it’s done.',
+    cta: 'Set up payouts',
+    refresh: false,
+  },
+  action_needed: {
+    headline: 'Payout setup isn’t finished',
+    body: 'Something is still needed before payouts can start. Pick up where you left off — the setup resumes in your browser.',
+    cta: 'Finish setting up payouts',
+    refresh: false,
+  },
+  under_review: {
+    headline: 'Payouts under review',
+    body: 'Nothing more is needed from you right now. The review finishes on its own — tap Refresh to check.',
+    cta: null,
+    refresh: true,
+  },
+  enabled: {
+    headline: 'Payouts are set up',
+    body: 'Approved payments are transferred to you on the provider’s schedule. There is nothing to trigger here.',
+    cta: null,
+    refresh: false,
+  },
+};
+
+/** The status → CTA mapping (R5b "The four status strings and the payouts CTA"). */
+export function payoutsCta(status: PayoutsStatus): PayoutsView {
+  return PAYOUTS_VIEWS[status];
+}
+
+export const PAYOUTS_STATUS_UNREADABLE = 'Your payout status could not be read right now. Try again.';
+
+// The cheap read itself — my_payouts_status() — lives in
+// lib/payments/stripe.ts beside the two connect calls: payouts exist on the
+// card path only, and this module's contract (tests/sandboxCheckout.test.mjs)
+// is that it calls no RPC on a payout path at all. It validates through
+// validatePayoutsStatusResponse() below, so the shape rule is written once.
+
+/** connect-onboarding's 200 body: the STORED status at the time of the call and the single-use hosted link. */
+export type PayoutsOnboarding = { status: PayoutsStatus; url: string };
+
+export const PAYOUTS_RESPONSE_MALFORMED =
+  'The payout setup could not be started right now. Nothing changed — try again.';
+
+/** Validated field by field — a missing or malformed link is an error, never a page this client guesses. */
+export function validatePayoutsOnboardingResponse(payload: unknown): {
+  data: PayoutsOnboarding | null;
+  error: { message: string } | null;
+} {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { data: null, error: { message: PAYOUTS_RESPONSE_MALFORMED } };
+  }
+  const { status, url } = payload as Record<string, unknown>;
+  if (!isPayoutsStatus(status) || typeof url !== 'string' || !url.startsWith('https://')) {
+    return { data: null, error: { message: PAYOUTS_RESPONSE_MALFORMED } };
+  }
+  return { data: { status, url }, error: null };
+}
+
+/** connect-status's 200 body: `{"status":"…"}` — the state the provider was just asked for, now stored. */
+export function validatePayoutsStatusResponse(payload: unknown): {
+  data: PayoutsStatus | null;
+  error: { message: string } | null;
+} {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { data: null, error: { message: PAYOUTS_STATUS_UNREADABLE } };
+  }
+  const { status } = payload as Record<string, unknown>;
+  if (!isPayoutsStatus(status)) return { data: null, error: { message: PAYOUTS_STATUS_UNREADABLE } };
+  return { data: status, error: null };
+}
