@@ -45,6 +45,25 @@ export const JOB_CATEGORY_LABELS: Record<JobCategory, string> = {
   other: 'Other',
 };
 
+/**
+ * Tier A (C7) — THE LAUNCH POSTING ALLOWLIST, additive only. A key listed
+ * here STAYS in JOB_CATEGORIES and JOB_CATEGORY_LABELS (worker services,
+ * browse, search chips, Home tiles and existing rows all read the shared map)
+ * and is filtered out at the POSTING category picker alone — one filter in
+ * screens/PostJobScreen.tsx — so a customer cannot post work whose plain
+ * reading is licensed NYC work.
+ *
+ * AT LAUNCH THE LIST IS EMPTY: none of the eleven keys reads plainly as
+ * plumbing, electrical, or home improvement / contracting. Keys that MERGE
+ * licensed and unlicensed work are left out by rule and named here for the
+ * operator to decide: `handyman` (a general repairs key), `painting`
+ * (residential painting over $200 is HIC-licensed work; a touch-up is not),
+ * `moving` (a moving company is DOT-licensed; a pair of hands is not).
+ * Adding a key is a one-line change; tests/launchCategories.test.mjs proves
+ * any key added here still exists in the map and is absent from the picker.
+ */
+export const LAUNCH_EXCLUDED_CATEGORIES: readonly JobCategory[] = [];
+
 export const JOB_CATEGORY_ICONS: Record<JobCategory, IoniconName> = {
   dog_walking: 'paw',
   cleaning: 'sparkles',

@@ -49,6 +49,7 @@ import {
   JOB_CATEGORIES,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
+  LAUNCH_EXCLUDED_CATEGORIES,
   updateJob,
   type Job,
   type JobCategory,
@@ -217,7 +218,17 @@ const PUBLISH_CARD_LIFT_ALPHA = 0.04;
  * glyph the pills themselves draw. "Other" is itself a row, so choosing it
  * selects the Other category.
  */
-const OTHER_SHEET_SERVICES: SkillCategory[] = JOB_CATEGORIES.map((c) => ({
+/**
+ * Tier A (C7) — THE ONE FILTER SITE of the launch posting allowlist. Every
+ * enumeration on this screen (the pills, their measurement pass, the packing,
+ * the Other sheet's rows and its pick) reads this list; the shared map is
+ * untouched and every other surface keeps reading it whole.
+ */
+const POSTABLE_CATEGORIES: readonly JobCategory[] = JOB_CATEGORIES.filter(
+  (c) => !LAUNCH_EXCLUDED_CATEGORIES.includes(c)
+);
+
+const OTHER_SHEET_SERVICES: SkillCategory[] = POSTABLE_CATEGORIES.map((c) => ({
   key: c,
   label: JOB_CATEGORY_LABELS[c],
   icon: JOB_CATEGORY_ICONS[c],
@@ -244,7 +255,7 @@ function packCategoryChips(
   rowWidth: number,
   gap: number
 ): JobCategory[] {
-  const packable = JOB_CATEGORIES.filter((c) => c !== 'other');
+  const packable = POSTABLE_CATEGORIES.filter((c) => c !== 'other');
   const sorted = [...packable].sort(
     (a, b) =>
       (widths.get(b) ?? 0) - (widths.get(a) ?? 0) ||
@@ -415,7 +426,7 @@ export function PostJobScreen() {
 
   useEffect(() => {
     if (chipOrder != null || chipsWidth <= 0) return;
-    if (JOB_CATEGORIES.some((c) => !chipWidthsRef.current.has(c))) return;
+    if (POSTABLE_CATEGORIES.some((c) => !chipWidthsRef.current.has(c))) return;
     setChipOrder(packCategoryChips(chipWidthsRef.current, chipsWidth, spacing.sm));
   }, [chipMeasureCount, chipsWidth, chipOrder]);
 
@@ -1222,7 +1233,7 @@ export function PostJobScreen() {
                     for the frame or two before. C3 — the Other pill opens the
                     category sheet instead of toggling; it still shows
                     selected when the sheet (or a row in it) chose 'other'. */}
-                {(chipOrder ?? JOB_CATEGORIES).map((c) => (
+                {(chipOrder ?? POSTABLE_CATEGORIES).map((c) => (
                   <Chip
                     key={c}
                     label={JOB_CATEGORY_LABELS[c]}
@@ -1251,7 +1262,7 @@ export function PostJobScreen() {
                   accessibilityElementsHidden
                   importantForAccessibility="no-hide-descendants"
                 >
-                  {JOB_CATEGORIES.map((c) => (
+                  {POSTABLE_CATEGORIES.map((c) => (
                     <View
                       key={c}
                       onLayout={(event) => {
@@ -1905,7 +1916,7 @@ export function PostJobScreen() {
         services={OTHER_SHEET_SERVICES}
         onSelect={(categoryKey) => {
           setOtherSheetOpen(false);
-          const chosen = JOB_CATEGORIES.find((c) => c === categoryKey);
+          const chosen = POSTABLE_CATEGORIES.find((c) => c === categoryKey);
           if (chosen) setCategory(chosen);
         }}
         onClose={() => setOtherSheetOpen(false)}
