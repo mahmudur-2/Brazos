@@ -26,7 +26,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(74);
+select plan(75);
 
 create temp table fx (k text primary key, v uuid);
 grant select, insert on fx to anon, authenticated;
@@ -207,7 +207,10 @@ select is((select count(*) from public.notification_outbox where recipient_id = 
 -- G. TIP — release-first, payer-only, capped, one per job
 -- ---------------------------------------------------------------------------
 select lives_ok($$ select public.transition_job_status((select v from fx where k = 'job2'), 'in_progress') $$, 'G: the worker starts job2');
-select lives_ok($$ select public.transition_job_status((select v from fx where k = 'job2'), 'completed') $$, 'G: the worker completes job2 without releasing it');
+select throws_ok($$ select public.transition_job_status((select v from fx where k = 'job2'), 'completed') $$,
+  'P0001', 'At least one photo of the finished work is required to mark this job complete',
+  'G: the worker cannot complete job2 without a photo (R6c D-14; 080_job_completions.sql carries the full proof)');
+select lives_ok($$ select public.transition_job_status((select v from fx where k = 'job2'), 'completed', '["https://example.com/proof-job2.jpg"]'::jsonb) $$, 'G: the worker completes job2 with a photo, without releasing it');
 select tests.authenticate_as(:'customer');
 select throws_ok($$ select public.sandbox_tip_worker((select v from fx where k = 'job2'), 500) $$,
   'P0001', 'The job payment releases first — then a tip can be added', 'G1: a tip is refused until the job payment releases');

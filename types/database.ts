@@ -476,6 +476,45 @@ export type Database = {
           },
         ]
       }
+      job_completions: {
+        Row: {
+          completed_by: string
+          created_at: string
+          id: string
+          job_id: string
+          photos: string[]
+        }
+        Insert: {
+          completed_by: string
+          created_at?: string
+          id?: string
+          job_id: string
+          photos: string[]
+        }
+        Update: {
+          completed_by?: string
+          created_at?: string
+          id?: string
+          job_id?: string
+          photos?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_completions_completed_by_fkey"
+            columns: ["completed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "job_completions_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: true
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       job_disputes: {
         Row: {
           created_at: string
@@ -2978,6 +3017,7 @@ export type Database = {
         }[]
       }
       job_categories_expanded: { Args: never; Returns: boolean }
+      job_completions_enabled: { Args: never; Returns: boolean }
       job_hotspots: {
         Args: never
         Returns: {
