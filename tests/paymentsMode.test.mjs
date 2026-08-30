@@ -84,8 +84,10 @@ test('an unrecognised value fails CLOSED - in dev as well as in a release', () =
   // An allow-list, not a block-list. Before Stage 4A an unknown value fell
   // back to the build default, so a typo silently enabled sandbox money in
   // dev; now anything unrecognised turns payments off and says why.
+  // 'stripe' left this list in R6a: it is the third mode now, executed in
+  // tests/stripePayments.test.mjs. Every other value still fails closed.
   const unrecognised = [
-    'stripe',
+    'stripe2',
     'sandbox2',
     'sand box',
     'sandbox,disabled',
@@ -131,9 +133,9 @@ test("'live', 'real' and 'production' are not modes and can never enable money",
 // Static guards: the allow-list must not grow toward a real provider
 // ---------------------------------------------------------------------------
 
-test('the resolver admits exactly two modes and has no real-provider branch', async () => {
+test('the resolver admits exactly three modes and has no live/real/production branch', async () => {
   const source = await read('lib/adapters/paymentsMode.ts');
-  assert.match(source, /export type PaymentsMode = 'sandbox' \| 'disabled';/);
+  assert.match(source, /export type PaymentsMode = 'sandbox' \| 'stripe' \| 'disabled';/);
 
   const code = stripComments(source);
   for (const forbidden of ['live', 'real', 'production']) {

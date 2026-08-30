@@ -1,11 +1,11 @@
 /**
  * Payments-mode resolution, pure - no React Native, no Supabase - so
- * tests/paymentsMode.test.mjs and tests/sandboxCheckout.test.mjs execute it
- * directly instead of asserting about it as text. The lib/phoneAuth/mode.ts
- * pattern, applied to money.
+ * tests/paymentsMode.test.mjs, tests/sandboxCheckout.test.mjs and
+ * tests/stripePayments.test.mjs execute it directly instead of asserting
+ * about it as text. The lib/phoneAuth/mode.ts pattern, applied to money.
  */
 
-export type PaymentsMode = 'sandbox' | 'disabled';
+export type PaymentsMode = 'sandbox' | 'stripe' | 'disabled';
 
 export type PaymentsModeResolution = {
   mode: PaymentsMode;
@@ -25,6 +25,7 @@ export type PaymentsModeResolution = {
  * THE TABLE - and it is an ALLOW-LIST:
  *
  *   'sandbox'                   -> sandbox
+ *   'stripe'                    -> stripe   (R6a, D1)
  *   'disabled'                  -> disabled
  *   unset / empty / whitespace  -> dev ? sandbox : disabled
  *   anything else               -> disabled, with the reason surfaced
@@ -34,9 +35,13 @@ export type PaymentsModeResolution = {
  * Matching a block-list of known-bad values instead would fail OPEN on the
  * one value nobody thought to list.
  *
- * There is deliberately no 'live', 'real' or 'production' value, and no code
- * path behind this function that could reach a real payment provider - the
- * sandbox RPCs are still the only functional provider that exists.
+ * THREE MODES COEXIST (R6a). 'sandbox' is the TestFlight beta's simulated
+ * ledger and stays exactly as it was. 'stripe' is the card path: the ledger
+ * row is minted by the create-payment edge function, the card is taken by the
+ * provider's payment sheet through lib/payments/stripe.ts, and the row reads
+ * held only when the provider's webhook says so. There is still deliberately
+ * no 'live', 'real' or 'production' value: which provider account a build
+ * talks to is the publishable key's business, never a mode word.
  *
  * The unset row reproduces the previous default exactly, so a build that
  * declares nothing behaves as it did before this change.
@@ -55,6 +60,9 @@ export function resolvePaymentsMode({
   }
   if (raw === 'sandbox') {
     return { mode: 'sandbox', configError: null };
+  }
+  if (raw === 'stripe') {
+    return { mode: 'stripe', configError: null };
   }
   if (raw === 'disabled') {
     return { mode: 'disabled', configError: null };

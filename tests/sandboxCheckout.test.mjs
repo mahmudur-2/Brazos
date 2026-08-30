@@ -47,7 +47,8 @@ test('payments availability is declared, never inferred from the build type', ()
   assert.equal(resolvePaymentsMode({ configured: 'disabled', dev: true }).mode, 'disabled');
   // Garbage now fails CLOSED rather than falling back to the build default:
   // an allow-list, not a block-list. Full table in tests/paymentsMode.test.mjs.
-  const garbage = resolvePaymentsMode({ configured: 'stripe', dev: true });
+  // ('stripe' itself became the third mode in R6a — tests/stripePayments.test.mjs.)
+  const garbage = resolvePaymentsMode({ configured: 'sandbox2', dev: true });
   assert.equal(garbage.mode, 'disabled');
   assert.ok(garbage.configError);
 });
