@@ -79,7 +79,7 @@ import { formatTimeAgo } from '../lib/time';
 import { useShellGround } from '../lib/shellGround';
 import type { JobDetailRouteParamList } from '../lib/navigation';
 import { useDialNumber } from '../lib/designOverrides';
-import { PLATFORM_FEE_RATE, workerPayoutCents } from '../lib/payments';
+import { quoteJobPrice, type JobPriceQuote } from '../lib/payments';
 import {
   fonts,
   radius,
@@ -92,23 +92,19 @@ import {
 import { useFloatingNavClearance } from '../ui/primitives';
 
 /**
- * "$45–$54" / "$54" — the job's budget as the worker would actually receive it.
- *
- * This screen used to own a local ESTIMATED_PLATFORM_FEE_RATE = 0.1 and quote
- * 90% of the budget, while checkout and Earnings showed no fee at all off the
- * ledger. The rate now comes from lib/payments.ts, which derives it from what
- * the payments RPCs actually write, so this figure can never again be lower
- * than what the worker is paid.
+ * The worker's take on this job — "$45–$54" / "$54" — comes from
+ * quote_job_price(), the database's own schedule and the ONLY price
+ * arithmetic in the marketplace (R6a, D11). This screen once owned a local
+ * ESTIMATED_PLATFORM_FEE_RATE = 0.1 and quoted 90% of the budget while
+ * checkout and Earnings showed no fee at all; then a shared client constant
+ * stood in for a schedule that did not exist. Neither survives: the figure is
+ * read, never computed, so it can never again be lower than what the worker
+ * is paid. See payoutEstimateLabel inside the component.
  */
-function payoutEstimateLabel(job: OpenJob): string | null {
-  const min = job.budget_min_cents;
-  const max = job.budget_max_cents ?? job.budget_cents;
-  if (max == null) return null;
-  if (min != null && min !== max) {
-    return `${formatBudget(workerPayoutCents(min))}–${formatBudget(workerPayoutCents(max))}`;
-  }
-  return formatBudget(workerPayoutCents(max));
-}
+type PayoutQuote =
+  | 'loading'
+  | 'failed'
+  | { min: number | null; max: number; fee: boolean };
 
 export function JobDetailScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -186,6 +182,52 @@ export function JobDetailScreen() {
   const insets = useSafeAreaInsets();
 
   const isOwnJob = !!user && job.client_id === user.id;
+
+  // D11: one quote_job_price() read per distinct figure — a min–max budget is
+  // two calls, a single budget one — only for the worker view that renders
+  // the payout card. worker_receives_cents is shown as returned.
+  const quoteMin = job.budget_min_cents;
+  const quoteMax = job.budget_max_cents ?? job.budget_cents;
+  const [payoutQuote, setPayoutQuote] = useState<PayoutQuote>('loading');
+  useEffect(() => {
+    let active = true;
+    setPayoutQuote('loading');
+    if (mode !== 'worker' || isOwnJob || quoteMax == null) return;
+    const distinct = quoteMin != null && quoteMin !== quoteMax ? [quoteMin, quoteMax] : [quoteMax];
+    Promise.all(distinct.map((cents) => quoteJobPrice(cents))).then((results) => {
+      if (!active) return;
+      const quotes = results.map((result) => result.data);
+      if (quotes.some((quote) => quote == null)) {
+        setPayoutQuote('failed');
+        return;
+      }
+      const receives = (quotes as JobPriceQuote[]).map((quote) => quote.worker_receives_cents);
+      const fee = (quotes as JobPriceQuote[]).some((quote) => quote.worker_fee_cents > 0);
+      setPayoutQuote(
+        distinct.length === 2
+          ? { min: receives[0], max: receives[1], fee }
+          : { min: null, max: receives[0], fee }
+      );
+    });
+    return () => {
+      active = false;
+    };
+  }, [mode, isOwnJob, quoteMin, quoteMax]);
+
+  /**
+   * "$45–$54" / "$54" — what the worker would actually receive, off the
+   * quote. While the quote loads it is an ellipsis; when the read failed it
+   * is the customer's stated budget alone, with no fee line and never a
+   * computed one; null when the job carries no budget at all.
+   */
+  const payoutEstimateLabel = (open: OpenJob): string | null => {
+    if (quoteMax == null) return null;
+    if (payoutQuote === 'loading') return '…';
+    if (payoutQuote === 'failed') return budgetRangeLabel(open);
+    return payoutQuote.min != null
+      ? `${formatBudget(payoutQuote.min)}–${formatBudget(payoutQuote.max)}`
+      : formatBudget(payoutQuote.max);
+  };
   // A pending bid past its deadline renders as expired and frees the worker
   // to bid again — the server enforces the same rule inside every RPC.
   const bidLapsed = !!existingBid && isOfferLapsed(existingBid);
@@ -884,25 +926,30 @@ export function JobDetailScreen() {
               ) : null}
 
               {/* Payout — the label, the number and the fee sentence all come
-                  from PLATFORM_FEE_RATE, so this card cannot drift from what
-                  checkout charges and Earnings sums. */}
+                  from quote_job_price() (D11), the same schedule checkout
+                  charges and the ledger records, so this card cannot drift
+                  from what the worker is actually paid. */}
               {payoutEstimateLabel(job) ? (
                 <Card style={[styles.payoutCard, styles.secondaryCard]}>
                   {/* Master 10 sets the shield mark against this card's copy
                       — decoration beside a claim the words already make. */}
                   <BrazosMonogram variant="shield" size={64} style={styles.payoutMark} />
                   <Text style={styles.priceEyebrow}>
-                    {PLATFORM_FEE_RATE > 0 ? 'Est. payout after fee' : 'Est. payout'}
+                    {payoutQuote === 'failed'
+                      ? 'Stated budget'
+                      : payoutQuote !== 'loading' && payoutQuote.fee
+                        ? 'Est. payout after fee'
+                        : 'Est. payout'}
                   </Text>
                   <Text style={styles.payoutAmount}>{payoutEstimateLabel(job)}</Text>
                   <Text style={styles.payoutNote}>
-                    {PLATFORM_FEE_RATE > 0
-                      ? `Estimate only, from the customer’s stated budget minus a ${Math.round(
-                          PLATFORM_FEE_RATE * 100
-                        )}% platform fee.`
-                      : 'Estimate only, from the customer’s stated budget. BRAZOS takes no platform fee — you receive the full agreed amount.'}{' '}
-                    Payments currently run in a clearly-labeled development sandbox — no
-                    real money is charged or paid out through the app yet.
+                    {payoutQuote === 'loading'
+                      ? 'Working out what you’d receive…'
+                      : payoutQuote === 'failed'
+                        ? 'Estimate only, from the customer’s stated budget. What you’d receive couldn’t be worked out right now.'
+                        : payoutQuote.fee
+                          ? 'Estimate only, from the customer’s stated budget with Brazos’s fee taken off — what you’d receive.'
+                          : 'Estimate only, from the customer’s stated budget — what you’d receive.'}
                   </Text>
                 </Card>
               ) : null}

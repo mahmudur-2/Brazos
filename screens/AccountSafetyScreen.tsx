@@ -9,6 +9,7 @@ import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
+import { paymentsMode } from '../lib/adapters/payments';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -70,7 +71,11 @@ export function AccountSafetyScreen() {
     {
       icon: 'card-outline',
       label: 'Payment methods',
-      sub: 'Sandbox only · no stored card.',
+      // D16 (R6a): the sandbox subtitle renders in sandbox mode only.
+      sub:
+        paymentsMode === 'sandbox'
+          ? 'Sandbox only · no stored card.'
+          : 'No stored cards · entered at checkout.',
       onPress: () => navigation.navigate('PaymentMethods'),
     },
     {

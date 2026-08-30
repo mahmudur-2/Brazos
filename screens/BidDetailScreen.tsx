@@ -13,6 +13,7 @@ import { useJobOffers } from '../hooks/useJobOffers';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
+import { paymentsMode } from '../lib/adapters/payments';
 import { completionPercent } from '../lib/profiles';
 import {
   acceptOffer,
@@ -337,7 +338,12 @@ export function BidDetailScreen() {
       <ConfirmDialog
         visible={confirming === 'accept'}
         title={`Accept ${formatBudget(offer?.amount_cents ?? null)} from ${workerName}?`}
-        message="This selects this bid for the job. The other active bids will no longer be eligible. Next, you’ll authorize and protect the payment in a sandbox checkout — no real money is charged in this development build."
+        message={
+          // D16 (R6a): the sandbox sentence renders in sandbox mode only.
+          paymentsMode === 'sandbox'
+            ? 'This selects this bid for the job. The other active bids will no longer be eligible. Next, you’ll authorize and protect the payment in a sandbox checkout — no real money is charged in this development build.'
+            : 'This selects this bid for the job. The other active bids will no longer be eligible. Next, you’ll protect the payment in checkout.'
+        }
         confirmText="Accept bid"
         cancelText="Cancel"
         loading={acting}

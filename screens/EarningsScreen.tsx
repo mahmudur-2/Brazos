@@ -12,7 +12,7 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { PLATFORM_FEE_RATE } from '../lib/payments';
+import { isReleaseRequested } from '../lib/payments';
 import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
@@ -30,8 +30,12 @@ import {
  * per-job breakdown, every figure DERIVED from payments rows on each focus
  * (§G: no hand-kept balance anywhere). The three buckets are the §H.3
  * vocabulary: held = pending approval, released = available, paid_out =
- * transferred by the SIMULATED cash-out — and the screen says "sandbox"
- * wherever money could be misread as real.
+ * transferred — by the SIMULATED cash-out in sandbox mode, by the provider's
+ * own transfer on the card path — and the screen says "sandbox" wherever
+ * money could be misread as real, and only there (D16).
+ *
+ * The fee figure is the ledger's sum of platform_fee_cents, nothing else
+ * (D10): no rate lives on the client any more.
  */
 export function EarningsScreen() {
   const { palette: colors } = useThemeColors();
@@ -68,10 +72,12 @@ export function EarningsScreen() {
       }
       await load();
       await alertAsync(
-        'Simulated cash-out complete',
+        paymentsMode === 'sandbox' ? 'Simulated cash-out complete' : 'Cash-out complete',
         data.length === 0
           ? 'Nothing was available to cash out.'
-          : `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred. Sandbox build — no real transfer exists.`
+          : paymentsMode === 'sandbox'
+            ? `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred. Sandbox build — no real transfer exists.`
+            : `${data.length} ${data.length === 1 ? 'payment' : 'payments'} moved to Transferred.`
       );
     } finally {
       setCashingOut(false);
@@ -93,7 +99,11 @@ export function EarningsScreen() {
     <>
       <DetailScreen
         title="Earnings"
-        subtitle="Sandbox — no real money"
+        subtitle={
+          paymentsMode === 'sandbox'
+            ? 'Sandbox — no real money'
+            : 'Every figure is a sum over your ledger rows'
+        }
         onBack={goBackOrHome}
         state={state}
         sections={
@@ -121,7 +131,7 @@ export function EarningsScreen() {
                         label="TRANSFERRED"
                         icon="arrow-up-circle-outline"
                         cents={s.transferredCents}
-                        note="Simulated cash-outs"
+                        note={paymentsMode === 'sandbox' ? 'Simulated cash-outs' : 'Transferred to you'}
                       />
                     </View>
                   ),
@@ -131,10 +141,9 @@ export function EarningsScreen() {
                     <View style={styles.feeCard}>
                       <Ionicons name="receipt-outline" size={16} color={colors.textMuted} />
                       <Text style={styles.feeText}>
-                        Platform fees on these rows: {formatBudget(s.feeCents)} — the
-                        same {Math.round(PLATFORM_FEE_RATE * 100)}% rate checkout
-                        charges and Job details quotes. Every figure here is a sum
-                        over the ledger rows below, nothing else.
+                        Platform fees on these rows: {formatBudget(s.feeCents)}. Every
+                        figure here is a sum over the ledger rows below, nothing
+                        else.
                       </Text>
                     </View>
                   ),
@@ -158,7 +167,11 @@ export function EarningsScreen() {
                               </Text>
                               <Text style={styles.rowMeta}>
                                 {row.status === 'held'
-                                  ? 'Held in protection'
+                                  ? // D23: approved, payout pending — the row
+                                    // stays held until the transfer lands.
+                                    isReleaseRequested(row)
+                                    ? 'Approved — payout on its way'
+                                    : 'Held in protection'
                                   : row.status === 'released'
                                     ? row.release_reason === 'auto_approved'
                                       ? `Released (auto) ${row.released_at ? formatTimeAgo(row.released_at) : ''}`
@@ -175,6 +188,9 @@ export function EarningsScreen() {
               ]
         }
         actionBar={
+          // D19: the cash-out control exists in sandbox mode only. On the card
+          // path payouts arrive on the provider's own schedule once payout
+          // setup is complete — there is nothing for the worker to trigger.
           s && paymentsMode === 'sandbox' ? (
             <Button
               title={
@@ -193,8 +209,12 @@ export function EarningsScreen() {
       <ConfirmDialog
         visible={confirmCashOut}
         title={`Cash out ${formatBudget(s?.availableCents ?? 0)}?`}
-        message="This SIMULATES a transfer: your released payments move to Transferred in the sandbox ledger. No bank is connected and no real money moves in this build."
-        confirmText="Cash out (simulated)"
+        message={
+          paymentsMode === 'sandbox'
+            ? 'This SIMULATES a transfer: your released payments move to Transferred in the sandbox ledger. No bank is connected and no real money moves in this build.'
+            : 'Payouts arrive on the provider’s own schedule once payout setup is complete — there is nothing to trigger here.'
+        }
+        confirmText={paymentsMode === 'sandbox' ? 'Cash out (simulated)' : 'Cash out'}
         cancelText="Not now"
         loading={cashingOut}
         onConfirm={cashOut}

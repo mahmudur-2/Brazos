@@ -15,15 +15,18 @@ import {
 
 /**
  * Screen 45 (Phase 9) — Payment methods, told honestly. There is no card
- * vault, no provider, and no stored payment method at any layer of this
- * build — so the screen SAYS that instead of rendering a fake card list.
- * What it can truthfully show: which payment mode the build runs (sandbox /
- * disabled) and what the sandbox actually does with money states.
+ * vault and no stored payment method at any layer of this app — so the
+ * screen SAYS that instead of rendering a fake card list. What it can
+ * truthfully show: which payment mode the build runs (sandbox / stripe /
+ * disabled — D16, D18) and what that mode actually does with money states.
+ * On the card path, cards are entered in the provider's payment sheet at
+ * checkout and never stored here.
  */
 export function PaymentMethodsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const sandbox = paymentsMode === 'sandbox';
+  const stripe = paymentsMode === 'stripe';
 
   return (
     <DetailScreen
@@ -43,7 +46,9 @@ export function PaymentMethodsScreen() {
               <Text style={styles.bodyText}>
                 {sandbox
                   ? 'Nothing on this build is a real charge. Every payment state is a database row you can audit.'
-                  : 'Payments are switched off on this build, so nothing here can move money.'}
+                  : stripe
+                    ? 'Your card is charged only when you protect a payment, and the funds stay held until you approve the finished work.'
+                    : 'Payments are switched off on this build, so nothing here can move money.'}
               </Text>
             </View>
           ),
@@ -60,12 +65,14 @@ export function PaymentMethodsScreen() {
               </View>
               <View style={styles.modeCopy}>
                 <Text style={styles.modeTitle}>
-                  {sandbox ? 'Sandbox payments' : 'Payments are off'}
+                  {sandbox ? 'Sandbox payments' : stripe ? 'Card payments' : 'Payments are off'}
                 </Text>
                 <Text style={styles.modeNote}>
                   {sandbox
                     ? 'This build runs a development sandbox: checkout, protection, release and tips write real app records, but no card exists and no real money ever moves.'
-                    : 'No payment mode is switched on in this build. Nothing can be authorized, held or moved.'}
+                    : stripe
+                      ? 'Cards are taken through the provider’s secure payment sheet at checkout. Brazos never sees your card number.'
+                      : 'No payment mode is switched on in this build. Nothing can be authorized, held or moved.'}
                 </Text>
               </View>
             </View>
@@ -83,9 +90,9 @@ export function PaymentMethodsScreen() {
               <Text style={styles.eyebrow}>FUNDING SOURCE</Text>
               <Text style={styles.sectionTitle}>No stored payment methods</Text>
               <Text style={styles.bodyText}>
-                BRAZOS doesn’t store any card, bank account or wallet in this
-                build — there is no payment provider connected yet. When a real
-                provider arrives, the methods you add will appear here.
+                {stripe
+                  ? 'Brazos doesn’t store your card. You enter it in the provider’s secure payment sheet at checkout, and any saved card lives with the provider, not in this app.'
+                  : 'Brazos doesn’t store any card, bank account or wallet in this build — there is no payment provider connected yet. When a real provider arrives, the methods you add will appear here.'}
               </Text>
             </View>
           ),

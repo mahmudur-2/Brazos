@@ -42,7 +42,14 @@ import {
   updateJobStatus,
 } from '../lib/jobs';
 import { fetchProfileById, type Profile } from '../lib/profiles';
-import { fetchJobPaymentState, isHeld, isReleased, type Payment } from '../lib/payments';
+import { paymentsMode } from '../lib/adapters/payments';
+import {
+  fetchJobPaymentState,
+  isHeld,
+  isReleased,
+  isReleaseRequested,
+  type Payment,
+} from '../lib/payments';
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
@@ -417,12 +424,25 @@ export function WorkerJobScreen() {
                   color={isDark ? colors.gold : colors.emerald}
                 />
               </View>
+              {/* D16: sandbox keeps its wording verbatim; the card path says
+                  the same money fact without the label. D23: a held row the
+                  customer approved (release_requested_at set) is approved —
+                  the payout is on its way; MoneyText keeps the row's real
+                  status, and nothing here says released before it is. */}
               <Text style={[styles.paymentEyebrow, isDark && styles.paymentEyebrowDark]}>
-                {isReleased(payment)
-                  ? 'PAYMENT RELEASED · SANDBOX'
-                  : isHeld(payment)
-                    ? 'PAYMENT PROTECTED · SANDBOX'
-                    : 'PAYMENT · SANDBOX'}
+                {paymentsMode === 'sandbox'
+                  ? isReleased(payment)
+                    ? 'PAYMENT RELEASED · SANDBOX'
+                    : isHeld(payment)
+                      ? 'PAYMENT PROTECTED · SANDBOX'
+                      : 'PAYMENT · SANDBOX'
+                  : isReleased(payment)
+                    ? 'PAYMENT RELEASED'
+                    : isReleaseRequested(payment)
+                      ? 'APPROVED · PAYOUT ON ITS WAY'
+                      : isHeld(payment)
+                        ? 'PAYMENT PROTECTED'
+                        : 'PAYMENT'}
               </Text>
               <MoneyText cents={payment.amount_cents} state={payment.status} />
               <Text style={styles.paymentNote}>
@@ -430,21 +450,37 @@ export function WorkerJobScreen() {
                   // A7: the disputed/awaiting fork comes from THE derivation
                   // point; the money predicates stay payment vocabulary.
                   const lifecycle = deriveJobLifecycle({ job, payment, hasOpenDispute: issueOpen });
+                  const sandbox = paymentsMode === 'sandbox';
                   if (isReleased(payment)) {
                     return payment.release_reason === 'auto_approved'
-                      ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
-                      : `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`;
+                      ? sandbox
+                        ? 'Released automatically after 72 hours with no response from the customer. Sandbox build — no real money.'
+                        : 'Released automatically after 72 hours with no response from the customer.'
+                      : sandbox
+                        ? `${clientName} approved the finished work and the funds were released. Sandbox build — no real money.`
+                        : `${clientName} approved the finished work and the payment was released.`;
                   }
                   if (lifecycle === 'disputed') {
                     return `${clientName} reported an issue, which holds the funds while it’s open. Sort it out together in chat — release resumes when the report is withdrawn or resolved.`;
                   }
+                  if (isReleaseRequested(payment)) {
+                    return payment.release_reason === 'auto_approved'
+                      ? `Approved automatically after 72 hours with no response from ${clientName}. Your payout is on its way and shows as released when the transfer lands.`
+                      : `${clientName} approved the finished work. Your payout is on its way and shows as released when the transfer lands.`;
+                  }
                   if (lifecycle === 'awaiting_approval') {
-                    return `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`;
+                    return sandbox
+                      ? `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically. Sandbox build — no real money.`
+                      : `Waiting on ${clientName} to approve the finished work. If they don’t respond within 72 hours, the funds release automatically.`;
                   }
                   if (isHeld(payment)) {
-                    return `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`;
+                    return sandbox
+                      ? `${clientName} placed the funds in protection. They’re released only after the finished work is approved — sandbox build, no real money.`
+                      : `${clientName} placed the funds in protection. They’re released only after the finished work is approved.`;
                   }
-                  return 'Sandbox build — payment states here are development records, not real money.';
+                  return sandbox
+                    ? 'Sandbox build — payment states here are development records, not real money.'
+                    : 'The payment isn’t in protection yet — the states here follow the ledger.';
                 })()}
               </Text>
             </Card>

@@ -102,41 +102,15 @@ export type Payment = {
 };
 
 /**
- * THE platform fee. Every fee figure in the app derives from this one value.
- *
- * WHY IT IS ZERO
- * The ledger is the authority, not the UI. Every insert into public.payments
- * writes `platform_fee_cents = 0` — sandbox_authorize_job_payment (phase50,
- * re-issued in phase58) and add_job_tip (phase51) — because no authoritative
- * fee schedule exists and a money table is the last place to invent one. So a
- * worker's real payout is the full agreed amount, and Earnings sums 0 in fees
- * off those same rows.
- *
- * WHY IT LIVES HERE RATHER THAN ON A SCREEN
- * Job details (screen 51) carried its own ESTIMATED_PLATFORM_FEE_RATE = 0.1 and
- * advertised "est. payout after fee" at 90% of the budget — $36 on a $40 job —
- * while checkout and Earnings both showed no fee at all. Two constants meant
- * the marketplace quoted a worker LESS than it pays them, which is the one
- * direction this must never be wrong in. One constant, ledger-derived, makes
- * that disagreement unrepresentable.
- *
- * WHEN A REAL SCHEDULE ARRIVES it comes from the database with the payment row,
- * not from a client constant: change the RPCs first, then read
- * `platform_fee_cents` off the row. This constant is the honest stand-in until
- * then, not a config knob to turn.
+ * THERE IS NO CLIENT FEE CONSTANT (R6a, D10). PLATFORM_FEE_RATE and its two
+ * helpers stood in for a schedule that did not exist; the real schedule now
+ * lives in the database — quote_job_price() before a ledger row exists, the
+ * row's own charge_amount_cents / customer_fee_cents / tax_cents /
+ * platform_fee_cents once it does — and every figure the app shows is read
+ * from one of those two places. Job details once quoted a worker LESS than
+ * the ledger paid them from a second local rate; with no client arithmetic
+ * left, that disagreement is unrepresentable.
  */
-export const PLATFORM_FEE_RATE: number = 0;
-
-/** What the platform keeps from `amountCents`. */
-export function platformFeeCents(amountCents: number): number {
-  return Math.round(amountCents * PLATFORM_FEE_RATE);
-}
-
-/** What the worker actually receives from `amountCents`. Never more than the
- *  ledger will pay them, and — while the rate is 0 — never less either. */
-export function workerPayoutCents(amountCents: number): number {
-  return amountCents - platformFeeCents(amountCents);
-}
 
 const PAYMENT_COLUMNS =
   'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, charge_amount_cents, customer_fee_cents, tax_cents, funding_due_at, release_requested_at, transfer_cents, refund_cents, refund_reason';

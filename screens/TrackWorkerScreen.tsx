@@ -9,6 +9,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { useAuth } from '../hooks/useAuth';
 import { useOwnedJobDetail } from '../hooks/useJobDetail';
 import { goBackOrHome } from '../lib/navigationRef';
+import { paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPaymentState, type Payment } from '../lib/payments';
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { fetchProfileById } from '../lib/profiles';
@@ -251,8 +252,14 @@ export function TrackWorkerScreen() {
                 title: 'Payment',
                 content: (
                   <View style={[styles.paymentCard, isDark && styles.cardDark]}>
+                    {/* D16 (R6a): the sandbox label renders in sandbox mode
+                        only; the card path names the money state. */}
                     <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
-                      SANDBOX — NO REAL MONEY
+                      {paymentsMode === 'sandbox'
+                        ? 'SANDBOX — NO REAL MONEY'
+                        : payment.status === 'held'
+                          ? 'PROTECTED PAYMENT'
+                          : 'PAYMENT'}
                     </Text>
                     <MoneyText cents={payment.amount_cents} state={payment.status} />
                     {hasOpenDispute === true ? (

@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict';
 import { readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
+import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const dir = (path) => readdirSync(new URL(`../${path}`, import.meta.url));
+/** A data-URL module cannot resolve a relative specifier; give it the absolute one. */
+const rulesUrl = new URL('../lib/paymentRules.ts', import.meta.url).href;
 
 const stripComments = (source) =>
   source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+const toDataUrl = (js) =>
+  'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
 
 // ---------------------------------------------------------------------------
 // One fee, and the ledger decides what it is
@@ -16,19 +22,81 @@ const stripComments = (source) =>
 // Job details advertised "EST. PAYOUT AFTER FEE $36" on a $40 job from a local
 // ESTIMATED_PLATFORM_FEE_RATE = 0.1, while checkout and Earnings both reported
 // no fee at all — because the payments RPCs write platform_fee_cents = 0. The
-// marketplace was quoting a worker LESS than it pays them.
+// marketplace was quoting a worker LESS than it pays them. The first fix was
+// one shared client constant; R6a (D10) removed even that: the schedule lives
+// in the database — quote_job_price() before a row exists, the row's own
+// columns after — and the client reads, never computes.
 
-test('the platform fee has exactly one definition, and it matches the ledger', async () => {
-  const payments = await read('lib/payments.ts');
-  assert.match(payments, /export const PLATFORM_FEE_RATE: number = 0;/);
-  assert.match(payments, /export function platformFeeCents\(/);
-  assert.match(payments, /export function workerPayoutCents\(/);
+test('the client carries no fee constant: quote_job_price() and the ledger row are the only fee sources', async () => {
+  const payments = stripComments(await read('lib/payments.ts'));
+  assert.doesNotMatch(payments, /PLATFORM_FEE_RATE|platformFeeCents|workerPayoutCents/);
+  assert.match(payments, /export async function quoteJobPrice\(/);
+  assert.match(payments, /rpc\('quote_job_price', \{ p_amount_cents: amountCents \}\)/);
+  // The row carries the customer's figures and the worker's fee.
+  assert.match(payments, /charge_amount_cents\?: number \| null;/);
+  assert.match(payments, /customer_fee_cents\?: number \| null;/);
+  assert.match(payments, /tax_cents\?: number \| null;/);
+  assert.match(payments, /platform_fee_cents: number;/);
 });
 
-test('every payments insert writes the same fee the client derives', async () => {
-  // The client constant is only honest while the RPCs agree with it. Each
-  // insert into public.payments names platform_fee_cents in its column list
-  // and passes a literal 0 in the values.
+test('quoteJobPrice validates every figure the screens show, and never invents one', async () => {
+  // Executed: lib/payments.ts with the supabase client stubbed to a canned
+  // rpc(), the tests/fundingPath arrangement.
+  const js = stripTypeScriptTypes(await read('lib/payments.ts'), { mode: 'strip' });
+  const load = async (rpc) => {
+    const stubbed = js
+      .replace(/import \{ supabase \} from '\.\/supabase';/, `const supabase = { rpc: ${rpc} };`)
+      .replace(/from '\.\/paymentRules';/, `from '${rulesUrl}';`);
+    assert.notEqual(stubbed, js, 'the supabase import must be found and stubbed');
+    assert.match(stubbed, /paymentRules\.ts';/, 'the pure re-export must be re-pointed to an absolute URL');
+    return import(toDataUrl(stubbed));
+  };
+  const row = {
+    job_price_cents: 4000,
+    customer_fee_cents: 400,
+    tax_cents: 0,
+    total_cents: 4400,
+    worker_fee_cents: 200,
+    worker_receives_cents: 3800,
+  };
+
+  // The RPC returns a set; the first row is the quote.
+  const asArray = await load(`async () => ({ data: [${JSON.stringify(row)}], error: null })`);
+  assert.deepEqual(await asArray.quoteJobPrice(4000), { data: row, error: null });
+  // A bare object is accepted too.
+  const asObject = await load(`async () => ({ data: ${JSON.stringify(row)}, error: null })`);
+  assert.deepEqual(await asObject.quoteJobPrice(4000), { data: row, error: null });
+  // A missing figure is an error, not a zero.
+  const { worker_receives_cents: _dropped, ...incomplete } = row;
+  const missing = await load(`async () => ({ data: [${JSON.stringify(incomplete)}], error: null })`);
+  const missingResult = await missing.quoteJobPrice(4000);
+  assert.equal(missingResult.data, null);
+  assert.match(missingResult.error.message, /price could not be worked out/);
+  // A non-numeric figure is an error, not a coercion.
+  const junk = await load(`async () => ({ data: [${JSON.stringify({ ...row, total_cents: '4400' })}], error: null })`);
+  assert.equal((await junk.quoteJobPrice(4000)).data, null);
+  // No row at all is an error.
+  const empty = await load(`async () => ({ data: [], error: null })`);
+  assert.equal((await empty.quoteJobPrice(4000)).data, null);
+  // The database's own refusal is passed through.
+  const refused = await load(`async () => ({ data: null, error: { message: 'Payments are paused right now.' } })`);
+  assert.deepEqual(await refused.quoteJobPrice(4000), {
+    data: null,
+    error: { message: 'Payments are paused right now.' },
+  });
+  // The worker's figure is the RPC's, as returned: never more than the price
+  // charged, and never recomputed here.
+  assert.ok(row.worker_receives_cents <= row.job_price_cents);
+  assert.equal((await asArray.quoteJobPrice(4000)).data.worker_receives_cents, 3800);
+});
+
+test('sandbox inserts write a zero fee — the figure Earnings sums for sandbox rows', async () => {
+  // The sandbox RPCs name platform_fee_cents in their column list and pass a
+  // literal 0; the card path's fee is written by begin_job_payment from
+  // quote_job_price() and is read off the row, so nothing here has to agree
+  // with a client constant any more — but a sandbox row that quietly grew a
+  // fee would misstate Earnings for the beta.
+  let inserts = 0;
   for (const file of dir('supabase').filter((f) => f.endsWith('.sql'))) {
     const sql = await read(`supabase/${file}`);
     for (const match of sql.matchAll(
@@ -41,21 +109,18 @@ test('every payments insert writes the same fee the client derives', async () =>
         .map((c) => c.trim())
         .indexOf('platform_fee_cents');
       const written = values.split(',')[index]?.trim();
-      assert.equal(
-        written,
-        '0',
-        `supabase/${file} writes platform_fee_cents = ${written}; ` +
-          'lib/payments.ts PLATFORM_FEE_RATE must be changed with it'
-      );
+      assert.equal(written, '0', `supabase/${file} writes platform_fee_cents = ${written} on a sandbox row`);
+      inserts++;
     }
   }
+  assert.ok(inserts > 0, 'the sandbox inserts were found');
 });
 
 test('no screen carries its own fee rate or fee arithmetic', async () => {
   const offenders = [];
   for (const file of dir('screens').filter((f) => f.endsWith('.tsx'))) {
     const source = stripComments(await read(`screens/${file}`));
-    // A second local constant is what caused the contradiction.
+    // A local constant is what caused the contradiction.
     if (/(?:FEE_RATE|PLATFORM_FEE)\s*=\s*[\d.]/.test(source)) {
       offenders.push(`screens/${file} — declares its own fee rate`);
     }
@@ -63,51 +128,53 @@ test('no screen carries its own fee rate or fee arithmetic', async () => {
     if (/\*\s*\(\s*1\s*-\s*[\w.]*FEE/i.test(source)) {
       offenders.push(`screens/${file} — hand-rolls the after-fee arithmetic`);
     }
+    // ...and so is importing a rate that no longer exists.
+    if (/PLATFORM_FEE_RATE|platformFeeCents|workerPayoutCents/.test(source)) {
+      offenders.push(`screens/${file} — imports a client fee constant`);
+    }
   }
 
   assert.deepEqual(
     offenders,
     [],
-    'fee figures must come from PLATFORM_FEE_RATE / platformFeeCents / ' +
-      'workerPayoutCents in lib/payments.ts'
+    'fee figures come from quote_job_price() or the ledger row, never from a screen'
   );
 });
 
-test('the three fee surfaces all read the shared constant', async () => {
+test('the three fee surfaces read the database, and Job details shows the RPC’s worker figure', async () => {
   const [jobDetail, checkout, earnings] = await Promise.all([
-    read('screens/JobDetailScreen.tsx'),
-    read('screens/CheckoutScreen.tsx'),
-    read('screens/EarningsScreen.tsx'),
+    read('screens/JobDetailScreen.tsx').then(stripComments),
+    read('screens/CheckoutScreen.tsx').then(stripComments),
+    read('screens/EarningsScreen.tsx').then(stripComments),
   ]);
 
-  assert.match(jobDetail, /workerPayoutCents/);
-  assert.match(jobDetail, /PLATFORM_FEE_RATE/);
-  // Comments stripped: the docblock explains the constant this screen no
-  // longer owns, and that history is worth keeping.
-  assert.doesNotMatch(stripComments(jobDetail), /ESTIMATED_PLATFORM_FEE_RATE/);
-  // R6a (D10): checkout reads its figures off the ledger row / the price
-  // quote and computes no fee of its own.
-  assert.doesNotMatch(stripComments(checkout), /platformFeeCents|PLATFORM_FEE_RATE|workerPayoutCents/);
+  // Job details: quote_job_price() per distinct figure, worker_receives_cents
+  // shown as returned, the stated budget alone when the read fails.
+  assert.match(jobDetail, /quoteJobPrice\(cents\)/);
+  assert.match(jobDetail, /worker_receives_cents/);
+  assert.match(jobDetail, /distinct = quoteMin != null && quoteMin !== quoteMax \? \[quoteMin, quoteMax\] : \[quoteMax\]/);
+  assert.match(jobDetail, /payoutQuote === 'failed'\) return budgetRangeLabel\(open\)/);
+  assert.doesNotMatch(jobDetail, /budget\w*_cents\s*\*|\*\s*[\d.]+\s*\)?\s*;?\s*$/m);
+  assert.doesNotMatch(jobDetail, /ESTIMATED_PLATFORM_FEE_RATE/);
+  assert.doesNotMatch(jobDetail, /takes no platform fee/);
+  // Checkout: the row's all-in figures, or the quote before a row exists.
   assert.match(checkout, /charge_amount_cents/);
+  assert.match(checkout, /quoteJobPrice\(amountCents\)/);
   assert.match(checkout, /payment\.platform_fee_cents/);
-  assert.match(earnings, /PLATFORM_FEE_RATE/);
+  // Earnings: the ledger's own sum, and no rate sentence.
+  assert.match(earnings, /formatBudget\(s\.feeCents\)/);
+  assert.doesNotMatch(earnings, /% rate/);
 });
 
-test('a worker is never quoted less than the ledger pays them', async () => {
-  // Executed, not pattern-matched: the payout helper is pure and the rule is
-  // an inequality, so assert the inequality.
-  const source = await read('lib/payments.ts');
-  const rate = Number(source.match(/PLATFORM_FEE_RATE: number = ([\d.]+);/)[1]);
-  const platformFee = (cents) => Math.round(cents * rate);
-  const payout = (cents) => cents - platformFee(cents);
-
-  for (const cents of [1, 99, 4000, 4499, 12345, 1_000_000]) {
-    assert.ok(
-      payout(cents) >= cents - platformFee(cents),
-      `quoted payout for ${cents} understates what the ledger releases`
-    );
-    assert.ok(payout(cents) <= cents, 'a payout may never exceed the amount charged');
-  }
-  // The specific device-reported case: a $40 job must not quote $36.
-  assert.equal(payout(4000), 4000);
+test('a worker is never quoted less than the ledger pays them — the figure is read, not derived', async () => {
+  // With no client arithmetic, the only way Job details could understate the
+  // payout is by showing something other than the RPC's worker figure.
+  const jobDetail = stripComments(await read('screens/JobDetailScreen.tsx'));
+  const label = jobDetail.slice(
+    jobDetail.indexOf('const payoutEstimateLabel'),
+    jobDetail.indexOf('return payoutQuote.min != null')
+  );
+  assert.ok(label.length > 0, 'the payout label helper exists');
+  assert.doesNotMatch(label, /[-*\/]\s*\d|Math\./, 'the label performs no arithmetic');
+  assert.match(jobDetail, /receives = \(quotes as JobPriceQuote\[\]\)\.map\(\(quote\) => quote\.worker_receives_cents\)/);
 });
