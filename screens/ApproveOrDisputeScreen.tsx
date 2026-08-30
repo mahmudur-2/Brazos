@@ -337,7 +337,9 @@ export function ApproveOrDisputeScreen() {
                       ? 'Released automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
                       : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
                     : releaseAllowed
-                      ? 'Approving releases this payment to the worker. If something isn’t right, report the issue instead — release waits while a report is open.'
+                      ? // Tier A (C3, D23): approving REQUESTS the release; the
+                        // transfer lands later, so the payment is "on its way".
+                        'Approving sends this payment on its way to the worker. If something isn’t right, report the issue instead — release waits while a report is open.'
                       : 'Payments are paused right now, so approval is unavailable for the moment. If something isn’t right, you can still report the issue.'}
             </Text>
           </View>
