@@ -59,6 +59,7 @@ import {
   savePostJobDraft,
 } from '../lib/postJobDraft';
 import { priceGuidanceLines } from '../lib/priceGuidance';
+import { PRICE_GUIDANCE } from '../lib/featureFlags';
 import { descriptionCharsNeeded } from '../lib/validation';
 import { createDirectOffer } from '../lib/offers';
 import { alertAsync } from '../lib/dialog';
@@ -1050,7 +1051,9 @@ export function PostJobScreen() {
   // (no floor retro-applied to an old description) and a hire request is a
   // negotiated single amount, not a budget to be guided.
   const descNeeded = isFreshPost ? descriptionCharsNeeded(description) : 0;
-  const guidanceLines = isFreshPost ? priceGuidanceLines(category) : null;
+  // Tier A (C6): the seeded range renders only behind PRICE_GUIDANCE (off
+  // until a source is attributed) — the predicate below is otherwise unchanged.
+  const guidanceLines = isFreshPost && PRICE_GUIDANCE ? priceGuidanceLines(category) : null;
   const bothBudgetsEmpty = !budgetMin.trim() && !budgetMax.trim();
   const showPriceGuidance = !!guidanceLines && (bothBudgetsEmpty || !editingBudget);
   const showPhotoNudge =
@@ -1647,7 +1650,7 @@ export function PostJobScreen() {
           <View style={styles.nudgeRow}>
             <Ionicons name="image-outline" size={18} color={colors.emerald} />
             <Text style={[styles.nudgeText, isDark && styles.nudgeTextDark]}>
-              Jobs with a photo get more bids.
+              Add photos so workers can see the work.
             </Text>
             <Pressable
               onPress={() => setPhotoNudgeDismissed(true)}

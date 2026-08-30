@@ -251,7 +251,7 @@ test('the section heading reads Available Jobs with its feed dot; retired copy s
 test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pulse dot row', async () => {
   // One eyebrow style for both columns: 11/700/1.2, gold.
   assert.match(screen, />AVAILABLE NOW<\/Text>/);
-  assert.match(screen, />POTENTIAL EARNINGS<\/Text>/);
+  assert.match(screen, />NEARBY DEMAND<\/Text>/);
   assert.match(
     code,
     /summaryEyebrow: \{\s*fontSize: 11,\s*fontWeight: '700',\s*letterSpacing: 1\.2,\s*color: colors\.gold,\s*\}/

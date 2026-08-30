@@ -471,7 +471,9 @@ export function WorkerHomeScreen() {
               </View>
               <View style={styles.summaryDivider} />
               <View style={styles.earningsHalf}>
-                <Text style={styles.summaryEyebrow}>POTENTIAL EARNINGS</Text>
+                {/* Tier A (C6): the summed budgets of the open jobs beside
+                    their count — a fact about demand, not a promise of pay. */}
+                <Text style={styles.summaryEyebrow}>NEARBY DEMAND</Text>
                 {loading ? (
                   <>
                     {/* The figures wait for the feed, exactly as the old

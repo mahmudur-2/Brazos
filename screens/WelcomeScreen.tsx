@@ -180,7 +180,7 @@ export function WelcomeScreen() {
           ]}
         >
           <Ionicons name="shield-checkmark" size={BADGE_ICON} color={surface.accent} />
-          <Text style={styles.badgeText}>Verified workers</Text>
+          <Text style={styles.badgeText}>Local workers</Text>
         </Animated.View>
 
         <Animated.View

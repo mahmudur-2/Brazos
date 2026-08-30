@@ -175,7 +175,7 @@ test('§3.4 · the nudge renders, dismisses per-draft, and never blocks advancin
   const screen = await read('screens/PostJobScreen.tsx');
   const draft = await read('lib/postJobDraft.ts');
 
-  assert.match(screen, /Jobs with a photo get more bids\./);
+  assert.match(screen, /Add photos so workers can see the work\./);
   assert.match(screen, /setPhotoNudgeDismissed\(true\)/, 'the nudge is dismissible');
 
   // The advance control's disabled expression must not mention the nudge or
@@ -203,7 +203,7 @@ test('§3.4 · the nudge renders, dismisses per-draft, and never blocks advancin
 test('§3.2 · guidance shows only for a seeded category while the budget is empty or unfocused [static]', async () => {
   const screen = await read('screens/PostJobScreen.tsx');
 
-  assert.match(screen, /const guidanceLines = isFreshPost \? priceGuidanceLines\(category\) : null;/);
+  assert.match(screen, /const guidanceLines = isFreshPost && PRICE_GUIDANCE \? priceGuidanceLines\(category\) : null;/);
   // RUN P1 RENAMED THE SECOND TERM, not the rule. The min/max pair became one
   // display pill with a single editor behind a pencil, so "an amount is being
   // typed" is now "the budget editor is open" — `editingBudget` — rather than
@@ -583,7 +583,7 @@ test('§6.2 · a null price reads "Ask about this" and prefills no amount; ceili
 
   assert.match(
     profileScreen,
-    /service\.price_cents != null \? 'Book at listed price' : 'Ask about this'/
+    /service\.price_cents != null \? 'Request at listed price' : 'Ask about this'/
   );
   // The amount prefill exists ONLY in the priced branch.
   assert.match(

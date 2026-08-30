@@ -336,3 +336,19 @@ export const DELIVERED_TICKS = false as boolean;
  * deployed; the sheet renders from fixtures today.
  */
 export const TRANSLATION = false as boolean;
+
+/**
+ * Tier A (C6): the static "Suggested starting range" guidance on the
+ * Post-a-Job budget step (lib/priceGuidance.ts). The table is a seed with no
+ * attributed source and no BRAZOS data behind it, so it renders OFF — the
+ * copy sweep's rule: nothing the app cannot prove.
+ *
+ * WAITS ON: an attributed source for every range in lib/priceGuidance.ts, or
+ * BRAZOS's own accepted-offer data once enough exists to replace the seed.
+ * Flip to true then; the module and its fence (tests/conversion.test.mjs
+ * §3.2) are unchanged either way.
+ *
+ * THE GUARD SITE is screens/PostJobScreen.tsx: `guidanceLines` is null while
+ * this is false, so the guidance card never mounts.
+ */
+export const PRICE_GUIDANCE = false as boolean;

@@ -823,12 +823,12 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   // flipped is still where a later reader looks to find out why it could be.
   const source = read('lib/featureFlags.ts');
   const flags = [...source.matchAll(/export const (\w+) = (false|true) as boolean;/g)];
-  assert.equal(flags.length, 11, `the roster is eleven flags (saw ${flags.length})`);
+  assert.equal(flags.length, 12, `the roster is twelve flags (saw ${flags.length})`);
   assert.deepEqual(
     flags.map((f) => f[1]).sort(),
     [
       'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'DELIVERED_TICKS', 'DOCUMENTS',
-      'HIDDEN_CHATS', 'LIVE_LOCATION', 'MARK_UNREAD', 'READ_TICKS',
+      'HIDDEN_CHATS', 'LIVE_LOCATION', 'MARK_UNREAD', 'PRICE_GUIDANCE', 'READ_TICKS',
       'TIMED_BLOCK', 'TRANSLATION',
     ],
     'the flag roster changed — say so in HANDOFF.md as well as here'
@@ -866,7 +866,9 @@ test('[static] every feature flag carries the dependency it waits on, and only t
     'ARCHIVE', 'CLEAR_CHAT', 'DELETE_CHAT', 'DOCUMENTS', 'HIDDEN_CHATS',
     'LIVE_LOCATION', 'MARK_UNREAD', 'READ_TICKS', 'TIMED_BLOCK',
   ];
-  const DARK = ['DELIVERED_TICKS', 'TRANSLATION'];
+  // PRICE_GUIDANCE (Tier A, 2026-08-30) is dark by the copy sweep's rule: the
+  // seeded range table has no attributed source, so the guidance waits on one.
+  const DARK = ['DELIVERED_TICKS', 'PRICE_GUIDANCE', 'TRANSLATION'];
   assert.deepEqual(
     [...LIVE, ...DARK].sort(),
     flags.map((f) => f[1]).sort(),

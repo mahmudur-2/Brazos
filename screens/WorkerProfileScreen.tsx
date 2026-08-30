@@ -418,7 +418,7 @@ export function WorkerProfileScreen() {
                       }
                     >
                       <Text style={styles.serviceBookText}>
-                        {service.price_cents != null ? 'Book at listed price' : 'Ask about this'}
+                        {service.price_cents != null ? 'Request at listed price' : 'Ask about this'}
                       </Text>
                     </Pressable>
                   ) : null}
