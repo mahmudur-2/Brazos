@@ -12,9 +12,14 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import { isReleaseRequested, payoutsCta, type PayoutsStatus } from '../lib/payments';
+import {
+  isReleaseRequested,
+  payoutsCta,
+  workerTakeCents,
+  type PayoutsStatus,
+} from '../lib/payments';
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
-import { fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
+import { deriveEarnings, fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
 import { formatBudget } from '../lib/jobs';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { formatTimeAgo } from '../lib/time';
@@ -105,6 +110,14 @@ export function EarningsScreen() {
         : { kind: 'ready' };
 
   const s = summary;
+  // R6c (D7): every figure a worker reads as "yours" is the take —
+  // amount_cents − platform_fee_cents through the one helper — bucketed by
+  // the same deriveEarnings the ledger read uses, so there is still one
+  // bucketing rule. Sandbox rows carry a zero fee, so no sandbox figure
+  // changes; the fee card below still sums the fees themselves.
+  const take = s
+    ? deriveEarnings(s.rows.map((row) => ({ ...row, amount_cents: workerTakeCents(row) })))
+    : null;
 
   return (
     <>
@@ -118,7 +131,7 @@ export function EarningsScreen() {
         onBack={goBackOrHome}
         state={state}
         sections={
-          !s
+          !s || !take
             ? []
             : [
                 {
@@ -129,19 +142,19 @@ export function EarningsScreen() {
                       <Bucket
                         label="PENDING"
                         icon="shield-outline"
-                        cents={s.pendingCents}
+                        cents={take.pendingCents}
                         note="Held in protection"
                       />
                       <Bucket
                         label="AVAILABLE"
                         icon="wallet-outline"
-                        cents={s.availableCents}
+                        cents={take.availableCents}
                         note="Released to you"
                       />
                       <Bucket
                         label="TRANSFERRED"
                         icon="arrow-up-circle-outline"
-                        cents={s.transferredCents}
+                        cents={take.transferredCents}
                         note={paymentsMode === 'sandbox' ? 'Simulated cash-outs' : 'Transferred to you'}
                       />
                     </View>
@@ -190,7 +203,7 @@ export function EarningsScreen() {
                                     : `Transferred ${row.paid_out_at ? formatTimeAgo(row.paid_out_at) : ''}`}
                               </Text>
                             </View>
-                            <MoneyText cents={row.amount_cents} state={row.status} captionHidden />
+                            <MoneyText cents={workerTakeCents(row)} state={row.status} captionHidden />
                           </View>
                         ))}
                       </View>

@@ -102,6 +102,31 @@ export type Payment = {
 };
 
 /**
+ * R6c (D7): THE one place the worker's take is derived from a ledger row —
+ * amount_cents − platform_fee_cents, both read off the row, no rate anywhere.
+ * Tips carry platform_fee_cents = 0 (enforce_tip_ceiling), so a tip's take is
+ * its full amount. Sandbox rows write platform_fee_cents = 0, so their take
+ * equals amount_cents and no sandbox figure changes. Every worker-facing
+ * "yours" figure — Earnings' buckets and rows, the worker's job card — calls
+ * this; nothing else on the client subtracts a fee.
+ */
+export function workerTakeCents(row: Pick<Payment, 'amount_cents' | 'platform_fee_cents'>): number {
+  return row.amount_cents - row.platform_fee_cents;
+}
+
+/**
+ * R6c (D7): the "Brazos Protection" line of the worker's breakdown — the
+ * customer's protection fee plus the worker-side fee, both read off the row.
+ * A sum of two ledger columns, beside workerTakeCents and nowhere else; the
+ * rates that produced each live in the database's fee_schedule.
+ */
+export function brazosFeeCents(
+  row: Pick<Payment, 'platform_fee_cents' | 'customer_fee_cents'>
+): number {
+  return row.platform_fee_cents + (row.customer_fee_cents ?? 0);
+}
+
+/**
  * THERE IS NO CLIENT FEE CONSTANT (R6a, D10). PLATFORM_FEE_RATE and its two
  * helpers stood in for a schedule that did not exist; the real schedule now
  * lives in the database — quote_job_price() before a ledger row exists, the

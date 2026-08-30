@@ -44,10 +44,12 @@ import {
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { paymentsMode } from '../lib/adapters/payments';
 import {
+  brazosFeeCents,
   fetchJobPaymentState,
   isHeld,
   isReleased,
   isReleaseRequested,
+  workerTakeCents,
   type Payment,
 } from '../lib/payments';
 import { fetchOpenJobDispute } from '../lib/disputes';
@@ -307,21 +309,22 @@ export function WorkerJobScreen() {
     // button is disabled for it — this is the belt to that braces.
     if (uploadingMedia) return;
 
-    // Evidence is optional, so an empty gallery gets one gentle nudge rather
-    // than a hard block — the client sees this as the "after" half of the
-    // job, so it's worth one prompt before finishing without it.
-    if (donePhotos.length === 0 && !doneVideo) {
+    // R6c (D-14 / D6): at least one PHOTO is required to mark the job
+    // complete — it is what the customer approves against, and
+    // transition_job_status refuses without one. So no call is made with an
+    // empty gallery: the reason is said, and the same picker is offered. A
+    // video alone is not a photo. Should the RPC refuse anyway, its own
+    // sentence is shown below, unchanged.
+    if (donePhotos.length === 0) {
       const addNow = await confirmAsync({
-        title: 'Show the client the finished job?',
+        title: 'Add a photo of the finished work',
         message:
-          'A quick photo or short clip shows what you did. You can also finish without one.',
-        confirmText: 'Add photos or video',
-        cancelText: 'Finish without',
+          'At least one photo of the finished work is required to mark this job complete — it’s what the customer approves against. Add one now?',
+        confirmText: 'Add photos',
+        cancelText: 'Not yet',
       });
-      if (addNow) {
-        await pickCompletionMedia();
-        return; // Let them review what was picked, then tap Mark complete again.
-      }
+      if (addNow) await pickCompletionMedia();
+      return; // Let them review what was picked, then tap Mark complete again.
     }
 
     setWorking(true);
@@ -444,7 +447,10 @@ export function WorkerJobScreen() {
                         ? 'PAYMENT PROTECTED'
                         : 'PAYMENT'}
               </Text>
-              <MoneyText cents={payment.amount_cents} state={payment.status} />
+              {/* R6c (D7): the figure a worker reads as "yours" is the take —
+                  amount_cents − platform_fee_cents through the one helper.
+                  Sandbox rows carry a zero fee, so nothing changes there. */}
+              <MoneyText cents={workerTakeCents(payment)} state={payment.status} />
               <Text style={styles.paymentNote}>
                 {(() => {
                   // A7: the disputed/awaiting fork comes from THE derivation
@@ -483,6 +489,34 @@ export function WorkerJobScreen() {
                     : 'The payment isn’t in protection yet — the states here follow the ledger.';
                 })()}
               </Text>
+              {/* R6c (D7): the three-line breakdown, off the row's own
+                  columns, once the customer's charge has actually landed
+                  (held or later) — never on an unfunded row. Card path
+                  only: the sandbox ledger carries no charge figure. */}
+              {paymentsMode === 'stripe' &&
+              payment.charge_amount_cents != null &&
+              (payment.status === 'held' ||
+                payment.status === 'released' ||
+                payment.status === 'paid_out') ? (
+                <View style={styles.breakdown}>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Customer paid</Text>
+                    <Text style={styles.breakdownValue}>
+                      {formatBudget(payment.charge_amount_cents)}
+                    </Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownLabel}>Brazos Protection</Text>
+                    <Text style={styles.breakdownValue}>{formatBudget(brazosFeeCents(payment))}</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={styles.breakdownStrongLabel}>You receive</Text>
+                    <Text style={styles.breakdownStrongValue}>
+                      {formatBudget(workerTakeCents(payment))}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
             </Card>
           ) : null}
 
@@ -549,8 +583,8 @@ export function WorkerJobScreen() {
             <Card>
               <Text style={styles.actionTitle}>Finish up</Text>
               <Text style={styles.actionText}>
-                Add up to {MAX_DONE_PHOTOS} photos and one short video of the
-                finished work (optional), then mark it complete.
+                Add at least one photo of the finished work — up to {MAX_DONE_PHOTOS},
+                plus one short video if you like — then mark it complete.
               </Text>
 
               {doneVideo && (
@@ -621,6 +655,11 @@ export function WorkerJobScreen() {
                 <Text style={styles.mediaCount}>
                   {donePhotos.length}/{MAX_DONE_PHOTOS} photos
                   {doneVideo ? ' · 1 video' : ''}
+                </Text>
+              )}
+              {donePhotos.length === 0 && (
+                <Text style={styles.mediaCount}>
+                  A photo of the finished work is required to mark it complete.
                 </Text>
               )}
 
@@ -726,6 +765,41 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
     lineHeight: 19,
+  },
+  // R6c (D7): the breakdown rows under the payment note.
+  breakdown: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.sm,
+    gap: spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  breakdownLabel: {
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  breakdownValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
+  },
+  breakdownStrongLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: colors.ink,
+  },
+  breakdownStrongValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: colors.ink,
+    fontVariant: ['tabular-nums'],
   },
   safe: {
     flex: 1,
