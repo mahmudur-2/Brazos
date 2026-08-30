@@ -27,9 +27,11 @@ import {
   fetchJobPaymentState,
   fetchJobTip,
   isReleased,
+  isReleaseRequested,
   type Payment,
 } from '../lib/payments';
 import { fetchProfileById } from '../lib/profiles';
+import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { dollarsToCents, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
@@ -76,6 +78,8 @@ export function ReviewAndTipScreen() {
   // form (hardening run, A6/A8).
   const [loadError, setLoadError] = useState<string | null>(null);
   const [workerName, setWorkerName] = useState<string | null>(null);
+  // D15: the payments kill switch, read on focus; a failed read is true.
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
 
   const [tipChoice, setTipChoice] = useState<number | 'custom' | null>(null);
   const [customTip, setCustomTip] = useState('');
@@ -108,6 +112,18 @@ export function ReviewAndTipScreen() {
   useFocusEffect(
     useCallback(() => {
       let active = true;
+      fetchRemoteConfig().then((config) => {
+        if (active) setPaymentsEnabled(config.paymentsEnabled);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
       if (!job.assigned_worker_id) return;
       fetchProfileById(job.assigned_worker_id).then(({ data }) => {
         if (active) setWorkerName(data?.full_name ?? null);
@@ -120,6 +136,11 @@ export function ReviewAndTipScreen() {
 
   const isOwner = !!user && user.id === job.client_id;
   const released = !!payment && isReleased(payment);
+  // D23: a stripe row the customer approved keeps status held until the
+  // provider's transfer lands. The gate below admits it — the decision is
+  // made, and bouncing it back to approval would loop forever.
+  const releaseRequested = !!payment && isReleaseRequested(payment);
+  const stripe = paymentsMode === 'stripe';
 
   const tipCents =
     tipChoice === 'custom'
@@ -181,7 +202,7 @@ export function ReviewAndTipScreen() {
                 message: loadError,
                 onRetry: () => void load(),
               }
-            : payment && !released
+            : payment && !released && !releaseRequested
             ? {
                 kind: 'empty' as const,
                 title: 'Approve the work first',
@@ -215,12 +236,29 @@ export function ReviewAndTipScreen() {
           >
             {payment ? (
               <View style={styles.paymentCard}>
-                <Text style={styles.eyebrow}>PAYMENT RELEASED · SANDBOX</Text>
+                {/* D16 / D23: sandbox keeps its wording verbatim; a stripe
+                    row is either released or approved with the payout on its
+                    way — MoneyText keeps the row's real status either way. */}
+                <Text style={styles.eyebrow}>
+                  {paymentsMode === 'sandbox'
+                    ? 'PAYMENT RELEASED · SANDBOX'
+                    : released
+                      ? 'PAYMENT RELEASED'
+                      : 'APPROVED · PAYOUT ON ITS WAY'}
+                </Text>
                 <MoneyText cents={payment.amount_cents} state={payment.status} />
                 <Text style={styles.cardNote}>
-                  {payment.release_reason === 'auto_approved'
-                    ? 'Released automatically after 72 hours. Sandbox build — no real money moved.'
-                    : 'Released on your approval. Sandbox build — no real money moved.'}
+                  {paymentsMode === 'sandbox'
+                    ? payment.release_reason === 'auto_approved'
+                      ? 'Released automatically after 72 hours. Sandbox build — no real money moved.'
+                      : 'Released on your approval. Sandbox build — no real money moved.'
+                    : released
+                      ? payment.release_reason === 'auto_approved'
+                        ? 'Released automatically after 72 hours.'
+                        : 'Released on your approval.'
+                      : payment.release_reason === 'auto_approved'
+                        ? 'Approved automatically after 72 hours. The payment is on its way to the worker and shows as released when the transfer lands.'
+                        : 'Approved on your say-so. The payment is on its way to the worker and shows as released when the transfer lands.'}
                 </Text>
               </View>
             ) : null}
@@ -244,13 +282,28 @@ export function ReviewAndTipScreen() {
                 <>
                   <MoneyText cents={tip.amount_cents} state={tip.status} />
                   <Text style={styles.cardNote}>
-                    Your tip went to {workerName ?? 'the worker'} on top of the
-                    job payment. Sandbox build — no real money moved.
+                    {paymentsMode === 'sandbox'
+                      ? `Your tip went to ${workerName ?? 'the worker'} on top of the job payment. Sandbox build — no real money moved.`
+                      : `Your tip went to ${workerName ?? 'the worker'} on top of the job payment.`}
                   </Text>
                 </>
-              ) : paymentsMode !== 'sandbox' ? (
+              ) : paymentsMode === 'disabled' ? (
                 <Text style={styles.cardNote}>
                   Payments are off in this build, so tipping is unavailable.
+                </Text>
+              ) : stripe ? (
+                // D3: no tip intent exists yet (R6b owns it), so the tip
+                // controls are hidden in stripe mode and the review controls
+                // above are untouched. One honest sentence, never "paid".
+                <Text style={styles.cardNote}>
+                  {releaseRequested
+                    ? 'Tipping arrives in the next update. Your approved payment is on its way to the worker.'
+                    : 'Tipping arrives in the next update.'}
+                </Text>
+              ) : !paymentsEnabled ? (
+                // D15: the kill switch hides the tip CTA.
+                <Text style={styles.cardNote}>
+                  Payments are paused right now, so tipping is unavailable for the moment.
                 </Text>
               ) : !payment ? (
                 <Text style={styles.cardNote}>
@@ -344,7 +397,11 @@ export function ReviewAndTipScreen() {
       <ConfirmDialog
         visible={confirmTip}
         title={`Send a ${formatBudget(tipCents ?? null)} tip?`}
-        message={`The tip goes straight to ${workerName ?? 'the worker'} as its own ledger entry, separate from the job payment. One tip per job. No real money moves in this sandbox build.`}
+        message={
+          paymentsMode === 'sandbox'
+            ? `The tip goes straight to ${workerName ?? 'the worker'} as its own ledger entry, separate from the job payment. One tip per job. No real money moves in this sandbox build.`
+            : `The tip goes straight to ${workerName ?? 'the worker'} as its own payment, separate from the job payment. One tip per job.`
+        }
         confirmText="Send tip"
         cancelText="Not now"
         loading={sendingTip}

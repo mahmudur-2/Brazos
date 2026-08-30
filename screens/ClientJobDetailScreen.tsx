@@ -41,8 +41,11 @@ import {
   fetchJobPaymentState,
   isHeld,
   isReleased,
+  isReleaseRequested,
   type Payment,
 } from '../lib/payments';
+import { paymentsMode } from '../lib/adapters/payments';
+import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
 import { useFloatingNavClearance } from '../ui/primitives';
@@ -52,7 +55,7 @@ import { goBackOrHome } from '../lib/navigationRef';
 import { acceptOffer, type OfferWithWorker } from '../lib/offers';
 import { BID_SORT_CHIPS, sortBidsForChip, type BidSortChip } from '../lib/compareBids';
 import { jobStage } from '../lib/jobStage';
-import { deriveJobLifecycle, trackStepIndex } from '../lib/jobLifecycle';
+import { deriveJobLifecycle, releaseCountdownLabel, trackStepIndex } from '../lib/jobLifecycle';
 import {
   arrivalWindowLabel,
   budgetRangeLabel,
@@ -125,6 +128,8 @@ export function ClientJobDetailScreen() {
   // render a retry banner instead of consuming the absent rows as truth.
   const [statusReadError, setStatusReadError] = useState(false);
   const [statusReadAttempt, setStatusReadAttempt] = useState(0);
+  // D15: the payments kill switch, read on focus; a failed read is true.
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
   const [workerError, setWorkerError] = useState<string | null>(null);
   const [rehirable, setRehirable] = useState<Set<string>>(new Set());
   // The exact service address (job_private_details). This is the poster's own
@@ -192,6 +197,20 @@ export function ClientJobDetailScreen() {
     payment,
     hasOpenDispute: !!openDispute,
   });
+  // D14: an unfunded stripe row's funding window. Open → the countdown rides
+  // the funding card; closed → canFundNow already refuses (D9), and the card
+  // below says so and offers a re-read, never a charge into a lapsed row.
+  const fundingDueMs =
+    payment?.status === 'unfunded' && payment.funding_due_at
+      ? Date.parse(payment.funding_due_at)
+      : null;
+  const fundingWindowOpen =
+    fundingDueMs != null && Number.isFinite(fundingDueMs) && Date.now() < fundingDueMs;
+  const fundingWindowClosed =
+    fundingDueMs != null && Number.isFinite(fundingDueMs) && Date.now() >= fundingDueMs;
+  // D23: approved, payout pending — the completed branch offers Review for it.
+  const releaseRequested = !!payment && isReleaseRequested(payment);
+  const stripe = paymentsMode === 'stripe';
 
   useEffect(() => {
     screenMountedRef.current = true;
@@ -261,6 +280,18 @@ export function ClientJobDetailScreen() {
         active = false;
       };
     }, [job.id, job.status, statusReadAttempt])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      fetchRemoteConfig().then((config) => {
+        if (active) setPaymentsEnabled(config.paymentsEnabled);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
   );
 
   useEffect(() => {
@@ -935,12 +966,26 @@ export function ClientJobDetailScreen() {
                     : lifecycle === 'completed'
                       ? ' The work is finished, but the worker can’t be paid until the payment is protected and then released.'
                       : ''}
+                  {/* D14: the remaining funding window, in the app's plain
+                      voice, off the one countdown formatter. */}
+                  {fundingWindowOpen
+                    ? ` The funding window closes in ${releaseCountdownLabel(
+                        fundingDueMs as number,
+                        Date.now()
+                      )}.`
+                    : ''}
+                  {!paymentsEnabled
+                    ? ' Payments are paused right now — check back shortly to protect it.'
+                    : ''}
                 </Text>
-                <Button
-                  title="Protect payment in checkout"
-                  palette={emeraldColors}
-                  onPress={() => navigation.navigate('Checkout', { job })}
-                />
+                {/* D15: the kill switch hides the checkout CTA in every mode. */}
+                {paymentsEnabled ? (
+                  <Button
+                    title="Protect payment in checkout"
+                    palette={emeraldColors}
+                    onPress={() => navigation.navigate('Checkout', { job })}
+                  />
+                ) : null}
               </Card>
             ) : payment && isHeld(payment) && job.status === 'assigned' ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
@@ -948,19 +993,51 @@ export function ClientJobDetailScreen() {
                 <View style={styles.paymentShield}>
                   <Ionicons name="shield-outline" size={22} color={colors.gold} />
                 </View>
-                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PROTECTED PAYMENT · SANDBOX</Text>
+                {/* D16: sandbox keeps its label verbatim; stripe drops it. */}
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
+                  {paymentsMode === 'sandbox' ? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'}
+                </Text>
                 <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
                 <Text style={styles.paymentNote}>
-                  Funds stay held until you approve the finished work. Sandbox
-                  build — no real money moves.
+                  {paymentsMode === 'sandbox'
+                    ? 'Funds stay held until you approve the finished work. Sandbox build — no real money moves.'
+                    : 'Funds stay held until you approve the finished work.'}
                 </Text>
+              </Card>
+            ) : payment && fundingWindowClosed ? (
+              // D14 PAST DUE: no checkout CTA (canFundNow refused it — D9), the
+              // window closed, and a re-read: once the row is voided a fresh
+              // checkout follows. Never a payment into a lapsed row.
+              <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
+                <View style={styles.paymentShield}>
+                  <Ionicons name="shield-outline" size={22} color={colors.gold} />
+                </View>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>FUNDING WINDOW CLOSED</Text>
+                <MoneyText cents={payment.amount_cents} state={payment.status} />
+                <Text style={styles.paymentNote}>
+                  The window to protect this payment closed before a card was
+                  charged. A fresh checkout will be available shortly — check
+                  again in a moment.
+                </Text>
+                <Button
+                  title="Check again"
+                  variant="secondary"
+                  palette={emeraldColors}
+                  onPress={() => setStatusReadAttempt((attempt) => attempt + 1)}
+                />
               </Card>
             ) : payment ? (
               <Card palette={emeraldColors} style={[styles.paymentCard, isDark && styles.hairlineDark]}>
                 <View style={styles.paymentShield}>
                   <Ionicons name="shield-outline" size={22} color={colors.gold} />
                 </View>
-                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>PAYMENT · SANDBOX</Text>
+                <Text style={[styles.eyebrow, isDark && styles.eyebrowDark]}>
+                  {paymentsMode === 'sandbox'
+                    ? 'PAYMENT · SANDBOX'
+                    : releaseRequested
+                      ? 'APPROVED · PAYOUT ON ITS WAY'
+                      : 'PAYMENT'}
+                </Text>
                 <MoneyText cents={payment.amount_cents} state={payment.status} />
               </Card>
             ) : null}
@@ -1098,11 +1175,29 @@ export function ClientJobDetailScreen() {
                   <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
                     <Text style={styles.approvalTitle}>Payment released</Text>
                     <Text style={styles.noticeText}>
-                      All settled with {workerName}. Leave a review — and a tip,
-                      if you’d like.
+                      {stripe
+                        ? `All settled with ${workerName}. Leave a review.`
+                        : `All settled with ${workerName}. Leave a review — and a tip, if you’d like.`}
                     </Text>
                     <Button
-                      title="Review & tip"
+                      title={stripe ? 'Review' : 'Review & tip'}
+                      palette={emeraldColors}
+                      onPress={() => navigation.navigate('ReviewAndTip', { job })}
+                    />
+                  </Card>
+                ) : releaseRequested ? (
+                  // D23: approved, payout pending. The decision is made; the
+                  // review is offered now, and the money copy says on its way
+                  // — never released until the transfer lands.
+                  <Card palette={emeraldColors} style={[styles.approvalCard, isDark && styles.hairlineDark]}>
+                    <Text style={styles.approvalTitle}>Work approved — payout on its way</Text>
+                    <Text style={styles.noticeText}>
+                      You approved {workerName}’s work. The payment is on its
+                      way to them and shows as released when the transfer
+                      lands. Leave a review whenever you like.
+                    </Text>
+                    <Button
+                      title="Review"
                       palette={emeraldColors}
                       onPress={() => navigation.navigate('ReviewAndTip', { job })}
                     />
@@ -1164,7 +1259,11 @@ export function ClientJobDetailScreen() {
               }?`
             : ''
         }
-        message="This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build)."
+        message={
+          paymentsMode === 'sandbox'
+            ? 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll authorize and protect the payment in a sandbox checkout (no real money in this build).'
+            : 'This selects their bid for the job — the other active bids will no longer be eligible. Next you’ll protect the payment in checkout.'
+        }
         confirmText="Accept bid"
         cancelText="Cancel"
         loading={!!pendingAccept && acceptingId === pendingAccept.id}

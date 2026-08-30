@@ -481,6 +481,83 @@ test('[static] CheckoutScreen takes the card through the adapter and the boundar
 });
 
 // ---------------------------------------------------------------------------
+// 6d. The customer screens (D3, D14, D15, D16, D23) — and the loop that cannot come back
+// ---------------------------------------------------------------------------
+
+test('[static] a held row with release_requested_at cannot bounce between ReviewAndTip and ApproveOrDispute', () => {
+  const review = stripComments(read('screens/ReviewAndTipScreen.tsx'));
+  const approve = stripComments(read('screens/ApproveOrDisputeScreen.tsx'));
+  // ReviewAndTip's gate admits the requested row: the only redirect back to
+  // approval is behind `!released && !releaseRequested`.
+  assert.match(review, /const releaseRequested = !!payment && isReleaseRequested\(payment\);/);
+  assert.match(review, /payment && !released && !releaseRequested\s*\?[\s\S]{0,400}navigation\.replace\('ApproveOrDispute'/);
+  assert.equal((review.match(/navigation\.replace\('ApproveOrDispute'/g) ?? []).length, 1);
+  // ApproveOrDispute's approve CTA consults it: `held` excludes a requested
+  // row, and a requested row is settled — it moves ON to review, never
+  // offering approval again.
+  assert.match(approve, /const releaseRequested = !!payment && isReleaseRequested\(payment\);/);
+  assert.match(approve, /const held = !!payment && isHeld\(payment\) && !releaseRequested;/);
+  assert.match(approve, /const settled = released \|\| releaseRequested;/);
+  assert.match(approve, /settled\s*\?\s*\(\) => navigation\.replace\('ReviewAndTip'/);
+  assert.match(approve, /paymentProvider\.releaseJobPayment\(job\.id\)/);
+  // D23 (5): the truth on the approved row — on its way, released only when
+  // the transfer lands — and never "paid".
+  assert.match(approve, /APPROVED · PAYOUT ON ITS WAY/);
+  assert.match(approve, /You approved the work\. The payment is on its way to the worker and shows as released when the transfer lands\./);
+  assert.match(review, /APPROVED · PAYOUT ON ITS WAY/);
+  // "can’t be paid early / until …" are honest negations; an affirmed "paid" is not.
+  for (const [name, src] of [['ReviewAndTip', review], ['ApproveOrDispute', approve]]) {
+    assert.doesNotMatch(src, /\bpaid\b(?! early| out| until)/i, `${name} must never say paid`);
+  }
+  // D15: both read the kill switch on focus; approve hides its release CTA.
+  assert.match(approve, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
+  assert.match(review, /fetchRemoteConfig\(\)\.then\(\(config\) => \{\s*if \(active\) setPaymentsEnabled\(config\.paymentsEnabled\);/);
+  assert.match(approve, /const releaseAllowed = paymentsMode !== 'disabled' && paymentsEnabled;/);
+  assert.match(approve, /held\s*\?\s*releaseAllowed\s*\?\s*`Approve & release/);
+  // D3: stripe mode hides the tip controls and keeps the review section.
+  assert.match(review, /\) : stripe \? \([\s\S]{0,400}Tipping arrives in the next update/);
+  assert.match(review, /<ReviewSection/);
+  assert.doesNotMatch(review, /paymentsMode !== 'sandbox'/);
+  // D16: the sandbox strings are verbatim and gated on the resolved mode.
+  assert.match(review, /paymentsMode === 'sandbox'\s*\?\s*'PAYMENT RELEASED · SANDBOX'/);
+  assert.match(approve, /paymentsMode === 'sandbox'\s*\?\s*released\s*\?\s*'PAYMENT RELEASED · SANDBOX'\s*:\s*'HELD PAYMENT · SANDBOX'/);
+});
+
+test('[static] ClientJobDetail offers Review on an approved row, counts down an unfunded one, and hides checkout when paused', () => {
+  const src = read('screens/ClientJobDetailScreen.tsx');
+  const code = stripComments(src);
+  // D23 (6): the completed branch offers Review for a requested row, after
+  // the released card and before the legacy no-payment review.
+  const completed = code.slice(code.indexOf("job.status === 'completed' ?"));
+  const releasedAt = completed.indexOf('isReleased(payment) ? (');
+  const requestedAt = completed.indexOf('releaseRequested ? (');
+  const legacyAt = completed.indexOf('<ReviewSection');
+  assert.ok(releasedAt > 0 && requestedAt > releasedAt && legacyAt > requestedAt);
+  assert.match(completed, /Work approved — payout on its way/);
+  assert.match(completed, /shows as released when the transfer\s+lands/);
+  assert.match(completed, /title="Review"[\s\S]{0,120}navigation\.navigate\('ReviewAndTip'/);
+  // D14: the countdown reuses the one formatter; a closed window has no CTA
+  // and a re-read.
+  assert.match(code, /releaseCountdownLabel\(\s*fundingDueMs as number,\s*Date\.now\(\)\s*\)/);
+  assert.match(code, /payment && fundingWindowClosed \? \(/);
+  const closedCard = code.slice(code.indexOf('payment && fundingWindowClosed ? ('), code.indexOf(') : payment ? ('));
+  assert.match(closedCard, /FUNDING WINDOW CLOSED/);
+  assert.match(closedCard, /title="Check again"/);
+  assert.doesNotMatch(closedCard, /navigate\('Checkout'/);
+  // D15: the checkout CTA is behind the kill switch.
+  assert.match(code, /\{paymentsEnabled \? \(\s*<Button\s+title="Protect payment in checkout"/);
+  // D16: mode-aware eyebrows; sandbox verbatim.
+  assert.match(code, /paymentsMode === 'sandbox' \? 'PROTECTED PAYMENT · SANDBOX' : 'PROTECTED PAYMENT'/);
+  assert.match(code, /'PAYMENT · SANDBOX'/);
+  assert.match(code, /Next you’ll protect the payment in checkout\./);
+  assert.doesNotMatch(code, /\bpaid\b(?! early| out| until)/i);
+  // JobConfirmed's note is mode-aware too.
+  const confirmed = stripComments(read('screens/JobConfirmedScreen.tsx'));
+  assert.match(confirmed, /paymentsMode === 'sandbox'\s*\?\s*'Sandbox build — these funds are development records, not real money\.'/);
+  assert.match(confirmed, /Your card was charged and the funds are held in protection/);
+});
+
+// ---------------------------------------------------------------------------
 // 7. The kill switch's fallback (D15) — executed
 // ---------------------------------------------------------------------------
 

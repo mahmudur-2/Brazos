@@ -7,6 +7,7 @@ import { MoneyText } from '../ui/primitives/MoneyText';
 import { StatusPill } from '../ui/primitives/StatusPill';
 import { DetailScreen } from '../ui/templates/DetailScreen';
 import type { ScreenState } from '../ui/templates/ScreenStates';
+import { paymentsMode } from '../lib/adapters/payments';
 import { fetchJobPayment, isHeld, type Payment } from '../lib/payments';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { arrivalWindowLabel } from '../lib/jobs';
@@ -123,8 +124,13 @@ export function JobConfirmedScreen() {
           <View style={styles.paymentBlock}>
             <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
             <StatusPill kind="payment" status={payment.status} />
+            {/* D16: the sandbox note renders only in sandbox mode; the card
+                path states the money fact — the row reads held, which is the
+                only state this screen renders over. */}
             <Text style={styles.sandboxNote}>
-              Sandbox build — these funds are development records, not real money.
+              {paymentsMode === 'sandbox'
+                ? 'Sandbox build — these funds are development records, not real money.'
+                : 'Your card was charged and the funds are held in protection until you approve the finished work.'}
             </Text>
           </View>
         </View>

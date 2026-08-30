@@ -21,6 +21,7 @@ import {
   fetchJobPaymentState,
   isHeld,
   isReleased,
+  isReleaseRequested,
   type Payment,
 } from '../lib/payments';
 import {
@@ -32,6 +33,7 @@ import {
   type DisputeReason,
   type JobDispute,
 } from '../lib/disputes';
+import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { completionPhotosOf, completionVideosOf, formatBudget } from '../lib/jobs';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
@@ -79,6 +81,8 @@ export function ApproveOrDisputeScreen() {
   const [confirmWithdraw, setConfirmWithdraw] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  // D15: the payments kill switch, read on focus; a failed read is true.
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -96,6 +100,18 @@ export function ApproveOrDisputeScreen() {
     useCallback(() => {
       void load();
     }, [load])
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      fetchRemoteConfig().then((config) => {
+        if (active) setPaymentsEnabled(config.paymentsEnabled);
+      });
+      return () => {
+        active = false;
+      };
+    }, [])
   );
 
   const isOwner = !!user && user.id === job.client_id;
@@ -132,7 +148,16 @@ export function ApproveOrDisputeScreen() {
             : { kind: 'ready' };
 
   const released = !!payment && isReleased(payment);
-  const held = !!payment && isHeld(payment);
+  // D23: a stripe row the customer approved keeps status held until the
+  // provider's transfer lands, with release_requested_at set. It is decided —
+  // no approve CTA, and review admits it, so nothing can loop back here.
+  const releaseRequested = !!payment && isReleaseRequested(payment);
+  const held = !!payment && isHeld(payment) && !releaseRequested;
+  const settled = released || releaseRequested;
+  const stripe = paymentsMode === 'stripe';
+  // D15 / D18: the release CTA answers to the kill switch and to the mode;
+  // reporting, withdrawing and moving on to review do not.
+  const releaseAllowed = paymentsMode !== 'disabled' && paymentsEnabled;
   // The one funding-CTA derivation (AUD-P1-02, lib/payments) — the same
   // predicate ClientJobDetail renders its checkout card from. True only for
   // the owner on a fundable job with no ledger or an authorized-only row.
@@ -199,16 +224,21 @@ export function ApproveOrDisputeScreen() {
   }
 
   // The pinned action follows the actual money state, in priority order:
-  // an open report offers withdraw; a held payment offers approval; a
-  // released payment moves on to review; report mode submits the report.
+  // an open report offers withdraw; a held payment offers approval (when the
+  // mode and the kill switch allow it); a released — or approved, payout
+  // pending — payment moves on to review; report mode submits the report.
   const submitLabel = reporting
     ? 'Send report'
     : dispute
       ? 'Withdraw report'
       : held
-        ? `Approve & release ${formatBudget(payment?.amount_cents ?? null)}`
-        : released
-          ? 'Continue to review & tip'
+        ? releaseAllowed
+          ? `Approve & release ${formatBudget(payment?.amount_cents ?? null)}`
+          : undefined
+        : settled
+          ? stripe
+            ? 'Continue to review'
+            : 'Continue to review & tip'
           : undefined;
 
   const onSubmit = reporting
@@ -216,8 +246,10 @@ export function ApproveOrDisputeScreen() {
     : dispute
       ? () => setConfirmWithdraw(true)
       : held
-        ? () => setConfirmApprove(true)
-        : released
+        ? releaseAllowed
+          ? () => setConfirmApprove(true)
+          : undefined
+        : settled
           ? () => navigation.replace('ReviewAndTip', { job })
           : undefined;
 
@@ -228,8 +260,8 @@ export function ApproveOrDisputeScreen() {
         subtitle={job.title}
         onBack={() => (reporting ? setReporting(false) : goBackOrHome())}
         state={state}
-        submitLabel={paymentsMode === 'sandbox' || released ? submitLabel : undefined}
-        onSubmit={paymentsMode === 'sandbox' || released ? onSubmit : undefined}
+        submitLabel={submitLabel}
+        onSubmit={onSubmit}
         submitDisabled={reporting ? !reason : false}
         submitLoading={reporting ? submittingReport : releasing || withdrawing}
         secondaryLabel={
@@ -269,16 +301,41 @@ export function ApproveOrDisputeScreen() {
 
         {payment && !canFundNow ? (
           <View style={styles.paymentCard}>
+            {/* D16: mode-aware copy. Sandbox keeps its wording verbatim;
+                stripe says the same money fact without the sandbox label.
+                MoneyText keeps the row's real status — held is still
+                literally true on an approved stripe row (D23); the eyebrow
+                and the note carry the approval. */}
             <Text style={styles.eyebrow}>
-              {released ? 'PAYMENT RELEASED · SANDBOX' : 'HELD PAYMENT · SANDBOX'}
+              {paymentsMode === 'sandbox'
+                ? released
+                  ? 'PAYMENT RELEASED · SANDBOX'
+                  : 'HELD PAYMENT · SANDBOX'
+                : released
+                  ? 'PAYMENT RELEASED'
+                  : releaseRequested
+                    ? 'APPROVED · PAYOUT ON ITS WAY'
+                    : 'HELD PAYMENT'}
             </Text>
             <MoneyText cents={payment.amount_cents} state={payment.status} size="lg" />
             <Text style={styles.paymentNote}>
-              {released
-                ? payment.release_reason === 'auto_approved'
-                  ? 'Released automatically after 72 hours with no issue reported. Sandbox build — no real money moved.'
-                  : 'You approved the work and the funds were released. Sandbox build — no real money moved.'
-                : 'Approving releases these funds to the worker. If something isn’t right, report the issue instead — release waits while a report is open. Sandbox build, no real money.'}
+              {paymentsMode === 'sandbox'
+                ? released
+                  ? payment.release_reason === 'auto_approved'
+                    ? 'Released automatically after 72 hours with no issue reported. Sandbox build — no real money moved.'
+                    : 'You approved the work and the funds were released. Sandbox build — no real money moved.'
+                  : 'Approving releases these funds to the worker. If something isn’t right, report the issue instead — release waits while a report is open. Sandbox build, no real money.'
+                : released
+                  ? payment.release_reason === 'auto_approved'
+                    ? 'Released automatically after 72 hours with no issue reported.'
+                    : 'You approved the work and the payment was released to the worker.'
+                  : releaseRequested
+                    ? payment.release_reason === 'auto_approved'
+                      ? 'Released automatically after 72 hours with no issue reported. The payment is on its way to the worker and shows as released when the transfer lands.'
+                      : 'You approved the work. The payment is on its way to the worker and shows as released when the transfer lands.'
+                    : releaseAllowed
+                      ? 'Approving releases this payment to the worker. If something isn’t right, report the issue instead — release waits while a report is open.'
+                      : 'Payments are paused right now, so approval is unavailable for the moment. If something isn’t right, you can still report the issue.'}
             </Text>
           </View>
         ) : canFundNow ? (
@@ -399,7 +456,11 @@ export function ApproveOrDisputeScreen() {
       <ConfirmDialog
         visible={confirmApprove}
         title={`Release ${formatBudget(payment?.amount_cents ?? null)} to the worker?`}
-        message="This approves the finished work and releases the held sandbox funds to the worker. It can’t be undone. No real money moves in this build."
+        message={
+          paymentsMode === 'sandbox'
+            ? 'This approves the finished work and releases the held sandbox funds to the worker. It can’t be undone. No real money moves in this build.'
+            : 'This approves the finished work and releases the payment to the worker. It can’t be undone — the payout is sent on the provider’s schedule and shows as released when the transfer lands.'
+        }
         confirmText="Approve & release"
         cancelText="Not yet"
         loading={releasing}
