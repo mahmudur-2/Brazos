@@ -1535,6 +1535,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -1573,6 +1574,7 @@ export type Database = {
           platform_fee_cents: number
           provider?: string
           provider_ref?: string | null
+          refund_attempts?: number
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
@@ -1611,6 +1613,7 @@ export type Database = {
           platform_fee_cents?: number
           provider?: string
           provider_ref?: string | null
+          refund_attempts?: number
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
@@ -2166,6 +2169,7 @@ export type Database = {
           platform_fee_cents: number | null
           provider: string | null
           provider_ref: string | null
+          refund_attempts: number | null
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -2204,6 +2208,7 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
@@ -2242,6 +2247,7 @@ export type Database = {
           platform_fee_cents?: number | null
           provider?: string | null
           provider_ref?: string | null
+          refund_attempts?: number | null
           refund_cents?: number | null
           refund_reason?: string | null
           refund_ref?: string | null
@@ -2526,6 +2532,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -2573,6 +2580,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -2896,6 +2904,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3014,6 +3023,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3297,6 +3307,15 @@ export type Database = {
           worker_receives_cents: number
         }[]
       }
+      record_settlement_attempt: {
+        Args: {
+          p_error: string
+          p_kind: string
+          p_payment_id: string
+          p_rotate: boolean
+        }
+        Returns: boolean
+      }
       refresh_worker_semantic_doc: {
         Args: { p_worker: string }
         Returns: undefined
@@ -3329,6 +3348,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3376,6 +3396,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3436,6 +3457,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3483,6 +3505,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3531,6 +3554,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3579,6 +3603,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3626,6 +3651,7 @@ export type Database = {
           platform_fee_cents: number
           provider: string
           provider_ref: string | null
+          refund_attempts: number
           refund_cents: number | null
           refund_reason: string | null
           refund_ref: string | null
@@ -3690,6 +3716,7 @@ export type Database = {
         Args: { p_status: string; p_user_id: string }
         Returns: boolean
       }
+      settlement_retry_enabled: { Args: never; Returns: boolean }
       settlement_schedules_enabled: { Args: never; Returns: boolean }
       should_notify: {
         Args: { p_actor: string; p_category: string; p_recipient: string }
