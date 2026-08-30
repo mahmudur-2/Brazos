@@ -99,6 +99,12 @@ export default (_context: ConfigContext): ExpoConfig => ({
       // permission iOS offers to support a case the feature deliberately does
       // not serve — and App Review asks what uses them.
     },
+    // R6a (D8): Time Sensitive notifications are an ENTITLEMENT, not an
+    // Info.plist key, so they live here and Build A carries them — no second
+    // build for it. The matching capability sits on each variant's App ID.
+    entitlements: {
+      'com.apple.developer.usernotifications.time-sensitive': true,
+    },
   },
   android: {
     package: `com.brazos.app${BUNDLE_SUFFIX[VARIANT]}`,
@@ -132,33 +138,35 @@ export default (_context: ConfigContext): ExpoConfig => ({
     bundler: 'metro',
     output: 'single',
   },
-  // Carried over whole from app.json: same entries, same order, same usage
-  // strings to the byte. A usage string is what App Review reads out loud.
+  // Carried over whole from app.json: same entries, same order. The usage
+  // strings say "Brazos" (operator decision 2026-08-29, D17: the all-caps
+  // form is the app's NAME — DISPLAY_NAME and slug — never its prose voice).
+  // A usage string is what App Review reads out loud.
   plugins: [
     'expo-font',
     [
       'expo-image-picker',
       {
         photosPermission:
-          'BRAZOS uses your photo library so you can attach photos and videos to jobs, messages, reviews, and your profile.',
+          'Brazos uses your photo library so you can attach photos and videos to jobs, messages, reviews, and your profile.',
         cameraPermission:
-          'BRAZOS uses the camera to take photos and videos of jobs, completed work, and your profile.',
+          'Brazos uses the camera to take photos and videos of jobs, completed work, and your profile.',
         microphonePermission:
-          'BRAZOS uses the microphone to record voice messages and job videos.',
+          'Brazos uses the microphone to record voice messages and job videos.',
       },
     ],
     [
       'expo-location',
       {
         locationWhenInUsePermission:
-          'BRAZOS uses your location to show nearby jobs and to place job locations on the map.',
+          'Brazos uses your location to show nearby jobs and to place job locations on the map.',
       },
     ],
     [
       'expo-audio',
       {
         microphonePermission:
-          'BRAZOS uses the microphone to record voice messages and job videos.',
+          'Brazos uses the microphone to record voice messages and job videos.',
       },
     ],
     [
@@ -171,23 +179,30 @@ export default (_context: ConfigContext): ExpoConfig => ({
       'expo-speech-recognition',
       {
         microphonePermission:
-          'BRAZOS uses your microphone only while you are searching by voice, and stops listening when you finish speaking.',
+          'Brazos uses your microphone only while you are searching by voice, and stops listening when you finish speaking.',
         speechRecognitionPermission:
           'Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server.',
       },
     ],
     'expo-video',
     'expo-secure-store',
-    // AN EMPTY OPTIONS OBJECT, NOT A BARE STRING, and the difference is a
-    // crash. withStripeIos destructures props.merchantIdentifier, so a bare
-    // string passes undefined and `expo export` dies with a TypeError before
-    // Metro starts. Empty is also exactly the posture we want: an undefined
-    // merchant identifier writes NO Apple Pay entitlement, and enableGooglePay
-    // defaults to false, which actively REMOVES the Google Pay meta-data from
-    // the Android manifest. Neither wallet is enabled and neither may be — the
-    // merchant ID an Apple Pay entitlement would need does not exist in the
-    // developer account, and a missing one fails iOS code signing.
-    ['@stripe/stripe-react-native', {}],
+    // AN OPTIONS OBJECT, NOT A BARE STRING, and the difference is a crash:
+    // withStripeIos destructures props.merchantIdentifier, so a bare string
+    // passes undefined and `expo export` dies with a TypeError before Metro
+    // starts. R6a (D8): the merchant identifier writes the Apple Pay
+    // entitlement so Build A CARRIES it, but the payment sheet is initialised
+    // without any applePay parameter (lib/payments/stripe.ts) — only cards are
+    // offered, because the Apple Pay processing certificate does not exist
+    // yet. Enabling it later is that certificate plus the sheet parameter, no
+    // rebuild. enableGooglePay: false actively REMOVES the Google Pay
+    // meta-data from the Android manifest. If Build A fails at code signing,
+    // look at each variant's App ID capabilities (bundle ids are suffixed per
+    // variant): this merchant identifier and the Time Sensitive Notifications
+    // capability the entitlement below needs — EAS normally syncs both.
+    [
+      '@stripe/stripe-react-native',
+      { merchantIdentifier: 'merchant.app.brazos.mobile', enableGooglePay: false },
+    ],
     // SOURCE-MAP UPLOAD IS ON NOW, which is the whole reason this stopped
     // being a bare string. The plugin writes a sentry.properties the native
     // build steps read, and without the three values below sentry-cli has no

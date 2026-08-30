@@ -702,8 +702,9 @@ test('[static] app.config.ts registers the plugin with the two verbatim usage st
   );
   assert.ok(entry, 'the expo-speech-recognition config plugin must be registered');
   assert.deepEqual(entry[1], {
+    // "Brazos" in prose (R6a, D17): the all-caps form is the app's name only.
     microphonePermission:
-      'BRAZOS uses your microphone only while you are searching by voice, and stops listening when you finish speaking.',
+      'Brazos uses your microphone only while you are searching by voice, and stops listening when you finish speaking.',
     speechRecognitionPermission:
       'Speech is recognized on your device to turn what you say into a search. Nothing is sent to a server.',
   });

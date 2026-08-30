@@ -558,6 +558,27 @@ test('[static] ClientJobDetail offers Review on an approved row, counts down an 
 });
 
 // ---------------------------------------------------------------------------
+// 6e. app.config.ts (D8, D17) — Build A's config-only native changes
+// ---------------------------------------------------------------------------
+
+test('[static] app.config.ts carries the merchant identifier, no Google Pay, the Time Sensitive entitlement, and "Brazos" in every usage string', () => {
+  const config = stripComments(read('app.config.ts'));
+  const flat = config.replace(/\s+/g, ' ');
+  assert.match(flat, /\[ '@stripe\/stripe-react-native', \{ merchantIdentifier: 'merchant\.app\.brazos\.mobile', enableGooglePay: false \}, \]/);
+  // The sheet never asks for Apple Pay (D8): the identifier ships, the wallet is not offered.
+  assert.doesNotMatch(stripComments(read('lib/payments/stripe.ts')), /applePay/);
+  // An ENTITLEMENT under ios, not an Info.plist key.
+  assert.match(flat, /entitlements: \{ 'com\.apple\.developer\.usernotifications\.time-sensitive': true, \}/);
+  assert.doesNotMatch(flat, /infoPlist: \{[^}]*time-sensitive/);
+  // D17: the six usage strings, and the app's own name unchanged.
+  const usage = [...config.matchAll(/'(Brazos|BRAZOS) uses [^']+'/g)].map((m) => m[0]);
+  assert.equal(usage.length, 6, `six usage strings (saw ${usage.length})`);
+  for (const sentence of usage) assert.match(sentence, /^'Brazos uses /, `prose says Brazos: ${sentence}`);
+  assert.match(config, /slug: 'BRAZOS'/);
+  assert.match(config, /production: 'BRAZOS'/);
+});
+
+// ---------------------------------------------------------------------------
 // 7. The kill switch's fallback (D15) — executed
 // ---------------------------------------------------------------------------
 
