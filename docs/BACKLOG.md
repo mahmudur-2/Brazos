@@ -11,6 +11,7 @@ Append; never dispatch from chat memory. A dispatch that needs an item reads it 
 ## v1.2 (after ten real users)
 - Instant payouts · Live Activities · Instant Book · automatic recurrence
 - Per-screen UI Studio generalised from dev-tools/HomeDesignStudio
+- Android as a shipping target — decide with real data after ten users.
 
 ## Side backlog (moved from Claude memory 2026-08-30)
 1. `job-photos` and `avatars` buckets are public with permanent unauthenticated URLs — batch with MEDIA1; do not fix via the dashboard "Remove policy" button

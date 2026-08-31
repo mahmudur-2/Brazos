@@ -24,9 +24,11 @@ implemented, the code wins and this file gets fixed.
 
 ## Target and trunk
 
-Expo native app shipping on **iOS and Android**. Both are shipping targets:
-Android is built, tested and shipped alongside iOS, and work may target it.
-`app.config.ts` carries a complete Android block and `npm run android` exists.
+Expo native app shipping on **iOS**. iOS is the only shipping target for v1;
+the Android configuration stays in the repository and keeps building —
+`app.config.ts` carries a complete Android block and `npm run android` exists —
+but no run treats Android as a release target, and no work is scheduled for it
+before ten real users.
 Derive the Expo SDK from `package.json`; consult version-matched Expo docs
 only before changing behavior that depends on a version-sensitive Expo API —
 not for ordinary layout, styling, or app logic. Base branch is **`mainexpo`**:
