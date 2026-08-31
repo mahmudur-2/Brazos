@@ -1,5 +1,8 @@
 # BRAZOS — Repository Instructions
 
+@docs/GATES.md
+@docs/SCOPE.md
+
 Permanent policy and invariants. Nothing here is current state.
 
 ## Source-of-truth hierarchy
@@ -258,3 +261,7 @@ The harness supplies its own `__BRAZOS_CONFIG__` for a project that does not
 exist and answers every non-local request itself, so it needs no credentials and
 reaches no database. It is a comparison aid for `docs/mockups/`, not a check
 `npm run verify` runs.
+
+## Gates
+
+`docs/GATES.md` is the phase gate and `docs/SCOPE.md` the feature list; both are binding. No screen or feature run while Gate 1 has an open box. A feature not in SCOPE.md is appended to `docs/BACKLOG.md` under v1.2 and the run continues without building it. A gate box is ticked only with the evidence path written beside it — a file, a test name, a HANDOFF line — never from a plan or a prompt. `docs/DECISIONS.md` carries dated taste decisions (font, colour, asset, spacing); none is reversed within 48 hours.

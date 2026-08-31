@@ -29,6 +29,12 @@ appears in no document.
 | File | Owns |
 | --- | --- |
 | `CLAUDE.md` | Permanent policy and invariants. Binding. |
+| `docs/GATES.md` | The phase gates. Binding — imported by `CLAUDE.md`. A box ticks only with its evidence path beside it; an open box carries what is still missing. |
+| `docs/SCOPE.md` | The v1 feature list, plus the frozen list of everything that already exists beyond it. Binding — imported by `CLAUDE.md`. |
+| `docs/DOMAIN.md` | The model a run reads before writing: state machines, tables, RPC contracts, product rules. Pointers only, never definitions. |
+| `docs/DECISIONS.md` | The top-level dated decision log, append-only. The root `DECISIONS.md` and `docs/emerald-v2/DECISIONS.md` are its prior history. |
+| `docs/BACKLOG.md` | The only place unscheduled work lives. A dispatch reads an item from here, never from chat memory. |
+| `docs/LAUNCH_CHECK.md` | The pre-run checklist for an overnight dispatch; every line ticks before the launch command. |
 | `AGENTS.md` | Reading order for an agent starting a session. |
 | `HANDOFF.md` | Current operational context: last work, blockers, next steps. |
 | `docs/architecture.md` | Implemented architecture, reconstructed from source. |
