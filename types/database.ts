@@ -1988,6 +1988,7 @@ export type Database = {
           rating: number
           reviewee_id: string
           reviewer_id: string
+          would_again: boolean | null
         }
         Insert: {
           comment?: string | null
@@ -1998,6 +1999,7 @@ export type Database = {
           rating: number
           reviewee_id: string
           reviewer_id: string
+          would_again?: boolean | null
         }
         Update: {
           comment?: string | null
@@ -2008,6 +2010,7 @@ export type Database = {
           rating?: number
           reviewee_id?: string
           reviewer_id?: string
+          would_again?: boolean | null
         }
         Relationships: [
           {
@@ -2719,8 +2722,12 @@ export type Database = {
         Args: { p_client_id: string }
         Returns: {
           cancelled: number
+          cancelled_after_hire: number
           completed: number
           posted: number
+          rehires: number
+          would_again_total: number
+          would_again_yes: number
         }[]
       }
       connect_onboarding_enabled: { Args: never; Returns: boolean }
@@ -2855,6 +2862,7 @@ export type Database = {
           p_photos?: Json
           p_rating: number
           p_reviewee_id: string
+          p_would_again?: boolean
         }
         Returns: {
           comment: string | null
@@ -2865,6 +2873,7 @@ export type Database = {
           rating: number
           reviewee_id: string
           reviewer_id: string
+          would_again: boolean | null
         }
         SetofOptions: {
           from: "*"
@@ -3305,19 +3314,26 @@ export type Database = {
       portfolio_category_freeform_enabled: { Args: never; Returns: boolean }
       post_wizard_fields_enabled: { Args: never; Returns: boolean }
       profile_review_summary: {
-        Args: { p_user: string }
+        Args: { p_role?: string; p_user: string }
         Returns: {
           average: number
           five: number
           four: number
+          is_new: boolean
           one: number
+          shown_average: number
           three: number
           total: number
           two: number
         }[]
       }
       profile_reviews: {
-        Args: { p_limit?: number; p_offset?: number; p_user: string }
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_role?: string
+          p_user: string
+        }
         Returns: {
           comment: string
           created_at: string
@@ -3473,6 +3489,15 @@ export type Database = {
         Returns: string
       }
       review_integrity_enabled: { Args: never; Returns: boolean }
+      review_is_revealed: {
+        Args: {
+          p_created_at: string
+          p_job_id: string
+          p_reviewee_id: string
+          p_reviewer_id: string
+        }
+        Returns: boolean
+      }
       sandbox_authorize_job_payment: {
         Args: { p_job_id: string }
         Returns: {

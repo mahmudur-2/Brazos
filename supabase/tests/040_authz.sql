@@ -41,7 +41,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(537);
+select plan(540);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -823,7 +823,8 @@ select tests.clear_auth();
 select is((select count(*) from public.payments where job_id = :'j_done' and status = 'paid_out' and payee_id = :'worker'), 2::bigint, 'runner: the swept rows are paid_out and belong to the worker');
 
 -- ---------------------------------------------------------------------------
--- §11. reviews — create_review, reviews_select_party, the profile readers.
+-- §11. reviews — create_review, the double-blind reviews_select_party (R8a
+--      D1), the profile readers over REVEALED rows only.
 -- ---------------------------------------------------------------------------
 select tests.authenticate_as(:'bidder');
 select throws_ok($$ select public.create_review((select v from fx where k = 'j_done'), (select v from fx where k = 'worker'), 1, 'sour grapes') $$,
@@ -842,18 +843,26 @@ select throws_ok($$ insert into public.reviews (job_id, reviewer_id, reviewee_id
 select tests.authenticate_anon();
 select throws_ok($$ select public.create_review((select v from fx where k = 'j_done'), (select v from fx where k = 'worker'), 5, 'x') $$,
   '42501', 'permission denied for function create_review', 'anon: cannot execute create_review');
+-- The double-blind sequence (R8a D1): the owner's review exists the moment it
+-- is written, but its reviewee reads zero rows until the counterpart lands.
 select tests.authenticate_as(:'owner');
 select (public.create_review(:'j_done', :'worker', 5, 'AUTHZ great work')).id as r_ow \gset
 insert into fx values ('r_ow', :'r_ow');
-select is((select count(*) from public.reviews where id = :'r_ow'), 1::bigint, 'owner: create_review of the worker on j_done succeeds and they read it');
+select is((select count(*) from public.reviews where id = :'r_ow'), 1::bigint, 'owner (reviewer): create_review of the worker on j_done succeeds and they read their own while it is blind');
 select tests.authenticate_as(:'worker');
-select is((select count(*) from public.reviews where id = :'r_ow'), 1::bigint, 'worker (reviewee): reads the review about them');
-select lives_ok($$ select public.create_review((select v from fx where k = 'j_done'), (select v from fx where k = 'owner'), 5, 'AUTHZ great client') $$, 'worker: create_review of the owner succeeds');
+select is((select count(*) from public.reviews where id = :'r_ow'), 0::bigint, 'worker (reviewee): reads ZERO rows through the table while the review is blind');
+select tests.authenticate_as(:'stranger');
+select is((select count(*) from public.profile_reviews(:'worker')), 0::bigint, 'stranger: profile_reviews shows nothing while the only review is blind');
+select tests.authenticate_as(:'worker');
+select lives_ok($$ select public.create_review((select v from fx where k = 'j_done'), (select v from fx where k = 'owner'), 5, 'AUTHZ great client') $$, 'worker: create_review of the owner succeeds (the counterpart)');
+select is((select count(*) from public.reviews where job_id = :'j_done'), 2::bigint, 'worker: the counterpart revealed both — they now read both j_done reviews');
+select tests.authenticate_as(:'owner');
+select is((select count(*) from public.reviews where job_id = :'j_done'), 2::bigint, 'owner: reads both j_done reviews once mutual');
 select tests.authenticate_as(:'bidder');
 select is((select count(*) from public.reviews where job_id = :'j_done'), 0::bigint, 'bidder: reads no j_done reviews');
 select tests.authenticate_as(:'stranger');
 select is((select count(*) from public.reviews where job_id = :'j_done'), 0::bigint, 'stranger: reads no j_done reviews through the table');
-select is((select count(*) from public.profile_reviews(:'worker')), 1::bigint, 'stranger: profile_reviews shows the worker''s public review (marketplace reputation, by design)');
+select is((select count(*) from public.profile_reviews(:'worker')), 1::bigint, 'stranger: profile_reviews shows only the revealed worker-role review (the counterpart is customer-role, about the owner)');
 select is((select total from public.profile_review_summary(:'worker')), 1, 'stranger: profile_review_summary counts it');
 select tests.authenticate_anon();
 select is((select count(*) from public.reviews where job_id = :'j_done'), 0::bigint, 'anon: reads zero reviews');
@@ -1174,14 +1183,14 @@ select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('anon', p.oid, 'EXECUTE')),
-  'phase76_rls_posture',
-  'anon may execute exactly one SECURITY DEFINER function: phase76_rls_posture (RLS on/off flags, no names, no rows)');
+  'phase76_rls_posture, review_is_revealed',
+  'anon may execute exactly two SECURITY DEFINER functions: phase76_rls_posture (RLS on/off flags, no names, no rows) and review_is_revealed (R8a — the reviews SELECT policy calls it, and the policy must evaluate for anon''s column-probe grant; a boolean about row visibility, no rows)');
 select is(
   (select coalesce(string_agg(p.proname, ', ' order by p.proname), '')
      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
     where n.nspname = 'public' and p.prosecdef and has_function_privilege('authenticated', p.oid, 'EXECUTE')),
-  'accept_bid, accept_legal_documents, accept_offer, account_deletion_blockers, account_deletion_enabled, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_bid, create_job, create_job_request, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_bid_count, job_bid_counts, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, job_request_parties_ok, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, match_workers_semantic, messaging_unlocked, my_payouts_enabled, my_payouts_status, my_pending_job_requests, my_pending_offers, open_job_dispute, phase68_deleted_at_authorization_enabled, phase69_execute_lockdown_enabled, phase70_unsend_message_authz_enabled, phase71_reviews_read_lockdown_enabled, phase72_storage_read_lockdown_enabled, phase76_rls_posture, profile_review_summary, profile_reviews, quote_job_price, register_push_token, release_job_payment, respond_job_request, sandbox_authorize_job_payment, sandbox_cash_out, sandbox_hold_job_payment, sandbox_release_job_payment, sandbox_tip_worker, set_active_mode, set_block, set_conversation_state, set_direct_thread_read_at, set_job_property, should_notify, start_live_location, stop_live_location, transition_job_status, unban_user, unsend_message, update_job_details, update_live_location, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
-  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, my_payouts_enabled, quote_job_price, release_job_payment; R5b added my_payouts_status)');
+  'accept_bid, accept_legal_documents, accept_offer, account_deletion_blockers, account_deletion_enabled, admin_open_reports, ban_user, begin_job_payment, begin_tip_payment, can_delete_own_job, cancel_job, client_job_stats, counter_offer, create_bid, create_job, create_job_request, create_offer, create_review, current_fee, current_user_is_admin, current_user_is_banned, decline_offer, delete_my_account, get_my_active_mode, get_my_profile, is_active_user, is_blocked_between, is_profile_active, job_bid_count, job_bid_counts, job_hotspots, job_offer_count, job_offer_counts, job_payment_state, job_request_parties_ok, jobs_in_cell, jobs_within_radius, mark_direct_thread_read, mark_worker_arrival, match_workers_semantic, messaging_unlocked, my_payouts_enabled, my_payouts_status, my_pending_job_requests, my_pending_offers, open_job_dispute, phase68_deleted_at_authorization_enabled, phase69_execute_lockdown_enabled, phase70_unsend_message_authz_enabled, phase71_reviews_read_lockdown_enabled, phase72_storage_read_lockdown_enabled, phase76_rls_posture, profile_review_summary, profile_reviews, quote_job_price, register_push_token, release_job_payment, respond_job_request, review_is_revealed, sandbox_authorize_job_payment, sandbox_cash_out, sandbox_hold_job_payment, sandbox_release_job_payment, sandbox_tip_worker, set_active_mode, set_block, set_conversation_state, set_direct_thread_read_at, set_job_property, should_notify, start_live_location, stop_live_location, transition_job_status, unban_user, unsend_message, update_job_details, update_live_location, update_my_profile, withdraw_job_dispute, withdraw_offer, worker_job_stats',
+  'the SECURITY DEFINER functions authenticated may execute are exactly this list (R4 added begin_job_payment, begin_tip_payment, cancel_job, current_fee, my_payouts_enabled, quote_job_price, release_job_payment; R5b added my_payouts_status; R8a added review_is_revealed)');
 select ok(has_function_privilege('service_role', 'public.claim_notification_batch(integer)', 'EXECUTE'), 'service_role may execute claim_notification_batch (positive control for the two refusals below)');
 -- R4: the service-role-only money functions, same pattern — the positive
 -- control is service_role's privilege, the proof is the stranger's refusal.

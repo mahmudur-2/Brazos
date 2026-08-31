@@ -7,8 +7,9 @@
 --
 -- Signatures were stale and are pinned to the live ones: create_job grew to
 -- fifteen parameters (phase49), transition_job_status to four (phase35's
--- completion videos), create_review to five (phase37's photos).
--- create_bid(uuid, integer, text) and accept_bid(uuid, uuid) were unchanged.
+-- completion videos), create_review to five (phase37's photos) and then six
+-- (R8a's would_again). create_bid(uuid, integer, text) and
+-- accept_bid(uuid, uuid) were unchanged.
 --
 -- One invariant cannot be proven on the local stack and says so instead of
 -- passing vacuously: the chat-media buckets are storage DATA rows, which the
@@ -52,7 +53,7 @@ select ok(has_function_privilege('authenticated',
 select ok(has_function_privilege('authenticated', 'public.create_bid(uuid, integer, text)', 'EXECUTE'), 'authenticated may execute create_bid(uuid, integer, text) (deprecated shim, signature unchanged)');
 select ok(has_function_privilege('authenticated', 'public.accept_bid(uuid, uuid)', 'EXECUTE'), 'authenticated may execute accept_bid(uuid, uuid) (deprecated shim, signature unchanged)');
 select ok(has_function_privilege('authenticated', 'public.transition_job_status(uuid, text, jsonb, jsonb)', 'EXECUTE'), 'authenticated may execute transition_job_status under its four-parameter signature');
-select ok(has_function_privilege('authenticated', 'public.create_review(uuid, uuid, integer, text, jsonb)', 'EXECUTE'), 'authenticated may execute create_review under its five-parameter signature');
+select ok(has_function_privilege('authenticated', 'public.create_review(uuid, uuid, integer, text, jsonb, boolean)', 'EXECUTE'), 'authenticated may execute create_review under its six-parameter signature (R8a''s would_again)');
 
 -- chat media: private buckets (data — see the header) and party-only reads
 select (count(*) = 0) as no_chat_buckets from storage.buckets where id in ('chat-photos', 'chat-audio') \gset
