@@ -1,6 +1,6 @@
 # LAUNCH_CHECK — tick every line before an overnight run. No questions after the last tick.
 
-- [ ] Prompt finished before 18:00; it is now before 23:00
+- [ ] Prompt last edited before 00:00 (preflight checks the file's write time); dispatching at any hour is fine
 - [ ] `preflight.ps1 -Prompt <file>` printed READY (paste the last line here)
 - [ ] Prompt file name is new; saved as a downloaded file, never pasted from a rendered page
 - [ ] Base gate is an ancestry check; allowlisted dirty paths named

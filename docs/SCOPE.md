@@ -17,7 +17,7 @@ Anything not listed goes to `docs/BACKLOG.md` under v1.2 — it is not built bef
 ## Not in v1 (do not build before ten real users ask)
 Voice messages · live location · document sharing · translation · hidden / archived / muted chats · Android · web · design studio · second theme · second font · instant payouts · calendars · AI features
 
-## Built already — frozen (BRAZOS only; a new project deletes this section)
+## Built already — no enhancement (BRAZOS only; a new project deletes this section)
 Everything below already exists in the repository and sits beyond the "In v1" line. It is
 listed so that a run can recognise it and leave it alone — not as a licence to extend it.
 
@@ -50,7 +50,7 @@ Not flagged, and equally out of scope for new work:
 The second font is NOT built: `assets/fonts/PlayfairDisplay-Bold.ttf` is on disk with its
 licence and is loaded by nothing — the app runs on platform faces.
 
-No run touches these before ten real users.
+These receive no enhancement work before ten real users. They may be removed, disabled or changed when required for v1 correctness, security, build health or simplification — delete what you are not shipping.
 
 ## Change control
 Adding a line to "In v1" requires a dated entry in `docs/DECISIONS.md` naming the user request that justified it.
