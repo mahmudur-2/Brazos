@@ -43,6 +43,150 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN jobs1 COMPLETED (2026-08-31) — the Home job card gets drawn for the first time, and the harness stops claiming it invents nothing
+
+Two commits, both client-side scratch infrastructure: `1144059` (`scripts/shots.mjs` and
+`tests/shotHarness.test.mjs`) and this record. HEAD was `d344c0e` at the base gate.
+
+**No database was contacted, local or remote; no SQL was written or run; no migration
+exists in either commit; no dependency was added; no image file was opened.** The write
+surface was exactly two files and the commit touches exactly those two. Nothing under
+`screens/`, `components/`, `ui/`, `lib/`, `hooks/`, `navigation/`, `modes/`, `supabase/`,
+`.github/` or `.claude/` is in it, and `app.config.ts`, `package.json` and `.gitignore`
+are untouched. Nothing this run changed sits on a path the staging pipeline watches, so
+the push applies no migration and deploys no edge function. `scripts/shots.mjs` is a
+screenshot harness that `npm run verify` does not run — this is a change to how the
+operator LOOKS at the app, not to the app.
+
+### The invariant this run deliberately broke, and how narrow the break is
+
+`scripts/shots.mjs` said of itself that "no job, worker, rating or review is invented
+anywhere in this file, and every list the app asks for still comes back empty". It now
+seeds **four job rows**, so that sentence was false as written and has been rewritten
+rather than left standing. This was the operator's decision, taken knowingly: customer
+Home answered its jobs feed with `[]`, so it photographed its honest empty state and
+`OpenJobCard` had **never once been rendered** — and a card that has never been drawn
+cannot be traced, measured or rebuilt as editable layers by the Figma track.
+
+The exception is fenced three ways, and the fences are the point:
+
+- **OPT-IN PER TARGET.** A new `jobs` registry field. `jobs: true` appears exactly ONCE
+  in code — on the single `flatMap` entry that produces both new targets — and
+  `tests/shotHarness.test.mjs` asserts that count against the comment-stripped source. A
+  third target carrying it would be a test failure, not a silently changed PNG.
+- **FOUR JOB ROWS AND NOTHING ELSE.** No worker, rating, review, history, profile or
+  image is invented. `photos` and `videos` are empty on all four, so every card draws its
+  category glyph; an image URL would address a host outside the harness and the escape
+  assertion would rightly fail the run.
+- **Nothing is written anywhere it could escape.** The rows exist only in that file's
+  memory, answered to a project that does not exist.
+
+### Decisions a later run must not re-derive
+
+- **The row shape is the SERVER'S.** Each row carries every one of the 31 columns
+  `public.jobs` has (`supabase/migrations/20260901000000_baseline.sql:1177`), holding
+  either what `create_job()` writes or that column's own default — including the legacy
+  mirror, where a RANGE's CEILING lands in the single `budget_cents`
+  (`coalesce(p_budget_max_cents, p_budget_min_cents, p_budget_cents)`).
+- **The answer is PROJECTED to the request's own `select`**, exactly as PostgREST does,
+  so the harness returns the 16 `OPEN_JOB_COLUMNS` and not 31. This is deliberate and is
+  the stronger arrangement: a column dropped from `OPEN_JOB_COLUMNS` stops arriving here
+  too, instead of being quietly supplied by the harness and hiding the regression.
+- **`created_at` is an OFFSET from now (2 h / 6 h / 24 h / 72 h), not a fixed date** —
+  the opposite of the `create_job` echo directly above it in the same file, for the same
+  reason. That card renders no relative age, so a pinned date makes two runs agree there;
+  this feed is sorted by age, so an offset is what makes two runs agree here.
+- **`POSTER_ID` is a second synthetic uuid, NOT the harness's `USER_ID`.** `HomeScreen`
+  computes `isOwn` against the signed-in id; seeding under `USER_ID` would render all
+  four as the operator's own posts, with the "Your job" chip and "No bids yet" in place
+  of a browsing worker's view. No profile row is seeded for it and no name is attached.
+- **Scheduling stays null on all four**, so no arrival line is drawn — and the card does
+  not draw one anyway (see below).
+- **`job_offer_counts` keeps its real shape:** a job with NO offers is ABSENT from the
+  result and the caller fills it in as zero. The dog-walking row is therefore absent
+  rather than sent as an explicit `0`.
+
+### What the four cards actually draw — read out of the DOM, not described
+
+`PREVIEW_COUNT` is 4 (`screens/HomeScreen.tsx:143`) and there are four rows, so **all
+four cards render**. In DOM order each card draws exactly: the category glyph (no text) ·
+the title · `EST. PRICE` · the budget · the location pin (no text) · the neighbourhood ·
+the category chip · the people glyph (no text) · the interest line.
+
+| title | budget | neighbourhood | category chip | interest line |
+|-|-|-|-|-|
+| Dog walking - twice this week | `$75` | East Flatbush | Dog walking | Be the first to bid |
+| Mount a 55-inch TV in the living room | `$120` | Bed-Stuy | TV/Furniture Mounting | 2 pros interested |
+| Help moving boxes into a third-floor walk-up | `$180` | Crown Heights | Packing/Unpacking | 5 pros interested |
+| Paint one bedroom, walls only | `$260` | Prospect Heights | Painting | 1 pro interested |
+
+Four facts a later run should not rediscover the hard way:
+
+- **The Home card draws NO time-ago line and NO arrival line.** `HomeScreen.tsx` imports
+  neither `formatTimeAgo` nor `arrivalWindowLabel`. The offsets still matter — they keep
+  the render stable if a line is ever added, and they keep `similarPostedToday()` honest.
+- **The card shows the single `budget_cents`, never a range.** It calls
+  `formatBudget(job.budget_cents)`, not `budgetRangeLabel()`, so a $90–$120 job reads
+  `$120` — the ceiling the server mirrored. That is the card's behaviour, not a fixture
+  artefact.
+- **No "similar jobs posted today" row is drawn.** `similarPostedToday()` counts other
+  jobs in the SAME category since midnight; all four categories differ, so the count is 0
+  for every card, on every run, at any hour.
+- **The card renders no poster NAME**, which is why this run did not have to stop.
+
+### Gate evidence
+
+- **G1** — `node scripts/shots.mjs --build --only customer-home-jobs` exited 0, wrote both
+  PNGs, no page errors, and the escape assertion held (it throws at the end of `main()`).
+- **G2** — proven by DOM READ, not by a picture: a copy of the harness with the shutter
+  replaced by a `TreeWalker` text read, same seeding, same stubs, same wait, same
+  guarantees. Four cards, every pinned string present, in both schemes. The probe was
+  scratch under the gitignored `.shots/` and was deleted at run end; nothing references it.
+- **G4** — `npm run verify` green at the base (1288/1288) and before the commit
+  (1289/1289, the +1 being the new fence). Zero skipped, zero failing, exit 0 both times.
+
+### G3 — THE FINDING. Two of the four Home targets are NOT byte-stable, and never were
+
+`customer-home-dark` and `customer-home-light` are byte-identical before and after. The
+two WORKER Home targets differ — and the opt-in did not leak. That was proven rather than
+assumed, by writing HEAD's own `scripts/shots.mjs` to a scratch file
+(`git show HEAD:scripts/shots.mjs`) and rendering with it:
+
+| target | baseline (HEAD) | after | verdict |
+|-|-|-|-|
+| `customer-home-dark` | `cf146e96…9d7fd` | `cf146e96…9d7fd` | identical |
+| `customer-home-light` | `3387a198…1a15e` | `3387a198…1a15e` | identical |
+| `worker-home-dark` | `516d90ad…78721` | `c23ee75f…ac165`, then `516d90ad…78721` | unstable at HEAD |
+| `worker-home-light` | `0dbbd9ba…445c94` | `26926874…8444ec` ×4 | unstable at HEAD |
+
+The proof, in order: **HEAD's unmodified harness** rendered `worker-home-dark` twice and
+produced TWO DIFFERENT hashes (`516d90ad…`, then `03d1d0cd…`); the CURRENT harness then
+produced **the same two, in the same order**. For `worker-home-light`, HEAD ×2 and current
+×2 all produced the identical `26926874…` — the outlier is the very first baseline render.
+The delta is antialiasing rounding, measured by decoding both PNGs in the browser the
+harness already drives: **4 differing pixels of 334,836, max channel delta 1** (dark) and
+**9 of 334,836, max channel delta 6** (light), all inside rows ~439–464 in both.
+
+So the honest statement is: `worker-home-dark` and `worker-home-light` are not
+render-to-render reproducible AT HEAD, independently of this run, and this run's change is
+invisible to them. Not chased, per the dispatch. **Two corrections for whoever wrote that
+gate:** the harness does NOT document this jitter anywhere — `grep -niE
+"jitter|antialias"` over `scripts/shots.mjs` returns nothing — and "a difference proves
+the opt-in leaked" is not a sound inference on these two targets, because the unmodified
+file reproduces the difference. If byte-identity is wanted as a real gate, worker Home's
+first-paint settling needs fixing first; that is a separate run and it would change
+existing PNGs.
+
+### Hook collision, recorded rather than worked around
+
+The dispatch's base gate step 2 called for `git fetch origin mainexpo`. The guard denies
+it — `BLOCK GUARD-GIT forbidden-git-subcommand`, `fetch` being in `$blockedSubs`
+(`.claude/hooks/guard.ps1:270`). The deny matrix is binding and supersedes the prompt, so
+no fetch was attempted. The ancestry check ran against the existing remote-tracking ref
+instead: `git merge-base --is-ancestor origin/mainexpo HEAD` exited 0 with
+`origin/mainexpo` and `HEAD` both at `d344c0e`. A run cannot refresh that ref; only the
+operator can.
+
 ## RUN R7D COMPLETED (2026-08-31) — a second emitter for the events no write can cause, and the fence that lists its call sites one by one
 
 Six commits, client only: `509f32a` (the two unions and the four-rule fence), `8ef79a9`
