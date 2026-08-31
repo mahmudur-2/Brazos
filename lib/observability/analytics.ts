@@ -1,7 +1,7 @@
 import { env } from '../../config/env';
 
 /**
- * PRODUCT ANALYTICS — a closed typed union and two no-op-safe functions.
+ * PRODUCT ANALYTICS — two closed typed unions, two emitters, and one client.
  *
  * THE ONE NUMBER THAT DECIDES WHETHER THIS MARKETPLACE LIVES IS BIDS PER JOB,
  * and that is why the worker side of the funnel is here in as much detail as
@@ -10,6 +10,30 @@ import { env } from '../../config/env';
  * answering them. `offer_sent.secondsSincePosted` is the leading indicator of
  * the same quantity: time to first bid.
  *
+ * TWO EMITTERS, AND THE LINE BETWEEN THEM IS THE POINT OF THE FILE.
+ *
+ *   `track` / `FunnelEvent`  — an event CAUSED BY A WRITE. It is emitted from
+ *     the `lib/` (or `modes/`) function that wraps that write, on its success
+ *     branch, one call site per state change. Every one of these has a row
+ *     behind it, so a count that looks wrong can be settled against the
+ *     database: jobs posted is `select count(*) from jobs`, and if the two
+ *     disagree the instrumentation is wrong, not the business.
+ *
+ *   `trackIntent` / `IntentEvent` — an event CAUSED BY A PERSON, with no write
+ *     to attach to. A permission dialog answered, a form opened and left, a
+ *     payment sheet dismissed. NONE OF THESE CAN EVER BE CROSS-CHECKED AGAINST
+ *     THE DATABASE, because the whole subject of the event is the thing that
+ *     did NOT get written. An abandoned post leaves no job row; a blocked
+ *     notification permission leaves no push token to be missing in any way
+ *     that distinguishes it from a worker who simply never opened the app.
+ *     They are the only numbers we will have for those states, and they are
+ *     also the only numbers here that nothing can audit — so they are kept in
+ *     their own union, under their own function name, and the analytics tool
+ *     can separate them by construction rather than by convention.
+ *
+ * The two functions are deliberately NOT sharing a body. Ten duplicated lines
+ * are cheaper than one call path that can be confused for the other.
+ *
  * WHY A UNION AND NOT A STRING. Every event name and every property is a
  * compile-time literal, so a typo is a build error rather than a silent second
  * funnel that looks empty. There is deliberately NO free-text property — a
@@ -17,20 +41,23 @@ import { env } from '../../config/env';
  * on a third party's servers by accident. Money, where it appears at all, is
  * integer cents, the same as everywhere else in this codebase.
  *
- * EVENTS ARE EMITTED FROM THE MUTATION LAYER AND NOWHERE ELSE. R7C gave nine
- * of the fourteen their call sites — one per state change, inside the `lib/`
- * function that wraps the write that causes it, on that write's success branch
- * and never on a refusal. Emitting from screens produces double-counts the
- * moment two screens can trigger the same mutation, and misses every path that
- * does not go through a screen at all; `tests/analyticsPrivacy.test.mjs` holds
- * that rule mechanically — a `track(` outside `lib/` or `modes/` fails the
- * suite, as does a funnel property typed as free text.
+ * WHAT IS STILL NOT EMITTED FROM HERE, AND WILL NOT BE: `payment_held` and
+ * `payment_released` are webhook-caused. Stripe lands both while the app may
+ * be backgrounded or killed, so a client caller under-counts silently and
+ * cannot be fixed by trying harder. Their DO-NOT-WIRE notes sit on the
+ * variants themselves and stay there.
+ *
+ * `tests/analyticsPrivacy.test.mjs` holds all of this mechanically: both
+ * unions are swept for free text, both emitters' call sites are swept for
+ * anything PII-shaped, `track(` outside `lib/` or `modes/` fails the suite,
+ * and `trackIntent(` fails from any file not on that test's written
+ * allowlist.
  *
  * THE VENDOR IS A CAUGHT REQUIRE for the reason set out in
  * lib/observability/sentry.ts: the screenshot harness renders through
  * `expo export --platform web`, and a static import that throws at module
  * evaluation would take the harness down rather than degrade. Absent vendor or
- * absent key means `client` is null and both functions do nothing.
+ * absent key means `client` is null and every function here does nothing.
  */
 
 export type FunnelEvent =
@@ -38,6 +65,7 @@ export type FunnelEvent =
   | { name: 'job_posted'; category: string; hasBudget: boolean }
   | { name: 'offer_accepted' }
   | { name: 'checkout_started' }
+  | { name: 'checkout_result'; outcome: 'succeeded' | 'cancelled' | 'failed' }
   // Webhook-caused — DO NOT wire from the client. Stripe lands this while the
   // app may be backgrounded or killed, so a client caller under-counts silently.
   | { name: 'payment_held'; amountCents: number }
@@ -45,15 +73,41 @@ export type FunnelEvent =
   | { name: 'payment_released'; reason: 'approved' | 'auto_approved' }
   | { name: 'review_left'; stars: number }
   // worker side — the numbers that say whether the marketplace has a supply side
-  | { name: 'worker_onboarded' }
-  | { name: 'job_viewed'; source: 'nearby' | 'map' | 'search' | 'push' }
   | { name: 'offer_sent'; kind: 'bid' | 'direct'; secondsSincePosted: number }
-  | { name: 'bid_viewed' }
   | { name: 'job_completed'; hasEvidencePhoto: boolean }
   | { name: 'connect_onboarding_started' }
   | { name: 'connect_onboarding_completed' }
   // both
   | { name: 'mode_switched'; to: 'customer' | 'worker' };
+
+/**
+ * CAUSED BY A PERSON, NEVER BY A WRITE — see the two-emitter paragraph above.
+ *
+ * `permission_result.outcome` separates `denied` from `blocked` because the
+ * product consequence is not the same one twice. A BLOCKED notification
+ * permission means a worker never sees a bid arrive, ever, until they go into
+ * iOS Settings — and in every other number in this system that worker is
+ * indistinguishable from one who simply is not interested.
+ *
+ * The abandonment pairs carry no free text for the same reason nothing else
+ * here does: `hadTitle` is a boolean derived from the title, never the title.
+ */
+export type IntentEvent =
+  | {
+      name: 'permission_result';
+      kind: 'notifications' | 'location' | 'photos' | 'camera';
+      outcome: 'granted' | 'denied' | 'blocked';
+    }
+  | { name: 'job_post_started' }
+  | {
+      name: 'job_post_abandoned';
+      secondsSpent: number;
+      hadTitle: boolean;
+      hadBudget: boolean;
+      hadPhoto: boolean;
+    }
+  | { name: 'offer_compose_started' }
+  | { name: 'offer_compose_abandoned'; secondsSpent: number };
 
 /**
  * The US cloud ingest host. Written out rather than made configurable: a
@@ -133,6 +187,26 @@ export function track(event: FunnelEvent): void {
   } catch {
     // Nothing to report to: reporting an analytics failure through analytics is
     // the same call again, and Sentry is not told about a metric it cannot fix.
+  }
+}
+
+/**
+ * Emit one intent event. The structural twin of `track` and deliberately not
+ * a wrapper around it: these two call paths must never be confusable, and the
+ * ten duplicated lines below are the cheapest way to guarantee that.
+ *
+ * Same null-client guard, same swallowed vendor exception, same reason. An
+ * intent call site sits in an unmount cleanup or immediately after a system
+ * permission dialog, which are two of the worst places in an app for an
+ * exception to escape.
+ */
+export function trackIntent(event: IntentEvent): void {
+  if (!client) return;
+  const { name, ...props } = event;
+  try {
+    client.capture(name, props);
+  } catch {
+    // Deliberately silent — see track().
   }
 }
 

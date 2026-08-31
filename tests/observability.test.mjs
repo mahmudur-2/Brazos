@@ -245,7 +245,11 @@ test('the init is inert without a vendor or a DSN, and tags only when the vendor
  * compared as a table rather than probed one regex at a time.
  */
 const unionStart = analyticsSource.indexOf('export type FunnelEvent =');
-const unionEnd = analyticsSource.indexOf('const POSTHOG_HOST');
+// Stops at the SECOND union rather than at the first non-union declaration.
+// R7D added IntentEvent between FunnelEvent and POSTHOG_HOST, and this
+// invariant is about the funnel — the events with a write and therefore a row
+// behind them. IntentEvent is fenced by tests/analyticsPrivacy.test.mjs.
+const unionEnd = analyticsSource.indexOf('export type IntentEvent =');
 assert.ok(unionStart > -1 && unionEnd > unionStart, 'the FunnelEvent union is gone');
 const union = analyticsSource.slice(unionStart, unionEnd);
 
@@ -255,36 +259,43 @@ const variants = [...union.matchAll(/\{\s*name:\s*'([a-z_]+)'([^}]*)\}/g)].map((
 ]);
 
 test('INVARIANT 12 · the funnel is a closed union, pinned variant by variant', () => {
-  // FOURTEEN, and the count is worth a sentence because the dispatch that
-  // ordered this module said sixteen. §3.2 of the target architecture — the
-  // source this was to be copied from EXACTLY — declares fourteen, listed
-  // below in its order. Copying exactly and inventing two more events to reach
-  // a number are not both possible; inventing marketplace events nothing emits
-  // is the worse of the two, so this is fourteen and the discrepancy is
-  // reported rather than papered over. Adding the missing pair, if a later run
-  // decides there is one, means adding rows here first.
+  // TWELVE. It was fourteen — copied from §3.2 of the target architecture,
+  // which itself declared fourteen against a dispatch that said sixteen, and
+  // the discrepancy was reported rather than papered over. R7D took the count
+  // DOWN, which is the direction this list is meant to be able to move:
+  // `worker_onboarded` overlapped `connect_onboarding_completed` and a server
+  // column, and `job_viewed` / `bid_viewed` are reads that belong in an
+  // exposure ledger in the database with a rank position, not in a funnel that
+  // cannot say where the view happened. `checkout_result` replaced none of
+  // them — it is the sibling `checkout_started` never had, and without it a
+  // dismissed payment sheet and a failed one are the same missing number.
   assert.deepEqual(variants, [
     ['job_posted', 'category: string; hasBudget: boolean'],
     ['offer_accepted', ''],
     ['checkout_started', ''],
+    ['checkout_result', "outcome: 'succeeded' | 'cancelled' | 'failed'"],
     ['payment_held', 'amountCents: number'],
     ['payment_released', "reason: 'approved' | 'auto_approved'"],
     ['review_left', 'stars: number'],
-    ['worker_onboarded', ''],
-    ['job_viewed', "source: 'nearby' | 'map' | 'search' | 'push'"],
     ['offer_sent', "kind: 'bid' | 'direct'; secondsSincePosted: number"],
-    ['bid_viewed', ''],
     ['job_completed', 'hasEvidencePhoto: boolean'],
     ['connect_onboarding_started', ''],
     ['connect_onboarding_completed', ''],
     ['mode_switched', "to: 'customer' | 'worker'"],
   ]);
 
-  // The worker side is half the list on purpose: the one number that says
-  // whether this marketplace has a supply side is bids per job, and an event
-  // list that tracks only the customer cannot compute it.
+  // The worker side is still here on purpose: the one number that says whether
+  // this marketplace has a supply side is bids per job, and an event list that
+  // tracks only the customer cannot compute it. `offer_sent` carries the
+  // numerator and `secondsSincePosted` the leading indicator; the two Connect
+  // events say whether a worker can be paid at all.
   const names = variants.map(([name]) => name);
-  for (const required of ['offer_sent', 'job_viewed', 'worker_onboarded', 'bid_viewed']) {
+  for (const required of [
+    'offer_sent',
+    'job_completed',
+    'connect_onboarding_started',
+    'connect_onboarding_completed',
+  ]) {
     assert.ok(names.includes(required), `the worker-side event ${required} is gone`);
   }
 });
