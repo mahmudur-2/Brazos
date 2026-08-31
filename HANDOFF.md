@@ -43,6 +43,147 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R7 COMPLETED (2026-08-31) — the six Verify-landed questions answered from the repository, and the platform decision landed
+
+Docs only, five files, three commits: `d53d2b7` (the platform decision), `be18099` (the six
+answers and the two gate boxes they touch) and this record. No SQL was executed and no
+database was contacted, local or remote — every migration, edge function and pgTAP file was
+read as TEXT. Nothing this run touched sits on a path the staging pipeline watches, so no
+migration was applied and no function was deployed. `npm run verify` green before every
+commit: 1283 tests, 0 failures, 0 skipped, the same count at the start and the end of the
+run.
+
+### The platform decision — the one clause CLAUDE.md changed
+
+Before, §Target and trunk:
+
+> Expo native app shipping on **iOS and Android**. Both are shipping targets: Android is
+> built, tested and shipped alongside iOS, and work may target it. `app.config.ts` carries a
+> complete Android block and `npm run android` exists.
+
+After:
+
+> Expo native app shipping on **iOS**. iOS is the only shipping target for v1; the Android
+> configuration stays in the repository and keeps building — `app.config.ts` carries a
+> complete Android block and `npm run android` exists — but no run treats Android as a
+> release target, and no work is scheduled for it before ten real users.
+
+Nothing else in CLAUDE.md moved: not the imports, not the Gates section, not an invariant,
+not a stop condition, not the mechanical deny sentinel `tests/governance.test.mjs` requires.
+The reasons are dated in `docs/DECISIONS.md`; `docs/BACKLOG.md` §v1.2 carries the reversal
+question ("Android as a shipping target — decide with real data after ten users"); Gate 0's
+SCOPE/DOMAIN box records the iOS-only clause RESOLVED and stays OPEN on the one clause left,
+that neither file is frozen.
+
+### The six verdicts
+
+Full evidence, in the operator's own question wording, is `docs/BACKLOG.md` §"Verify landed".
+
+| # | question | verdict | the path that proves it | what would close it |
+|-|-|-|-|-|
+| 1 | agreement snapshot written at acceptance | **LANDED** | `20260905000000_stripe_foundation.sql:400/449/483` — `job_agreements`, `snapshot_job_agreement()`, `jobs_snapshot_agreement`; `030_payments.sql` §12 | — |
+| 2 | reversal clears `released_at` | **LANDED** | `20260915000000_connect_onboarding.sql:165/189` (the live `apply_payment_event`); `030_payments.sql` §6 | — |
+| 3 | reversal does NOT re-open `release_requested_at` | **LANDED** | `connect_onboarding.sql:194`; `stripe_foundation.sql:771/780/866/278`; `process-settlements/index.ts:300`; `030_payments.sql` §6 | — |
+| 4 | R4 reconciled with the existing `payments` table | **LANDED** | `baseline.sql:2519` creates it; `stripe_foundation.sql:183/185/195/265` widens it and names the LIVE constraint | — |
+| 5 | the three app.json fixes rode the app.config.ts rewrite | **LANDED** | `app.config.ts:75` `policy: 'appVersion'`, `:85` `supportsTablet: false`, `:92` records both plist keys gone; `app.json` no longer exists | — |
+| 6 | authorization proofs cover every client-writable table | **PARTIAL** | 17 of 19 proven in `040_authz.sql` (`plan(460)`); `bids` DELETE and `storage.objects` unproven | a test file — pgTAP added to `040_authz.sql` |
+
+Three of these decided whether a later run needs a migration. None does: the only work any
+answer implies is a test file.
+
+### Question 6 — the census, both lists in full
+
+Client-writable means a write grant to `authenticated`, or an RLS policy `for insert` /
+`for update` / `for delete` reaching it, derived from the seven files in
+`supabase/migrations/` that a `db reset` applies.
+
+**WITH authorization proofs in `supabase/tests/040_authz.sql`** — table · write privilege ·
+section · identities:
+
+- `messages` · ALL · §7 · owner, assigned worker, losing bidder, stranger, anon
+- `message_reads` · ALL · §7 · worker, owner, losing bidder, stranger
+- `message_reactions` · ALL · §7 · worker, owner, losing bidder, stranger
+- `job_checklist_items` · ALL · §9 · worker, owner, losing bidder, stranger
+- `notification_prefs` · ALL · §13 · owner, worker (as victim), anon
+- `notification_outbox` · UPDATE of `read_at` only · §1 + §13 · owner, worker, stranger, anon
+- `push_tokens` · ALL · §13 · worker, stranger, anon
+- `legal_acceptances` · ALL · §13 · owner, stranger, anon
+- `saved_workers` · ALL · §13 · owner, stranger
+- `mutes` · INSERT + DELETE · §13 · stranger, the muted party, losing bidder
+- `blocks` · INSERT + DELETE · §13 · stranger, the blocked party, losing bidder, anon
+- `properties` · ALL · §13 · owner, stranger
+- `portfolio_items` · ALL · §13 · worker, stranger, losing bidder
+- `worker_services` · ALL · §13 · worker, stranger, anon
+- `reports` · ALL · §16 · owner, stranger, anon, admin
+- `jobs` · DELETE only · §1 + §15 · owner, worker, stranger, anon
+- `conversations` · a `security_invoker` VIEW granted ALL by the dump · §7 · owner, stranger, anon (reads only; derived, not a write surface)
+
+**WITHOUT an authorization proof — the answer to "any table missing?":**
+
+- `bids` — `authenticated` holds DELETE (`baseline.sql:7813`); RLS is on with SELECT, INSERT
+  and UPDATE policies and NO `for delete` policy, so a client DELETE should touch zero rows.
+  `040_authz.sql` §1 proves the INSERT and UPDATE refusals and never issues a DELETE; no
+  file under `supabase/tests/` does.
+- `storage.objects` — `grant all ... to authenticated` (`baseline.sql:8640`) with twelve
+  write policies over `avatars`, `chat-audio`, `chat-documents`, `chat-photos` and
+  `job-photos` (six INSERT, one UPDATE, three DELETE). `040_authz.sql` never mentions
+  storage; `phase29_security_contract.sql:64-65` asserts two READ policies EXIST by name and
+  nothing more. This is the media surface — job photos, chat documents, voice notes.
+
+### What a later run must not rediscover
+
+- **`apply_payment_event()` has two definitions and the LIVE one is the later.**
+  `20260915000000_connect_onboarding.sql:114` replaces the R4 body whole. Reading only
+  `20260905000000_stripe_foundation.sql` and concluding anything about the money state
+  machine is reading a superseded function. The reversal branch is identical in both, but
+  the `charge.refunded` and `payment_intent.succeeded` branches are NOT (R5b, E-6).
+- **A write POLICY is not a write GRANT, and four tables have the policy without the
+  grant.** `jobs` and `bids` carry INSERT and UPDATE policies with no TO clause, `profiles`
+  carries INSERT and UPDATE policies, `reviews` carries an INSERT policy TO `authenticated` —
+  and in every one of those cases `authenticated` holds no such privilege, so the write is
+  refused at the grant, before RLS is ever consulted. `040_authz.sql` §1 asserts exactly
+  that with `has_table_privilege` plus a real refused statement. Do not read a policy list
+  as a capability list.
+- **The whole census is `authenticated`-only.** `service_role` holds ALL on the R4 tables by
+  default privilege and is the operator's, not a client's; `job_agreements` is the one table
+  revoked from `service_role` as well.
+- **`docs/SCOPE.md:47` is now stale** — it still says CLAUDE.md's Target-and-trunk section
+  contradicts its "Platform: iOS only" line and that the operator settles which text
+  changes. That contradiction is gone; the sentence outlived it. SCOPE.md was outside this
+  run's write surface, so it was left exactly as found. It is a two-sentence edit for the
+  next run that owns that file.
+- **`app.json` does not exist.** Any check written against it will pass vacuously.
+- **The second PreToolUse hook is registered by `settings.local.json`, which is
+  gitignored** (`.gitignore:36`, `*.local.json` under the agent-config directory) — not, as
+  the KIT2 record says, by the uncommitted working-tree edit to the tracked settings file.
+  Both hook scripts are tracked; only the tracked settings register the first one.
+- **The guard blocks read-only commands that carry `2>&1`.** `GUARD-CLAUDEDIR` treats any
+  `>` in the command text as a write, so `ls -la <agent-config path> 2>&1` is refused while
+  the same command without the redirection is allowed. Cost this run one call; there is no
+  need to spend another.
+- **The pgTAP plan counts, for the next run that cites them:** 000 smoke 2, 010 offers 52,
+  020 lifecycle 75, 030 payments 299, 040 authz 460, 050 settlements 71, 060 connect 136,
+  070 settlement retry 97, 080 job completions 69, helpers 8, phase29 security contract 26.
+
+### The gate boxes this run moved
+
+`docs/GATES.md` Gate 0's SCOPE/DOMAIN box: still OPEN, evidence rewritten — the iOS-only
+clause RESOLVED, the freeze clause still unproven. Gate 1's authorization box: still OPEN,
+evidence rewritten from "any table missing?" to the two tables that are. Gate 1's money-
+ledger box: **TICKED**, with a path and a test section beside each of its five clauses —
+held-in-protection states, fee schedule, agreement snapshot, cancellation, refund path. Four
+of twenty boxes now tick; every other box, tick and evidence path in the file is
+byte-identical.
+
+### The run's own state
+
+The tree carried two modified harness-config files at run start and still does: they are
+outside every write surface this run had, were never staged, and were left exactly as found
+per CLAUDE.md §Workflow. No dependency was added. No test constant needed updating — no test
+reads any of these documents except `tests/governance.test.mjs`, whose five CLAUDE.md
+literals (`mainexpo`, `transition_job_status`, `accept_offer`, `job_locations`, the deny
+sentinel) are all untouched by the one clause that changed.
+
 ## RUN KIT2 COMPLETED (2026-08-31) — three kit-doc corrections: where the production ref may live, what Gate 1 bars, and what "frozen" never meant
 
 A docs-only correctness pass over the kit KIT1 landed. One commit, `1d599b4`: three files,
