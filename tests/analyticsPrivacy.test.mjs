@@ -70,7 +70,21 @@ const ANALYTICS = 'lib/observability/analytics.ts';
  * entry naming a file that no longer calls trackIntent, so this list cannot
  * quietly become standing permission for a surface nobody instruments any more.
  */
-const INTENT_ALLOWLIST = ['lib/', 'modes/'];
+const INTENT_ALLOWLIST = [
+  'lib/',
+  'modes/',
+  // R7D · permission_result. Each of these shows a system permission dialog
+  // and reads its answer, which is the one place that answer exists — there is
+  // no write behind it and no row to reconcile it against. A dialog shown is a
+  // real event EVERY time it is shown, so several surfaces asking for the same
+  // permission all emit; unlike a funnel step, this cannot double-count a
+  // conversion.
+  'components/HotspotMap.native.tsx',
+  'hooks/useLiveLocation.ts',
+  'hooks/useSetupPermissions.ts',
+  'screens/ChatScreen.tsx',
+  'screens/ProfileScreen.tsx',
+];
 
 /**
  * Not app source: build output, the frozen web surface, the Deno edge

@@ -211,6 +211,30 @@ export function trackIntent(event: IntentEvent): void {
 }
 
 /**
+ * THE ONE RULE FOR READING A PERMISSION ANSWER, WRITTEN ONCE.
+ *
+ * Several surfaces in this app ask the OS for a permission, and every one of
+ * them has to classify the answer identically or the three outcomes stop
+ * meaning the same thing between them. So the classification lives here rather
+ * than as a ternary copied at each site (CLAUDE.md: one implementation per
+ * rule). The `trackIntent` call itself still sits at the surface — that is
+ * rule 4's whole point — but what it emits is derived in one place.
+ *
+ * `blocked` is why the distinction is worth a function. Someone who tapped
+ * "Don't Allow" can be asked again; someone the OS will no longer prompt for
+ * cannot, and until they go into Settings themselves the feature is simply
+ * gone for them. Collapsing the two into "denied" hides the only one of them
+ * anything can be done about.
+ */
+export function permissionOutcome(
+  status: string,
+  canAskAgain: boolean
+): 'granted' | 'denied' | 'blocked' {
+  if (status === 'granted') return 'granted';
+  return canAskAgain ? 'denied' : 'blocked';
+}
+
+/**
  * Bind or unbind the analytics identity. The id and nothing else — the same
  * rule as `setSentryUser`, for the same reason. A null id is a sign-out and
  * resets the distinct id so the next session is not attributed to the person

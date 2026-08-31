@@ -34,6 +34,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { fetchPortfolio, fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
 import {
   profileCompleteness,
@@ -288,6 +289,11 @@ export function ProfileScreen() {
 
   async function takePhoto() {
     const permission = await ImagePicker.requestCameraPermissionsAsync();
+    trackIntent({
+      name: 'permission_result',
+      kind: 'camera',
+      outcome: permissionOutcome(permission.status, permission.canAskAgain),
+    });
     if (!permission.granted) {
       await alertAsync(
         'Camera access needed',

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Linking, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
+import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 
 /**
  * The real state of the two permissions the setup screen shows.
@@ -142,6 +143,14 @@ export function useSetupPermissions(): {
     (async () => {
       try {
         const result = await Location.requestForegroundPermissionsAsync();
+        // The onboarding ask. Emitted here as well as at the other asking
+        // surfaces: a dialog shown is a real event each time, and this is not
+        // a funnel step that could double-count a conversion.
+        trackIntent({
+          name: 'permission_result',
+          kind: 'location',
+          outcome: permissionOutcome(result.status, result.canAskAgain),
+        });
         if (mounted.current) setLocation(toState(result.status, result.canAskAgain));
       } catch {
         if (mounted.current) setLocation('unavailable');
@@ -166,6 +175,11 @@ export function useSetupPermissions(): {
     (async () => {
       try {
         const result = await Notifications.requestPermissionsAsync();
+        trackIntent({
+          name: 'permission_result',
+          kind: 'notifications',
+          outcome: permissionOutcome(result.status, result.canAskAgain),
+        });
         if (mounted.current) setNotifications(toState(result.status, result.canAskAgain));
       } catch {
         if (mounted.current) setNotifications('unavailable');

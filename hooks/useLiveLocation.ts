@@ -17,6 +17,7 @@ import {
   type LiveLocationShare,
 } from '../lib/liveLocation';
 import type { ChatTarget } from '../lib/messages';
+import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -204,6 +205,14 @@ export function useLiveLocation(
         // the same prompt the hotspot map and the posting flow ask for, so
         // granting it in any of them covers all of them.
         const permission = await Location.requestForegroundPermissionsAsync();
+        // Same prompt as the hotspot map and the posting flow, so this is the
+        // third surface that can raise it — emitted at every one of them,
+        // because a dialog shown is an event each time it is shown.
+        trackIntent({
+          name: 'permission_result',
+          kind: 'location',
+          outcome: permissionOutcome(permission.status, permission.canAskAgain),
+        });
         if (permission.status !== 'granted') {
           return {
             message:
