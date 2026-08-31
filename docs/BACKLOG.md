@@ -78,3 +78,33 @@ Read as text: no SQL was executed and no database was contacted, local or remote
 
 ## Parked tangents
 - Naming / branding · voice modes · hardware monetisation · Codex switch · Idiolect
+
+## R7D — the five funnel events R7C left unwired (2026-08-31)
+
+`lib/observability/analytics.ts` declares fourteen `FunnelEvent` variants. R7C
+(2026-08-31) gave nine of them call sites in the mutation layer — `job_posted`,
+`job_completed`, `offer_sent` (both kinds), `offer_accepted`, `mode_switched`,
+`review_left`, `checkout_started`, `connect_onboarding_started` and
+`connect_onboarding_completed`. These five have none, each for a reason that was decided
+rather than deferred by accident:
+
+- **`payment_held`** — webhook-caused. Stripe lands the hold, and the phone can be
+  backgrounded or killed when it does, so a client caller would under-count silently. NOT
+  to be wired from the client: the union now carries that note directly above the variant,
+  so a later run reads it before touching it. If this number is wanted, it belongs to the
+  webhook function, server-side.
+- **`payment_released`** — webhook-caused, same reason, same note above the variant.
+- **`job_viewed`** — a read, with no write to attach to. R7C wired write sites only.
+  Before it can be counted honestly, someone has to decide where a "view" begins: a card
+  scrolling past in the feed, the detail screen mounting, or a dwell threshold. The variant
+  already carries `source: 'nearby' | 'map' | 'search' | 'push'`, so whatever is decided has
+  to be able to answer that too.
+- **`bid_viewed`** — a read, same as `job_viewed`.
+- **`worker_onboarded`** — its definition is an unmade product decision. Profile complete,
+  services listed, and Stripe Connect finished are three different numbers, and R7C was
+  forbidden to invent one. Note that the Connect reading is already measured under its own
+  name: `connect_onboarding_completed` is wired.
+
+Nothing else is outstanding from R7C. No CONTINUE-PATH was taken: both bidding surfaces
+already held the job row that the newly required `NewMarketplaceOffer.postedAt` needed, and
+the review write had exactly one owner (`createReview()` in `lib/reviews.ts`).

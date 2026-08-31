@@ -43,6 +43,132 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R7C COMPLETED (2026-08-31) — track() gains its callers in the write layer, and the fence that keeps them there
+
+Seven commits, client only: `700046f` (track/identify cannot throw into a write),
+`7b8c266` (the privacy fence), `bc4fb9f` (job lifecycle), `a138443` (offers, plus the
+required `postedAt`), `98f3290` (mode and review), `a19729f` (the money path) and this
+record. HEAD was `e2e3998` at the base gate, and `git merge-base --is-ancestor e2e3998 HEAD`
+exited 0.
+
+**No database was contacted, local or remote, and no SQL was written or run.** Nothing
+under `supabase/`, `.github/` or `.claude/` is in any commit. `package.json`,
+`package-lock.json` and `.gitignore` are untouched — `git diff HEAD -- .gitignore` prints
+nothing, which matters because it is a native fingerprint input and an edit would silently
+break OTA delivery to the installed build. No dependency was added. Nothing this run
+touched sits on a path the staging pipeline watches, so the push applies no migration and
+deploys no edge function.
+
+`npm run verify` was green before every commit. **Floor at run start: 1283 tests, 0
+failures. At the end: 1287 tests, 0 failures** — the rise is exactly the four assertions
+`tests/analyticsPrivacy.test.mjs` adds, and the count never fell.
+
+### Nine events wired, every one on a success branch
+
+`lib/observability/analytics.ts` declared a fourteen-variant `FunnelEvent` union and a
+`track()` with no callers. It has callers now, and they are all in the mutation layer —
+inside the `lib/` (or `modes/`) function that wraps the write, never in a screen:
+
+- `job_posted` — `lib/jobs.ts:453`, after `create_job()` returns a row. Both refusals
+  (budget ceiling, coordinate-shaped location) return before the RPC, so a refused post is
+  never counted. `hasBudget` is whether ANY of the three figures was named.
+- `job_completed` — `lib/jobs.ts:666`, `updateJobStatus` and only for `'completed'`. The
+  `in_progress` transition emits nothing; a refused transition is not a completion.
+- `offer_sent` (bid) — `lib/offers.ts:266`, `secondsSincePosted` computed from the job's
+  `created_at`.
+- `offer_sent` (direct) — `lib/offers.ts:337`, `secondsSincePosted: 0`. Not a placeholder:
+  `create_offer()` creates the jobs row in the same transaction, so the job is exactly zero
+  seconds old.
+- `offer_accepted` — `lib/offers.ts:387`, gated on the job id `accept_offer()` returns,
+  which is the only proof the transaction committed.
+- `mode_switched` — `modes/ModeProvider.tsx:347`, immediately after `startTransition()`
+  takes ownership. A declined confirmation returns earlier and emits nothing.
+- `review_left` — `lib/reviews.ts:51`, `createReview()`. The rating and nothing else.
+- `checkout_started` — `lib/payments/stripe.ts:202`, once the payment intent exists and
+  BEFORE the sheet is presented.
+- `connect_onboarding_started` — `lib/payments/stripe.ts:259`, when the client asked for
+  the hosted link and got one.
+- `connect_onboarding_completed` — `lib/payments/stripe.ts:297`, when the on-demand
+  `connect-status` refresh comes back `'enabled'`.
+
+Ten call sites for nine names: `offer_sent` has two, one per `kind`.
+
+**Five events are deliberately unwired**, recorded in `docs/BACKLOG.md` under "R7D":
+`payment_held` and `payment_released` are webhook-caused and would under-count from a phone
+that can be backgrounded or killed — the union now carries a DO-NOT-WIRE note above each
+variant; `job_viewed` and `bid_viewed` are reads with no write to attach to;
+`worker_onboarded` has no agreed definition and none was invented.
+
+### Three judgement calls, written down because they are arguable
+
+1. **`checkout_started` fires for the job checkout and not for a tip.** Both run through
+   `createPaymentSession()` (R6c), and the event carries no property that could tell them
+   apart. A tip is not a step in post → bid → accept → fund, so counting it would inflate
+   the funding step with money that was never funding.
+2. **`connect_onboarding_completed` can emit more than once per worker.** A second refresh
+   on an already-enabled account emits again. Deduplicating would mean inventing
+   client-side state a fresh launch forgets anyway, so the count is honestly "times a
+   completed status was observed", and the comment at the site says so.
+3. **`mode_switched` sits beside `startTransition()`, not inside `onSwitch`.** Two fences
+   (`tests/mode.test.mjs:196` and `:335`) read `onSwitch: () => setMode(target)` as a
+   literal one-expression arrow. Emitting from the line after the transition starts is the
+   same commit point — the confirmation is accepted and nothing downstream can cancel it —
+   and it left both fences untouched. No fence logic was weakened anywhere this run.
+
+### What the run changed outside its own call sites
+
+- `track()` and `identify()` now swallow a vendor throw. The module's docblock had promised
+  "never throws" while `client.capture()` sat bare; with C3–C6 putting it on the money path
+  that gap would have failed writes. The inner calls are byte-identical inside the try, so
+  `tests/observability.test.mjs`'s no-op assertions still read them.
+- `NewMarketplaceOffer` gained a **required** `postedAt: string`. Optional, a new bidding
+  surface could drop time-to-bid and `tsc` would say nothing; required, it is a compile
+  error. Both existing bidding surfaces (`components/OfferComposer.tsx`,
+  `screens/JobDetailScreen.tsx`) already held the job row, so neither needed a read — the
+  CONTINUE-PATH that would have reverted this half was not taken.
+- The three tests that EXECUTE `lib/offers.ts` as a stubbed data-URL module
+  (`tests/counterCap.test.mjs`, `tests/counterResponse.test.mjs`,
+  `tests/offerActionParity.test.mjs`) each gained the analytics import in their stub list,
+  the same treatment the other four runtime imports already had. Expected constants
+  updated; no assertion weakened.
+
+### New fence
+
+`tests/analyticsPrivacy.test.mjs` — three rules over source text, each failure message
+stating the rule in full so a later run reads it off the failure: (1) every `FunnelEvent`
+property is a number, a boolean, a union of string literals, or the one named exception
+`category: string`; (2) no `track(` call site passes an identifier, member expression or
+object property whose NAME matches title / descript / address / location / message / body /
+email / phone / street / note; (3) `track(` is called only from `lib/` and `modes/`. Rule 3
+is the one that matters — "emit from the mutation layer, never a screen" was previously
+written in one docblock and enforced by nobody. Every rule carries a non-vacuity proof that
+does not depend on how many call sites exist, because the fence landed BEFORE any of them.
+
+### Contradiction found and left standing
+
+`tests/observability.test.mjs:338` is named **'nothing emits an analytics event yet — the
+mutation layer owns that, in R8'**. Its assertions are scoped to `analytics.ts`'s own source
+and remain TRUE and green — nothing calls `track()` inside that module. Its NAME is now
+false, and it prints on every run. Renaming it is a one-line change this run's per-commit
+file scope did not authorise. **For the next dispatch:** rename it to something like 'the
+analytics module does not emit its own events'.
+
+### Guard
+
+No guard refusal blocked any intended change this run. Commit messages were written to a
+repo-root temp file and applied with `git commit -F`, removed in the same command; no
+message carried the Co-Authored-By trailer, whose bare model token `GUARD-NESTED-CLAUDE`
+blocks — already logged as standing friction item 12. Two refusals were hit and worked
+WITH rather than around: writing this record through the `Write` tool into the session
+scratchpad was refused as `GUARD-PATH-ESCAPE` (item 12's fourth case, reproduced again), so
+it was written to a repo-root temp file and spliced in; and a shell heredoc carrying this
+record's backticks failed to parse, so the `Write` tool was used for the body and the shell
+only for the splice. One self-inflicted failure is recorded rather than hidden: a
+`npm run verify 2` typo passed `2` to `node --test`, which then treated the pre-existing
+empty untracked `2/` directory as a test target and reported one failure. The suite itself
+was 1283/1283 in that same run; the command was re-issued correctly and nothing was
+touched.
+
 ## RUN R7b COMPLETED (2026-08-31) — the two authorization proofs R7's census found missing, and Gate 1's authorization box ticks
 
 Tests and docs, six files, three commits: `f4c9e09` (the proofs), `fc71236` (the three
