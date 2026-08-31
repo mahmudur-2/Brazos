@@ -191,6 +191,9 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
       if (context.kind === 'bid') {
         const { data: offerId, error } = await createMarketplaceOffer({
           jobId: context.job.id,
+          // The job row this composer is bidding on is already in hand, so
+          // time-to-bid costs no read (lib/offers.ts NewMarketplaceOffer).
+          postedAt: context.job.created_at,
           amountCents,
           // The pitch plus at most ONE trailing availability line. With no
           // chips selected this is exactly message.trim(), as it always was.

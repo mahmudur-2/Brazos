@@ -33,8 +33,16 @@ const offersModule = (async () => {
     .replace(
       /import \{ coordinateLocationError \} from '\.\/locationPrivacy';/,
       'const coordinateLocationError = () => null;'
+    )
+    // R7C's funnel emitter, on the RPC writers only. Stubbed for the same
+    // reason as the rest: the analytics module reaches config/env, which bare
+    // Node ESM cannot resolve, and nothing exercised here emits anything.
+    .replace(
+      /import \{ track \} from '\.\/observability\/analytics';/,
+      'const track = () => {};'
     );
   assert.match(stubbed, /const supabase = null;/, 'the supabase import must be stubbed');
+  assert.match(stubbed, /const track = \(\) => \{\};/, 'the analytics import must be stubbed');
   assert.match(
     stubbed,
     /const PUBLIC_PROFILE_COLUMNS = 'id';/,

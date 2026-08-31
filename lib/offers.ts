@@ -2,6 +2,7 @@ import { supabase } from './supabase';
 import type { JobCategory } from './jobs';
 import { coordinateLocationError } from './locationPrivacy';
 import type { Message } from './messages';
+import { track } from './observability/analytics';
 import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
 import { moneyCeilingError } from './validation';
 
@@ -228,6 +229,17 @@ export type NewMarketplaceOffer = {
   jobId: string;
   amountCents: number;
   message: string;
+  /**
+   * The job row's `created_at`, as the bidding surface already holds it.
+   * REQUIRED, and deliberately not optional: it exists so `offer_sent` can
+   * carry time-to-bid — the leading indicator of bids per job, the one number
+   * that says whether this marketplace has a supply side — and an optional
+   * field would let a new bidding surface drop the measurement silently. It is
+   * passed rather than read back here because every surface that can bid is
+   * looking at the job it is bidding on; a database round trip to learn a
+   * timestamp already on screen would be a real cost for an analytics figure.
+   */
+  postedAt: string;
 };
 
 /** A worker bids on a public open job. create_offer() derives the worker and
@@ -243,6 +255,21 @@ export async function createMarketplaceOffer(input: NewMarketplaceOffer) {
     p_job_id: input.jobId,
     p_message: input.message,
   });
+
+  if (!error && data) {
+    // Time to first bid, on the success branch only. An unparseable timestamp
+    // emits NOTHING rather than an NaN property — a missing event is a hole in
+    // a count, an NaN is a number nobody can trust. Clamped at zero because a
+    // device clock behind the server's is a client fact, not a negative age.
+    const postedMs = Date.parse(input.postedAt);
+    if (!Number.isNaN(postedMs)) {
+      track({
+        name: 'offer_sent',
+        kind: 'bid',
+        secondsSincePosted: Math.max(0, Math.round((Date.now() - postedMs) / 1000)),
+      });
+    }
+  }
 
   return { data: data as string | null, error };
 }
@@ -302,6 +329,14 @@ export async function createDirectOffer(input: NewDirectOffer) {
     p_thread_job_id: input.threadJobId ?? null,
   });
 
+  if (!error && data) {
+    // secondsSincePosted is 0 and that is a measurement, not a placeholder:
+    // this RPC creates the jobs row in the SAME transaction as the offer, so
+    // the job is exactly zero seconds old when the offer is sent. A direct
+    // offer has no waiting-for-a-bid interval to measure, by construction.
+    track({ name: 'offer_sent', kind: 'direct', secondsSincePosted: 0 });
+  }
+
   return { data: data as string | null, error };
 }
 
@@ -344,6 +379,13 @@ export async function acceptOffer(offerId: string) {
   const { data, error } = await supabase.rpc('accept_offer', {
     p_offer_id: offerId,
   });
+
+  // Acceptance is assignment, and assignment is the database's alone — so the
+  // returned job id is the only proof the transaction committed, and the event
+  // waits for it. Funding is a separate event on a separate branch (D5), which
+  // is why nothing here says the job was paid for.
+  if (!error && data) track({ name: 'offer_accepted' });
+
   return { data: data as string | null, error };
 }
 
