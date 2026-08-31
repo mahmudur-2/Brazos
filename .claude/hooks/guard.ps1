@@ -359,18 +359,26 @@ try {
         Write-Deny 'GUARD-HOOKSPATH' 'git-hooks-path-override'
     }
 
-    # ---- 6. GUARD-DB -------------------------------------------------------
-    # Bare command verb: first token of the full command, or of any subcommand
-    # after a split on &&, ||, ; or |.
-    $dbVerbs = @('psql', 'pg_dump', 'pg_restore', 'pg_dumpall', 'supabase')
-    foreach ($segment in ($low -split '\|\||&&|\||;')) {
-        $seg = $segment.Trim()
-        if ($seg -eq '') { continue }
-        $first = $seg.Split(' ')[0]
-        foreach ($v in $dbVerbs) {
-            if (Test-BareVerb $first $v) { Write-Deny 'GUARD-DB' 'direct-database-contact' }
-        }
+    # ---- 6. GUARD-DB ---------------------------------------------------
+# Bare command verb: first token of the full command, or of any subcommand
+# after a split on &&, ||, ; or |.
+# The local stack is the run's database: start, stop, db reset, test db,
+# gen types and migration new all touch 127.0.0.1 only and are allowed.
+# Anything that can reach a REMOTE project is denied below.
+$dbVerbs = @('psql', 'pg_dump', 'pg_restore', 'pg_dumpall')
+foreach ($segment in ($low -split '\|\||&&|\||;')) {
+    $seg = $segment.Trim()
+    if ($seg -eq '') { continue }
+    $first = $seg.Split(' ')[0]
+    foreach ($v in $dbVerbs) {
+        if (Test-BareVerb $first $v) { Write-Deny 'GUARD-DB' 'direct-database-contact' }
     }
+}
+if ($low -match '--linked|--db-url|--project-ref') { Write-Deny 'GUARD-DB' 'remote-database-flag' }
+if ($low -match 'supabase\s+(login|logout|link|projects|orgs|branches|secrets)\b') { Write-Deny 'GUARD-DB' 'remote-database-subcommand' }
+if ($low -match 'supabase\s+db\s+(push|pull|dump|remote)\b') { Write-Deny 'GUARD-DB' 'remote-database-subcommand' }
+if ($low -match 'supabase\s+migration\s+repair\b') { Write-Deny 'GUARD-DB' 'remote-database-subcommand' }
+if ($low -match 'supabase\s+functions\s+deploy\b') { Write-Deny 'GUARD-DB' 'remote-database-subcommand' }
 
     # ---- 7. GUARD-DEPS -----------------------------------------------------
     # Package-manager verb plus mutating subcommand, both as whole tokens, so
