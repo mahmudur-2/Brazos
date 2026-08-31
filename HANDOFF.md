@@ -43,6 +43,67 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN G1B COMPLETED (2026-08-31) — Gate 1 read to the bottom: no tick moves, and its two open boxes now carry their operator steps
+
+Docs only, two commits: `5ee1e7b` (the two Gate 1 box rewrites in `docs/GATES.md`)
+and this record. Base gate held (`mainexpo`, `23b222b` an ancestor, tree clean).
+No SQL was executed and no database was contacted, local or remote; nothing this
+run touched sits on a path the staging pipeline watches, so the push applies no
+migration and deploys no function. `npm run verify` green before each commit:
+**1289 tests, 0 failures, 0 skipped**. `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md`
+untouched — no Gate 1 clause requires a line of it, and its §1 declares itself a
+snapshot at its named commit, never live state.
+
+### The verdict, box by box — every clause checked against the repository this run
+
+- **The device box stays OPEN, and the walk is now cited for exactly what it
+  proves.** The R6b money walk (2026-08-30) closed on staging — a test-mode
+  charge of $107.50, $92.50 transferred under a real `tr_` reference, the
+  payments row reached `released` — so "a test-mode charge and payout" has
+  happened once. It cannot tick the box: the record names NO device, names none
+  of post/bid/accept/complete/review (review appears nowhere in it), and the
+  walk finished only because the operator hand-ran the `transfer_attempts = 1`
+  update to clear the idempotency wedge — while the R6b rotation corrective and
+  the R8a double-blind review schema both landed AFTER the walk, so the code as
+  it ships has never carried the six-step sequence end to end untouched. The box
+  now carries eight numbered phone steps (Metro → PostJobScreen →
+  SubmitBidScreen → CheckoutScreen with the 4242 card → WorkerJobScreen /
+  ApproveOrDisputeScreen → one hands-off settlement tick → ReviewAndTipScreen →
+  the provider's test dashboard), each with its expected outcome; step (6) also
+  supplies the rotation-rule proof R6b's optional step (5) left unperformed.
+- **The provenance box stays OPEN and is now explicitly the operator's.** All
+  three contents were verified again — `docs/architecture.md:187-188` states
+  the two RPC invariants; §Offers, §Money, §Messaging, §Location privacy and
+  §Security model carry the tables and contracts — but `docs/README.md:40`
+  still classifies the file as "reconstructed from source", no run can change
+  where a document came from, and `docs/DECISIONS.md` holds no ruling on it.
+  The box names the single closing move: the operator either accepts
+  reconstructed-from-the-gate's-core as "the OUTPUT of this gate" (dated in
+  `docs/DECISIONS.md`, then ticks by hand) or rewords the clause and judges it
+  afresh.
+
+### Findings reported, not acted on
+
+- **The R7b record says "Gate 1 still has three open boxes"; the file has two,
+  and the file wins** — the ticked three are authorization (R7b), the money
+  ledger (R7) and the schema verifier (KIT1), beside the two above.
+- The device box's offline half re-confirmed: all six payment functions exist
+  under `supabase/functions/` (`create-payment`, `stripe-webhook`,
+  `connect-onboarding`, `connect-status`, `connect-return`,
+  `process-settlements`; `send-push`, `worker-search` and `translate` are the
+  non-payment three), and all six cited node test files exist.
+- No deny rule and no hook fired on anything in the write surface. `docs/GATES.md`
+  was edited with the file tools (its text cites guard paths, so a shell
+  redirect would be refused); the commit trailer rode in a `git commit -F`
+  message file under the gitignored `.shots/` (the R8A pattern), removed at run
+  end.
+
+### What closes Gate 1 now
+
+Nothing a run can do. Both remaining boxes are operator-owned — the eight-step
+device walk and the provenance ruling — and every other Gate 1 box is ticked
+with its evidence paths beside it.
+
 ## RUN R8A COMPLETED (2026-08-31) — the reputation core: double-blind reviews, two reputations per person, shrunk cold-start ratings, and the client's record
 
 Two commits: `42468a0` (one migration, two pgTAP files changed/added, one fence
