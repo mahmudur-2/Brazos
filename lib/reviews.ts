@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { track } from './observability/analytics';
 
 export type Review = {
   id: string;
@@ -42,6 +43,12 @@ export async function createReview(_reviewerId: string, input: NewReviewInput) {
       p_photos: input.photos ?? [],
     })
     .single();
+
+  // The one review write in the app — create_review() is the only path, and
+  // every other reviews query in this file reads. The rating and nothing else:
+  // the comment the reviewer typed is prose, and prose does not leave the
+  // device (tests/analyticsPrivacy.test.mjs rule 2).
+  if (!error && data) track({ name: 'review_left', stars: input.rating });
 
   return {
     data: data ? ({ ...data, photos: toPhotoArray((data as any).photos) } as Review) : null,

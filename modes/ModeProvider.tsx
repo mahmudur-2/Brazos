@@ -11,6 +11,7 @@ import {
 import { useModeTransition } from '../components/ModeTransitionOverlay';
 import { useAuth } from '../hooks/useAuth';
 import { confirmAsync } from '../lib/dialog';
+import { track } from '../lib/observability/analytics';
 import { fetchMyActiveMode, setMyActiveMode } from '../lib/profiles';
 import { consumePendingLanding } from '../lib/setupLanding';
 import {
@@ -333,6 +334,17 @@ export function ModeProvider({ children }: PropsWithChildren) {
           // never visible mid-flight.
           onSwitch: () => setMode(target),
         });
+
+        // The switch has committed: the confirmation was accepted, the
+        // transition owns the change, and nothing downstream can cancel it. A
+        // DECLINED confirmation returned above and emits nothing.
+        //
+        // Emitted HERE and not from setMyActiveMode(): that is the persistence
+        // call, it is allowed to fail offline and be repaid later (F-042),
+        // and a mode the user is already looking at is switched whether or not
+        // the server has heard about it yet. ModeProvider is the single
+        // authority for a mode change, so it is the single emitter.
+        track({ name: 'mode_switched', to: target });
 
         // Persistence runs alongside the animation rather than gating it — a
         // slow network must not stall a UI state change the user already
