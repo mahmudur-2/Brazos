@@ -17,11 +17,14 @@ import { env } from '../../config/env';
  * on a third party's servers by accident. Money, where it appears at all, is
  * integer cents, the same as everywhere else in this codebase.
  *
- * NOTHING CALLS `track()` YET, AND THAT IS THE DESIGN. Events are emitted from
- * the mutation layer, which R8 builds — one call site per state change, next to
- * the write that causes it. Emitting from screens produces double-counts the
+ * EVENTS ARE EMITTED FROM THE MUTATION LAYER AND NOWHERE ELSE. R7C gave nine
+ * of the fourteen their call sites — one per state change, inside the `lib/`
+ * function that wraps the write that causes it, on that write's success branch
+ * and never on a refusal. Emitting from screens produces double-counts the
  * moment two screens can trigger the same mutation, and misses every path that
- * does not go through a screen at all.
+ * does not go through a screen at all; `tests/analyticsPrivacy.test.mjs` holds
+ * that rule mechanically — a `track(` outside `lib/` or `modes/` fails the
+ * suite, as does a funnel property typed as free text.
  *
  * THE VENDOR IS A CAUGHT REQUIRE for the reason set out in
  * lib/observability/sentry.ts: the screenshot harness renders through
@@ -35,7 +38,10 @@ export type FunnelEvent =
   | { name: 'job_posted'; category: string; hasBudget: boolean }
   | { name: 'offer_accepted' }
   | { name: 'checkout_started' }
+  // Webhook-caused — DO NOT wire from the client. Stripe lands this while the
+  // app may be backgrounded or killed, so a client caller under-counts silently.
   | { name: 'payment_held'; amountCents: number }
+  // Webhook-caused — DO NOT wire from the client, for the same reason.
   | { name: 'payment_released'; reason: 'approved' | 'auto_approved' }
   | { name: 'review_left'; stars: number }
   // worker side — the numbers that say whether the marketplace has a supply side
@@ -117,7 +123,17 @@ const client: PostHogLike | null = createClient();
 export function track(event: FunnelEvent): void {
   if (!client) return;
   const { name, ...props } = event;
-  client.capture(name, props);
+  // "Never throws" was a claim about the sentence above and not about the code
+  // until R7C, which put these calls on the money path — inside createJob,
+  // createMarketplaceOffer, acceptOffer and createPaymentSession. A vendor
+  // exception escaping here would fail the write that emitted it. Swallowed,
+  // deliberately: a lost event is a lost event, a thrown one is a lost job.
+  try {
+    client.capture(name, props);
+  } catch {
+    // Nothing to report to: reporting an analytics failure through analytics is
+    // the same call again, and Sentry is not told about a metric it cannot fix.
+  }
 }
 
 /**
@@ -128,6 +144,12 @@ export function track(event: FunnelEvent): void {
  */
 export function identify(userId: string | null): void {
   if (!client) return;
-  if (userId) client.identify(userId);
-  else client.reset();
+  // Same gap, same fix as track(): this one runs from AuthContext, so a vendor
+  // exception here would break sign-in rather than a write.
+  try {
+    if (userId) client.identify(userId);
+    else client.reset();
+  } catch {
+    // Deliberately silent — see track().
+  }
 }
