@@ -24,6 +24,14 @@
 // the selected service tile is the only marker, and for a category outside the
 // first three it renders off the right edge of a 393pt viewport. Whether to say
 // so on screen is an appearance decision and is not this file's to make.
+//
+// RUN JOBS1 added a third kind of fence, at the bottom of this file. The
+// harness now seeds four job rows so that customer Home's job card can be
+// photographed at all — an exception to the rule it otherwise keeps, and one
+// that is only as narrow as its OPT-IN. A third target carrying `jobs: true`
+// would change a PNG that is supposed to be byte-identical, silently, minutes
+// into a capture run and only when somebody runs one. That is what the last
+// test here turns into an offline failure.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -122,10 +130,16 @@ test('the registry photographs where a category chip lands, in both schemes', ()
     'worker-inbox-light',
     'worker-profile-dark',
     'worker-profile-light',
+    // RUN JOBS1 — the populated customer Home, both schemes. Listed here so
+    // they are protected from a silent rename or drop exactly like the rest;
+    // what makes them DIFFERENT from the rest is asserted in the last test.
+    'customer-home-jobs-dark',
+    'customer-home-jobs-light',
   ]) {
     assert.ok(names.includes(existing), `${existing} disappeared from the registry`);
   }
-  assert.equal(names.length, 60, `registry is ${names.length} targets, expected 60`);
+  // 60 through RUN SHOTS1, plus the two RUN JOBS1 populated-Home targets.
+  assert.equal(names.length, 62, `registry is ${names.length} targets, expected 62`);
 });
 
 test('that target is reached by tapping a chip, never by naming the route', async () => {
@@ -243,4 +257,70 @@ test('a tapped category reaches the search, not just the destination state', asy
 
   // …which is a real filter on the read, not a label carried alongside it.
   assert.match(codeOnly(lib), /\.overlaps\('categories', searchedCategories\)/);
+});
+
+// RUN JOBS1 — THE POPULATED HOME, AND THE FENCE AROUND ITS OPT-IN.
+test('the populated Home targets exist, and are the only ones seeded with jobs', async () => {
+  const names = registry();
+  for (const scheme of ['dark', 'light']) {
+    assert.ok(
+      names.includes(`customer-home-jobs-${scheme}`),
+      `no customer-home-jobs-${scheme} target`
+    );
+  }
+
+  const harness = await read('scripts/shots.mjs');
+
+  // The new field is documented where the other five are. A registry field
+  // that cannot be found by reading the registry's own header is a field the
+  // next person adds a target without.
+  const header = harness.slice(
+    harness.indexOf('// THE TARGET REGISTRY.'),
+    harness.indexOf('const TARGETS = [')
+  );
+  assert.ok(header.length > 0, 'the registry header comment is gone');
+  const documented = header
+    .split('\n')
+    .map((line) => line.match(/^\/\/ {3}(\w+) {2,}\S/)?.[1])
+    .filter(Boolean);
+  for (const field of ['name', 'mode', 'colorScheme', 'recipe', 'wait', 'jobs']) {
+    assert.ok(
+      documented.includes(field),
+      `the registry header does not document \`${field}\``
+    );
+  }
+
+  // OPT-IN, and the opt-in IS the byte-identity guarantee: exactly one
+  // occurrence in code — the single flatMap entry that produces both schemes.
+  // Comments are stripped first, so the prose explaining the flag cannot be
+  // what satisfies this.
+  const code = codeOnly(harness);
+  assert.equal(
+    (code.match(/jobs:\s*true/g) ?? []).length,
+    1,
+    '`jobs: true` appears on more than the one opted-in registry entry'
+  );
+
+  // …and it is that entry, bounded by its own braces, so a `jobs: true` that
+  // drifted onto some other target could never satisfy the assertion above by
+  // standing in for this one.
+  const start = code.indexOf('name: `customer-home-jobs-${colorScheme}`');
+  assert.ok(start > -1, 'the populated Home target is gone from the registry');
+  const entry = code.slice(start, code.indexOf('},', start));
+  assert.match(entry, /mode: 'customer',/);
+  assert.match(entry, /jobs: true,/);
+
+  // The wait is the LAST seeded card's title, read from the data rather than
+  // restated as a literal: text only a populated card draws, so a target that
+  // failed to populate fails loudly instead of photographing the empty state
+  // and passing — and taken from the END of the list, so a feed that arrives
+  // short fails too rather than being photographed short.
+  assert.match(entry, /wait: SEEDED_JOBS\[SEEDED_JOBS\.length - 1\]\.title,/);
+
+  // Both stub branches are guarded by the flag, and the flag is read off the
+  // registry entry — which is what makes "every other target still gets the
+  // empty answer" a fact rather than an intention.
+  assert.match(code, /if \(jobs && pathname\.endsWith\('\/rest\/v1\/jobs'\)/);
+  assert.match(code, /if \(jobs && pathname\.endsWith\('\/rest\/v1\/rpc\/job_offer_counts'\)/);
+  assert.match(code, /jobs: shot\.jobs === true,/);
 });

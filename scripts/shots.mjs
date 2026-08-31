@@ -103,20 +103,205 @@ const USER_ID = '00000000-0000-4000-8000-000000000001';
 //
 // Pinned so two runs of a Post-a-Job target type the same characters and
 // produce the same pixels. These are the harness's OWN inputs — a person
-// filling in a form — not marketplace data: no job, worker, rating or review
-// is invented anywhere in this file, and every list the app asks for still
-// comes back empty.
+// filling in a form — not marketplace data.
+//
+// THAT SENTENCE USED TO COVER THE WHOLE FILE, AND NO LONGER DOES. Four
+// invented job rows now live below, under THE SEEDED JOB ROWS, and they are
+// marketplace data by any honest reading. What the opt-in there buys, and what
+// is still true of this file: no worker, rating, review, history or image is
+// invented anywhere in it, and every list requested by a target that does not
+// ask for those four rows still comes back empty.
 //
 // DESCRIPTION reuses the title verbatim. lib/validation.ts sets a 20-character
 // floor that gates Continue, so the step cannot be passed without one, and
-// restating the title adds no fact that was not already pinned.
+// restating the title adds no fact that was not already pinned — which is why
+// the seeded rows describe themselves the same way.
 // ===========================================================================
 const JOB_TITLE = 'Dog walking - twice this week';
 const JOB_DESCRIPTION = JOB_TITLE;
-/** The dog-walking category. lib/jobs.ts spells its own label 'Dog walking'. */
+/**
+ * The dog-walking category, in both spellings the file needs: the recipe TAPS
+ * the label, and the seeded row below CARRIES the key, which is the pairing
+ * lib/jobs.ts (JOB_CATEGORY_LABELS) holds. Restating either one somewhere else
+ * is how the two would drift apart.
+ */
+const JOB_CATEGORY = 'dog_walking';
 const JOB_CATEGORY_LABEL = 'Dog walking';
 const JOB_AREA = 'East Flatbush, Brooklyn, NY';
 const JOB_BUDGET = '75';
+
+// ===========================================================================
+// THE SEEDED JOB ROWS — the one place this harness answers with invented
+// marketplace data. It is recorded here rather than buried, because the file
+// spent its whole life claiming the opposite.
+//
+// WHY THEY EXIST. jobs, bids and counts all came back empty, so customer Home
+// photographed its honest empty state and its job card had never once been
+// rendered. A card that has never been drawn cannot be traced, measured or
+// rebuilt as editable layers, so these four rows give that card something to
+// draw. That is the operator's decision, taken knowingly.
+//
+// HOW NARROW THE EXCEPTION IS. It is OPT-IN PER TARGET (`jobs: true` on a
+// registry entry): every target that does not ask keeps the empty answer, and
+// its PNG stays byte-identical. It is four job rows and nothing else — no
+// worker, rating, review, profile or photo is invented alongside them. Nothing
+// here is written anywhere it could escape.
+//
+// THE ROW SHAPE IS THE SERVER'S, NOT THIS FILE'S. Each row carries every
+// column supabase/migrations/20260901000000_baseline.sql gives public.jobs,
+// holding either the value create_job() would have written or that column's
+// own default — including the legacy mirror, where a RANGE's CEILING is what
+// lands in the single budget_cents (create_job:
+// `coalesce(p_budget_max_cents, p_budget_min_cents, p_budget_cents)`). The
+// answer is then projected down to the columns the request's own `select`
+// names, exactly as PostgREST would, so a column dropped from
+// OPEN_JOB_COLUMNS stops arriving here too instead of being quietly supplied
+// by the harness.
+//
+// TIMESTAMPS ARE OFFSETS FROM NOW, NOT FIXED DATES — the opposite of the
+// create_job echo further down, for the very same reason. That card renders no
+// relative age, so a PINNED date is what makes two runs agree there. These
+// rows feed a list sorted by age whose cards are one line away from spelling
+// one, so an OFFSET is what makes two runs agree here: a pinned date would
+// read "2 hours ago" on the day it was written and "seven months ago" today.
+//
+// NO IMAGES. `photos` and `videos` are empty on all four, so every card falls
+// back to its category glyph. An image URL would be a request to a host
+// outside the harness, and the escape assertion at the end of main() would
+// rightly fail the run for it.
+//
+// SCHEDULING STAYS NULL on all four. "Flexible" is a real and common answer —
+// lib/jobs.ts says so where it declares those columns — and a fixed date would
+// age exactly the way a fixed created_at would.
+// ===========================================================================
+
+/** A second stable synthetic account id, and NOT the harness's own USER_ID:
+ *  HomeScreen computes `isOwn` against the signed-in id, so seeding these
+ *  under USER_ID would render all four as the operator's own posts, with the
+ *  "Your job" chip and "No bids yet" in place of a browsing worker's view. No
+ *  profile row is seeded for it and no name is attached to it anywhere. */
+const POSTER_ID = '00000000-0000-4000-8000-000000000002';
+
+const HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * The four postings, held as the ARGUMENTS create_job() would have been
+ * called with rather than as finished rows, so the server's rules are applied
+ * below instead of being pre-computed by hand. Declared newest first, which is
+ * the order `fetchOpenJobs()` asks for (`order=created_at.desc`).
+ */
+const SEEDED_JOBS = [
+  {
+    id: '00000000-0000-4000-8000-000000000101',
+    title: JOB_TITLE,
+    category: JOB_CATEGORY,
+    location: JOB_AREA,
+    budget_cents: Number(JOB_BUDGET) * 100,
+    budget_min_cents: null,
+    budget_max_cents: null,
+    offers: 0,
+    agedHours: 2,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000102',
+    title: 'Mount a 55-inch TV in the living room',
+    category: 'tv_mounting',
+    location: 'Bed-Stuy, Brooklyn, NY',
+    budget_cents: null,
+    budget_min_cents: 9_000,
+    budget_max_cents: 12_000,
+    offers: 2,
+    agedHours: 6,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000103',
+    title: 'Help moving boxes into a third-floor walk-up',
+    category: 'packing',
+    location: 'Crown Heights, Brooklyn, NY',
+    budget_cents: null,
+    budget_min_cents: 14_000,
+    budget_max_cents: 18_000,
+    offers: 5,
+    agedHours: 24,
+  },
+  {
+    id: '00000000-0000-4000-8000-000000000104',
+    title: 'Paint one bedroom, walls only',
+    category: 'painting',
+    location: 'Prospect Heights, Brooklyn, NY',
+    budget_cents: null,
+    budget_min_cents: 20_000,
+    budget_max_cents: 26_000,
+    offers: 1,
+    agedHours: 72,
+  },
+];
+
+/** Every column public.jobs has, carrying what create_job() writes or what the
+ *  table itself defaults to — never a third, invented value. */
+function seededJobRows() {
+  const now = Date.now();
+  return SEEDED_JOBS.map((seed) => ({
+    // Written by create_job() from the poster's answers.
+    id: seed.id,
+    client_id: POSTER_ID,
+    title: seed.title,
+    description: seed.title,
+    category: seed.category,
+    location: seed.location,
+    // create_job()'s legacy single-budget mirror, transcribed:
+    //   coalesce(p_budget_max_cents, p_budget_min_cents, p_budget_cents)
+    budget_cents: seed.budget_max_cents ?? seed.budget_min_cents ?? seed.budget_cents,
+    budget_min_cents: seed.budget_min_cents,
+    budget_max_cents: seed.budget_max_cents,
+    scheduled_date: null,
+    arrival_start_hour: null,
+    arrival_end_hour: null,
+    photos: [],
+    videos: [],
+    // Written by create_job() as a literal.
+    status: 'open',
+    // now − agedHours, in the ISO form PostgREST returns for a timestamptz.
+    created_at: new Date(now - seed.agedHours * HOUR_MS).toISOString(),
+    // The remaining columns of public.jobs, at the table's own defaults. None
+    // of the four needs one, so none of them gets a value anybody chose.
+    location_text: null,
+    completion_photo_url: null,
+    completion_photos: [],
+    completion_videos: [],
+    visibility: 'open_market',
+    assigned_worker_id: null,
+    accepted_bid_id: null,
+    accepted_offer_id: null,
+    final_amount_cents: null,
+    scheduled_for: null,
+    en_route_at: null,
+    arrived_at: null,
+    completed_at: null,
+    property_id: null,
+    area_code: null,
+  }));
+}
+
+/**
+ * PostgREST returns the columns the request's own `select` names and no
+ * others, so this does too. That is the stronger arrangement: a column dropped
+ * from OPEN_JOB_COLUMNS stops arriving in the harness as well, instead of
+ * being handed over anyway and hiding the regression. An embed
+ * (`job_offers!fk(count)`) is not a column of this row and is skipped, which
+ * leaves bid_count on mapJobRow's own zero fallback exactly as a real embed-
+ * less read would.
+ */
+function projectColumns(row, select) {
+  if (!select) return row;
+  const picked = {};
+  for (const raw of select.split(',')) {
+    const name = raw.trim();
+    if (!name || name.includes('(')) continue;
+    if (name in row) picked[name] = row[name];
+  }
+  return picked;
+}
 
 // ===========================================================================
 // THE TARGET REGISTRY.
@@ -136,9 +321,14 @@ const JOB_BUDGET = '75';
 //                the recipe and before the shutter, so a target that never
 //                shows it fails loudly instead of photographing the wrong
 //                screen.
+//   jobs         optional. `true` opts this target in to the four seeded job
+//                rows (see THE SEEDED JOB ROWS) — the one place this harness
+//                answers with invented marketplace data. Absent everywhere
+//                else, and absence is what keeps every other target on the
+//                empty answer it has always had, with its PNG unchanged.
 //
-// A target with no recipe is photographed exactly where the app lands, which
-// is what the four Home targets do — and their capture path is the one
+// A target with no recipe is photographed exactly where the app lands. The
+// four original Home targets do that, and their capture path is the one
 // home-shots.mjs used, which is what the byte-identity gate checks.
 // ===========================================================================
 
@@ -264,8 +454,10 @@ const TARGETS = [
       // category it was handed, and a direct navigate would seed that param by
       // hand instead of proving the chip carries it.
       //
-      // The harness invents no marketplace data, so an empty result is the
-      // EXPECTED end state here and says nothing about what staging holds.
+      // The harness invents no WORKER — the seeded job rows are the whole of
+      // its invented data, and this target does not opt in to them anyway — so
+      // an empty result is the EXPECTED end state here and says nothing about
+      // what staging holds.
       // The wait is the SUBSTRING 'workers matched' because that title now
       // names the applied category — "No Dog Walking/Pet Care workers
       // matched" — and the unlabelled "No workers matched" is still what an
@@ -280,10 +472,12 @@ const TARGETS = [
   ]),
 
   // =========================================================================
-  // RUN SHOTS1 — customer-mode coverage. Every surface below is reached the
-  // way a customer reaches it, from where the app lands, with the fixtures
-  // the harness already seeds — so list-shaped screens photograph their
-  // honest EMPTY state, named per entry. No marketplace data is invented.
+  // RUN SHOTS1 — customer-mode coverage. Every surface IN THIS BLOCK is
+  // reached the way a customer reaches it, from where the app lands, with the
+  // fixtures the harness already seeds — so list-shaped screens photograph
+  // their honest EMPTY state, named per entry. No entry here opts in to the
+  // seeded job rows, so nothing in this block is fed invented marketplace
+  // data. (RUN JOBS1, at the end of the registry, is where that changed.)
   // =========================================================================
   ...['dark', 'light'].flatMap((colorScheme) => [
     {
@@ -324,7 +518,8 @@ const TARGETS = [
     {
       // The customer's job hub, by its standing customer path: the [ + ]
       // sheet's "My jobs" action (the hub has no customer bar item). EMPTY
-      // state: no job fixtures exist.
+      // state: this target does not opt in to the seeded job rows — and that
+      // hub reads jobs by client_id, which those rows would not answer anyway.
       name: `customer-myjobs-${colorScheme}`,
       mode: 'customer',
       colorScheme,
@@ -461,7 +656,8 @@ const TARGETS = [
     },
     {
       // The open-jobs list, by worker Home's own "view all" path. EMPTY
-      // state: no job fixtures exist. Neither the header title nor any part
+      // state: this target does not opt in to the seeded job rows, so the feed
+      // it reads still answers empty. Neither the header title nor any part
       // of the empty-state copy can be the wait — worker Home spells both,
       // hidden but first in DOM once this screen is pushed over it, and the
       // non-exact text match is case-insensitive — so the wait is a distance
@@ -496,6 +692,30 @@ const TARGETS = [
       colorScheme,
       recipe: [{ expect: 'Get hired.' }, { pressText: 'Profile' }],
       wait: 'Choose which events can alert you.',
+    },
+  ]),
+
+  // =========================================================================
+  // RUN JOBS1 — the POPULATED customer Home, and the only two targets in this
+  // registry that opt in to the seeded job rows. Every entry above keeps the
+  // empty answer.
+  //
+  // No recipe: Home is where the app lands, and the four cards under "Nearby"
+  // are the whole surface. HomeScreen slices the feed to PREVIEW_COUNT, which
+  // is 4, and there are four rows, so all four draw.
+  // =========================================================================
+  ...['dark', 'light'].flatMap((colorScheme) => [
+    {
+      name: `customer-home-jobs-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      jobs: true,
+      // The LAST seeded card's title. It has to be text only a populated card
+      // draws — never something Home spells anyway — or a target that failed
+      // to populate would quietly photograph the empty state and pass. Taking
+      // it from the end of the list rather than the start also means a feed
+      // that arrives short fails loudly instead of being photographed short.
+      wait: SEEDED_JOBS[SEEDED_JOBS.length - 1].title,
     },
   ]),
 ];
@@ -647,8 +867,14 @@ function legalVersions() {
   return { terms: pick('TERMS_VERSION'), privacy: pick('PRIVACY_VERSION') };
 }
 
-/** Everything the app asks the network for, answered locally. */
-function stubResponse(pathname, headers, postData) {
+/**
+ * Everything the app asks the network for, answered locally.
+ *
+ * `jobs` is the target's opt-in, threaded down from the registry entry: false
+ * for every target but the two RUN JOBS1 ones, and the branches it guards are
+ * unreachable without it.
+ */
+function stubResponse({ pathname, query, headers, postData, jobs }) {
   const single = String(headers.accept ?? '').includes('vnd.pgrst.object');
 
   // The legal gate, answered by PASSING it with the versions the app itself
@@ -720,9 +946,43 @@ function stubResponse(pathname, headers, postData) {
     return { status: 200, body: single ? row : [row] };
   }
 
-  // Everything else — jobs, bids, counts — comes back EMPTY. Every screen
-  // draws its honest empty state; no marketplace data is invented to fill a
-  // screenshot.
+  // THE OPEN-JOBS FEED, for a target that opted in. Gated on the predicate
+  // the feed itself sends (lib/jobs.ts, fetchOpenJobs: status=eq.open), so
+  // this answers THAT read and no other read of the same table: a "my jobs"
+  // query carries no such filter and still comes back empty, which is right —
+  // POSTER_ID is not the signed-in account and none of these is the
+  // operator's.
+  if (jobs && pathname.endsWith('/rest/v1/jobs') && query.get('status') === 'eq.open') {
+    const select = query.get('select');
+    const rows = seededJobRows().map((row) => projectColumns(row, select));
+    return { status: 200, body: single ? (rows[0] ?? {}) : rows };
+  }
+
+  // The batched count behind each card's interest line (lib/offers.ts,
+  // fetchOfferCounts → job_offer_counts). Two details of the real RPC are kept
+  // rather than smoothed over, because the card reads them: it filters by the
+  // ids it was handed, and it leaves a job with NO offers out of the result
+  // entirely — the caller fills those in as zero — so the dog-walking row is
+  // deliberately absent here instead of being sent as an explicit 0.
+  if (jobs && pathname.endsWith('/rest/v1/rpc/job_offer_counts')) {
+    let asked = [];
+    try {
+      asked = JSON.parse(postData ?? '{}').p_job_ids ?? [];
+    } catch {
+      asked = [];
+    }
+    return {
+      status: 200,
+      body: SEEDED_JOBS.filter((seed) => seed.offers > 0 && asked.includes(seed.id)).map(
+        (seed) => ({ job_id: seed.id, offer_count: seed.offers }),
+      ),
+    };
+  }
+
+  // Everything else comes back EMPTY — and for every target that did not set
+  // `jobs: true`, "everything else" still includes the jobs feed and its offer
+  // counts, so those screens draw the same honest empty state they always did.
+  // The two branches above are the whole of the exception.
   return { status: 200, body: single ? {} : [] };
 }
 
@@ -812,18 +1072,25 @@ async function main() {
           return route.continue();
         }
         let pathname = url;
+        let query = new URLSearchParams();
         try {
           const parsed = new URL(url);
           pathname = parsed.pathname;
+          // PostgREST puts the select list, the filters and the ordering in
+          // the query string, and the jobs branch reads two of them.
+          query = parsed.searchParams;
           if (parsed.hostname !== HARNESS_HOST) escaped.add(parsed.hostname);
         } catch {
           escaped.add(url);
         }
-        const stub = stubResponse(
+        const stub = stubResponse({
           pathname,
-          route.request().headers(),
-          route.request().postData(),
-        );
+          query,
+          headers: route.request().headers(),
+          postData: route.request().postData(),
+          // THE OPT-IN, per target and nowhere else.
+          jobs: shot.jobs === true,
+        });
         return route.fulfill({
           status: stub.status,
           contentType: 'application/json',
