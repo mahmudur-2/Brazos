@@ -346,12 +346,19 @@ test('INVARIANT 12 · track and identify are no-ops when there is no client', ()
   assert.ok(!analyticsCode.includes('export const client'), 'the raw client must not be exported');
 });
 
-test('nothing emits an analytics event yet — the mutation layer owns that, in R8', () => {
-  // §3.2 is explicit that events come from the mutation layer, one call site
-  // per state change, next to the write that causes it. Emitting from screens
-  // double-counts the moment two screens can trigger the same mutation. R2
-  // creates the module and stops; this is the fence that keeps a later run
-  // from quietly wiring a screen to it without re-deciding that.
+test('the analytics module does not emit its own events, and does not import itself', () => {
+  // WHAT THIS PROVES, AND WHAT IT NO LONGER CLAIMS. It was named "nothing
+  // emits an analytics event yet — the mutation layer owns that, in R8" and
+  // was written when track() had no callers at all. R7C gave it ten and R7D
+  // added more, so the name became false while every assertion below stayed
+  // true: they are scoped to analytics.ts's OWN source, and what they say is
+  // that the module is a leaf. It emits nothing of its own, so no event in
+  // the funnel can originate from the emitter rather than from a write; and
+  // it does not import itself, which is what would let the scan below read a
+  // call site it should not.
+  //
+  // The rule the old name was reaching for now lives where it can be
+  // enforced: tests/analyticsPrivacy.test.mjs, rules 3 and 4.
   //
   // Scoped to the analytics module's own exports so it cannot go red on an
   // unrelated `track(` somewhere in the tree.
@@ -361,5 +368,13 @@ test('nothing emits an analytics event yet — the mutation layer owns that, in 
     (analyticsCode.match(/\btrack\(/g) ?? []).length,
     1,
     'track is called inside its own module'
+  );
+  // The second emitter, held to the same rule. One occurrence, and it is the
+  // declaration — `\btrack\(` above cannot see this name, so without this line
+  // the module could emit an intent event from inside itself unnoticed.
+  assert.equal(
+    (analyticsCode.match(/\btrackIntent\(/g) ?? []).length,
+    1,
+    'trackIntent is called inside its own module'
   );
 });

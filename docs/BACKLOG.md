@@ -79,32 +79,74 @@ Read as text: no SQL was executed and no database was contacted, local or remote
 ## Parked tangents
 - Naming / branding · voice modes · hardware monetisation · Codex switch · Idiolect
 
-## R7D — the five funnel events R7C left unwired (2026-08-31)
+## Analytics — what is still not emitted, and the caveats on what is (R7D, 2026-08-31)
 
-`lib/observability/analytics.ts` declares fourteen `FunnelEvent` variants. R7C
-(2026-08-31) gave nine of them call sites in the mutation layer — `job_posted`,
-`job_completed`, `offer_sent` (both kinds), `offer_accepted`, `mode_switched`,
-`review_left`, `checkout_started`, `connect_onboarding_started` and
-`connect_onboarding_completed`. These five have none, each for a reason that was decided
-rather than deferred by accident:
+R7D closed the R7D backlog item this section used to be. Of the five events R7C left
+unwired, **three no longer exist**: `worker_onboarded`, `job_viewed` and `bid_viewed` were
+removed from `FunnelEvent` rather than wired, because the reasons they had no call site
+were reasons they should not have been names. What remains is two events that are
+deliberately server-side, one union arm nothing can call yet, and three caveats that make
+a number mean less than it looks like it means.
+
+### Still unwired, and not to be wired from the client
 
 - **`payment_held`** — webhook-caused. Stripe lands the hold, and the phone can be
   backgrounded or killed when it does, so a client caller would under-count silently. NOT
-  to be wired from the client: the union now carries that note directly above the variant,
-  so a later run reads it before touching it. If this number is wanted, it belongs to the
+  to be wired from the client: the union carries that note directly above the variant, so
+  a later run reads it before touching it. If this number is wanted, it belongs to the
   webhook function, server-side.
 - **`payment_released`** — webhook-caused, same reason, same note above the variant.
-- **`job_viewed`** — a read, with no write to attach to. R7C wired write sites only.
-  Before it can be counted honestly, someone has to decide where a "view" begins: a card
-  scrolling past in the feed, the detail screen mounting, or a dwell threshold. The variant
-  already carries `source: 'nearby' | 'map' | 'search' | 'push'`, so whatever is decided has
-  to be able to answer that too.
-- **`bid_viewed`** — a read, same as `job_viewed`.
-- **`worker_onboarded`** — its definition is an unmade product decision. Profile complete,
-  services listed, and Stripe Connect finished are three different numbers, and R7C was
-  forbidden to invent one. Note that the Connect reading is already measured under its own
-  name: `connect_onboarding_completed` is wired.
 
-Nothing else is outstanding from R7C. No CONTINUE-PATH was taken: both bidding surfaces
-already held the job row that the newly required `NewMarketplaceOffer.postedAt` needed, and
-the review write had exactly one owner (`createReview()` in `lib/reviews.ts`).
+### Removed rather than wired
+
+- **`worker_onboarded`** — removed. Its definition was an unmade product decision (profile
+  complete, services listed, Stripe Connect finished are three different numbers), and the
+  Connect reading is already measured under its own name by
+  `connect_onboarding_completed`. A third overlapping name is what makes a funnel
+  unreadable a year later. Profile completeness is a server column and can be counted
+  there, without an event.
+- **`job_viewed`** and **`bid_viewed`** — removed. Both are reads. A view belongs in an
+  exposure ledger in the DATABASE, with a rank position, so that "seen" can be joined to
+  "bid on" per position — which is the question an impression number is actually asked.
+  A client event cannot carry rank and cannot be reconciled against anything. Whoever
+  builds that ledger decides where a view begins (a card scrolling past, the detail screen
+  mounting, a dwell threshold); nothing in the app should re-add these names first.
+
+### Uncalled arm of IntentEvent
+
+- **`permission_result` with `kind: 'photos'`** — no surface asks for it. Nothing in the
+  app calls `requestMediaLibraryPermissionsAsync`; every library pick goes straight to
+  `launchImageLibraryAsync`, so on iOS the system picker handles its own access and there
+  is no answer for the app to read. The arm stays in the union because the day a surface
+  does ask, the event should already have a name.
+
+### Caveats — three numbers that mean less than they look like they mean
+
+- **`connect_onboarding_completed` re-emits.** A worker who taps refresh twice on an
+  already-enabled account emits it twice: it is read off the `connect-status` call, which
+  is the only thing that moves the stored state, not off a stored flag. Deduplicating
+  would mean inventing client-side state a fresh launch forgets anyway. **The count means
+  "times a completed status was observed", not "workers onboarded"** — do not divide it by
+  anything without dedupe on the analytics side.
+- **Both abandonment events are FLOORS, not truths.** `job_post_abandoned` and
+  `offer_compose_abandoned` fire from an unmount cleanup, so an app killed mid-form never
+  reports one. Read them as "at least this many people opened it and left", never as an
+  abandonment rate. On the posting screen this is the same kill that leaves the persisted
+  draft in place, so the two facts have one cause.
+- **`job_post_started` counts fresh posts only.** PostJobScreen is also the edit form and
+  the Hire Again request form; neither is a post being started, and counting them would
+  put rows already in the database at the top of the funnel.
+
+### Not counted anywhere, on purpose
+
+- **Tips.** Neither `checkout_started` nor `checkout_result` counts a tip sheet — a tip is
+  not a step in post → bid → accept → fund. `lib/payments/stripe.ts` keeps a set of the
+  payment ids that belong to a job checkout so the two events measure the same population;
+  without it the second could report a success rate above 100%.
+- **The frozen web surface.** `components/HotspotMap.web.tsx` raises the same location
+  permission as its native sibling and emits nothing, because product work never modifies
+  the web surface.
+- **Speech recognition.** `lib/voiceSearch/provider.ts` asks for a microphone permission,
+  which is not one of the four kinds `permission_result` names. Adding a fifth arm would
+  widen a taxonomy that was just narrowed on purpose; if voice search matters enough to
+  measure, that is a decision with a dated entry behind it.

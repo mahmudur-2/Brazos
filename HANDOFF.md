@@ -43,6 +43,182 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## RUN R7D COMPLETED (2026-08-31) — a second emitter for the events no write can cause, and the fence that lists its call sites one by one
+
+Six commits, client only: `509f32a` (the two unions and the four-rule fence), `8ef79a9`
+(`permission_result`, seven call sites), `b3f223c` (the two abandonment pairs), `0f4f07e`
+(`checkout_result`), `643640d` (the Sentry record) and this record. HEAD was `7d806f5` at
+the base gate and `git merge-base --is-ancestor 7d806f5 HEAD` exited 0.
+
+**No database was contacted, local or remote, and no SQL was written or run.** Nothing
+under `supabase/`, `.github/` or `.claude/` is in any commit — `git diff --stat
+7d806f5..HEAD` names twelve files and none is under those trees. `package.json`,
+`package-lock.json` and `.gitignore` are untouched; `git diff 7d806f5..HEAD -- .gitignore`
+prints nothing, which matters because it is a native fingerprint input and an edit would
+silently break OTA delivery to the installed build. No dependency was added. Nothing this
+run touched sits on a path the staging pipeline watches, so the push applies no migration
+and deploys no edge function.
+
+`npm run verify` was green before every commit. **Floor at run start: 1288 tests, 0
+failures** (1287 at the base gate, and `tests/analyticsPrivacy.test.mjs` is confirmed to
+have EXECUTED — its four test titles print in that run's output). **At the end: 1288, 0
+failures.** The rise of one is RULE 4; the count never fell.
+
+### Two emitters, because one of them can never be checked against anything
+
+`track()` / `FunnelEvent` is an event caused by a WRITE. Every one has a row behind it, so
+a count that looks wrong can be settled against the database. R7C's rule 3 — emit from the
+`lib/` function that wraps the write, never from a screen — stands untouched.
+
+`trackIntent()` / `IntentEvent` is an event caused by a PERSON, with no write to attach to.
+A permission dialog answered, a form opened and left. **None of these can ever be
+cross-checked against the database, because the subject of the event is the thing that did
+NOT get written**: an abandoned post leaves no job row, and a blocked notification
+permission leaves nothing that distinguishes it from a worker who never opened the app.
+They are the only numbers we will have for those states and also the only ones nothing can
+audit, so they are a separate union under a separate function name and the analytics tool
+separates them by construction rather than by convention. The two functions do not share a
+body; ten duplicated lines are cheaper than one call path mistakable for the other.
+
+### The taxonomy is smaller, not bigger
+
+`FunnelEvent` went from fourteen variants to twelve. **Removed:** `worker_onboarded`
+(overlapped `connect_onboarding_completed` and a server column), `job_viewed` and
+`bid_viewed` (reads, which belong in a database exposure ledger with a rank position — a
+client event cannot carry rank and cannot be reconciled). **Added:** `checkout_result`,
+the sibling `checkout_started` never had. `IntentEvent` is five variants.
+
+### Six event names, where each one is
+
+- `permission_result` — WIRED at seven sites, and seven is deliberate: a permission dialog
+  is a real event every time it is shown, and unlike a funnel step it cannot double-count a
+  conversion. Location at `lib/geolocation.ts:90`, `hooks/useSetupPermissions.ts:150`,
+  `hooks/useLiveLocation.ts:212` and `components/HotspotMap.native.tsx:60`; notifications at
+  `lib/pushNotifications.ts:182` and `hooks/useSetupPermissions.ts:179`; camera at
+  `screens/ChatScreen.tsx:1439` and `screens/ProfileScreen.tsx:293`.
+- `job_post_started` — WIRED, `screens/PostJobScreen.tsx:505`.
+- `job_post_abandoned` — WIRED, `screens/PostJobScreen.tsx:510`.
+- `offer_compose_started` — WIRED, `components/OfferComposer.tsx:162`.
+- `offer_compose_abandoned` — WIRED, `components/OfferComposer.tsx:166`.
+- `checkout_result` — WIRED, `lib/payments/stripe.ts:351`.
+
+`kind: 'photos'` is the one arm of the union nothing calls: no surface asks for it.
+
+### RULE 4 — why the allowlist is a list and not a directory
+
+An intent event can only be emitted where the person acted, which is exactly the screens
+and components rule 3 keeps `track()` out of. Rather than weaken rule 3, R7D added rule 4:
+`trackIntent(` may appear only in `lib/`, `modes/`, or a file written by hand into
+`INTENT_ALLOWLIST` at the top of `tests/analyticsPrivacy.test.mjs`. Adding a call site
+therefore requires editing the fence, and the failure message says why — someone has to
+decide, each time, whether that surface mounts once per intent rather than once per
+keystroke, and whether the instant the event fires is the instant it names. Seven files are
+on the list. The rule also refuses an entry naming a file that no longer emits, so it
+cannot rot into standing permission.
+
+Rules 1 and 2 now sweep both unions and both emitters. Each union's member count is
+asserted against its OWN floor by name (twelve and five), never a combined total — a run
+that deleted three funnel variants and added five intent ones would sail through a single
+number while halving the funnel.
+
+### Two fence mechanics that were changed, and why neither weakens anything
+
+1. **Rule 2 blanks quoted string literals before reading names out of a call.** Its own
+   docblock says it inspects identifiers, member-expression segments and object keys; a
+   literal is none of those, is written by a developer at build time, and cannot carry a
+   user's address at run time. Without this, `kind: 'location'` — a member of a closed union
+   rule 1 has already checked — would read as a leak. TEMPLATE literals are deliberately
+   still scanned, and the non-vacuity block proves `` `${job.title}` `` is still caught while
+   `'location'` is not.
+2. **`hadTitle` is the one exempt name**, permitted because it is exactly the substitution
+   rule 2's own message prescribes: a boolean saying WHETHER a title was typed, never the
+   title. The exemption is exact (`title`, `jobTitle`, `hadTitleText` are all still refused)
+   and the test proves every exempt name is declared `boolean` in one of the unions, so it
+   can never come to cover a string.
+
+### Four judgement calls, written down because they are arguable
+
+1. **`job_post_started` fires for fresh posts only.** PostJobScreen is also the edit form
+   and the Hire Again request form. An edit reopens a job that already exists and a hire
+   request creates no job at all, so counting either would put rows already in the database
+   at the top of the posting funnel and would report backing out of an edit as an abandoned
+   post. `isFreshPost` is the screen's own existing gate for that distinction. The dispatch
+   said "on mount" and did not anticipate the other two modes.
+2. **`checkout_result` excludes tips, and that costs a `Set`.** `checkout_started` already
+   excludes them (R7C), but `CheckoutSession` carries four strings from the server and none
+   says which kind of payment it is, so by the time the sheet resolves the module cannot
+   tell. `jobCheckoutPaymentIds` records the id where `checkout_started` fires and drops it
+   where the result is read. Without it the two events would measure different populations
+   and the second could report a success rate above 100%.
+3. **`permissionOutcome()` is shared; the `trackIntent(` calls are not.** Seven copies of
+   `granted / denied / blocked` would be three outcomes that drift into meaning different
+   things at different sites, and CLAUDE.md forbids duplicating a derivation. The emitting
+   call still sits at each surface, because that is what rule 4 charges for.
+4. **`tests/observability.test.mjs` is in the D2 commit** although the dispatch named only
+   two files for it. Its INVARIANT 12 pins the funnel variant by variant and would have been
+   red the moment three variants were removed, and the dispatch's own hard gate is zero
+   failures at every commit. Its union slice now stops at `IntentEvent`, so it remains a
+   statement about the funnel alone; the variant table and the worker-side list were updated
+   and no assertion was weakened.
+
+### The one thing the dispatch asked for that did NOT land
+
+D6 asked for `tracesSampleRate: 1.0`. **It was not landed, and this is the run's one
+refusal.** `tests/observability.test.mjs` fences that value with the assertion
+"Environment and sampling come from the variant, never from a literal" — and a flat `1.0`
+is exactly a literal, so landing it meant weakening a regression fence's LOGIC rather than
+updating an expected constant, which CLAUDE.md makes a stop. The verify run proved it
+rather than a reading of the file: the change was made, the fence went red naming that
+regex, and the line was restored.
+
+**The objective did not depend on it.** Mobile vitals need tracing enabled, and
+`hasTracingEnabled` in the SDK asks only whether `tracesSampleRate` is a number. The
+existing `production ? 0.1 : 1` always is, so cold and warm app start
+(`appStartIntegration`), slow and frozen frames (the native frames integration) and
+`reactNativeTracingIntegration` itself are all already in the default integration set —
+each gated on `hasTracingEnabled` in
+`node_modules/@sentry/react-native/dist/js/integrations/default.js`. Nothing was added to
+an `integrations` list for the same reason: passing an ARRAY would REPLACE that default set
+and take the vitals down with it, and the callback form would only re-add what is present.
+`App.tsx:365` has wrapped the root export through `wrapApp()` since the module was written,
+so D6's third clause was already satisfied.
+
+**Raising production from 0.1 to 1.0 is the operator's to decide**, and it is a two-file
+change: the literal in `lib/observability/sentry.ts` and the assertion in
+`tests/observability.test.mjs` that says it must not be one.
+
+### Not wired, deliberately
+
+- `components/HotspotMap.web.tsx` raises the same location permission as its native
+  sibling. It is the frozen web surface and product work never modifies it.
+- `lib/voiceSearch/provider.ts` asks for speech recognition — a microphone permission, not
+  one of the four kinds `permission_result` names. Adding a fifth arm would widen a taxonomy
+  this run narrowed on purpose.
+- `kind: 'photos'`: nothing calls `requestMediaLibraryPermissionsAsync` anywhere. Every
+  library pick goes straight to `launchImageLibraryAsync`, so on iOS the system picker
+  handles its own access and there is no answer to read.
+
+### Base-gate findings, reported rather than acted on
+
+- **R7C's own gate-7 claim was untestable, and the diff now says so.**
+  `git diff e2e3998..7d806f5 -- lib/observability/analytics.ts | grep "^[-+].*name: '"` returns
+  NOTHING: R7C added and removed no event name. Its 29 insertions and 7 deletions are the
+  two try/catch blocks and the two DO-NOT-WIRE notes.
+- **`.claude/` is still dirty.** `git status --porcelain .claude/` reports `M
+  .claude/hooks/guard.ps1` and `M .claude/settings.json`, unstaged, exactly as at R7C. Out
+  of this run's scope entirely; nothing under `.claude/` was read for content beyond the
+  deny matrix, and nothing was written.
+
+### Guard
+
+No guard refusal blocked an intended change. Two known behaviours were worked WITH: commit
+messages were written to a repo-root temp file and applied with `git commit -F`, removed in
+the same command, and none carried the Co-Authored-By trailer whose bare model token
+`GUARD-NESTED-CLAUDE` blocks (standing friction item 12); and this record was written
+through the file-writing tool to a repo-root temp file rather than the session scratchpad,
+which `GUARD-PATH-ESCAPE` refuses. No `2>&1` was used on a read-only command and no heredoc
+carried backticks.
+
 ## RUN R7C COMPLETED (2026-08-31) — track() gains its callers in the write layer, and the fence that keeps them there
 
 Seven commits, client only: `700046f` (track/identify cannot throw into a write),
