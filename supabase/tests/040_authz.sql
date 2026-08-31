@@ -41,7 +41,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(460);
+select plan(537);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -317,6 +317,96 @@ select is((select count(*) from public.bids where job_id in (:'j_open', :'j_live
 select tests.authenticate_anon();
 select throws_ok($$ select count(*) from public.job_offers $$, '42501', 'permission denied for table job_offers', 'anon: cannot read job_offers at all');
 select is((select count(*) from public.bids where job_id = :'j_open'), 0::bigint, 'anon: sees zero bids');
+
+-- ---------------------------------------------------------------------------
+-- §4a. bids — the DELETE grant (R7b). R7's census of client-writable tables
+--      found this the one table in `public` reachable by a client write with
+--      no authorization proof: `authenticated` holds DELETE
+--      (20260901000000_baseline.sql:7813), RLS is on, and not one of the six
+--      policies is FOR DELETE. The grant is therefore real and the command
+--      default-denied — every row is unreachable through it. That is asserted
+--      here on ONE row, as five identities, rather than inferred from the
+--      catalog: the catalog assertions record the shape, the statements
+--      record what the shape actually does.
+--
+--      `bids` is the LEGACY projection, not the live write surface: it is
+--      maintained from job_offers by the phase47/48 projection (see
+--      v_bids_projection_drift's comment) and §1 already proves authenticated
+--      holds no INSERT and no UPDATE on it, which leaves its three PUBLIC-role
+--      "workers insert/update own bids" policies dead letters with no grant
+--      behind them. It retires with the compatibility shims.
+-- ---------------------------------------------------------------------------
+select tests.clear_auth();
+select id as b_live from public.bids where job_id = :'j_live' and worker_id = :'worker' \gset
+insert into fx values ('b_live', :'b_live');
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'runner: the worker''s j_live bid row exists in the projection (the row every DELETE below tries to remove)');
+
+-- The catalog, as fact rather than inference.
+select policies_are('public', 'bids', ARRAY[
+  'bids_select_job_owner', 'bids_select_own', 'job owner views bids on their job',
+  'workers insert own bids', 'workers update own bids', 'workers view own bids'],
+  'catalog: public.bids carries exactly these six policies — four SELECT, one INSERT, one UPDATE, and NONE for DELETE');
+select table_privs_are('public', 'bids', 'authenticated',
+  ARRAY['SELECT', 'REFERENCES', 'DELETE', 'TRIGGER', 'TRUNCATE'],
+  'catalog: authenticated really does hold DELETE on bids (recorded, not inferred), plus SELECT/REFERENCES/TRIGGER/TRUNCATE');
+select table_privs_are('public', 'bids', 'anon',
+  ARRAY['SELECT', 'REFERENCES', 'TRIGGER', 'TRUNCATE'],
+  'catalog: anon holds no DELETE on bids');
+select ok((select relrowsecurity from pg_class where oid = 'public.bids'::regclass),
+  'catalog: row level security is enabled on bids, so a command with no policy of its own is default-denied');
+
+-- The bidding worker: the row is theirs and they can see it.
+select tests.authenticate_as(:'worker');
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'worker: sees their own j_live bid row (positive control — the row is there to delete)');
+with d as (delete from public.bids where id = (select v from fx where k = 'b_live') returning 1)
+select is((select count(*) from d), 0::bigint,
+  'worker: DELETE of their OWN bid row touches zero rows — the DELETE grant has no policy behind it');
+select tests.clear_auth();
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'runner: the row survived the worker''s DELETE');
+
+-- The job's client: they can see the bid, and still cannot remove it.
+select tests.authenticate_as(:'owner');
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'owner: sees the worker''s bid on their own job (positive control)');
+with d as (delete from public.bids where id = (select v from fx where k = 'b_live') returning 1)
+select is((select count(*) from d), 0::bigint,
+  'owner: DELETE of a bid on their own job touches zero rows');
+select tests.clear_auth();
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'runner: the row survived the owner''s DELETE');
+
+-- The losing bidder: cannot even see the winning bid.
+select tests.authenticate_as(:'bidder');
+select is((select count(*) from public.bids where id = :'b_live'), 0::bigint,
+  'bidder: does NOT see the worker''s winning bid row (no SELECT policy admits them)');
+with d as (delete from public.bids where id = (select v from fx where k = 'b_live') returning 1)
+select is((select count(*) from d), 0::bigint,
+  'bidder: DELETE of the winning bid touches zero rows');
+select tests.clear_auth();
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'runner: the row survived the losing bidder''s DELETE');
+
+-- An unrelated stranger.
+select tests.authenticate_as(:'stranger');
+select is((select count(*) from public.bids where id = :'b_live'), 0::bigint,
+  'stranger: does NOT see the bid row');
+with d as (delete from public.bids where id = (select v from fx where k = 'b_live') returning 1)
+select is((select count(*) from d), 0::bigint,
+  'stranger: DELETE of someone else''s bid touches zero rows');
+select tests.clear_auth();
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'runner: the row survived the stranger''s DELETE');
+
+-- anon: refused at the grant, one step earlier than everyone else.
+select tests.authenticate_anon();
+select throws_ok($$ delete from public.bids where id = (select v from fx where k = 'b_live') $$,
+  '42501', 'permission denied for table bids', 'anon: DELETE from bids is refused outright — anon holds no DELETE grant');
+select tests.clear_auth();
+select is((select count(*) from public.bids where id = :'b_live'), 1::bigint,
+  'runner: the row survived anon''s attempt — five identities, zero deletions');
 
 -- ---------------------------------------------------------------------------
 -- §5. Offer RPCs (surface c). Turn, party and author checks in the bodies.
@@ -1122,6 +1212,176 @@ select ok((select prosrc from pg_proc where proname = 'accept_bid' and pronamesp
 select ok((select prosrc from pg_proc where proname = 'respond_job_request' and pronamespace = 'public'::regnamespace) ~ 'public\.accept_offer\(p_request_id\)'
        and (select prosrc from pg_proc where proname = 'respond_job_request' and pronamespace = 'public'::regnamespace) !~* 'update public\.(jobs|job_offers)',
   'the respond_job_request shim still only delegates to accept/decline/counter_offer (never called: CLAUDE.md)');
+
+
+-- ---------------------------------------------------------------------------
+-- §18. storage.objects — the media surface (R7b). The second table R7's
+--      census found client-writable without an authorization proof:
+--      `grant all on storage.objects to authenticated` AND `to anon`
+--      (20260901000000_baseline.sql:8640-8641), with fifteen policies across
+--      five buckets that this file had never mentioned. Every privilege a
+--      client holds here is therefore RLS's to withhold, and nothing else's.
+--
+--      Ten of the fifteen policies are writes — six INSERT, one UPDATE, three
+--      DELETE. (R7 recorded twelve; the catalog says ten, and the catalog is
+--      what these assertions read.) The remaining five are SELECT.
+--
+--      The bucket ROWS are storage data, not schema: the baseline is a
+--      schema-only dump, so a fresh stack has none. supabase/seed.sql creates
+--      the five the policies name, which is why the behaviour half below can
+--      run at all — and why `npm run db:reset` must precede `npm run db:test`.
+--      phase29_security_contract.sql's conditional skip closes for the same
+--      reason.
+-- ---------------------------------------------------------------------------
+select tests.clear_auth();
+select policies_are('storage', 'objects', ARRAY[
+  'avatars_insert', 'avatars_read', 'avatars_update',
+  'chat_audio_insert_party', 'chat_audio_read_party',
+  'chat_documents_insert_party', 'chat_documents_read_party',
+  'chat_photos_insert_party', 'chat_photos_read_party',
+  'job_photos_delete_own_completion', 'job_photos_delete_own_posting', 'job_photos_delete_own_review',
+  'job_photos_insert', 'job_photos_insert_review', 'job_photos_read'],
+  'catalog: storage.objects carries exactly these fifteen policies — ten writes and five reads, across five buckets');
+
+-- The ten write policies: command and roles, one assertion each.
+select policy_cmd_is('storage', 'objects', 'avatars_insert', 'INSERT', 'catalog: avatars_insert is FOR INSERT');
+select policy_cmd_is('storage', 'objects', 'avatars_update', 'UPDATE', 'catalog: avatars_update is FOR UPDATE');
+select policy_cmd_is('storage', 'objects', 'chat_audio_insert_party', 'INSERT', 'catalog: chat_audio_insert_party is FOR INSERT');
+select policy_cmd_is('storage', 'objects', 'chat_documents_insert_party', 'INSERT', 'catalog: chat_documents_insert_party is FOR INSERT');
+select policy_cmd_is('storage', 'objects', 'chat_photos_insert_party', 'INSERT', 'catalog: chat_photos_insert_party is FOR INSERT');
+select policy_cmd_is('storage', 'objects', 'job_photos_insert', 'INSERT', 'catalog: job_photos_insert is FOR INSERT');
+select policy_cmd_is('storage', 'objects', 'job_photos_insert_review', 'INSERT', 'catalog: job_photos_insert_review is FOR INSERT');
+select policy_cmd_is('storage', 'objects', 'job_photos_delete_own_completion', 'DELETE', 'catalog: job_photos_delete_own_completion is FOR DELETE');
+select policy_cmd_is('storage', 'objects', 'job_photos_delete_own_posting', 'DELETE', 'catalog: job_photos_delete_own_posting is FOR DELETE');
+select policy_cmd_is('storage', 'objects', 'job_photos_delete_own_review', 'DELETE', 'catalog: job_photos_delete_own_review is FOR DELETE');
+select policy_roles_are('storage', 'objects', 'avatars_insert', ARRAY['authenticated']::name[], 'catalog: avatars_insert admits authenticated only');
+select policy_roles_are('storage', 'objects', 'avatars_update', ARRAY['authenticated']::name[], 'catalog: avatars_update admits authenticated only');
+select policy_roles_are('storage', 'objects', 'chat_audio_insert_party', ARRAY['authenticated']::name[], 'catalog: chat_audio_insert_party admits authenticated only');
+select policy_roles_are('storage', 'objects', 'chat_documents_insert_party', ARRAY['authenticated']::name[], 'catalog: chat_documents_insert_party admits authenticated only');
+select policy_roles_are('storage', 'objects', 'chat_photos_insert_party', ARRAY['authenticated']::name[], 'catalog: chat_photos_insert_party admits authenticated only');
+select policy_roles_are('storage', 'objects', 'job_photos_insert', ARRAY['authenticated']::name[], 'catalog: job_photos_insert admits authenticated only');
+select policy_roles_are('storage', 'objects', 'job_photos_insert_review', ARRAY['authenticated']::name[], 'catalog: job_photos_insert_review admits authenticated only');
+select policy_roles_are('storage', 'objects', 'job_photos_delete_own_completion', ARRAY['authenticated']::name[], 'catalog: job_photos_delete_own_completion admits authenticated only');
+select policy_roles_are('storage', 'objects', 'job_photos_delete_own_posting', ARRAY['authenticated']::name[], 'catalog: job_photos_delete_own_posting admits authenticated only');
+select policy_roles_are('storage', 'objects', 'job_photos_delete_own_review', ARRAY['authenticated']::name[], 'catalog: job_photos_delete_own_review admits authenticated only');
+select table_privs_are('storage', 'objects', 'anon',
+  ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'REFERENCES', 'TRIGGER', 'TRUNCATE'],
+  'catalog: anon holds every table privilege on storage.objects — no policy admits it, so RLS is the whole boundary');
+select table_privs_are('storage', 'objects', 'authenticated',
+  ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'REFERENCES', 'TRIGGER', 'TRUNCATE'],
+  'catalog: authenticated holds every table privilege on storage.objects — likewise');
+select ok((select relrowsecurity from pg_class where oid = 'storage.objects'::regclass),
+  'catalog: row level security is enabled on storage.objects (without it those grants would be unrestricted)');
+
+-- The bucket rows the policies name, and the control that the behaviour half
+-- below is measuring something real.
+select is((select count(*) from storage.buckets where id in ('avatars', 'chat-audio', 'chat-documents', 'chat-photos', 'job-photos')), 5::bigint,
+  'runner: all five buckets the policies name exist and none of them is public (seed.sql) — the behaviour half below is live, not vacuous');
+
+-- avatars: own folder only, but readable by every account.
+select tests.authenticate_as(:'worker');
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('avatars', (select v from fx where k = 'worker')::text || '/authz-avatar.jpg') $$,
+  'worker: writes an avatar into their OWN folder (positive control for every avatars refusal below)');
+select tests.authenticate_as(:'stranger');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('avatars', (select v from fx where k = 'worker')::text || '/authz-hijack.jpg') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write into the worker''s avatar folder');
+select is((select count(*) from storage.objects where bucket_id = 'avatars'), 1::bigint,
+  'stranger: CAN read the worker''s avatar — avatars_read carries no ownership clause, so avatars are readable by every account by design');
+with u as (update storage.objects set metadata = '{}'::jsonb where bucket_id = 'avatars' returning 1)
+select is((select count(*) from u), 0::bigint, 'stranger: an UPDATE of the worker''s avatar touches zero rows');
+select tests.authenticate_as(:'worker');
+with u as (update storage.objects set metadata = '{}'::jsonb where bucket_id = 'avatars' returning 1)
+select is((select count(*) from u), 1::bigint, 'worker: an UPDATE of their OWN avatar touches one row (avatars_update, the positive control for the refusal above)');
+select tests.authenticate_anon();
+select is((select count(*) from storage.objects where bucket_id = 'avatars'), 0::bigint, 'anon: reads no avatar (every policy here admits authenticated only)');
+
+-- chat-photos: <job>/<uploader>/… , both parties to an assigned job.
+select tests.authenticate_as(:'worker');
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('chat-photos', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'worker')::text || '/authz.jpg') $$,
+  'worker: writes a chat photo into j_live''s thread, under their own uid (positive control)');
+select tests.authenticate_as(:'owner');
+select is((select count(*) from storage.objects where bucket_id = 'chat-photos'), 1::bigint,
+  'owner: reads the worker''s chat photo — the other party to the assigned job');
+select tests.authenticate_as(:'bidder');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-photos', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'bidder')::text || '/authz.jpg') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'bidder: cannot write a chat photo into the job they lost');
+select is((select count(*) from storage.objects where bucket_id = 'chat-photos'), 0::bigint, 'bidder: reads no chat photo from the job they lost');
+select tests.authenticate_as(:'stranger');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-photos', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'stranger')::text || '/authz.jpg') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write a chat photo into j_live');
+select is((select count(*) from storage.objects where bucket_id = 'chat-photos'), 0::bigint, 'stranger: reads no chat photo');
+
+-- chat-audio: the same shape, job threads only.
+select tests.authenticate_as(:'owner');
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('chat-audio', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'owner')::text || '/authz.m4a') $$,
+  'owner: writes a voice note into j_live''s thread (positive control)');
+select tests.authenticate_as(:'stranger');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-audio', (select v from fx where k = 'j_live')::text || '/' || (select v from fx where k = 'stranger')::text || '/authz.m4a') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write a voice note into j_live');
+select is((select count(*) from storage.objects where bucket_id = 'chat-audio'), 0::bigint, 'stranger: reads no voice note');
+
+-- chat-documents: the one attachment kind that also works on a pair thread.
+select tests.authenticate_as(:'owner');
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('chat-documents', (select v from fx where k = 'dt_ow')::text || '/' || (select v from fx where k = 'owner')::text || '/authz.pdf') $$,
+  'owner: writes a document into the owner-worker pair thread (positive control)');
+select tests.authenticate_as(:'worker');
+select is((select count(*) from storage.objects where bucket_id = 'chat-documents'), 1::bigint,
+  'worker: reads the owner''s document — the other party to that pair thread');
+select tests.authenticate_as(:'stranger');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('chat-documents', (select v from fx where k = 'dt_ow')::text || '/' || (select v from fx where k = 'stranger')::text || '/authz.pdf') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write a document into someone else''s pair thread');
+select is((select count(*) from storage.objects where bucket_id = 'chat-documents'), 0::bigint, 'stranger: reads no document');
+
+-- job-photos: three write paths — postings/<uid>/…, <job>/… for the assigned
+-- worker, reviews/<uid>/… — and one bucket-wide read.
+select tests.authenticate_as(:'owner');
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', 'postings/' || (select v from fx where k = 'owner')::text || '/authz.jpg') $$,
+  'owner: writes a posting photo under their own uid (positive control)');
+select tests.authenticate_as(:'worker');
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', (select v from fx where k = 'j_live')::text || '/authz-done.jpg') $$,
+  'worker: writes a completion photo on j_live, the job assigned to them (positive control)');
+select lives_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', 'reviews/' || (select v from fx where k = 'worker')::text || '/authz.jpg') $$,
+  'worker: writes a review photo under their own uid (positive control)');
+select tests.authenticate_as(:'stranger');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', 'postings/' || (select v from fx where k = 'owner')::text || '/authz-intrusion.jpg') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write into the owner''s postings folder');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', (select v from fx where k = 'j_live')::text || '/authz-intrusion.jpg') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'stranger: cannot write a completion photo on a job they are not assigned to');
+select tests.authenticate_as(:'bidder');
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('job-photos', (select v from fx where k = 'j_live')::text || '/authz-bidder.jpg') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'bidder: cannot write a completion photo on the job they lost');
+select tests.authenticate_as(:'stranger');
+select is((select count(*) from storage.objects where bucket_id = 'job-photos'), 3::bigint,
+  'stranger: CAN read all three job photos — job_photos_read carries no ownership clause, so job photos are readable by every account by design');
+with u as (update storage.objects set metadata = '{}'::jsonb where bucket_id = 'job-photos' returning 1)
+select is((select count(*) from u), 0::bigint, 'stranger: an UPDATE of a job photo touches zero rows (no UPDATE policy covers this bucket at all)');
+
+-- DELETE: the three job_photos_delete_* policies are unreachable from SQL.
+-- storage''s own protect_objects_delete trigger (storage.protect_delete)
+-- refuses every direct DELETE before RLS is consulted, for the row''s owner
+-- as flatly as for a stranger. Deletion is the Storage API''s alone, and
+-- these assertions are the fence that says so if that ever changes.
+select tests.authenticate_as(:'owner');
+select throws_ok($$ delete from storage.objects where bucket_id = 'job-photos' $$,
+  '42501', 'Direct deletion from storage tables is not allowed. Use the Storage API instead.',
+  'owner: a direct DELETE is refused even where job_photos_delete_own_posting would have matched');
+select tests.authenticate_as(:'worker');
+select throws_ok($$ delete from storage.objects where bucket_id = 'job-photos' $$,
+  '42501', 'Direct deletion from storage tables is not allowed. Use the Storage API instead.',
+  'worker: a direct DELETE is refused even where job_photos_delete_own_completion would have matched');
+select tests.authenticate_as(:'stranger');
+select throws_ok($$ delete from storage.objects where bucket_id = 'avatars' $$,
+  '42501', 'Direct deletion from storage tables is not allowed. Use the Storage API instead.',
+  'stranger: a direct DELETE is refused as well');
+select tests.clear_auth();
+select ok(exists (select 1 from pg_trigger where tgrelid = 'storage.objects'::regclass and tgname = 'protect_objects_delete' and not tgisinternal),
+  'runner: protect_objects_delete is the trigger doing it — named so the three refusals above cannot be mistaken for RLS');
+
+-- anon, across the whole surface.
+select tests.authenticate_anon();
+select throws_ok($$ insert into storage.objects (bucket_id, name) values ('avatars', 'anon/authz.jpg') $$,
+  '42501', 'new row violates row-level security policy for table "objects"', 'anon: holds every grant on storage.objects and can still write nothing — no policy admits it');
+select is((select count(*) from storage.objects), 0::bigint, 'anon: reads zero objects of the seven this section created');
 
 select * from finish();
 rollback;

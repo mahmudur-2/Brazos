@@ -340,3 +340,26 @@ end if;
 
 end
 $seed$;
+
+-- ---------------------------------------------------------------------------
+-- Storage buckets (R7b). These are storage DATA, not schema: the baseline is a
+-- schema-only dump, so a fresh local stack carries none of them and every
+-- policy on storage.objects sits over an empty bucket list. On staging they
+-- were created through the Storage API. Seeding them here is what lets the
+-- authorization proofs in supabase/tests/040_authz.sql §18 exercise the ten
+-- write policies for real, and what closes the conditional skip in
+-- supabase/tests/phase29_security_contract.sql.
+--
+-- Every one is PRIVATE. Reads are RLS's to grant (avatars_read and
+-- job_photos_read admit any authenticated account; the three chat buckets
+-- admit thread parties only); a public bucket would bypass that entirely.
+-- Outside the do-block above deliberately: it touches no fixture id, and it
+-- is idempotent on its own.
+-- ---------------------------------------------------------------------------
+insert into storage.buckets (id, name, public) values
+  ('avatars',        'avatars',        false),
+  ('chat-audio',     'chat-audio',     false),
+  ('chat-documents', 'chat-documents', false),
+  ('chat-photos',    'chat-photos',    false),
+  ('job-photos',     'job-photos',     false)
+on conflict (id) do nothing;
