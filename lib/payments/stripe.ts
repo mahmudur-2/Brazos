@@ -36,6 +36,7 @@
 import { Platform } from 'react-native';
 import { env } from '../../config/env';
 import { userMessage } from '../errorMessage';
+import { track } from '../observability/analytics';
 import {
   validatePayoutsOnboardingResponse,
   validatePayoutsStatusResponse,
@@ -184,7 +185,24 @@ export async function createPaymentSession(
     const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
     return { data: null, error: { message: userMessage(message) } };
   }
-  return validateCheckoutResponse(invoked.data);
+
+  const session = validateCheckoutResponse(invoked.data);
+
+  // "The customer began", not "the customer paid": this fires once the payment
+  // intent exists and BEFORE the sheet is presented, so a dismissed sheet still
+  // counts as a checkout started — which is the whole point of measuring it.
+  // The funded/held half of the story is payment_held, and that one is the
+  // webhook's to tell (lib/observability/analytics.ts).
+  //
+  // Job checkout only. A tip runs through this same function (R6c) but is not
+  // a step in post -> bid -> accept -> fund; counting it here would inflate the
+  // funding step with money that was never funding, and the event carries no
+  // property that could tell the two apart.
+  if (tipAmountCents == null && !session.error && session.data) {
+    track({ name: 'checkout_started' });
+  }
+
+  return session;
 }
 
 // ---------------------------------------------------------------------------
@@ -233,7 +251,14 @@ export async function beginPayoutsOnboarding(): Promise<{
     const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
     return { data: null, error: { message: userMessage(message) } };
   }
-  return validatePayoutsOnboardingResponse(invoked.data);
+  const onboarding = validatePayoutsOnboardingResponse(invoked.data);
+
+  // Started = the client asked for the link and got one back. It says nothing
+  // about whether the worker went on to finish the hosted flow; that is
+  // connect_onboarding_completed, and only connect-status can answer it.
+  if (!onboarding.error && onboarding.data) track({ name: 'connect_onboarding_started' });
+
+  return onboarding;
 }
 
 /**
@@ -257,7 +282,22 @@ export async function refreshPayoutsStatus(): Promise<{
     const { message } = extractInvokeError(invoked.error as InvokeErrorLike, body);
     return { data: null, error: { message: userMessage(message) } };
   }
-  return validatePayoutsStatusResponse(invoked.data);
+  const refreshed = validatePayoutsStatusResponse(invoked.data);
+
+  // Completed = the on-demand refresh came back 'enabled'. Read off THIS call
+  // and not off a stored payouts_enabled flag: connect-status is the only thing
+  // that moves the stored state (R5b D3), so anywhere else would be reporting
+  // a state someone else had already recorded.
+  //
+  // KNOWN, and left as it is: a worker who taps refresh twice on an already
+  // enabled account emits this twice. Deduplicating would mean inventing
+  // client-side state that a fresh launch would forget anyway, so the count is
+  // "times a completed status was observed", not "workers onboarded".
+  if (!refreshed.error && refreshed.data === 'enabled') {
+    track({ name: 'connect_onboarding_completed' });
+  }
+
+  return refreshed;
 }
 
 export type SheetOutcome =
