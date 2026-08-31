@@ -200,6 +200,11 @@ export async function createPaymentSession(
   // property that could tell the two apart.
   if (tipAmountCents == null && !session.error && session.data) {
     track({ name: 'checkout_started' });
+    // ...and the id is remembered so its RESULT can be counted from the same
+    // population. See jobCheckoutPaymentIds below: without this, the sibling
+    // event would count tip sheets that this one deliberately does not, and
+    // the pair would not divide.
+    jobCheckoutPaymentIds.add(session.data.paymentId);
   }
 
   return session;
@@ -305,14 +310,58 @@ export type SheetOutcome =
   | { outcome: 'failed'; error: { message: string } };
 
 /**
+ * THE PAYMENT IDS THAT BELONG TO A JOB CHECKOUT RATHER THAN A TIP.
+ *
+ * `CheckoutSession` carries four strings from the server and none of them says
+ * which kind of payment it is, so by the time the sheet resolves this module
+ * can no longer tell a funding charge from a tip. `checkout_started` already
+ * excludes tips (R7C: a tip is not a step in post -> bid -> accept -> fund),
+ * and `checkout_result` has to exclude exactly the same ones or the two events
+ * count different populations and their ratio is meaningless — the second
+ * would report a success rate above 100% on a busy tipping day.
+ *
+ * An id is added when `checkout_started` fires and removed when its result is
+ * read, so this holds at most the sessions whose sheets have not resolved yet.
+ * Both callers create a fresh session per attempt and present it once, so a
+ * retry gets a new id and its own started/result pair rather than being lost.
+ */
+const jobCheckoutPaymentIds = new Set<string>();
+
+/**
  * D5 steps two and three: initialise the payment sheet with the session
  * create-payment returned, then present it. `completed` means the customer
  * confirmed a card — NOT that the row is held; the screen polls for that.
  * `dismissed` is the SDK's Canceled code and is never shown as an error.
  */
 export async function presentCheckoutSheet(session: CheckoutSession): Promise<SheetOutcome> {
+  // THE OTHER HALF OF checkout_started, and the only place the app learns why
+  // a funding attempt ended. `dismissed` is the customer closing the sheet and
+  // `failed` is everything else — a card refused, the SDK unavailable, the
+  // sheet never shown. Without this event those two are the same absence: a
+  // checkout_started with no payment_held after it, and no way to tell someone
+  // who changed their mind from someone whose card would not go through.
+  //
+  // Emitted through `track()` and NOT through `trackIntent()`. A money outcome
+  // has a payments row behind it and can be reconciled against the database,
+  // which is the one distinction the two emitters exist to preserve.
+  const isJobCheckout = jobCheckoutPaymentIds.delete(session.paymentId);
+  const report = (result: SheetOutcome): SheetOutcome => {
+    if (isJobCheckout) {
+      track({
+        name: 'checkout_result',
+        outcome:
+          result.outcome === 'completed'
+            ? 'succeeded'
+            : result.outcome === 'dismissed'
+              ? 'cancelled'
+              : 'failed',
+      });
+    }
+    return result;
+  };
+
   if (!stripe || !(await ensureInitialised())) {
-    return { outcome: 'failed', error: { message: STRIPE_UNAVAILABLE_MESSAGE } };
+    return report({ outcome: 'failed', error: { message: STRIPE_UNAVAILABLE_MESSAGE } });
   }
   try {
     const initialisedSheet = await stripe.initPaymentSheet({
@@ -323,19 +372,23 @@ export async function presentCheckoutSheet(session: CheckoutSession): Promise<Sh
     });
     if (initialisedSheet.error) {
       const classified = classifySheetError(initialisedSheet.error);
-      return classified.outcome === 'dismissed'
-        ? { outcome: 'dismissed', error: null }
-        : { outcome: 'failed', error: { message: userMessage(classified.message) } };
+      return report(
+        classified.outcome === 'dismissed'
+          ? { outcome: 'dismissed', error: null }
+          : { outcome: 'failed', error: { message: userMessage(classified.message) } }
+      );
     }
     const presented = await stripe.presentPaymentSheet();
     if (presented.error) {
       const classified = classifySheetError(presented.error);
-      return classified.outcome === 'dismissed'
-        ? { outcome: 'dismissed', error: null }
-        : { outcome: 'failed', error: { message: userMessage(classified.message) } };
+      return report(
+        classified.outcome === 'dismissed'
+          ? { outcome: 'dismissed', error: null }
+          : { outcome: 'failed', error: { message: userMessage(classified.message) } }
+      );
     }
-    return { outcome: 'completed', error: null };
+    return report({ outcome: 'completed', error: null });
   } catch {
-    return { outcome: 'failed', error: { message: SHEET_UNSHOWN_MESSAGE } };
+    return report({ outcome: 'failed', error: { message: SHEET_UNSHOWN_MESSAGE } });
   }
 }
