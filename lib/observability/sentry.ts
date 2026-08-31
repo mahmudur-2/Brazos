@@ -179,7 +179,28 @@ export function initSentry(): void {
     // spends its whole body removing client-side.
     sendDefaultPii: false,
     enableAutoSessionTracking: true,
-    // Full tracing everywhere except the build that has real users on it.
+    // MOBILE VITALS RIDE ON THIS ONE NUMBER. With a numeric tracesSampleRate
+    // the SDK's default integration set adds appStartIntegration (cold and
+    // warm app start), the native frames integration (slow and frozen frames)
+    // and reactNativeTracingIntegration itself — see
+    // node_modules/@sentry/react-native/dist/js/integrations/default.js, where
+    // each is gated on `hasTracingEnabled`. So no integration is listed here:
+    // passing an `integrations` ARRAY would REPLACE that default set and take
+    // the vitals down with it, and the callback form would only re-add what is
+    // already present. The other half of the requirement is `Sentry.wrap`,
+    // which App.tsx has applied through `wrapApp` since the module was written.
+    //
+    // R7D asked for a flat 1.0 here and did NOT make that change. The value
+    // is fenced by tests/observability.test.mjs — "Environment and sampling
+    // come from the variant, never from a literal" — and a literal is exactly
+    // what a flat 1.0 is, so landing it would have meant weakening a
+    // regression fence's LOGIC rather than updating an expected constant.
+    // CLAUDE.md makes that a stop, and the objective did not need it: the
+    // expression below is always a number, `hasTracingEnabled` asks only
+    // whether it is one, and so every variant already has tracing — and
+    // therefore vitals — switched on. Full tracing everywhere except the build
+    // that has real users on it. Raising production to 1.0 is the operator's
+    // call to make, here and in that fence together.
     tracesSampleRate: env.EXPO_PUBLIC_APP_VARIANT === 'production' ? 0.1 : 1,
     beforeSend: (event: SentryEvent) => scrubEvent(event),
   });
