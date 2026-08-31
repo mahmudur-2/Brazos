@@ -8,3 +8,11 @@ Prior history, not restated here: `DECISIONS.md` at the repository root holds th
 2026-08-30 · D-0 · This kit replaces ad-hoc process; governance changes need a named failure they would have prevented · retrospective · yes (delete the file)
 
 2026-08-31 — Platform: iOS only for v1. Android stays buildable, not a release target. Reason: every device walk doubles on a second platform and the operator is the only device tester; the platform differences sit in the money path, which is the most expensive place to diverge; a second store is a fifth external clock. Reversible — the code is not removed.
+
+2026-08-31 — R8a reputation, five decisions locked by the operator. Where `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` (§4.3 row 6, "double-blind, 14-day auto-publish", and A.2's D-§10 #6) says 14 days, this dated decision supersedes it — do not "correct" back to 14.
+- D1 Double-blind: a review is hidden until BOTH sides have written, or 7 days after it was written, whichever comes first. Computed at read time (`review_is_revealed()`); no reveal column, no cron.
+- D2 Writing window: 30 days from `jobs.completed_at` — a separate clock from the blind window. A late review still lands; it just isn't blind. `completed_at` NULL (legacy rows) → no window enforced.
+- D3 Two reputations per person, worker and customer, never mixed. Role is derived per review from the job: the reviewee was the worker if `jobs.assigned_worker_id = reviewee_id`, the customer if `jobs.client_id = reviewee_id`. No role column.
+- D4 New-rating cold start: the publicly shown rating is shrunk toward a platform prior — `shown_average = (5m + sum)/(5 + n)`, m the platform-wide revealed average for the role, 4.5 when the platform has none — and "New" under three revealed reviews.
+- D5 would-you-hire-again / would-you-work-for-them-again captured per review (`reviews.would_again`); rehires counted; workers see a customer's record before bidding (`client_job_stats`).
+Deliberately untouched by R8a, until R8b repoints its readers: `recompute_profile_rating`, `profiles.rating_avg`, `profiles.rating_count` — the legacy mixed aggregate. Reversible — read-time predicates and additive columns, nothing destructive (cost: one corrective migration).
