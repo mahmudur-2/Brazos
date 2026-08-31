@@ -36,6 +36,7 @@ import { SuccessMark } from '../components/SuccessMark';
 import { FieldLabel, TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useEntrance } from '../hooks/useEntrance';
+import { trackIntent } from '../lib/observability/analytics';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   arrivalWindowLabel,
@@ -473,6 +474,50 @@ export function PostJobScreen() {
     // this screen's life, so it is safe to read without being a dependency.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [successScale]);
+
+  // R7D — job_post_started / job_post_abandoned.
+  //
+  // ABANDONMENT FIRES ON UNMOUNT, SO AN APP KILLED MID-FORM NEVER REPORTS IT.
+  // The number is a FLOOR, not the truth: read it as "at least this many
+  // people opened the form and left without posting", never as the
+  // abandonment rate. The same kill that skips this line is precisely what
+  // leaves the persisted draft in place for the cleanup effect above, so the
+  // two facts have the same cause and neither can be fixed from here.
+  //
+  // FRESH POSTS ONLY. An edit reopens a job that already exists and a Hire
+  // Again request creates no job at all; counting either would put rows that
+  // are already in the database at the top of the posting funnel, and would
+  // report backing out of an edit as an abandoned post.
+  const postStartedAtRef = useRef(Date.now());
+  const postSavedRef = useRef(false);
+  // Assigned during render, not held in state: the unmount cleanup needs the
+  // LAST rendered values, and putting them in state would repaint the whole
+  // form on every keystroke to feed one analytics event.
+  const draftShapeRef = useRef({ hadTitle: false, hadBudget: false, hadPhoto: false });
+  draftShapeRef.current = {
+    hadTitle: title.trim().length > 0,
+    hadBudget: budgetMax.trim().length > 0,
+    hadPhoto: photos.length > 0,
+  };
+
+  useEffect(() => {
+    if (!isFreshPost) return;
+    trackIntent({ name: 'job_post_started' });
+    return () => {
+      if (postSavedRef.current) return;
+      const shape = draftShapeRef.current;
+      trackIntent({
+        name: 'job_post_abandoned',
+        secondsSpent: Math.round((Date.now() - postStartedAtRef.current) / 1000),
+        hadTitle: shape.hadTitle,
+        hadBudget: shape.hadBudget,
+        hadPhoto: shape.hadPhoto,
+      });
+    };
+    // Same reasoning as the cleanup effect above: isFreshPost is derived once
+    // from route params and never changes across this screen's life.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Restore an in-progress fresh-post draft so it survives an app kill
   // (Phase 4 DoD). Skipped for edit (its source of truth is the saved job)
@@ -943,6 +988,10 @@ export function PostJobScreen() {
       return;
     }
     uploadsCommittedRef.current = true;
+    // The one thing that makes the unmount below NOT an abandonment. Set from
+    // the same success branch that commits the uploads, and read in the
+    // cleanup — a ref rather than state so nothing repaints for it.
+    postSavedRef.current = true;
     if (!screenMountedRef.current) return;
     setSubmitting(false);
     if (locationError) {

@@ -84,6 +84,14 @@ const INTENT_ALLOWLIST = [
   'hooks/useSetupPermissions.ts',
   'screens/ChatScreen.tsx',
   'screens/ProfileScreen.tsx',
+  // R7D · the two abandonment pairs. Both mount once per session of the thing
+  // they measure — a posting form opened, a composer opened — and neither is
+  // keyed on form state, so typing re-renders them and never remounts them.
+  // Both fire their abandonment from an unmount cleanup, which an app kill
+  // never reaches: each number is a floor, and the comment at each site says
+  // so.
+  'components/OfferComposer.tsx',
+  'screens/PostJobScreen.tsx',
 ];
 
 /**
