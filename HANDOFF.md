@@ -47,10 +47,12 @@ at the head of the "Verification 2026-08-19" section of
 
 This section is the operator's own testimony, given on the evening of
 2026-08-31. **No run performed it and no run observed it** — a device walk is
-the operator's alone (`CLAUDE.md` §Agent autonomy) — and nothing in it was
-checked against a database, a provider dashboard, a log or a test. It is
-transcribed here because it is the only source for the walk, and it is the
-evidence Gate 1's payment-provider device box cites.
+the operator's alone (`CLAUDE.md` §Agent autonomy). When first transcribed,
+nothing in it had been checked against a database, a provider dashboard, a log
+or a test; the corroboration rows below (R8b-s, 2026-08-31) now check it —
+DATA the operator read from the staging SQL editor after the walk, not
+testimony. It is transcribed here because it is the only source for the walk,
+and it is the evidence Gate 1's payment-provider device box cites.
 
 **Where it ran.** On the operator's iPhone, against STAGING, on the Beta build
 — EAS build `d2ccc7f` — after an OTA to `f95b7f92` via `npm run update:preview`.
@@ -61,14 +63,38 @@ funded — **$53.75 charged on the 4242 test card for a $50 job**, which is the
 7.5% customer fee; the work was completed; the customer approved.
 
 **The release was hands-off.** The payment reached `released` ON ITS OWN,
-roughly eight minutes after approval, with NO hand-run SQL — the funds left
-held in protection without an operator hand on the database. The idempotency
-wedge the operator had to clear by hand during the R6b walk did not recur.
+with NO hand-run SQL — the funds left held in protection without an operator
+hand on the database. The corroboration rows time it exactly (all UTC
+2026-09-01): `release_requested_at` 00:40:39 → `updated_at` 00:45:03 =
+**4 minutes 24 seconds from approval to release**, and `held_at` 00:35:29 →
+`updated_at` 00:45:03 = **9 minutes 34 seconds from funding to release**. (An
+earlier version of this record said "roughly eight minutes after approval";
+the rows corrected the number, not the verdict.) The idempotency wedge the
+operator had to clear by hand during the R6b walk did not recur.
 
 **The reviews.** Reviews were written in both directions, and the counterpart
 reveal held: neither side saw the other's review before its condition was met.
 
 **The provider.** The provider's test dashboard shows the charge.
+
+**The corroboration (R8b-s, 2026-08-31).** After the walk, the operator read
+these rows from the STAGING SQL editor. They are DATA, not testimony — they
+check what the transcription above could not. The 2026-09-01 UTC timestamps
+and the 2026-08-31 evening walk date are the same sitting: local evening,
+next-day UTC — do not "correct" either date to match the other.
+
+- job `01fd3f6e-f9e9-49a4-b62f-2cd29a67d108`.
+- payments `a36beb95-86e8-46ed-a0ec-d50bfa72ede0` — status `released`,
+  `transfer_attempts` **0**, `transfer_ref` `tr_1UAfow43w4QKhn3toCdTFkf8`,
+  `held_at` 00:35:29, `release_requested_at` 00:40:39, `updated_at` 00:45:03
+  (the row's last write, which was the release), all UTC 2026-09-01.
+  `transfer_attempts` 0 is the load-bearing column: the transfer cleared
+  FIRST TRY, so the hands-off release is now proven by a column and not only
+  by the operator's account.
+- two `reviews` rows on that job, 00:38:25 and 00:40:45 UTC 2026-09-01, both
+  `would_again` NULL — NULL by construction, not because the reviewer
+  skipped: the client never asks the question (`docs/BACKLOG.md` §R8b
+  item 4).
 
 
 ## RUN G2 COMPLETED (2026-08-31) — Gate 1 CLOSES: the device walk recorded, the provenance ruled, and the three R8b defects filed

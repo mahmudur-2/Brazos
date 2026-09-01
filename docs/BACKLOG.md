@@ -165,3 +165,11 @@ readers, as the R8a entry already said it would.
 1. `notify_on_review` (baseline:3620) writes "… left you 5★." to the reviewee at INSERT time, so the notification carries the rating before the reveal condition is met. Seen on the phone, 2026-08-31.
 2. ProfileScreen's reviews link is gated on `profiles.rating_count` — the legacy mixed aggregate R8a deliberately left alone — so the header shows a rating the page below cannot show.
 3. ProfileReviewsScreen never passes `p_role`, so it always reads the WORKER reputation. A customer's own profile reads "No reviews yet" while a customer-role review exists. Confirmed on the phone, 2026-08-31.
+4. `would_again` is never asked. R8a's D5 captures it per review and `create_review` takes `p_would_again`, but `components/ReviewSection.tsx` — the only review form, hosted by `screens/ReviewAndTipScreen.tsx` and the job screen — holds rating, comment and photos only, and `createReview` in `lib/reviews.ts` sends five arguments with no `would_again` among them. Both rows from the 2026-08-31 walk are NULL by construction, not because the reviewer skipped. D5 is unimplemented on the client; `client_job_stats`' `would_again_yes` / `would_again_total` can only ever count zero until R8b-c adds the question.
+
+## Parked — operator decisions, not runs
+
+Neither item is authorized by any prompt until it carries a dated `docs/DECISIONS.md` entry.
+
+- A read-only staging Postgres role for runs. Connection string lives in `%LOCALAPPDATA%` only, never in the repository, never in `.env`, read-only forever. Needs its own dated DECISIONS.md entry BEFORE any run uses it.
+- The reveal fires no notification. Once R8b-s lands, a reviewee whose review is still blind is told a review exists without its rating — correct — but when the counterpart review or the 7-day clock later reveals it, nothing tells them. The reveal is computed at read time with no cron and no reveal column (R8a D1), so there is no event to hang a notification on; a fix needs either a new notification type (which `screens/NotificationsScreen.tsx`'s icon map and its pinning test would have to learn) or a scheduled sweep. Out of scope for R8b-s by design.
