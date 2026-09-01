@@ -1,5 +1,4 @@
 import {
-  knownRating,
   onTimePercent,
   totalCompletedJobs,
   trustRowFor,
@@ -7,18 +6,24 @@ import {
 
 /**
  * The worker hero card's trust content (4E) — a thin, pure COMPOSITION of
- * lib/compareBids.ts's derivations, never a second copy of them: knownRating
- * decides whether a rating is a fact, worker_job_stats rows are summed by
- * totalCompletedJobs, and the "New worker" verdict is trustRowFor's, verbatim.
+ * lib/compareBids.ts's derivations, never a second copy of them:
+ * worker_job_stats rows are summed by totalCompletedJobs, and the "New
+ * worker" verdict is trustRowFor's, verbatim. The rating moved off the
+ * profile's rating columns in R8b-c: it is the worker-role
+ * profile_review_summary — REVEALED reviews of one role only — because
+ * rating_avg/rating_count mix both roles and count reviews the blind window
+ * still holds back.
  *
  * The C3 contract, enforced here so every rendering surface inherits it:
- * trust content is positive-only and drawn from real profile columns,
- * rendered only when non-null. Null is unknown and renders NOTHING — never
- * zero, never a placeholder. Concretely:
+ * trust content is positive-only and drawn from real reads, rendered only
+ * when non-null. Null is unknown and renders NOTHING — never zero, never a
+ * placeholder. Concretely:
  *
- * - rating: only with at least one counted review (a rating_avg with zero
- *   reviews is not a fact). No known rating → no rating row — and no "New"
- *   stand-in where a number would go.
+ * - rating: only with at least one REVEALED worker-role review — zero
+ *   revealed reviews is not a fact, and an unanswered or failed summary
+ *   read is UNKNOWN. No known rating → no rating row. The number is D1's
+ *   shown_average; isNew tells the surface to print the word "New" instead
+ *   of it while the reputation is too young for a number.
  * - completedJobs: null until the stats read answers (a pending or failed
  *   read is UNKNOWN, not zero), and a KNOWN zero also renders nothing —
  *   positive-only means no "0 jobs completed" line.
@@ -31,7 +36,7 @@ import {
  */
 
 export type WorkerHeroTrust = {
-  rating: { average: number; count: number } | null;
+  rating: { shownAverage: number; isNew: boolean; count: number } | null;
   /** True only on trustRowFor's KNOWN-new verdict; suppresses the fact rows. */
   newWorker: boolean;
   /** A positive completed-jobs total, or null (unknown or zero). */
@@ -41,22 +46,30 @@ export type WorkerHeroTrust = {
 };
 
 export type WorkerHeroProfileFacts = {
-  rating_avg?: number | null;
-  rating_count?: number | null;
   on_time_pct?: number | null;
   response_time?: string | null;
 } | null;
 
+export type WorkerHeroRatingSummary = {
+  shownAverage: number | null;
+  isNew: boolean;
+  total: number;
+} | null;
+
 export function deriveWorkerHeroTrust(input: {
   profile: WorkerHeroProfileFacts;
+  /** profile_review_summary(p_user, 'worker'), or null while unanswered/failed. */
+  ratingSummary: WorkerHeroRatingSummary;
   /** worker_job_stats(p_worker) rows, or null while unanswered/failed. */
   stats: ReadonlyArray<{ count: number }> | null;
 }): WorkerHeroTrust {
   const profile = input.profile;
+  const summary = input.ratingSummary;
 
-  const average = knownRating(profile);
-  const count = profile?.rating_count ?? 0;
-  const rating = average != null && count > 0 ? { average, count } : null;
+  const rating =
+    summary && summary.total > 0 && summary.shownAverage != null
+      ? { shownAverage: summary.shownAverage, isNew: summary.isNew, count: summary.total }
+      : null;
 
   const completed = input.stats !== null ? totalCompletedJobs(input.stats) : null;
   const verdict = trustRowFor(onTimePercent(profile?.on_time_pct), completed);

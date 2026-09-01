@@ -26,6 +26,7 @@ import {
 import { canRehireWorker, JOB_CATEGORIES, JOB_CATEGORY_LABELS, type JobCategory } from '../lib/jobs';
 import { fetchWorkerJobStats } from '../lib/portfolio';
 import { canHire } from '../lib/rebook';
+import { fetchProfileReviewSummary, type ReviewSummary } from '../lib/reviews';
 import { deriveWorkerHeroTrust } from '../lib/workerHeroCard';
 import { fetchSavedWorkerIds, saveWorker, unsaveWorker } from '../lib/savedWorkers';
 import {
@@ -101,6 +102,9 @@ export function WorkerProfileScreen() {
   // RPC answers (and null again on failure): UNKNOWN renders nothing, and
   // can never produce the "New worker" verdict (lib/workerHeroCard.ts).
   const [jobStats, setJobStats] = useState<ReadonlyArray<{ count: number }> | null>(null);
+  // R8b-c — the worker-role revealed summary behind the hero rating row.
+  // Null while unanswered or failed: UNKNOWN renders no rating, never zero.
+  const [ratingSummary, setRatingSummary] = useState<ReviewSummary | null>(null);
   /**
    * Banned/suspended accounts can't be transacted with. `banned` is not
    * publicly readable (phase29), so this asks the narrow RPC instead. Starts
@@ -176,6 +180,17 @@ export function WorkerProfileScreen() {
     };
   }, [params.workerId]);
 
+  useEffect(() => {
+    let active = true;
+    setRatingSummary(null);
+    fetchProfileReviewSummary(params.workerId, 'worker').then(({ data, error: summaryError }) => {
+      if (active && !summaryError) setRatingSummary(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [params.workerId]);
+
   /**
    * §6.2 — "Book at listed price": the direct-offer composer prefilled with
    * the service's own terms, NEVER a one-tap send (the composer still needs
@@ -227,7 +242,7 @@ export function WorkerProfileScreen() {
   // Signed in, not looking at yourself, and the other account is in good
   // standing. No completed-job history required — that is the whole fix.
   const canOffer = !!user && !isSelf && recipientActive && hireable;
-  const heroTrust = deriveWorkerHeroTrust({ profile, stats: jobStats });
+  const heroTrust = deriveWorkerHeroTrust({ profile, ratingSummary, stats: jobStats });
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -263,12 +278,15 @@ export function WorkerProfileScreen() {
                     {name}
                   </Text>
                 </View>
-                {/* 4E hero trust content — positive-only, real columns,
+                {/* 4E hero trust content — positive-only, real reads,
                     non-null only (lib/workerHeroCard.ts). A rating with zero
-                    counted reviews is not a fact, so with none there is no
-                    rating row at all — no "New" stand-in, no "no reviews
-                    yet" placeholder — and nothing to open ProfileReviews on
-                    either, so the reviews entry exists only with reviews. */}
+                    REVEALED worker-role reviews is not a fact, so with none
+                    there is no rating row at all — no stand-in, no "no
+                    reviews yet" placeholder — and nothing to open
+                    ProfileReviews on either, so the reviews entry exists
+                    only with reviews. With revealed reviews the number is
+                    D1's shown_average, or the word "New" while the
+                    reputation is too young for one. */}
                 {heroTrust.rating ? (
                   <Pressable
                     onPress={() =>
@@ -284,7 +302,9 @@ export function WorkerProfileScreen() {
                     style={({ pressed }) => [styles.proofRow, pressed && styles.proofRowPressed]}
                   >
                     <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />
-                    <Text style={styles.proofStrong}>{heroTrust.rating.average.toFixed(1)}</Text>
+                    <Text style={styles.proofStrong}>
+                      {heroTrust.rating.isNew ? 'New' : heroTrust.rating.shownAverage.toFixed(1)}
+                    </Text>
                     <Text style={styles.proofMuted}>
                       {`(${heroTrust.rating.count} ${
                         heroTrust.rating.count === 1 ? 'review' : 'reviews'

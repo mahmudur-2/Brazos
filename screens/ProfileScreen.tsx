@@ -40,6 +40,7 @@ import {
   profileCompleteness,
   type CompletenessStepKey,
 } from '../lib/profileCompleteness';
+import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
 import { fetchWorkerServices } from '../lib/services';
 import { updateProfile } from '../lib/profiles';
 import { useMode } from '../modes/ModeProvider';
@@ -162,6 +163,14 @@ export function ProfileScreen() {
   // Backs the above-the-fold summary line — same worker_job_stats() RPC
   // PastWork's own stat line further down the page already calls.
   const [jobStats, setJobStats] = useState<CategoryStat[]>([]);
+  // R8b-c: the rating comes from the per-role REVEALED summaries, never
+  // profiles.rating_avg/rating_count — the legacy aggregate mixes both roles
+  // and counts reviews the blind window still holds back. Null is a read
+  // that has not answered (or failed): UNKNOWN renders nothing (F-026).
+  const [roleSummaries, setRoleSummaries] = useState<{
+    worker: ReviewSummary | null;
+    customer: ReviewSummary | null;
+  } | null>(null);
   // §6.4 — published-services and portfolio counts behind the completeness
   // meter. Null = not yet known, and an UNKNOWN count renders no meter at
   // all rather than a guessed one.
@@ -220,6 +229,19 @@ export function ProfileScreen() {
     // usually followed by adding it to the portfolio, so re-checking here
     // too keeps this line from going stale without a dedicated subscription.
   }, [user, portfolioVersion]);
+
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    fetchBothRoleSummaries(user.id).then(({ worker, customer, error }) => {
+      // A failed read stays UNKNOWN — no rating line, no link, never zero.
+      if (!active || error) return;
+      setRoleSummaries({ worker, customer });
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   // §6.4 — refreshed on focus so publishing a service or featuring a photo
   // elsewhere moves the meter the moment this screen returns. Worker mode
@@ -451,13 +473,24 @@ export function ProfileScreen() {
         year: 'numeric',
       })
     : null;
+  const workerSummary = roleSummaries?.worker ?? null;
+  const customerSummary = roleSummaries?.customer ?? null;
+  const workerReviewTotal = workerSummary?.total ?? 0;
+  // The link gate sums both roles — a customer-only account still has
+  // reviews worth reading, which is the defect this gate used to have.
+  const reviewTotal = workerReviewTotal + (customerSummary?.total ?? 0);
   const summaryParts: string[] = [];
   // The star leads the line when there is a rating, and is rendered as its own
   // span below so it can carry the one gold star treatment instead of the
   // meta line's grey.
-  const summaryLeadsWithStar = Boolean(profile?.rating_count);
-  if (profile?.rating_count) {
-    summaryParts.push(`${(profile.rating_avg ?? 0).toFixed(1)} (${profile.rating_count})`);
+  const summaryLeadsWithStar = workerReviewTotal > 0;
+  if (workerSummary && workerReviewTotal > 0) {
+    // D1: shown_average or the word New — the raw mean never renders.
+    summaryParts.push(
+      workerSummary.isNew || workerSummary.shownAverage == null
+        ? 'New'
+        : `${workerSummary.shownAverage.toFixed(1)} (${workerReviewTotal})`
+    );
   }
   if (totalCompletedJobs > 0) {
     summaryParts.push(`${totalCompletedJobs} job${totalCompletedJobs === 1 ? '' : 's'} completed`);
@@ -607,23 +640,25 @@ export function ProfileScreen() {
             </Text>
             {/* Same destination the rating row on someone else's profile
                 leads to, pointed at this account — so "what have people said
-                about me?" is answerable from your own profile too. */}
-            {!!profile?.rating_count && user && (
+                about me?" is answerable from your own profile too. Gated on
+                EITHER role's revealed total: a customer-only account has
+                reviews worth reading even with no worker rating to show. */}
+            {reviewTotal > 0 && user && (
               <Pressable
                 onPress={() =>
                   navigation.navigate('ProfileReviews', {
                     userId: user.id,
-                    name: profile.full_name ?? undefined,
+                    name: profile?.full_name ?? undefined,
                     role: 'both',
                   })
                 }
                 hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
                 accessibilityRole="button"
-                accessibilityLabel={`See all ${profile.rating_count} reviews about you`}
+                accessibilityLabel={`See all ${reviewTotal} reviews about you`}
                 style={({ pressed }) => [styles.reviewsLink, pressed && styles.reviewsLinkPressed]}
               >
                 <Text style={styles.reviewsLinkText}>
-                  See {profile.rating_count === 1 ? 'your review' : 'all your reviews'}
+                  See {reviewTotal === 1 ? 'your review' : 'all your reviews'}
                 </Text>
                 <Ionicons name="chevron-forward" size={13} color={colors.primary} />
               </Pressable>

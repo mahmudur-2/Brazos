@@ -708,10 +708,14 @@ test('[static] the public page is honest about what an anonymous visitor can see
   assert.match(branch[1], /<PublicProfileScreen userId=\{webRoute\.userId\} \/>/);
 
   // NOTHING IS INVENTED. The rating block renders only on a real positive
-  // count — an unrated person gets no stars, no "New" badge and no zero.
-  assert.match(page, /state\.profile\.rating_count > 0/);
-  assert.match(page, /typeof state\.profile\.rating_avg === 'number'/);
-  assert.match(page, /\{rated \? \(/);
+  // REVEALED total from the per-role summary (R8b-c) — worker first, hiring
+  // when that is all they have; a person with none gets no stars and no
+  // zero, and a failed summary read stays UNKNOWN and renders nothing. The
+  // legacy profiles aggregate is out of this file entirely.
+  assert.match(page, /summary && summary\.total > 0 && summary\.shownAverage != null/);
+  assert.match(page, /\{shownSummary \? \(/);
+  assert.match(page, /if \(!alive \|\| error\) return;/);
+  assert.doesNotMatch(page, /rating_count|rating_avg/);
 
   // An empty read is ONE state whether the cause is RLS or a missing id: the
   // page must not tell strangers which user ids exist.

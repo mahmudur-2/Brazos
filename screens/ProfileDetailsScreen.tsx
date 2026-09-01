@@ -13,6 +13,7 @@ import { useProfile } from '../hooks/useProfile';
 import { goBackOrHome } from '../lib/navigationRef';
 import { formatPhoneDisplay } from '../lib/phone';
 import { fetchWorkerJobStats, type CategoryStat } from '../lib/portfolio';
+import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
 import { skillCategoryLabel } from '../lib/skillCategories';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import {
@@ -66,6 +67,14 @@ export function ProfileDetailsScreen() {
   const [statsReadFailed, setStatsReadFailed] = useState(false);
   const [statsReadAttempt, setStatsReadAttempt] = useState(0);
   const [avatarViewerUri, setAvatarViewerUri] = useState<string | null>(null);
+  // R8b-c: the rating comes from the per-role REVEALED summaries, never
+  // profiles.rating_avg/rating_count — the legacy aggregate mixes both roles
+  // and counts reviews the blind window still holds back. Null is a read
+  // that has not answered (or failed): UNKNOWN renders nothing, never zero.
+  const [roleSummaries, setRoleSummaries] = useState<{
+    worker: ReviewSummary | null;
+    customer: ReviewSummary | null;
+  } | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -81,8 +90,24 @@ export function ProfileDetailsScreen() {
     };
   }, [user, statsReadAttempt]);
 
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    fetchBothRoleSummaries(user.id).then(({ worker, customer, error }) => {
+      if (!active || error) return;
+      setRoleSummaries({ worker, customer });
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   const completed = jobStats?.reduce((total, row) => total + row.count, 0) ?? null;
-  const ratingCount = profile?.rating_count ?? 0;
+  const workerSummary = roleSummaries?.worker ?? null;
+  const workerReviewTotal = workerSummary?.total ?? 0;
+  // The link gate sums both roles — a customer-only account still has
+  // reviews worth reading (R8b-c, the gate defect).
+  const reviewTotal = workerReviewTotal + (roleSummaries?.customer?.total ?? 0);
   // The account's own creation timestamp, from the auth session — `profiles`
   // carries no created_at, so an absent session simply omits the line.
   const since = memberSince(user?.created_at);
@@ -147,11 +172,16 @@ export function ProfileDetailsScreen() {
           {user?.email ? <Text style={styles.email}>{user.email}</Text> : null}
 
           <View style={styles.metaRow}>
-            {ratingCount > 0 ? (
+            {/* D1 (R8b-c): the worker role's shown_average, or the word New —
+                nothing at all with zero revealed worker reviews, and nothing
+                while the read is unanswered. */}
+            {workerSummary && workerReviewTotal > 0 ? (
               <View style={styles.metaItem}>
                 <Ionicons name="star" size={15} color={starColors(colors, isDark).filled} />
                 <Text style={styles.metaStrong}>
-                  {(profile?.rating_avg ?? 0).toFixed(1)}
+                  {workerSummary.isNew || workerSummary.shownAverage == null
+                    ? 'New'
+                    : workerSummary.shownAverage.toFixed(1)}
                 </Text>
               </View>
             ) : null}
@@ -173,12 +203,13 @@ export function ProfileDetailsScreen() {
             {since ? <Text style={styles.metaText}>{since}</Text> : null}
           </View>
 
-          {ratingCount > 0 && user ? (
+          {reviewTotal > 0 && user ? (
             <Button
               title="See all your reviews"
               variant="secondary"
               icon="star-outline"
               iconPosition="leading"
+              accessibilityLabel={`See all ${reviewTotal} reviews about you`}
               onPress={() =>
                 navigation.navigate('ProfileReviews', {
                   userId: user.id,

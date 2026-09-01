@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -22,6 +22,7 @@ import {
   effectiveOfferStatus,
 } from '../lib/offers';
 import { formatBudget } from '../lib/jobs';
+import { fetchProfileReviewSummary, type ReviewSummary } from '../lib/reviews';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
 import {
@@ -64,6 +65,25 @@ export function BidDetailScreen() {
   const [confirming, setConfirming] = useState<'accept' | 'decline' | null>(null);
   const [acting, setActing] = useState(false);
   const actingRef = useRef(false);
+  // R8b-c: the worker's rating comes from the worker-role revealed summary,
+  // never the profile's rating columns — the legacy aggregate mixes both
+  // roles and counts reviews the blind window still holds back. Null is a
+  // read that has not answered (or failed): UNKNOWN renders no rating at
+  // all, never a zero and never "No reviews yet".
+  const [workerRatingSummary, setWorkerRatingSummary] = useState<ReviewSummary | null>(null);
+  const workerId = offer?.worker?.id ?? null;
+
+  useEffect(() => {
+    setWorkerRatingSummary(null);
+    if (!workerId) return;
+    let active = true;
+    fetchProfileReviewSummary(workerId, 'worker').then(({ data, error: summaryError }) => {
+      if (active && !summaryError) setWorkerRatingSummary(data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [workerId]);
 
   const effective = offer ? effectiveOfferStatus(offer) : null;
   const isMyTurn = !!offer && !!user && offer.awaiting_id === user.id;
@@ -196,25 +216,32 @@ export function BidDetailScreen() {
                           </Text>
                         </View>
                         <Text style={styles.workerMeta}>
-                          {(offer.worker?.rating_count ?? 0) > 0 ? (
-                            <>
-                              {/* One star treatment, BOTH palettes: gold in
-                                  dark, the Heritage `star` gold in light. The
-                                  light side used to be `undefined`, which let
-                                  the glyph inherit the meta line's muted grey
-                                  — the one washed-out star left in the app. */}
-                              <Text style={{ color: starColors(colors, isDark).filled }}>
-                                ★
-                              </Text>
-                              {` ${(offer.worker?.rating_avg ?? 0).toFixed(1)} (${
-                                offer.worker?.rating_count
-                              } ${offer.worker?.rating_count === 1 ? 'review' : 'reviews'})`}
-                            </>
-                          ) : (
-                            'No reviews yet'
-                          )}
+                          {workerRatingSummary ? (
+                            workerRatingSummary.total > 0 ? (
+                              <>
+                                {/* One star treatment, BOTH palettes: gold in
+                                    dark, the Heritage `star` gold in light. The
+                                    light side used to be `undefined`, which let
+                                    the glyph inherit the meta line's muted grey
+                                    — the one washed-out star left in the app. */}
+                                <Text style={{ color: starColors(colors, isDark).filled }}>
+                                  ★
+                                </Text>
+                                {` ${
+                                  workerRatingSummary.isNew ||
+                                  workerRatingSummary.shownAverage == null
+                                    ? 'New'
+                                    : workerRatingSummary.shownAverage.toFixed(1)
+                                } (${workerRatingSummary.total} ${
+                                  workerRatingSummary.total === 1 ? 'review' : 'reviews'
+                                })`}
+                              </>
+                            ) : (
+                              'No reviews yet'
+                            )
+                          ) : null}
                           {completionPercent(offer.worker?.completion_rate) != null
-                            ? ` · ${completionPercent(
+                            ? `${workerRatingSummary ? ' · ' : ''}${completionPercent(
                                 offer.worker?.completion_rate
                               )}% completion`
                             : ''}

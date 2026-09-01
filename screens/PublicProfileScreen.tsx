@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Avatar } from '../components/Avatar';
 import { fetchProfileById, type Profile } from '../lib/profiles';
 import { DELETED_USER_LABEL } from '../lib/rebook';
+import { fetchBothRoleSummaries, type ReviewSummary } from '../lib/reviews';
 import {
   fonts,
   radius,
@@ -34,10 +35,13 @@ import {
  *                        profile failed to load — it says what is true, which
  *                        is that this page needs the app.
  *
- * NOTHING IS INVENTED. The rating block renders only when `rating_count` is a
- * real positive number; an unrated person gets no stars, no "New" badge and no
- * zero — the repo rule against placeholder marketplace data applies hardest on
- * the one surface strangers see first.
+ * NOTHING IS INVENTED. The rating block renders only when a role's REVEALED
+ * review total is a real positive number (worker first, hiring when that is
+ * all they have — R8b-c, profile_review_summary rather than the legacy
+ * profiles aggregate); a person with none gets no stars and no zero, and a
+ * failed summary read is UNKNOWN and renders nothing — the repo rule against
+ * placeholder marketplace data applies hardest on the one surface strangers
+ * see first.
  *
  * WHEN THE SCHEMA GAINS AN ANONYMOUS READ PATH — a party-free select policy,
  * or a security-definer function returning the public columns for one id —
@@ -57,10 +61,18 @@ export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   const [state, setState] = useState<LoadState>({ status: 'loading' });
+  // R8b-c: the per-role revealed summaries, signed-in path only — the
+  // anonymous visitor could not read the profile, so nothing asks for them.
+  // Null is unanswered or failed: UNKNOWN renders no rating block.
+  const [roleSummaries, setRoleSummaries] = useState<{
+    worker: ReviewSummary | null;
+    customer: ReviewSummary | null;
+  } | null>(null);
 
   useEffect(() => {
     let alive = true;
     setState({ status: 'loading' });
+    setRoleSummaries(null);
     void fetchProfileById(userId).then(({ data }) => {
       if (!alive) return;
       // A read that returns nothing is the SAME state whether the cause is
@@ -68,17 +80,26 @@ export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
       // between them out loud: it would be telling strangers which user ids
       // exist.
       setState(data ? { status: 'ready', profile: data } : { status: 'unavailable' });
+      if (data) {
+        void fetchBothRoleSummaries(userId).then(({ worker, customer, error }) => {
+          if (!alive || error) return;
+          setRoleSummaries({ worker, customer });
+        });
+      }
     });
     return () => {
       alive = false;
     };
   }, [userId]);
 
-  const rated =
-    state.status === 'ready' &&
-    typeof state.profile.rating_count === 'number' &&
-    state.profile.rating_count > 0 &&
-    typeof state.profile.rating_avg === 'number';
+  // Worker first; the hiring side only when it is all they have. Zero across
+  // both roles renders no block at all.
+  const pickShown = (summary: ReviewSummary | null) =>
+    summary && summary.total > 0 && summary.shownAverage != null
+      ? { shownAverage: summary.shownAverage, isNew: summary.isNew, total: summary.total }
+      : null;
+  const shownSummary =
+    pickShown(roleSummaries?.worker ?? null) ?? pickShown(roleSummaries?.customer ?? null);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
@@ -95,16 +116,14 @@ export function PublicProfileScreen({ userId }: PublicProfileScreenProps) {
             <Text style={styles.name} numberOfLines={2}>
               {state.profile.full_name ?? DELETED_USER_LABEL}
             </Text>
-            {rated ? (
+            {shownSummary ? (
               <View style={styles.ratingRow}>
                 <Ionicons name="star" size={16} color={colors.star} />
                 <Text style={styles.rating}>
-                  {(state.profile.rating_avg as number).toFixed(1)}
+                  {shownSummary.isNew ? 'New' : shownSummary.shownAverage.toFixed(1)}
                 </Text>
                 <Text style={styles.ratingCount}>
-                  {state.profile.rating_count === 1
-                    ? '1 review'
-                    : `${state.profile.rating_count} reviews`}
+                  {shownSummary.total === 1 ? '1 review' : `${shownSummary.total} reviews`}
                 </Text>
               </View>
             ) : null}

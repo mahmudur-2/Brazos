@@ -39,20 +39,31 @@ const { deriveWorkerHeroTrust } = await (async () => {
 
 test('C3 · full known facts render all three rows', () => {
   const trust = deriveWorkerHeroTrust({
-    profile: { rating_avg: 4.7, rating_count: 12, on_time_pct: 0.9, response_time: '2 hours' },
+    profile: { on_time_pct: 0.9, response_time: '2 hours' },
+    ratingSummary: { shownAverage: 4.7, isNew: false, total: 12 },
     stats: [{ count: 20 }, { count: 7 }],
   });
   assert.deepEqual(trust, {
-    rating: { average: 4.7, count: 12 },
+    rating: { shownAverage: 4.7, isNew: false, count: 12 },
     newWorker: false,
     completedJobs: 27,
     respondsIn: '2 hours',
   });
 });
 
-test('C3 · a rating with zero counted reviews is not a fact — no rating, no placeholder', () => {
+test('C3 · zero revealed reviews is not a fact — no rating, no placeholder', () => {
   const trust = deriveWorkerHeroTrust({
-    profile: { rating_avg: 4.9, rating_count: 0, on_time_pct: 0.8, response_time: null },
+    profile: { on_time_pct: 0.8, response_time: null },
+    ratingSummary: { shownAverage: 4.9, isNew: false, total: 0 },
+    stats: [{ count: 5 }],
+  });
+  assert.equal(trust.rating, null);
+});
+
+test('C3 · an unanswered or failed summary read is UNKNOWN: no rating row (R8b-c)', () => {
+  const trust = deriveWorkerHeroTrust({
+    profile: { on_time_pct: 0.8, response_time: null },
+    ratingSummary: null,
     stats: [{ count: 5 }],
   });
   assert.equal(trust.rating, null);
@@ -60,7 +71,8 @@ test('C3 · a rating with zero counted reviews is not a fact — no rating, no p
 
 test('C3 · an unanswered or failed stats read is UNKNOWN: no completed row, no "New worker" verdict', () => {
   const trust = deriveWorkerHeroTrust({
-    profile: { rating_avg: null, rating_count: 0, on_time_pct: null, response_time: null },
+    profile: { on_time_pct: null, response_time: null },
+    ratingSummary: null,
     stats: null,
   });
   assert.equal(trust.completedJobs, null);
@@ -69,19 +81,22 @@ test('C3 · an unanswered or failed stats read is UNKNOWN: no completed row, no 
 
 test('C3 · the "New worker" verdict is compareBids\' — KNOWN sub-3 completed with null on-time — and replaces the fact rows', () => {
   const trust = deriveWorkerHeroTrust({
-    profile: { rating_avg: 5, rating_count: 1, on_time_pct: null, response_time: '1 hour' },
+    profile: { on_time_pct: null, response_time: '1 hour' },
+    ratingSummary: { shownAverage: 5, isNew: true, total: 1 },
     stats: [{ count: 1 }],
   });
   assert.equal(trust.newWorker, true);
   assert.equal(trust.completedJobs, null);
   assert.equal(trust.respondsIn, null);
-  // The rating itself is still a fact and keeps rendering.
-  assert.deepEqual(trust.rating, { average: 5, count: 1 });
+  // The rating itself is still a fact and keeps rendering — with the young-
+  // reputation verdict beside it, so the surface prints "New" not a number.
+  assert.deepEqual(trust.rating, { shownAverage: 5, isNew: true, count: 1 });
 });
 
 test('C3 · a KNOWN zero completed with a known on-time renders nothing — never "0 jobs completed"', () => {
   const trust = deriveWorkerHeroTrust({
-    profile: { rating_avg: null, rating_count: 0, on_time_pct: 0.95, response_time: null },
+    profile: { on_time_pct: 0.95, response_time: null },
+    ratingSummary: null,
     stats: [],
   });
   assert.equal(trust.newWorker, false);
@@ -90,12 +105,14 @@ test('C3 · a KNOWN zero completed with a known on-time renders nothing — neve
 
 test('C3 · responds-in is the real column value, trimmed; blank is null', () => {
   const blank = deriveWorkerHeroTrust({
-    profile: { rating_avg: null, rating_count: 0, on_time_pct: 0.5, response_time: '   ' },
+    profile: { on_time_pct: 0.5, response_time: '   ' },
+    ratingSummary: null,
     stats: [{ count: 9 }],
   });
   assert.equal(blank.respondsIn, null);
   const real = deriveWorkerHeroTrust({
-    profile: { rating_avg: null, rating_count: 0, on_time_pct: 0.5, response_time: ' about a day ' },
+    profile: { on_time_pct: 0.5, response_time: ' about a day ' },
+    ratingSummary: null,
     stats: [{ count: 9 }],
   });
   assert.equal(real.respondsIn, 'about a day');
@@ -104,9 +121,14 @@ test('C3 · responds-in is the real column value, trimmed; blank is null', () =>
 test('C3 · the module composes compareBids rather than copying its rules', async () => {
   const source = stripComments(await read('lib/workerHeroCard.ts'));
   assert.match(source, /from '\.\/compareBids'/);
-  for (const fn of ['knownRating', 'onTimePercent', 'totalCompletedJobs', 'trustRowFor']) {
+  // knownRating left this list in R8b-c: the rating no longer derives from
+  // the profile's mixed aggregate — it is the worker-role revealed summary.
+  for (const fn of ['onTimePercent', 'totalCompletedJobs', 'trustRowFor']) {
     assert.ok(source.includes(fn), `must reuse ${fn}`);
   }
+  // The legacy aggregate stays out: no reader of the profile rating columns.
+  assert.ok(!source.includes('rating_avg'));
+  assert.ok(!source.includes('rating_count'));
   // No re-implementation: the sum and the verdict live in compareBids only.
   assert.doesNotMatch(source, /reduce\(/);
   assert.doesNotMatch(source, /< 3/);
@@ -118,7 +140,10 @@ test('C3 · the module composes compareBids rather than copying its rules', asyn
 
 test('[static] 4E · the hero renders the module output; the old placeholders are gone', async () => {
   const screen = await read('screens/WorkerProfileScreen.tsx');
-  assert.match(screen, /deriveWorkerHeroTrust\({ profile, stats: jobStats }\)/);
+  assert.match(screen, /deriveWorkerHeroTrust\({ profile, ratingSummary, stats: jobStats }\)/);
+  // R8b-c: the summary is the worker role's, and a failed read stays null.
+  assert.match(screen, /fetchProfileReviewSummary\(params\.workerId, 'worker'\)/);
+  assert.match(screen, /if \(active && !summaryError\) setRatingSummary\(data\);/);
   assert.match(screen, /heroTrust\.rating \?/);
   assert.match(screen, /heroTrust\.newWorker \?/);
   assert.match(screen, /jobs?'\s*} completed|} completed/);
