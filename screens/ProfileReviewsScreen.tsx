@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -23,9 +23,11 @@ import { userMessage } from '../lib/errorMessage';
 import { JOB_CATEGORY_LABELS } from '../lib/jobs';
 import { goBackOrHome } from '../lib/navigationRef';
 import {
+  fetchBothRoleSummaries,
   fetchProfileReviews,
   fetchProfileReviewSummary,
   type ProfileReview,
+  type ReviewRole,
   type ReviewSummary,
 } from '../lib/reviews';
 import { formatTimeAgo } from '../lib/time';
@@ -33,6 +35,7 @@ import type { ProfileReviewsRouteParamList } from '../lib/navigation';
 import {
   fonts,
   radius,
+  selectedInDark,
   spacing,
   starColors,
   themedStyles,
@@ -51,6 +54,11 @@ const STARS = [5, 4, 3, 2, 1] as const;
  * The aggregate at the top and the list beneath it are counted from the same
  * review rows (profile_review_summary / profile_reviews, phase37), so the
  * header can never claim "2 reviews" above three of them.
+ *
+ * Which reputation it shows is the route's `role`. Another person's profile
+ * pins one role; the own-account entries pass 'both', which adds the
+ * Work / Hiring toggle — reputation is kept per role (R8a D4) and mixing the
+ * two back into one page would blur what the split exists to keep apart.
  */
 export function ProfileReviewsScreen() {
   const { palette: colors, isDark } = useThemeColors();
@@ -59,8 +67,15 @@ export function ProfileReviewsScreen() {
   const navClearance = useFloatingNavClearance();
   const { params } =
     useRoute<RouteProp<ProfileReviewsRouteParamList, 'ProfileReviews'>>();
+  const paramRole = params.role;
 
-  const [summary, setSummary] = useState<ReviewSummary | null>(null);
+  const [activeRole, setActiveRole] = useState<ReviewRole>(
+    paramRole === 'customer' ? 'customer' : 'worker'
+  );
+  const [summaries, setSummaries] = useState<{
+    worker: ReviewSummary | null;
+    customer: ReviewSummary | null;
+  }>({ worker: null, customer: null });
   const [reviews, setReviews] = useState<ProfileReview[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -69,21 +84,63 @@ export function ProfileReviewsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setError(null);
-    const [summaryRes, listRes] = await Promise.all([
-      fetchProfileReviewSummary(params.userId),
-      fetchProfileReviews(params.userId, { limit: PAGE_SIZE, offset: 0 }),
-    ]);
+  // Bumped by every fresh load and by every role switch, so a response that
+  // was in flight when the role changed lands nowhere instead of overwriting
+  // the newer role's list.
+  const loadTokenRef = useRef(0);
 
-    const firstError = summaryRes.error || listRes.error;
-    if (firstError) setError(userMessage(firstError));
+  const load = useCallback(
+    async (roleOverride?: ReviewRole) => {
+      const token = ++loadTokenRef.current;
+      setError(null);
 
-    setSummary(summaryRes.data);
-    setReviews(listRes.data);
-    setExhausted(listRes.data.length < PAGE_SIZE);
-    setLoading(false);
-  }, [params.userId]);
+      if (paramRole === 'both') {
+        const {
+          worker,
+          customer,
+          error: summariesError,
+        } = await fetchBothRoleSummaries(params.userId);
+        if (token !== loadTokenRef.current) return;
+        // Opens on the side with something to show: worker, unless only the
+        // hiring side has revealed reviews. A refresh keeps the role the
+        // reader chose rather than re-deciding it under them.
+        const role =
+          roleOverride ??
+          ((worker?.total ?? 0) === 0 && (customer?.total ?? 0) > 0
+            ? 'customer'
+            : 'worker');
+        const listRes = await fetchProfileReviews(params.userId, {
+          limit: PAGE_SIZE,
+          offset: 0,
+          role,
+        });
+        if (token !== loadTokenRef.current) return;
+        const firstError = summariesError || listRes.error;
+        if (firstError) setError(userMessage(firstError));
+        setSummaries({ worker, customer });
+        setActiveRole(role);
+        setReviews(listRes.data);
+        setExhausted(listRes.data.length < PAGE_SIZE);
+        setLoading(false);
+        return;
+      }
+
+      const role = paramRole;
+      const [summaryRes, listRes] = await Promise.all([
+        fetchProfileReviewSummary(params.userId, role),
+        fetchProfileReviews(params.userId, { limit: PAGE_SIZE, offset: 0, role }),
+      ]);
+      if (token !== loadTokenRef.current) return;
+      const firstError = summaryRes.error || listRes.error;
+      if (firstError) setError(userMessage(firstError));
+      setSummaries((prev) => ({ ...prev, [role]: summaryRes.data }));
+      setActiveRole(role);
+      setReviews(listRes.data);
+      setExhausted(listRes.data.length < PAGE_SIZE);
+      setLoading(false);
+    },
+    [params.userId, paramRole]
+  );
 
   useEffect(() => {
     setLoading(true);
@@ -92,20 +149,47 @@ export function ProfileReviewsScreen() {
 
   async function onRefresh() {
     setRefreshing(true);
-    await load();
+    await load(paramRole === 'both' ? activeRole : undefined);
     setRefreshing(false);
+  }
+
+  /** The toggle's switch: the list, offset and end-of-list state all belong
+   *  to one role, so they reset together and refetch for the other. */
+  async function switchRole(next: ReviewRole) {
+    if (next === activeRole || paramRole !== 'both') return;
+    const token = ++loadTokenRef.current;
+    setActiveRole(next);
+    setReviews([]);
+    setExhausted(false);
+    setError(null);
+    setLoading(true);
+    const { data, error: listError } = await fetchProfileReviews(params.userId, {
+      limit: PAGE_SIZE,
+      offset: 0,
+      role: next,
+    });
+    if (token !== loadTokenRef.current) return;
+    if (listError) setError(userMessage(listError));
+    setReviews(data);
+    setExhausted(data.length < PAGE_SIZE);
+    setLoading(false);
   }
 
   /** Next page, appended. Guarded so a fast scroll can't stack requests or
    *  keep asking once the end has been reached. */
   async function loadMore() {
     if (loadingMore || exhausted || loading) return;
+    const token = loadTokenRef.current;
     setLoadingMore(true);
     const { data, error } = await fetchProfileReviews(params.userId, {
       limit: PAGE_SIZE,
       offset: reviews.length,
+      role: activeRole,
     });
     setLoadingMore(false);
+    // A page requested before a switch or refresh belongs to that older
+    // load — appending it would mix roles.
+    if (token !== loadTokenRef.current) return;
     if (error) return;
     if (data.length < PAGE_SIZE) setExhausted(true);
     if (data.length > 0) {
@@ -117,6 +201,7 @@ export function ProfileReviewsScreen() {
   }
 
   const firstName = params.name?.trim().split(/\s+/)[0];
+  const summary = activeRole === 'customer' ? summaries.customer : summaries.worker;
   const total = summary?.total ?? 0;
 
   return (
@@ -153,14 +238,57 @@ export function ProfileReviewsScreen() {
           onEndReachedThreshold={0.4}
           onEndReached={loadMore}
           ListHeaderComponent={
-            total > 0 ? (
+            <>
+              {paramRole === 'both' ? (
+                // The own-account entries land here with 'both': one page,
+                // two reputations, never mixed (R8b-c D2). Same local
+                // pressable-pair treatment as the review form's Yes/No.
+                <View style={styles.roleRow}>
+                  {(['worker', 'customer'] as const).map((role) => {
+                    const selected = activeRole === role;
+                    return (
+                      <Pressable
+                        key={role}
+                        style={[
+                          styles.rolePill,
+                          selected &&
+                            (isDark ? styles.rolePillActiveDark : styles.rolePillActive),
+                        ]}
+                        onPress={() => void switchRole(role)}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                      >
+                        <Text
+                          style={[
+                            styles.rolePillText,
+                            selected &&
+                              (isDark
+                                ? styles.rolePillTextActiveDark
+                                : styles.rolePillTextActive),
+                          ]}
+                        >
+                          {role === 'worker' ? 'Work' : 'Hiring'}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+              {total > 0 ? (
               <Card style={styles.summaryCard}>
                 <View style={styles.summaryTop}>
+                  {/* D1 (R8b-c): the one number any surface shows —
+                      shown_average, or the word New while the reputation is
+                      too young for a number. The raw mean never renders. */}
                   <Text style={styles.average}>
-                    {summary?.average != null ? summary.average.toFixed(1) : '—'}
+                    {summary?.isNew
+                      ? 'New'
+                      : summary?.shownAverage != null
+                        ? summary.shownAverage.toFixed(1)
+                        : '—'}
                   </Text>
                   <View style={styles.summaryTopText}>
-                    <StarRating value={Math.round(summary?.average ?? 0)} size={18} />
+                    <StarRating value={Math.round(summary?.shownAverage ?? 0)} size={18} />
                     <Text style={styles.summaryCount}>
                       {total} {total === 1 ? 'review' : 'reviews'}
                     </Text>
@@ -188,7 +316,8 @@ export function ProfileReviewsScreen() {
                   })}
                 </View>
               </Card>
-            ) : null
+              ) : null}
+            </>
           }
           ListEmptyComponent={
             <View style={styles.empty}>
@@ -326,6 +455,46 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   summaryCard: {
     marginBottom: spacing.xs,
+  },
+  // The Work / Hiring toggle copies ReviewAndTipScreen's tip preset row
+  // locally (R8b-c D6: no new shared component) — the same selected
+  // treatment the review form's Yes/No pair carries.
+  roleRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  rolePill: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rolePillActive: {
+    borderColor: colors.emerald,
+    backgroundColor: colors.mint,
+  },
+  // emerald D6: one selection treatment — gold line, gold label, no fill.
+  rolePillActiveDark: {
+    borderColor: selectedInDark(colors).line,
+    backgroundColor: selectedInDark(colors).fill,
+  },
+  rolePillText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  rolePillTextActive: {
+    color: colors.emerald,
+  },
+  rolePillTextActiveDark: {
+    color: selectedInDark(colors).line,
   },
   summaryTop: {
     flexDirection: 'row',

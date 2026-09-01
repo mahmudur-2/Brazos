@@ -933,9 +933,13 @@ export function ChatScreen() {
 
   function openCounterpartyReviews() {
     if (!counterparty) return;
+    // The role is the counterparty's, read off this screen's own mode: a
+    // customer is talking to a worker and vice versa. The navigate cast
+    // above means tsc could not catch this param going missing (R8b-c).
     (navigation.navigate as (n: string, p?: object) => void)('ProfileReviews', {
       userId: counterparty.id,
       name: counterparty.full_name ?? undefined,
+      role: mode === 'customer' ? 'worker' : 'customer',
     });
   }
 

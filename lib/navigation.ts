@@ -143,7 +143,7 @@ export type CustomerHomeStackParamList = {
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
   /**
    * Worker search. Opened blank from Home's search field, or pre-run with a
    * typed query / a tapped service chip. `autoFocus: false` suppresses the
@@ -166,7 +166,7 @@ export type CustomerHomeStackNavigation =
 export type DiscoverStackParamList = {
   WorkerSearch: { query?: string; category?: string; autoFocus?: boolean } | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
   PostJob:
     | {
         hireWorkerId?: string;
@@ -209,7 +209,7 @@ export type WorkerHomeStackParamList = {
    *  this, so Back cannot land on a re-submittable form. */
   BidSent: { jobTitle: string; amountCents: number; offerId: string };
   WorkerProfile: { workerId: string; workerName?: string };
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
   /**
    * Registered 2026-08-10 (user decision, device-reproduced crash). This tree
    * mounts three screens that dispatch it — WorkerProfile ("Send an offer"),
@@ -322,7 +322,7 @@ export type MyJobsStackParamList = {
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
 };
 
 export type MyJobsStackNavigation = NativeStackNavigationProp<MyJobsStackParamList>;
@@ -355,7 +355,7 @@ export type MessagesStackParamList = {
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
 };
 
 export type MessagesStackNavigation = NativeStackNavigationProp<MessagesStackParamList>;
@@ -393,7 +393,7 @@ export type MapStackParamList = {
       }
     | undefined;
   WorkerProfile: { workerId: string; workerName?: string };
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
 };
 
 export type MapStackNavigation = NativeStackNavigationProp<MapStackParamList>;
@@ -453,7 +453,7 @@ export type ProfileStackParamList = {
       }
     | undefined;
   LegalDocument: { document: 'terms' | 'privacy' };
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
   /** Phase 67 — in-app account deletion (App Store Guideline 5.1.1(v)).
    *  Reached only from the Profile tab's destructive row, below Log out. */
   DeleteAccount: undefined;
@@ -577,7 +577,7 @@ export type WorkerProfileRouteParamList = {
 // tab, for the user's own reviews). Same standalone-type treatment as the
 // others: the screen needs its params and goBack(), not the whole stack.
 export type ProfileReviewsRouteParamList = {
-  ProfileReviews: { userId: string; name?: string };
+  ProfileReviews: { userId: string; name?: string; role: 'worker' | 'customer' | 'both' };
 };
 
 // Registered in the customer Home stack (pushed from Home's search/chips) and

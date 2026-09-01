@@ -275,6 +275,7 @@ export function WorkerProfileScreen() {
                       navigation.navigate('ProfileReviews', {
                         userId: params.workerId,
                         name,
+                        role: 'worker',
                       })
                     }
                     hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}

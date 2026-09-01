@@ -183,6 +183,7 @@ export function ProfileDetailsScreen() {
                 navigation.navigate('ProfileReviews', {
                   userId: user.id,
                   name: profile?.full_name ?? undefined,
+                  role: 'both',
                 })
               }
               style={styles.reviewsAction}

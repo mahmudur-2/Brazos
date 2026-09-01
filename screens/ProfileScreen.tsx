@@ -614,6 +614,7 @@ export function ProfileScreen() {
                   navigation.navigate('ProfileReviews', {
                     userId: user.id,
                     name: profile.full_name ?? undefined,
+                    role: 'both',
                   })
                 }
                 hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
