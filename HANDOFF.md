@@ -97,6 +97,99 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN R8b-c COMPLETED (2026-09-01) — the client half of R8b: every single-subject surface leaves the legacy aggregate, and would-you-again is finally asked
+
+Five commits, each pushed on its own: `a159312` (C1, `lib/reviews.ts`),
+`35238fe` (C2, the review form and its three hosts), `35bc905` (C3, the
+reviews page, navigation types and one type-erased call site), `00798d3`
+(C4, five single-subject surfaces off the legacy aggregate, two fences
+updated), and the C5 docs commit carrying this record. Base gate held
+(`mainexpo`, `37dca2a` an ancestor, tree clean at run start). CLIENT ONLY —
+no schema file touched, no `db:test`, no database contacted; `npm run
+verify` was green before every commit (1289 pass through C3, 1290 from C4 —
+one net-new hero-card test). BACKLOG §R8b items 2, 3 and 4 are DONE; item 1
+was R8b-s's.
+
+### C1 — the data layer (`a159312`)
+
+`ReviewRole` enters `lib/reviews.ts`; `fetchProfileReviewSummary` and
+`fetchProfileReviews` pass `p_role` (worker default, D2); the summary maps
+`shown_average` → `shownAverage` and `is_new` → `isNew` (absent row defaults
+new). `createReview` sends `p_would_again` (null stays a legitimate skip,
+D3) and maps the row back; `fetchMyReviewForJob` selects `would_again`.
+`fetchBothRoleSummaries` runs both roles in one Promise.all for the
+own-profile surfaces. Analytics untouched: `review_left` keeps stars only
+(D4).
+
+### C2 — the question (`35238fe`)
+
+ReviewSection gains a required `revieweeRole` and a Yes/No pair directly
+under the stars — the tip preset treatment copied locally from
+ReviewAndTipScreen (D6), tokens only. Tapping the active option clears it
+back to null: an accidental tap must not become a permanent claim about a
+real person. The submitted card renders the reviewer's own answer as one
+line and nothing when null — `profile_reviews` never returns the column, so
+it can never render on anyone else's reviews (D5). Hosts:
+ClientJobDetailScreen and ReviewAndTipScreen pass `'worker'`,
+WorkerJobScreen passes `'customer'`; the card's two-host doc comment
+corrected to three.
+
+### C3 — the page (`35bc905`)
+
+`ProfileReviews` requires `role: 'worker' | 'customer' | 'both'` in all
+eight param lists — no default, so a missed call site is a type error, not
+a silent worker read. WorkerProfileScreen pins `'worker'`; ProfileScreen
+and ProfileDetailsScreen pass `'both'`, which opens on worker UNLESS only
+the hiring side has revealed reviews, and adds the Work / Hiring toggle.
+Switching resets list, offset and end-of-list state and refetches under a
+load token, so a role-switch mid-flight response lands nowhere. The header
+big number is `shown_average` to one decimal or the word New, and the star
+row rounds the same number — the raw mean no longer renders anywhere (D1).
+FOUND BEYOND THE PRE-READ: ChatScreen's `openCounterpartyReviews` navigates
+through a type-erased cast tsc cannot check; it now passes the
+counterparty's role off the screen's own mode (customer mode → 'worker',
+worker mode → 'customer').
+
+### C4 — the surfaces (`00798d3`)
+
+FIVE single-subject surfaces (the four named plus BidDetailScreen, which
+the `rating_count` grep surfaced — one offer, one worker, so the
+continue-path repointed it): ProfileScreen and ProfileDetailsScreen call
+`fetchBothRoleSummaries` once on mount — the star shows the worker role's
+`shownAverage` or New, and the see-your-reviews link is gated on EITHER
+role's total (the gate that used to lock a customer-only account out of its
+own reviews); its accessibility label carries the summed total.
+WorkerProfileScreen fetches the worker-role summary and
+`deriveWorkerHeroTrust` takes `{ shownAverage, isNew, total }` in place of
+the profile rating columns — positive-only, non-null, never-invent contract
+intact, zero revealed reviews still renders no row and no link.
+PublicProfileScreen's signed-in path shows worker first, hiring when that
+is all they have; the anonymous install page is untouched. Everywhere a
+failed summary read is UNKNOWN and renders nothing — never 0.0, never New.
+Fences updated to the new truth in the same commit:
+`tests/workerHeroCard.test.mjs` (new input shape, `knownRating` retired
+from the reuse list, the aggregate asserted absent) and the
+PublicProfileScreen pins in `tests/chatComposer.test.mjs`.
+
+### The pre-read finding — recompute_profile_rating counts unrevealed reviews
+
+The trigger function (`supabase/migrations/20260901000000_baseline.sql:4126`)
+aggregates with `where r.reviewee_id = target` — that clause verbatim in
+both subqueries, `count(*)` and `avg(r.rating)` — no reveal predicate, no
+role split. So `profiles.rating_avg` / `rating_count` count reviews the
+blind window still holds back, mixed across both roles. Nothing in this run
+changed it; the retirement is filed in `docs/BACKLOG.md` §v1.2 as a schema
+run, after the list surfaces (WorkerSearchScreen, SavedWorkersScreen,
+CompareBidsScreen / OfferCard, `lib/workerSearch.ts`) get a batch per-role
+summary function (D7 kept them on the aggregate this run).
+
+### The loose thread — not real
+
+`load-bearin` appears only as the complete word "load-bearing"; no
+paragraph repeats consecutively. The two similar `transfer_attempts`
+sentences live in two different sections on purpose — the walk record and
+the R8b-s run record each keep their own copy. Nothing fixed.
+
 ## RUN R8b-s COMPLETED (2026-08-31) — the review notification stops leaking the blind window, and the walk record gains its corroborating rows
 
 Two commits, each pushed on its own: `4992bda` (C1, docs — `HANDOFF.md`,
