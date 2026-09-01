@@ -1,7 +1,8 @@
 -- 090_reputation.sql — the R8a proofs: 20260925000100_r8a_reputation.sql
 -- proven on the local stack before the pipeline applies it anywhere. Each
 -- section is one of the five operator decisions (docs/DECISIONS.md,
--- 2026-08-31) made executable.
+-- 2026-08-31) made executable. §10 (R8b-s) extends the file to
+-- 20260925000200_r8bs_review_notification.sql — the notification side of D1.
 --
 -- THE CAST (named once; every assertion says which of these it ran as):
 --   customer    posts worker1's three jobs (JA, JB, JC)
@@ -48,6 +49,10 @@
 --      review_is_revealed is the one deliberate anon grant (the reviews
 --      SELECT policy calls it and must evaluate for anon's column-probe
 --      SELECT grant — B in the run contract, fenced in 040_authz.sql §17).
+--   §10 R8b-s: the review notification honours the blind window — the outbox
+--      row enqueued by a blind insert carries no rating and says why; the
+--      row enqueued by a revealing insert keeps the baseline star copy; the
+--      reviews_notify trigger itself is byte-for-byte the baseline's.
 --
 -- PAIRING: every denial or zero-count sits beside the positive control that
 -- proves the row exists for the identity meant to see it.
@@ -56,7 +61,7 @@
 
 begin;
 set local search_path = public, extensions, pg_temp;
-select plan(48);
+select plan(61);
 
 -- psql does not interpolate :'vars' inside dollar quotes, so ids also live in
 -- this temp table for the statements throws_ok/lives_ok execute.
@@ -325,6 +330,54 @@ select ok(has_function_privilege('authenticated', 'public.client_job_stats(uuid)
   '9: authenticated may execute client_job_stats');
 select ok(has_function_privilege('authenticated', 'public.review_is_revealed(uuid, uuid, uuid, timestamp with time zone)', 'EXECUTE'),
   '9: authenticated may execute review_is_revealed');
+
+-- ---------------------------------------------------------------------------
+-- §10. R8b-s — THE NOTIFICATION STOPS LEAKING THE BLIND WINDOW
+--      (20260925000200_r8bs_review_notification.sql). The outbox rows §2's
+--      two inserts enqueued, read back as the runner by dedupe key — the
+--      050 §4 shape. The customer's review of worker1 (r_ja_cw) was BLIND at
+--      insert: no counterpart existed yet, so its notification must name no
+--      rating. worker1's counterpart was REVEALED at insert: that insert
+--      revealed both, so its notification keeps the baseline copy, star and
+--      all. Nothing here inserts a review — the rows are read where §2's
+--      trigger firings left them.
+-- ---------------------------------------------------------------------------
+select tests.clear_auth();
+select id as r_ja_wc from public.reviews
+ where job_id = (select v from fx where k = 'ja')
+   and reviewer_id = (select v from fx where k = 'worker1') \gset
+
+select is((select count(*) from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text), 1::bigint,
+  '10: runner — exactly one outbox row for the blind insert, at dedupe key review:<review id>');
+select is((select recipient_id from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text), :'worker1'::uuid,
+  '10: runner — the blind row''s recipient is worker1, the reviewee');
+select is((select type from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text), 'review_received',
+  '10: runner — the type is still review_received (the client icon map and its pinning test hang off this string)');
+select is((select category from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text), 'job_updates',
+  '10: runner — the category is still job_updates');
+select is((select title from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text), 'You got a review',
+  '10: runner — the title is unchanged; it never carried the rating');
+select is((select data ->> 'screen' from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text), 'ProfileMain',
+  '10: runner — the tap target is unchanged');
+select is((select body from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text),
+  'Cleo Customer left you a review. It stays hidden until you review them back or seven days pass.',
+  '10: runner — the BLIND body byte for byte: a review exists, both D1 reveal arms stated, no rating');
+select ok((select body !~ '[0-9★]' from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_cw'::text),
+  '10: runner — the blind body carries no digit and no star (seven is spelled out so this can hold)');
+select is((select count(*) from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_wc'::text), 1::bigint,
+  '10: runner — exactly one outbox row for the revealing insert, at the counterpart''s dedupe key');
+select is((select recipient_id from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_wc'::text), :'customer'::uuid,
+  '10: runner — the revealed row''s recipient is the customer, that review''s reviewee');
+select is((select body from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_wc'::text),
+  'Wan Worker left you 4★.',
+  '10: runner — the REVEALED body is the baseline copy byte for byte: that insert revealed both, nothing is withheld');
+select ok((select body ~ '4★' from public.notification_outbox where dedupe_key = 'review:' || :'r_ja_wc'::text),
+  '10: runner — … and it does carry the rating: the pair for the blind negative above');
+select is(
+  (select pg_get_triggerdef(t.oid) from pg_trigger t
+    where t.tgrelid = 'public.reviews'::regclass and t.tgname = 'reviews_notify'),
+  'CREATE TRIGGER reviews_notify AFTER INSERT ON public.reviews FOR EACH ROW EXECUTE FUNCTION notify_on_review()',
+  '10: runner — the trigger is byte-for-byte the baseline''s: AFTER INSERT, FOR EACH ROW, same function; only the function body moved');
 
 select * from finish();
 rollback;
