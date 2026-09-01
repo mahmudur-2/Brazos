@@ -97,6 +97,135 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN R8b-s COMPLETED (2026-08-31) — the review notification stops leaking the blind window, and the walk record gains its corroborating rows
+
+Two commits, each pushed on its own: `4992bda` (C1, docs — `HANDOFF.md`,
+`docs/GATES.md`, `docs/BACKLOG.md`) and `5238716` (C2, schema — one new
+migration plus its pgTAP). Base gate held (`mainexpo`, `109a242` an ancestor,
+tree clean at run start, nothing unrelated in it). NO client code — the R8b
+client defects belong to R8b-c, the next run. The C2 push lands on the
+pipeline-watched migrations path; the migration is one `create or replace` on
+one function — non-destructive — so the staging pipeline applies it with no
+operator tap. `gh` was not on PATH, so the pipeline run was not observed from
+this run.
+
+### C1 — what the corroboration corrected
+
+The operator read the walk's rows from the STAGING SQL editor after the walk;
+they are DATA, not testimony. They are now recorded in the walk-record section
+above and named in `docs/GATES.md`'s device box (evidence half only, nothing
+else in that file moved): job `01fd3f6e-f9e9-49a4-b62f-2cd29a67d108`; payments
+`a36beb95-86e8-46ed-a0ec-d50bfa72ede0` — status `released`,
+`transfer_attempts` 0, `transfer_ref` `tr_1UAfow43w4QKhn3toCdTFkf8`, `held_at`
+00:35:29, `release_requested_at` 00:40:39, `updated_at` 00:45:03, all UTC
+2026-09-01; two `reviews` rows at 00:38:25 and 00:40:45, both `would_again`
+NULL. `transfer_attempts` 0 is the load-bearing column: the transfer cleared
+FIRST TRY, so the hands-off release is proven by a column now, not only by the
+operator's account.
+
+THE NUMBER MOVED, NOT THE VERDICT. The record said "roughly eight minutes
+after approval"; the rows say **4 minutes 24 seconds from approval**
+(`release_requested_at` 00:40:39 → `updated_at` 00:45:03) and **9 minutes 34
+seconds from funding** (`held_at` 00:35:29 → 00:45:03). Both the walk record
+and the GATES.md device box now carry both intervals with their timestamps.
+The 2026-09-01 UTC timestamps and the 2026-08-31 evening walk are the same
+sitting — local evening, next-day UTC; neither date is wrong and neither was
+"corrected" to match the other.
+
+Also in C1: `docs/BACKLOG.md`'s R8b section gains item 4 — `would_again` is
+never asked; the only review form holds rating, comment and photos, so both
+walk rows are NULL by construction and `client_job_stats`'
+`would_again_yes` / `would_again_total` can only count zero until R8b-c adds
+the question. A new §"Parked — operator decisions, not runs" holds two items
+that are NOT runs and stay unauthorized until each carries a dated
+`docs/DECISIONS.md` entry: a read-only staging Postgres role for runs
+(connection string in `%LOCALAPPDATA%` only, never the repository, never
+`.env`), and the reveal-fires-no-notification gap (R8a D1 computes the reveal
+at read time — no cron, no reveal column — so there is no event to hang a
+notification on; a fix needs a new notification type or a scheduled sweep).
+The stale-build grep over `HANDOFF.md`, `docs/GATES.md` and `docs/BACKLOG.md`
+found NO claim that the walk ran on a stale or wrong build; nothing was
+changed for that step.
+
+### C2 — what the migration replaced
+
+R8b defect 1: `notify_on_review()` — trigger `reviews_notify`, AFTER INSERT
+on `reviews` — handed the reviewee the star rating at insert time, before
+R8a's D1 reveal condition was met. The probe after `npm run db:reset`
+confirmed the live body was byte-for-byte the baseline's before the fix, so
+the premise held.
+
+`supabase/migrations/20260925000200_r8bs_review_notification.sql` is one
+`create or replace function public.notify_on_review()` plus its `comment on
+function` — no new function, type, column, grant, policy or trigger
+re-creation; `create or replace` preserves the ACL, so neither
+`040_authz.sql` §17 allow-list string moves. The body branches on
+`public.review_is_revealed(new.job_id, new.reviewer_id, new.reviewee_id,
+new.created_at)` — at insert time its 7-day arm is always false, so it is
+true exactly when this insert supplies the counterpart.
+
+The notification copy, before and after, in full:
+
+- BEFORE (one body, always — the leak):
+  `public.notify_display_name(new.reviewer_id) || ' left you ' || new.rating::text || '★.'`
+- AFTER, revealed at insert (the counterpart existed, so this insert reveals
+  both) — the same string, kept exactly:
+  `public.notify_display_name(new.reviewer_id) || ' left you ' || new.rating::text || '★.'`
+- AFTER, blind at insert — no rating, no star, no digit, both D1 arms stated:
+  `public.notify_display_name(new.reviewer_id) || ' left you a review. It stays hidden until you review them back or seven days pass.'`
+
+Recipient `new.reviewee_id`, actor `new.reviewer_id`, category `job_updates`,
+type `review_received`, title `You got a review`, data
+`jsonb_build_object('screen','ProfileMain')` and dedupe key
+`'review:' || new.id::text` are unchanged in both branches. No `notify pgrst`
+(the R8a file carries none) and no `npm run db:types` — a trigger function is
+not in the exposed API.
+
+### The proof and the counts
+
+`supabase/tests/090_reputation.sql` §10 — 13 assertions, `plan(48)` →
+`plan(61)`, the 050 §4 shape: `tests.clear_auth()` first, then the
+`notification_outbox` rows §2's two inserts enqueued, read as the runner by
+dedupe key. The blind row (`r_ja_cw`, Cleo Customer → worker1): exactly one
+row, recipient, type, category, title, tap target, the exact blind body, and
+`body !~ '[0-9★]'`. The revealed row (the counterpart, Wan Worker →
+customer): exactly one row, recipient, the exact baseline body
+`Wan Worker left you 4★.`, and `body ~ '4★'`. Plus `pg_get_triggerdef` of
+`reviews_notify` byte-equal to the baseline's. No continue-path fired: the
+fixture names matched the literal bodies, the `job_updates` prefs were
+default-on, and the outbox was readable as the runner.
+
+- `npm run db:test`: **Files=12, Tests=1436, PASS** — the 1423 baseline plus
+  exactly the 13 added; every file PASS; only 090 moved its count.
+- `npm run verify`: **1289 tests, 0 failures, 0 skipped** — green before
+  C1's commit and again before C2's; the count never moved. No node test
+  asserted on the old notification body, so the copy-string continue-path
+  was not needed.
+
+### Next
+
+**R8b-c, the client surfaces, with FOUR defects filed** under
+`docs/BACKLOG.md`'s R8b section: item 1's schema half is fixed by this run
+(the client shows whatever the outbox says, so no client work remains on the
+leak itself); items 2 and 3 (ProfileScreen's legacy-aggregate gate,
+ProfileReviewsScreen's missing `p_role`) and item 4 (`would_again` never
+asked) are client work. The parked reveal-notification gap stays parked until
+an operator decision.
+
+### Guards and mechanics
+
+- Both commit messages rode in `git commit -F` files under the gitignored
+  `.shots/`, removed in the same command — GUARD-NESTED-CLAUDE denies a `-m`
+  message carrying the bare product-name token in the required trailer (the
+  G2 / R8A / G1B pattern). All doc edits went through the file tools, never a
+  shell redirect.
+- The probe ran as `docker exec supabase_db_BRAZOS psql …` against the
+  127.0.0.1 stack only; no remote project was contacted and no remote
+  credential was held.
+- Staged by explicit path only, inspected with `git diff --cached
+  --name-status` before each commit. Nothing else fired.
+
+
 ## RUN G2 COMPLETED (2026-08-31) — Gate 1 CLOSES: the device walk recorded, the provenance ruled, and the three R8b defects filed
 
 Docs only, four commits over four files: `eceabcf` (the walk record above, in
