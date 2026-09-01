@@ -43,6 +43,34 @@ at the head of the "Verification 2026-08-19" section of
 `docs/mockups/PRESTIGE_RUN_REPORT.md`.*
 
 
+## THE GATE 1 DEVICE WALK — PASSED (2026-08-31, evening)
+
+This section is the operator's own testimony, given on the evening of
+2026-08-31. **No run performed it and no run observed it** — a device walk is
+the operator's alone (`CLAUDE.md` §Agent autonomy) — and nothing in it was
+checked against a database, a provider dashboard, a log or a test. It is
+transcribed here because it is the only source for the walk, and it is the
+evidence Gate 1's payment-provider device box cites.
+
+**Where it ran.** On the operator's iPhone, against STAGING, on the Beta build
+— EAS build `d2ccc7f` — after an OTA to `f95b7f92` via `npm run update:preview`.
+
+**What passed.** All eight numbered steps of the Gate 1 device box, in one
+sitting: the job was posted; the bid was placed; the bid was accepted and
+funded — **$53.75 charged on the 4242 test card for a $50 job**, which is the
+7.5% customer fee; the work was completed; the customer approved.
+
+**The release was hands-off.** The payment reached `released` ON ITS OWN,
+roughly eight minutes after approval, with NO hand-run SQL — the funds left
+held in protection without an operator hand on the database. The idempotency
+wedge the operator had to clear by hand during the R6b walk did not recur.
+
+**The reviews.** Reviews were written in both directions, and the counterpart
+reveal held: neither side saw the other's review before its condition was met.
+
+**The provider.** The provider's test dashboard shows the charge.
+
+
 ## RUN G1B COMPLETED (2026-08-31) — Gate 1 read to the bottom: no tick moves, and its two open boxes now carry their operator steps
 
 Docs only, two commits: `5ee1e7b` (the two Gate 1 box rewrites in `docs/GATES.md`)
