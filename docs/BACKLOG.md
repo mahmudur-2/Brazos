@@ -150,3 +150,18 @@ a number mean less than it looks like it means.
   which is not one of the four kinds `permission_result` names. Adding a fifth arm would
   widen a taxonomy that was just narrowed on purpose; if voice search matters enough to
   measure, that is a decision with a dated entry behind it.
+
+## R8b — the blind window leaks everywhere except the table (found on device 2026-08-31)
+
+One bug family, three surfaces. R8a made the reviews TABLE double-blind — the reveal is
+computed at read time by `review_is_revealed()`, D1 of the 2026-08-31 R8a decisions in
+`docs/DECISIONS.md` — and the table honours it. Every surface that reaches a review, or a
+rating derived from one, by some other path still shows what the blind window is there to
+hold back. All three were found on the operator's phone during the Gate 1 device walk of
+2026-08-31. They are DEFECTS in the reputation surface, not out-of-scope features: none of
+them goes under v1.2, and R8b — the client surfaces — is the run that repoints these
+readers, as the R8a entry already said it would.
+
+1. `notify_on_review` (baseline:3620) writes "… left you 5★." to the reviewee at INSERT time, so the notification carries the rating before the reveal condition is met. Seen on the phone, 2026-08-31.
+2. ProfileScreen's reviews link is gated on `profiles.rating_count` — the legacy mixed aggregate R8a deliberately left alone — so the header shows a rating the page below cannot show.
+3. ProfileReviewsScreen never passes `p_role`, so it always reads the WORKER reputation. A customer's own profile reads "No reviews yet" while a customer-role review exists. Confirmed on the phone, 2026-08-31.
