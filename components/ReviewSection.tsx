@@ -28,6 +28,7 @@ import { deleteJobPhoto, uploadReviewPhoto } from '../lib/storage';
 import {
   fonts,
   radius,
+  selectedInDark,
   spacing,
   themedStyles,
   useThemeColors,
@@ -62,6 +63,9 @@ type ReviewSectionProps = {
   reviewerId: string;
   revieweeId: string;
   revieweeName: string;
+  /** The role of the person BEING REVIEWED, not the reviewer — it picks the
+   *  would-you-again wording ("hire" vs "work for"). */
+  revieweeRole: 'worker' | 'customer';
   /** e.g. "How was working with Carlos?" prompt label. */
   prompt: string;
   onSubmitted?: () => void;
@@ -80,12 +84,13 @@ export function ReviewSection({
   reviewerId,
   revieweeId,
   revieweeName,
+  revieweeRole,
   prompt,
   onSubmitted,
   scrollRef,
   palette: paletteProp,
 }: ReviewSectionProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
   const [existing, setExisting] = useState<Review | null>(null);
@@ -93,6 +98,7 @@ export function ReviewSection({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [rating, setRating] = useState(0);
+  const [wouldAgain, setWouldAgain] = useState<boolean | null>(null);
   const [comment, setComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [commentFocused, setCommentFocused] = useState(false);
@@ -109,6 +115,10 @@ export function ReviewSection({
   // Every review-photo upload made by this mounted form stays here until the
   // review is committed, even if the user removes it from the visible draft.
   const draftPhotosRef = useRef<Set<string>>(new Set());
+
+  // The would-you-again question addresses the person the way a message to
+  // them would — first name, or the whole string when there is only one.
+  const revieweeFirstName = revieweeName.trim().split(/\s+/)[0] || revieweeName;
 
   function cleanupDraftPhotos() {
     for (const url of draftPhotosRef.current) {
@@ -133,9 +143,10 @@ export function ReviewSection({
   }, []);
 
   /**
-   * On both screens that host it, this card is the LAST thing in the scroll
-   * content — so "scroll to the end" is exactly "put the comment field and
-   * the Submit button above the keyboard", with no measuring needed.
+   * On the three screens that host it, this card sits at (or, on the tip
+   * screen, near) the end of the scroll content — so "scroll to the end" is
+   * exactly "put the comment field and the Submit button above the
+   * keyboard", with no measuring needed.
    *
    * The KeyboardAvoidingView those screens wrap the scroller in only shrinks
    * the viewport; it never scrolls, which is why the field and the button
@@ -260,6 +271,7 @@ export function ReviewSection({
       rating,
       comment,
       photos: submittedPhotos,
+      wouldAgain,
     });
     if (!error) {
       uploadsCommittedRef.current = true;
@@ -329,6 +341,19 @@ export function ReviewSection({
             “{existing.comment}”
           </Text>
         ) : null}
+        {/* The reviewer's OWN answer only — profile_reviews never returns
+            would_again (R8a D5), and a skipped question renders nothing. */}
+        {existing.would_again != null ? (
+          <Text style={[styles.doneWouldAgain, { color: palette.textMuted }]}>
+            {revieweeRole === 'worker'
+              ? existing.would_again
+                ? 'You’d hire them again.'
+                : 'You wouldn’t hire them again.'
+              : existing.would_again
+                ? 'You’d work for them again.'
+                : 'You wouldn’t work for them again.'}
+          </Text>
+        ) : null}
         {existing.photos.length > 0 && (
           <ScrollViewRN
             horizontal
@@ -353,6 +378,43 @@ export function ReviewSection({
       <Text style={[styles.title, { color: palette.text }]}>{prompt}</Text>
       <View style={styles.stars}>
         <StarRating value={rating} onChange={submitting ? undefined : setRating} />
+      </View>
+      {/* R8a D5's question, finally asked. Skipping is a legitimate answer
+          (null, R8b-c D3), so there is no validation and no Skip control —
+          and tapping the active option clears it back to null, because an
+          accidental tap must not become a permanent claim about a real
+          person. */}
+      <Text style={[styles.wouldAgainLabel, { color: palette.text }]}>
+        {revieweeRole === 'worker'
+          ? `Would you hire ${revieweeFirstName} again?`
+          : `Would you work for ${revieweeFirstName} again?`}
+      </Text>
+      <View style={styles.presetRow}>
+        {([true, false] as const).map((answer) => {
+          const selected = wouldAgain === answer;
+          return (
+            <Pressable
+              key={answer ? 'yes' : 'no'}
+              style={[
+                styles.preset,
+                selected && (isDark ? styles.presetActiveDark : styles.presetActive),
+              ]}
+              onPress={() => setWouldAgain(selected ? null : answer)}
+              disabled={submitting}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+            >
+              <Text
+                style={[
+                  styles.presetText,
+                  selected && (isDark ? styles.presetTextActiveDark : styles.presetTextActive),
+                ]}
+              >
+                {answer ? 'Yes' : 'No'}
+              </Text>
+            </Pressable>
+          );
+        })}
       </View>
       <TextField
         palette={palette}
@@ -440,6 +502,52 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     alignItems: 'center',
     marginVertical: spacing.lg,
   },
+  wouldAgainLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
+  // The Yes/No pair copies ReviewAndTipScreen's tip preset row locally (R8b-c
+  // D6: no new shared component) so the two choices on one submit flow read
+  // as one control family.
+  presetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.lg,
+  },
+  preset: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm + 2,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  presetActive: {
+    borderColor: colors.emerald,
+    backgroundColor: colors.mint,
+  },
+  // emerald D6: one selection treatment — gold line, gold label, no fill.
+  presetActiveDark: {
+    borderColor: selectedInDark(colors).line,
+    backgroundColor: selectedInDark(colors).fill,
+  },
+  presetText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  presetTextActive: {
+    color: colors.emerald,
+  },
+  presetTextActiveDark: {
+    color: selectedInDark(colors).line,
+  },
   multiline: {
     height: 84,
     paddingTop: spacing.md,
@@ -513,6 +621,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 14,
     color: colors.textMuted,
     fontStyle: 'italic',
+    marginTop: spacing.md,
+  },
+  doneWouldAgain: {
+    fontSize: 14,
+    color: colors.textMuted,
     marginTop: spacing.md,
   },
   doneNote: {

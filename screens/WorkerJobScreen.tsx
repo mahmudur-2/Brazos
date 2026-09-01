@@ -713,6 +713,7 @@ export function WorkerJobScreen() {
                   reviewerId={user.id}
                   revieweeId={job.client_id}
                   revieweeName={clientName}
+                  revieweeRole="customer"
                   prompt={`How was working with ${clientName}?`}
                   scrollRef={scrollRef}
                 />

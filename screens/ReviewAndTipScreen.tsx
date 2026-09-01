@@ -518,6 +518,7 @@ export function ReviewAndTipScreen() {
                 reviewerId={user.id}
                 revieweeId={job.assigned_worker_id}
                 revieweeName={workerName ?? 'the worker'}
+                revieweeRole="worker"
                 prompt={`How was ${workerName ?? 'the worker'}’s work?`}
                 scrollRef={scrollRef}
                 palette={emeraldColors}
