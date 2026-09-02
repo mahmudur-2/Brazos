@@ -63,10 +63,18 @@ type ReviewSectionProps = {
   reviewerId: string;
   revieweeId: string;
   revieweeName: string;
-  /** The role of the person BEING REVIEWED, not the reviewer — it picks the
-   *  would-you-again wording ("hire" vs "work for"). */
+  /** The role of the person BEING REVIEWED, not the reviewer — it picks both
+   *  the heading ("…'s work" vs "working with …") and the would-you-again
+   *  wording ("hire" vs "work for"). */
   revieweeRole: 'worker' | 'customer';
-  /** e.g. "How was working with Carlos?" prompt label. */
+  /**
+   * NO LONGER RENDERED (DECISIONS 2026-09-01). The heading is built here from
+   * revieweeName instead, so one screen prints one form of one person's name;
+   * a host-supplied sentence arrives with the full name already inside it.
+   * Still accepted so the three hosts — ClientJobDetailScreen,
+   * ReviewAndTipScreen, WorkerJobScreen — keep compiling; dropping it from
+   * them is a follow-up.
+   */
   prompt: string;
   onSubmitted?: () => void;
   /**
@@ -85,7 +93,6 @@ export function ReviewSection({
   revieweeId,
   revieweeName,
   revieweeRole,
-  prompt,
   onSubmitted,
   scrollRef,
   palette: paletteProp,
@@ -116,8 +123,10 @@ export function ReviewSection({
   // review is committed, even if the user removes it from the visible draft.
   const draftPhotosRef = useRef<Set<string>>(new Set());
 
-  // The would-you-again question addresses the person the way a message to
-  // them would — first name, or the whole string when there is only one.
+  // The heading and the would-you-again question both address the person the
+  // way a message to them would — first name, or the whole string when there
+  // is only one. ONE derivation, so the two lines can never disagree about
+  // what to call the same person (DECISIONS 2026-09-01).
   const revieweeFirstName = revieweeName.trim().split(/\s+/)[0] || revieweeName;
 
   function cleanupDraftPhotos() {
@@ -375,7 +384,13 @@ export function ReviewSection({
 
   return (
     <Card palette={palette}>
-      <Text style={[styles.title, { color: palette.text }]}>{prompt}</Text>
+      {/* Each role keeps the wording its hosts already used; only the name
+          form moves (DECISIONS 2026-09-01). */}
+      <Text style={[styles.title, { color: palette.text }]}>
+        {revieweeRole === 'worker'
+          ? `How was ${revieweeFirstName}’s work?`
+          : `How was working with ${revieweeFirstName}?`}
+      </Text>
       <View style={styles.stars}>
         <StarRating value={rating} onChange={submitting ? undefined : setRating} />
       </View>
