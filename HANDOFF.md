@@ -97,6 +97,106 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN G0A COMPLETED (2026-09-02) — the production ref leaves every document and every retyped script literal; Gate 0's production-ref box ticks on the post-strip census
+
+Dispatched 2026-09-01; the run crossed midnight, so the two rulings it dates
+carry 2026-09-01 and this record carries 2026-09-02. Three commits, docs plus
+one small code commit: `19d35df` (C1 — eleven documents and the two DECISIONS
+entries), `89ef147` (C3's leftover strip — two scripts, two SQL headers) and
+the C3 docs commit carrying this record and the GATES tick. C2 made no change
+(below), so its commit was skipped. Base gate held (`mainexpo`, `7238e31` an
+ancestor, tree clean at run start). No database contacted, local or remote;
+`.env` unread; the ref was never placed in a command — every hit was found
+with Grep and changed with the file tools. `npm run verify` was green (1290
+pass, 0 fail) before every commit.
+
+### The census — 23 tracked files before, 8 after, file by file
+
+KEEP, guard machinery under the ruling (unchanged, still carrying the ref):
+`.claude/settings.json` (deny matrix, two rules), `.claude/hooks/guard.ps1`
+(PreToolUse hook, GUARD-PRODREF), `CLAUDE.md` §Supabase (the deny sentinel),
+`tests/governance.test.mjs` (requires the sentinel), `tests/safety.test.mjs`
+(the hook must block a command carrying the ref; the deny matrix must carry
+it), `tests/messagingLock.test.mjs` and `tests/postJobPublish.test.mjs` (the
+ref is named nowhere in the code they fence), `scripts/supabase-ref.mjs`
+(`PRODUCTION_REF` — the C2 verdict below). Ten occurrences in total.
+
+STRIP, carried out: eleven documents — `BRAZOS_MASTER_PLAN.md`,
+`DIAG_offer_negotiation_messaging.md`,
+`docs/runbooks/phase67-account-deletion.md`,
+`docs/audits/HARDENING_RUN_B_2026-08-14.md`,
+`docs/audit/2026-08-21/02_invariants.md`,
+`docs/audit/2026-08-22/guard_coverage.md`, `docs/emerald-v2/DECISIONS.md`,
+`docs/archive/RUN_REPORT_2026-08.md`,
+`docs/archive/BRAZOS_BUILD_STATE_2026-08.md`,
+`docs/archive/FINDINGS_2026-08-12.md`,
+`docs/archive/root-audits/AUDIT_2026-08-12.md` — nineteen occurrences, each
+replaced by "the production ref", nothing else reworded (`19d35df`); two
+hand-run staging scripts that had retyped the literal for their own refusal
+check, `scripts/seed-review.mjs` and `scripts/lifecycle-proof.mjs`, which now
+import `PRODUCTION_REF` so the refusal is unchanged and the literal is gone;
+and the header comment of two historical phase files,
+`supabase/phase67_account_deletion.sql` and
+`supabase/phase68_deleted_at_authorization.sql`, no statement touched
+(`89ef147`). The old box's breakdown — "fourteen documents" — had counted
+those four code files as documents. After the strip: the eight KEEP files
+and nothing else. No document carries the ref; no script retypes it.
+
+### The C2 verdict — `scripts/supabase-ref.mjs` is KEEP, unchanged
+
+The file selects and prints nothing: it is the parser module plus the two
+project-ref constants, and its own header (lines 38-45) says why the
+production literal is there — "verify-schema.mjs hard-refuses the production
+one before constructing any request … the production literal doubles as the
+mechanical deny sentinel (see CLAUDE.md)". The exit-4 refusal the dispatch
+itself names as the model of guard machinery is implemented through it:
+`scripts/verify-schema.mjs:32` imports `PRODUCTION_REF` and `:139` refuses on
+`ref === PRODUCTION_REF`; `tests/verifySchemaGuards.test.mjs:21` imports the
+same constant to prove that refusal. Removing it would have broken that
+refusal, the EAS pre-install build gate (`scripts/eas-build-pre-install.mjs:83`
+pins the `production` profile's expected ref to it and fails the build on any
+other) and two tracked tests (`tests/appConfig.test.mjs:8`,
+`tests/verifySchemaGuards.test.mjs:21`) — the dispatch's second path would
+have ended in a STOP. The two scripts that retyped the literal now import it
+from here, so the constant has exactly one home.
+
+### The two rulings dated in `docs/DECISIONS.md` (2026-09-01)
+
+"Production ref placement": guard machinery is the `.claude/` deny matrix,
+the `.claude/` PreToolUse hook, the `CLAUDE.md` deny-sentinel line that
+`tests/governance.test.mjs` requires, and the tests that prove the ref is
+refused; the ref lives nowhere else — docs say "the production ref".
+"Where secrets live": real secrets (database password, service-role key,
+Stripe secret keys, read-only staging connection string) live only under
+`%LOCALAPPDATA%\BRAZOS\` on the operator's machine, never in the repository,
+`.env` or a prompt; `.env` holds client-public values only; `start.ps1` is
+quarantined outside the tracked tree; nothing is zipped without the
+credential scan in `tests/governance.test.mjs` having passed.
+
+### Gate 0 after this run
+
+The production-ref box is ticked on the ruling and the post-strip census
+(`docs/GATES.md`). The secrets box stays OPEN and is the operator's; its
+evidence now points at the "Where secrets live" entry instead of saying that
+nothing in the repository states where secrets live. Gate 0's one remaining
+open box besides it is the cloud-synced-folder clause of the first box.
+
+**NEEDS THE OPERATOR — the one secrets-box step.** Read `.env` by hand (a run
+cannot: deny rule), confirm it holds client-public values only — the staging
+URL and the publishable or anon key, no service-role key, no database
+password, no Stripe secret — and tick the box in `docs/GATES.md` by hand with
+that confirmation written beside it. The first clause, secrets only under
+`%LOCALAPPDATA%\BRAZOS\`, is likewise the operator's machine to inspect.
+
+### One guard met for the first time this run
+
+`.claude/hooks/evidence-guard.ps1`, registered in `.claude/settings.local.json`,
+refuses the Read tool under `docs/archive/` and `docs/handoff-archive/`, and
+refuses subagents. The four archive documents were therefore read through
+their Grep hits and the hit lines only — as the dispatch instructed — and
+edited with the Edit tool, which that guard allows. No archive file was read
+in bulk, and no `.claude/` file was touched.
+
 ## RUN R8b-d COMPLETED (2026-09-01) — the R8b-c device walk: PASS 4/4, three findings filed, name form shipped
 
 Docs plus one copy commit. The operator walked R8b-c on the phone, 2026-09-01
