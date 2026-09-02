@@ -97,6 +97,160 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E2 COMPLETED (2026-09-02) — money walk hardening after EAS run 01a0611f: the keyboard is dismissed before every tap that follows a typed field, the silent waits fail in 30 s with the screen's own error text, and the workflow reruns on a given build_id without rebuilding
+
+Dispatch: `C:\Users\mdmah\runs\e2e2.txt`. Base `3c910a6`, branch `mainexpo`,
+tree clean, `origin/mainexpo` at the same commit (the E2E1 commits were pushed
+by the operator; run 01a0611f ran on them). Nothing in this run triggered an
+EAS build or workflow, contacted a database, added a dependency, or touched
+`eas.json`, `app.config.ts`, `package.json`, `supabase/`, `.github/`, `.env`
+or `start.ps1`. `npm run verify` exited 0 before every commit (1296 tests,
+0 failing, lint clean). The fingerprint gate runs after C3 and its result is
+in the run's final report; nothing C1–C3 touches is a fingerprint source.
+
+### The evidence this run answers
+
+EAS run 01a0611f (2026-09-02): `build_ios_simulator` green in 8m20s;
+`money_walk` failed in `.maestro/sign-in.yml` at `extendedWaitUntil visible
+"FINAL SETUP" timeout 60000` after 1m21s. The failure frame: the sign-in form
+filled, the keyboard still up, no error text. Reading: the `tapOn "Continue"`
+landed on the keyboard.
+
+### What landed, commit by commit
+
+- **C1 `fae09be` — `.maestro/sign-in.yml`, `.maestro/money-walk.yml`.** The
+  keyboard sweep: `- hideKeyboard` before every tap that follows a typed field
+  and lands on a screen element — Email/Password → `Continue`;
+  title/description → `STEP 1 OF 4`; area → `STEP 3 OF 4`; address →
+  `STEP 3 OF 4`; budget → `Save` (`components/EditBudgetDialog.tsx:156`);
+  search → `Search` (the WorkerHome submit disc,
+  `screens/WorkerHomeScreen.tsx:358` `accessibilityLabel="Search"` — the
+  keyboard's return key reads the same word, `ui/primitives/SearchBar.tsx:283`
+  `returnKeyType="search"`, so with the keyboard down the tap is unambiguous);
+  and once on the Stripe sheet, before `Pay $53.75`, never between its
+  fields. The fail-fast waits: each silent wait became `extendedWaitUntil
+  visible '<success>|<error>' 30000` → `assertNotVisible '<error>'` →
+  `extendedWaitUntil visible '<success>' 30000`, so a failure surfaces in
+  30 s WITH the screen's text instead of a 60 s timeout with none. The
+  Check-again loop on Checkout is kept; the error assert sits inside it and
+  its slices are 30 s. `tests/maestroFlows.test.mjs` untouched and green.
+- **C2 `37d6e03` — `.eas/workflows/e2e-ios.yml`.** `workflow_dispatch` takes
+  an optional string input `build_id`; `build_ios_simulator` carries
+  `if: ${{ !inputs.build_id }}`; `money_walk` takes
+  `build_id: ${{ inputs.build_id || after.build_ios_simulator.outputs.build_id }}`.
+  `after`, not `needs` — deviation 1. The trigger is still `workflow_dispatch`
+  only (D-10) and the trigger assertion passed unchanged on the inputs block,
+  so it was not extended. The one fence line touched is the `build_id`
+  expression the workflow test pins — deviation 2.
+- **C3 — this record**, `docs/DECISIONS.md` 2026-09-02 "E2E2: D5/D8 amended",
+  `docs/BACKLOG.md` side backlog 15 (`.easignore`).
+
+### The error strings, per screen (file:line)
+
+- **Sign-in — `screens/EmailSignInScreen.tsx`.** The screen owns no literal
+  for a failed sign-in: line 85 `if (error) setFormError(error.message)`
+  renders the auth layer's message verbatim under the form (line 155), and
+  `lib/AuthContext.tsx:151` returns Supabase's `signInWithPassword` error
+  untouched, so the text is GoTrue's — `Invalid login credentials` (wrong
+  email or password), `Email not confirmed`. The field errors the screen does
+  own: `Enter your email address.` (line 69), `Enter a valid email address.`
+  (line 71), `Enter your password.` (line 73). All five are in the regex; the
+  two GoTrue strings are the ones a failing rerun proves or corrects.
+- **Publish — `screens/PostJobScreen.tsx`.** `Could not post job` (line 985,
+  the alert title on a failed `createJob`); `Saved, but without a map pin`
+  (line 1002 — the job saved but its `job_locations` write failed; its body
+  begins "Your job is live, but", which the flow's whole-label
+  `Your job is live\.` never matches, so it was a silent timeout too).
+- **Bid — `screens/JobDetailScreen.tsx`.** `Could not place bid` (line 435,
+  the alert title for every `createMarketplaceOffer` failure, the duplicate
+  included).
+- **Checkout — `screens/CheckoutScreen.tsx`.** After `Pay $53.75`:
+  `The card was not charged` (line 389, the sheet's failed outcome);
+  `The payment did not go through` (line 500, the row vanished — phase
+  `gone`); `Funding window closed` (line 531, the window lapsed before a
+  charge). NOT asserted, on purpose: `Still confirming` (line 515, phase
+  `timeout`) is the state the Check-again loop exists to drive.
+
+### Deviations from the dispatch, each with its reason
+
+1. **`after: [build_ios_simulator]` replaces `needs`.** The dispatch asked
+   for `needs` kept unless the docs show a skipped `needs` job blocks its
+   dependents. docs.expo.dev/eas/workflows/syntax, read before editing: under
+   `jobs.<job_id>.if` — "A skipped job won't have completed successfully and
+   any downstream jobs will not run that have this job in their `needs`
+   list"; under `jobs.<job_id>.after` — "A list of job IDs that must complete
+   (successfully or not) before this job will run", with outputs read as
+   `after.<job_id>.outputs.<output_name>`. So the documented alternative is
+   `after`, and the expression reads `after.build_ios_simulator.outputs.build_id`.
+   Whether EAS counts a SKIPPED job as complete for `after` is not stated in
+   so many words; the first rerun with a build_id answers it (finding 1). A
+   job-level `if` on money_walk was ruled out by the dispatch. Cost: a FAILED
+   build now also starts money_walk, which fails at once on the empty
+   build_id — the same red, one job later.
+2. **One fence line updated.** `tests/maestroFlows.test.mjs` pinned the exact
+   old line `build_id: ${{ needs.build_ios_simulator.outputs.build_id }}`
+   (its line 157); C2 cannot land without moving it. The expected constant was
+   updated to the new expression — the fence still pins the exact line — which
+   CLAUDE.md allows ("update its expected constants"); its logic is unchanged.
+   The dispatch's fence clause covered only the trigger assertion, which
+   passed unchanged and was not touched.
+3. **The `.claude/` guard hooks were not active in this session.** It was
+   launched from `C:\Users\mdmah`, so the BRAZOS `.claude/settings.json`
+   hooks and deny matrix were not loaded; both were read at run start and
+   self-enforced from then on. Two commands issued before that read used
+   `node -e` to parse JSON (the fingerprint output and `package.json`) — a
+   GUARD-DYNEXEC shape the matrix denies; none after it. Nothing else the
+   matrix forbids ran. The report-file write the dispatch calls a step-5 test
+   therefore met no hook; the final report says what happened.
+4. **HANDOFF.md rides in C3.** The dispatch lists three commits and nothing
+   else; CLAUDE.md requires this file rewritten at the end of every run and
+   the dispatch never overrides CLAUDE.md, so the record rides in the docs
+   commit, as E2E1's did.
+5. **Publish watches two texts, not one.** `Saved, but without a map pin` is
+   not a refused publish — the job is live — but the walk cannot continue
+   past that alert and the old wait timed out on it silently, so it fails with
+   the message now.
+
+### Findings the rerun will answer (in the order it meets them)
+
+1. **`after` past a skipped build** — with `-F build_id=<id>`,
+   `build_ios_simulator` must show skipped and `money_walk` must start. If
+   money_walk is skipped too, EAS does not count a skipped job as complete for
+   `after`, and the next reading is a second workflow file for the reuse path
+   (no `if`, no build job) — never a job-level `if` on money_walk.
+2. **`hideKeyboard` on the iOS simulator** — Maestro's iOS implementation is
+   best-effort; if the Continue tap still lands on the keyboard, the next
+   reading is a tap on a neutral screen element before Continue.
+3. **The GoTrue strings** — `Invalid login credentials` / `Email not
+   confirmed` are the server's, not the screen's; a failed sign-in that shows
+   a different sentence names the replacement.
+4. **Stripe's sheet with the keyboard down** — the sheet's layout with the
+   keyboard dismissed before `Pay $53.75` is unverified.
+
+### NEEDS THE OPERATOR — in order
+
+**(a) Read the build_id of run 01a0611f's build.** expo.dev → account
+`mah_r2` → project BRAZOS → Workflows → the run `01a0611f` →
+`build_ios_simulator` → its build page. The page URL ends in the build's id:
+`expo.dev/accounts/mah_r2/projects/BRAZOS/builds/<build_id>` — the last
+segment, a UUID. CLI equivalent, from the repo root:
+`npx eas-cli@latest build:list --platform ios --build-profile e2e-test --limit 1 --json --non-interactive`
+— the `id` of the one row (the newest e2e-test build, which is that run's).
+
+**(b) Rerun on it, from the repo root, after the push:**
+`npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml -F build_id=<build_id>`
+(`-F` is `--input`, `key=value`, one flag per input — `npx eas-cli@latest
+workflow:run --help`). Expected: `build_ios_simulator` skipped, `money_walk`
+running on that binary within a minute of the upload, and the flow past
+`FINAL SETUP` on the first sign-in. On a failure the log now names the
+screen's own text — `Invalid login credentials`, `Could not post job`, … — at
+the command that met it, inside 30 s. Without `-F` the workflow runs as
+before: build, then walk.
+
+**(c) Paste back:** the run URL; both job statuses (the build's must read
+skipped); the failing command and the screen-text dump if red; the six
+screenshot artifacts if green — which ticks Gate 2 box 4 with that URL.
+
 ## RUN E2E1 COMPLETED, NOT PUSHED (2026-09-02) — Gate 2 box 4's path lands: the money walk as one Maestro flow on EAS Workflows; the box stays OPEN until the operator's first green run; the commits wait on the operator's push because the fingerprint gate fired on eas.json itself
 
 Dispatch: `C:\Users\mdmah\runs\e2e1.txt`. Base `0a52fba`, branch `mainexpo`,

@@ -35,6 +35,7 @@ Append; never dispatch from chat memory. A dispatch that needs an item reads it 
 12. UNVERIFIED (from a ChatGPT review): `send-push` receipt handling, `translate` rate limiting, inline embedding refresh in `worker-search` — verify before acting
 13. `payouts_enabled` ≠ identity verification — no copy may claim "ID-verified workers" from that flag
 14. Tax as a first-class price component, compatible with all-in display
+15. .easignore — mirror .gitignore fully first (EAS ignores .gitignore when .easignore exists); saves ~25 s of upload per run.
 
 ## Verify landed — answered by R7 (2026-08-31) from the repository alone
 Read as text: no SQL was executed and no database was contacted, local or remote. Verdicts are LANDED (the path and the function or table that proves it), PARTIAL (what holds and what does not, both cited) or NOT LANDED (the empty grep, or the code that shows the opposite). A PARTIAL is never rounded up. Each answer that is not LANDED names the KIND of work that would close it — nothing here schedules that work.
