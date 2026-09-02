@@ -97,6 +97,24 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN R8b-d COMPLETED (2026-09-01) — the R8b-c device walk: PASS 4/4, three findings filed, name form shipped
+
+Docs plus one copy commit. The operator walked R8b-c on the phone, 2026-09-01
+evening: OTA to preview, runtime 1.0.0, commit `52fea4f`, update group
+`ebd80599-16fa-4708-8e4e-789e1035bc43`, Beta build, staging, two test accounts
+(customer and worker).
+
+1. Yes/No clears on second tap and submits blank — PASS; the submitted card
+   shows stars only.
+2. Worker-side prompt reads "Would you work for <First> again?" — PASS.
+3. Own profile shows the Work / Hiring toggle — PASS.
+4. Header star matches the page number for the same role — PASS (New, 2
+   reviews).
+
+Findings a and b, neither blocking, filed in `docs/BACKLOG.md` §v1.2. Finding c
+ruled and shipped this run: ReviewSection renders first name only, both roles
+(`docs/DECISIONS.md` 2026-09-01, cooling waived by the operator).
+
 ## RUN R8b-c COMPLETED (2026-09-01) — the client half of R8b: every single-subject surface leaves the legacy aggregate, and would-you-again is finally asked
 
 Five commits, each pushed on its own: `a159312` (C1, `lib/reviews.ts`),
