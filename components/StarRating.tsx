@@ -35,6 +35,7 @@ export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
         return (
           <Pressable
             key={star}
+            testID={`review-star-${star}`}
             onPress={() => onChange(star)}
             hitSlop={6}
             style={styles.star}

@@ -1,0 +1,50 @@
+# .maestro/sign-in.yml — the one sign-in path (E2E1 D4/D5): a cold, signed-out
+# launch, then email + password on EmailSignIn, then the Setup step that every
+# clearState launch brings back (the setup record is device-local —
+# lib/setupStorage.ts). Called by money-walk.yml through runFlow with:
+#   EMAIL, PASSWORD  — the account, from the MAESTRO_E2E_* variables (D3)
+#   START_IN         — the Setup "Start in" card: "Hire help" or "Find work"
+#   HOME_MARK        — text that proves that mode's Home arrived
+# Nothing here is a credential; tests/maestroFlows.test.mjs keeps it so.
+appId: app.brazos.mobile.preview
+---
+# D6 — one fixed coordinate before every launch: Emmons Avenue, Sheepshead Bay.
+- setLocation:
+    latitude: 40.5840
+    longitude: -73.9539
+# D5 — clearState wipes AsyncStorage (the setup record, the push-prompt memory);
+# clearKeychain wipes the session, which lives in expo-secure-store — without
+# it the previous role would still be signed in. Never Log out.
+- launchApp:
+    clearState: true
+    clearKeychain: true
+    permissions:
+      all: allow
+- extendedWaitUntil:
+    visible: "I already have an account"
+    timeout: 60000
+- tapOn: "I already have an account"
+- tapOn: "Use Email Instead"
+# AuthField labels both its caption and its input "Email"; the caption comes
+# first in the hierarchy, so index 1 is the input. Same for "Password".
+- tapOn:
+    text: "Email"
+    index: 1
+- inputText: ${EMAIL}
+- tapOn:
+    text: "Password"
+    index: 1
+- inputText: ${PASSWORD}
+- tapOn: "Continue"
+- extendedWaitUntil:
+    visible: "FINAL SETUP"
+    timeout: 60000
+# Terms & Privacy is accepted server-side, once, by the operator's own first
+# login on this account (HANDOFF — NEEDS THE OPERATOR (a)). Without it Finish
+# setup stays disabled, so the flow says so here rather than failing later.
+- assertVisible: 'Terms and Privacy\. Reviewed\.|Terms and Privacy reviewed'
+- tapOn: '.*${START_IN}.*'
+- tapOn: "Finish setup"
+- extendedWaitUntil:
+    visible: '${HOME_MARK}'
+    timeout: 60000

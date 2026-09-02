@@ -1,0 +1,378 @@
+# .maestro/money-walk.yml — Gate 2 box 4: the money walk as one Maestro flow.
+#
+#   post → bid → accept = fund → start → complete → approve → review → released
+#
+# Two dedicated staging accounts (D4) sign in through sign-in.yml; their
+# credentials arrive as MAESTRO_E2E_* variables from the EAS `preview`
+# environment through .eas/workflows/e2e-ios.yml (D3) and are never written
+# here. Every tap is on text the screens render (D15), read from the source
+# on 2026-09-02; the one `id:` is the review star, which carries no text.
+# Selectors are regular expressions that must match a whole label, so `.*`
+# brackets the ones whose element folds an icon or a subtitle into its label.
+appId: app.brazos.mobile.preview
+---
+# D7 — a title unique to this run.
+- evalScript: ${output.title = 'E2E ' + Date.now()}
+
+# ─── Act 1 · the customer posts the job ───────────────────────────────────
+- runFlow:
+    file: sign-in.yml
+    env:
+      EMAIL: ${MAESTRO_E2E_CUSTOMER_EMAIL}
+      PASSWORD: ${MAESTRO_E2E_CUSTOMER_PASSWORD}
+      START_IN: Hire help
+      HOME_MARK: Post a job
+- tapOn: "Post a job"
+- extendedWaitUntil:
+    visible: "STEP 1 OF 4"
+    timeout: 30000
+# Step 1 — Describe: a title, a description past the 20-character floor
+# (lib/validation.ts), one category. Tapping the step eyebrow drops the
+# keyboard so the chips below the fields are reachable.
+- tapOn: "e.g. Walk my dog on weekday mornings"
+- inputText: ${output.title}
+- tapOn: "Describe what you need done…"
+- inputText: "Cleaning of a two bedroom apartment for the end to end money walk."
+- tapOn: "STEP 1 OF 4"
+- tapOn: "Cleaning"
+- tapOn: "Continue to Media"
+# Step 2 — Media: optional, nothing attached.
+- extendedWaitUntil:
+    visible: "STEP 2 OF 4"
+    timeout: 30000
+- tapOn: "Continue to Location"
+# Step 3 — Where and when (D6). The area is typed first; then the step's own
+# GPS button pins the job to the simulated coordinate and replaces the typed
+# area with the resolved place name. If either tier fails the typed area
+# stays and an alert says so, which is dismissed.
+- extendedWaitUntil:
+    visible: "STEP 3 OF 4"
+    timeout: 30000
+- tapOn: "e.g. Sheepshead Bay, Brooklyn"
+- inputText: "Sheepshead Bay, Brooklyn"
+- tapOn: "STEP 3 OF 4"
+- tapOn: "Use my current location"
+- waitForAnimationToEnd:
+    timeout: 20000
+- runFlow:
+    when:
+      visible: "Location unavailable|Area name needed"
+    commands:
+      - tapOn: "OK"
+- tapOn: "e.g. 2410 Emmons Ave, Apt 3B"
+- inputText: "2017 Emmons Ave, Brooklyn, NY 11235"
+- tapOn: "STEP 3 OF 4"
+- scrollUntilVisible:
+    element:
+      text: "Today"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Today"
+- scrollUntilVisible:
+    element:
+      text: "Morning.*"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Morning.*"
+- tapOn: "Continue to Review"
+# Step 4 — Review and publish. D8: the max budget is $50.
+- extendedWaitUntil:
+    visible: "STEP 4 OF 4"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Edit budget"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Edit budget"
+- tapOn: "Maximum budget in dollars"
+- inputText: "50"
+- tapOn: "Save"
+- tapOn: "Publish"
+# The screen fires the push pre-prompt without awaiting it, so it can land
+# over the success overlay; declining is remembered only until the next
+# clearState, which is why every act handles it.
+- extendedWaitUntil:
+    visible: 'Your job is live\.|Get notified\?'
+    timeout: 60000
+- runFlow:
+    when:
+      visible: 'Get notified\?'
+    commands:
+      - tapOn: "Not now"
+- assertVisible: 'Your job is live\.'
+- takeScreenshot: posted
+- tapOn: "Done"
+
+# ─── Act 2 · the worker finds the job and bids the listed price ───────────
+- runFlow:
+    file: sign-in.yml
+    env:
+      EMAIL: ${MAESTRO_E2E_WORKER_EMAIL}
+      PASSWORD: ${MAESTRO_E2E_WORKER_PASSWORD}
+      START_IN: Find work
+      HOME_MARK: Search for jobs or areas
+# D7 — worker Home has search, so exact-title search is the one path. The
+# results header quotes the query back, so the job card is the second match.
+- tapOn: "Search for jobs or areas"
+- inputText: ${output.title}
+- tapOn: "Search"
+- extendedWaitUntil:
+    visible:
+      text: '.*${output.title}.*'
+      index: 1
+    timeout: 30000
+- tapOn:
+    text: '.*${output.title}.*'
+    index: 1
+- scrollUntilVisible:
+    element:
+      text: '.*I.ll do it for \$50.*'
+    direction: DOWN
+    timeout: 30000
+- tapOn: '.*I.ll do it for \$50.*'
+- tapOn: "Send bid"
+- extendedWaitUntil:
+    visible: "Offer sent"
+    timeout: 30000
+- tapOn: "OK"
+- runFlow:
+    when:
+      visible: 'Get notified\?'
+    commands:
+      - tapOn: "Not now"
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Pending bids"
+    direction: DOWN
+    timeout: 30000
+- takeScreenshot: bid
+
+# ─── Act 3 · the customer accepts the bid and funds the job ───────────────
+- runFlow:
+    file: sign-in.yml
+    env:
+      EMAIL: ${MAESTRO_E2E_CUSTOMER_EMAIL}
+      PASSWORD: ${MAESTRO_E2E_CUSTOMER_PASSWORD}
+      START_IN: Hire help
+      HOME_MARK: Post a job
+# My Jobs has no bar slot in customer mode; the [ + ] sheet's "My jobs" is the
+# standing route (navigation/CustomerRoot.tsx). The hub opens on Active.
+- tapOn: "Create"
+- tapOn: '.*My jobs.*'
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: '.*${output.title}.*'
+    direction: DOWN
+    timeout: 30000
+- tapOn: '.*${output.title}.*'
+- extendedWaitUntil:
+    notVisible: "Loading bids…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: "Accept offer"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Accept offer"
+- tapOn: "Accept bid"
+# Checkout (D8): the $50 job quotes $53.75 all-in — the 7.5% protection fee.
+- extendedWaitUntil:
+    visible: "Protected checkout"
+    timeout: 60000
+- extendedWaitUntil:
+    visible: '.*Protect \$53\.75 by card.*'
+    timeout: 60000
+- assertVisible: '.*\$53\.75.*'
+- tapOn: '.*Protect \$53\.75 by card.*'
+- tapOn: "Pay & protect"
+# The Stripe PaymentSheet is native; its fields answer to their labels.
+- extendedWaitUntil:
+    visible: 'Card number|1234 1234 1234 1234'
+    timeout: 60000
+- tapOn: 'Card number|1234 1234 1234 1234'
+- inputText: "4242424242424242"
+- tapOn: 'expiration date|MM / YY'
+- inputText: "1234"
+- tapOn: "CVC"
+- inputText: "123"
+- tapOn: "ZIP"
+- inputText: "10001"
+- tapOn: 'Pay \$53\.75'
+# Checkout polls the ledger for `held` for 30 s and offers "Check again" past
+# that; the webhook normally lands well inside the first poll.
+- repeat:
+    times: 3
+    while:
+      notVisible: "Job confirmed"
+    commands:
+      - runFlow:
+          when:
+            visible: "Check again"
+          commands:
+            - tapOn: "Check again"
+      - extendedWaitUntil:
+          visible: "Job confirmed"
+          timeout: 60000
+          optional: true
+- assertVisible: "Job confirmed"
+- takeScreenshot: held
+
+# ─── Act 4 · the worker starts and completes the work ─────────────────────
+- runFlow:
+    file: sign-in.yml
+    env:
+      EMAIL: ${MAESTRO_E2E_WORKER_EMAIL}
+      PASSWORD: ${MAESTRO_E2E_WORKER_PASSWORD}
+      START_IN: Find work
+      HOME_MARK: Search for jobs or areas
+- tapOn: '.*My Jobs.*'
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+- scrollUntilVisible:
+    element:
+      text: '.*${output.title}.*'
+    direction: DOWN
+    timeout: 30000
+- tapOn: '.*${output.title}.*'
+- scrollUntilVisible:
+    element:
+      text: "Start job"
+    direction: DOWN
+    timeout: 30000
+- tapOn: "Start job"
+- scrollUntilVisible:
+    element:
+      text: "Finish up"
+    direction: DOWN
+    timeout: 30000
+# D9 — the screen requires at least one photo of the finished work. The
+# system picker labels every image "Photo, <date>"; the first one is taken,
+# confirmed with Add, and the upload is waited out before Mark complete.
+- tapOn: "Add photos or video of the finished work"
+- extendedWaitUntil:
+    visible: 'Photo, .*'
+    timeout: 30000
+- tapOn:
+    text: 'Photo, .*'
+    index: 0
+- tapOn: 'Add( \(\d+\))?'
+- extendedWaitUntil:
+    visible: '1/5 photos.*'
+    timeout: 180000
+- scrollUntilVisible:
+    element:
+      text: "Mark complete"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Mark complete"
+- extendedWaitUntil:
+    visible: "Finished work"
+    timeout: 60000
+- takeScreenshot: completed
+
+# ─── Act 5 · the customer approves, reviews, and sees the release ─────────
+- runFlow:
+    file: sign-in.yml
+    env:
+      EMAIL: ${MAESTRO_E2E_CUSTOMER_EMAIL}
+      PASSWORD: ${MAESTRO_E2E_CUSTOMER_PASSWORD}
+      START_IN: Hire help
+      HOME_MARK: Post a job
+- tapOn: "Create"
+- tapOn: '.*My jobs.*'
+- extendedWaitUntil:
+    notVisible: "Loading your jobs…"
+    timeout: 30000
+# Work submitted and awaiting approval sits under Review (lib/jobLifecycle.ts).
+- tapOn: "Review"
+- scrollUntilVisible:
+    element:
+      text: '.*${output.title}.*'
+    direction: DOWN
+    timeout: 30000
+- tapOn: '.*${output.title}.*'
+- scrollUntilVisible:
+    element:
+      text: "Review & approve the work"
+    direction: DOWN
+    timeout: 60000
+- tapOn: "Review & approve the work"
+- extendedWaitUntil:
+    visible: '.*Approve & release \$53\.75.*'
+    timeout: 30000
+- tapOn: '.*Approve & release \$53\.75.*'
+- tapOn: "Approve & release"
+- extendedWaitUntil:
+    visible: "APPROVED · PAYOUT ON ITS WAY"
+    timeout: 60000
+- takeScreenshot: approved
+- tapOn: '.*Continue to review.*'
+- scrollUntilVisible:
+    element:
+      id: review-star-5
+    direction: DOWN
+    timeout: 30000
+- tapOn:
+    id: review-star-5
+- scrollUntilVisible:
+    element:
+      text: "Submit review"
+    direction: DOWN
+    timeout: 20000
+- tapOn: "Submit review"
+- extendedWaitUntil:
+    visible: 'Thanks for rating.*'
+    timeout: 30000
+# D10 — open the job and wait for the released copy, 480000 ms in all. The
+# job screen re-reads the payment row on focus and never on a timer, so the
+# wait is sixteen 30 s slices, each one backing out to the hub (an edge swipe
+# pops the native stack; the plain back chevron carries no label) and
+# re-opening the job from Closed, where an approved job sits. An approved job
+# shows "Work approved — payout on its way" until the transfer lands.
+- swipe:
+    start: 2%, 50%
+    end: 90%, 50%
+    duration: 400
+- scrollUntilVisible:
+    element:
+      text: 'Payment released|Work approved.*'
+    direction: DOWN
+    timeout: 60000
+- repeat:
+    times: 16
+    while:
+      notVisible: "Payment released"
+    commands:
+      - swipe:
+          start: 2%, 50%
+          end: 90%, 50%
+          duration: 400
+      - extendedWaitUntil:
+          notVisible: "Loading your jobs…"
+          timeout: 30000
+      - tapOn: "Closed"
+      - scrollUntilVisible:
+          element:
+            text: '.*${output.title}.*'
+          direction: DOWN
+          timeout: 30000
+      - tapOn: '.*${output.title}.*'
+      - scrollUntilVisible:
+          element:
+            text: 'Payment released|Work approved.*'
+          direction: DOWN
+          timeout: 60000
+      - extendedWaitUntil:
+          visible: "Payment released"
+          timeout: 30000
+          optional: true
+- assertVisible: "Payment released"
+- takeScreenshot: released
