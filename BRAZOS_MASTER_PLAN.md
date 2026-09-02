@@ -121,7 +121,7 @@ Six more leave with Stage 4C — phase74 and phase75, applied to staging on
   two files read together imply preview means staging, which is false. Fix is
   documentation at the point of collision, or renaming the environment.
 - **Production rebuild from a staging dump (standing decision).** Production
-  (`avkighsiufeefyycbebf`) has none of the staging migrations and holds dev
+  (`the production ref`) has none of the staging migrations and holds dev
   exhaust only, no real users. Rather than replay the numbered queue, the
   standing decision is to rebuild production from a staging schema dump once
   staging is beta-ready. `PROD_APPLY.md` remains the ordered fallback if a

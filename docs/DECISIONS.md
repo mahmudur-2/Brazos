@@ -31,3 +31,7 @@ Deliberately untouched by R8a: `recompute_profile_rating`, `profiles.rating_avg`
 2026-09-01 — Audit budget: two audits for this project, Gate 0 and pre-TestFlight. Anything else called an audit becomes one scoped fix run with a named pass condition. Gate 0's audit-budget box closes on this ruling.
 
 2026-09-01 — SCOPE and DOMAIN frozen: docs/SCOPE.md and docs/DOMAIN.md change only through a dated entry in this file; a feature not in SCOPE.md goes to docs/BACKLOG.md v1.2 and never to a run. The iOS-only clause was settled 2026-08-31. Gate 0's SCOPE/DOMAIN box closes on this ruling.
+
+2026-09-01 — Production ref placement: guard machinery is the .claude/ deny matrix, the .claude/ PreToolUse hook, the CLAUDE.md deny-sentinel line that tests/governance.test.mjs requires, and the tests that prove the ref is refused. The ref lives nowhere else — docs say "the production ref". Ruled by the operator; G0A carried it out.
+
+2026-09-01 — Where secrets live: real secrets (database password, service-role key, Stripe secret keys, read-only staging connection string) live only under %LOCALAPPDATA%\BRAZOS\ on the operator's machine, never in the repository, never in .env, never in a prompt. .env holds client-public values only. start.ps1 is quarantined outside the tracked tree. Nothing is zipped without the credential scan in tests/governance.test.mjs having passed.

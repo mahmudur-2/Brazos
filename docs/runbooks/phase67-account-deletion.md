@@ -106,7 +106,7 @@ in step 2 is checking:
 - **Do not look for `RAISE NOTICE` output in the dashboard.** It is never
   shown. Acceptance is "Success. No rows returned." with no error, then a green
   `node scripts/verify-schema.mjs`. Full explanation in the box at the top.
-- Staging only. Production (`avkighsiufeefyycbebf`) is never contacted, and
+- Staging only. Production (`the production ref`) is never contacted, and
   `.env` stays pointed at staging.
 - Production has none of the staging migrations; its ordered queue is
   `PROD_APPLY.md`.
@@ -128,7 +128,7 @@ preserved unchanged for that run.
 
 1. Open the Supabase SQL Editor for **STAGING `zzkumxcjtbqoselzptig`**. Confirm
    the project ref in the URL before pasting anything. Production
-   (`avkighsiufeefyycbebf`) is never contacted.
+   (`the production ref`) is never contacted.
 2. Paste the whole of `supabase/phase68_deleted_at_authorization.sql` and run
    it. It is one transaction and is safe to run more than once, including after
    a failed run.

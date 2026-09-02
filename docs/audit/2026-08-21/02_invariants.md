@@ -357,7 +357,7 @@ The rest of the surface is clean:
 ### I-22 — Every new SECURITY DEFINER function carries explicit `revoke`/`grant`
 **Deferred to `08_security_schema.md` §E/§F.**
 
-### I-23 — Production ref `avkighsiufeefyycbebf` is never contacted
+### I-23 — Production ref `the production ref` is never contacted
 **PASS for this audit run (VERIFIED).** No command containing that string was constructed or executed. Whether any *repo file* references it is a domain 08 question.
 
 ### I-24 — There are NO generated database types

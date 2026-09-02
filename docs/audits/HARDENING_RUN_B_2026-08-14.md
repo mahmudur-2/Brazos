@@ -35,7 +35,7 @@ checked, and the result. No claim was contradicted, so the run proceeded.
 | 2 | `.claude/settings.local.json` is untracked and ignored by the `.claude/` rule | absent from `git ls-files`; `.gitignore` line 31 was `.claude/` | CONFIRMED |
 | 3 | `guard.ps1` exits 0 on unparseable input -- it fails OPEN | read `guard.ps1`; `catch { exit 0 }` at lines 24-26 | CONFIRMED |
 | 4 | Its header claim that `settings.json` is the backstop is FALSE | header lines 16-17 assert it; deny list carries no equivalent rule | CONFIRMED false |
-| 5 | The production ref `avkighsiufeefyycbebf` appears in NO deny rule, so the hook was the only enforcement | read all 31 deny entries | CONFIRMED |
+| 5 | The production ref `the production ref` appears in NO deny rule, so the hook was the only enforcement | read all 31 deny entries | CONFIRMED |
 | 6 | PreToolUse matcher is `Bash\|PowerShell`; the hook never sees Edit, Write, NotebookEdit | `settings.json` line 42 | CONFIRMED |
 | 7 | `settings.local.json` allows `Bash(psql:*)` and nothing denies it | allow entry present; no psql deny anywhere | CONFIRMED |
 | 8 | `start.ps1` is out of the working tree, gitignored, and its absence does not dirty the tree | `ls start.ps1` -> not found; `.gitignore` line 48 retains it; `git status` empty | CONFIRMED absent |
@@ -127,7 +127,7 @@ Totals at the B4 checkpoint (PRE-ARM, resolving `guard.v2.ps1`):
 
 ### MUST BLOCK, 79 canaries
 
-Production ref (1): `echo avkighsiufeefyycbebf`.
+Production ref (1): `echo the production ref`.
 
 Nested session (2): `claude --dangerously-skip-permissions`;
 `cd x && claude -p "go"`.

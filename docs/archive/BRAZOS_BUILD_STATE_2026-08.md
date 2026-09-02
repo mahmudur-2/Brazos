@@ -2691,7 +2691,7 @@ grep categories, no correctness bugs.
 by the owner; nothing in this run executed SQL anywhere):**
 1. `psql "<staging connection string>" -f supabase/phase59_staging_counter_notification.sql`
    (or paste the whole file into the STAGING project's SQL Editor). Idempotent;
-   safe to re-run. Do NOT run against production `avkighsiufeefyycbebf` — it is
+   safe to re-run. Do NOT run against production `the production ref` — it is
    not in the production apply queue until promoted.
 2. `node scripts/verify-schema.mjs` (reads `.env`, which currently holds the
    STAGING pair, so the probe targets staging). The apply counts ONLY when the
@@ -2830,7 +2830,7 @@ every input the collapse needs was already reachable client-side.
 
 **Migrations verified:** none written and none touched. `.env` was checked to
 resolve to STAGING `zzkumxcjtbqoselzptig` (not production
-`avkighsiufeefyycbebf`) before anything ran, and `.env` itself was not
+`the production ref`) before anything ran, and `.env` itself was not
 modified. `node scripts/verify-schema.mjs` then ran **green, exit 0** — all
 required objects through phase66 exist. Nothing new needed verifying; this is
 the unchanged-schema baseline.

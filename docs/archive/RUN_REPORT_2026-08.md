@@ -2,7 +2,7 @@ Run complete. All seven phases executed; nothing blocked except one gated item.
 
 ## 1. Preflight
 
-P1–P4 **pass** (branch `stability-core-transactions`, tree completely clean, staging conn string verified to contain `zzkumxcjtbqoselzptig` and not `avkighsiufeefyycbebf`, `select 1` connected). Production was never contacted; the ref check was re-run before every database operation.
+P1–P4 **pass** (branch `stability-core-transactions`, tree completely clean, staging conn string verified to contain `zzkumxcjtbqoselzptig` and not `the production ref`, `select 1` connected). Production was never contacted; the ref check was re-run before every database operation.
 
 **P5 — BASELINE MISMATCH.** Claimed 308/307/1. Measured **311 tests / 310 pass / 1 fail**. The one failure is the documented frozen-PWA test. Per instruction I did not reconcile it and used **311/310/1** as the baseline. Typecheck clean.
 

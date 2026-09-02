@@ -388,7 +388,7 @@ STAGING (`zzkumxcjtbqoselzptig`) — **APPLIED and verified**.
 (`messaging_lock_enabled()` and `messaging_unlocked()` both OK),
 "All REQUIRED objects exist in the live database", 0 MISSING / 0 PENDING.
 Re-applied a second time to prove idempotency — no change. Production
-(`avkighsiufeefyycbebf`) was never contacted or referenced.
+(`the production ref`) was never contacted or referenced.
 
 **Behavioural proof: `scripts/phase66-proof.sql` — 8 PASS, 0 FAIL,
 `ROLLBACK`, zero residue.** Run against staging through the `authenticated`

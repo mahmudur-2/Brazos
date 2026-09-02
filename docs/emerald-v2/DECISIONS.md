@@ -471,7 +471,7 @@ without the literal boundary in front of you.
 
 | Guard | Coverage boundary, verbatim |
 |-------|-----------------------------|
-| `.claude/settings.json` deny matrix | 100 patterns. Paths: `Edit(/design-reference/**)`, `Edit(/public/**)`, `Edit(/hosting/**)`, `Edit(/dist/**)`, `Edit(/WEB_DEPLOYMENT.md)`, `Edit(**/*.web.ts)`, `Edit(**/*.web.tsx)`, `Edit(/.claude/**)`, `Read(./start.ps1)`, `Read(./.env)`, `Read(./.env.*)`, `Edit(./start.ps1)`, `Edit(./.env)`, `Edit(./.env.*)`, `Bash(*avkighsiufeefyycbebf*)`. |
+| `.claude/settings.json` deny matrix | 100 patterns. Paths: `Edit(/design-reference/**)`, `Edit(/public/**)`, `Edit(/hosting/**)`, `Edit(/dist/**)`, `Edit(/WEB_DEPLOYMENT.md)`, `Edit(**/*.web.ts)`, `Edit(**/*.web.tsx)`, `Edit(/.claude/**)`, `Read(./start.ps1)`, `Read(./.env)`, `Read(./.env.*)`, `Edit(./start.ps1)`, `Edit(./.env)`, `Edit(./.env.*)`, `Bash(*the production ref*)`. |
 | `.claude/hooks/guard.ps1` | Tools: `"matcher": "Bash\|PowerShell\|Edit\|Write\|NotebookEdit"`. Frozen prefixes: `@('design-reference/', 'public/', 'hosting/', 'dist/')`. Web modules: `.web.ts` / `.web.tsx`. Secret basenames: `web_deployment.md`, `start.ps1`, `.env`, `^\.env\..+$`. Push allow-list: `origin mainexpo` \| `origin mainexpo:mainexpo`, no pre-flags. Fails closed — every ambiguity is `exit 2`. |
 | `.claude/hooks/session-context.ps1` | SessionStart, informational. Enforces nothing, blocks nothing, `exit 0` unconditionally. |
 | `npm run lint` / `typecheck` | `tsconfig.json`: `"exclude": ["node_modules", "supabase/functions"]`, no `include`/`files`. Everything else under the root is type-checked; the two Deno edge functions are checked by nothing. |
