@@ -35,10 +35,22 @@ appId: app.brazos.mobile.preview
     text: "Password"
     index: 1
 - inputText: ${PASSWORD}
+# E2E2 (run 01a0611f): the keyboard was still up after the password and the
+# Continue tap landed on it. Dismiss it first. A failed sign-in renders the
+# auth error under the form (screens/EmailSignInScreen.tsx `formError` — the
+# message the auth layer returns verbatim: "Invalid login credentials" for a
+# wrong email or password, "Email not confirmed" for an unconfirmed account)
+# or a field error above it, so the wait watches for those too and the flow
+# fails here inside 30 s with the message instead of a silent timeout.
+- hideKeyboard
 - tapOn: "Continue"
 - extendedWaitUntil:
+    visible: 'FINAL SETUP|Invalid login credentials|Email not confirmed|Enter your email address\.|Enter a valid email address\.|Enter your password\.'
+    timeout: 30000
+- assertNotVisible: 'Invalid login credentials|Email not confirmed|Enter your email address\.|Enter a valid email address\.|Enter your password\.'
+- extendedWaitUntil:
     visible: "FINAL SETUP"
-    timeout: 60000
+    timeout: 30000
 # Terms & Privacy is accepted server-side, once, by the operator's own first
 # login on this account (HANDOFF — NEEDS THE OPERATOR (a)). Without it Finish
 # setup stays disabled, so the flow says so here rather than failing later.

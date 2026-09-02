@@ -27,12 +27,14 @@ appId: app.brazos.mobile.preview
     visible: "STEP 1 OF 4"
     timeout: 30000
 # Step 1 — Describe: a title, a description past the 20-character floor
-# (lib/validation.ts), one category. Tapping the step eyebrow drops the
-# keyboard so the chips below the fields are reachable.
+# (lib/validation.ts), one category. The keyboard is dismissed after the last
+# typed field (E2E2) before the step eyebrow is tapped, so the chips below the
+# fields are reachable.
 - tapOn: "e.g. Walk my dog on weekday mornings"
 - inputText: ${output.title}
 - tapOn: "Describe what you need done…"
 - inputText: "Cleaning of a two bedroom apartment for the end to end money walk."
+- hideKeyboard
 - tapOn: "STEP 1 OF 4"
 - tapOn: "Cleaning"
 - tapOn: "Continue to Media"
@@ -50,6 +52,7 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - tapOn: "e.g. Sheepshead Bay, Brooklyn"
 - inputText: "Sheepshead Bay, Brooklyn"
+- hideKeyboard
 - tapOn: "STEP 3 OF 4"
 - tapOn: "Use my current location"
 - waitForAnimationToEnd:
@@ -61,6 +64,7 @@ appId: app.brazos.mobile.preview
       - tapOn: "OK"
 - tapOn: "e.g. 2410 Emmons Ave, Apt 3B"
 - inputText: "2017 Emmons Ave, Brooklyn, NY 11235"
+- hideKeyboard
 - tapOn: "STEP 3 OF 4"
 - scrollUntilVisible:
     element:
@@ -87,14 +91,22 @@ appId: app.brazos.mobile.preview
 - tapOn: "Edit budget"
 - tapOn: "Maximum budget in dollars"
 - inputText: "50"
+- hideKeyboard
 - tapOn: "Save"
 - tapOn: "Publish"
 # The screen fires the push pre-prompt without awaiting it, so it can land
 # over the success overlay; declining is remembered only until the next
-# clearState, which is why every act handles it.
+# clearState, which is why every act handles it. E2E2: a failed publish is
+# the alert "Could not post job" (screens/PostJobScreen.tsx), and a job saved
+# without its map pin is "Saved, but without a map pin"; either fails the
+# flow here with its message inside 30 s instead of a silent timeout.
+- extendedWaitUntil:
+    visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
+    timeout: 30000
+- assertNotVisible: 'Could not post job|Saved, but without a map pin'
 - extendedWaitUntil:
     visible: 'Your job is live\.|Get notified\?'
-    timeout: 60000
+    timeout: 30000
 - runFlow:
     when:
       visible: 'Get notified\?'
@@ -116,6 +128,7 @@ appId: app.brazos.mobile.preview
 # results header quotes the query back, so the job card is the second match.
 - tapOn: "Search for jobs or areas"
 - inputText: ${output.title}
+- hideKeyboard
 - tapOn: "Search"
 - extendedWaitUntil:
     visible:
@@ -132,6 +145,12 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - tapOn: '.*I.ll do it for \$50.*'
 - tapOn: "Send bid"
+# E2E2: a refused bid is the alert "Could not place bid"
+# (screens/JobDetailScreen.tsx); the flow fails here with its message.
+- extendedWaitUntil:
+    visible: 'Offer sent|Could not place bid'
+    timeout: 30000
+- assertNotVisible: 'Could not place bid'
 - extendedWaitUntil:
     visible: "Offer sent"
     timeout: 30000
@@ -204,9 +223,15 @@ appId: app.brazos.mobile.preview
 - inputText: "123"
 - tapOn: "ZIP"
 - inputText: "10001"
+# E2E2: the sheet's keyboard is dismissed once, before Pay — never between
+# its fields.
+- hideKeyboard
 - tapOn: 'Pay \$53\.75'
 # Checkout polls the ledger for `held` for 30 s and offers "Check again" past
-# that; the webhook normally lands well inside the first poll.
+# that; the webhook normally lands well inside the first poll. E2E2: each pass
+# also watches for Checkout's own failure texts — the alert "The card was not
+# charged", the "The payment did not go through" card and "Funding window
+# closed" (screens/CheckoutScreen.tsx) — and fails with the one it sees.
 - repeat:
     times: 3
     while:
@@ -218,9 +243,10 @@ appId: app.brazos.mobile.preview
           commands:
             - tapOn: "Check again"
       - extendedWaitUntil:
-          visible: "Job confirmed"
-          timeout: 60000
+          visible: 'Job confirmed|The card was not charged|The payment did not go through|Funding window closed'
+          timeout: 30000
           optional: true
+      - assertNotVisible: 'The card was not charged|The payment did not go through|Funding window closed'
 - assertVisible: "Job confirmed"
 - takeScreenshot: held
 
