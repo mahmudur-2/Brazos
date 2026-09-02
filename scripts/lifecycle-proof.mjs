@@ -33,6 +33,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { PRODUCTION_REF } from './supabase-ref.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const env = Object.fromEntries(
@@ -46,7 +47,7 @@ const ANON = env.SUPABASE_KEY;
 const DB = process.env.SUPABASE_DB_URL_STAGING;
 if (!URL || !ANON) { console.error('Missing SUPABASE_URL / SUPABASE_KEY in .env'); process.exit(2); }
 if (!DB) { console.error('SUPABASE_DB_URL_STAGING is not set'); process.exit(2); }
-if (URL.includes('avkighsiufeefyycbebf') || DB.includes('avkighsiufeefyycbebf')) {
+if (URL.includes(PRODUCTION_REF) || DB.includes(PRODUCTION_REF)) {
   console.error('REFUSING TO RUN: production ref detected'); process.exit(2);
 }
 

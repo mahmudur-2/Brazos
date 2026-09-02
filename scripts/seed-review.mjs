@@ -15,10 +15,11 @@
  * proven by scripts/lifecycle-proof.mjs and the per-phase proofs.
  */
 import { execFileSync } from 'node:child_process';
+import { PRODUCTION_REF } from './supabase-ref.mjs';
 
 const DB = process.env.SUPABASE_DB_URL_STAGING;
 if (!DB) { console.error('SUPABASE_DB_URL_STAGING is not set'); process.exit(2); }
-if (DB.includes('avkighsiufeefyycbebf')) { console.error('REFUSING: production ref'); process.exit(2); }
+if (DB.includes(PRODUCTION_REF)) { console.error('REFUSING: production ref'); process.exit(2); }
 
 const C = 'b6c00000-0000-4000-8000-000000000001'; // Casey (customer view)
 const W = 'b6c00000-0000-4000-8000-000000000002'; // Wren  (worker view)

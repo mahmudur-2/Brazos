@@ -2,7 +2,7 @@
 -- Brazos - Phase 68 - route ban checks through is_profile_active(uuid)
 --
 -- Apply to STAGING (zzkumxcjtbqoselzptig) via the Supabase SQL Editor.
--- Production (avkighsiufeefyycbebf) is never contacted by this run.
+-- Production (the production ref) is never contacted by this run.
 -- Safe to run twice, and safe to re-run after a failed run: every statement is
 -- `create or replace function`, a grant, or a catalog-reading DO block. Nothing
 -- here depends on a failed paste having rolled back.

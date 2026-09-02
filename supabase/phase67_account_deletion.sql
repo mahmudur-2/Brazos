@@ -2,7 +2,7 @@
 -- Brazos · Phase 67 · in-app account deletion (App Store Guideline 5.1.1(v))
 --
 -- Apply to STAGING (zzkumxcjtbqoselzptig) via the Supabase SQL Editor.
--- Production (avkighsiufeefyycbebf) is never contacted by this run.
+-- Production (the production ref) is never contacted by this run.
 -- Safe to run twice: every statement is `if not exists` / `create or replace`
 -- / a guarded DO block.
 --
