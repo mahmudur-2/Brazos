@@ -25,3 +25,5 @@ Deliberately untouched by R8a: `recompute_profile_rating`, `profiles.rating_avg`
 - D3 Skipping would-you-again stays legitimate: NULL is a valid answer — no validation, no Skip control. Reversible — display-layer only (cost: one client run).
 
 2026-09-01 — ReviewSection name form: first name only. Every person-name ReviewSection renders uses the first name, both roles — the heading and the would-again line ("How was <First>'s work?", "Would you hire <First> again?", "Would you work for <First> again?"). One screen, one person, one form of the name. Found as item (c) on the R8b-c device walk. Cooling waived 2026-09-01 by the operator: two lines of copy, trivial to re-flip, nothing depends on it.
+
+2026-09-01 — Calendar clocks deferred: LLC/EIN/bank, Stripe business verification, and the domain start pre-TestFlight, not before. Apple Developer is already done (2026-08-15). Gate 0's calendar-clock box closes on this ruling; nothing in Gate 2 depends on the paperwork.
