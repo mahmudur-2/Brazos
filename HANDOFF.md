@@ -97,6 +97,236 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E1 COMPLETED, NOT PUSHED (2026-09-02) — Gate 2 box 4's path lands: the money walk as one Maestro flow on EAS Workflows; the box stays OPEN until the operator's first green run; the commits wait on the operator's push because the fingerprint gate fired on eas.json itself
+
+Dispatch: `C:\Users\mdmah\runs\e2e1.txt`. Base `0a52fba`, branch `mainexpo`,
+tree clean. Nothing in this run triggered an EAS build or workflow, contacted a
+database, added a dependency, or touched production, `.env`, `start.ps1`,
+`supabase/`, `.github/`, `.gitignore`, `package.json`, `package-lock.json` or
+`app.config.ts`. `npm run verify` exited 0 before every commit (1296 tests,
+0 failing, lint clean). **Five commits sit on local `mainexpo` ahead of
+`origin/mainexpo`, unpushed**, because the dispatch's step-6 fingerprint gate
+fired — see NEEDS THE OPERATOR (0), which is the first thing to do.
+
+### The fingerprint gate, and why it fired
+
+`npm run fingerprint -- --platform ios` at base: `8a10f287ecd040cd284d7cfa09ad681ed3512f65`.
+After the code commits: `cd05945b7e1eef16e13869d5fd0451bdd0e4c941`. Of the
+182 fingerprint sources exactly ONE differs — `file:eas.json`, reason
+`easBuild` (`72ce5b84…` → `97a267f5…`); every other source is byte-identical.
+expo-fingerprint counts `eas.json` as a source, so D2 — the dispatch's own
+decision to amend the `e2e-test` profile — cannot be carried out without
+moving this hash; every past edit to `eas.json` moved it the same way. What
+the installed Beta actually keys its OTA channel on is unchanged:
+`app.config.ts` sets `runtimeVersion: { policy: 'appVersion' }` with
+`version: '1.0.0'`, by decision (its own comment: "appVersion, not
+fingerprint"), and neither was touched. The dispatch said: if it differs, run
+`npx eas-cli@latest fingerprint:compare` if it runs offline, do not push, put
+it first for the operator. It does not run offline — it exited 1 with
+"Insufficent arguments provided for fingerprint comparison in non-interactive
+mode" (it needs a build id or a hash and an EAS session) — so the local
+source-by-source diff above is the comparison. Not pushed.
+
+### What landed, commit by commit
+
+- **C1 `33e758d` — `eas.json`.** `e2e-test` is now a credential-less simulator
+  build in the Beta's shape: `withoutCredentials: true`, `ios.simulator: true`,
+  both `APP_VARIANT` values `preview` (were `development`), environment
+  `preview` and distribution internal kept, no channel. The pre-install gate
+  already pins this profile to staging, so `scripts/eas-build-pre-install.mjs`
+  is untouched (D2's continue-path did not fire).
+- **C2 `9441abe` — the flow.** `.maestro/money-walk.yml` (post → bid →
+  accept = fund → start → complete → approve → review → released, five
+  launches, two accounts, six milestone screenshots) and `.maestro/sign-in.yml`
+  (the one sign-in subflow, parameterised by EMAIL / PASSWORD / START_IN /
+  HOME_MARK). Plus the ONE testID this run adds, in the same commit because the
+  flow needs it: `components/StarRating.tsx` gives each star Pressable
+  `testID="review-star-<n>"` — the stars are icon-only, so D15 allows it.
+- **C3 `08b5a0a` — `.eas/workflows/e2e-ios.yml`.** Section 4's shape verbatim:
+  `workflow_dispatch` only (D-10), `build_ios_simulator` (type build, ios,
+  profile e2e-test) then `money_walk` (type maestro, environment preview, the
+  four `MAESTRO_E2E_*` names mapped from `${{ env.NAME }}`, `build_id` from the
+  build's outputs, `flow_path: .maestro/money-walk.yml`, `record_screen: true`).
+- **C4 `92ea50c` — `tests/maestroFlows.test.mjs`**, six string-based tests:
+  appId equals the preview bundle identifier derived from `app.config.ts`; no
+  email-shaped literal, `pk_` / `sk_` prefix, or 13+-digit run other than the
+  Stripe test card in any `.maestro` file, and all four `${MAESTRO_E2E_…}`
+  names read; `workflow_dispatch` present with no push / pull_request /
+  schedule / tag under `on:`; the workflow runs that flow on that build in the
+  preview environment; the `e2e-test` profile's D2 facts; the production ref
+  in no `.maestro` or `.eas` file.
+- **C5 — this record**, plus `docs/DECISIONS.md` 2026-09-02 "Gate 2 box 4
+  path" (D1–D12), `docs/GATES.md` Gate 2 box 4 rewritten (still open),
+  `docs/BACKLOG.md` v1.2 "E2E staging rows cleanup (title prefix E2E)".
+
+### The walk, in the order the flow taps (every label read from the source)
+
+Sign-in, every act: `I already have an account` → `Use Email Instead` →
+`Email` (index 1 — the input, after its caption) → email → `Password`
+(index 1) → password → `Continue` → wait `FINAL SETUP` → assert `Terms and
+Privacy. Reviewed.` → `Hire help` or `Find work` → `Finish setup` → wait
+`Post a job` (customer) or `Search for jobs or areas` (worker).
+
+1. Customer posts: `Post a job` → Title (placeholder `e.g. Walk my dog on
+   weekday mornings`) ← `E2E <Date.now()>` → Description (`Describe what you
+   need done…`) ← a 66-character sentence → `STEP 1 OF 4` (drops the keyboard)
+   → `Cleaning` → `Continue to Media` → `Continue to Location` → Area
+   (`e.g. Sheepshead Bay, Brooklyn`) ← `Sheepshead Bay, Brooklyn` → `Use my
+   current location` (`OK` if `Location unavailable` / `Area name needed`) →
+   Address (`e.g. 2410 Emmons Ave, Apt 3B`) ← `2017 Emmons Ave, Brooklyn, NY
+   11235` → `Today` → `Morning · 8–11 AM` → `Continue to Review` → `Edit
+   budget` → `Maximum budget in dollars` ← `50` → `Save` → `Publish` →
+   (`Not now` if `Get notified?`) → assert `Your job is live.` → 📸 posted →
+   `Done`.
+2. Worker bids: `Search for jobs or areas` ← the title → `Search` → the title
+   (index 1 — the results header quotes the query, the card is second) →
+   `I’ll do it for $50` → `Send bid` → `OK` (Offer sent) → (`Not now`) →
+   `Pending bids` on My Jobs → 📸 bid.
+3. Customer funds: `Create` → `My jobs` → the title → `Accept offer` →
+   `Accept bid` → wait `Protected checkout` and `Protect $53.75 by card`,
+   assert `$53.75` → `Protect $53.75 by card` → `Pay & protect` → PaymentSheet:
+   `Card number` ← 4242 4242 4242 4242 → `expiration date` ← 1234 → `CVC` ← 123
+   → `ZIP` ← 10001 → `Pay $53.75` → (`Check again` if the 30 s poll lapsed) →
+   assert `Job confirmed` → 📸 held.
+4. Worker completes: `My Jobs` → the title → `Start job` → wait `Finish up` →
+   `Add photos or video of the finished work` → first `Photo, …` in the system
+   picker → `Add` → wait `1/5 photos` → `Mark complete` → assert `Finished
+   work` → 📸 completed.
+5. Customer approves and waits: `Create` → `My jobs` → `Review` → the title →
+   `Review & approve the work` → `Approve & release $53.75` → `Approve &
+   release` → assert `APPROVED · PAYOUT ON ITS WAY` → 📸 approved → `Continue
+   to review` → `id: review-star-5` → `Submit review` → assert `Thanks for
+   rating` → edge swipe back → up to 16 × { edge swipe back → `Closed` → the
+   title → scroll to the money card → `extendedWaitUntil` `Payment released`
+   30 s, optional } → assert `Payment released` → 📸 released.
+
+### Deviations from the dispatch, each with its reason
+
+1. **`git fetch origin mainexpo` (step 0) was refused** by the deny matrix
+   (`Bash(git fetch:*)`) and the guard (GUARD-GIT). The dispatch itself says
+   the deny matrix wins, so the base gate ran against the cached
+   `origin/mainexpo` (equal to HEAD `0a52fba`; `merge-base --is-ancestor`
+   exit 0). The operator's push is the mechanical check of the same fact: a
+   moved remote rejects it.
+2. **`npm run fingerprint` fails on its own** — `expo-updates
+   fingerprint:generate` exits 1 with "--platform must be provided" — and
+   `package.json` is untouchable (D14). Both hashes were taken with the same
+   script plus the pass-through argument: `npm run fingerprint -- --platform
+   ios`.
+3. **`clearKeychain: true` rides beside D5's `clearState: true`.** The session
+   is in the Keychain through expo-secure-store (`lib/secureSessionStorage.ts`);
+   clearState alone leaves the previous role signed in.
+4. **D10's wait is sixteen 30 s `extendedWaitUntil` slices, not one 480000 ms
+   call.** `ClientJobDetailScreen` re-reads the payment row in a focus effect
+   and never on a timer or pull-to-refresh, so a single wait on a static screen
+   can never see the release; each slice backs out to the hub (edge swipe — the
+   plain back chevron carries no accessibility label) and re-opens the job.
+   The budget is the same 480000 ms. Recorded in DECISIONS D10.
+5. **The StarRating testID has no commit line of its own** and rides in C2
+   with the flow that references it.
+6. **The Terms & Privacy gate is asserted, not driven.** Acceptance is
+   server-side (`legal_acceptances`) and one-time; the flow asserts `Terms and
+   Privacy. Reviewed.` on Setup and stops with that message if the operator's
+   first login (below) has not happened.
+7. **Web fetch:** `pre-packaged-jobs.md` was read; `e2e-tests.md` returned
+   404, so its canonical page was read instead. Section 4's shapes were used
+   verbatim either way.
+8. **One stale comment, left alone (no unrelated cleanup):**
+   `scripts/eas-build-pre-install.mjs` still says the `preview` EAS
+   *environment* holds production credentials; `eas.json` and
+   `tests/buildGate.test.mjs` pin the preview and e2e-test profiles to
+   `environment: preview`, the Beta on the device walk ran against staging from
+   it, and D3 places the four variables there. The comment is wrong, the code is
+   right; a one-line fix for a later touch.
+
+### Findings the first run will answer (in the order the flow meets them)
+
+1. **D9 — the system photo picker.** `Photo, .*` (index 0) then
+   `Add( \(\d+\))?` is the best reading of PHPicker's accessibility labels;
+   whether Maestro's iOS driver can tap inside the out-of-process picker is
+   unverified. The first finding by D9's own rule.
+2. **Placeholder-targeted inputs on Post-a-Job** (Title, Description, Area,
+   Address: `components/TextField.tsx` sets no accessibility label) rely on
+   Maestro matching an iOS placeholder as the element's hint text. The auth
+   fields and the worker search bar do not — they label their inputs.
+3. **`optional: true` on `extendedWaitUntil`** (the release wait and the
+   Job-confirmed poll) needs a Maestro with optional commands; EAS's default
+   Maestro is recent, but a YAML error there is this.
+4. **Two index-based taps:** `Email` / `Password` index 1 (input after its
+   caption) and the search result index 1 (header, then card).
+5. **Buttons that fold an icon or subtitle into one label** are matched with
+   `.*…​.*`; if a label is exposed differently the exact-text taps beside them
+   say which.
+6. **PaymentSheet field labels** are Stripe's: `Card number`, `expiration date`
+   (alternation with `MM / YY`), `CVC`, `ZIP`, `Pay $53.75`.
+7. **Notifications** cannot be pre-granted by `simctl`, so the in-app
+   `Get notified?` pre-prompt is answered `Not now` wherever it can appear.
+
+### NEEDS THE OPERATOR — in order
+
+**(0) Decide the fingerprint, then push.** The move is `eas.json` only (above);
+the Beta's runtime version is `appVersion` `1.0.0` and did not move. If that
+reading is accepted, from the repo root: `git push origin mainexpo` — expected
+"0a52fba..<C5> mainexpo -> mainexpo" on GitHub, after which
+`.github/workflows/ci.yml` runs `npm run verify` on the push and the staging
+pipeline finds nothing pending (no migration, no function changed). If it is
+not accepted, the five commits are local and can be dropped by the operator;
+nothing else in this run has any effect until they are pushed.
+
+**(a) Two dedicated staging accounts, Terms accepted.** Supabase dashboard →
+the STAGING project → Authentication → Users → Add user → Create new user →
+an email and a password for the customer, "Auto Confirm User" ON → Create;
+repeat for the worker. Then sign in ONCE with each on the installed Beta (it
+reads staging): Welcome → `I already have an account` → `Use Email Instead` →
+email, password → `Continue` → Setup → `Terms & Privacy` → review both
+documents to the end → `Agree and continue` → Start in `Hire help` (customer) /
+`Find work` (worker) → `Finish setup`. That first login is the only in-app
+state the flow expects to pre-exist: Terms acceptance is server-side and
+one-time; everything else on Setup is device-local and the flow drives it
+every launch. The worker must NOT set up payouts (D4). Expected: each account
+reaches its Home.
+
+**(b) Four EAS variables in the `preview` environment, visibility secret.**
+expo.dev → account `mah_r2` → project BRAZOS → Environment variables → Create
+variable → Name / Value / Environment `preview` / Visibility `Secret` → four
+times: `MAESTRO_E2E_CUSTOMER_EMAIL`, `MAESTRO_E2E_CUSTOMER_PASSWORD`,
+`MAESTRO_E2E_WORKER_EMAIL`, `MAESTRO_E2E_WORKER_PASSWORD`. CLI equivalent,
+from the repo root, once per name:
+`npx eas-cli@latest env:create --scope project --environment preview --visibility secret --type string --name MAESTRO_E2E_CUSTOMER_EMAIL --value "<the email>" --non-interactive`.
+Expected: "Created a new variable MAESTRO_E2E_CUSTOMER_EMAIL" (and the three
+others); `npx eas-cli@latest env:list --environment preview` shows the four
+names with hidden values.
+
+**(c) Run the workflow from the repo root, after the push:**
+`npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml`. Expected: the
+CLI validates the file and prints the run URL under
+expo.dev/accounts/mah_r2/projects/BRAZOS/workflows/…. On that page,
+`build_ios_simulator` runs first (a simulator build, roughly 15–25 minutes,
+its own build page and log), then `money_walk` (the Maestro job page: the
+flow log command by command, the screen recording, and the artifacts
+`posted.png`, `bid.png`, `held.png`, `completed.png`, `approved.png`,
+`released.png`). A pass is both jobs green and the log ending with the flow
+marked passed; the job takes 20–40 minutes, up to 8 of them the release wait.
+On a failure the log names the command that failed and dumps the screen's
+visible text at that moment — that is the finding.
+
+**(d) Paste back:** the run URL; the status of both jobs; the list of
+screenshot artifacts that exist; on failure, the failing command line and the
+screen-text dump around it (about 40 lines). A green run ticks Gate 2 box 4
+with that URL as the evidence path — the next run's first line of work.
+
+### Guards and mechanics met this run
+
+- `git fetch` refused by both layers (deviation 1). The Write tool is refused
+  outside the project tree (GUARD-PATH-ESCAPE), so run scratch lived under the
+  gitignored `.shots/e2e1-scratch/`, staged nothing, and was removed at the end.
+- Two long heredocs (the 250-line flow and the 170-line fence) failed to parse
+  in the shell; the same content landed through the Write tool. Probes with a
+  backtick and with `${x = 'a'}` alone passed, so the cause is not either
+  character on its own; not chased further.
+- `npm run fingerprint` (deviation 2); `eas fingerprint:compare` needs a target
+  and a session (the fingerprint section).
+
 ## RUN G0A COMPLETED (2026-09-02) — the production ref leaves every document and every retyped script literal; Gate 0's production-ref box ticks on the post-strip census
 
 Dispatched 2026-09-01; the run crossed midnight, so the two rulings it dates
