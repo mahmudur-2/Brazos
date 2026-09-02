@@ -154,7 +154,13 @@ test('the workflow runs the money walk on the simulator build it makes, in the p
   assert.match(text, /^\s+profile: e2e-test$/m);
   assert.match(text, /^\s+type: maestro$/m);
   assert.match(text, /^\s+environment: preview$/m);
-  assert.match(text, /^\s+build_id: \$\{\{ needs\.build_ios_simulator\.outputs\.build_id \}\}$/m);
+  // E2E2: the dispatch may name a build_id; the walk takes it first and falls
+  // back to the build it makes, which is listed under `after` (a skipped
+  // `needs` job would block the walk — docs.expo.dev/eas/workflows/syntax).
+  assert.match(
+    text,
+    /^\s+build_id: \$\{\{ inputs\.build_id \|\| after\.build_ios_simulator\.outputs\.build_id \}\}$/m
+  );
   assert.match(text, /^\s+record_screen: true$/m);
   const flowPath = text.match(/^\s+flow_path: (\S+)$/m);
   assert.ok(flowPath, 'flow_path is declared');

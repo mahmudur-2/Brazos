@@ -7,19 +7,35 @@
 # metered iOS simulator build per commit is the one unbounded meter. The
 # operator starts a run with:
 #   npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml
+# E2E2 — build reuse: the dispatch takes an optional `build_id`. Given one, the
+# simulator build is skipped and the walk runs on that binary, so a flow-only
+# fix reruns on the last build (~$1, ~5 min) instead of rebuilding it:
+#   npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml -F build_id=<id>
+# money_walk lists the build under `after`, not `needs`: per
+# docs.expo.dev/eas/workflows/syntax a job skipped by its `if` "won't have
+# completed successfully and any downstream jobs will not run that have this
+# job in their `needs` list", while `after` waits for a job to complete
+# "successfully or not" and exposes its outputs as `after.<job>.outputs.*`.
+# The cost: a FAILED build also starts money_walk, which then fails at once on
+# the empty build_id — the same red, one job later.
 # The four MAESTRO_E2E_* values live in the EAS `preview` environment (D3);
 # nothing here or in .maestro/ carries a credential — tests/maestroFlows.test.mjs.
 name: E2E iOS money walk
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      build_id:
+        type: string
+        required: false
 jobs:
   build_ios_simulator:
+    if: ${{ !inputs.build_id }}
     type: build
     params:
       platform: ios
       profile: e2e-test
   money_walk:
-    needs: [build_ios_simulator]
+    after: [build_ios_simulator]
     type: maestro
     environment: preview
     env:
@@ -28,6 +44,6 @@ jobs:
       MAESTRO_E2E_WORKER_EMAIL: ${{ env.MAESTRO_E2E_WORKER_EMAIL }}
       MAESTRO_E2E_WORKER_PASSWORD: ${{ env.MAESTRO_E2E_WORKER_PASSWORD }}
     params:
-      build_id: ${{ needs.build_ios_simulator.outputs.build_id }}
+      build_id: ${{ inputs.build_id || after.build_ios_simulator.outputs.build_id }}
       flow_path: .maestro/money-walk.yml
       record_screen: true
