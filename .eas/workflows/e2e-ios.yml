@@ -1,0 +1,33 @@
+# .eas/workflows/e2e-ios.yml — Gate 2 box 4: the money walk on EAS Workflows.
+#
+# Two pre-packaged jobs: an iOS Simulator build of the `e2e-test` profile, then
+# the `maestro` job running .maestro/money-walk.yml on it. D-10
+# (docs/BRAZOS_TARGET_ARCHITECTURE_v3.md): workflow_dispatch ONLY — never a
+# branch push, pull request, schedule or tag. Runs push their own commits, and a
+# metered iOS simulator build per commit is the one unbounded meter. The
+# operator starts a run with:
+#   npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml
+# The four MAESTRO_E2E_* values live in the EAS `preview` environment (D3);
+# nothing here or in .maestro/ carries a credential — tests/maestroFlows.test.mjs.
+name: E2E iOS money walk
+on:
+  workflow_dispatch: {}
+jobs:
+  build_ios_simulator:
+    type: build
+    params:
+      platform: ios
+      profile: e2e-test
+  money_walk:
+    needs: [build_ios_simulator]
+    type: maestro
+    environment: preview
+    env:
+      MAESTRO_E2E_CUSTOMER_EMAIL: ${{ env.MAESTRO_E2E_CUSTOMER_EMAIL }}
+      MAESTRO_E2E_CUSTOMER_PASSWORD: ${{ env.MAESTRO_E2E_CUSTOMER_PASSWORD }}
+      MAESTRO_E2E_WORKER_EMAIL: ${{ env.MAESTRO_E2E_WORKER_EMAIL }}
+      MAESTRO_E2E_WORKER_PASSWORD: ${{ env.MAESTRO_E2E_WORKER_PASSWORD }}
+    params:
+      build_id: ${{ needs.build_ios_simulator.outputs.build_id }}
+      flow_path: .maestro/money-walk.yml
+      record_screen: true
