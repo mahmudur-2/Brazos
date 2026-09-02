@@ -27,3 +27,7 @@ Deliberately untouched by R8a: `recompute_profile_rating`, `profiles.rating_avg`
 2026-09-01 — ReviewSection name form: first name only. Every person-name ReviewSection renders uses the first name, both roles — the heading and the would-again line ("How was <First>'s work?", "Would you hire <First> again?", "Would you work for <First> again?"). One screen, one person, one form of the name. Found as item (c) on the R8b-c device walk. Cooling waived 2026-09-01 by the operator: two lines of copy, trivial to re-flip, nothing depends on it.
 
 2026-09-01 — Calendar clocks deferred: LLC/EIN/bank, Stripe business verification, and the domain start pre-TestFlight, not before. Apple Developer is already done (2026-08-15). Gate 0's calendar-clock box closes on this ruling; nothing in Gate 2 depends on the paperwork.
+
+2026-09-01 — Audit budget: two audits for this project, Gate 0 and pre-TestFlight. Anything else called an audit becomes one scoped fix run with a named pass condition. Gate 0's audit-budget box closes on this ruling.
+
+2026-09-01 — SCOPE and DOMAIN frozen: docs/SCOPE.md and docs/DOMAIN.md change only through a dated entry in this file; a feature not in SCOPE.md goes to docs/BACKLOG.md v1.2 and never to a run. The iOS-only clause was settled 2026-08-31. Gate 0's SCOPE/DOMAIN box closes on this ruling.

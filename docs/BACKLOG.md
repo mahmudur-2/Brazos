@@ -17,6 +17,7 @@ Append; never dispatch from chat memory. A dispatch that needs an item reads it 
 - ProfileReviews page title renders the viewing user's first name instead of the profile owner's ("Mahmudur's reviews" shown on Mahmudur Worker's profile) — the wrong person's name on screen. Found on the R8b-c device walk, 2026-09-01.
 - Profile header says "2 completed" while the reviews page says "2 reviews" — two different counts rendered as if the same fact (completed jobs vs revealed reviews). Pick one label per fact. Found on the R8b-c device walk, 2026-09-01.
 - ReviewSection tail from R8b-d: the dead `prompt` prop still passed by ClientJobDetailScreen, ReviewAndTipScreen, WorkerJobScreen — remove from all four files; the submitted-card note and comment placeholder still print the full name; dedupe the "NO LONGER RENDERED" comment if it really is doubled. One small client run, next touch.
+- Web app: the full BRAZOS experience in a browser, same Supabase backend so everything stays in sync (Uber Eats-style customer and worker web). Phone-in-a-browser first, desktop layout later. Needs a web checkout path (Stripe's native library is iOS/Android only), web branches for camera, push, maps and share, clean hosting config, a domain. After TestFlight and ten users; scope change on paper before any run.
 
 ## Side backlog (moved from Claude memory 2026-08-30)
 1. `job-photos` and `avatars` buckets are public with permanent unauthenticated URLs — batch with MEDIA1; do not fix via the dashboard "Remove policy" button
