@@ -199,9 +199,28 @@ appId: app.brazos.mobile.preview
       START_IN: Hire help
       HOME_MARK: Post a job
 # My Jobs has no bar slot in customer mode; the [ + ] sheet's "My jobs" is the
-# standing route (navigation/CustomerRoot.tsx). The hub opens on Active.
+# standing route (navigation/CustomerRoot.tsx), and the hub opens on Active,
+# where an open job sits (lib/jobLifecycle.ts, deriveMyJobsTab) — no filter
+# tap. E2E4 (the run on build 9f3ecf3a): the walk fell through this sheet to
+# Home, whose Nearby cards — the poster's own job included — offer the
+# worker-mode prompt rather than the job, and it died there looking for
+# "Accept offer". The route is now asserted step by step so it can only fail
+# where it breaks: the sheet must be open before its row is tapped, the hub's
+# own customer subtitle on screen before the job is looked for, and the job
+# screen's title before the offer is. The [ + ] answers to its
+# accessibilityLabel (ui/primitives/BottomNav.tsx). The sheet title is
+# bracketed because on iOS a Pressable folds its children's text into one
+# label, and the sheet's full-screen backdrop is a Pressable — which is also
+# why the row is matched by its exact label: a whole-sheet element would
+# satisfy a bracketed pattern and be tapped at its centre, the scrim.
 - tapOn: "Create"
-- tapOn: '.*My jobs.*'
+- extendedWaitUntil:
+    visible: '.*What do you need\?.*'
+    timeout: 30000
+- tapOn: "My jobs"
+- extendedWaitUntil:
+    visible: 'Jobs you posted, from first bid to final review\.'
+    timeout: 30000
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
     timeout: 30000
@@ -211,6 +230,13 @@ appId: app.brazos.mobile.preview
     direction: DOWN
     timeout: 30000
 - tapOn: '.*${output.title}.*'
+# While an offer can still be accepted the job screen titles itself
+# "Job & bids" (screens/ClientJobDetailScreen.tsx, ScreenHeader); the bids
+# load under it, and each pending one carries the "Accept offer" button
+# (components/OfferCard.tsx).
+- extendedWaitUntil:
+    visible: 'Job & bids'
+    timeout: 30000
 - extendedWaitUntil:
     notVisible: "Loading bids…"
     timeout: 30000
@@ -220,6 +246,7 @@ appId: app.brazos.mobile.preview
     direction: DOWN
     timeout: 30000
 - tapOn: "Accept offer"
+# The ConfirmDialog's confirmText (screens/ClientJobDetailScreen.tsx).
 - tapOn: "Accept bid"
 # Checkout (D8): the $50 job quotes $53.75 all-in — the 7.5% protection fee.
 - extendedWaitUntil:
@@ -337,8 +364,16 @@ appId: app.brazos.mobile.preview
       PASSWORD: ${MAESTRO_E2E_CUSTOMER_PASSWORD}
       START_IN: Hire help
       HOME_MARK: Post a job
+# E2E4 — the same asserted route as Act 3: the sheet must be open before its
+# row is tapped, and the customer hub on screen before the job is looked for.
 - tapOn: "Create"
-- tapOn: '.*My jobs.*'
+- extendedWaitUntil:
+    visible: '.*What do you need\?.*'
+    timeout: 30000
+- tapOn: "My jobs"
+- extendedWaitUntil:
+    visible: 'Jobs you posted, from first bid to final review\.'
+    timeout: 30000
 - extendedWaitUntil:
     notVisible: "Loading your jobs…"
     timeout: 30000
@@ -350,6 +385,11 @@ appId: app.brazos.mobile.preview
     direction: DOWN
     timeout: 30000
 - tapOn: '.*${output.title}.*'
+# Past acceptance the job screen titles itself "Job detail"
+# (screens/ClientJobDetailScreen.tsx, ScreenHeader).
+- extendedWaitUntil:
+    visible: "Job detail"
+    timeout: 30000
 - scrollUntilVisible:
     element:
       text: "Review & approve the work"
