@@ -472,14 +472,27 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 # D10 — open the job and wait for the released copy, 480000 ms in all. The
 # job screen re-reads the payment row on focus and never on a timer, so the
-# wait is sixteen 30 s slices, each one backing out to the hub (an edge swipe
-# pops the native stack; the plain back chevron carries no label) and
-# re-opening the job from Closed, where an approved job sits. An approved job
-# shows "Work approved — payout on its way" until the transfer lands.
-- swipe:
-    start: 2%, 50%
-    end: 90%, 50%
-    duration: 400
+# wait is sixteen 30 s slices, each one backing out to the hub and re-opening
+# the job from Closed, where an approved job sits. An approved job shows
+# "Work approved — payout on its way" until the transfer lands.
+# E2E7 (D1): every pop is a tap on the header's own back chevron. Run 01a06545
+# proved the edge swipe (2%,50% → 90%,50%) pops nothing on this build — the
+# hierarchy at its timeout was still Review & tip. The chevron is an unlabeled
+# element: a bare Pressable with no accessibilityRole or accessibilityLabel
+# (components/ScreenHeader.tsx, backLabel unset on Review & tip and on the job
+# screen alike), so it is tapped by position — 6%,11% is the centre of its
+# [12,81][38,108] frame on the pinned iPhone 16, 393×852.
+- tapOn:
+    point: "6%,11%"
+# E2E7 (D2): fail fast — the pop must land on the job screen, which titles
+# itself "Job detail" past acceptance (screens/ClientJobDetailScreen.tsx).
+- extendedWaitUntil:
+    visible: "Job detail"
+    timeout: 30000
+# E2E7 (D4): this scroll anchor admits the pre-release title on purpose, so the
+# approval card is on screen in every slice; it never ends the loop. The only
+# text that ends the loop and takes the screenshot is "Payment released", which
+# the job screen renders under isReleased() alone (lib/paymentRules.ts).
 - scrollUntilVisible:
     element:
       text: 'Payment released|Work approved.*'
@@ -490,11 +503,10 @@ appId: app.brazos.mobile.preview
     while:
       notVisible: "Payment released"
     commands:
-      - swipe:
-          start: 2%, 50%
-          end: 90%, 50%
-          duration: 400
-      # E2E6 (A1): the hub's own subtitle before its tab is tapped.
+      # E2E7 (D1): the job screen's bare chevron, the same frame as above.
+      - tapOn:
+          point: "6%,11%"
+      # E2E6 (A1), E2E7 (D2): the hub's own subtitle, directly after the pop.
       - extendedWaitUntil:
           visible: 'Jobs you posted, from first bid to final review\.'
           timeout: 30000
