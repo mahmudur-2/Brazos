@@ -97,6 +97,153 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E6 COMPLETED (2026-09-02) — the walk clears "Mark complete", "Finished work", approval and the review for the first time, five of the six screenshots; red at the released copy, because the edge swipe does not pop Review & tip
+
+Dispatch: `C:\Users\mdmah\runs\e2e6.txt`. Base `b537f8c`, branch `mainexpo`,
+tree clean; ancestry gate printed `mainexpo`, merge-base exit 0, empty
+porcelain. Files changed: `.maestro/money-walk.yml`, `docs/BACKLOG.md` (one
+line) and this record. NO app file changed — the audit needed none (A3
+below) — so the rerun reused build `8aa5fe85`. Nothing touched `screens/`,
+`.gitignore`, `eas.json`, `.eas/`, `.github/`, `supabase/`, `package.json`,
+the guard directory, `.env` or `start.ps1`; no database was contacted; no
+dependency added. `npm run verify` exited 0 before the flow commit (1296
+tests, 0 failing, lint clean); the docs commit changes no code.
+
+**Commits.** C1 `692c3e2` — E2E6: wait for the completion photo before Mark
+complete; remaining taps audited (`.maestro/money-walk.yml`,
+`docs/BACKLOG.md`), pushed `b537f8c..692c3e2`. The push piped through
+`| tail` was refused by the guard (`GUARD-GIT git-push-not-gated-mainexpo`);
+the bare `git push origin mainexpo` went through — the form is exact, not
+just flag-free. C2 — this record, docs only, pushed on its own.
+
+**E2E5's failure, read from its own bundle (run 01a06511: `maestro.log`,
+`screen-hierarchy/step-192-…Finished_work.json`).** The dispatch's theory
+was a tap inside the upload window (the Button is `disabled={uploadingMedia}`).
+The bundle says otherwise, in three facts. (1) At the tap (19:36:31.0) the
+element was `accessibilityText=Mark complete, bounds=[33,716][360,768],
+enabled=true`; at the capture sixty seconds later the same node was still
+`enabled: true`. A write in flight sets `working`, which is `loading`, which
+is `disabled` — so nothing was in flight — and "1/5 photos" still on screen
+means `setDonePhotos([])` never ran: the tap never reached the handler.
+(2) The picker control is ONE labeled element
+(`accessibilityLabel="Add photos or video of the finished work"`,
+`screens/WorkerJobScreen.tsx:641`), so its inner "Uploading…" / "Add photos
+or video" text is never in the iOS hierarchy (0 occurrences in the capture;
+the label once) — F1 passes at once on iOS and cannot observe the window it
+was written for; and in the source `setUploadingPhoto(false)` (`:233`)
+precedes `setDonePhotos` (`:236`) in the same tick, so the counter cannot be
+on screen while the flag is set. The Add tap was 19:36:29.2 and the Mark
+complete tap 1.8 s later, past any picker dismissal. (3) THE GEOMETRY. The
+tab bar is IN FLOW on every non-Home route (`ui/primitives/BottomNav.tsx`,
+`bottomNavScreenOptions`), its box [0,764][393,852], but its items are laid
+out RAISED — `[0,746][78,834]` … `[157,746][235,834]` for "My Jobs, tab,
+3 of 5" — and the tap at (196,742) sat in that item's column, four points
+above its frame, on a button whose lower 22 points lay under the items; in
+dark, the focused item's glow box bleeds `textShadowRadius` 8 above its
+frame (`ui/tokens.ts:586`, `BottomNav.tsx:373`). Maestro's
+`getVisiblePercentage` measures against the screen only (read in
+maestro-client `UiElement.kt`), so an element laid out under the bar counts
+as 100% visible and `scrollUntilVisible` stops there; `centerElement` would
+not have helped — for a DOWN scroll `isElementNearScreenCenter` only rejects
+an element in the top fifth of the screen (margin `screenHeight / 5`).
+Maestro 2.10.0 on the worker.
+
+**The flow (`.maestro/money-walk.yml`).** Act 4 after the picker — F1–F4 as
+dispatched, plus one guard: `extendedWaitUntil notVisible "Uploading…"` 60 s
+(F1; inert on iOS, see above; kept as ordered); `extendedWaitUntil visible
+'.*1/5 photos.*'` 60 s (F2, was 180 s); `scrollUntilVisible "Mark complete"`
+30 s (F3, was 20 s); then the guard, `swipe 50%,60% → 50%,45%, 600 ms` — a
+short drag that lifts the button clear of the bar (only the bar clearance
+lies below it, so it cannot leave the screen); then the tap; "Finished work"
+stays at 60 s (F4). The guard is the one step beyond F1–F3 inside the zone
+acceptance gate (2) fences, flagged here and in the run report.
+AUDIT, every step after the "Mark complete" tap. A1 — three waits on
+destination text: the ConfirmDialog title `'Release \$53\.75 to the
+worker\?'` before "Approve & release" (`screens/ApproveOrDisputeScreen.tsx:463`);
+Review & tip's header "Review & tip" (`screens/ReviewAndTipScreen.tsx:466`)
+after the APPROVED eyebrow, which the approval screen also renders once
+`setPayment` lands (`ApproveOrDisputeScreen.tsx:186-187`); the hub subtitle
+before each "Closed" tap in the released loop (`screens/MyJobsHubScreen.tsx:298`).
+A2 — the same drag before "Review & approve the work", the review star,
+"Submit review" and the loop's job-card tap, since `scrollUntilVisible` alone
+can rest a control under the bar. A3 — NO app change: "Create" is an
+explicitly labeled Pressable (`BottomNav.tsx:793`); "My jobs" the
+E2E5-labeled sheet row; "Review" / "Closed" are Pressables with
+`accessibilityRole="tab"` whose only child is the label Text, so the folded
+label is the exact text (`MyJobsHubScreen.tsx:91-112`); the job card is
+`Card onPress` → one folded Pressable (`components/HubCard.tsx:80`,
+`components/Card.tsx:52`), its thumbnail the poster's own photo, absent here
+(`lib/jobs.ts:381`); "Review & approve the work", "Approve & release" and
+"Submit review" are `Button`s; `'.*Approve & release \$53\.75.*'` is
+FormScreen's pinned footer Pressable with `accessibilityLabel={submitLabel}`
+(`ui/templates/FormScreen.tsx:183`); the star is a Pressable with a `testID`
+and no label (`components/StarRating.tsx:36-44`) inside a plain-View Card,
+reached by id → `docs/BACKLOG.md` §v1 bugs, the VoiceOver label. No
+`inputText` follows the tap. Acceptance gates: verify green; the first flow
+hunk starts at the Add tap; no app file in `git diff --stat`;
+`grep -rn "Switch to Worker\|browseOpenJobs" .maestro/` empty.
+
+**The rerun (run `01a06545-65a8-766a-a86b-042f3f9fd18b`,
+`-F build_id=8aa5fe85-35ce-4399-95dd-77645ef7f5f1`; `build_ios_simulator`
+SKIPPED as designed, `money_walk` FAILURE, run FAILURE).** Run:
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/workflows/01a06545-65a8-766a-a86b-042f3f9fd18b`.
+Failing Maestro line: `money-walk (6m 43s) (No visible element found:
+"Payment released|Work approved.*")`; JUnit `<failure>No visible element
+found: "Payment released|Work approved.*"</failure>`, `time="402.948"`,
+device `iPhone 16 - iOS 18.3`, `eas exit: 11`. Milestone screenshots
+present: `posted`, `bid`, `held`, `completed`, `approved` — FIVE of six;
+`released` missing.
+PROVEN FOR THE FIRST TIME (simulator clock 20:xx, 2026-09-02):
+- The guard: "Uploading…" not visible 20:24:33.1, ".*1/5 photos.*"
+  20:24:33.3, the scroll (no movement), the drag 20:24:33.5 → 34.7, then
+  "Mark complete" tapped at `bounds=[33,599][360,651]` — the button E2E5
+  tapped at 716–768, lifted 117 points — and "Finished work" visible 0.17 s
+  after the tap completed (20:24:36.665): the completion write is instant.
+  `completed` taken.
+- Act 5 to the review: "Create", "My jobs", the hub subtitle, "Review"
+  20:25:14.4, the job, "Job detail" 20:25:16.7, the approval card after a
+  7 s scroll, the drag, "Review & approve the work" 20:25:27.1; the pinned
+  `'.*Approve & release \$53\.75.*'`, the dialog title (the A1 wait)
+  20:25:28.6, "Approve & release" 20:25:30.5, "APPROVED · PAYOUT ON ITS
+  WAY" and "Review & tip" both inside 0.3 s — the release call returned in
+  about two seconds; `approved` taken; the star by id (drag, tap
+  20:25:33.3); "Submit review" 20:25:36.2; "Thanks for rating.*" 20:25:36.4.
+THE FAILURE: the edge swipe (`swipe 2%,50% → 90%,50%`; XCTest
+`Swipe (v2) from (7.0, 426.0) to (353.0, 426.0) with 0.4 duration`,
+20:25:36.5) executed and popped nothing. The hierarchy captured at the 60 s
+timeout (`step-244-scrollUntilVisible-Payment_releasedWork.json`) is STILL
+Review & tip — header "Review & tip", the job title, "APPROVED · PAYOUT ON
+ITS WAY", "$50", "Funds held in protection", "Approved on your say-so…",
+"Your review", "Thanks for rating E2E Worker.", "Add a tip?", "The job
+payment releases first — then a tip can be added…" — and the sixty seconds
+of DOWN swipes hunted for the job screen's copy on the wrong screen. The
+bare back chevron IS in the hierarchy: an element with empty text at
+`[12,81][38,108]` (`components/ScreenHeader.tsx:154-170`, a Pressable with
+`hitSlop={10}` and no label, since `backLabel` is unset). Not inspected: the
+failure frame and the recording (images, per the standing rule). Not
+checked: whether the transfer landed — the walk never reached a screen that
+shows it. The bundle stayed in the session scratchpad; the four
+`MAESTRO_E2E_*` values it prints were kept out of every file and this record.
+
+**NEEDS THE OPERATOR — in order.**
+(a) One dispatch for the back step, in both places — the swipe after "Thanks
+for rating" and the one inside the released loop. Two forms; the cheaper
+first. NO REBUILD: tap the chevron where it is — `tapOn: point: "6%,11%"`
+((24,94) on the pinned iPhone 16, inside [12,81][38,108] plus its 10-point
+slop) — and assert "Job detail" (the first pop) and the hub subtitle (the
+loop's) right after, so a miss fails at once; rerun with
+`-F build_id=8aa5fe85-35ce-4399-95dd-77645ef7f5f1`. REBUILD: give the bare
+chevron `accessibilityRole="button"` and `accessibilityLabel="Back"` in
+`components/ScreenHeader.tsx` (accessibility props only; the labeled variant
+already carries `Back to …`) and tap "Back"; plain `workflow:run`, a fresh
+build. Either way the released loop then runs for real for the first time,
+and the release clock (≈4.5 min in the Gate 1 walk) sits inside its 480 s.
+(b) Optional, in the staging SQL editor: this run's job `E2E 1788405598378`
+— `payments.status`, `release_requested_at`, `transfer_attempts`,
+`updated_at` — to know whether the transfer landed on its own while the walk
+was stuck, which says whether the loop's 480 s is enough.
+Gate 2 box 4 stays OPEN: five screenshots, no green run.
+
 ## RUN E2E5 COMPLETED (2026-09-02) — the [ + ] sheet unfolds on iOS and the walk clears it, Accept, Checkout, the Stripe sheet and the photo picker for the first time; red at "Finished work", one step after "Mark complete"
 
 Dispatch: `C:\Users\mdmah\runs\e2e5.txt`. Base `f8d270d`, branch `mainexpo`,
