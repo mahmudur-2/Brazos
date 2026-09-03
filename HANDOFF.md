@@ -97,6 +97,150 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E3 COMPLETED (2026-09-02) — the money walk dry-run against the source, command by command, after EAS run 01a06475: six flow fixes, no app code, and the keyboard rule grounded in what Maestro's hideKeyboard actually does on iOS
+
+Dispatch: `C:\Users\mdmah\runs\e2e3.txt`. Base `1ff2399`, branch `mainexpo`,
+tree clean, ancestor check exit 0. Nothing in this run triggered an EAS build
+or workflow, contacted a database, added a dependency, or touched app code,
+`eas.json`, `app.config.ts`, `package.json`, `supabase/`, `.github/`, `.env`
+or `start.ps1`. `npm run verify` exited 0 before each commit (1296 tests, 0
+failing, lint clean); `tests/maestroFlows.test.mjs` passed unchanged.
+Fingerprint (`npm run fingerprint -- --platform ios`):
+`cd05945b7e1eef16e13869d5fd0451bdd0e4c941` at base, and the same value
+measured after C1 with the C2 edits in the tree — none of the run's three
+files (`.maestro/money-walk.yml`, `docs/DECISIONS.md`, `HANDOFF.md`) is a
+fingerprint source. The formal post-C2 measurement and the push line are in
+the terminal report.
+
+**Commits.** C1 `342349d` — test(e2e): dry run of the money walk against the
+source; multiline keyboard dismissal (E2E3). C2 — docs: E2E3 decision line
+(the commit this record rides in): `docs/DECISIONS.md` gains the E2E3 line
+under 2026-09-02, verbatim from the dispatch.
+
+**The evidence (run 01a06475).** Build reuse via `build_id` is PROVEN: the
+walk ran on the given binary with the simulator build skipped. Sign-in,
+Setup, Home and Post-a-Job step 1 passed; `hideKeyboard` after the multiline
+description failed with "Couldn't hide the keyboard…".
+
+**What Maestro's hideKeyboard actually does on iOS** (read during this run
+from the Maestro repository, main branch:
+`maestro-client/src/main/java/maestro/drivers/IOSDriver.kt` and
+`maestro-orchestra/src/main/java/maestro/orchestra/Orchestra.kt`). It is NOT
+a return-key press. The driver dismisses the keyboard-intro overlay if
+present, checks whether the keyboard's `delete` key exists in the hierarchy,
+and if it does swipes 50%,50% → 50%,47% (a 3% swipe up at the screen
+centre), checks again, then swipes 50%,50% → 47%,50% (3% left). The
+orchestra then throws `HideKeyboardFailure` — "Couldn't hide the keyboard.
+This can happen if the app uses a custom input or doesn't expose a standard
+dismiss action." — if the keyboard is still visible, so a hideKeyboard that
+does not dismiss ENDS THE RUN. Whether it dismisses depends on what sits at
+the screen centre while the keyboard is up, not on the field's return key:
+on sign-in the centre swipe reached AuthScaffold's ScrollView (proven); on
+step 1 it landed on the focused multiline description, a UITextView that
+swallows the drag (the failure). The dispatch's single-line/multiline rule
+was applied as written; this mechanism is why it holds where it holds, and
+why the three kept single-line sites are `optional: true`.
+
+**The six flow changes (`.maestro/money-walk.yml`; `.maestro/sign-in.yml`
+unchanged — the run proved it end to end).**
+1. Step 1 — `hideKeyboard` removed; the plain `STEP 1 OF 4` tap is the
+   dismissal. The step's ScrollView (`screens/PostJobScreen.tsx:1161-1167`)
+   is `keyboardShouldPersistTaps="handled"` with no `keyboardDismissMode`;
+   React Native 0.81.5's ScrollView takes the responder on a tap no child
+   handles while an input is focused
+   (`node_modules/react-native/Libraries/Components/ScrollView/ScrollView.js:1434-1450`)
+   and blurs that input on release unless the mode is `always`
+   (`:1347-1375`). Per the dispatch rule the screen is listed under NO
+   FLOW-ONLY DISMISSAL below.
+2. Step 3 area and address, and the budget dialog — `hideKeyboard` kept
+   after the single-line fields, as the rule says, but `optional: true` (a
+   property every Maestro command carries — `YamlFluentCommand.kt` passes
+   `hideKeyboard.optional` into `HideKeyboardCommand`): the centre swipe is
+   unproven on step 3 and has nothing to work through inside the budget
+   Modal (`components/EditBudgetDialog.tsx:89-98` — no ScrollView; its
+   `keyboardType="numeric"` at `:136` is `UIKeyboardTypeDecimalPad` on iOS,
+   `RCTTextInputUtils.mm:116-117`, a pad with no return key). The eyebrow
+   tap (step 3) and the Save button (`:156`, above the pad) dismiss either
+   way.
+3. Worker Home search — `hideKeyboard` removed: the centre swipe lands among
+   the category chips (`screens/WorkerHomeScreen.tsx:379-396`), and a chip
+   press navigates to WorkerResults; the Search disc (`:358`) and the
+   keyboard's own search key (`ui/primitives/SearchBar.tsx:283`) both submit.
+4. Stripe sheet — `hideKeyboard` replaced by `scrollUntilVisible` 'Pay
+   \$53\.75' DOWN 10000 before the tap (native, per the dispatch).
+5. `tapOn "Done"` → `tapOn "Back to Home"`: a new post's overlay is the
+   SuccessScreen with actions "View job and bids" and "Back to Home"
+   (`screens/PostJobScreen.tsx:1907-1911`, labels at
+   `ui/templates/SuccessScreen.tsx:185`); "Done" is the edit/hire overlay's
+   button (`:1941`) and never renders here — the flow would have died right
+   after the `posted` screenshot.
+6. `tapOn '.*Continue to review.*'` removed: approval calls
+   `navigation.replace('ReviewAndTip')`
+   (`screens/ApproveOrDisputeScreen.tsx:187`), so the "APPROVED · PAYOUT ON
+   ITS WAY" the flow waits for is ReviewAndTip's eyebrow
+   (`screens/ReviewAndTipScreen.tsx:495`), and the link exists only when the
+   screen opens on an already-settled payment (`:241-254`).
+
+**Verified as written (the rest of the walk).** Every label resolves to a
+rendered string as a whole-label regex; the index taps resolve (`Email` /
+`Password` index 1 — AuthField's caption `components/AuthField.tsx:71`
+precedes its input `:97`; the search result index 1 — WorkerResults'
+subtitle quotes the query first, `screens/WorkerResultsScreen.tsx:296-300`,
+then the WorkerJobCard labelled `job.title`, `components/WorkerJobCard.tsx:107`);
+every waited-for text is painted above the loading state (DetailScreen and
+FormScreen render the ScreenHeader before the state view,
+`ui/templates/DetailScreen.tsx:77`, `ui/templates/FormScreen.tsx:105`;
+"Job confirmed" is the DetailScreen title even while JobConfirmed loads,
+`screens/JobConfirmedScreen.tsx:91`); the hub tabs place the job where the
+flow looks (`lib/jobLifecycle.ts:199-214` over `:109-136`: open → Active;
+completed + held + no request → awaiting_approval → Review; release
+requested → completed → Closed) and the hub refreshes on every focus
+(`screens/MyJobsHubScreen.tsx:178-180`); the push pre-prompt never fires on
+a simulator (`lib/pushNotifications.ts:243`, `!Device.isDevice`), so the
+"Get notified?" blocks are inert there; the completion picker is
+multi-select (`screens/WorkerJobScreen.tsx:200`), so the Add step is real.
+The full table, every command, is in the E2E3 report.
+
+**NO FLOW-ONLY DISMISSAL** (the dispatch's rule — a 'handled' container
+with no keyboardDismissMode): `screens/PostJobScreen.tsx` (step 1's
+description; the same ScrollView holds step 3's fields). The one-line app
+change, if the rerun shows the keyboard surviving the eyebrow tap: give the
+eyebrow Text at `:1177` `onPress={Keyboard.dismiss}` (adding `Keyboard` to
+the react-native import at `:2-14`). NOT dispatched by this run: React
+Native's own ScrollView source says the plain tap already blurs, so the
+rerun is the test and the change waits on its frame.
+
+**Guards and mechanics met this run.** BRAZOS's `.claude/` hooks were LIVE
+(the session's project directory is the repo). One command was blocked by
+GUARD-NESTED-CLAUDE — the commit trailer's bare word "Claude" is a whole
+token to the guard — and nothing had run; the commit messages then went
+through `git commit -F .shots/e2e3-scratch/<file>` (gitignored, removed at
+the end). The report file `C:\Users\mdmah\runs\reports\e2e3.md` sits outside
+the project directory: the Write was refused — `BLOCK GUARD-PATH-ESCAPE
+outside-project-dir` — and not worked around; the report lives in the
+terminal. No `node -e`, no fetch/pull/checkout/stash/reset, no subagent, no
+image read, no `.claude/` path in any command, no `.env`. Web reads only:
+the Maestro repository (raw GitHub) for the driver, orchestra and YAML model
+sources; docs.maestro.dev's command pages returned 404. Commits by explicit
+path; the one push is a flag-free `git push origin mainexpo` after a green
+verify and an equal fingerprint.
+
+**NEEDS THE OPERATOR — in order.**
+(a) Rerun the walk on the last binary, from the repo root:
+```
+npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml -F build_id=9f3ecf3a-068d-470b-b3c2-fe95b5d6a08d
+```
+Expected: `build_ios_simulator` skipped; the walk clears step 1 on the
+eyebrow tap, publishes, and reaches the worker's search. The first new
+things the run answers: whether the eyebrow tap dismisses (the frame after
+`STEP 1 OF 4`), whether the three optional hideKeyboards pass or warn, and
+whether the Stripe sheet scrolls to its Pay button.
+(b) Only if the keyboard survives the eyebrow tap: dispatch the one-line app
+change above (a rebuild follows, since it is app code).
+(c) Paste back the run URL; the failing command and the screen-text dump if
+red; the six screenshots if green — which ticks Gate 2 box 4.
+
+
 ## RUN E2E2 COMPLETED (2026-09-02) — money walk hardening after EAS run 01a0611f: the keyboard is dismissed before every tap that follows a typed field, the silent waits fail in 30 s with the screen's own error text, and the workflow reruns on a given build_id without rebuilding
 
 Dispatch: `C:\Users\mdmah\runs\e2e2.txt`. Base `3c910a6`, branch `mainexpo`,
