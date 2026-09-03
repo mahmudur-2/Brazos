@@ -342,14 +342,32 @@ appId: app.brazos.mobile.preview
     text: 'Photo, .*'
     index: 0
 - tapOn: 'Add( \(\d+\))?'
+# E2E6 (run 01a06511): red one step past "Mark complete" — the in-progress
+# card, "1/5 photos" and no alert still on screen, the button enabled before
+# the tap and 60 s after it, so no write was in flight: the tap never reached
+# the handler. Two guards. The Button is disabled while an upload is in
+# flight (disabled={uploadingMedia}; handleComplete returns early on the same
+# flag), so the picker's "Uploading…" is waited out and the counter waited in
+# before the scroll. And that tap landed at y=742 on a button laid out at
+# 716–768 — under the tab bar's raised items (746–834,
+# ui/primitives/BottomNav.tsx), which Maestro does not count as covering —
+# so a short drag lifts the button clear before the tap; only the bar
+# clearance lies below it, so the drag cannot carry it off the top.
 - extendedWaitUntil:
-    visible: '1/5 photos.*'
-    timeout: 180000
+    notVisible: "Uploading…"
+    timeout: 60000
+- extendedWaitUntil:
+    visible: '.*1/5 photos.*'
+    timeout: 60000
 - scrollUntilVisible:
     element:
       text: "Mark complete"
     direction: DOWN
-    timeout: 20000
+    timeout: 30000
+- swipe:
+    start: 50%, 60%
+    end: 50%, 45%
+    duration: 600
 - tapOn: "Mark complete"
 - extendedWaitUntil:
     visible: "Finished work"
@@ -395,11 +413,23 @@ appId: app.brazos.mobile.preview
       text: "Review & approve the work"
     direction: DOWN
     timeout: 60000
+# E2E6 (A2): the bar is in flow, but Maestro counts an element laid out under
+# it as visible (E2E5's "Mark complete", Act 4), so every control a scroll can
+# leave in the bar's band gets the same short drag before its tap.
+- swipe:
+    start: 50%, 60%
+    end: 50%, 45%
+    duration: 600
 - tapOn: "Review & approve the work"
 - extendedWaitUntil:
     visible: '.*Approve & release \$53\.75.*'
     timeout: 30000
 - tapOn: '.*Approve & release \$53\.75.*'
+# E2E6 (A1): the ConfirmDialog's own title (screens/ApproveOrDisputeScreen.tsx)
+# is on screen before its confirm is tapped.
+- extendedWaitUntil:
+    visible: 'Release \$53\.75 to the worker\?'
+    timeout: 30000
 - tapOn: "Approve & release"
 # E2E3: approval replaces the approval screen with Review & tip outright
 # (screens/ApproveOrDisputeScreen.tsx, approveAndRelease), so the APPROVED
@@ -409,12 +439,22 @@ appId: app.brazos.mobile.preview
 - extendedWaitUntil:
     visible: "APPROVED · PAYOUT ON ITS WAY"
     timeout: 60000
+# E2E6 (A1): the approval screen renders the same eyebrow once the release
+# call returns (setPayment precedes the replace), so Review & tip's own
+# header title is waited for before the screenshot and the star.
+- extendedWaitUntil:
+    visible: "Review & tip"
+    timeout: 30000
 - takeScreenshot: approved
 - scrollUntilVisible:
     element:
       id: review-star-5
     direction: DOWN
     timeout: 30000
+- swipe:
+    start: 50%, 60%
+    end: 50%, 45%
+    duration: 600
 - tapOn:
     id: review-star-5
 - scrollUntilVisible:
@@ -422,6 +462,10 @@ appId: app.brazos.mobile.preview
       text: "Submit review"
     direction: DOWN
     timeout: 20000
+- swipe:
+    start: 50%, 60%
+    end: 50%, 45%
+    duration: 600
 - tapOn: "Submit review"
 - extendedWaitUntil:
     visible: 'Thanks for rating.*'
@@ -450,6 +494,10 @@ appId: app.brazos.mobile.preview
           start: 2%, 50%
           end: 90%, 50%
           duration: 400
+      # E2E6 (A1): the hub's own subtitle before its tab is tapped.
+      - extendedWaitUntil:
+          visible: 'Jobs you posted, from first bid to final review\.'
+          timeout: 30000
       - extendedWaitUntil:
           notVisible: "Loading your jobs…"
           timeout: 30000
@@ -459,6 +507,10 @@ appId: app.brazos.mobile.preview
             text: '.*${output.title}.*'
           direction: DOWN
           timeout: 30000
+      - swipe:
+          start: 50%, 60%
+          end: 50%, 45%
+          duration: 600
       - tapOn: '.*${output.title}.*'
       - scrollUntilVisible:
           element:
