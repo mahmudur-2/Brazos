@@ -73,6 +73,7 @@ export function Button({
   icon,
   iconPosition = 'trailing',
   style,
+  accessibilityLabel,
   ...rest
 }: ButtonProps) {
   const styles = stylesFor();
@@ -213,6 +214,11 @@ export function Button({
             : styles.pressed),
         typeof style === 'function' ? style(state) : style,
       ]}
+      // E2E5: on iOS this Pressable is one element whose folded label is the
+      // glyph plus the title when an icon is set; the explicit label is the
+      // title alone, so an exact match hits it. A caller-supplied label wins.
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? title}
       {...rest}
     >
       {loading ? (

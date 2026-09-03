@@ -88,6 +88,12 @@ export function ActionSheet({
           { paddingBottom: insets.bottom + spacing.lg },
         ]}
         onPress={onClose}
+        // E2E5: a Pressable is accessible by default, and on iOS an accessible
+        // view is ONE element that folds its children's text and hides them —
+        // so the backdrop and card below folded the whole sheet into a single
+        // element with no reachable row (EAS run 01a064ef, "Element not found:
+        // Text matching regex: My jobs"). Neither container is a control.
+        accessible={false}
       >
         {/* MOTION1 (C3): the frosted layer sits over the scrim this backdrop
             already paints, and under the sheet. Absent on web and on any
@@ -98,7 +104,7 @@ export function ActionSheet({
             hairline and blur from ui/tokens.ts's table, geometry unchanged
             via the radius prop. The backdrop above and every open/close
             mechanic are byte-identical. */}
-        <Pressable onPress={() => {}}>
+        <Pressable accessible={false} onPress={() => {}}>
           <Surface material="sheet" corners="all" radius={dialogRadius} style={[styles.sheet, sheetShadowDial != null && { shadowOpacity: sheetShadowDial }]}>
           {(title || subtitle) && (
             <View style={styles.header}>
@@ -112,6 +118,10 @@ export function ActionSheet({
               key={item.key}
               style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
               onPress={item.onPress}
+              // E2E5: the row's own folded label would be glyph + text; the
+              // explicit label is the text alone, so an exact match hits it.
+              accessibilityRole="button"
+              accessibilityLabel={item.label}
             >
               {item.icon && (
                 <Ionicons
@@ -129,6 +139,8 @@ export function ActionSheet({
           <Pressable
             style={({ pressed }) => [styles.cancel, pressed && styles.itemPressed]}
             onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
