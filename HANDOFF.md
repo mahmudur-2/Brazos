@@ -97,6 +97,147 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E4 COMPLETED (2026-09-02) — the customer's path to Accept asserted step by step; the walk had fallen through the [ + ] sheet, which iOS folds into one element
+
+Dispatch: `C:\Users\mdmah\runs\e2e4.txt`. Base `619f870`, branch `mainexpo`,
+tree clean; ancestry gate printed `mainexpo`, merge-base exit 0, empty
+porcelain. Nothing in this run touched app code, `eas.json`, `app.config.ts`,
+`package.json`, `supabase/`, `.github/`, `.eas/`, the guard directory,
+`.env` or `start.ps1`; no database was contacted; no dependency added; no
+web read. `npm run verify` exited 0 before the commit (1296 tests, 0
+failing, lint clean); `tests/maestroFlows.test.mjs` passed unchanged.
+
+**Commits.** C1 `6c786cf` — E2E4: customer reaches the job through My Jobs,
+not Home (`.maestro/money-walk.yml`, `docs/BACKLOG.md`), pushed
+`619f870..6c786cf`. C2 — this record (the commit it rides in, docs only).
+
+**The evidence the dispatch carried (the run on build 9f3ecf3a, before this
+run).** money-walk failed after 4m02s with `No visible element found:
+"Accept offer"`; its last frame was customer Home with the worker-mode
+prompt open and the E2E card reading "1 pro interested" — the bid had
+landed. The dispatch read that as the flow tapping the E2E title on Home.
+It was — but the flow at `619f870` already went [ + ] → "My jobs" first
+(`.maestro/money-walk.yml`, Act 3), so the customer had fallen THROUGH the
+sheet.
+
+**The cause, read from the source.** `components/ActionSheet.tsx` wraps the
+whole sheet in two Pressables — the full-screen backdrop
+(`onPress={onClose}`, line 83) and the card (`onPress={() => {}}`, line
+101). Pressable is `accessible` by default (`react-native` 0.81.5,
+`Libraries/Components/Pressable/Pressable.js:245`, `accessible: accessible
+!== false`), and on iOS an accessible view is ONE accessibility element
+whose label folds every child's text (`React/Views/RCTView.m`,
+`RCTRecursiveAccessibilityLabel`, joined by spaces) and whose children are
+not exposed to VoiceOver or XCUITest. Maestro's text selectors match a
+whole label as a regex and take the deepest matching element; `.*My
+jobs.*` therefore matched the whole-sheet element — "What do you need? …
+Post a job … Hire someone again … My jobs Cancel" — and the tap went to
+its centre, the screen centre, which is the scrim: `onClose` fired, the
+sheet closed, nothing navigated. `extendedWaitUntil notVisible "Loading
+your jobs…"` passed on Home trivially, `scrollUntilVisible` found the E2E
+title on Home's Nearby card (the poster's own job wears a "Your job" chip
+but runs the same `browseOpenJobs()` as every other card,
+`screens/HomeScreen.tsx:868` and `:484`), the title tap opened the
+mode-switch prompt, and "Accept offer" was never on screen. Consistent
+with everything that passed: every icon-bearing control the walk already
+taps carries an explicit `accessibilityLabel` (Chip, "Edit budget", "Use my
+current location", "Post a job", "Search"), and the Setup card is tapped
+as `.*Hire help.*`, the bracketed form a folded element needs. This is also
+a VoiceOver defect: the [ + ] creation sheet reads as a single element and
+none of its rows can be activated. `navigateAcrossTabs('MyJobs')` itself is
+sound — the tab navigator is the container's root (`App.tsx`,
+`navigation/ModeShell.tsx`), `MyJobs` is a registered hidden route, and
+`canNavigateTo` finds it.
+
+**The flow changes (`.maestro/money-walk.yml`, Acts 3 and 5 — the two
+customer segments that re-open the job through the sheet; the sixteen
+released slices pop back to the hub by edge swipe and are unchanged, D3).**
+1. The [ + ] is tapped by its accessibilityLabel "Create"
+   (`ui/primitives/BottomNav.tsx:793`) — D2's first branch; the point
+   fallback was not needed and BACKLOG line (b) was not added.
+2. The sheet must be open before its row is tapped: `extendedWaitUntil`
+   `'.*What do you need\?.*'` 30 s (`navigation/CustomerRoot.tsx:219`),
+   bracketed because the sheet may be one folded element.
+3. The row is tapped by its exact label "My jobs"
+   (`navigation/CustomerRoot.tsx:235`): a bracketed pattern would accept
+   the whole-sheet element and tap the scrim again. Under the fold this
+   fails at once with "Element not found" and a frame showing the sheet
+   open — which is the proof; if the rows are exposed it hits the row.
+4. The customer hub must be on screen before the job is looked for:
+   `'Jobs you posted, from first bid to final review\.'`
+   (`screens/MyJobsHubScreen.tsx:298`), then the existing
+   `notVisible "Loading your jobs…"` (`:311`). An open job sits under the
+   default Active filter (`lib/jobLifecycle.ts`, `deriveMyJobsTab`), so no
+   filter tap in Act 3; Act 5 keeps its "Review" tap (`:65`).
+5. The job screen's title before the offer: `'Job & bids'` in Act 3 and
+   `"Job detail"` in Act 5 (`screens/ClientJobDetailScreen.tsx:446`,
+   `canAccept = job.status === 'open'` at `:155`, from the route params, so
+   the title is right on first render). Then the existing
+   `notVisible "Loading bids…"` (`:692`), "Accept offer"
+   (`components/OfferCard.tsx:238`, a Button outside any pressable Card),
+   "Accept bid" (the ConfirmDialog `confirmText`, `:1272`; its backdrop is
+   a plain View) and the Checkout steps, unchanged.
+Acceptance gates: `grep -rn "Switch to Worker\|browseOpenJobs" .maestro/`
+returns nothing; `git diff --stat` at C1 named only the two files.
+
+**`docs/BACKLOG.md`, under v1 bugs.** (a) The Home card that offers the
+mode switch instead of the client job detail, verbatim from the dispatch.
+(c) The ActionSheet fold above, with its fix: `accessible={false}` on the
+backdrop and card Pressables (the rows keep their own) — an app change
+needing a rebuild. The dispatch's grep anchor `Chip.tsx` does not exist in
+the file; the lines went under "## v1 bugs", the section for app defects.
+
+**The rerun (run `01a064ef-0dd6-7cc3-b965-1ebdaea430de`, on build
+9f3ecf3a, build job skipped).**
+RED, where the change said it would break, and the line is the proof:
+`money-walk (3m 27s) (Element not found: Text matching regex: My jobs)` —
+JUnit: `Element not found: Text matching regex: My jobs`, `time="206.675"`,
+device `iPhone 16 - iOS 18.3`, `eas exit: 11`. Sign-in, Setup, all of Act 1,
+all of Act 2 (search, bid, "Pending bids") and Act 3's sign-in passed
+again; the [ + ] tap passed; the NEW sheet-open assert
+`'.*What do you need\?.*'` PASSED — the sheet was on screen — and the
+exact-label tap "My jobs" found no element while that label was painted
+inside the sheet. That is the fold: to XCUITest the sheet is one element
+and its rows are not, so the previous run's bracketed pattern had matched
+the whole sheet and tapped its centre. 35 s shorter than the previous run
+(3m27s vs 4m02s): it stopped inside the tap's own lookup rather than after
+a 30 s scroll for "Accept offer". Nothing past "My jobs" ran, so the hub
+subtitle, "Job & bids", "Accept bid", the Stripe sheet and the picker (D9)
+stay unproven. The failure frame
+(`Failure Screenshot: money-walk (attempt 1)`) was downloaded but NOT
+inspected — this run's evidence guard refuses image reads without operator
+authorization; the operator can view it on the run page. Run:
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/workflows/01a064ef-0dd6-7cc3-b965-1ebdaea430de`.
+
+**Guards and mechanics met this run.** GUARD-DYNEXEC blocked one command
+carrying a `node -p` version read; the read was redone with grep. GUARD-GIT
+blocked a push chained after the commit (`git-push-not-gated-mainexpo`);
+nothing had run, and the push then went as its own flag-free
+`git push origin mainexpo`. GUARD-CLAUDEDIR blocked a heredoc whose TEXT
+named the guard directory; reworded and written through the file tool
+instead. The commit message went through `git commit -F
+.shots/e2e4-msg.txt` (gitignored). No guard-directory path in any command,
+no `.env`, no fetch/pull/checkout/stash/reset, no subagent.
+
+**NEEDS THE OPERATOR — in order.**
+(a) The one-line app fix, dispatched as app code with a rebuild:
+`components/ActionSheet.tsx` — `accessible={false}` on the backdrop
+Pressable (line 83) and on the card Pressable (line 101); the row
+Pressables keep their default. Pair it with BACKLOG (a) if the same touch
+is wanted: `screens/HomeScreen.tsx` OpenJobCard `onPress`, `isOwn` →
+`navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job })`. The flow needs
+no change for either.
+(b) After that build lands, from the repo root:
+```
+npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml
+```
+Expected: the walk clears the sheet on "My jobs", the hub subtitle and
+"Job & bids" appear, "Accept bid" opens Checkout. The first new things the
+run answers: whether the Stripe sheet scrolls to its Pay button, and
+whether the system photo picker can be driven (D9).
+(c) Paste back the run URL; the failing command and the screen-text dump if
+red; the six screenshots if green — which ticks Gate 2 box 4.
+
 ## RUN E2E3 COMPLETED (2026-09-02) — the money walk dry-run against the source, command by command, after EAS run 01a06475: six flow fixes, no app code, and the keyboard rule grounded in what Maestro's hideKeyboard actually does on iOS
 
 Dispatch: `C:\Users\mdmah\runs\e2e3.txt`. Base `1ff2399`, branch `mainexpo`,
