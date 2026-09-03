@@ -97,6 +97,144 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E8 COMPLETED (2026-09-03) — the green money walk: Gate 2 box 4 ticks on run 01a065d8, after one flow-only fix between two runs on the reused build
+
+Dispatch: `C:\Users\mdmah\runs\E2E8.txt`. Base `a890ee9`, branch `mainexpo`,
+tree clean; ancestry gate printed `a890ee9`, merge-base exit 0, empty
+porcelain. Files changed: `.maestro/money-walk.yml` (C1), then
+`docs/GATES.md`, `docs/DECISIONS.md`, `docs/BACKLOG.md` and this record
+(C2). NO app file changed, so both runs reused build `8aa5fe85`. Nothing
+touched `screens/`, `components/`, `lib/`, `eas.json`, `.eas/`, `.github/`,
+`supabase/`, `package.json`, the guard directory, `.env` or `start.ps1`; no
+database was contacted; no dependency added. `npm run verify` exited 0
+before each commit (1296 tests, 0 failing, lint clean).
+
+**Commits.** C1 `ed7df73` — E2E8: the in-loop drag crept the Closed card
+under the hub header (`.maestro/money-walk.yml` only), pushed
+`a890ee9..ed7df73` by the bare `git push origin mainexpo`. C2 — this record
+with the three docs, pushed the same way.
+
+**What was read (step 1).** HANDOFF §E2E7 for the command shape:
+`npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml -F build_id=8aa5fe85-35ce-4399-95dd-77645ef7f5f1`,
+this run adding `--wait` (exit 0 green, 11 failure; it prints the JUnit
+lines itself). `workflow:view <run-id> --json --non-interactive` lists the
+jobs, their statuses and every artifact with a one-hour download URL; the
+`Maestro Test Results` `artifacts.tar.gz` unpacks with `tar --force-local`
+to `tests/<stamp>/money-walk/{commands.json,logs/maestro.log,screen-hierarchy,screenshots,takeScreenshot,manifest.json}`,
+and on iOS the hierarchy's content lives in `accessibilityText`, not
+`text`. `workflow:logs <run-id> --non-interactive` printed only "No
+workflow job found that matched the provided ID" and went unused. The
+released-wait block of `.maestro/money-walk.yml` (D10: sixteen 30 s slices,
+each popping to the hub by the chevron at 6%,11%, "Closed", the job card
+by title, the scroll anchor `Payment released|Work approved.*`, the
+optional 30 s wait on "Payment released"; the loop's `while` and the final
+`assertVisible` on "Payment released" alone). `screens/ClientJobDetailScreen.tsx`,
+the card area on the customer's own completed job: the ternary at
+`:1149-1209` runs `lifecycle === 'disputed'` → `'awaiting_approval'` →
+`isReleased()` → `releaseRequested`, and never reads whether a review
+exists (no `hasReview` / `reviewed` in the file; the legacy `ReviewSection`
+at `:1217` sits on the no-ledger branch only), so a submitted review
+changes nothing below; `lib/jobLifecycle.ts:117` returns `'completed'` for
+a held row with `release_requested_at` set; `lib/paymentRules.ts:21-37`
+defines `isReleased` (released or paid_out) and `isReleaseRequested` (held
++ `release_requested_at`).
+S1 — held, `release_requested_at` set, review submitted, stripe mode:
+payment card eyebrow "APPROVED · PAYOUT ON ITS WAY", `MoneyText` "$53.75"
+with caption "Funds held in protection" (`ui/primitives/MoneyText.tsx:27`);
+approval card title "Work approved — payout on its way", notice "You
+approved E2E Worker’s work. The payment is on its way to them and shows as
+released when the transfer lands. Leave a review whenever you like.",
+button "Review". Confirmed as rendered by run 01a065c7's slice-1 capture
+(`step-255-assertCondition-Payment_released.json`), every string present.
+S2 — released, review submitted, stripe mode: eyebrow "PAYMENT", "$53.75"
+with caption "Released to worker" (`MoneyText.tsx:28`); approval card
+title "Payment released", notice "All settled with E2E Worker. Leave a
+review.", button "Review". (Sandbox mode would read "PAYMENT · SANDBOX",
+"All settled with E2E Worker. Leave a review — and a tip, if you’d like."
+and "Review & tip"; the walk runs stripe.)
+
+**The anchor: UNCHANGED.** "Payment released" is the S2 title and nothing
+in S1 matches it under either a full-match or a substring reading; the
+scroll alternation matches the S1 title whole and the S2 title whole, so no
+slice fails on the anchor while S1 shows. Step 2 edited nothing.
+
+**Run 1 — `01a065c7-ae38-75c4-8204-3faaec26cce9`, RED at 7m41s (JUnit
+`time="461.459"`, `money_walk` FAILURE, `eas exit: 11`).**
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/workflows/01a065c7-ae38-75c4-8204-3faaec26cce9`.
+Failing line: `No visible element found: "Payment released|Work approved.*"`
+— the loop's scroll anchor, in the SECOND slice, after 26 "Element not
+found" retries over its 60 s (22:48:52 → 22:49:54 simulator clock, local
+2026-09-02 = UTC 05:4x 2026-09-03). The hierarchy at the failure
+(`step-263-scrollUntilVisible-Payment_releasedWork.json`) is the My Jobs
+hub — "My jobs", "Jobs you posted, from first bid to final review.",
+"Closed", four Closed cards ("Completed, 4 min ago … E2E 1788414134252",
+"53 min ago … E2E 1788411215398", "1 h ago … E2E 1788407944188", "2 h ago
+… E2E 1788405598378") — not the job screen: the card tap had missed. Slice
+1 tapped the card at `[16,150][377,343]` and reached the job screen (its
+optional wait WARNED on S1, as designed); slice 2 found the same card at
+`[16,33][377,226]`, centre y=129, inside the hub's fixed title-and-tab band
+(the "Closed" tab sat at `[258,161][373,205]` in both slices), and tapped
+nothing. THE CAUSE: the hub (`screens/MyJobsHubScreen.tsx`) is one
+`ScrollView` with a `RefreshControl` that keeps its offset across the pop,
+and the loop's E2E6 (A2) drag (50%,60% → 50%,45%, ≈117 px) accumulated
+slice by slice. E2E7 ran all sixteen slices on the same flow only because
+Closed then held two cards and could not scroll; with four it scrolls, and
+the second drag pushed the card under the header. Flow-only, so C1: the
+drag is removed from the loop (the run's own job is the newest card under
+Closed, at `[16,266][377,459]` with no gesture — clear of the header and of
+the bottom bar; a pull-down reset was rejected because it would trigger the
+refresh), and a 30 s `extendedWaitUntil visible "Job detail"` follows the
+card tap, the E2E7 D2 fail-fast shape. Not inspected: the failure frame,
+the recording and the step captures (images, per the standing rule).
+
+**Run 2 — `01a065d8-0147-7d7c-bc67-20ee4b3512e9`, GREEN (JUnit
+`time="635.205"`, `money_walk` SUCCESS, run SUCCESS, `eas exit: 0`,
+`build_ios_simulator` SKIPPED as designed).**
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/workflows/01a065d8-0147-7d7c-bc67-20ee4b3512e9`.
+Fired 05:57:30 UTC, finished 06:11:01 UTC. Job `E2E 1788415205724`,
+"Cleaning · Brighton Beach, Cancún, NY, Worker · E2E Worker, $50". The six
+screenshots, as the bundle's `manifest.json` lists them (kind
+`TAKE_SCREENSHOT`, count 6, `money-walk/takeScreenshot/`): `posted.png`
+23:01:50, `bid.png` 23:02:49, `held.png` 23:04:10, `completed.png`
+23:04:58, `approved.png` 23:05:56, `released.png` 23:10:39 (simulator
+clock, local 2026-09-02; UTC 06:0x–06:10 2026-09-03). The run page's
+artifacts: `iOS Maestro Test Report (junit)`, `Maestro Test Results`
+(`artifacts.tar.gz`, the bundle above) and `Screen Recording`
+(`record_screen` on). The loop: seven slices, the card tapped at
+`[16,266][377,459]` in every one (the fix proven), the in-loop "Job detail"
+fail-fast passed in ≈1.2 s each time, the optional wait WARNED six times
+(23:06:45 → 23:10:19), and the seventh slice saw "Payment released" — loop
+COMPLETED 23:10:39.15, final assert COMPLETED 23:10:39.33 — 4 min 43 s
+after the `approved` screenshot and 4 min 38 s after "Thanks for rating",
+inside one five-minute settlement tick. D10's sixteen slices stand.
+
+**Gate 2 box 4 is TICKED** (`docs/GATES.md`: run 01a065d8, build 8aa5fe85,
+the six screenshots, record_screen on). E2E1–E2E8 are the money-walk
+sequence that closed it: E2E1 the flow, the workflow, the profile and the
+fence; E2E2 the keyboard and the error-text waits; E2E3 the dry run and
+build reuse; E2E4 the [ + ] sheet; E2E5 Accept, Checkout, the Stripe sheet
+and the picker; E2E6 Mark complete, approval and the review; E2E7 the
+chevron pop and the first full loop, red because the fixture had no
+Connect account; E2E8 the fixture onboarded by the operator
+(`docs/DECISIONS.md` 2026-09-03, D4 amended), the hub-drift fix and the
+green run. `docs/BACKLOG.md` §v1 bugs gains the process-settlements
+`payouts_enabled` item.
+
+**Guards and mechanics met this run.** None fired. Both commit messages
+went through `git commit -F .shots/E2E8-msg.txt` (gitignored, written by
+the file tool, rewritten for C2); both pushes were the bare
+`git push origin mainexpo`; no `node -p`, no `2>&1`, no guard-directory
+path in any command or file, no `.env`, no fetch/pull/checkout/stash/reset,
+no subagent; recursive searches stayed inside `screens/`, `components/`,
+`lib/`, `.maestro/`, `docs/` and `supabase/`. Both bundles stayed in the
+session scratchpad; no fixture login was written to any file or this
+record. `workflow:status <run-id>` waits like `--wait` does; the poll that
+survives the tool's ten-minute cap is `workflow:view --json` every 60 s.
+
+**NEEDS THE OPERATOR.** Nothing for this box. Next: the process-settlements
+`payouts_enabled` fix is a money run of its own (BACKLOG §v1 bugs); the
+three accessibility items already there ride with the next app touch.
+
 ## RUN E2E7 COMPLETED (2026-09-03) — the header chevron pops both screens and the released loop runs for the first time, all sixteen slices; red at the final assert, because the transfer never landed in the twelve minutes the loop watched
 
 Dispatch: `C:\Users\mdmah\runs\e2e7.txt`. Base `f7c8a3f`, branch `mainexpo`,
