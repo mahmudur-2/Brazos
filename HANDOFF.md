@@ -97,6 +97,134 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E7 COMPLETED (2026-09-03) — the header chevron pops both screens and the released loop runs for the first time, all sixteen slices; red at the final assert, because the transfer never landed in the twelve minutes the loop watched
+
+Dispatch: `C:\Users\mdmah\runs\e2e7.txt`. Base `f7c8a3f`, branch `mainexpo`,
+tree clean; ancestry gate printed `mainexpo`, merge-base exit 0, empty
+porcelain. Files changed: `.maestro/money-walk.yml`, `docs/BACKLOG.md` (one
+line) and this record. NO app file changed, so the rerun reused build
+`8aa5fe85`. Nothing touched `screens/`, `components/`, `.gitignore`,
+`eas.json`, `.eas/`, `.github/`, `supabase/`, `package.json`, the guard
+directory, `.env` or `start.ps1`; no database was contacted; no dependency
+added. `npm run verify` exited 0 before the flow commit (1296 tests, 0
+failing, lint clean); the docs commit changes no code.
+
+**Commits.** C1 `5bf1b28` — E2E7: pop by the header chevron; released loop
+exits only on the released copy (`.maestro/money-walk.yml`,
+`docs/BACKLOG.md`), pushed `f7c8a3f..5bf1b28` by the bare
+`git push origin mainexpo`. C2 — this record, docs only, pushed on its own.
+
+**The flow (`.maestro/money-walk.yml`), D1–D6 as dispatched.** D1: both
+headers popped are the bare chevron — `screens/ReviewAndTipScreen.tsx:465`
+and `screens/ClientJobDetailScreen.tsx:445` each render `ScreenHeader` with
+`onBack={goBackOrHome}` and no `backLabel`, so there is no "Back to …" label
+to tap; both edge swipes became `tapOn: point: "6%,11%"`, the centre of the
+chevron's `[12,81][38,108]` frame on the pinned iPhone 16, once after the
+"Thanks for rating.*" wait and once inside the loop, the first carrying the
+comment that names run 01a06545 and the unlabeled chevron. D2:
+`extendedWaitUntil visible "Job detail"` 30 s follows the Review & tip pop;
+the hub-subtitle wait E2E6 added already sits directly after the loop's pop
+and was not duplicated. D3: nothing — `ReviewAndTipScreen` has no
+`beforeRemove`, and its `ConfirmDialog` (`:654`) guards the tip send
+(`confirmTip`), not leaving. D4: the loop's exit was ALREADY released-only —
+`while: notVisible: "Payment released"`, the final `extendedWaitUntil` and
+the `assertVisible` all use "Payment released", the `approvalTitle` at
+`screens/ClientJobDetailScreen.tsx:1180`, rendered only under
+`isReleased(payment)` (`lib/paymentRules.ts:22`: `released` or `paid_out`);
+"Work approved — payout on its way" (`:1197`) is the `releaseRequested`
+branch and satisfies none of them. The alternation
+`Payment released|Work approved.*` lives only in the two `scrollUntilVisible`
+anchors and stays there, now commented as the anchor and not the exit: a
+released-only scroll target fails every pre-release slice, which would break
+D10's sixteen-slice budget. D5: `docs/BACKLOG.md` §v1 bugs, one line after
+the StarRating line — the bare chevron's missing `accessibilityRole` /
+`accessibilityLabel`, fix in `components/ScreenHeader.tsx`, accessibility
+props only, to ride with the next app touch. D6: nothing before the "Thanks
+for rating.*" wait changed; the first flow hunk starts at line 475.
+Acceptance gates: verify green; `git diff --stat` names the two files only;
+`grep -n "start: 2%" .maestro/money-walk.yml` empty;
+`grep -rn "Switch to Worker\|browseOpenJobs" .maestro/` empty.
+
+**The rerun (run `01a06569-34f6-7297-86c5-7ccd6ec2c875`,
+`-F build_id=8aa5fe85-35ce-4399-95dd-77645ef7f5f1`; `build_ios_simulator`
+SKIPPED as designed, `money_walk` FAILURE, run FAILURE).** Run:
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/workflows/01a06569-34f6-7297-86c5-7ccd6ec2c875`.
+Failing Maestro line: `money-walk (18m 13s) (Assertion is false: "Payment
+released" is visible)` — the `assertVisible` AFTER the loop, not a step
+inside it; JUnit `<failure>Assertion is false: "Payment released" is
+visible</failure>`, `time="1092.78"`, device `iPhone 16 - iOS 18.3`,
+`eas exit: 11`. Milestone screenshots present: `posted`, `bid`, `held`,
+`completed`, `approved` — FIVE of six; `released` missing.
+PROVEN FOR THE FIRST TIME (simulator clock 21:xx, worker local, 2026-09-02;
+UTC 04:xx 2026-09-03):
+- The pop. "Thanks for rating.*" visible 21:05:03.756; `Tap on point
+  (6%,11%)` 21:05:03.757 → 21:05:04.922; "Job detail" visible 21:05:05.107
+  — the chevron popped Review & tip in 0.2 s, and the D2 fail-fast passed
+  at once. The first scroll found the approval card without moving
+  (21:05:05.295): the job screen kept its scroll offset across the push.
+- The loop, all sixteen slices. 17 `Tap on point (6%,11%) COMPLETED` (one
+  after the review, sixteen in the loop), 16 `Tap on "Closed" COMPLETED`,
+  16 `Assert that (Optional) "Payment released" is visible WARNED`; the
+  in-loop pop landed on the hub subtitle in ≈0.14 s every time. First slice
+  21:05:06.0, sixteenth ends 21:16:56.6; the final assert ran 21:16:57.6 →
+  FAILED 21:17:14.98. One slice costs ≈44.7 s — the 30 s optional wait plus
+  ≈15 s of pop, "Closed", job card and the anchor scroll (≈7 s: two
+  "Element not found" retries before the card came into view) — so D10's
+  "480000 ms in all" understates the loop: sixteen slices watch for
+  ≈11 min 51 s, and this run watched from ≈12 s after approval to
+  ≈12 min 25 s after it.
+- The job: `E2E 1788407944188`, "Cleaning · Brighton Beach, Cancún, NY,
+  Worker · E2E Worker, $50", sitting under Closed as "Completed, 4 min ago"
+  in the first slice and "Completed, 7 min ago" by the fifth.
+THE FAILURE is not the flow's. The final hierarchy
+(`step-391-assertCondition-Payment_released.json`) is the customer's job
+screen — "Job detail", "$53.75", the payment row "Funds held in protection",
+the card "Work approved — payout on its way" with its D23 notice ("You
+approved E2E Worker's work. The payment is on its way to them and shows as
+released when the transfer lands. Leave a review whenever you like.") and its
+"Review" button. `payments.status` was therefore still `held` with
+`release_requested_at` set, ≈12.4 minutes after approval. In the Gate 1
+device walk on this same staging project the transfer cleared first try,
+4 min 24 s after approval (`docs/GATES.md`, Gate 1 box 3). What the
+repository says about the path: `brazos-process-settlements` is a pg_cron
+job every 5 minutes (`supabase/migrations/20260910000000_settlement_schedules.sql:167`)
+that calls `drain_settlements()` (`:78-125`), which POSTs the
+`process-settlements` edge function with a URL and service key read from the
+Vault; the function reads `transfers_due`, looks the payee up in
+`payment_accounts`, and LEAVES IN THE QUEUE any payee with no
+`stripe_account_id` — "payee has no connected account yet, left in the
+queue" (`supabase/functions/process-settlements/index.ts:250-280`). The
+Gate 1 walk's worker was the operator's own, Connect-onboarded account; the
+E2E walk's worker is the `MAESTRO_E2E_WORKER_*` fixture. LEADING READING,
+NOT PROVEN (no database was contacted): the E2E worker has no connected
+account, so its transfer is never attempted and no slice count can see
+"Payment released". The alternative — the cron or its Vault secrets not
+firing on staging — is checkable by the same queries below. Not inspected:
+the failure frame, the sixteen step captures and the recording (images, per
+the standing rule). The bundle stayed in the session scratchpad; the four
+`MAESTRO_E2E_*` values it prints were kept out of every file and this record.
+
+**NEEDS THE OPERATOR — in order.**
+(a) In the staging SQL editor, for this run's job `E2E 1788407944188` and
+E2E6's `E2E 1788405598378` (whose transfer had a further seven hours to
+land): `payments.status`, `release_requested_at`, `transfer_attempts`,
+`updated_at`; whether each payment still sits in `transfers_due`; and
+`payment_accounts.stripe_account_id` for the E2E worker's `user_id`. Then
+`cron.job_run_details` for `brazos-process-settlements` between 04:05 and
+04:20 UTC on 2026-09-03 — whether it ran, and whether the function's log
+carries the "no connected account yet" line for that payee.
+(b) If the worker has no connected account: onboard the E2E worker fixture
+on Connect once, in test mode, through the app's own worker-mode payouts
+flow (`connect-onboarding`) — a staging-account step, no code, no flow
+change — then rerun with `-F build_id=8aa5fe85-35ce-4399-95dd-77645ef7f5f1`.
+The loop already watches ≈12 minutes, nearly three times the Gate 1
+release clock. If the account exists and the cron did not fire, the Vault
+secrets `process_settlements_url` / `process_settlements_service_key` and
+the cron job on staging are the next look.
+(c) Only if the transfer does land but later than ≈12 minutes: raise the
+loop's `times`, at ≈45 s per slice, in one dispatch.
+Gate 2 box 4 stays OPEN: five screenshots, no green run.
+
 ## RUN E2E6 COMPLETED (2026-09-02) — the walk clears "Mark complete", "Finished work", approval and the review for the first time, five of the six screenshots; red at the released copy, because the edge swipe does not pop Review & tip
 
 Dispatch: `C:\Users\mdmah\runs\e2e6.txt`. Base `b537f8c`, branch `mainexpo`,
