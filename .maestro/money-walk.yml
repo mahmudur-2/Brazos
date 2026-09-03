@@ -519,11 +519,18 @@ appId: app.brazos.mobile.preview
             text: '.*${output.title}.*'
           direction: DOWN
           timeout: 30000
-      - swipe:
-          start: 50%, 60%
-          end: 50%, 45%
-          duration: 600
+      # E2E8: NO drag before this tap. The hub is one ScrollView that keeps
+      # its offset across the pop, so the E2E6 (A2) drag accumulated slice by
+      # slice once Closed held enough cards to scroll (run 01a065c7: the card
+      # sat at y=150 in slice 1 and y=33 in slice 2, its centre inside the
+      # fixed title-and-tab band, and the tap opened nothing). The run's own
+      # job is the newest card under Closed, so with no gesture it stays clear
+      # of both the header and the bottom bar in every slice.
       - tapOn: '.*${output.title}.*'
+      # E2E8: fail fast — the tap must land on the job screen (E2E7 D2 shape).
+      - extendedWaitUntil:
+          visible: "Job detail"
+          timeout: 30000
       - scrollUntilVisible:
           element:
             text: 'Payment released|Work approved.*'
