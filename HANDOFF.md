@@ -97,6 +97,171 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN E2E5 COMPLETED (2026-09-02) — the [ + ] sheet unfolds on iOS and the walk clears it, Accept, Checkout, the Stripe sheet and the photo picker for the first time; red at "Finished work", one step after "Mark complete"
+
+Dispatch: `C:\Users\mdmah\runs\e2e5.txt`. Base `f8d270d`, branch `mainexpo`,
+tree clean; ancestry gate printed `mainexpo`, merge-base exit 0, empty
+porcelain. Accessibility props only — no style, layout, navigation or
+handler change anywhere; nothing in this run touched `screens/`,
+`.maestro/`, `.gitignore`, `eas.json`, `.eas/`, `.github/`, `supabase/`,
+`package.json`, the guard directory, `.env` or `start.ps1`; no database was
+contacted; no dependency added. `npm run verify` exited 0 before the app
+commit (1296 tests, 0 failing, lint clean) and again before the docs commit;
+no fence under `tests/` asserted the old props, so none changed.
+
+**Commits.** C1 `0a77b63` — E2E5: overlays reachable on iOS — no container
+folds, every tapped control labeled (`components/ActionSheet.tsx`,
+`components/Button.tsx`), pushed `f8d270d..0a77b63`. C2 — this record (the
+commit it rides in, docs only), pushed on its own.
+
+**The defect (E2E4's failing line, run 01a064ef on build 9f3ecf3a):**
+`money-walk (3m 27s) (Element not found: Text matching regex: My jobs)`,
+with the sheet-open assert `'.*What do you need\?.*'` PASSED just before
+it. Pressable is accessible by default; on iOS an accessible view is ONE
+element whose label is its children's text folded together and whose
+children are not exposed. The backdrop and card Pressables folded the whole
+sheet into one element with no reachable row; and even unfolded, a row's own
+label is glyph + text, so an exact "My jobs" would still miss.
+
+**Two rules, applied where the dispatch scoped them.**
+1. A container that is not a control carries `accessible={false}`, so its
+   children stay exposed as their own elements.
+2. Every control the flow taps carries an explicit `accessibilityLabel`
+   equal to its tapped text, with `accessibilityRole="button"`.
+
+S1 `components/ActionSheet.tsx` — `accessible={false}` on the backdrop
+Pressable (`:96`) and on the card Pressable (`:107`);
+`accessibilityRole="button"` + `accessibilityLabel={item.label}` on every
+row Pressable (`:123-124`); `accessibilityRole="button"` +
+`accessibilityLabel="Cancel"` on the Cancel Pressable (`:142-143`).
+S2 `components/ConfirmDialog.tsx` — UNCHANGED: its backdrop and centre wrap
+are plain Views (`:84`, `:86`), no Pressable container; its confirm and
+cancel controls are `Button`s titled `confirmText` / `cancelText` (`:99`,
+`:107`), labeled by S3.
+S3 `components/Button.tsx` — the Pressable set no label, so a button with an
+icon folded glyph + title. `accessibilityLabel` is now destructured (`:76`)
+and the Pressable carries `accessibilityRole="button"` and
+`accessibilityLabel={accessibilityLabel ?? title}` (`:220-221`) ahead of
+`{...rest}`; a caller-supplied label still wins, and the prop was already in
+the type through `PressableProps`. This labels every ConfirmDialog action the
+walk taps — "Accept bid" (`screens/ClientJobDetailScreen.tsx:1272`),
+"Send bid" (`screens/JobDetailScreen.tsx:1060`), "Pay & protect"
+(`screens/CheckoutScreen.tsx:682`), "Approve & release"
+(`screens/ApproveOrDisputeScreen.tsx:469`) — and EditBudgetDialog's "Save".
+S4 `ui/primitives/Surface.tsx` — UNCHANGED: a plain View, no `accessible`
+prop anywhere in the file.
+S5, every other `<Modal` renderer under `components/` or `ui/primitives/`
+whose text the flow taps (the renderers: ActionSheet, AmountPrompt,
+ConfirmDialog, CountryPicker, EditBudgetDialog, PhotoViewer, ReactionPicker,
+ReportDialog, ServicePickerSheet, `ui/primitives/Sheet.tsx`): only
+`components/EditBudgetDialog.tsx` — UNCHANGED; its containers are Views
+(`:98-99`) and a LitSurface (`:100`, a View with no `accessible` prop),
+"Maximum budget in dollars" is already an explicit label on its TextInput
+(`:145`), and "Save" is a `Button` (`:156`), labeled by S3. Every other
+tapOn string maps to `screens/` text, a placeholder, an existing
+`accessibilityLabel` or a `Button`; "Get notified?" / "Not now" is
+`lib/dialog.ts` `confirmAsync` → `Alert.alert`, native and out of reach, as
+are the Stripe sheet and the system photo picker. Acceptance gates: verify
+green; `git diff --stat` at C1 named only the two component files;
+`git diff --stat .maestro/` empty; `grep -n accessibilityLabel
+components/ActionSheet.tsx` → `:124` the row label, `:143` "Cancel".
+
+**The rerun (run `01a06511-117b-70c5-8848-5495742c85f2`, a FRESH build on
+`0a77b63`; `build_ios_simulator` SUCCESS, build id
+`8aa5fe85-35ce-4399-95dd-77645ef7f5f1` — the new reusable id for
+`-F build_id=`; `money_walk` FAILURE).**
+RED, one step past the furthest the walk has ever reached:
+`money-walk (5m 41s) (Assertion is false: "Finished work" is visible)` —
+JUnit `<failure>Assertion is false: "Finished work" is visible</failure>`,
+`time="340.791"`, device `iPhone 16 - iOS 18.3`, `eas exit: 11`. Run:
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/workflows/01a06511-117b-70c5-8848-5495742c85f2`.
+Read from the run's Maestro bundle (`commands.json`, `logs/maestro.log`,
+`screen-hierarchy/step-192-assertCondition-Finished_work.json` — text, not
+the frame): 181 commands COMPLETED or SKIPPED as designed, the 182nd FAILED.
+The three optional `hideKeyboard`s on the post-job steps report WARNED (the
+keyboard survived the centre swipe, harmless because optional — E2E3 said
+the eyebrow tap is the dismissal of record, and it was).
+PROVEN FOR THE FIRST TIME, with the simulator clock (19:xx, 2026-09-02):
+- Act 3 through the sheet: "Create" 19:35:02, `'.*What do you need\?.*'`,
+  the exact-label tap "My jobs" COMPLETED 19:35:04.6 — THE FIX HOLDS — the
+  hub subtitle, the E2E job, "Job & bids" 19:35:06.9, "Accept offer",
+  "Accept bid" 19:35:12.9 (the S3 label), "Protected checkout" 19:35:13.2.
+- The Stripe sheet is driveable end to end: card, expiry, CVC, ZIP typed;
+  `scrollUntilVisible 'Pay \$53\.75'` COMPLETED (E2E3's open question:
+  yes, the native sheet scrolls to its Pay button); "Pay $53.75" tapped
+  19:35:34.3; "Job confirmed" 19:35:41.5 — 7.2 s from the tap to `held`, so
+  the `repeat` / "Check again" loop was SKIPPED as designed; screenshot
+  `held` taken. `posted` and `bid` were taken too: three of the six.
+- Act 4 to the edge: `'.*My Jobs.*'`, the job, "Start job" 19:36:25.7 with
+  "Finish up" (the `in_progress` card, `screens/WorkerJobScreen.tsx:584`)
+  on screen 0.65 s later — the start transition landed; the system photo
+  picker CAN be driven (D9): "Add photos or video of the finished work",
+  `'Photo, .*'` index 0 (the simulator's stock library image), `'Add'`
+  19:36:30.4, the upload done and "1/5 photos" visible at 19:36:30.7;
+  "Mark complete" tapped 19:36:31.7 at (196, 742), the button `enabled`,
+  Maestro noting a hierarchy change right after the tap.
+THE FAILURE, from the hierarchy captured at 19:37:32 (60 s after the tap):
+the screen is STILL the worker's in-progress card — "Your Job", "Finish
+up", "Add at least one photo of the finished work …", "1/5 photos",
+"Mark complete", "Customer paid $53.75", "You receive $46.25", "Brazos
+Protection $7.50", "Work checklist" — with NO alert and NO error text. That
+rules out every path of `handleComplete` that finishes
+(`screens/WorkerJobScreen.tsx:307-345`): success clears the photo list
+(`setDonePhotos([])`, `:342`) and re-reads the job, so "1/5 photos" would
+be gone and the `completed` branch (`:675`) on screen; a refused write
+alerts "Could not complete job" (`:339`); an empty list prompts "Add a
+photo of the finished work" (`:318`). Native alerts DO appear in this
+hierarchy ("Offer sent" was found and its "OK" tapped in Act 2). What is
+left: the `transition_job_status('completed')` call still in flight 60 s
+after the tap (the button then shows a spinner, and since S3 the element
+keeps its "Mark complete" label while loading, so the hierarchy cannot
+tell), or the tap never reaching the handler. The database side is not the
+refusal: `supabase/migrations/20260925000000_job_completions.sql` allows
+`in_progress → completed`, requires ≥ 1 photo (one was sent), and a refusal
+would have raised into the alert above. Not in the bundle: the app's own
+console (a release build writes none to the simulator log — 0 hits for the
+RPC name or the screen's tag in 163 MB). The failure frame
+(`Failure Screenshot: money-walk (attempt 1)`) and the screen recording
+exist on the run page and were NOT inspected — images and video, per the
+evidence rule E2E4 recorded. Nothing past "Finished work" ran: the
+`completed` screenshot, Act 5, approval, the review star and the sixteen
+released slices stay unproven.
+
+**Guards and mechanics met this run.** None fired. The push went as its own
+flag-free `git push origin mainexpo`; the commit message went through
+`git commit -F .shots/e2e5-msg.txt` (gitignored); no `node -p`, no heredoc,
+no guard-directory path in any command or file, no `.env`, no
+fetch/pull/checkout/stash/reset, no subagent. GNU tar under Git Bash read
+the scratchpad's drive letter as a host; `--force-local` fixed it. The
+bundle's `commands.json` prints the four `MAESTRO_E2E_*` values in clear
+(they are the staging test-fixture logins, the class Gate 0's secrets box
+already treats as client-public); they were kept out of every file and this
+record, and the bundle stayed in the session scratchpad.
+
+**NEEDS THE OPERATOR — in order.**
+(a) Look at the run's failure frame and the screen recording at 19:36:31 →
+19:37:32 (simulator clock) on the run page: is the "Mark complete" button
+spinning through the whole minute (the write in flight), does it flash and
+return (the handler ran and finished without the screen changing), or does
+nothing happen at all (the tap did not reach the handler)? That one look
+decides the next dispatch.
+(b) In the staging SQL editor, the E2E job of this run (title `E2E
+1788402712732`, the customer's most recent post): its `jobs.status`,
+`completed_at`, `completion_photos`, and whether a `job_completions` row
+exists. A `completed` row with a `completed_at` after 19:37:32 says the
+write landed late; an `in_progress` row says it never landed.
+(c) Then one dispatch, by what (a)/(b) show: a flow change if the wait is the
+issue (watch "Could not complete job|Add a photo of the finished work" in
+the same wait as "Finished work", as E2E2 did for every other write, and
+lengthen the 60 s to match what (b) measured), or an app change if the
+handler is. Rerun WITHOUT a rebuild on the new id:
+```
+npx eas-cli@latest workflow:run .eas/workflows/e2e-ios.yml -F build_id=8aa5fe85-35ce-4399-95dd-77645ef7f5f1
+```
+— unless the fix is app code, which needs the plain form and a fresh build.
+Expected: "Finished work" and the `completed` screenshot, then the first run
+of Act 5. Gate 2 box 4 stays OPEN: no green run yet.
+
 ## RUN E2E4 COMPLETED (2026-09-02) — the customer's path to Accept asserted step by step; the walk had fallen through the [ + ] sheet, which iOS folds into one element
 
 Dispatch: `C:\Users\mdmah\runs\e2e4.txt`. Base `619f870`, branch `mainexpo`,
