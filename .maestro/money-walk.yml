@@ -6,7 +6,8 @@
 # credentials arrive as MAESTRO_E2E_* variables from the EAS `preview`
 # environment through .eas/workflows/e2e-ios.yml (D3) and are never written
 # here. Every tap is on text the screens render (D15), read from the source
-# on 2026-09-02; the one `id:` is the review star, which carries no text.
+# on 2026-09-02 and dry-run against it command by command (E2E3); the one
+# `id:` is the review star, which carries no text.
 # Selectors are regular expressions that must match a whole label, so `.*`
 # brackets the ones whose element folds an icon or a subtitle into its label.
 appId: app.brazos.mobile.preview
@@ -29,12 +30,15 @@ appId: app.brazos.mobile.preview
 # Step 1 — Describe: a title, a description past the 20-character floor
 # (lib/validation.ts), one category. The keyboard is dismissed after the last
 # typed field (E2E2) before the step eyebrow is tapped, so the chips below the
-# fields are reachable.
+# fields are reachable — E2E3 (run 01a06475): by the eyebrow tap itself, never
+# hideKeyboard. Maestro's iOS hideKeyboard is a short swipe at the screen
+# centre, which the multiline description swallows; the eyebrow is static text
+# in the step's own ScrollView (keyboardShouldPersistTaps="handled"), and React
+# Native blurs the focused input on a tap that no child handles.
 - tapOn: "e.g. Walk my dog on weekday mornings"
 - inputText: ${output.title}
 - tapOn: "Describe what you need done…"
 - inputText: "Cleaning of a two bedroom apartment for the end to end money walk."
-- hideKeyboard
 - tapOn: "STEP 1 OF 4"
 - tapOn: "Cleaning"
 - tapOn: "Continue to Media"
@@ -46,13 +50,17 @@ appId: app.brazos.mobile.preview
 # Step 3 — Where and when (D6). The area is typed first; then the step's own
 # GPS button pins the job to the simulated coordinate and replaces the typed
 # area with the resolved place name. If either tier fails the typed area
-# stays and an alert says so, which is dismissed.
+# stays and an alert says so, which is dismissed. E2E3: hideKeyboard stays
+# after the two single-line fields here but is optional — its centre swipe
+# is unproven on this step — and the eyebrow tap that follows is the
+# dismissal of record, as on step 1.
 - extendedWaitUntil:
     visible: "STEP 3 OF 4"
     timeout: 30000
 - tapOn: "e.g. Sheepshead Bay, Brooklyn"
 - inputText: "Sheepshead Bay, Brooklyn"
-- hideKeyboard
+- hideKeyboard:
+    optional: true
 - tapOn: "STEP 3 OF 4"
 - tapOn: "Use my current location"
 - waitForAnimationToEnd:
@@ -64,7 +72,8 @@ appId: app.brazos.mobile.preview
       - tapOn: "OK"
 - tapOn: "e.g. 2410 Emmons Ave, Apt 3B"
 - inputText: "2017 Emmons Ave, Brooklyn, NY 11235"
-- hideKeyboard
+- hideKeyboard:
+    optional: true
 - tapOn: "STEP 3 OF 4"
 - scrollUntilVisible:
     element:
@@ -79,7 +88,10 @@ appId: app.brazos.mobile.preview
     timeout: 20000
 - tapOn: "Morning.*"
 - tapOn: "Continue to Review"
-# Step 4 — Review and publish. D8: the max budget is $50.
+# Step 4 — Review and publish. D8: the max budget is $50. E2E3: the amount
+# field opens a decimal pad with no return key, inside a Modal with no scroll
+# container for a centre swipe to work through, so hideKeyboard is optional
+# there; Save sits above the pad and is tapped either way.
 - extendedWaitUntil:
     visible: "STEP 4 OF 4"
     timeout: 30000
@@ -91,7 +103,8 @@ appId: app.brazos.mobile.preview
 - tapOn: "Edit budget"
 - tapOn: "Maximum budget in dollars"
 - inputText: "50"
-- hideKeyboard
+- hideKeyboard:
+    optional: true
 - tapOn: "Save"
 - tapOn: "Publish"
 # The screen fires the push pre-prompt without awaiting it, so it can land
@@ -99,7 +112,10 @@ appId: app.brazos.mobile.preview
 # clearState, which is why every act handles it. E2E2: a failed publish is
 # the alert "Could not post job" (screens/PostJobScreen.tsx), and a job saved
 # without its map pin is "Saved, but without a map pin"; either fails the
-# flow here with its message inside 30 s instead of a silent timeout.
+# flow here with its message inside 30 s instead of a silent timeout. E2E3: a
+# new post's overlay offers "View job and bids" and "Back to Home"
+# (screens/PostJobScreen.tsx, the SuccessScreen actions); "Done" belongs to
+# the edit and hire variants only, and never renders here.
 - extendedWaitUntil:
     visible: 'Your job is live\.|Get notified\?|Could not post job|Saved, but without a map pin'
     timeout: 30000
@@ -114,7 +130,7 @@ appId: app.brazos.mobile.preview
       - tapOn: "Not now"
 - assertVisible: 'Your job is live\.'
 - takeScreenshot: posted
-- tapOn: "Done"
+- tapOn: "Back to Home"
 
 # ─── Act 2 · the worker finds the job and bids the listed price ───────────
 - runFlow:
@@ -126,9 +142,13 @@ appId: app.brazos.mobile.preview
       HOME_MARK: Search for jobs or areas
 # D7 — worker Home has search, so exact-title search is the one path. The
 # results header quotes the query back, so the job card is the second match.
+# E2E3: no hideKeyboard before Search — Maestro's iOS dismissal swipes at the
+# screen centre, where this Home's category chips sit, and a chip press would
+# leave the screen. The Search disc (accessibilityLabel "Search") and the
+# keyboard's own search key both submit the query, so the tap needs no
+# dismissal first.
 - tapOn: "Search for jobs or areas"
 - inputText: ${output.title}
-- hideKeyboard
 - tapOn: "Search"
 - extendedWaitUntil:
     visible:
@@ -224,8 +244,13 @@ appId: app.brazos.mobile.preview
 - tapOn: "ZIP"
 - inputText: "10001"
 # E2E2: the sheet's keyboard is dismissed once, before Pay — never between
-# its fields.
-- hideKeyboard
+# its fields. E2E3: by scrolling the native sheet to its Pay button rather
+# than hideKeyboard; the sheet is Stripe's and cannot be read from the source.
+- scrollUntilVisible:
+    element:
+      text: 'Pay \$53\.75'
+    direction: DOWN
+    timeout: 10000
 - tapOn: 'Pay \$53\.75'
 # Checkout polls the ledger for `held` for 30 s and offers "Check again" past
 # that; the webhook normally lands well inside the first poll. E2E2: each pass
@@ -336,11 +361,15 @@ appId: app.brazos.mobile.preview
     timeout: 30000
 - tapOn: '.*Approve & release \$53\.75.*'
 - tapOn: "Approve & release"
+# E2E3: approval replaces the approval screen with Review & tip outright
+# (screens/ApproveOrDisputeScreen.tsx, approveAndRelease), so the APPROVED
+# eyebrow waited for here is Review & tip's own, and there is no
+# "Continue to review" to tap — that link exists only when the screen opens
+# on an already-settled payment.
 - extendedWaitUntil:
     visible: "APPROVED · PAYOUT ON ITS WAY"
     timeout: 60000
 - takeScreenshot: approved
-- tapOn: '.*Continue to review.*'
 - scrollUntilVisible:
     element:
       id: review-star-5
