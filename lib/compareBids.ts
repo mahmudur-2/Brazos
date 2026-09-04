@@ -11,9 +11,18 @@
  * exactly as CompareBidsScreen already did.
  */
 
+/**
+ * What the ranking knows about one bidder: the worker-role REVEALED summary
+ * (n7 — profile_review_summaries, one batch call per list), never the
+ * profile's legacy mixed aggregate. `shown_average` is the one displayable
+ * number (R8b-c D1), `is_new` is the under-three verdict, `revealed_total`
+ * the count of revealed reviews behind them. Null is UNKNOWN — the batch has
+ * not answered, or failed — and the row then ranks as unrated.
+ */
 export type CompareWorker = {
-  rating_avg?: number | null;
-  rating_count?: number | null;
+  shown_average?: number | null;
+  is_new?: boolean | null;
+  revealed_total?: number | null;
   on_time_pct?: number | null;
 } | null;
 
@@ -25,15 +34,42 @@ export type CompareBid = {
 };
 
 /**
- * A worker's rating as a KNOWN fact, or null. A rating_avg without a single
- * counted review is not a fact (D4: null is unknown, never zero — and zero
- * reviews means there is nothing to average).
+ * The batch row as the ranking reads it — the ONE mapping from the summary's
+ * camelCase row to CompareWorker, so every list ranks on identical fields.
+ * Structural on purpose: this module stays import-free so tests execute it.
+ * Absent or null in = null out (UNKNOWN).
+ */
+export function compareWorkerFromSummary(
+  summary:
+    | {
+        total: number;
+        shownAverage: number | null;
+        isNew: boolean;
+        onTimePct: number | null;
+      }
+    | null
+    | undefined
+): CompareWorker {
+  if (!summary) return null;
+  return {
+    shown_average: summary.shownAverage,
+    is_new: summary.isNew,
+    revealed_total: summary.total,
+    on_time_pct: summary.onTimePct,
+  };
+}
+
+/**
+ * A worker's rating as a KNOWN fact, or null. shown_average without a single
+ * REVEALED review is the platform prior, not a fact about this person (D4:
+ * null is unknown, never zero — and zero revealed reviews means there is
+ * nothing to show), so a zero-review worker has no KNOWN rating.
  */
 export function knownRating(worker: CompareWorker): number | null {
   if (!worker) return null;
-  const count = worker.rating_count ?? 0;
-  const avg = worker.rating_avg;
-  return count > 0 && avg != null ? avg : null;
+  const total = worker.revealed_total ?? 0;
+  const shown = worker.shown_average;
+  return total > 0 && shown != null ? shown : null;
 }
 
 /** Rating desc; unknown ratings sort LAST as a block (never interleaved by
@@ -58,7 +94,7 @@ function compareBidsDefault(a: CompareBid, b: CompareBid): number {
 }
 
 /**
- * §5.4 — rating_avg DESC, then amount ASC, then created_at ASC, then id.
+ * §5.4 — shown_average DESC, then amount ASC, then created_at ASC, then id.
  * Bids with no known rating sort LAST as a block and tiebreak among
  * themselves the same way. This is also the DEFAULT order everywhere bids
  * are listed (no chip selected).
@@ -100,17 +136,18 @@ export function sortBidsForChip<T extends CompareBid>(
 /**
  * §5.1 DEVIATION 2 — the only badge this surface may render. "HIGHEST RATED"
  * is a factual claim, so it fails closed: it needs at least two bids, a top
- * rating built on 3+ reviews, and every other bid's rating KNOWN and strictly
- * lower. An unrated competitor makes the comparison unknowable and kills the
- * badge; so does any tie. Never "best fit" — fit scoring is permanently
- * rejected on this product.
+ * rating that is KNOWN and past the "New" threshold (`is_new` false — three
+ * or more REVEALED reviews, the same bar the summary itself applies), and
+ * every other bid's rating KNOWN and strictly lower. An unrated competitor
+ * makes the comparison unknowable and kills the badge; so does any tie.
+ * Never "best fit" — fit scoring is permanently rejected on this product.
  */
 export function highestRatedBadgeId(bids: readonly CompareBid[]): string | null {
   if (bids.length < 2) return null;
   const sorted = sortBidsDeterministic(bids);
   const top = sorted[0];
   const topRating = knownRating(top.worker);
-  if (topRating == null || (top.worker?.rating_count ?? 0) < 3) return null;
+  if (topRating == null || top.worker?.is_new !== false) return null;
   for (const other of sorted.slice(1)) {
     const r = knownRating(other.worker);
     if (r == null || r >= topRating) return null;

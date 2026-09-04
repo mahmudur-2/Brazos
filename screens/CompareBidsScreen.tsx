@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { useMemo, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -10,15 +10,15 @@ import { useJobOffers } from '../hooks/useJobOffers';
 import { goBackOrHome } from '../lib/navigationRef';
 import {
   BID_ORDER_RULE,
+  compareWorkerFromSummary,
   highestRatedBadgeId,
   knownRating,
   onTimePercent,
   sortBidsDeterministic,
-  totalCompletedJobs,
   trustRowFor,
+  type CompareWorker,
 } from '../lib/compareBids';
 import { effectiveOfferStatus, type OfferWithWorker } from '../lib/offers';
-import { fetchWorkerJobStats } from '../lib/portfolio';
 import { formatBudget } from '../lib/jobs';
 import { formatTimeAgo } from '../lib/time';
 import type { MyJobsStackNavigation, MyJobsStackParamList } from '../lib/navigation';
@@ -68,46 +68,36 @@ export function CompareBidsScreen() {
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'CompareBids'>>();
   const job = params.job;
 
-  const { offers, loading, error, refresh } = useJobOffers(job.id);
-  // Completed-job totals per worker, from worker_job_stats() (D3: the total
-  // is the SUM of per-category rows). Absent key = UNKNOWN, never zero.
-  const [completedByWorker, setCompletedByWorker] = useState<Record<string, number>>({});
+  // n7 — ONE profile_review_summaries() call for the offers' worker ids
+  // (worker role, REVEALED reviews only), issued by the shared hook whenever
+  // that id set changes. It replaces the per-worker worker_job_stats() loop:
+  // the row's completed_jobs IS worker_job_stats' predicate summed (D3), so
+  // the figure's definition is unchanged. `summaries` is null until the batch
+  // answers — UNKNOWN — and every read below treats null as "render nothing".
+  const { offers, loading, error, refresh, summaries } = useJobOffers(job.id, {
+    summaries: true,
+  });
 
   const pending = useMemo(
     () => offers.filter((offer) => effectiveOfferStatus(offer) === 'pending'),
     [offers]
   );
-  const sorted = useMemo(() => sortBidsDeterministic(pending), [pending]);
-  const badgeId = useMemo(() => highestRatedBadgeId(pending), [pending]);
-
-  useEffect(() => {
-    let active = true;
-    const wanted = [...new Set(pending.map((bid) => bid.worker_id))].filter(
-      (id) => !(id in completedByWorker)
-    );
-    if (wanted.length === 0) return;
-    (async () => {
-      const entries = await Promise.all(
-        wanted.map(async (workerId) => {
-          const { data, error: statsError } = await fetchWorkerJobStats(workerId);
-          // A failed read stays UNKNOWN — the row omits the figure rather
-          // than inventing one.
-          return [workerId, statsError ? null : totalCompletedJobs(data)] as const;
-        })
-      );
-      if (!active) return;
-      setCompletedByWorker((prev) => {
-        const next = { ...prev };
-        for (const [workerId, total] of entries) {
-          if (total != null) next[workerId] = total;
-        }
-        return next;
-      });
-    })();
-    return () => {
-      active = false;
-    };
-  }, [pending, completedByWorker]);
+  // The rank rows: each pending bid with its worker's summary mapped to
+  // CompareWorker (null while unanswered → unrated → sorts last as a block,
+  // and no badge until the numbers are known).
+  const ranked = useMemo(
+    () =>
+      pending.map((bid) => ({
+        id: bid.id,
+        amount_cents: bid.amount_cents,
+        created_at: bid.created_at,
+        worker: compareWorkerFromSummary(summaries?.get(bid.worker_id)),
+        bid,
+      })),
+    [pending, summaries]
+  );
+  const sorted = useMemo(() => sortBidsDeterministic(ranked), [ranked]);
+  const badgeId = useMemo(() => highestRatedBadgeId(ranked), [ranked]);
 
   const state: ScreenState =
     loading && offers.length === 0
@@ -163,14 +153,16 @@ export function CompareBidsScreen() {
         {
           content: (
             <View style={[styles.list, { gap: listGap }]}>
-              {sorted.map((bid) => (
+              {sorted.map((row) => (
                 <CompareRow
-                  key={bid.id}
-                  bid={bid}
-                  highestRated={bid.id === badgeId}
-                  completedJobs={completedByWorker[bid.worker_id] ?? null}
+                  key={row.id}
+                  bid={row.bid}
+                  worker={row.worker}
+                  highestRated={row.id === badgeId}
+                  // Absent row or null column = UNKNOWN, never zero.
+                  completedJobs={summaries?.get(row.bid.worker_id)?.completedJobs ?? null}
                   onPress={() =>
-                    navigation.navigate('BidDetail', { job, offerId: bid.id })
+                    navigation.navigate('BidDetail', { job, offerId: row.id })
                   }
                 />
               ))}
@@ -226,11 +218,15 @@ export function CompareBidsScreen() {
 
 function CompareRow({
   bid,
+  worker: reputation,
   highestRated,
   completedJobs,
   onPress,
 }: {
   bid: OfferWithWorker;
+  /** The bidder's worker-role REVEALED summary as the ranking read it (n7);
+   *  null = UNKNOWN, which renders no rating and no trust facts. */
+  worker: CompareWorker;
   highestRated: boolean;
   completedJobs: number | null;
   onPress: () => void;
@@ -243,9 +239,13 @@ function CompareRow({
   const rowRadius = useDialNumber('compareBids.row.radius') ?? radius.xl;
   const highestBorderWidth = useDialNumber('compareBids.rowHighest.borderWidth') ?? 2;
   const worker = bid.worker;
-  const rating = knownRating(worker);
-  const ratingCount = worker?.rating_count ?? 0;
-  const trust = trustRowFor(onTimePercent(worker?.on_time_pct), completedJobs);
+  // Positive-only, as this row always was: the rating line needs at least one
+  // REVEALED review. It prints "New" in the number's place while the
+  // reputation is too young for one (is_new), the shrunk shown_average once
+  // it is not, and nothing at all while the summary is unknown.
+  const rating = knownRating(reputation);
+  const ratingCount = reputation?.revealed_total ?? 0;
+  const trust = trustRowFor(onTimePercent(reputation?.on_time_pct), completedJobs);
 
   return (
     <Pressable
@@ -279,7 +279,9 @@ function CompareRow({
           {rating != null ? (
             <View style={styles.rowRating}>
               <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
-              <Text style={styles.rowRatingStrong}>{rating.toFixed(1)}</Text>
+              <Text style={styles.rowRatingStrong}>
+                {reputation?.is_new ? 'New' : rating.toFixed(1)}
+              </Text>
               <Text style={styles.rowRatingMuted}>({ratingCount})</Text>
             </View>
           ) : null}

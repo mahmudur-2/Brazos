@@ -319,13 +319,17 @@ test('§4.4 · the rebook strip tops the search surface and "Hire someone again"
 
 const compareBidsModule = importLibModule('lib/compareBids.ts');
 
+// n7: CompareWorker is the worker-role REVEALED summary's shape — shown_average,
+// is_new (under three revealed reviews) and revealed_total — never the
+// profile's legacy rating_avg / rating_count. The fixture keeps its (rating,
+// count) arguments so every case below reads as it always did.
 const bid = (id, amount, rating, ratingCount, createdAt = `2026-08-0${id.length}T00:00:00Z`) => ({
   id,
   amount_cents: amount,
   created_at: createdAt,
   worker: rating == null && ratingCount == null
     ? null
-    : { rating_avg: rating, rating_count: ratingCount },
+    : { shown_average: rating, is_new: (ratingCount ?? 0) < 3, revealed_total: ratingCount },
 });
 
 test('§5.4 · the sort is total and stable: rating desc, price asc, time asc, id', async () => {

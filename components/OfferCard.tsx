@@ -32,6 +32,7 @@ import {
   type OfferWithWorker,
 } from '../lib/offers';
 import type { Message } from '../lib/messages';
+import type { ProfileReviewSummaryRow } from '../lib/reviews';
 
 /**
  * The one offer card. Replaces BidWorkerCard (a bid in the customer's compare
@@ -61,6 +62,11 @@ import type { Message } from '../lib/messages';
 type ListProps = {
   variant: 'list';
   offer: OfferWithWorker;
+  /** n7 — this worker's worker-role REVEALED summary, from the host's ONE
+   *  profile_review_summaries() call over its offers' worker ids. Null or
+   *  absent is UNKNOWN: the rating line renders nothing — never a zero, never
+   *  a number from the profile's legacy mixed aggregate. */
+  summary?: ProfileReviewSummaryRow | null;
   canAccept: boolean;
   accepting?: boolean;
   disabled?: boolean;
@@ -126,6 +132,7 @@ export function OfferCard(props: OfferCardProps) {
 
 function OfferListCard({
   offer,
+  summary = null,
   canAccept,
   accepting = false,
   disabled = false,
@@ -142,7 +149,19 @@ function OfferListCard({
   const styles = stylesFor(colors);
   const worker = offer.worker;
   const name = worker?.full_name ?? 'Worker';
-  const ratingCount = worker?.rating_count ?? 0;
+  // The rating line reads the summary and nothing else (R8b-c D1): the word
+  // "New" while the reputation is under three revealed reviews, the shrunk
+  // shown_average to one decimal once it is not, and nothing while the row is
+  // unknown. The count beside it is REVEALED reviews only.
+  const ratingCount = summary?.total ?? null;
+  const ratingText =
+    summary == null
+      ? ''
+      : summary.isNew
+        ? 'New'
+        : summary.shownAverage != null && summary.total > 0
+          ? summary.shownAverage.toFixed(1)
+          : '';
   const completion = completionPercent(worker?.completion_rate);
   const isAccepted = offer.status === 'accepted';
   // Who may accept is ownership, not mode: the screen resolves it and passes
@@ -177,13 +196,13 @@ function OfferListCard({
             </View>
             <View style={styles.proofRow}>
               <Ionicons name="star" size={14} color={starColors(colors, isDark).filled} />
-              <Text style={styles.proofStrong}>
-                {ratingCount > 0 ? (worker?.rating_avg ?? 0).toFixed(1) : 'New'}
-              </Text>
+              <Text style={styles.proofStrong}>{ratingText}</Text>
               <Text style={styles.proofMuted}>
-                {ratingCount > 0
-                  ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
-                  : 'No reviews yet'}
+                {ratingCount == null
+                  ? ''
+                  : ratingCount > 0
+                    ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
+                    : 'No reviews yet'}
               </Text>
               {completion != null && (
                 <>

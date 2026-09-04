@@ -11,13 +11,54 @@ import {
   type OfferWithWorker,
 } from '../lib/offers';
 import type { Message } from '../lib/messages';
+import { fetchProfileReviewSummaries, type ProfileReviewSummaryRow } from '../lib/reviews';
 
-/** Loads every offer on a job (with each offering worker's profile). */
-export function useJobOffers(jobId: string) {
+/**
+ * Loads every offer on a job (with each offering worker's profile).
+ *
+ * `summaries: true` (n7) adds the list surfaces' reputation read: ONE
+ * profile_review_summaries() call over the offers' distinct worker ids —
+ * worker role, revealed reviews only — re-run only when that id set changes.
+ * The map is null until the batch answers (or when it failed): UNKNOWN, so a
+ * card renders no number and the ranking treats every bid as unrated until
+ * the numbers are known. Opt-in so BidDetail, which reads the single
+ * summary for its one worker, issues no second request.
+ */
+export function useJobOffers(jobId: string, options: { summaries?: boolean } = {}) {
+  const wantSummaries = options.summaries === true;
   const [offers, setOffers] = useState<OfferWithWorker[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [summaries, setSummaries] = useState<Map<string, ProfileReviewSummaryRow> | null>(
+    null
+  );
   const runRef = useRef(0);
+
+  // Effects compare by identity and `offers` is a fresh array per read;
+  // keying on the sorted distinct worker ids is what makes this ONE call per
+  // id set rather than one per refresh.
+  const workerKey = useMemo(
+    () => [...new Set(offers.map((offer) => offer.worker_id))].sort().join(','),
+    [offers]
+  );
+
+  useEffect(() => {
+    if (!wantSummaries) return;
+    let active = true;
+    (async () => {
+      const { data } = await fetchProfileReviewSummaries(
+        workerKey ? workerKey.split(',') : [],
+        'worker'
+      );
+      if (!active) return;
+      // A failed read is null — UNKNOWN — never an empty map standing in
+      // for "no reviews".
+      setSummaries(data);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [wantSummaries, workerKey]);
 
   const refresh = useCallback(async () => {
     const runId = ++runRef.current;
@@ -54,7 +95,7 @@ export function useJobOffers(jobId: string) {
     }, [refresh])
   );
 
-  return { offers, loading, error, refresh };
+  return { offers, loading, error, refresh, summaries };
 }
 
 /**

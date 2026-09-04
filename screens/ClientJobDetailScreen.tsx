@@ -54,7 +54,12 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { acceptOffer, type OfferWithWorker } from '../lib/offers';
-import { BID_SORT_CHIPS, sortBidsForChip, type BidSortChip } from '../lib/compareBids';
+import {
+  BID_SORT_CHIPS,
+  compareWorkerFromSummary,
+  sortBidsForChip,
+  type BidSortChip,
+} from '../lib/compareBids';
 import { jobStage } from '../lib/jobStage';
 import { deriveJobLifecycle, releaseCountdownLabel, trackStepIndex } from '../lib/jobLifecycle';
 import {
@@ -110,7 +115,17 @@ export function ClientJobDetailScreen() {
   const { job, missing, refresh: refreshJob } = useOwnedJobDetail(params.job);
 
   const { user } = useAuth();
-  const { offers: bids, loading, error, refresh: refreshBids } = useJobOffers(job.id);
+  // n7 — `summaries` is the shared hook's ONE profile_review_summaries() call
+  // over the offers' worker ids (worker role, REVEALED reviews only); null
+  // until it answers. The ranking and every card's rating read it, never the
+  // profile's legacy mixed aggregate.
+  const {
+    offers: bids,
+    loading,
+    error,
+    refresh: refreshBids,
+    summaries,
+  } = useJobOffers(job.id, { summaries: true });
   // null = no chip selected = the stated deterministic default order
   // (lib/compareBids.ts — the single ordering source).
   const [sort, setSort] = useState<BidSortChip | null>(null);
@@ -164,9 +179,19 @@ export function ClientJobDetailScreen() {
   // failed payment read — so it runs payment-null, exactly like
   // RouteArrival's derivation, instead of reusing `lifecycle` below.
   const hasLifecycle = trackStepIndex(deriveJobLifecycle({ job, payment: null })) >= 0;
+  // The rank rows lib/compareBids.ts orders: each pending bid with its
+  // worker's summary mapped to CompareWorker (null while unanswered → unrated
+  // → last as a block) and the offer itself for the card.
   const pendingBids = useMemo(
-    () => bids.filter((bid) => bid.status === 'pending'),
-    [bids]
+    () =>
+      bids.filter((bid) => bid.status === 'pending').map((bid) => ({
+        id: bid.id,
+        amount_cents: bid.amount_cents,
+        created_at: bid.created_at,
+        worker: compareWorkerFromSummary(summaries?.get(bid.worker_id)),
+        offer: bid,
+      })),
+    [bids, summaries]
   );
   // `job.bid_count` includes withdrawn/rejected history. Only pending rows can
   // drive the poster's actionable status, even while the fresh read loads.
@@ -752,7 +777,7 @@ export function ClientJobDetailScreen() {
               )}
 
               <View style={styles.bidList}>
-                {sortedBids.map((bid) => {
+                {sortedBids.map(({ offer: bid }) => {
                   // A const narrows ONCE and survives into the closures — the
                   // five `bid.worker!` assertions this replaces were sound
                   // only by inspection (hardening A8).
@@ -763,6 +788,7 @@ export function ClientJobDetailScreen() {
                       key={bid.id}
                       variant="list"
                       offer={bid}
+                      summary={summaries?.get(bid.worker_id) ?? null}
                       palette={emeraldColors}
                       canAccept={canAccept}
                       accepting={acceptingId === bid.id}

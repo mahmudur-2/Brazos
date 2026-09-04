@@ -176,6 +176,89 @@ export async function fetchProfileReviewSummary(userId: string, role: ReviewRole
 }
 
 /**
+ * One row of the batch summary (n7): what a LIST card needs about one person
+ * — the same shown_average / is_new the single returns, plus the two figures
+ * profile_review_summaries carries so a list makes ONE call. Every null is
+ * UNKNOWN, never zero: a card renders nothing for it.
+ */
+export type ProfileReviewSummaryRow = {
+  /** REVEALED reviews of this role only. 0 is a known zero. */
+  total: number;
+  /** The one displayable number (R8b-c D1), or null when there is none. */
+  shownAverage: number | null;
+  /** Under three revealed reviews the surface says "New", not a number. */
+  isNew: boolean;
+  /** worker_job_stats' predicate summed (worker role); null when unreadable. */
+  completedJobs: number | null;
+  /** profiles.on_time_pct verbatim; null when unknown. */
+  onTimePct: number | null;
+};
+
+/** numeric arrives as a string over PostgREST; anything else is malformed. */
+function toFiniteNumber(value: unknown): number | null | undefined {
+  if (value == null) return null;
+  const n = typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(n) ? n : undefined;
+}
+
+/**
+ * The batch form of fetchProfileReviewSummary — profile_review_summaries()
+ * (n6), ONE request for every id a list renders. Distinct ids only; an empty
+ * list is answered locally with an empty Map and no request. The result is
+ * keyed by user id so a card looks its row up; an id the server answered
+ * nothing for is simply absent (UNKNOWN). Each numeric field is coerced the
+ * way the single coerces; a row that fails validation is dropped from the map
+ * and reported through `error`, so the other rows still render while the
+ * failure is not hidden.
+ */
+export async function fetchProfileReviewSummaries(
+  userIds: readonly string[],
+  role: ReviewRole = 'worker'
+): Promise<{ data: Map<string, ProfileReviewSummaryRow> | null; error: unknown }> {
+  const ids = [...new Set(userIds.filter((id) => typeof id === 'string' && id.length > 0))];
+  if (ids.length === 0) return { data: new Map(), error: null };
+
+  const { data, error } = await supabase.rpc('profile_review_summaries', {
+    p_users: ids,
+    p_role: role,
+  });
+  if (error) return { data: null, error };
+
+  const rows = new Map<string, ProfileReviewSummaryRow>();
+  let malformed: unknown = null;
+  for (const raw of (Array.isArray(data) ? data : []) as Record<string, unknown>[]) {
+    const userId = raw?.user_id;
+    const total = toFiniteNumber(raw?.total);
+    const shownAverage = toFiniteNumber(raw?.shown_average);
+    const completedJobs = toFiniteNumber(raw?.completed_jobs);
+    const onTimePct = toFiniteNumber(raw?.on_time_pct);
+    const isNew = raw?.is_new;
+    const valid =
+      typeof userId === 'string' &&
+      userId.length > 0 &&
+      total != null &&
+      shownAverage !== undefined &&
+      completedJobs !== undefined &&
+      onTimePct !== undefined &&
+      (typeof isNew === 'boolean' || isNew == null);
+    if (!valid) {
+      malformed ??= new Error('profile_review_summaries returned a malformed row');
+      continue;
+    }
+    rows.set(userId, {
+      total,
+      shownAverage,
+      // An absent verdict is treated as new — the same honest default as the
+      // single: no invented number.
+      isNew: typeof isNew === 'boolean' ? isNew : true,
+      completedJobs,
+      onTimePct,
+    });
+  }
+  return { data: rows, error: malformed };
+}
+
+/**
  * Both roles' summaries in one round trip — the own-profile surfaces need
  * worker AND customer to decide what to show and whether the reviews page is
  * worth linking to at all. Each side is null when its read failed or returned
