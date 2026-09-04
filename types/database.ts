@@ -3313,6 +3313,23 @@ export type Database = {
       phase78_properties_enabled: { Args: never; Returns: boolean }
       portfolio_category_freeform_enabled: { Args: never; Returns: boolean }
       post_wizard_fields_enabled: { Args: never; Returns: boolean }
+      profile_review_summaries: {
+        Args: { p_role?: string; p_users: string[] }
+        Returns: {
+          average: number
+          completed_jobs: number
+          five: number
+          four: number
+          is_new: boolean
+          on_time_pct: number
+          one: number
+          shown_average: number
+          three: number
+          total: number
+          two: number
+          user_id: string
+        }[]
+      }
       profile_review_summary: {
         Args: { p_role?: string; p_user: string }
         Returns: {
