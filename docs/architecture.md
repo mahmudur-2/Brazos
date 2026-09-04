@@ -336,12 +336,19 @@ Legacy public URLs resolve to the same object path and are signed too.
 SELECT and re-granted it column by column: the readable set is exactly
 `PUBLIC_PROFILE_COLUMNS` in `lib/profiles.ts`. `phone`, `is_admin` and `banned`
 are self-only, via `get_my_profile()`. Real reputation signals, and nothing
-else: `rating_avg` / `rating_count` (trigger-maintained from `reviews`);
+else: the per-role REVEALED summaries — `profile_review_summary(p_user,
+p_role)` for one person and `profile_review_summaries(p_users, p_role)` for a
+list (both any-signed-in-user; both shrunk toward the platform prior, with
+"New" under three revealed reviews; the batch also returns `completed_jobs`
+and `on_time_pct`);
 `completion_rate`, `on_time_pct`, `response_time` (nullable — treat null as
 unknown, never as zero); `categories`; `worker_job_stats(p_worker)`, a security
 definer aggregate because a visitor cannot read another user's completed jobs
 under RLS (it returns per-category counts — the total is their sum); and
-`portfolio_items`. Never invent any of it. Where bids present a worker,
+`portfolio_items`. `rating_avg` / `rating_count` are the legacy mixed
+aggregate — still maintained by the trigger, read by no display after n7, and
+scheduled for retirement (`docs/BACKLOG.md` §v1.2). Never invent any of it.
+Where bids present a worker,
 `lib/compareBids.ts` enforces the null-is-unknown rule as code: facts render
 only when known, unknown renders nothing, and "New worker" appears only when a
 sub-3 completed-job count is actually known alongside a null `on_time_pct`.
