@@ -97,6 +97,38 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN n6-reputation-schema COMPLETED (2026-09-04) - profile_review_summaries, the batch per-role revealed summary
+
+Dispatch `C:\Users\mdmah\runs\night1\n6-reputation-schema.txt`; base `b4f4d3d` (an ancestor), HEAD `473482e`, branch
+`mainexpo`, tree clean, HEAD equal to origin/mainexpo (FRESH). Report `.shots/night1/reports/n6-reputation-schema.md`.
+No app file changed (the client repoint is n7); only the local stack was contacted; no dependency added; the guard
+directory, `rating_avg`, `rating_count` and `recompute_profile_rating` untouched.
+
+**Commits.** C1 `5030d68` — `supabase/migrations/20260930000200_reputation_batch_summary.sql` (one plain
+`create function`, revoke/grant/comment) + `supabase/tests/120_reputation_batch.sql` (plan 83) +
+`supabase/tests/040_authz.sql` §17 (the authenticated allow-list constant gains the new name) + `types/database.ts`
+(regenerated, +17 lines); pushed `473482e..5030d68`, which started the staging pipeline (verify → scan → migrate →
+deploy). C2 `cc9dd65` — `docs/architecture.md` §Profiles and reputation, `docs/BACKLOG.md` §v1.2 line. C3 — this
+record. Proof: `db:reset` clean; `db:test` `Files=14, Tests=1564` `Result: PASS`; `staging-scan.sh` `ok`; `verify`
+1296/0 each commit.
+
+**What changed.** `public.profile_review_summaries(p_users uuid[], p_role text default 'worker')` — one row per
+DISTINCT id, ordered by `user_id`: `total`, `average`, `five`…`one`, `shown_average`, `is_new` exactly as
+`profile_review_summary` computes them (same role check, prior m, revealed-only WHERE and `auth.uid()` guard — no
+session returns zeros, never raises), plus `completed_jobs` (`worker_job_stats`' predicate for the worker role,
+`client_job_stats`' completed predicate for the customer role) and `on_time_pct` (`profiles.on_time_pct`, null when
+unknown). An id with no revealed review still gets a row (total 0, average null, shown_average m, is_new true). Any
+signed-in user may call it; anon is refused (42501). Nothing existing changed.
+
+**Exceptions.** (1) The first full `db:test` was red at ONE assertion, 040_authz §17 test 462 — the exact allow-list
+of SECURITY DEFINER functions authenticated may execute; its constant gained `profile_review_summaries` (logic
+unchanged, R8a-style annotation); second run 1564/1564. (2) The guard blocked two commit-and-push forms before
+anything ran (`git -C … push` reads as a config-prefixed push; `mainexpo;` and `2>&1` become extra push arguments);
+`git commit -F <msg> && git push origin mainexpo` was accepted. (3) 120's fixture adds a stranger and a customer-role
+1 on JD, so the customer role's prior (2.5) differs from the worker role's (4.0); a leaked prior would print 4.0, not
+2.75. **NEEDS THE OPERATOR.** None. Next: n7 repoints the list surfaces; then the legacy aggregate retires (BACKLOG v1.2).
+
+
 ## RUN n3-autorelease-schema COMPLETED (2026-09-04) - the 72-hour auto-release gates on told, not pushed; 7-day fallback
 
 Dispatch `C:\Users\mdmah\runs\night1\n3-autorelease-schema.txt`; base `b4f4d3d`, branch `mainexpo`, tree
