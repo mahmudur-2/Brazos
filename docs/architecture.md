@@ -267,8 +267,17 @@ simulated money are not the same risk.
 The flow is sandbox: checkout creates a payment that stops at `held`; release
 happens on customer approval or the 72-hour auto-release clock, stamped with
 `release_reason` (`approved` | `auto_approved`); a simulated cash-out sweeps
-released rows to `paid_out`. `PLATFORM_FEE_RATE` is 0, so `platform_fee_cents`
-is always 0 — a real column and real maths, not an omission. An open dispute
+released rows to `paid_out`. For a stripe row the 72-hour clock requires that
+the customer was TOLD — a `job_completed` `notification_outbox` row in any
+terminal status (`sent`, `skipped`, `failed`), because the in-app feed shows the
+row whether or not a push left the server — and an unconditional fallback
+releases at 7 days after completion under the same refusal set as
+`release_job_payment()` (open dispute, card dispute, refund-directed, parked).
+`job_completed` is enqueued under the always-on `jobs` category, which a
+preference, a mute or a block never suppresses (migration
+`20260930000100_auto_release_told_gate.sql`). `PLATFORM_FEE_RATE` is 0, so
+`platform_fee_cents` is always 0 — a real column and real maths, not an
+omission. An open dispute
 (`job_disputes`, phase51) freezes release: the manual approval RPC and the
 auto-release both refuse while one exists. **Money labels follow this state
 machine everywhere** — never "paid" before `released`.
