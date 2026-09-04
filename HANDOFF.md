@@ -97,6 +97,38 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN n3-autorelease-schema COMPLETED (2026-09-04) - the 72-hour auto-release gates on told, not pushed; 7-day fallback
+
+Dispatch `C:\Users\mdmah\runs\night1\n3-autorelease-schema.txt`; base `b4f4d3d`, branch `mainexpo`, tree
+clean, HEAD equal to origin/mainexpo (FRESH). Report `.shots/night1/reports/n3-autorelease-schema.md`.
+No app file, edge function, view, ledger transition, `apply_payment_event` or `release_job_payment` line
+changed; only the local stack was contacted; no dependency added; the guard directory untouched.
+
+**Commits.** C1 `1de76c5` — `supabase/migrations/20260930000100_auto_release_told_gate.sql` (three
+CREATE OR REPLACEs, each restating its own ACL, nothing else) + `supabase/tests/110_auto_release_gate.sql`
+(plan 45); pushed `b4f4d3d..1de76c5`, which started the staging pipeline (verify → scan → migrate → deploy).
+C2 `88ba77e` — `docs/architecture.md` §Money, `docs/DECISIONS.md` 2026-09-04 (the gate decided, R12's
+DELIVERED gate withdrawn), `docs/BACKLOG.md` §v1 bugs (the liveness item, added in n1's D10 wording because
+n1 had not run, marked FIXED in the same edit). C3 — this record. Proof: `db:reset` clean; `db:test`
+`Files=13, Tests=1481` `Result: PASS`; `staging-scan.sh` `ok`; `db:types` unchanged; `verify` 1296/0 each commit.
+
+**What changed.** `auto_release_due_payments()` releases a stripe row 72 h after completion once a
+`job_completed` outbox row exists for the customer in ANY terminal status (sent, skipped, failed — the
+in-app feed shows it whether or not a push left the server; pending still refuses), or unconditionally at
+7 days, both under `release_job_payment()`'s refusal set. `notify_on_job_status()` enqueues `job_completed`
+under the always-on `jobs` category, and `should_notify()` returns true for `jobs` before the block and
+mute checks, so a preference, a mute or a block never suppresses it (`dispute_opened` and `payment_released`
+gain the same bypass, deliberately). Sandbox rows and `tests/notificationFeed.test.mjs` untouched.
+
+**Exceptions.** (1) Case 7 was written to the code: resolving a report for the worker is itself the release
+(`dispute_resolved`), so the fallback then returns 0 — no double release — proven on a second job; "releases
+once the report is no longer open" is proven by the customer's `withdraw_job_dispute`, which leaves the
+payment untouched. (2) The first full db:test went red once at case 8's prefs insert (every profile already
+has a row from `create_default_notification_prefs`); the fixture became the prefs upsert. (3) n1 has not run;
+its version `20260930000000` is OLDER than this file's, so a later n1 needs a later version. **NEEDS THE
+OPERATOR.** None. Advisory: side backlog item 11 is superseded by this gate and can be closed.
+
+
 ## RUN E2E8 COMPLETED (2026-09-03) — the green money walk: Gate 2 box 4 ticks on run 01a065d8, after one flow-only fix between two runs on the reused build
 
 Dispatch: `C:\Users\mdmah\runs\E2E8.txt`. Base `a890ee9`, branch `mainexpo`,
