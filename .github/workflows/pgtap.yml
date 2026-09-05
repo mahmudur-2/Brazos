@@ -1,0 +1,82 @@
+name: pgTAP
+
+# THE DATABASE PROOF, IN CI, ON THE RUNNER'S OWN LOCAL STACK.
+#
+# WHY ITS OWN FILE. tests/governance.test.mjs fences ci.yml: the executable
+# YAML there may never match /SUPABASE/i, /secrets\./, /verify-schema/ or
+# /\beas\b/i, so `npx supabase start` cannot live in ci.yml without weakening
+# that fence's logic — which is a stop, not an edit. This workflow is the
+# continue-path: a second file, which the same test fences on its own terms
+# ('pgTAP CI starts only the local stack and needs no secret').
+#
+# WHAT IT PROVES. Exactly what every schema run proves on the operator's
+# machine before it commits: `npm run db:reset` applies supabase/migrations/
+# and supabase/seed.sql to a fresh local stack, then `npm run db:test` runs
+# every pgTAP file under supabase/tests/ against it. Both scripts are pinned
+# to --local in package.json. Green here means the committed migrations and
+# proofs agree on a clean database, not only on one developer's.
+#
+# WHAT IT NEVER DOES. It contacts no remote project — no link, no --linked,
+# no --db-url, no --project-ref — and it consumes no secret: no environment,
+# no `secrets.` reference, no env block. The stack it starts is Docker on the
+# runner, reachable at 127.0.0.1 only, and it is stopped in the last step
+# whatever the outcome. Staging and production are untouched by design; the
+# staging pipeline (staging.yml) is the only workflow that reaches a remote
+# project, and it does so after its own verify job, never from here.
+#
+# Third-party actions are pinned to the same full commit SHAs ci.yml uses: a
+# tag is mutable and can be repointed at new code after review.
+
+on:
+  push:
+    branches: [mainexpo]
+    paths:
+      - 'supabase/migrations/**'
+      - 'supabase/tests/**'
+      - 'supabase/seed.sql'
+      - 'supabase/config.toml'
+      - '.github/workflows/pgtap.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pgtap:
+    name: pgTAP on the local stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          # .nvmrc is the single source for the Node major, shared with local
+          # development. Never hard-code a version here.
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # The CLI is the repository's own devDependency (package.json), so the
+      # version that runs here is the version the lockfile pins. The runner
+      # ships Docker; this starts the whole local stack on 127.0.0.1.
+      - name: Start the local stack
+        run: npx supabase start
+
+      # A fresh database: every file in supabase/migrations/, then seed.sql.
+      - name: Reset the local database
+        run: npm run db:reset
+
+      # Every pgTAP file under supabase/tests/, against that database.
+      - name: Run the pgTAP suite
+        run: npm run db:test
+
+      # Always, so a red suite never leaves containers behind on the runner.
+      - name: Stop the local stack
+        if: always()
+        run: npx supabase stop --no-backup

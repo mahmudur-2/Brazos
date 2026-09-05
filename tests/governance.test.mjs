@@ -237,6 +237,47 @@ test('CI runs the canonical offline check and nothing that needs a secret', () =
   assert.doesNotMatch(code, /STRIPE/i);
 });
 
+test('pgTAP CI starts only the local stack and needs no secret', () => {
+  // The database proof runs in its own workflow because the ci.yml fence
+  // above forbids anything Supabase-shaped there — and that fence is never
+  // weakened to make room. This one is pgtap.yml's: the same two commands
+  // every schema run proves locally, on a stack the runner starts itself,
+  // with nothing in reach that could address a remote project.
+  let workflow = null;
+  try {
+    workflow = read('.github/workflows/pgtap.yml');
+  } catch {
+    workflow = null;
+  }
+  assert.ok(
+    workflow !== null,
+    '.github/workflows/pgtap.yml must exist — the database proof has no other home in CI'
+  );
+
+  // Every third-party action pinned to a full 40-hex commit SHA, as in ci.yml.
+  const uses = [...workflow.matchAll(/^\s*uses:\s*(\S+)/gm)].map((m) => m[1]);
+  assert.ok(uses.length > 0, 'the workflow uses no actions at all — check the file');
+  const unpinned = uses.filter((ref) => !/@[0-9a-f]{40}$/.test(ref));
+  assert.deepEqual(unpinned, [], `unpinned action reference(s): ${unpinned.join(', ')}`);
+
+  // Executable YAML only, for the same reason as above: the header comment
+  // is allowed to name the things it forbids.
+  const code = linesOf(workflow)
+    .filter((line) => !/^\s*#/.test(line))
+    .map((line) => line.replace(/\s+#.*$/, ''))
+    .join('\n');
+
+  assert.match(code, /npm run db:reset/, 'the suite must run against a freshly reset local database');
+  assert.match(code, /npm run db:test/, 'the pgTAP suite itself must run');
+
+  assert.doesNotMatch(code, /secrets\./, 'pgTAP CI must consume no secrets');
+  assert.doesNotMatch(code, /--linked/, 'pgTAP CI must never address a linked remote project');
+  assert.doesNotMatch(code, /--db-url/, 'pgTAP CI must never address a database by URL');
+  assert.doesNotMatch(code, /--project-ref/, 'pgTAP CI must never name a remote project');
+  assert.doesNotMatch(code, /SUPABASE_/, 'no SUPABASE_* name may appear in executable YAML');
+  assert.doesNotMatch(code, /STRIPE/i, 'nothing here touches the payment provider');
+});
+
 test('.nvmrc names the Node major the suite actually runs on', () => {
   const declared = read('.nvmrc').trim();
 
