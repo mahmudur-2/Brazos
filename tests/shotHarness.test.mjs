@@ -138,8 +138,9 @@ test('the registry photographs where a category chip lands, in both schemes', ()
   ]) {
     assert.ok(names.includes(existing), `${existing} disappeared from the registry`);
   }
-  // 60 through RUN SHOTS1, plus the two RUN JOBS1 populated-Home targets.
-  assert.equal(names.length, 62, `registry is ${names.length} targets, expected 62`);
+  // 60 through RUN SHOTS1, plus the two RUN JOBS1 populated-Home targets,
+  // plus RUN n2's twelve signed-out and not-yet-set-up targets.
+  assert.equal(names.length, 74, `registry is ${names.length} targets, expected 74`);
 });
 
 test('that target is reached by tapping a chip, never by naming the route', async () => {
@@ -283,22 +284,37 @@ test('the populated Home targets exist, and are the only ones seeded with jobs',
     .split('\n')
     .map((line) => line.match(/^\/\/ {3}(\w+) {2,}\S/)?.[1])
     .filter(Boolean);
-  for (const field of ['name', 'mode', 'colorScheme', 'recipe', 'wait', 'jobs']) {
+  for (const field of ['name', 'mode', 'colorScheme', 'recipe', 'wait', 'jobs', 'session', 'setup']) {
     assert.ok(
       documented.includes(field),
       `the registry header does not document \`${field}\``
     );
   }
 
-  // OPT-IN, and the opt-in IS the byte-identity guarantee: exactly one
-  // occurrence in code — the single flatMap entry that produces both schemes.
+  // OPT-IN, and the opt-in IS the byte-identity guarantee. RUN n2 turned the
+  // exactly-once count into an ALLOW-LIST: every registry entry carrying
+  // `jobs: true` is named below in its source form, and the set has to match
+  // exactly, so a `jobs: true` that drifts onto any other entry fails offline
+  // rather than changing a PNG minutes into a capture run. The promise the
+  // count made is kept because no PRE-EXISTING entry changed: the list still
+  // names the one RUN JOBS1 entry and nothing else — n2 registered no further
+  // opted-in target (its two candidates, the worker's job detail and Submit
+  // Bid, are UNRENDERED at this HEAD; docs/GATES.md Gate 2 box 2 says why).
   // Comments are stripped first, so the prose explaining the flag cannot be
   // what satisfies this.
   const code = codeOnly(harness);
-  assert.equal(
-    (code.match(/jobs:\s*true/g) ?? []).length,
-    1,
-    '`jobs: true` appears on more than the one opted-in registry entry'
+  const optedIn = [...code.matchAll(/jobs:\s*true/g)].map((match) => {
+    const nameAt = code.lastIndexOf('name:', match.index);
+    assert.ok(nameAt > -1, 'a `jobs: true` with no registry entry name before it');
+    return code
+      .slice(nameAt, code.indexOf('\n', nameAt))
+      .replace(/^name:\s*/, '')
+      .replace(/,\s*$/, '');
+  });
+  assert.deepEqual(
+    optedIn.sort(),
+    ['`customer-home-jobs-${colorScheme}`'],
+    '`jobs: true` appears on an entry outside the allow-list'
   );
 
   // …and it is that entry, bounded by its own braces, so a `jobs: true` that
@@ -323,4 +339,52 @@ test('the populated Home targets exist, and are the only ones seeded with jobs',
   assert.match(code, /if \(jobs && pathname\.endsWith\('\/rest\/v1\/jobs'\)/);
   assert.match(code, /if \(jobs && pathname\.endsWith\('\/rest\/v1\/rpc\/job_offer_counts'\)/);
   assert.match(code, /jobs: shot\.jobs === true,/);
+});
+
+// RUN n2 — THE SIGNED-OUT AND NOT-YET-SET-UP TREES, AND THE TWO OPT-OUTS
+// THAT REACH THEM.
+test('the auth and setup targets are listed, both schemes, and reach their trees by the two landing opt-outs', async () => {
+  const names = registry();
+  for (const scheme of ['dark', 'light']) {
+    for (const surface of [
+      'welcome',
+      'signin',
+      'email-signin',
+      'create-account',
+      'email-create-account',
+      'setup',
+    ]) {
+      assert.ok(names.includes(`auth-${surface}-${scheme}`), `no auth-${surface}-${scheme} target`);
+    }
+  }
+
+  // The opt-outs are read off the registry entry the way `jobs` is, and only
+  // an explicit `false` opts out — so every entry that predates them keeps
+  // the seeding it always had, which is the byte-identity promise for their
+  // PNGs. seedPage() then honours each flag at the key it governs: no
+  // session means none of the three keys; no setup means no setup record.
+  const code = codeOnly(await read('scripts/shots.mjs'));
+  assert.match(code, /session: shot\.session !== false,/);
+  assert.match(code, /setup: shot\.setup !== false,/);
+  assert.match(code, /function seedPage\(\{ mode, url, key, sessionKey, userId, session, setup \}\)/);
+  assert.match(code, /if \(!session\) return;/);
+  assert.match(code, /if \(setup\) \{\s*window\.localStorage\.setItem\(\s*`brazos\.setup\.v1\.\$\{userId\}`/);
+
+  // Every locator the auth recipes introduce is a string the app renders —
+  // a renamed button is an offline failure here, not a timeout minutes into
+  // a capture run.
+  const [welcome, signIn, createAccount, authButton, setup] = await Promise.all([
+    read('screens/WelcomeScreen.tsx'),
+    read('screens/SignInScreen.tsx'),
+    read('screens/CreateAccountScreen.tsx'),
+    read('components/AuthButton.tsx'),
+    read('screens/SetupScreen.tsx'),
+  ]);
+  // `press` matches the accessibility label, which AuthButton sets to its title.
+  assert.match(codeOnly(authButton), /accessibilityLabel=\{title\}/);
+  assert.match(codeOnly(welcome), /title="Continue with phone"/);
+  assert.match(codeOnly(welcome), /title="I already have an account"/);
+  assert.match(codeOnly(signIn), /title="Use Email Instead"/);
+  assert.match(codeOnly(createAccount), /title="Use Email Instead"/);
+  assert.match(codeOnly(setup), />FINAL SETUP</);
 });

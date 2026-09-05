@@ -326,6 +326,13 @@ function projectColumns(row, select) {
 //                answers with invented marketplace data. Absent everywhere
 //                else, and absence is what keeps every other target on the
 //                empty answer it has always had, with its PNG unchanged.
+//   session      optional. `false` seeds NO session, setup record or mode
+//                key, so the app lands on Welcome — the signed-out tree.
+//                Absent is today's seeding, and every existing PNG stays
+//                byte-identical.
+//   setup        optional. `false` seeds the session and the mode key but
+//                NOT the setup record, so the app lands on Setup — the
+//                signed-in, not-yet-set-up tree. Absent is today's seeding.
 //
 // A target with no recipe is photographed exactly where the app lands. The
 // four original Home targets do that, and their capture path is the one
@@ -718,6 +725,94 @@ const TARGETS = [
       wait: SEEDED_JOBS[SEEDED_JOBS.length - 1].title,
     },
   ]),
+
+  // =========================================================================
+  // RUN n2 — the signed-out and the not-yet-set-up trees, both schemes. These
+  // are the only entries that set `session: false` or `setup: false`; every
+  // entry above keeps the seeded landing it has always had, PNG unchanged.
+  //
+  // The auth flow is a native stack: a screen navigated away from stays in
+  // the DOM, hidden, and first — so every wait here is a sentence only the
+  // arriving screen renders, never the eyebrow or the headline the two
+  // sign-in screens share ("WELCOME BACK", "Sign in to BRAZOS").
+  //
+  // Not here, and why (docs/GATES.md Gate 2 box 2 carries the whole list):
+  // Verify phone, because phone auth resolves to `disabled` outside
+  // development (lib/phoneAuth/mode.ts) and no challenge is ever issued; and
+  // the legal gate, which needs the acceptance read answered EMPTY for one
+  // target — a third stub flag this run does not add.
+  // =========================================================================
+  ...['dark', 'light'].flatMap((colorScheme) => [
+    {
+      // Where the app lands with no session at all.
+      name: `auth-welcome-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      session: false,
+      wait: 'Hire trusted local help',
+    },
+    {
+      // Phone-first sign in, by Welcome's own ghost button.
+      name: `auth-signin-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      session: false,
+      recipe: [
+        { expect: 'Hire trusted local help' },
+        { pressText: 'I already have an account' },
+      ],
+      wait: 'Use the phone number connected to your account.',
+    },
+    {
+      // …then the email route one tap below it — the path that actually
+      // authenticates anyone today.
+      name: `auth-email-signin-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      session: false,
+      recipe: [
+        { expect: 'Hire trusted local help' },
+        { pressText: 'I already have an account' },
+        { expect: 'Use the phone number connected to your account.' },
+        { press: 'Use Email Instead' },
+      ],
+      wait: 'Use the email and password connected to your account.',
+    },
+    {
+      // Phone-first create account, by Welcome's primary button.
+      name: `auth-create-account-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      session: false,
+      recipe: [{ expect: 'Hire trusted local help' }, { press: 'Continue with phone' }],
+      wait: 'One account. Two ways to use it.',
+    },
+    {
+      // …then the email route below it. Welcome has no button of its own to
+      // this screen at this HEAD, so it is reached from CreateAccount's.
+      name: `auth-email-create-account-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      session: false,
+      recipe: [
+        { expect: 'Hire trusted local help' },
+        { press: 'Continue with phone' },
+        { expect: 'One account. Two ways to use it.' },
+        { press: 'Use Email Instead' },
+      ],
+      wait: 'Sign up with your email',
+    },
+    {
+      // Signed in, mode seeded, setup record absent: the one-time Setup step.
+      // Its legal row reads as reviewed because the acceptance read is
+      // answered with the current versions here, as it is for every target.
+      name: `auth-setup-${colorScheme}`,
+      mode: 'customer',
+      colorScheme,
+      setup: false,
+      wait: 'FINAL SETUP',
+    },
+  ]),
 ];
 
 const MIME = {
@@ -811,9 +906,17 @@ function serve(dir) {
  * Runs before any of the app's own code — including public/config.js, which
  * only fills `__BRAZOS_CONFIG__` in when it is still unset. Supplies the web
  * build's runtime configuration and seeds the three AsyncStorage-backed gates.
+ *
+ * `session` and `setup` are the target's two landing opt-outs (RUN n2),
+ * threaded from the registry entry exactly as `jobs` is into stubResponse.
+ * Both true is the seeding every target has always had. `session` false
+ * writes none of the three keys, so the app lands on Welcome; `setup` false
+ * writes the session and the mode key but not the setup record, so it lands
+ * on Setup. The runtime configuration is supplied either way.
  */
-function seedPage({ mode, url, key, sessionKey, userId }) {
+function seedPage({ mode, url, key, sessionKey, userId, session, setup }) {
   globalThis.__BRAZOS_CONFIG__ = { SUPABASE_URL: url, SUPABASE_KEY: key };
+  if (!session) return;
 
   const now = Math.floor(Date.now() / 1000);
   window.localStorage.setItem(
@@ -835,10 +938,12 @@ function seedPage({ mode, url, key, sessionKey, userId }) {
       },
     }),
   );
-  window.localStorage.setItem(
-    `brazos.setup.v1.${userId}`,
-    JSON.stringify({ completed: true, landing: mode === 'worker' ? 'work' : 'hire' }),
-  );
+  if (setup) {
+    window.localStorage.setItem(
+      `brazos.setup.v1.${userId}`,
+      JSON.stringify({ completed: true, landing: mode === 'worker' ? 'work' : 'hire' }),
+    );
+  }
   window.localStorage.setItem(`brazos.mode.v1.${userId}`, mode);
 }
 
@@ -1105,6 +1210,10 @@ async function main() {
         key: HARNESS_KEY,
         sessionKey: HARNESS_SESSION_KEY,
         userId: USER_ID,
+        // THE TWO LANDING OPT-OUTS, per target and nowhere else — read off
+        // the registry entry exactly the way `jobs` is above.
+        session: shot.session !== false,
+        setup: shot.setup !== false,
       });
 
       const page = await context.newPage();
