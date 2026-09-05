@@ -618,7 +618,12 @@ test('D12 · the address caption is below the field, and the label owns its row'
 test('D13/D14 · the budget pill displays, the pencil edits, and nothing else is a control', () => {
   const flat = flatten(read('screens/PostJobScreen.tsx'));
 
-  const at = flat.indexOf('<FieldLabel palette={emeraldColors}>Max budget</FieldLabel>');
+  // RUN a4 (2026-09-05): the label is now the mode's own word — 'Max budget'
+  // in open bids, 'Price' in posted — so the block is anchored on the
+  // expression rather than on the string it resolves to. Logic unchanged.
+  const at = flat.indexOf(
+    '<FieldLabel palette={emeraldColors}>{priceFieldLabel(pricingMode)}</FieldLabel>'
+  );
   assert.notEqual(at, -1, 'the maximum carries the shared field label, left-aligned');
   const end = flat.indexOf('Optional — leave blank', at);
   assert.notEqual(end, -1, 'the helper must follow the pill');
@@ -724,9 +729,17 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
     'the wash comes from the shared primitive, not from an expression written here'
   );
 
-  // The contents, verbatim.
-  assert.match(flat, />Edit Budget<\/Text>/);
-  assert.match(flat, /Set the maximum amount workers can bid up to\./);
+  // The contents, verbatim. RUN a4 (2026-09-05): the title and the message are
+  // now the MODE's, so the two open-bids strings live in lib/pricingMode.ts —
+  // pinned there, byte for byte — and what this dialog is pinned on is that it
+  // renders that module's answer for the mode being edited, never its own copy.
+  const modes = read('lib/pricingMode.ts');
+  assert.match(modes, /title: 'Edit Budget',/);
+  assert.match(modes, /message: 'Set the maximum amount workers can bid up to\.',/);
+  assert.match(flat, /const copy = budgetEditorCopy\(draftMode\);/);
+  assert.match(flat, /<Text style=\{\[styles\.title, \{ color: palette\.onForest \}\]\}>\{copy\.title\}<\/Text>/);
+  assert.match(flat, /\{copy\.message\}<\/Text>/);
+  assert.match(flat, /accessibilityLabel=\{copy\.fieldLabel\}/);
   assert.match(flat, /keyboardType="numeric"/);
   assert.match(flat, /returnKeyType="done"/);
   assert.match(flat, /onSubmitEditing=\{handleSave\}/, 'the Done key IS Save, not a second outcome');
@@ -748,7 +761,14 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   // THE CEILING, COMPOSED FROM THE SHARED RULES and refusing before any RPC.
   assert.match(flat, /import \{ validateOfferAmount \} from '\.\/OfferComposer';/);
   assert.match(flat, /import \{ moneyCeilingError \} from '\.\.\/lib\/validation';/);
-  assert.match(flat, /if \(!text\.trim\(\)\) return null;/, 'empty is legal and means no maximum');
+  // RUN a4 (2026-09-05): empty is still legal and still means no maximum — the
+  // mode now decides whether this mode HAS one, and a posted price does not.
+  assert.match(
+    flat,
+    /if \(!text\.trim\(\)\) return budgetEditorCopy\(mode\)\.allowEmpty \? null : 'Enter an amount\.';/,
+    'empty is legal and means no maximum, where the mode allows a maximum'
+  );
+  assert.match(read('lib/pricingMode.ts'), /allowEmpty: true,/, 'and open bids is that mode');
   assert.match(flat, /return moneyCeilingError\(dollarsToCents\(text\)\);/);
   assert.match(flat, /if \(found\) \{ setProblem\(found\); return; \}/, 'a refusal blocks the save');
   // RUN PUBLISH1 (C2) drew the field here instead of through TextField, so the
@@ -770,12 +790,20 @@ test('D15 · the budget editor is ConfirmDialog shaped, emerald, and refuses ove
   assert.ok(!flat.includes('supabase'), 'the dialog contacts nothing');
   assert.ok(!flat.includes('createJob'), 'the dialog writes nothing');
 
-  // Cancel discards: the next open re-seeds from the live value.
-  assert.match(flat, /useEffect\(\(\) => \{ if \(!visible\) return; setDraft\(value\); setProblem\(null\); \}/);
+  // Cancel discards: the next open re-seeds from the live value. RUN a4: and
+  // from the live MODE, so a cancelled mode change discards with the amount.
+  assert.match(
+    flat,
+    /useEffect\(\(\) => \{ if \(!visible\) return; setDraft\(value\); setDraftMode\(mode\); setProblem\(null\); \}/
+  );
 
-  // The screen wires it: Save writes and closes, Cancel only closes.
+  // The screen wires it: Save writes and closes, Cancel only closes. RUN a4:
+  // Save now writes both halves of the one decision.
   const screen = flatten(read('screens/PostJobScreen.tsx'));
-  assert.match(screen, /onSave=\{\(next\) => \{ setBudgetMax\(next\); setEditingBudget\(false\); \}\}/);
+  assert.match(
+    screen,
+    /onSave=\{\(next, mode\) => \{ setBudgetMax\(next\); setPricingMode\(mode\); setEditingBudget\(false\); \}\}/
+  );
   assert.match(screen, /onCancel=\{\(\) => setEditingBudget\(false\)\}/);
 });
 
@@ -783,8 +811,15 @@ test('D16 · this screen writes no minimum, and nothing else about the column mo
   const screen = read('screens/PostJobScreen.tsx');
   const flat = flatten(screen);
 
-  assert.match(flat, /budgetCents: null, .*budgetMinCents: null, budgetMaxCents,/);
-  // The summary label must not claim a minimum either.
+  // RUN a4 (2026-09-05): the one typed figure now goes to the column its mode
+  // means — budget_cents for a posted price, budget_max_cents for open bids.
+  // The MINIMUM is what this test is about and it is still null on both roads.
+  assert.match(
+    flat,
+    /budgetCents: posted \? budgetMaxCents : null, budgetMinCents: null, budgetMaxCents: posted \? null : budgetMaxCents, pricingMode,/
+  );
+  // The summary label must not claim a minimum either. RUN a4: that derivation
+  // is now the open-bids branch, which is the only one that can render a range.
   assert.match(flat, /budget_min_cents: null, budget_max_cents: validMax,/);
 
   // NOT A SCHEMA CHANGE. No migration was written and the column's other
@@ -809,13 +844,16 @@ test('D17/D18 · the summary keeps all six rows, and the media row counts honest
   const rows = [...card.matchAll(/<Text style=\{styles\.reviewLabel\}>([^<]+)<\/Text>/g)].map(
     (match) => match[1]
   );
+  // RUN a4 (2026-09-05): SIX ROWS STILL, and the last one is still the amount —
+  // what changed is that its label now comes from the posting mode ('Budget'
+  // for open bids, 'Price' for a posted price) instead of being written here.
   assert.deepEqual(rows, [
     'Category',
     'Area',
     'Media',
     'Timing',
     'Address (private)',
-    '{isHiring ? \'Offer\' : \'Budget\'}',
+    '{isHiring ? \'Offer\' : priceRowLabel(pricingMode)}',
   ]);
 
   // The private-address row no longer disappears when it is empty — a

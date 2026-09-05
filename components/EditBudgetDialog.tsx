@@ -2,8 +2,14 @@ import { useEffect, useState } from 'react';
 import { Modal, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Button } from './Button';
 import { validateOfferAmount } from './OfferComposer';
+import { SegmentedControl } from './SegmentedControl';
 import { dollarsToCents } from '../lib/jobs';
 import { LitSurface } from '../ui/primitives';
+import {
+  budgetEditorCopy,
+  PRICING_MODE_OPTIONS,
+  type PricingMode,
+} from '../lib/pricingMode';
 import { moneyCeilingError } from '../lib/validation';
 import {
   controls,
@@ -41,9 +47,21 @@ const DIALOG_LIFT_ALPHA = 0.04;
  * ConfirmDialog's lighter `text` @ 0.35, which is what deepens it; dark passes
  * the page ground exactly as every other sheet does.
  *
- * EMPTY IS LEGAL AND MEANS NO MAXIMUM. That is a real state on a job row —
- * `budget_max_cents` is nullable and the poster's own view of it reads "No
- * budget set" — so clearing the field is a save, never a validation failure.
+ * IT ASKS THE POSTING QUESTION TOO (a4, `docs/DECISIONS.md` 2026-09-05 entry
+ * (2)). Ask for bids, or set a price — the existing `SegmentedControl` in its
+ * existing dress, and the ONE amount below it is the maximum in the first mode
+ * and the price in the second. One field, one dialog, never two amounts. The
+ * mode is a DRAFT here exactly as the amount is: Cancel discards both, and
+ * Save hands both back together, so the screen cannot end up holding a mode
+ * the poster backed out of. Every string comes from `lib/pricingMode.ts`, the
+ * one place the two modes are written.
+ *
+ * EMPTY IS LEGAL AND MEANS NO MAXIMUM — in the open-bids mode. That is a real
+ * state on a job row — `budget_max_cents` is nullable and the poster's own view
+ * of it reads "No budget set" — so clearing the field is a save, never a
+ * validation failure. A POSTED PRICE CANNOT BE BLANK: the server refuses a
+ * posted-price row without an amount (migration 20260930000400), so
+ * `budgetEditorCopy`'s `allowEmpty` decides which of the two rules applies.
  *
  * THE CEILING REFUSES IN WRITING BEFORE ANYTHING IS WRITTEN. The amount goes
  * through `validateOfferAmount` (the one answer to "is this a valid amount",
@@ -54,15 +72,19 @@ const DIALOG_LIFT_ALPHA = 0.04;
 export function EditBudgetDialog({
   visible,
   value,
+  mode,
   onSave,
   onCancel,
   palette: paletteProp,
 }: {
   visible: boolean;
-  /** The current maximum, in whole dollars as typed. Empty means no maximum. */
+  /** The current amount, in whole dollars as typed. Empty means no maximum. */
   value: string;
-  /** Called with the accepted text. Empty string means "no maximum". */
-  onSave: (next: string) => void;
+  /** The current posting choice. The dialog edits a copy of it. */
+  mode: PricingMode;
+  /** Called with the accepted text and the chosen mode. An empty string means
+   *  "no maximum", which only the open-bids mode allows. */
+  onSave: (next: string, mode: PricingMode) => void;
   onCancel: () => void;
   palette?: ColorPalette;
 }) {
@@ -70,23 +92,26 @@ export function EditBudgetDialog({
   const palette = paletteProp ?? colors;
   const styles = stylesFor(colors);
   const [draft, setDraft] = useState(value);
+  const [draftMode, setDraftMode] = useState<PricingMode>(mode);
   const [problem, setProblem] = useState<string | null>(null);
+  const copy = budgetEditorCopy(draftMode);
 
   // Opening the dialog re-seeds it from the live value: a cancelled edit
   // discards, so the next open must not resume the discarded text.
   useEffect(() => {
     if (!visible) return;
     setDraft(value);
+    setDraftMode(mode);
     setProblem(null);
-  }, [visible, value]);
+  }, [visible, value, mode]);
 
   function handleSave() {
-    const found = problemFor(draft);
+    const found = problemFor(draft, draftMode);
     if (found) {
       setProblem(found);
       return;
     }
-    onSave(draft.trim());
+    onSave(draft.trim(), draftMode);
   }
 
   return (
@@ -107,10 +132,22 @@ export function EditBudgetDialog({
             liftAlpha={DIALOG_LIFT_ALPHA}
             flat={!isDark}
           >
-            <Text style={[styles.title, { color: palette.onForest }]}>Edit Budget</Text>
-            <Text style={[styles.message, { color: palette.onForest }]}>
-              Set the maximum amount workers can bid up to.
-            </Text>
+            <Text style={[styles.title, { color: palette.onForest }]}>{copy.title}</Text>
+            <Text style={[styles.message, { color: palette.onForest }]}>{copy.message}</Text>
+
+            {/* a4 — THE POSTING QUESTION, on the control that already answers
+                two-way questions in this app (ClientJobDetail's bid order
+                renders the same one). NO NEW STYLE: it sits in the same
+                `field` wrapper the amount row below uses, so the two carry the
+                same rhythm, and the segments bring their own 44pt targets. */}
+            <View style={styles.field}>
+              <SegmentedControl<PricingMode>
+                options={[...PRICING_MODE_OPTIONS]}
+                value={draftMode}
+                onChange={setDraftMode}
+                palette={palette}
+              />
+            </View>
 
             {/* PUBLISH1 (C2) — THE LABEL IS GONE, NOT MOVED, and the field is
                 drawn here rather than through components/TextField.tsx.
@@ -142,7 +179,7 @@ export function EditBudgetDialog({
                   // to remove.
                   returnKeyType="done"
                   onSubmitEditing={handleSave}
-                  accessibilityLabel="Maximum budget in dollars"
+                  accessibilityLabel={copy.fieldLabel}
                   autoFocus
                 />
               </View>
@@ -172,12 +209,14 @@ export function EditBudgetDialog({
 /**
  * The written refusal for an amount, or null when it is acceptable.
  *
- * Composed, never restated: blank is a legal "no maximum"; anything else is
- * whatever `validateOfferAmount` says about its shape and then whatever
- * `moneyCeilingError` says about its size.
+ * Composed, never restated: blank is a legal "no maximum" WHERE THE MODE
+ * ALLOWS IT (a4 — a posted price needs one, and gets `validateOfferAmount`'s
+ * own "Enter an amount." rather than a second sentence for the same fact);
+ * anything else is whatever `validateOfferAmount` says about its shape and then
+ * whatever `moneyCeilingError` says about its size.
  */
-function problemFor(text: string): string | null {
-  if (!text.trim()) return null;
+function problemFor(text: string, mode: PricingMode): string | null {
+  if (!text.trim()) return budgetEditorCopy(mode).allowEmpty ? null : 'Enter an amount.';
   const { amountCents, problem } = validateOfferAmount(text);
   if (problem || amountCents == null) return problem ?? 'Enter an amount.';
   return moneyCeilingError(dollarsToCents(text));

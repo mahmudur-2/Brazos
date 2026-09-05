@@ -61,7 +61,13 @@ import {
   loadPostJobDraft,
   savePostJobDraft,
 } from '../lib/postJobDraft';
-import { DEFAULT_PRICING_MODE, pricingModeFrom, type PricingMode } from '../lib/pricingMode';
+import {
+  DEFAULT_PRICING_MODE,
+  priceFieldLabel,
+  priceRowLabel,
+  pricingModeFrom,
+  type PricingMode,
+} from '../lib/pricingMode';
 import { priceGuidanceLines } from '../lib/priceGuidance';
 import { PRICE_GUIDANCE } from '../lib/featureFlags';
 import { descriptionCharsNeeded } from '../lib/validation';
@@ -932,8 +938,10 @@ export function PostJobScreen() {
       return;
     }
 
-    // Hire mode negotiates a single amount; a posting carries a maximum, or
-    // nothing at all.
+    // Hire mode negotiates a single amount; a posting carries a maximum, a
+    // posted price, or nothing at all. a4: `posted` is the fresh-post and edit
+    // choice only — a direct offer is one negotiated amount and has no mode.
+    const posted = pricingMode === 'posted_price';
     const budgetMaxCents = dollarsToCents(budgetMax);
     let budgetCents: number | null = dollarsToCents(budget);
     if (isHiring) {
@@ -958,6 +966,17 @@ export function PostJobScreen() {
     // There is no range to cross-check any more: with one figure, "the
     // minimum cannot be more than the maximum" has nothing to compare.
 
+    // a4 — a posted price IS the amount, so it cannot be left open. Refused
+    // here, in the sentence that names the way out, rather than letting the
+    // server's own "A posted price needs an amount" arrive as an alert.
+    if (!isHiring && posted && (budgetMaxCents == null || Number.isNaN(budgetMaxCents))) {
+      await alertAsync(
+        'Set your price',
+        'A posted price needs an amount. Open Edit budget and enter one, or switch to Ask for bids.'
+      );
+      return;
+    }
+
     // Sending an offer puts a real, priced commitment in front of a specific
     // person, so it gets a confirmation naming the amount and the recipient
     // before it goes. sendOffer() below is the confirmed half.
@@ -975,13 +994,18 @@ export function PostJobScreen() {
       description: description.trim(),
       category,
       location: location.trim(),
-      budgetCents: null,
+      // a4 — ONE TYPED FIGURE, TWO COLUMNS. The `budgetMax` state is the price
+      // in posted mode and the maximum in open mode, so it is written to
+      // whichever column that mode means. The server's own CHECK backs this:
+      // a posted-price row carries budget_cents and no range.
+      budgetCents: posted ? budgetMaxCents : null,
       // D16 — THIS SCREEN NO LONGER WRITES A MINIMUM. The field is gone, so
       // there is no minimum to write and null is the honest value. The column
       // stays, every other reader of it stays, and nothing is migrated: this
       // is one writer declining to write, not a schema change.
       budgetMinCents: null,
-      budgetMaxCents,
+      budgetMaxCents: posted ? null : budgetMaxCents,
+      pricingMode,
       scheduledDate,
       arrivalStartHour,
       arrivalEndHour,
@@ -1111,24 +1135,34 @@ export function PostJobScreen() {
   const reviewMaxCents = dollarsToCents(budgetMax);
   const validMax =
     reviewMaxCents != null && !Number.isNaN(reviewMaxCents) ? reviewMaxCents : null;
+  const postedPrice = pricingMode === 'posted_price';
   const reviewBudget = isHiring
     ? reviewBudgetCents != null && !Number.isNaN(reviewBudgetCents)
       ? formatBudget(reviewBudgetCents)
       : 'Required before sending'
     : validMax != null
-      ? budgetRangeLabel({
-          budget_cents: null,
-          // D16: this screen writes no minimum, so the label it derives must
-          // not claim one either.
-          budget_min_cents: null,
-          budget_max_cents: validMax,
-        })
+      ? // a4 — a posted price is ONE figure, so it is written as one. Open bids
+        // keeps the shared range label, which is the only place two figures
+        // know how to be written together.
+        postedPrice
+        ? formatBudget(validMax)
+        : budgetRangeLabel({
+            budget_cents: null,
+            // D16: this screen writes no minimum, so the label it derives must
+            // not claim one either.
+            budget_min_cents: null,
+            budget_max_cents: validMax,
+          })
       : // Master 35 is the poster's own view of an unset-budget job and it
         // reads "No budget set" — the same string `formatBudget` returns.
         'No budget set';
   // D13 — what the display pill shows. The SAME resolved cents the summary
   // row reads, so the pill and the row can never disagree about the amount.
-  const maxBudgetDisplay = validMax != null ? formatBudget(validMax) : 'No maximum';
+  // a4 — an empty posted price is not an open budget, it is a missing one, and
+  // the pill says which rather than offering "No maximum" as though it were a
+  // legal state of this mode.
+  const maxBudgetDisplay =
+    validMax != null ? formatBudget(validMax) : postedPrice ? 'Price required' : 'No maximum';
   const reviewTiming =
     arrivalWindowLabel({
       scheduled_date: scheduledDate,
@@ -1605,7 +1639,7 @@ export function PostJobScreen() {
                       text input and it is not a touch target. The pencil is
                       the only thing here that can be pressed, and it opens
                       the one editor. No slider, no track, no second pill. */}
-                  <FieldLabel palette={emeraldColors}>Max budget</FieldLabel>
+                  <FieldLabel palette={emeraldColors}>{priceFieldLabel(pricingMode)}</FieldLabel>
                   <View style={styles.budgetPill}>
                     <Text style={styles.budgetPillValue} numberOfLines={1}>
                       {maxBudgetDisplay}
@@ -1711,7 +1745,7 @@ export function PostJobScreen() {
                     <Ionicons name="wallet-outline" size={18} color={colors.emerald} />
                   </View>
                   <View style={styles.reviewText}>
-                    <Text style={styles.reviewLabel}>{isHiring ? 'Offer' : 'Budget'}</Text>
+                    <Text style={styles.reviewLabel}>{isHiring ? 'Offer' : priceRowLabel(pricingMode)}</Text>
                     <Text style={styles.reviewValue}>{reviewBudget}</Text>
                   </View>
                 </View>
@@ -1885,7 +1919,13 @@ export function PostJobScreen() {
                         <Text style={styles.reviewIconGlyph}>$</Text>
                       </View>
                       <View style={styles.reviewText}>
-                        <Text style={styles.reviewLabel}>Budget</Text>
+                        {/* a4 — the PUBLISHED row names what was actually
+                            saved, read back off the row rather than off the
+                            form state, so an edit that failed cannot leave the
+                            card claiming a mode the database does not hold. */}
+                        <Text style={styles.reviewLabel}>
+                          {priceRowLabel(pricingModeFrom(publishedJob.pricing_mode))}
+                        </Text>
                         {/* C1: MoneyText with NO state — this is an amount, not
                             a payment. A state would attach a caption from the
                             payment machine to a job that has not been paid for
@@ -2001,16 +2041,19 @@ export function PostJobScreen() {
         onClose={() => setOtherSheetOpen(false)}
       />
 
-      {/* D15 — the one budget editor. Cancel discards, Save writes and
-          closes, and an empty field saves as "no maximum" rather than
-          refusing. The ceiling refuses in writing inside the dialog, before
-          anything reaches createJob. */}
+      {/* D15 — the one budget editor, and since a4 the one place the posting
+          choice is made. Cancel discards both the amount and the mode, Save
+          writes both and closes, and an empty field saves as "no maximum"
+          where the mode allows it. The ceiling refuses in writing inside the
+          dialog, before anything reaches createJob. */}
       <EditBudgetDialog
         visible={editingBudget}
         value={budgetMax}
+        mode={pricingMode}
         palette={emeraldColors}
-        onSave={(next) => {
+        onSave={(next, mode) => {
           setBudgetMax(next);
+          setPricingMode(mode);
           setEditingBudget(false);
         }}
         onCancel={() => setEditingBudget(false)}
