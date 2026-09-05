@@ -97,6 +97,37 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN n7-reputation-client COMPLETED (2026-09-04) - every list reads the revealed per-role summary; rating_avg / rating_count read nowhere
+
+Dispatch `C:\Users\mdmah\runs\night1\n7-reputation-client.txt`; base `b4f4d3d` (an ancestor), HEAD `44040af`, branch `mainexpo`, tree clean,
+HEAD = origin/mainexpo (FRESH); RESUMED once (2026-09-05) with STEP 2's edits already on disk, finished from there. Report
+`.shots/night1/reports/n7-reputation-client.md`. Nothing under supabase/ changed (no staging pipeline; ci.yml ran verify); no dependency
+added; the guard directory, `.gitignore`, the `worker-search` edge function and the five R8b-c single-subject surfaces untouched.
+
+**Commits.** C1 `56760e8` — `lib/reviews.ts`: `ProfileReviewSummaryRow` + `fetchProfileReviewSummaries(userIds, role)` (ONE
+`.rpc('profile_review_summaries')`, distinct ids, an empty list answered locally, the single's coercion, a malformed row dropped and reported).
+`lib/compareBids.ts`: CompareWorker = `{ shown_average, is_new, revealed_total, on_time_pct } | null`; `knownRating` a fact only at
+revealed_total > 0; `highestRatedBadgeId` needs `is_new === false`; `compareWorkerFromSummary()`. `hooks/useJobOffers.ts`: opt-in
+`{ summaries: true }` = one batch call per distinct worker-id set, shared by CompareBids and ClientJobDetail (BidDetail opts out);
+CompareBidsScreen's N+1 `worker_job_stats` loop replaced by the row's `completed_jobs`; `components/OfferCard.tsx` takes `summary`;
+`tests/conversion.test.mjs` fixture moved. C2 `af83aa5` — `lib/profiles.ts` drops the columns from `Profile` and `PUBLIC_PROFILE_COLUMNS`;
+`lib/workerSearch.ts` `ratingScore()` reads the summary, `scoreMatch()` gains a trailing `summary = null`, `searchWorkers()` makes one batch
+call over every candidate, `ServerMatch` drops ratingAvg / ratingCount; WorkerSearchScreen and SavedWorkersScreen each make ONE call keyed on
+their sorted distinct id set; `tests/legacyAggregateFence.test.mjs` (new) scans lib/, screens/, components/, hooks/, navigation/, modes/ with
+comments stripped; `tests/workerMatching.test.mjs` mirror moved. C3 — `docs/BACKLOG.md` §v1.2 (two lines) and this record. Proof: lint clean,
+`verify` 1296/0 (C1) and 1300/0 (C2, C3) before each commit; each pushed with the bare `git push origin mainexpo`.
+
+**The rule everywhere (R8b-c D1).** `shown_average` to one decimal at three or more REVEALED reviews; the word "New" while `is_new`; nothing
+while the row is UNKNOWN (null is unknown, never zero); the count beside it is revealed reviews. Ranking: a zero-review worker has no KNOWN
+rating and sorts last as a block; HIGHEST RATED needs the top past "New" and every rival known and strictly lower.
+
+**Renders (D7).** Compare Bids UNRENDERED by construction — the harness invents no offers or workers. Fresh export, then reused:
+`.shots/worker-results-{dark,light}.png` and `.shots/workersearch-category-{dark,light}.png` (2026-09-05 02:44); the harness seeds no worker
+and answers the RPC empty, so these prove the screens mount after the repoint, not what a populated list prints. **Exceptions.** (1) ChatScreen's OfferCard host is the thread variant — no worker profile, no rating at HEAD — nothing
+to repoint, no call added. (2) The first session ended mid-render; the resumed one re-ran both pairs. (3) The guard refused `git push origin
+mainexpo 2>&1 | tail` (the redirect reads as a push argument); the bare form was accepted. **NEEDS THE OPERATOR.** An app change needs a
+rebuild — n8 STEP 6 builds fresh. Next: retire `recompute_profile_rating` / `rating_avg` / `rating_count` (docs/BACKLOG.md §v1.2, a schema run).
+
 ## RUN n6-reputation-schema COMPLETED (2026-09-04) - profile_review_summaries, the batch per-role revealed summary
 
 Dispatch `C:\Users\mdmah\runs\night1\n6-reputation-schema.txt`; base `b4f4d3d` (an ancestor), HEAD `473482e`, branch
