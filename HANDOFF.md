@@ -99,6 +99,21 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN m1-mode-race COMPLETED (2026-09-05) - the gate hooks answer for the current user, synchronously; the mode race after Setup is closed
+
+Dispatch `C:\Users\mdmah\runs\night2\m1-mode-race.txt`; report `.shots/night2/reports/m1-mode-race.md`. Base gate PASS: `git merge-base --is-ancestor b453c47 HEAD` exit 0, `git rev-parse --abbrev-ref HEAD` printed `mainexpo`, `git status --porcelain` empty; m1 started from `b453c47` ("docs: NIGHT1 maestro result"). This record is written by the follow-up run m1b-docs, because m1 exited before its own reporting step and left the repository with no record of the fix.
+
+**THE BUG.** A user who finished Setup with "Find work" landed in the customer tree. `hooks/useSetupStatus.ts` and `hooks/useLegalGate.ts` both flip to 'loading' inside a `useEffect`, so in the one render where the user first appears they still answered from their signed-out branches ('complete' / 'accepted'); `App.tsx`'s RootNavigator dropped its loader and mounted MainTabs for that commit, `navigation/ModeShell.tsx` armed the resolution, and `modes/ModeProvider.tsx` resolved and stamped the user with no landing parked yet — so the 'work' landing `screens/SetupScreen.tsx` parked a moment later was never consumed, and the server-side `active_mode` decided the tree.
+
+BEFORE walk: MAESTRO RED 01a07320-6419-7e1a-b440-8913e9184e5d — `Assertion is false: "Search for jobs or areas" is visible`, failing at the worker's `runFlow sign-in.yml` in Act 2 with customer Home in the screen hierarchy behind it; deliberate, on the unfixed build be257242-4fef-4e62-8cfe-0f3797c5d115 at `b453c47`. It is not the pass condition — it is the proof that the walk sees the bug.
+
+**Commit.** `bfb8e0c` "m1: the gate hooks answer for the current user, synchronously" — five files, staged by explicit path: `lib/gateAnswer.ts` (new — the pure derivation `deriveGateAnswer(userId, stored, signedOut)` over a `GateAnswer<T>` `{ forUser, value }` record, importing nothing), `tests/gateAnswer.test.mjs` (new — 10 tests, including both hooks executed from a data URL through the errorHonesty micro hook runtime), `hooks/useSetupStatus.ts` and `hooks/useLegalGate.ts` (each derives its answer in the same render now, so an answer stored for another user — or for nobody — reads 'loading' instead of the signed-out value, and the public API of both hooks is unchanged), and `tests/errorHonesty.test.mjs` (+8 — one exact-line replacement in its data-URL harness, which cannot resolve a relative specifier; its four gate assertions are untouched). Proof: `npm run lint` clean, `npm test` 1325 pass / 0 fail / 0 skipped; pushed with the bare `git push origin mainexpo`.
+
+AFTER walk: money_walk GREEN, 21m56s, EAS run 01a07330-a127-7c91-9bc0-cb256c3355d1, build 1ffe5205-ced7-4e1f-a740-61d99f0e4324 (confirmed by the operator from eas workflow:runs, 2026-09-05).
+
+**The build is reusable.** `1ffe5205-ced7-4e1f-a740-61d99f0e4324` is the e2e-test simulator build that carries the fix, recorded in `.shots/night2/build_id.txt`. A later walk skips the simulator build entirely by passing `-F build_id=1ffe5205-ced7-4e1f-a740-61d99f0e4324` to `.eas/workflows/e2e-ios.yml`, which is how m1's own BEFORE walk ran on the unfixed build. **NEEDS THE OPERATOR.** Nothing from m1: no SQL, no secret, no device step, no destructive migration, no new dependency; nothing under `supabase/` changed, so no staging pipeline ran for it.
+
+
 ## NIGHT1 COMPLETED (2026-09-04) - eight dispatches authored by the planner, seven runs landed: n3 the auto-release told-gate, n6 the batch reputation summary, n7 lists on that summary, n1 nearby alerts default on, n2 the harness registry, n5 the first session, n9 Sentry captures; n4 never started; n8 (this record) the hygiene sweep
 
 Planned 2026-09-04 (`.shots/night1/reports/plan.md`, base `b4f4d3d`), executed 2026-09-04 → 2026-09-05 by the operator's night1 chain; prompts under `.shots/night1/prompts/`, reports under `.shots/night1/reports/` (both gitignored). One line per run — name, its last commit, its result, how its report ends:
