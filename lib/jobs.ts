@@ -4,6 +4,7 @@ import { categoryAccents } from '../ui/tokens';
 import { supabase } from './supabase';
 import { coordinateLocationError, publicLocationLabel } from './locationPrivacy';
 import { track } from './observability/analytics';
+import { DEFAULT_PRICING_MODE, pricingModeFrom, type PricingMode } from './pricingMode';
 import { moneyCeilingError } from './validation';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -120,6 +121,10 @@ export type Job = {
    *  budget_cents so legacy readers keep working. */
   budget_min_cents: number | null;
   budget_max_cents: number | null;
+  /** a4 (2026-09-05): the poster's own choice between open bids and a posted
+   *  price (migration 20260930000400). Never nullable here — the column is
+   *  defaulted and `pricingModeFrom` resolves anything unknown to open bids. */
+  pricing_mode: PricingMode;
   /** Scheduling (phase49): the chosen day plus a local wall-clock arrival
    *  window. All nullable — "flexible" is a real, common answer. */
   scheduled_date: string | null;
@@ -178,6 +183,7 @@ export function mapJobRow(row: any): Job {
     created_at: row.created_at,
     budget_min_cents: row.budget_min_cents ?? null,
     budget_max_cents: row.budget_max_cents ?? null,
+    pricing_mode: pricingModeFrom(row.pricing_mode),
     scheduled_date: row.scheduled_date ?? null,
     arrival_start_hour: row.arrival_start_hour ?? null,
     arrival_end_hour: row.arrival_end_hour ?? null,
@@ -231,6 +237,9 @@ export type NewJobInput = {
    *  the legacy single budget_cents; callers pass whichever the poster set. */
   budgetMinCents?: number | null;
   budgetMaxCents?: number | null;
+  /** a4 (2026-09-05): the posting choice. Absent means the default the server
+   *  itself defaults to, so an older caller writes exactly today's row. */
+  pricingMode?: PricingMode;
   /** YYYY-MM-DD, or null for "flexible" (screen 14). */
   scheduledDate?: string | null;
   /** Local wall-clock arrival window, both-or-neither (screen 14). */
@@ -265,6 +274,9 @@ export type OpenJob = {
   budget_cents: number | null;
   budget_min_cents: number | null;
   budget_max_cents: number | null;
+  /** a4 (2026-09-05): carried on the browse shape too, so a card built from it
+   *  can name the amount correctly without a second read. */
+  pricing_mode: PricingMode;
   scheduled_date: string | null;
   arrival_start_hour: number | null;
   arrival_end_hour: number | null;
@@ -291,6 +303,9 @@ export function toOpenJob(row: any): OpenJob {
     // projection) and correctly null there — same fallback rule as photos.
     budget_min_cents: row.budget_min_cents ?? null,
     budget_max_cents: row.budget_max_cents ?? null,
+    // Absent from a projection that predates a4 (the map drill-down RPC) and
+    // correctly open bids there — the allow-list resolves anything unknown.
+    pricing_mode: pricingModeFrom(row.pricing_mode),
     scheduled_date: row.scheduled_date ?? null,
     arrival_start_hour: row.arrival_start_hour ?? null,
     arrival_end_hour: row.arrival_end_hour ?? null,
@@ -311,7 +326,7 @@ export function toOpenJob(row: any): OpenJob {
 // from silently reopening this class of leak if a new sensitive column is
 // ever added to `jobs`.
 const OPEN_JOB_COLUMNS =
-  'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
+  'id, client_id, title, description, category, location, budget_cents, budget_min_cents, budget_max_cents, pricing_mode, scheduled_date, arrival_start_hour, arrival_end_hour, status, created_at, photos, videos';
 const JOB_COLUMNS =
   `${OPEN_JOB_COLUMNS}, assigned_worker_id, final_amount_cents, completion_photo_url, completion_photos, completion_videos, en_route_at, arrived_at, completed_at`;
 
@@ -402,8 +417,36 @@ function jobBudgetCeilingError(input: NewJobInput): string | null {
   );
 }
 
+/**
+ * a4's client mirror of the two posted-price rules `create_job()` and
+ * `update_job_details()` enforce (migration 20260930000400) — the
+ * MAX_COUNTERS_PER_SIDE arrangement: the database is the real enforcement and
+ * this only decides what the app offers, refusing in the server's OWN
+ * sentences before the RPC rather than after it. A posted price is one amount,
+ * so it needs one and it takes no range.
+ */
+function jobPricingModeError(input: NewJobInput): string | null {
+  if (input.pricingMode !== 'posted_price') return null;
+  if (input.budgetCents == null || Number.isNaN(input.budgetCents) || input.budgetCents <= 0) {
+    return 'A posted price needs an amount';
+  }
+  if (input.budgetMinCents != null || input.budgetMaxCents != null) {
+    return 'A posted price is one amount, not a range';
+  }
+  return null;
+}
+
 /** Create an open job and its optional exact location in one transaction. */
 export async function createJob(_clientId: string, input: NewJobInput) {
+  const modeError = jobPricingModeError(input);
+  if (modeError) {
+    return {
+      data: null,
+      error: { message: modeError },
+      locationError: null as { message: string } | null,
+    };
+  }
+
   const ceilingError = jobBudgetCeilingError(input);
   if (ceilingError) {
     return {
@@ -442,11 +485,12 @@ export async function createJob(_clientId: string, input: NewJobInput) {
       p_arrival_start_hour: input.arrivalStartHour ?? null,
       p_arrival_end_hour: input.arrivalEndHour ?? null,
       p_address_line: input.addressLine ?? null,
+      p_pricing_mode: input.pricingMode ?? DEFAULT_PRICING_MODE,
     })
     .single();
 
-  // The top of the funnel, and only when a job actually exists: both refusals
-  // above return before the RPC ever runs, and a refused post is not a post.
+  // The top of the funnel, and only when a job actually exists: every refusal
+  // above returns before the RPC ever runs, and a refused post is not a post.
   // `hasBudget` is whether the customer named ANY figure — the single amount or
   // either end of the range — never the figure itself.
   if (!error && data) {
@@ -474,6 +518,17 @@ export async function createJob(_clientId: string, input: NewJobInput) {
  * transaction.
  */
 export async function updateJob(jobId: string, input: NewJobInput) {
+  // Same posted-price mirror as createJob — an edit must not be the path that
+  // reaches the server's refusal either.
+  const modeError = jobPricingModeError(input);
+  if (modeError) {
+    return {
+      data: null,
+      error: { message: modeError },
+      locationError: null as { message: string } | null,
+    };
+  }
+
   const ceilingError = jobBudgetCeilingError(input);
   if (ceilingError) {
     return {
@@ -512,6 +567,7 @@ export async function updateJob(jobId: string, input: NewJobInput) {
       p_arrival_start_hour: input.arrivalStartHour ?? null,
       p_arrival_end_hour: input.arrivalEndHour ?? null,
       p_address_line: input.addressLine ?? null,
+      p_pricing_mode: input.pricingMode ?? DEFAULT_PRICING_MODE,
     })
     .single();
 

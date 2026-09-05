@@ -61,6 +61,7 @@ import {
   loadPostJobDraft,
   savePostJobDraft,
 } from '../lib/postJobDraft';
+import { DEFAULT_PRICING_MODE, pricingModeFrom, type PricingMode } from '../lib/pricingMode';
 import { priceGuidanceLines } from '../lib/priceGuidance';
 import { PRICE_GUIDANCE } from '../lib/featureFlags';
 import { descriptionCharsNeeded } from '../lib/validation';
@@ -386,6 +387,11 @@ export function PostJobScreen() {
   );
   const [budgetMin, setBudgetMin] = useState('');
   const [budgetMax, setBudgetMax] = useState('');
+  // a4 — the posting choice (docs/DECISIONS.md 2026-09-05 entry (2)). Open bids
+  // is the default, so a wizard nobody touches posts exactly the job it posted
+  // before this run. The ONE typed figure above is the price in posted mode and
+  // the maximum in open mode — one field, one dialog, never two amounts.
+  const [pricingMode, setPricingMode] = useState<PricingMode>(DEFAULT_PRICING_MODE);
   // Exact service address — job_private_details on publish, never public.
   const [address, setAddress] = useState('');
   const [scheduledDate, setScheduledDate] = useState<string | null>(null);
@@ -564,6 +570,7 @@ export function PostJobScreen() {
         setCoords(draft.coords);
         setBudgetMin(draft.budgetMin);
         setBudgetMax(draft.budgetMax);
+        setPricingMode(draft.pricingMode);
         setAddress(draft.address);
         // A date that slipped into the past while the draft sat idle is
         // dropped rather than restored — publishing yesterday is never right.
@@ -608,6 +615,7 @@ export function PostJobScreen() {
       coords,
       budgetMin,
       budgetMax,
+      pricingMode,
       address,
       scheduledDate,
       arrivalStartHour,
@@ -617,7 +625,7 @@ export function PostJobScreen() {
       step,
       photoNudgeDismissed,
     });
-  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step, photoNudgeDismissed]);
+  }, [isFreshPost, draftReady, draftUserId, title, description, category, location, coords, budgetMin, budgetMax, pricingMode, address, scheduledDate, arrivalStartHour, arrivalEndHour, photos, videos, step, photoNudgeDismissed]);
 
   // Header Back, Android Back, and the iOS edge gesture all mean the same
   // thing inside the wizard: move back one step. A write in flight cannot be
@@ -683,6 +691,10 @@ export function PostJobScreen() {
             ? String(job.budget_cents / 100)
             : ''
       );
+      // a4 — an edit reopens on the mode the job was posted in. A row written
+      // before migration 20260930000400, or a stale cached one, has no mode at
+      // all, and the allow-list reads that as open bids: no special case.
+      setPricingMode(pricingModeFrom(job.pricing_mode));
       setScheduledDate(job.scheduled_date);
       setArrivalStartHour(job.arrival_start_hour);
       setArrivalEndHour(job.arrival_end_hour);

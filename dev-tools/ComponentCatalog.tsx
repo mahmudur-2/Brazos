@@ -107,6 +107,9 @@ const CATALOG_JOB: OpenJob = {
   budget_cents: 18000,
   budget_min_cents: 15000,
   budget_max_cents: 18000,
+  // RUN a4 (2026-09-05): OpenJob carries the posting choice; the fixture has a
+  // range, so open bids is the only mode it could honestly be in.
+  pricing_mode: 'open_bids',
   scheduled_date: null,
   arrival_start_hour: null,
   arrival_end_hour: null,

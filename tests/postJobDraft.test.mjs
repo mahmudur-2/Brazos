@@ -4,6 +4,11 @@ import { stripTypeScriptTypes } from 'node:module';
 import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
+// RUN a4 (2026-09-05): lib/pricingMode.ts's own URL. Unlike the three imports
+// stubbed below it is a REAL module here — it is import-free, so the data-URL
+// module can load it for real once the relative specifier is made absolute
+// (the tests/ownJobCard.test.mjs rewrite).
+const pricingModeUrl = new URL('../lib/pricingMode.ts', import.meta.url).href;
 
 function codeOnly(source) {
   return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
@@ -47,9 +52,21 @@ const draftModule = (async () => {
   );
   assert.notEqual(withSentry, stubbed, 'the Sentry import must be found and stubbed');
   stubbed = withSentry;
+  // RUN a4: the mode read is REAL, not a stub — lib/pricingMode.ts is
+  // import-free, so only its specifier needs making absolute for a data URL to
+  // resolve it. Rewritten, never replaced: the allow-list this file depends on
+  // must be the shipped one.
+  const withPricingMode = stubbed.replace(
+    "from './pricingMode';",
+    () => `from '${pricingModeUrl}';`
+  );
+  assert.notEqual(withPricingMode, stubbed, 'the pricingMode import must be found');
+  stubbed = withPricingMode;
   assert.ok(
-    !stubbed.includes("'./dialog'") && !stubbed.includes("'./observability/sentry'"),
-    'no runtime import may survive stubbing'
+    !stubbed.includes("'./dialog'") &&
+      !stubbed.includes("'./observability/sentry'") &&
+      !stubbed.includes("'./pricingMode'"),
+    'no unresolvable relative import may survive stubbing'
   );
   return import(toDataUrl(stubbed));
 })();
@@ -62,6 +79,8 @@ const blankDraft = {
   coords: null,
   budgetMin: '',
   budgetMax: '',
+  // RUN a4 (2026-09-05): the posting choice, blank-draft value = the default.
+  pricingMode: 'open_bids',
   address: '',
   scheduledDate: null,
   arrivalStartHour: null,
@@ -206,6 +225,31 @@ test('clearing one account leaves the other account untouched', async () => {
   assert.equal(await mod.loadPostJobDraft('user-a'), null);
   const b = await mod.loadPostJobDraft('user-b');
   assert.equal(b?.title, 'B draft');
+});
+
+// ---------------------------------------------------------------------------
+// RUN a4 (2026-09-05): the posting choice survives the same kill the rest of
+// the draft survives, and a draft written before a4 reads as the default.
+// ---------------------------------------------------------------------------
+
+test('the posting choice round-trips, and a pre-a4 draft reads as open bids', async () => {
+  const mod = await draftModule;
+  globalThis.__draftTestStore = new Map();
+
+  await mod.savePostJobDraft('user-a', { ...blankDraft, pricingMode: 'posted_price' });
+  assert.equal((await mod.loadPostJobDraft('user-a'))?.pricingMode, 'posted_price');
+
+  // A draft stored before this run carries no mode at all. The allow-list
+  // reads that as open bids — the same answer jobs.pricing_mode's own default
+  // gives — rather than leaving it undefined for the wizard to seed from.
+  const { pricingMode, ...withoutMode } = blankDraft;
+  globalThis.__draftTestStore.set(
+    mod.draftStorageKey('user-b'),
+    JSON.stringify({ ...withoutMode, title: 'saved before a4' })
+  );
+  const legacy = await mod.loadPostJobDraft('user-b');
+  assert.equal(legacy?.title, 'saved before a4');
+  assert.equal(legacy?.pricingMode, 'open_bids');
 });
 
 // ---------------------------------------------------------------------------

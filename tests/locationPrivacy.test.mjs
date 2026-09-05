@@ -165,8 +165,21 @@ const openJobModule = (async () => {
   const openEnd = jobsJs.indexOf('\n}', openStart);
   assert.ok(openStart > 0 && openEnd > openStart, 'toOpenJob must exist in lib/jobs.ts');
 
+  // RUN a4 (2026-09-05): toOpenJob now resolves the posting choice through
+  // lib/pricingMode.ts, so that function is extracted the same verbatim way
+  // and prepended — the span stays the shipped code, not a stub of it.
+  const modeJs = stripTypeScriptTypes(await read('lib/pricingMode.ts'), { mode: 'strip' });
+  const modeStart = modeJs.indexOf('export function pricingModeFrom');
+  const modeEnd = modeJs.indexOf('\n}', modeStart);
+  assert.ok(modeStart > 0 && modeEnd > modeStart, 'pricingModeFrom must exist in lib/pricingMode.ts');
+  const defaultStart = modeJs.indexOf('export const DEFAULT_PRICING_MODE');
+  const defaultEnd = modeJs.indexOf('\n', defaultStart);
+  assert.ok(defaultStart > 0 && defaultEnd > defaultStart, 'DEFAULT_PRICING_MODE must exist');
+
   const js = [
     privacyJs,
+    modeJs.slice(defaultStart, defaultEnd),
+    modeJs.slice(modeStart, modeEnd + 2),
     jobsJs.slice(photoStart, photoEnd + 2),
     jobsJs.slice(openStart, openEnd + 2),
   ].join('\n');

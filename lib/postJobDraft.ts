@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alertAsync } from './dialog';
 import type { JobCategory } from './jobs';
 import { Sentry } from './observability/sentry';
+import { pricingModeFrom, type PricingMode } from './pricingMode';
 
 /**
  * A fresh (not editing, not hiring) post's in-progress fields, persisted so
@@ -43,6 +44,9 @@ export type PostJobDraft = {
   /** Editable MIN/MAX budget range (screen 15), as typed dollar strings. */
   budgetMin: string;
   budgetMax: string;
+  /** a4 (2026-09-05): the posting choice, so an interrupted wizard resumes on
+   *  the mode it was left on rather than silently back on the default. */
+  pricingMode: PricingMode;
   /** Exact service address (private — job_private_details on publish). */
   address: string;
   /** YYYY-MM-DD, or null for "flexible". */
@@ -88,6 +92,9 @@ export async function loadPostJobDraft(userId: string): Promise<PostJobDraft | n
       // A draft saved before the range fields existed folds its single budget
       // into the ceiling — the same slot the server mirrors a range into.
       budgetMax: parsed.budgetMax ?? parsed.budget ?? '',
+      // a4: a draft saved before this run carries no mode, and the allow-list
+      // reads that as open bids — the same answer the column's default gives.
+      pricingMode: pricingModeFrom(parsed.pricingMode),
       address: parsed.address ?? '',
       scheduledDate: parsed.scheduledDate ?? null,
       arrivalStartHour: parsed.arrivalStartHour ?? null,
