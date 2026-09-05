@@ -265,6 +265,28 @@ test('a2 · Home reads the hub, derives nothing itself, and sits below the pill 
   }
 });
 
+test('a2 · the Nearby card says when the job was posted, once, in the row above it', () => {
+  const home = stripComments(read('screens/HomeScreen.tsx'));
+  const card = home.slice(home.indexOf('function OpenJobCard('));
+  assert.ok(card.length > 0, 'OpenJobCard must still be in this file');
+
+  // docs/BACKLOG.md's parked card-facts item: this was the one card carrying
+  // the bid count and no posted-ago line. Written once, and always drawn —
+  // jobs.created_at is NOT NULL, so there is no branch to get wrong.
+  assert.equal(
+    (card.match(/Posted \{formatTimeAgo\(job\.created_at\)\}/g) ?? []).length,
+    1,
+    'the posted-ago line is written once'
+  );
+  // No new style and no new prop: the neighbourhood row's own two styles.
+  assert.match(
+    card,
+    /<View style=\{styles\.jobPlaceRow\}>\s*<Ionicons name="time-outline" size=\{16\} color=\{colors\.homeSlate\} \/>\s*<Text style=\{styles\.jobPlace\} numberOfLines=\{1\}>\s*Posted \{formatTimeAgo\(job\.created_at\)\}/
+  );
+  // The interest line is untouched — tests/customerCore.test.mjs requires it.
+  assert.match(card, /pros?' : 'pro'|'pro' : 'pros'|pros interested|\$\{bidCount === 1 \? 'pro' : 'pros'\} interested/);
+});
+
 test('a2 · the selection rule lives in lib/homeAttention.ts and imports only the derivation', () => {
   const module = stripComments(read('lib/homeAttention.ts'));
   const runtimeImports = [...module.matchAll(/^import [\s\S]*?from '[^']+';$/gm)]

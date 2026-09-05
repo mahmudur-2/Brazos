@@ -1124,6 +1124,18 @@ function OpenJobCard({
               </Text>
             </View>
           ) : null}
+          {/* a2 (2026-09-05) — docs/BACKLOG.md's parked card-facts item: this
+              was the ONE card in the app carrying the bid count and no
+              posted-ago line, and how long a job has sat unanswered is what
+              tells a browsing worker whether it is worth a bid. Always drawn —
+              jobs.created_at is NOT NULL — in the neighbourhood row's own two
+              styles, with the clock glyph WorkerJobCard's "Posted" row uses. */}
+          <View style={styles.jobPlaceRow}>
+            <Ionicons name="time-outline" size={16} color={colors.homeSlate} />
+            <Text style={styles.jobPlace} numberOfLines={1}>
+              Posted {formatTimeAgo(job.created_at)}
+            </Text>
+          </View>
           <View style={styles.jobFootRow}>
             <View style={styles.jobTags}>
               {isOwn ? <Chip label="Your job" variant="soft" size="sm" /> : null}
