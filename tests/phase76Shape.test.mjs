@@ -11,7 +11,7 @@ import { classifyPostureResponse } from '../scripts/verify-schema.mjs';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const MIGRATION = 'supabase/phase76_rls_and_search_path_corrections.sql';
+const MIGRATION = 'supabase/archive/phases/phase76_rls_and_search_path_corrections.sql';
 
 /** Comment-and-blank-stripped statement lines, in order. */
 function statementLines(sql) {

@@ -248,7 +248,7 @@ test('§4.3 · a tombstoned profile carries no Hire, and the label is phase67\'s
   assert.equal(DELETED_USER_LABEL, 'Deleted user');
   // Pin the label against the migration that writes it — the client constant
   // and the tombstone UPDATE must never drift apart.
-  const phase67 = await read('supabase/phase67_account_deletion.sql');
+  const phase67 = await read('supabase/archive/phases/phase67_account_deletion.sql');
   assert.match(phase67, /set full_name\s+= 'Deleted user',/);
 
   assert.equal(canHire('Deleted user'), false);
@@ -533,7 +533,7 @@ test('§6.1 · the 500 cap is mirrored: chips stand down before a send could exc
 
   assert.equal(OFFER_MESSAGE_MAX, 500);
   // Pin the server's own literal — create_offer's latest revision.
-  const phase61 = await read('supabase/phase61_marketplace_thread_identity.sql');
+  const phase61 = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
   assert.match(phase61, /if length\(coalesce\(p_message, ''\)\) > 500 then/);
 
   const longest = longestAvailabilityLineLength(['Wed, Aug 26']);

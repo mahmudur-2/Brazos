@@ -24,7 +24,7 @@ const read = (rel) => readFile(join(root, rel), 'utf8');
 const dir = (rel) => readdirSync(join(root, rel));
 
 test('phase53 posture: grants, allowlist, draft policies', async () => {
-  const sql = await read('supabase/phase53_worker_self_service.sql');
+  const sql = await read('supabase/archive/phases/phase53_worker_self_service.sql');
   // Explicit narrow grants on both new tables.
   assert.match(sql, /grant select, insert, update, delete on public\.worker_services to authenticated/);
   assert.match(sql, /grant select, insert, delete on public\.saved_workers to authenticated/);
@@ -57,15 +57,15 @@ test('saving an already-saved worker is a silent no-op, not an UPDATE', async ()
   assert.match(body, /onConflict: 'user_id,worker_id'/);
 
   // The repair must stay client-side: nothing may hand the table UPDATE.
-  for (const file of dir('supabase').filter((f) => f.endsWith('.sql'))) {
-    const sql = (await read(`supabase/${file}`)).toLowerCase();
+  for (const file of dir('supabase/archive/phases').filter((f) => f.endsWith('.sql'))) {
+    const sql = (await read(`supabase/archive/phases/${file}`)).toLowerCase();
     assert.ok(
       !/on public\.saved_workers\s+for update/.test(sql),
-      `supabase/${file} adds an UPDATE policy to saved_workers; the client relies on DO NOTHING instead`
+      `supabase/archive/phases/${file} adds an UPDATE policy to saved_workers; the client relies on DO NOTHING instead`
     );
     assert.ok(
       !/grant[^;]*\bupdate\b[^;]*on public\.saved_workers/.test(sql),
-      `supabase/${file} grants UPDATE on saved_workers; the client relies on DO NOTHING instead`
+      `supabase/archive/phases/${file} grants UPDATE on saved_workers; the client relies on DO NOTHING instead`
     );
   }
 });
@@ -88,7 +88,7 @@ test('the bookmark call site treats a duplicate save as success', async () => {
 test('a NULL price is "Ask for a quote", never zero dollars', async () => {
   const services = await read('lib/services.ts');
   assert.match(services, /if \(service\.price_cents == null\) return 'Ask for a quote'/);
-  const sql = await read('supabase/phase53_worker_self_service.sql');
+  const sql = await read('supabase/archive/phases/phase53_worker_self_service.sql');
   assert.match(sql, /price_cents is null or price_cents > 0/);
 });
 

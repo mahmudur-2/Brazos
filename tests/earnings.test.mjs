@@ -66,7 +66,7 @@ test('the screen derives from the ledger and only the ledger', async () => {
 });
 
 test('phase55 keeps the sandbox posture', async () => {
-  const sql = await read('supabase/phase55_sandbox_cash_out.sql');
+  const sql = await read('supabase/archive/phases/phase55_sandbox_cash_out.sql');
   assert.match(sql, /payee_id = v_actor/);
   assert.match(sql, /status = 'released'/);
   assert.match(sql, /grant execute on function public\.sandbox_cash_out\(\) to authenticated/);

@@ -346,7 +346,7 @@ test('ReviewAndTip refuses to render its form while the payment is held', async 
 });
 
 test('phase51 defers the §H.1 enum and grants every new function', async () => {
-  const sql = await read('supabase/phase51_active_work_lifecycle.sql');
+  const sql = await read('supabase/archive/phases/phase51_active_work_lifecycle.sql');
   assert.ok(
     !/alter\s+type\s+public\.job_status/i.test(sql),
     'phase51 must NOT widen job_status — the §H.1 enum migration is deferred'

@@ -71,8 +71,8 @@ const OUTBOX = [
  */
 async function scanEmitted() {
   const pairs = new Set();
-  for (const file of dir('supabase').filter((f) => f.endsWith('.sql'))) {
-    const sql = await read(`supabase/${file}`);
+  for (const file of dir('supabase/archive/phases').filter((f) => f.endsWith('.sql'))) {
+    const sql = await read(`supabase/archive/phases/${file}`);
     const calls = /enqueue_notification\(\s*[^,()]+,\s*[^,]+?,\s*'([a-z_]+)',\s*(?:'([a-z_]+)'|(v_type))/g;
     for (const m of sql.matchAll(calls)) {
       const [category, literalType, variableType] = [m[1], m[2], m[3]];
@@ -96,7 +96,7 @@ async function scanEmitted() {
 }
 
 test('one event log — no parallel notifications table', async () => {
-  const sql = await read('supabase/phase56_notification_feed.sql');
+  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
   assert.ok(!/create table/.test(sql), 'phase56 must not create a new table');
   assert.match(sql, /alter table public\.notification_outbox/);
   const lib = await read('lib/notifications.ts');
@@ -104,14 +104,14 @@ test('one event log — no parallel notifications table', async () => {
 });
 
 test('the recipient writes read_at and nothing else', async () => {
-  const sql = await read('supabase/phase56_notification_feed.sql');
+  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
   assert.match(sql, /revoke insert, update, delete, truncate, references, trigger\s+on public\.notification_outbox from authenticated/);
   assert.match(sql, /grant update \(read_at\) on public\.notification_outbox to authenticated/);
   assert.match(sql, /recipient_id = auth\.uid\(\)/);
 });
 
 test('should_notify keeps every social gate, loses only the token gate', async () => {
-  const sql = await read('supabase/phase56_notification_feed.sql');
+  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
   const fn = sql.slice(sql.indexOf('create or replace function public.should_notify'));
   for (const gate of ['is_blocked_between', 'mutes', 'banned', 'notification_prefs', 'nearby_jobs']) {
     assert.ok(fn.includes(gate), `should_notify must keep the ${gate} gate`);
@@ -120,7 +120,7 @@ test('should_notify keeps every social gate, loses only the token gate', async (
 });
 
 test('the two Phase-6 events are wired and deduped', async () => {
-  const sql = await read('supabase/phase56_notification_feed.sql');
+  const sql = await read('supabase/archive/phases/phase56_notification_feed.sql');
   assert.match(sql, /payments_notify_release\s+after update on public\.payments/);
   assert.match(sql, /job_disputes_notify\s+after insert on public\.job_disputes/);
   assert.match(sql, /'payment_released:' \|\| new\.id::text/);
@@ -142,7 +142,7 @@ test('the outbox inventory and the migrations agree in BOTH directions', async (
 });
 
 test('every emitted category is gated by the notification_prefs column it claims', async () => {
-  const phase20 = await read('supabase/phase20_push_notifications.sql');
+  const phase20 = await read('supabase/archive/phases/phase20_push_notifications.sql');
 
   // The columns the table actually has.
   const table = phase20.slice(
@@ -161,8 +161,8 @@ test('every emitted category is gated by the notification_prefs column it claims
 
   // The arms should_notify() actually branches on. phase56 and phase68 both
   // re-issue the function; the newest definition in the repo is the contract.
-  const feed = await read('supabase/phase56_notification_feed.sql');
-  const deleted = await read('supabase/phase68_deleted_at_authorization.sql');
+  const feed = await read('supabase/archive/phases/phase56_notification_feed.sql');
+  const deleted = await read('supabase/archive/phases/phase68_deleted_at_authorization.sql');
   const live = deleted.slice(deleted.indexOf('create or replace function public.should_notify'));
   const gated = new Set([...live.matchAll(/when '([a-z_]+)'\s+then v_prefs\./g)].map((m) => m[1]));
   assert.ok(gated.size > 0, 'should_notify must carry a per-category case');

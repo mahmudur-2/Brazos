@@ -10,7 +10,7 @@ import test from 'node:test';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-const MIGRATION = 'supabase/phase77_conversation_features.sql';
+const MIGRATION = 'supabase/archive/phases/phase77_conversation_features.sql';
 
 /** Comment-and-blank-stripped statement lines, in order. */
 function statementLines(sql) {

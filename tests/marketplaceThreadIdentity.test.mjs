@@ -14,7 +14,7 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 // inbox keyed it `direct:null`. phase61 posts the root for both kinds.
 
 test('phase61 is one idempotent transaction that grants what it creates', async () => {
-  const sql = await read('supabase/phase61_marketplace_thread_identity.sql');
+  const sql = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
 
   assert.match(sql, /^begin;/m);
   assert.match(sql, /^commit;/m);
@@ -30,7 +30,7 @@ test('phase61 is one idempotent transaction that grants what it creates', async 
 });
 
 test('phase61 replaces create_offer in place — no signature change', async () => {
-  const sql = await read('supabase/phase61_marketplace_thread_identity.sql');
+  const sql = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
 
   assert.match(sql, /create or replace function public\.create_offer\(/);
   // A drop would change the RPC contract PostgREST and verify-schema pin.
@@ -42,7 +42,7 @@ test('phase61 replaces create_offer in place — no signature change', async () 
 });
 
 test('phase61 binds a marketplace chain to the PAIR thread, never a job thread', async () => {
-  const sql = await read('supabase/phase61_marketplace_thread_identity.sql');
+  const sql = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
 
   // The marketplace branch resolves the pair thread…
   assert.match(sql, /v_direct := public\.ensure_direct_thread\(v_customer, v_worker\);/);
@@ -57,7 +57,7 @@ test('phase61 binds a marketplace chain to the PAIR thread, never a job thread',
 });
 
 test('the phase61 backfill is one idempotent statement scoped to live chains', async () => {
-  const sql = await read('supabase/phase61_marketplace_thread_identity.sql');
+  const sql = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
   const backfill = sql.slice(sql.indexOf('-- 4. Backfill'), sql.indexOf('-- 5. Regrants'));
 
   // Exactly one INSERT — there is no unique index on
@@ -78,7 +78,7 @@ test('the phase61 backfill is one idempotent statement scoped to live chains', a
 });
 
 test('phase61 suppresses the double-notify it would otherwise introduce', async () => {
-  const sql = await read('supabase/phase61_marketplace_thread_identity.sql');
+  const sql = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
 
   // phase20 bid_received already covers a marketplace root and phase59
   // offer_countered already covers its counters, so a generic "New message"
@@ -102,7 +102,7 @@ test('phase61 suppresses the double-notify it would otherwise introduce', async 
 });
 
 test('phase61 leaves the conversations view alone', async () => {
-  const sql = await read('supabase/phase61_marketplace_thread_identity.sql');
+  const sql = await read('supabase/archive/phases/phase61_marketplace_thread_identity.sql');
 
   // The view is defined last by phase36 and already carries
   // security_invoker = true. Redefining it here — in either direction — would

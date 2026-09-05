@@ -35,7 +35,7 @@ const messagesModule = (async () => {
   return import(toDataUrl(stubbed));
 })();
 
-const migration = () => read('supabase/phase66_messaging_locked_until_confirmed.sql');
+const migration = () => read('supabase/archive/phases/phase66_messaging_locked_until_confirmed.sql');
 
 /** The `with check (...)` body of the new INSERT policy. */
 async function insertPolicyBody() {
@@ -69,8 +69,8 @@ test('offer, counteroffer, accept and decline all still succeed pre-confirmation
   // The stronger reason it cannot break: every writer of a negotiation event
   // is SECURITY DEFINER, so it does not meet this policy at all.
   const writers = [
-    ['supabase/phase46_offer_rpcs_and_rls.sql', 'offer_post_event'],
-    ['supabase/phase61_marketplace_thread_identity.sql', 'create_offer'],
+    ['supabase/archive/phases/phase46_offer_rpcs_and_rls.sql', 'offer_post_event'],
+    ['supabase/archive/phases/phase61_marketplace_thread_identity.sql', 'create_offer'],
   ];
   for (const [file, fn] of writers) {
     const sql = await read(file);

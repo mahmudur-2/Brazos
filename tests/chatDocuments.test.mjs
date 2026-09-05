@@ -591,7 +591,7 @@ test('[static] both document columns ride the projection, and nowhere else chang
 });
 
 test('[static] the migration this run wired is the one that is applied', async () => {
-  const sql = await read('supabase/phase77_conversation_features.sql');
+  const sql = await read('supabase/archive/phases/phase77_conversation_features.sql');
   // The client contract, read back off the authority. A column renamed here
   // and not there is a runtime failure with no build-time signal, because
   // there are no generated database types in this repo.

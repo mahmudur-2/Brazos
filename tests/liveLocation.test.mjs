@@ -33,7 +33,7 @@ const flatten = (source) => stripComments(source).replace(/\s+/g, ' ');
 const toDataUrl = (js) =>
   'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
 
-const MIGRATION = 'supabase/phase77_conversation_features.sql';
+const MIGRATION = 'supabase/archive/phases/phase77_conversation_features.sql';
 const LIB = 'lib/liveLocation.ts';
 const HOOK = 'hooks/useLiveLocation.ts';
 
@@ -684,9 +684,9 @@ test('gate · production is named nowhere, and every RPC is one phase77 declares
   // migration in the repo declares.
   const { readdirSync } = await import('node:fs');
   const migrations = await Promise.all(
-    readdirSync(new URL('../supabase', import.meta.url))
+    readdirSync(new URL('../supabase/archive/phases', import.meta.url))
       .filter((name) => name.endsWith('.sql'))
-      .map((name) => read(`supabase/${name}`))
+      .map((name) => read(`supabase/archive/phases/${name}`))
   );
   for (const fn of called) {
     assert.ok(

@@ -840,7 +840,7 @@ test('[static] every feature flag carries the dependency it waits on, and only t
   assert.doesNotMatch(source, /export const MUTE\b/);
   assert.match(source, /NOT A FLAG — MUTE WAS RETIRED/);
   // WHICH FLAGS ARE LIVE, named rather than counted. Seven flipped on
-  // 2026-08-24 — exactly the ones supabase/phase77_conversation_features.sql
+  // 2026-08-24 — exactly the ones supabase/archive/phases/phase77_conversation_features.sql
   // supplied a dependency for, wired by RUN W1 on BOTH thread kinds. DOCUMENTS
   // and LIVE_LOCATION joined them on 2026-08-25 (RUN W2), the other two
   // features phase77 declared.

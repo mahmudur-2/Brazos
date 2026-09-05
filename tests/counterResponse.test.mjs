@@ -233,7 +233,7 @@ test('the hub’s pending-offer card reads a counter awaiting the user as requir
 // ---------------------------------------------------------------------------
 
 test('phase59 is idempotent, marketplace-scoped, and grants what it creates', async () => {
-  const sql = await read('supabase/phase59_staging_counter_notification.sql');
+  const sql = await read('supabase/archive/phases/phase59_staging_counter_notification.sql');
 
   assert.match(sql, /create or replace function public\.notify_on_offer_counter\(\)/);
   assert.match(sql, /drop trigger if exists job_offers_notify_counter on public\.job_offers;/);

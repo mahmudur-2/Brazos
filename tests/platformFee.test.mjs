@@ -107,8 +107,8 @@ test('sandbox inserts write a zero fee — the figure Earnings sums for sandbox 
   // with a client constant any more — but a sandbox row that quietly grew a
   // fee would misstate Earnings for the beta.
   let inserts = 0;
-  for (const file of dir('supabase').filter((f) => f.endsWith('.sql'))) {
-    const sql = await read(`supabase/${file}`);
+  for (const file of dir('supabase/archive/phases').filter((f) => f.endsWith('.sql'))) {
+    const sql = await read(`supabase/archive/phases/${file}`);
     for (const match of sql.matchAll(
       /insert into public\.payments \(([\s\S]*?)\)\s*values\s*\(([\s\S]*?)\);/g
     )) {
@@ -119,7 +119,7 @@ test('sandbox inserts write a zero fee — the figure Earnings sums for sandbox 
         .map((c) => c.trim())
         .indexOf('platform_fee_cents');
       const written = values.split(',')[index]?.trim();
-      assert.equal(written, '0', `supabase/${file} writes platform_fee_cents = ${written} on a sandbox row`);
+      assert.equal(written, '0', `supabase/archive/phases/${file} writes platform_fee_cents = ${written} on a sandbox row`);
       inserts++;
     }
   }

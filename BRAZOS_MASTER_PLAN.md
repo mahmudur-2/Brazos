@@ -46,7 +46,7 @@ Four more leave with Stage 4A and its tail, all evidenced in
   string, is in `HANDOFF.md`; it exists nowhere else.
 - **`transition_job_status`'s NULL-unsafe owner guard and `unsend_message`'s
   missing active-user gate are both CLOSED** by
-  `supabase/phase73_null_safe_owner_guard_and_unsend_gate.sql`, applied to
+  `supabase/archive/phases/phase73_null_safe_owner_guard_and_unsend_gate.sql`, applied to
   staging and verified green on 2026-08-16.
 - **The `saved_workers` save write is fixed** in the client as
   `ignoreDuplicates` (ON CONFLICT DO NOTHING). The table has neither an UPDATE
@@ -198,7 +198,7 @@ Each item cites `COMPLETION_REVIEW_2026-08-15.md` (CR) or
   Removal needs its own migration plus that client sweep.
 - A stale map pin after an address edit. (The `42P17` RLS recursion on job
   delete that used to share this line was fixed by
-  `supabase/phase60_jobs_delete_policy_recursion.sql`, applied and verified
+  `supabase/archive/phases/phase60_jobs_delete_policy_recursion.sql`, applied and verified
   on staging 2026-08-16.)
 - **Worker hero-card parity with the design reference** — never built, not a
   regression.

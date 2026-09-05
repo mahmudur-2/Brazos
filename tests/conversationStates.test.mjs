@@ -21,7 +21,7 @@ const inbox = await import('../lib/inboxFilters.ts');
 const conversations = visibility;
 const states = visibility;
 
-const MIGRATION = 'supabase/phase77_conversation_features.sql';
+const MIGRATION = 'supabase/archive/phases/phase77_conversation_features.sql';
 const INBOX = 'screens/MessagesInboxScreen.tsx';
 const CHAT = 'screens/ChatScreen.tsx';
 const HIDDEN = 'screens/HiddenChatsScreen.tsx';

@@ -890,7 +890,7 @@ test('D22 · the bids card is on the screen because the schema actually backs it
   assert.match(flat, /You&apos;ll be notified when a worker bids on this job\./);
 
   // LINK 1 — the preference defaults to on, so a fresh account receives it.
-  const phase20 = read('supabase/phase20_push_notifications.sql');
+  const phase20 = read('supabase/archive/phases/phase20_push_notifications.sql');
   assert.match(
     phase20,
     /\n {2}bids boolean not null default true,/,
@@ -910,7 +910,7 @@ test('D22 · the bids card is on the screen because the schema actually backs it
 
   // LINK 3 — `bids` is written for every marketplace offer chain, so that
   // trigger fires on the real write path (job_offers), not a dead legacy one.
-  const phase47 = flatten(read('supabase/phase47_bids_projection_trigger.sql'));
+  const phase47 = flatten(read('supabase/archive/phases/phase47_bids_projection_trigger.sql'));
   assert.match(phase47, /insert into public\.bids \(id, job_id, worker_id, amount_cents, message, status, created_at\)/);
   assert.match(phase47, /create trigger job_offers_mirror_bids/);
 

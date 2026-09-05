@@ -357,7 +357,7 @@ test('the counter cap is still 10 per side, per chain', async () => {
   assert.equal(countersRemaining(chain, CUSTOMER), 10);
 
   // Server-side cap unchanged: phase63 is still the newest counter_offer().
-  const sql = await read('supabase/phase63_counteroffer_cap_ten_per_side.sql');
+  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
   assert.match(sql, /create or replace function public\.counter_offer\(/);
   assert.match(sql, /10/);
 });

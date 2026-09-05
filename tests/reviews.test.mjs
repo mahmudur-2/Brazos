@@ -21,7 +21,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
 test('phase54 states the full review rule as defense in depth', async () => {
-  const sql = await read('supabase/phase54_review_integrity.sql');
+  const sql = await read('supabase/archive/phases/phase54_review_integrity.sql');
   assert.match(sql, /j\.status = 'completed'/);
   assert.match(sql, /j\.client_id = auth\.uid\(\) and j\.assigned_worker_id = reviewee_id/);
   assert.match(sql, /j\.assigned_worker_id = auth\.uid\(\) and j\.client_id = reviewee_id/);

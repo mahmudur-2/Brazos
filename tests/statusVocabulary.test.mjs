@@ -78,7 +78,7 @@ function parseRawStatusInputs() {
 
 /** Every job_status value the migrations record, by reference kind. */
 function parseMigrationEnum() {
-  const files = readdirSync(join(root, 'supabase')).filter((f) => f.endsWith('.sql'));
+  const files = readdirSync(join(root, 'supabase', 'archive', 'phases')).filter((f) => f.endsWith('.sql'));
   assert.ok(files.length > 50, 'the migration directory is populated');
 
   const patterns = {
@@ -96,7 +96,7 @@ function parseMigrationEnum() {
 
   const byPattern = { alterType: new Set(), casts: new Set(), jobsWrites: new Set(), transitions: new Set() };
   for (const file of files) {
-    const sql = read(join('supabase', file));
+    const sql = read(join('supabase', 'archive', 'phases', file));
     for (const [name, pattern] of Object.entries(patterns)) {
       for (const m of sql.matchAll(pattern)) {
         byPattern[name].add(m[1]);

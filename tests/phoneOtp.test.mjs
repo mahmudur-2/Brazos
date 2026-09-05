@@ -504,7 +504,7 @@ test('a sign-up creates, and carries the name the trigger reads', async () => {
 
   const options = calls.signInWithOtp[0].options;
   assert.equal(options.shouldCreateUser, true);
-  // handle_new_user (supabase/phase6, phase7) reads these off the user
+  // handle_new_user (supabase/archive/phases/phase6, phase7) reads these off the user
   // metadata, so no client write has to race the trigger.
   assert.deepEqual(options.data, { full_name: 'Carlos Reyes', phone: PHONE });
 });

@@ -317,7 +317,7 @@ not on `jobs` (phase12 removed `lat`/`lng` from `jobs`; phase43 extended the
 table with `address_line` and access notes). RLS grants it to the job owner and
 the assigned worker only, and it is never added to realtime. The planned
 `job_private_details` table was never created — `job_locations` is that surface,
-stated in `supabase/phase43_job_offers_foundation.sql`. Customer-facing
+stated in `supabase/archive/phases/phase43_job_offers_foundation.sql`. Customer-facing
 open-market surfaces show approximate location only, enforced by RLS rather
 than by the frontend.
 

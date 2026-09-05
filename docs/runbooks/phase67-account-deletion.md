@@ -50,7 +50,7 @@ What that changes about acceptance:
 
 ## ACTION REQUIRED — phase67 is written but NOT applied
 
-Paste `supabase/phase67_account_deletion.sql` into the Supabase SQL Editor for
+Paste `supabase/archive/phases/phase67_account_deletion.sql` into the Supabase SQL Editor for
 **STAGING `zzkumxcjtbqoselzptig`** and run it. It was amended this run and never
 executed anywhere. Then confirm two things the repo cannot prove:
 
@@ -129,7 +129,7 @@ preserved unchanged for that run.
 1. Open the Supabase SQL Editor for **STAGING `zzkumxcjtbqoselzptig`**. Confirm
    the project ref in the URL before pasting anything. Production
    (`the production ref`) is never contacted.
-2. Paste the whole of `supabase/phase68_deleted_at_authorization.sql` and run
+2. Paste the whole of `supabase/archive/phases/phase68_deleted_at_authorization.sql` and run
    it. It is one transaction and is safe to run more than once, including after
    a failed run.
 3. **Accept on "Success. No rows returned." with no error.** phase68 is one
@@ -158,7 +158,7 @@ preserved unchanged for that run.
 4. Run `node scripts/verify-schema.mjs`. The six phase68 checks flip from
    PENDING to OK. **This is the real gate** — only a green run counts as
    applied.
-5. If something is wrong, paste `supabase/phase68_rollback.sql`. It restores all
+5. If something is wrong, paste `supabase/archive/phases/phase68_rollback.sql`. It restores all
    five bodies to their pre-phase68 form and drops the sentinel, and is itself
    safe to run more than once.
 

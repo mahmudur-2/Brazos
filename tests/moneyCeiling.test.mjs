@@ -47,7 +47,7 @@ test('the client constants mirror the database ceilings, operator included', asy
   assert.ok(Number.isInteger(MONEY_CEILING_CENTS));
   assert.ok(Number.isInteger(TIP_CEILING_CENTS));
 
-  const phase75 = await read('supabase/phase75_security_hardening.sql');
+  const phase75 = await read('supabase/archive/phases/phase75_security_hardening.sql');
   // jobs: all three budget figures, inclusive.
   assert.match(phase75, /budget_cents\s+> 0 and budget_cents\s+<= 10000000/);
   assert.match(phase75, /budget_min_cents\s+> 0 and budget_min_cents\s+<= 10000000/);
@@ -59,7 +59,7 @@ test('the client constants mirror the database ceilings, operator included', asy
     'job_offers and payments each carry the inclusive amount ceiling'
   );
 
-  const phase51 = await read('supabase/phase51_active_work_lifecycle.sql');
+  const phase51 = await read('supabase/archive/phases/phase51_active_work_lifecycle.sql');
   // The tip cap REJECTS `> 100000`, so 100000 itself is accepted.
   assert.match(
     phase51,

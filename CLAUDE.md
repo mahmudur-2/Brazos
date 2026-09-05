@@ -63,7 +63,7 @@ worker is assigned.
 enforced by RLS, never only by the frontend. Customer-facing open-market
 surfaces show approximate location only. `job\_private\_details` was never
 built — `job\_locations` is that surface, per
-`supabase/phase43\_job\_offers\_foundation.sql`.
+`supabase/archive/phases/phase43\_job\_offers\_foundation.sql`.
 * **Never invent marketplace data.** No placeholder ratings, fake reviews,
 stub history, or stock imagery standing in for real uploads.
 * **Lifecycle derivation is never duplicated** (P3-31). One implementation per

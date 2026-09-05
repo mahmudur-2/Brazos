@@ -39,8 +39,8 @@ and fixture-tested whether the flag is on or off, so a flag is the whole switch.
 
 Not flagged, and equally out of scope for new work:
 
-- Voice messages — record, meter and play back in a thread. `supabase/phase16_voice_messages.sql`, `components/VoiceNote.tsx`, `components/AudioMeterBars.tsx`, `lib/audioMeter.ts`.
-- Muting a person — live since `supabase/phase13_moderation_photos_location.sql`, reached from the inbox long-press sheet and the chat overflow menu; it was never flag-gated because it had no unmet dependency.
+- Voice messages — record, meter and play back in a thread. `supabase/archive/phases/phase16_voice_messages.sql`, `components/VoiceNote.tsx`, `components/AudioMeterBars.tsx`, `lib/audioMeter.ts`.
+- Muting a person — live since `supabase/archive/phases/phase13_moderation_photos_location.sql`, reached from the inbox long-press sheet and the chat overflow menu; it was never flag-gated because it had no unmet dependency.
 - Voice search — spoken input on the Home search bar. `lib/voiceSearch/`, `ui/primitives/SearchBar.tsx`, `expo-speech-recognition`, `tests/voiceSearch.test.mjs`.
 - The design studio — a schema-driven, per-screen dial surface. `dev-tools/HomeDesignStudio.tsx`, `components/DesignStudioPanel.tsx`, `lib/designOverrides.ts`, `lib/designStudioGate.ts`, `ui/designStudioSchema.ts`, `screens/AppearanceScreen.tsx`, `tests/designStudio.test.mjs`, `tests/homeDesignStudio.test.mjs`.
 - The dark theme — the second theme, with a stored per-user preference and a light / dark / system choice. `lib/ThemeContext.tsx`, `lib/themePreference.ts`, `lib/themePreferenceStorage.ts`, `tests/themeResolution.test.mjs`. Ruled one theme, not a second, by docs/DECISIONS.md 2026-09-04 (n1) entry (2): one token set rendered in the device's own appearance; the picker stays.

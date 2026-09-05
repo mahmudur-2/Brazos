@@ -56,7 +56,7 @@ const offersModule = (async () => {
 // that OPENS a chain is not counted.
 
 test('phase63 caps at 10, per side, per chain', async () => {
-  const sql = await read('supabase/phase63_counteroffer_cap_ten_per_side.sql');
+  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
 
   assert.match(sql, /^begin;/m);
   assert.match(sql, /^commit;/m);
@@ -84,7 +84,7 @@ test('phase63 caps at 10, per side, per chain', async () => {
 });
 
 test('phase63 counts under the job row lock, not as a read-then-write', async () => {
-  const sql = await read('supabase/phase63_counteroffer_cap_ten_per_side.sql');
+  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
 
   const lockAt = sql.indexOf('perform 1 from public.jobs where id = v_job_id for update;');
   const parentLockAt = sql.indexOf('for update;\n  if not found');
@@ -101,7 +101,7 @@ test('phase63 counts under the job row lock, not as a read-then-write', async ()
 });
 
 test('phase63 restates the grant phase32 revoked', async () => {
-  const sql = await read('supabase/phase63_counteroffer_cap_ten_per_side.sql');
+  const sql = await read('supabase/archive/phases/phase63_counteroffer_cap_ten_per_side.sql');
   assert.match(sql, /revoke all on function public\.counter_offer\(uuid, integer\) from public, anon;/);
   assert.match(sql, /grant execute on function public\.counter_offer\(uuid, integer\) to authenticated;/);
   // No signature change — a drop would break the PostgREST contract

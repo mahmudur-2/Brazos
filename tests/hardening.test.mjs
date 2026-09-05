@@ -8,8 +8,8 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 const existsSync = (path) => fsExistsSync(join(root, path));
 
-const migration = read('supabase/phase29_security_hardening.sql');
-const executeGrants = read('supabase/phase32_function_execute_privileges.sql');
+const migration = read('supabase/archive/phases/phase29_security_hardening.sql');
+const executeGrants = read('supabase/archive/phases/phase32_function_execute_privileges.sql');
 const profiles = read('lib/profiles.ts');
 const jobs = read('lib/jobs.ts');
 const offers = read('lib/offers.ts');
@@ -98,7 +98,7 @@ test('job, bid, and review protected writes use server-validated RPCs', () => {
 // These assertions are what stop a future edit from reintroducing a second
 // writer, which is the exact shape of the original bug.
 test('the bids compatibility mirror is a trigger-driven projection only', async () => {
-  const phase47 = read('supabase/phase47_bids_projection_trigger.sql');
+  const phase47 = read('supabase/archive/phases/phase47_bids_projection_trigger.sql');
 
   // One projection, driven by the source of truth.
   assert.match(phase47, /create trigger job_offers_mirror_bids\s+after insert or update on public\.job_offers/i);
@@ -158,7 +158,7 @@ test('no client-side jobs.status writer exists anywhere', () => {
   assert.match(jobs, /\.rpc\('transition_job_status'/);
 
   // The RPC the app depends on still exists and is still transactional.
-  const phase31 = read('supabase/phase31_transition_job_status_rpc.sql');
+  const phase31 = read('supabase/archive/phases/phase31_transition_job_status_rpc.sql');
   assert.match(phase31, /create or replace function public\.transition_job_status\(/i);
   assert.match(phase31, /where id = p_job_id\s+for update;/i);
   assert.match(phase31, /v_job\.assigned_worker_id <> v_user/i);
@@ -353,7 +353,7 @@ test('unsupported identity and proximity claims are absent', () => {
 });
 
 test('direct job offers stay private and server-authorised', () => {
-  const phase36 = read('supabase/phase36_direct_offer_threads.sql');
+  const phase36 = read('supabase/archive/phases/phase36_direct_offer_threads.sql');
   const workerProfile = read('screens/WorkerProfileScreen.tsx');
 
   // The defect the phase exists to fix: eligibility used to require a shared
@@ -412,8 +412,8 @@ test('direct job offers stay private and server-authorised', () => {
 });
 
 test('profile reviews are readable without widening the reviews policy', () => {
-  const phase37 = read('supabase/phase37_profile_reviews_and_photos.sql');
-  const phase6 = read('supabase/phase6_reviews_and_storage.sql');
+  const phase37 = read('supabase/archive/phases/phase37_profile_reviews_and_photos.sql');
+  const phase6 = read('supabase/archive/phases/phase6_reviews_and_storage.sql');
 
   // The party-scoped SELECT policy is the reason a reader needs a function at
   // all; phase37 must not relax it.

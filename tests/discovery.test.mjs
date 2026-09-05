@@ -176,10 +176,10 @@ const stripComments = (source) =>
 /** The two schema facts the Hourly decision rests on, read from the SQL. */
 const readSchema = async () => {
   const { readdir } = await import('node:fs/promises');
-  const names = (await readdir(join(root, 'supabase'))).filter((n) => n.endsWith('.sql'));
-  const all = (await Promise.all(names.map((n) => read(`supabase/${n}`)))).join('\n');
+  const names = (await readdir(join(root, 'supabase', 'archive', 'phases'))).filter((n) => n.endsWith('.sql'));
+  const all = (await Promise.all(names.map((n) => read(`supabase/archive/phases/${n}`)))).join('\n');
   return {
-    phase53: await read('supabase/phase53_worker_self_service.sql'),
+    phase53: await read('supabase/archive/phases/phase53_worker_self_service.sql'),
     // EVERY column the jobs table has or gains, gathered from every migration
     // rather than from the one phase file that happens to be remembered — the
     // whole point is to notice a column added somewhere else.

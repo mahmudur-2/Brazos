@@ -39,7 +39,7 @@ const app = read('App.tsx');
 const home = read('screens/HomeScreen.tsx');
 const jobCard = read('ui/primitives/JobCard.tsx');
 const bottomNav = read('ui/primitives/BottomNav.tsx');
-const migration = read('supabase/phase42_active_mode.sql');
+const migration = read('supabase/archive/phases/phase42_active_mode.sql');
 
 // ---------------------------------------------------------------------------
 // An invalid mode can never exist

@@ -32,7 +32,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFile(join(root, rel), 'utf8');
 
 test('phase52: trigger-backed thread creation, sealed and non-fatal', async () => {
-  const sql = await read('supabase/phase52_offer_scoped_chat.sql');
+  const sql = await read('supabase/archive/phases/phase52_offer_scoped_chat.sql');
   assert.match(sql, /create trigger job_offers_thread_autocreate\s+after insert on public\.job_offers/);
   assert.match(sql, /drop trigger if exists job_offers_thread_autocreate/);
   // The trigger body must swallow its own failure — an offer insert can
@@ -95,7 +95,7 @@ test('phase66 supersedes the pre-hire chat ENTRIES, not the thread itself', asyn
   // first offer, so the negotiation cards still have somewhere to live and the
   // conversation is already there the moment the job is confirmed. What went
   // away is the free-form ENTRY POINTS before that moment.
-  const phase52 = await read('supabase/phase52_offer_scoped_chat.sql');
+  const phase52 = await read('supabase/archive/phases/phase52_offer_scoped_chat.sql');
   assert.match(phase52, /create trigger job_offers_thread_autocreate/);
 
   const bidDetail = await read('screens/BidDetailScreen.tsx');

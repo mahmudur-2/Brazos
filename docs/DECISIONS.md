@@ -52,3 +52,5 @@ Deliberately untouched by R8a: `recompute_profile_rating`, `profiles.rating_avg`
 - (3) `accepting_work` defaults ON for new profiles — already the schema default since the baseline (`profiles.accepting_work`, baseline line 2239); asserted by pgTAP 100 (`supabase/tests/100_nearby_alerts_default.sql`) assertion 2; no migration statement needed.
 - (4) Audit waiver: `.shots/recommendation_final.md` ran 2026-09-03 under the operator's 2026-09-01 audit-budget waiver, read-only, advisory; no gate is ticked by it and it is not one of the two budgeted audits.
 - (5) D-4's take-home line ("the worker sees all three numbers on their own bid", `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` line 402) is built in n5 from `quote_job_price()`, never from a client-side rate.
+
+2026-09-04 - night1 (n8): the pre-baseline supabase/phase*.sql files moved to supabase/archive/phases/; path citations in SCOPE.md updated, no scope change

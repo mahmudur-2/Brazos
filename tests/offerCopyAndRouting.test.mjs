@@ -55,8 +55,8 @@ test('every notification payload the triggers emit resolves to a destination', a
   // not handle is a dead tap by construction, so the inventory is read from
   // the migrations rather than restated here.
   const emitted = new Set();
-  for (const file of dir('supabase').filter((f) => f.endsWith('.sql'))) {
-    const sql = await read(`supabase/${file}`);
+  for (const file of dir('supabase/archive/phases').filter((f) => f.endsWith('.sql'))) {
+    const sql = await read(`supabase/archive/phases/${file}`);
     for (const m of sql.matchAll(/'screen',\s*'([A-Za-z]+)'/g)) emitted.add(m[1]);
   }
   // A scan that found nothing would pass every loop below for the wrong reason.
@@ -136,7 +136,7 @@ test('the My Jobs hub names an incoming counter by first name', async () => {
 });
 
 test('phase62 rewrites only the notification copy, keeping phase59’s guards', async () => {
-  const sql = await read('supabase/phase62_counter_notification_copy.sql');
+  const sql = await read('supabase/archive/phases/phase62_counter_notification_copy.sql');
 
   assert.match(sql, /^begin;/m);
   assert.match(sql, /^commit;/m);

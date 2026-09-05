@@ -7,8 +7,8 @@ import { fileURLToPath } from 'node:url';
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (path) => readFileSync(join(root, path), 'utf8');
 
-const phase39 = read('supabase/phase39_worker_semantic_matching.sql');
-const phase40 = read('supabase/phase40_fix_semantic_match_return_type.sql');
+const phase39 = read('supabase/archive/phases/phase39_worker_semantic_matching.sql');
+const phase40 = read('supabase/archive/phases/phase40_fix_semantic_match_return_type.sql');
 const edgeFn = read('supabase/functions/worker-search/index.ts');
 const workerSearch = read('lib/workerSearch.ts');
 const screen = read('screens/WorkerSearchScreen.tsx');

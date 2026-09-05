@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * build-areas-seed.mjs - generate supabase/phase78_areas_seed.sql from NYC
+ * build-areas-seed.mjs - generate supabase/archive/phases/phase78_areas_seed.sql from NYC
  * DCP's 2020 Neighborhood Tabulation Areas.
  *
  * WHY THIS IS A COMMITTED SCRIPT AND NOT A ONE-OFF. DCP republishes the NTA
@@ -45,7 +45,7 @@ const SOURCE = join(root, '.shots', 'nta2020.geojson');
  */
 const ALIAS_SOURCE = join(root, '.shots', 'nhood_names.geojson');
 
-const OUT = join(root, 'supabase', 'phase78_areas_seed.sql');
+const OUT = join(root, 'supabase', 'archive', 'phases', 'phase78_areas_seed.sql');
 
 /**
  * The operator pastes the output into the Supabase SQL editor by hand, so the
