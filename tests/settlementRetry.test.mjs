@@ -222,7 +222,7 @@ test('12 · every result carries both flags as booleans, a code that is null or 
 // The drain itself, as raw text — this repository's normal fence shape for a
 // Deno handler nothing here can load.
 // ---------------------------------------------------------------------------
-test('13 · the drain (raw text): refunds_due select names refund_attempts, both keys carry their counter, classify.mjs is imported by relative path, and the recorder runs in both passes', () => {
+test('13 · the drain (raw text): refunds_due select names refund_attempts, both keys carry their counter, classify.mjs is imported by relative path, the recorder runs in both passes, and (n4b) only an ENABLED payout account is paid', () => {
   const src = readFileSync(new URL('../supabase/functions/process-settlements/index.ts', import.meta.url), 'utf8');
 
   // The refunds query reads the counter the key is built from; the transfers
@@ -257,6 +257,21 @@ test('13 · the drain (raw text): refunds_due select names refund_attempts, both
   assert.equal((passOne.match(/failure = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass one turns a throw into a recorded failure');
   assert.equal((passTwo.match(/failure = \{ threw: err \?\? 'unknown' \};/g) ?? []).length, 1, 'pass two turns a throw into a recorded failure');
   assert.match(src, /if \(!recorded\) counts\.defects\+\+;/, 'a row that could not be recorded counts as a defect');
+
+  // n4b (2026-09-05): the drain pays only a payee whose payout account is
+  // ENABLED — payment_accounts.payouts_enabled, derived by set_payouts_status()
+  // — and a payee without one is counted blocked BEFORE the first provider
+  // call in pass one, so nothing is fired and no idempotency key is spent.
+  assert.match(
+    src,
+    /payment_accounts\?select=user_id,stripe_account_id&payouts_enabled=eq\.true&user_id=in\.\(/,
+    'the payee lookup carries payouts_enabled=eq.true'
+  );
+  const blockedAt = passOne.indexOf('counts.blocked++');
+  const transferAt = passOne.indexOf("'/v1/transfers'");
+  assert.ok(blockedAt > -1, 'pass one has a blocked branch');
+  assert.ok(transferAt > -1, 'pass one makes a /v1/transfers request');
+  assert.ok(blockedAt < transferAt, 'the blocked branch runs before the first /v1/transfers request in runTransfers');
 
   // The tally the operator reads.
   assert.match(src, /\(\): Tally => \(\{ attempted: 0, succeeded: 0, deferred: 0, failed: 0, defects: 0, blocked: 0 \}\)/, 'the tally is { attempted, succeeded, deferred, failed, defects, blocked }');

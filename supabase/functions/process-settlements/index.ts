@@ -247,13 +247,19 @@ async function runTransfers(): Promise<Tally> {
   if (rows.length === 0) return counts;
 
   // One lookup for the whole batch rather than one per row. A payee with no
-  // connected account yet cannot be paid; that is onboarding's job, not this
-  // function's, and the row simply waits.
+  // ENABLED payout account yet (payment_accounts.payouts_enabled — derived by
+  // set_payouts_status() from the state connect-status records, true only
+  // once the provider reports transfers active) cannot be paid; that is
+  // onboarding's job, not this function's, and the row simply waits: counted
+  // blocked below, BEFORE any provider call, so nothing is fired and no
+  // idempotency key is spent on it (n4b, 2026-09-05). An account that exists
+  // but is not enabled is filtered out here and blocks exactly like no
+  // account at all.
   const payees = [...new Set(rows.map((r) => r.payee_id).filter(Boolean))];
   const accounts = new Map<string, string>();
   if (payees.length > 0) {
     const list = await getRows<{ user_id: string; stripe_account_id: string | null }>(
-      `payment_accounts?select=user_id,stripe_account_id&user_id=in.(${payees.map(encodeURIComponent).join(',')})`
+      `payment_accounts?select=user_id,stripe_account_id&payouts_enabled=eq.true&user_id=in.(${payees.map(encodeURIComponent).join(',')})`
     );
     for (const row of list) {
       if (row.stripe_account_id) accounts.set(row.user_id, row.stripe_account_id);
@@ -277,7 +283,7 @@ async function runTransfers(): Promise<Tally> {
       const destination = accounts.get(row.payee_id);
       if (!destination) {
         counts.blocked++;
-        console.error(`process-settlements: payment ${row.id} — payee has no connected account yet, left in the queue`);
+        console.error(`process-settlements: payment ${row.id} — payee has no ENABLED payout account yet (payment_accounts.payouts_enabled), left in the queue`);
         continue;
       }
 
