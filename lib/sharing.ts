@@ -2,6 +2,7 @@ import { Platform, Share } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { Directory, File, Paths } from 'expo-file-system';
 import { profileUrl } from './appLinks';
+import { Sentry } from './observability/sentry';
 
 /**
  * Hands a photo to the OS share sheet.
@@ -151,6 +152,7 @@ export async function shareProfileLink(userId: string, name?: string | null): Pr
       // cancellation, not a failure.
       if (err instanceof Error && err.name === 'AbortError') return { ok: true };
       console.error('[sharing] web profile share failed', err);
+      Sentry?.captureException(err, { extra: { site: 'sharing.shareProfileLink', stage: 'web' } });
       return { ok: false, message: 'Could not share this profile.' };
     }
   }
@@ -160,6 +162,7 @@ export async function shareProfileLink(userId: string, name?: string | null): Pr
     return { ok: true };
   } catch (err) {
     console.error('[sharing] profile share failed', err);
+    Sentry?.captureException(err, { extra: { site: 'sharing.shareProfileLink', stage: 'native' } });
     return { ok: false, message: 'Could not share this profile.' };
   }
 }
@@ -181,6 +184,7 @@ export async function sharePhoto(url: string): Promise<ShareResult> {
       // real failure, so don't surface an error for it.
       if (err instanceof Error && err.name === 'AbortError') return { ok: true };
       console.error('[sharing] web share failed', err);
+      Sentry?.captureException(err, { extra: { site: 'sharing.sharePhoto', stage: 'web' } });
       return { ok: false, message: 'Could not share this photo.' };
     }
   }
@@ -204,6 +208,7 @@ export async function sharePhoto(url: string): Promise<ShareResult> {
     return { ok: true };
   } catch (err) {
     console.error('[sharing] share failed', err);
+    Sentry?.captureException(err, { extra: { site: 'sharing.sharePhoto', stage: 'native' } });
     return {
       ok: false,
       message: err instanceof Error ? err.message : 'Could not share this photo.',
@@ -249,6 +254,7 @@ export async function shareDocument(
       // not a failure, so nothing is surfaced for it.
       if (err instanceof Error && err.name === 'AbortError') return { ok: true };
       console.error('[sharing] web document share failed', err);
+      Sentry?.captureException(err, { extra: { site: 'sharing.shareDocument', stage: 'web' } });
       return { ok: false, message: 'Could not open this document.' };
     }
   }
@@ -271,6 +277,7 @@ export async function shareDocument(
     return { ok: true };
   } catch (err) {
     console.error('[sharing] document share failed', err);
+    Sentry?.captureException(err, { extra: { site: 'sharing.shareDocument', stage: 'native' } });
     return {
       ok: false,
       message: err instanceof Error ? err.message : 'Could not open this document.',

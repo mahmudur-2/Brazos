@@ -37,6 +37,7 @@ import { FieldLabel, TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useEntrance } from '../hooks/useEntrance';
 import { trackIntent } from '../lib/observability/analytics';
+import { Sentry } from '../lib/observability/sentry';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   arrivalWindowLabel,
@@ -445,7 +446,10 @@ export function PostJobScreen() {
   function cleanupSessionUploads() {
     for (const url of sessionUploadsRef.current) {
       deleteJobPhoto(url).then(({ error }) => {
-        if (error) console.error('[PostJobScreen] orphan media cleanup failed', error);
+        if (error) {
+          console.error('[PostJobScreen] orphan media cleanup failed', error);
+          Sentry?.captureException(error, { extra: { site: 'PostJobScreen.cleanupSessionUploads' } });
+        }
       });
     }
   }
@@ -847,8 +851,12 @@ export function PostJobScreen() {
    */
   async function handleDeleteMedia(url: string) {
     const { error } = await deleteJobPhoto(url);
-    if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
-    else sessionUploadsRef.current.delete(url);
+    if (error) {
+      console.error('[PostJobScreen] deleteJobPhoto failed', error);
+      Sentry?.captureException(error, { extra: { site: 'PostJobScreen.handleDeleteMedia' } });
+    } else {
+      sessionUploadsRef.current.delete(url);
+    }
     return { error };
   }
 
@@ -1012,13 +1020,23 @@ export function PostJobScreen() {
       for (const url of originalPhotosRef.current) {
         if (photos.includes(url)) continue;
         deleteJobPhoto(url).then(({ error }) => {
-          if (error) console.error('[PostJobScreen] deleteJobPhoto failed', error);
+          if (error) {
+            console.error('[PostJobScreen] deleteJobPhoto failed', error);
+            Sentry?.captureException(error, {
+              extra: { site: 'PostJobScreen.handleSubmit', stage: 'photo' },
+            });
+          }
         });
       }
       for (const url of originalVideosRef.current) {
         if (videos.includes(url)) continue;
         deleteJobPhoto(url).then(({ error }) => {
-          if (error) console.error('[PostJobScreen] deleteJobPhoto (video) failed', error);
+          if (error) {
+            console.error('[PostJobScreen] deleteJobPhoto (video) failed', error);
+            Sentry?.captureException(error, {
+              extra: { site: 'PostJobScreen.handleSubmit', stage: 'video' },
+            });
+          }
         });
       }
     }

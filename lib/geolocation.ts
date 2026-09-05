@@ -1,5 +1,6 @@
 import * as Location from 'expo-location';
 import { permissionOutcome, trackIntent } from './observability/analytics';
+import { Sentry } from './observability/sentry';
 import { publicLocationLabel } from './locationPrivacy';
 import { reverseGeocodeArea } from './reverseGeocode';
 
@@ -110,6 +111,9 @@ export async function resolveCurrentPlace(): Promise<ResolveResult> {
     longitude = position.coords.longitude;
   } catch (err) {
     console.error('[geolocation] getCurrentPositionAsync failed', err);
+    Sentry?.captureException(err, {
+      extra: { site: 'geolocation.resolveCurrentPlace', stage: 'position' },
+    });
     const reason = err instanceof Error ? err.message : String(err);
     return {
       ok: false,
@@ -133,6 +137,9 @@ export async function resolveCurrentPlace(): Promise<ResolveResult> {
       // network, or no provider on some Android builds). The coordinates
       // are still good; only the label stays empty.
       console.error('[geolocation] native reverseGeocodeAsync failed', err);
+      Sentry?.captureException(err, {
+        extra: { site: 'geolocation.resolveCurrentPlace', stage: 'nativeReverseGeocode' },
+      });
     }
   }
 

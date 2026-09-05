@@ -3,6 +3,7 @@ import { fetchJobById } from './jobs';
 import type { OpenJob } from './jobs';
 import type { AppMode } from '../modes/types';
 import { navigateAcrossTabs } from './navigationRef';
+import { Sentry } from './observability/sentry';
 
 /**
  * Dispatch only into a navigator that can actually handle the target.
@@ -221,8 +222,14 @@ export async function handleNotificationData(
   if (!target) {
     if (data?.screen && !TAB_FOR_SCREEN[data.screen]) {
       console.error('[push] unknown notification screen', data.screen);
+      Sentry?.captureException(new Error('[push] unknown notification screen'), {
+        extra: { site: 'notificationRoutes.handleNotificationData', screen: data.screen },
+      });
     } else if (data?.screen) {
       console.error('[push] notification missing jobId for screen', data.screen);
+      Sentry?.captureException(new Error('[push] notification missing jobId for screen'), {
+        extra: { site: 'notificationRoutes.handleNotificationData', screen: data.screen },
+      });
     }
     if (data?.screen) {
       // A tapped alert that routes nowhere says so instead of silently doing
@@ -266,6 +273,13 @@ export async function handleNotificationData(
     // Deleted job, or RLS hides it from this user (e.g. they were unassigned).
     // Land them on the owning tab rather than doing nothing at all.
     console.error('[push] could not load job for notification', target.jobId, error);
+    Sentry?.captureException(error ?? new Error('[push] could not load job for notification'), {
+      extra: {
+        site: 'notificationRoutes.handleNotificationData',
+        jobId: target.jobId,
+        code: error?.code,
+      },
+    });
     navigateChecked(target.tab);
     return;
   }

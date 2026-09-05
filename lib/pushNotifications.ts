@@ -5,6 +5,7 @@ import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
 import { confirmAsync } from './dialog';
 import { permissionOutcome, trackIntent } from './observability/analytics';
+import { Sentry } from './observability/sentry';
 import { supabase } from './supabase';
 
 // ---------------------------------------------------------------------------
@@ -85,6 +86,7 @@ export async function configurePushHandling(): Promise<void> {
       // A missing channel degrades presentation, not delivery — never let it
       // take down app startup.
       console.error('[push] setNotificationChannelAsync failed', err);
+      Sentry?.captureException(err, { extra: { site: 'pushNotifications.configurePushHandling' } });
     }
   }
 }
@@ -306,6 +308,9 @@ export async function unregisterPushToken(): Promise<void> {
       token = (await Notifications.getExpoPushTokenAsync({ projectId })).data;
     } catch (err) {
       console.error('[push] unregisterPushToken could not resolve this device token', err);
+      Sentry?.captureException(err, {
+        extra: { site: 'pushNotifications.unregisterPushToken', stage: 'resolveToken' },
+      });
     }
   }
 
@@ -313,7 +318,12 @@ export async function unregisterPushToken(): Promise<void> {
   if (token) {
     let { error } = await deactivateToken(token);
     if (error) ({ error } = await deactivateToken(token));
-    if (error) console.error('[push] unregisterPushToken failed after retry', error);
+    if (error) {
+      console.error('[push] unregisterPushToken failed after retry', error);
+      Sentry?.captureException(error, {
+        extra: { site: 'pushNotifications.unregisterPushToken', stage: 'deactivate', code: error.code },
+      });
+    }
     owed = !!error;
   }
 

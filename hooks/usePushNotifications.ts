@@ -3,6 +3,7 @@ import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { handleNotificationData } from '../lib/notificationRoutes';
 import { registerPushToken, settlePendingPushDeactivation } from '../lib/pushNotifications';
+import { Sentry } from '../lib/observability/sentry';
 import { useAuth } from './useAuth';
 import { useNotificationModeBridge } from './useNotificationModeBridge';
 
@@ -56,6 +57,9 @@ export function usePushNotifications() {
       }
       if (!result.ok && result.reason === 'error') {
         console.error('[push] token sync failed:', result.message);
+        Sentry?.captureException(new Error(`[push] token sync failed: ${result.message}`), {
+          extra: { site: 'usePushNotifications.sync' },
+        });
         syncFailedRef.current = true;
       } else {
         syncFailedRef.current = false;
@@ -83,7 +87,10 @@ export function usePushNotifications() {
         handledColdStart.current = true;
         handleNotificationData(response.notification.request.content.data, modeBridge);
       })
-      .catch((err) => console.error('[push] getLastNotificationResponseAsync failed', err));
+      .catch((err) => {
+        console.error('[push] getLastNotificationResponseAsync failed', err);
+        Sentry?.captureException(err, { extra: { site: 'usePushNotifications.coldStartEffect' } });
+      });
 
     return () => {
       active = false;

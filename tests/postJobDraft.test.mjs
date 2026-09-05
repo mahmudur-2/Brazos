@@ -38,7 +38,19 @@ const draftModule = (async () => {
   );
   assert.notEqual(withDialog, stubbed, 'the dialog import must be found and stubbed');
   stubbed = withDialog;
-  assert.ok(!stubbed.includes("'./dialog'"), 'no runtime import may survive stubbing');
+  // n9: the crash reporter is a nullable seam in the app (a caught require that
+  // resolves to null off-device) and null here, so the capture beside each
+  // console.error is a no-op.
+  const withSentry = stubbed.replace(
+    /import \{ Sentry \} from '\.\/observability\/sentry';/,
+    'const Sentry = null;'
+  );
+  assert.notEqual(withSentry, stubbed, 'the Sentry import must be found and stubbed');
+  stubbed = withSentry;
+  assert.ok(
+    !stubbed.includes("'./dialog'") && !stubbed.includes("'./observability/sentry'"),
+    'no runtime import may survive stubbing'
+  );
   return import(toDataUrl(stubbed));
 })();
 

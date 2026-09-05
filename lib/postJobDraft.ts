@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { alertAsync } from './dialog';
 import type { JobCategory } from './jobs';
+import { Sentry } from './observability/sentry';
 
 /**
  * A fresh (not editing, not hiring) post's in-progress fields, persisted so
@@ -123,6 +124,7 @@ export async function savePostJobDraft(userId: string, draft: PostJobDraft): Pro
       draftSaveFailureAnnounced = false;
     } catch (e) {
       console.error('[postJobDraft] failed to persist draft', e);
+      Sentry?.captureException(e, { extra: { site: 'postJobDraft.savePostJobDraft' } });
       // The user is typing work this device is silently NOT keeping — that
       // must surface, once per streak, so they can finish or copy it out.
       if (!draftSaveFailureAnnounced) {
@@ -141,6 +143,7 @@ export async function clearPostJobDraft(userId: string): Promise<void> {
     await AsyncStorage.removeItem(draftStorageKey(userId));
   } catch (e) {
     console.error('[postJobDraft] failed to clear draft', e);
+    Sentry?.captureException(e, { extra: { site: 'postJobDraft.clearPostJobDraft' } });
   }
 }
 

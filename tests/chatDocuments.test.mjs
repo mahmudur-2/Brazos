@@ -660,6 +660,13 @@ const sharingModule = (async () => {
     .replace(
       /import \{ profileUrl \} from '\.\/appLinks';/,
       `const profileUrl = (id) => 'https://brazos.invalid/profile/' + id;`
+    )
+    .replace(
+      // n9: the crash reporter is a nullable seam in the app (a caught require
+      // that resolves to null off-device), and null is what it is here — every
+      // `Sentry?.captureException` beside a console.error is a no-op.
+      /import \{ Sentry \} from '\.\/observability\/sentry';/,
+      'const Sentry = null;'
     );
 
   // If any import survived the stubbing the module would reach for a real

@@ -210,6 +210,10 @@ const legalGateModule = (async () => {
       "import { useAuth } from './useAuth';",
       "const useAuth = () => ({ user: { id: 'user-1' } });",
     ],
+    // n9: the crash reporter is a nullable seam in the app (a caught require
+    // that resolves to null off-device) and null here, so the capture beside
+    // the console.error is a no-op.
+    ["import { Sentry } from '../lib/observability/sentry';", 'const Sentry = null;'],
   ];
   for (const [from, to] of replacements) {
     assert.ok(js.includes(from), `expected the runtime import: ${from}`);

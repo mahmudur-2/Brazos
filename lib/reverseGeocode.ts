@@ -1,3 +1,5 @@
+import { Sentry } from './observability/sentry';
+
 /**
  * Neighbourhood-level reverse geocoding via OpenStreetMap's Nominatim.
  *
@@ -138,6 +140,9 @@ async function fetchAddress(
   });
   if (!response.ok) {
     console.error('[reverseGeocode] Nominatim HTTP error', response.status);
+    Sentry?.captureException(new Error('[reverseGeocode] Nominatim HTTP error'), {
+      extra: { site: 'reverseGeocode.fetchAddress', status: response.status },
+    });
     return null;
   }
   const json = (await response.json()) as { address?: NominatimAddress };
@@ -249,6 +254,7 @@ export async function geocodeQuery(
     return { label: label || trimmed, lat, lng };
   } catch (err) {
     console.error('[reverseGeocode] geocodeQuery failed', err);
+    Sentry?.captureException(err, { extra: { site: 'reverseGeocode.geocodeQuery' } });
     return null;
   } finally {
     clearTimeout(timeout);
@@ -282,6 +288,7 @@ export async function reverseGeocodeArea(
     // Network failure, timeout (AbortError) or rate limiting — all recoverable
     // by the caller's fallback tier.
     console.error('[reverseGeocode] lookup failed', err);
+    Sentry?.captureException(err, { extra: { site: 'reverseGeocode.reverseGeocodeArea' } });
     return null;
   } finally {
     clearTimeout(timeout);

@@ -56,13 +56,20 @@ const replacements = [
     "import { navigateAcrossTabs } from './navigationRef';",
     'const navigateAcrossTabs = globalThis.__crossMode_navigateAcrossTabs;',
   ],
+  // n9: the crash reporter is a nullable seam in the app (a caught require that
+  // resolves to null off-device) and null here, so the capture beside each
+  // console.error is a no-op.
+  ["import { Sentry } from './observability/sentry';", 'const Sentry = null;'],
 ];
 for (const [from, to] of replacements) {
   assert.ok(js.includes(from), `expected the runtime import: ${from}`);
   js = js.replace(from, to);
 }
 assert.ok(
-  !js.includes("'./jobs'") && !js.includes("'./navigationRef'") && !js.includes("'./dialog'"),
+  !js.includes("'./jobs'") &&
+    !js.includes("'./navigationRef'") &&
+    !js.includes("'./dialog'") &&
+    !js.includes("'./observability/sentry'"),
   'every runtime import must be stubbed before the module loads'
 );
 

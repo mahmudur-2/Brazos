@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { fetchLegalStatus } from '../lib/legal';
+import { Sentry } from '../lib/observability/sentry';
 import { useAuth } from './useAuth';
 
 type GateState = 'loading' | 'accepted' | 'needs_acceptance' | 'unknown';
@@ -43,6 +44,7 @@ export function useLegalGate() {
       // The read itself threw (an offline fetch failure rejects before
       // fetchLegalStatus can shape it): the same fact as a failed read.
       console.error('[legal] acceptance check failed:', err);
+      Sentry?.captureException(err, { extra: { site: 'useLegalGate.check' } });
       status = 'unknown';
     }
     setState(gateStateForStatus(status));

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -377,4 +377,113 @@ test('the analytics module does not emit its own events, and does not import its
     1,
     'trackIntent is called inside its own module'
   );
+});
+
+// ---------------------------------------------------------------------------
+// THE CAPTURE CENSUS — every handled failure reaches Sentry beside its
+// console.error (n9, 2026-09-05).
+//
+// A console.error is visible only to someone attached to a Metro session, so
+// a handled failure whose whole record is that line is a failure nobody hears
+// about once it happens on a tester's phone. The rule: a file under lib/,
+// hooks/, screens/ or components/ that calls console.error imports `Sentry`
+// from this module and captures AT LEAST AS MANY TIMES as it logs — counted
+// per file, so a new console.error added without a capture beside it goes red
+// here, offline, even in a file that already captures somewhere else. The
+// web-specific modules are the frozen surface and are never counted.
+//
+// What the capture carries is governed by INVARIANT 11 above, not here: every
+// `extra` is deep-scrubbed by `scrubEvent` before it leaves the device, and the
+// sites pass identifiers, codes and kind labels only — never a name, address,
+// coordinate pair, message body, draft text or file URI. That is a review rule
+// at the call site; this test proves presence, not content.
+// ---------------------------------------------------------------------------
+
+const APP_DIRS = ['lib', 'hooks', 'screens', 'components'];
+
+function* appFiles(rel) {
+  for (const entry of readdirSync(join(root, rel), { withFileTypes: true })) {
+    const child = `${rel}/${entry.name}`;
+    if (entry.isDirectory()) yield* appFiles(child);
+    else if (/\.tsx?$/.test(entry.name) && !/\.web\.tsx?$/.test(entry.name)) yield child;
+  }
+}
+
+/** The import specifier `file` must use to reach this module. */
+function sentrySpecifier(file) {
+  const spec = relative(dirname(file), SENTRY.replace(/\.ts$/, '')).split('\\').join('/');
+  return spec.startsWith('.') ? spec : `./${spec}`;
+}
+
+/**
+ * The census rule on one file's comment-stripped source: the reason it fails,
+ * or null when it holds (including for a file with no console.error at all).
+ */
+function captureGap(file, code) {
+  const logs = (code.match(/console\.error\(/g) ?? []).length;
+  if (logs === 0) return null;
+  const spec = sentrySpecifier(file);
+  const imported = new RegExp(
+    `^import \\{[^}]*\\bSentry\\b[^}]*\\} from '${spec.replace(/\./g, '\\.')}';`,
+    'm'
+  ).test(code);
+  if (!imported) return `${file}: calls console.error but does not import Sentry from '${spec}'`;
+  const captures = (code.match(/Sentry\?\.captureException\(/g) ?? []).length;
+  if (captures < logs) {
+    return `${file}: ${logs} console.error site(s) but only ${captures} Sentry?.captureException call(s)`;
+  }
+  return null;
+}
+
+test('the census · every console.error in app code has a Sentry capture beside it', () => {
+  const files = APP_DIRS.flatMap((dir) => [...appFiles(dir)]);
+  assert.ok(files.length > 100, `the walk must enumerate the app tree (saw ${files.length})`);
+
+  const sites = [];
+  const gaps = [];
+  for (const file of files) {
+    const code = strip(read(file));
+    if (!/console\.error\(/.test(code)) continue;
+    sites.push(file);
+    const gap = captureGap(file, code);
+    if (gap) gaps.push(gap);
+  }
+  assert.deepEqual(gaps, [], 'a handled failure must reach Sentry, not only the console');
+
+  // Non-vacuity: the census is not empty and still holds the files n9
+  // instrumented — a walk that finds nothing proves nothing.
+  assert.ok(sites.length >= 10, `the census found only ${sites.length} files`);
+  for (const known of [
+    'lib/sharing.ts',
+    'hooks/useLegalGate.ts',
+    'screens/PostJobScreen.tsx',
+    'components/AppErrorBoundary.tsx',
+  ]) {
+    assert.ok(sites.includes(known), `${known} has left the census — check the walk`);
+  }
+
+  // The rule is exercised on fixtures it MUST refuse and ones it must not, so
+  // it cannot pass merely because the scan stopped reading.
+  assert.equal(sentrySpecifier('lib/sharing.ts'), './observability/sentry');
+  assert.equal(sentrySpecifier('hooks/useLegalGate.ts'), '../lib/observability/sentry');
+  assert.equal(sentrySpecifier('components/AppErrorBoundary.tsx'), '../lib/observability/sentry');
+  assert.equal(
+    captureGap('lib/x.ts', "console.error('a');"),
+    "lib/x.ts: calls console.error but does not import Sentry from './observability/sentry'"
+  );
+  assert.match(
+    captureGap(
+      'lib/x.ts',
+      "import { Sentry } from './observability/sentry';\nconsole.error('a');\nconsole.error('b');\nSentry?.captureException(e);"
+    ),
+    /2 console\.error site\(s\) but only 1 Sentry/
+  );
+  assert.equal(
+    captureGap(
+      'hooks/x.ts',
+      "import { Sentry } from '../lib/observability/sentry';\nconsole.error('a');\nSentry?.captureException(e);"
+    ),
+    null
+  );
+  assert.equal(captureGap('lib/x.ts', 'nothing here'), null);
 });

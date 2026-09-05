@@ -18,6 +18,7 @@ import {
 } from '../lib/liveLocation';
 import type { ChatTarget } from '../lib/messages';
 import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
+import { Sentry } from '../lib/observability/sentry';
 import { supabase } from '../lib/supabase';
 
 /**
@@ -279,6 +280,7 @@ export function useLiveLocation(
         // read as success and leave the user with silence after a share that
         // did not start.
         console.error('[LiveLocation] start failed', err);
+        Sentry?.captureException(err, { extra: { site: 'useLiveLocation.start' } });
         return err instanceof Error ? err : { message: null };
       } finally {
         setBusy(false);

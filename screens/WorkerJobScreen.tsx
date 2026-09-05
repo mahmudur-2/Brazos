@@ -32,6 +32,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useJob } from '../hooks/useJob';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { Sentry } from '../lib/observability/sentry';
 import {
   categoryAccent,
   completionPhotosOf,
@@ -289,7 +290,10 @@ export function WorkerJobScreen() {
     // uploads from this completion attempt, so every removal here is always
     // safe to clean up from storage immediately.
     deleteJobPhoto(url).then(({ error }) => {
-      if (error) console.error('[WorkerJobScreen] deleteJobPhoto failed', error);
+      if (error) {
+        console.error('[WorkerJobScreen] deleteJobPhoto failed', error);
+        Sentry?.captureException(error, { extra: { site: 'WorkerJobScreen.removeDonePhoto' } });
+      }
     });
   }
 
@@ -300,7 +304,10 @@ export function WorkerJobScreen() {
     setDoneVideo(null);
     if (!url) return;
     deleteJobPhoto(url).then(({ error }) => {
-      if (error) console.error('[WorkerJobScreen] delete completion video failed', error);
+      if (error) {
+        console.error('[WorkerJobScreen] delete completion video failed', error);
+        Sentry?.captureException(error, { extra: { site: 'WorkerJobScreen.removeDoneVideo' } });
+      }
     });
   }
 

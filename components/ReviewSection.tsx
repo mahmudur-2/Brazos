@@ -18,6 +18,7 @@ import { StarRating } from './StarRating';
 import { TextField } from './TextField';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
+import { Sentry } from '../lib/observability/sentry';
 import {
   createReview,
   fetchMyReviewForJob,
@@ -53,6 +54,7 @@ async function deletePhotoWithRetry(url: string): Promise<boolean> {
   const second = await deleteJobPhoto(url);
   if (second.error) {
     console.error('[ReviewSection] photo cleanup failed after retry', second.error);
+    Sentry?.captureException(second.error, { extra: { site: 'ReviewSection.deletePhotoWithRetry' } });
     return false;
   }
   return true;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { advanceMeterWindow, emptyMeterWindow, normalizeMeter } from '../lib/audioMeter';
 import { userMessage } from '../lib/errorMessage';
+import { Sentry } from '../lib/observability/sentry';
 import {
   RecordingPresets,
   requestRecordingPermissionsAsync,
@@ -128,6 +129,7 @@ export function useVoiceRecorder() {
       setPhase('recording');
     } catch (err) {
       console.error('[useVoiceRecorder] start failed', err);
+      Sentry?.captureException(err, { extra: { site: 'useVoiceRecorder.beginRecording' } });
       setError(userMessage(err instanceof Error ? err : null, 'Could not start recording.'));
       setPhase('idle');
     }
@@ -169,6 +171,7 @@ export function useVoiceRecorder() {
       setPhase('preview');
     } catch (err) {
       console.error('[useVoiceRecorder] stop failed', err);
+      Sentry?.captureException(err, { extra: { site: 'useVoiceRecorder.stopRecording' } });
       setError(userMessage(err instanceof Error ? err : null, 'Could not finish recording.'));
       setPhase('idle');
     }
