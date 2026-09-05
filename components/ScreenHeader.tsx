@@ -149,8 +149,10 @@ export function ScreenHeader({
   );
 
   // The bare chevron and the labelled link are ONE control in two lengths —
-  // same press, same colour, same hit slop — so a flow that labels its back
-  // step cannot drift into a second back treatment.
+  // same press, same colour, same hit slop, and (n5, 2026-09-04) the same
+  // role with a name either way, so VoiceOver can say "Back" for the bare
+  // chevron too — so a flow that labels its back step cannot drift into a
+  // second back treatment.
   const backControl = onBack ? (
     <Pressable
       onPress={onBack}
@@ -159,8 +161,8 @@ export function ScreenHeader({
         backLabel ? styles.link : styles.back,
         backOffsetDial != null && { marginLeft: backOffsetDial },
       ]}
-      accessibilityRole={backLabel ? 'button' : undefined}
-      accessibilityLabel={backLabel ? `Back to ${backLabel}` : undefined}
+      accessibilityRole="button"
+      accessibilityLabel={backLabel ? `Back to ${backLabel}` : 'Back'}
     >
       <Ionicons name="chevron-back" size={backLabel ? 20 : (backSizeDial ?? 26)} color={backColor} />
       {backLabel ? (

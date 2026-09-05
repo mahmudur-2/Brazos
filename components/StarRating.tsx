@@ -39,6 +39,12 @@ export function StarRating({ value, onChange, size = 32 }: StarRatingProps) {
             onPress={() => onChange(star)}
             hitSlop={6}
             style={styles.star}
+            // n5 (2026-09-04): a name and a state for VoiceOver — the glyph
+            // alone read as its character. The testID stays: the Maestro walk
+            // taps the stars by it.
+            accessibilityRole="button"
+            accessibilityLabel={`${star} ${star === 1 ? 'star' : 'stars'}`}
+            accessibilityState={{ selected: filled }}
           >
             {icon}
           </Pressable>

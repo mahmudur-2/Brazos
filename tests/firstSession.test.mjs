@@ -83,3 +83,30 @@ test('n5 · the launch overlay has no visibility floor: the exit starts on sessi
   assert.match(launch, /fade\(logo, LOGO_DELAY, 400\)/);
   assert.match(code('App.tsx'), /sessionReady=\{!loading\}/);
 });
+
+// ---------------------------------------------------------------------------
+// STEP 6 — VoiceOver names for the rating stars and the bare back chevron
+// (docs/BACKLOG.md). Accessibility props only: the testID the Maestro walk
+// taps stays, and the labelled "Back to …" variant is unchanged.
+// ---------------------------------------------------------------------------
+
+test('n5 · every rating star is a named button carrying its selected state, and the bare back chevron is named "Back"', () => {
+  const stars = code('components/StarRating.tsx');
+  const pressableAt = stars.indexOf('<Pressable');
+  assert.ok(pressableAt > -1, 'the star Pressable is gone');
+  const pressable = stars.slice(pressableAt, stars.indexOf('</Pressable>', pressableAt));
+  assert.match(pressable, /testID=\{`review-star-\$\{star\}`\}/, 'the Maestro walk taps the stars by testID — it stays');
+  assert.match(pressable, /accessibilityRole="button"/);
+  assert.match(pressable, /accessibilityLabel=\{`\$\{star\} \$\{star === 1 \? 'star' : 'stars'\}`\}/);
+  assert.match(pressable, /accessibilityState=\{\{ selected: filled \}\}/);
+  assert.match(stars, /const filled = star <= value;/, 'selected means at or below the current value');
+
+  const header = code('components/ScreenHeader.tsx');
+  const backAt = header.indexOf('const backControl = onBack ?');
+  assert.ok(backAt > -1, 'the back control is gone');
+  const back = header.slice(backAt, header.indexOf('const rightControl', backAt));
+  assert.match(back, /accessibilityRole="button"/, 'the chevron is a button with or without a label');
+  assert.match(back, /accessibilityLabel=\{backLabel \? `Back to \$\{backLabel\}` : 'Back'\}/);
+  assert.doesNotMatch(back, /accessibilityRole=\{backLabel \?/, 'the role no longer depends on the label');
+  assert.doesNotMatch(back, /`Back to \$\{backLabel\}` : undefined/, 'the bare chevron is never unnamed');
+});
