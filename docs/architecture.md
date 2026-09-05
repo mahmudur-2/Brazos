@@ -204,7 +204,11 @@ caller-supplied keys, importing that title-caser), `components/JobProgress.tsx`
 nothing). Screens still branch on raw `job.status` for control flow — fetch
 gates, permission gates, section selection — but no screen re-derives a
 lifecycle classification, and a raw status→step map anywhere outside
-`lib/jobLifecycle.ts` fails `tests/lifecycle.test.mjs`'s sweep.
+`lib/jobLifecycle.ts` fails `tests/lifecycle.test.mjs`'s sweep. Customer Home
+reads the hub's aggregation (`hooks/useMyJobsHub.ts`) and, through
+`lib/homeAttention.ts`, lists the posted jobs that need the customer's move
+with the hub's own next-action line; the selection rule lives there and
+nowhere else.
 
 ## Offers — one negotiation model
 
