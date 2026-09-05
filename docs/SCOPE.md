@@ -13,6 +13,7 @@ Anything not listed goes to `docs/BACKLOG.md` under v1.2 — it is not built bef
 - Text + photo messaging, unlocked after assignment
 - Worker discovery with radius and default-on nearby alerts
 - Account deletion; report / block
+- Posted-price choice at posting: the customer chooses between a posted price and open bids (ruled in 2026-09-05 - docs/DECISIONS.md, entry (2) of that date; not Instant Book - the customer still accepts and funds)
 
 ## Not in v1 (do not build before ten real users ask)
 Voice messages · live location · document sharing · translation · hidden / archived / muted chats · Android · web · design studio · second theme · second font · instant payouts · calendars · AI features

@@ -99,6 +99,25 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN a0-rulings COMPLETED (2026-09-05) - the operator's four rulings recorded; SCOPE gains the posted-price line; BACKLOG annotated for chain A
+
+Dispatch `C:\Users\mdmah\runs\night2\a0-rulings.txt`; report `.shots/night2/reports/a0-rulings.md`. Base `b4f4d3d` (an ancestor), branch `mainexpo`, tree clean and level with origin/mainexpo at start on `5435d28` ("docs: m1 record") - a FRESH start. DOCS ONLY: no code, no SQL, nothing under `supabase/`, so no staging pipeline ran for it; ci.yml ran verify. `docs/GATES.md`, `docs/BRAZOS_TARGET_ARCHITECTURE_v3.md` (its section 4.1 production row stays as written), `.gitignore`, `.maestro/`, the guard directory and the production project are untouched.
+
+**The commit.** One commit, "docs: rulings 2026-09-05 - DECISIONS R1-R4, the SCOPE posted-price line, BACKLOG annotations, HANDOFF record", four files staged by explicit path: `docs/DECISIONS.md` (one dated block, four entries), `docs/SCOPE.md` (one line under "In v1"), `docs/BACKLOG.md` (eight bullets, each gaining a sentence at its end - no bullet removed or reordered), `HANDOFF.md` (this record). Its sha is Git's to state, not this file's.
+
+**The four rulings**, planned by plan-a (`.shots/night1/reports/plan-a.md`) and recorded in full in `docs/DECISIONS.md` under 2026-09-05:
+- (1) The ten-user TestFlight cohort runs on STAGING with test money; production is not touched and no migration is hand-applied to it until real money moves. For the cohort only this reverses v3 section 4.1's production row, which stands for launch - and the row itself is not edited.
+- (2) The posted-price choice at posting is IN v1: at posting the customer chooses between a posted price and open bids. Not Instant Book - the customer still accepts and funds; the counter-offer cap stays 10; open bids is the default, so the E2E money walk posts, bids, accepts, funds, completes and releases exactly as before.
+- (3) brazosmvp@gmail.com is the published support contact, as a mailto row on the profile's Settings list - the app has no help, support or contact surface today, and no domain exists yet.
+- (4) The customer Home leads with what needs attention, as logic and data only: the customer's own posted jobs that need their move, read through `hooks/useMyJobsHub.ts` and drawn on `components/HubCard.tsx`, directly below the Post-a-job card and above Nearby - a section above the card would push the walk's pill below the fold.
+
+**Chain A's launch order** (`.shots/night1/chainA-manifest.txt`): a0-rulings (this run), a1-support-contact, a2-home-attention, a3-posted-price-schema (dep a0-rulings), a4-posted-price-client (dep a3-posted-price-schema), a6-payout-copy (MONEY, its own revert boundary). a5-rating-retire is SKIPPED on its own ruling's condition: readers of `profiles.rating_avg` / `rating_count` remain after n7 - `match_workers_semantic()` (baseline 2855-2984), `supabase/functions/worker-search/index.ts` 410-437, `supabase/tests/020_lifecycle.sql` 241, `scripts/lifecycle-proof.mjs` 360-361 - and the retirement is a destructive migration the staging pipeline stops for the operator. Also SKIPPED by plan-a and annotated in the backlog: the waiting-state facts and nudges, the "Available this week" label, and the bank-arrival half of the payout ETA copy.
+
+**Exceptions.** (1) The record names its commit by message, not by short sha: one commit carries all four files, and a commit cannot contain its own SHA - the rule this file states at its head. (2) `docs/BACKLOG.md`'s eight bullets were anchored by their opening text, not by line number: m1's bullet had already moved every one of them down by one.
+
+**NEEDS THE OPERATOR.** Nothing from this run: no SQL, no secret, no device step, no destructive migration, no new dependency. Standing, from plan-a: the two planner decisions written in your name (the Home section's position; a4 leaving the worker side untouched), a5-rating-retire's unblocking schema run, and n4's remaining money steps.
+
+
 ## RUN m1-mode-race COMPLETED (2026-09-05) - the gate hooks answer for the current user, synchronously; the mode race after Setup is closed
 
 Dispatch `C:\Users\mdmah\runs\night2\m1-mode-race.txt`; report `.shots/night2/reports/m1-mode-race.md`. Base gate PASS: `git merge-base --is-ancestor b453c47 HEAD` exit 0, `git rev-parse --abbrev-ref HEAD` printed `mainexpo`, `git status --porcelain` empty; m1 started from `b453c47` ("docs: NIGHT1 maestro result"). This record is written by the follow-up run m1b-docs, because m1 exited before its own reporting step and left the repository with no record of the fix.
