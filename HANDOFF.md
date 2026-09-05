@@ -97,6 +97,37 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN n5-first-session COMPLETED (2026-09-04) - email-first Welcome, permissions at first need, no launch floor, the take-home line, own-job card, VoiceOver names
+
+Dispatch `C:\Users\mdmah\runs\night1\n5-first-session.txt`; base `b4f4d3d` (an ancestor), HEAD `4e318c5`, branch `mainexpo`, tree clean, HEAD equal to origin/mainexpo
+(FRESH; executed 2026-09-05 after n1/n2/n3/n6/n7 — the planner's 2026-09-04 date stands on this heading, as n1 and n2 did). Report `.shots/night1/reports/n5-first-session.md`.
+Nothing under supabase/ changed (no staging pipeline; ci.yml ran verify); no dependency added; `.gitignore`, `.maestro/`, the guard directory and the production project untouched.
+
+**Commits.** C1 `856b4f3` — `screens/WelcomeScreen.tsx`: "Continue with email" (→ EmailCreateAccount) leads, "Continue with phone" (→ CreateAccount) stays second, sign-in
+unchanged — phone sign-up resolves to `disabled` outside development; `tests/firstSession.test.mjs` (new); `tests/copyTruth.test.mjs` C5 hint fence → the two new brand-free hints.
+C2 `0afd5f2` — `screens/SetupScreen.tsx`: Location/Notifications rows, PermissionSetupRow and the hook import gone; Terms and "Start in" kept exactly; location is asked where
+coordinates are first needed (`WorkerResultsScreen` on entry, the Post-a-Job Location step — both via `resolveCurrentPlace()`, already so at HEAD), notifications after the first
+post or bid (`maybePromptForPush`, already so); `tests/setupOnboarding.test.mjs` four Setup-row fences retargeted (one renamed), `tests/workerHome.test.mjs` `<Switch` set → `[]`;
+`hooks/useSetupPermissions.ts` stays, unimported. C3 `2ae6dd8` — `screens/LaunchScreen.tsx`: MIN_VISIBLE / REDUCED_MIN_VISIBLE / floorReached removed; the exit starts on
+`sessionReady` alone; the EXIT_GRACE_MS failsafe stays. C4 `784a282` — `lib/payments.ts` `workerTakeLine()` ("You receive $X after the fee" from quote_job_price's
+`worker_receives_cents` as returned; null when unknown); `components/OfferComposer.tsx` asks quoteJobPrice 400 ms after the last keystroke on a valid bid amount, latest answer wins,
+`<Text>` under the amount field, bid context only; `tests/offerComposer.test.mjs` + 2; `tests/platformFee.test.mjs` / `tests/payouts.test.mjs` loaders inline the real formatBudget;
+`scripts/shots.mjs` `worker-submit-bid-<scheme>` + THE ONE-ROW READ stub (the by-id read n2 recorded as unanswered, answered from the same four rows when `jobs: true`);
+`tests/shotHarness.test.mjs` 74 → 76. C5 `42b5f89` — `lib/ownJobCard.ts` (new) + `screens/HomeScreen.tsx`: a customer's own Nearby card fetches the full row and opens MyJobs /
+ClientJobDetail, other cards keep the confirmed Worker Mode switch; `tests/ownJobCard.test.mjs` (new); BACKLOG line 10 FIXED. C6 `4829635` — `components/StarRating.tsx` (role
+button, "N stars", selected) and `components/ScreenHeader.tsx` (bare chevron: role button, label "Back"); BACKLOG lines 12–13 FIXED. C7 — this record.
+
+**Renders** (`node scripts/shots.mjs --build --only …`, 393×852, dark and light, `.shots/`): auth-welcome, auth-setup, worker-submit-bid (take-home line ABSENT by design — the
+harness answers quote_job_price empty), customer-home-jobs (no own card — the rows belong to POSTER_ID), customer-profile-details (the bare chevron's host); ReviewSection
+(StarRating's host) UNRENDERED by construction; none for C3. **Exceptions.** (1) `tests/copyTruth.test.mjs:39` pinned the Welcome hint exactly, outside D1's fence list — an
+expected-constant update. (2) payments.ts importing formatBudget creates no cycle, but the two tests executing it from a data URL inline the real formatBudget (function replacers:
+the source carries `$$`). (3) `lib/ownJobCard.ts` carries one pure runtime import, userMessage, so the dialog copy stays on the one error mapper. (4) The Submit Bid recipe taps the
+seeded card on Worker Home, not after "View all open jobs": with rows seeded the same title also sits on the hidden Home screen, first in the DOM. (5) The Terms row keeps its
+`divider` exactly as D2 asked and is now the card's first row. **Proof.** `verify` lint clean and green before every commit — 1303 (C1, C2), 1304 (C3), 1307 (C4), 1312 (C5), 1313
+(C6, C7); each pushed with the bare `git push origin mainexpo`. **NEEDS THE OPERATOR.** Every app change needs a rebuild before it reaches a device (n8 STEP 6 builds fresh); the
+review of the ten renders under `.shots/` (the run reads no image).
+
+
 ## RUN n2-harness-registry COMPLETED (2026-09-04) - client nearby default on; registry widened to every renderable v1 screen
 
 Dispatch `C:\Users\mdmah\runs\night1\n2-harness-registry.txt`; base `b4f4d3d` (an ancestor), HEAD `d806576`, branch `mainexpo`,
