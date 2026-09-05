@@ -27,12 +27,16 @@ import { useProfile } from '../hooks/useProfile';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
   categoryAccent,
+  fetchJobById,
   formatBudget,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
+import { alertAsync } from '../lib/dialog';
+import { navigateAcrossTabs } from '../lib/navigationRef';
+import { openOwnJob } from '../lib/ownJobCard';
 import { HOME_SERVICE_ROWS, MORE_SERVICES } from '../lib/skillCategories';
 import { greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
@@ -858,16 +862,32 @@ export function HomeScreen() {
               </Text>
             ) : (
               <View style={styles.cardList}>
-                {preview.map((job) => (
-                  <OpenJobCard
-                    key={job.id}
-                    job={job}
-                    isOwn={!!user && user.id === job.client_id}
-                    bidCount={bidCounts[job.id]}
-                    similarToday={similarPostedToday(jobs, job)}
-                    onPress={browseOpenJobs}
-                  />
-                ))}
+                {preview.map((job) => {
+                  const isOwn = !!user && user.id === job.client_id;
+                  // n5 (2026-09-04): the poster's own card opens its client
+                  // job detail (lib/ownJobCard.ts — the full row is fetched
+                  // first, since ClientJobDetail takes a Job, not the card's
+                  // OpenJob); every other card keeps the confirmed switch
+                  // into Worker Mode.
+                  return (
+                    <OpenJobCard
+                      key={job.id}
+                      job={job}
+                      isOwn={isOwn}
+                      bidCount={bidCounts[job.id]}
+                      similarToday={similarPostedToday(jobs, job)}
+                      onPress={
+                        isOwn
+                          ? () =>
+                              void openOwnJob(
+                                { fetchJob: fetchJobById, navigate: navigateAcrossTabs, alert: alertAsync },
+                                job.id
+                              )
+                          : browseOpenJobs
+                      }
+                    />
+                  );
+                })}
               </View>
             )}
           </Animated.View>
