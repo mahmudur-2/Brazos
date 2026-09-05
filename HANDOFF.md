@@ -97,6 +97,31 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN n9-sentry COMPLETED (2026-09-05) - Sentry captureException beside every handled console.error; the census fence
+
+Dispatch `C:\Users\mdmah\runs\night1\n9-sentry.txt` — n4-money-ops STEP 3 alone, split out so that money code keeps its own revert boundary (`docs/BACKLOG.md` line 15);
+n4's STEPS 1, 2 and 4 are NOT run here: process-settlements, the Payouts screen and Maestro are untouched. Base `b4f4d3d` (an ancestor), HEAD `bb23576`, branch `mainexpo`,
+tree clean, HEAD equal to origin/mainexpo (FRESH). Report `.shots/night1/reports/n9-sentry.md`. Nothing under supabase/ changed (no staging pipeline; ci.yml ran verify); no
+dependency added; `.gitignore`, `.maestro/`, the guard directory, the production project and every money file untouched.
+
+**Commits.** C1 `7076280` — the census re-run at HEAD matched D3's count exactly: 32 console.error sites in 13 app files (lib/geolocation 2, notificationRoutes 3,
+postJobDraft 2, pushNotifications 3, reverseGeocode 3, sharing 6; hooks/useLegalGate 1, useLiveLocation 1, usePushNotifications 2, useVoiceRecorder 2; screens/PostJobScreen 4,
+WorkerJobScreen 2; components/ReviewSection 1; AppErrorBoundary already captured). Each gains, beside the console.error it keeps,
+`Sentry?.captureException(<the caught error, or new Error(<the console message>)>, { extra: { site: '<file>.<function>', … } })`, importing `{ Sentry }` from
+`lib/observability/sentry` — the nullable seam, so every capture is a no-op wherever the vendor did not load. `extra` carries identifiers and codes only (a job id, a PostgREST
+code, an HTTP status, a screen name, a stage label); the scrubber deep-scrubs it before it leaves the device. No site's control flow changes. `tests/observability.test.mjs` + 1,
+'the census · every console.error in app code has a Sentry capture beside it': every file under lib/, hooks/, screens/, components/ (never *.web.*) that calls console.error must
+import Sentry by its own relative path and capture at least as many times as it logs, counted per file. Four data-URL loaders learned the import and stub it to null:
+`tests/chatDocuments.test.mjs`, `tests/crossModeNotification.test.mjs`, `tests/errorHonesty.test.mjs`, `tests/postJobDraft.test.mjs`; no test deleted; invariants 11 and 12
+untouched. C2 — this record (CLAUDE.md's end-of-run rewrite; the step itself is the one commit the dispatch asked for).
+
+**Exceptions.** (1) `lib/reverseGeocode.ts` gained its first import; its header's "imports nothing from expo" stays true, but a bare-node script would now pull config/env — no
+such script exists (`scripts/` names the module nowhere). (2) The fence counts captures per file rather than requiring one, because "at least one" would let a second
+console.error into an already-capturing file unnoticed, which is the gap the fence exists to close. (3) The commit carries the n9 prefix, not n4's, so git log, the report and
+this record agree. **Proof.** `verify` lint clean, 1314 pass / 0 fail before C1; pushed with the bare `git push origin mainexpo`. **NEEDS THE OPERATOR.** Every capture needs a
+rebuild before it reaches a device (n8 STEP 6 builds fresh); until then installed builds report only the error boundary's crashes. n4's STEPS 1, 2 and 4 remain to run, as n4.
+
+
 ## RUN n5-first-session COMPLETED (2026-09-04) - email-first Welcome, permissions at first need, no launch floor, the take-home line, own-job card, VoiceOver names
 
 Dispatch `C:\Users\mdmah\runs\night1\n5-first-session.txt`; base `b4f4d3d` (an ancestor), HEAD `4e318c5`, branch `mainexpo`, tree clean, HEAD equal to origin/mainexpo
