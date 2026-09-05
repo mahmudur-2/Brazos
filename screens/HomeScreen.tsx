@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Image,
@@ -14,14 +14,16 @@ import {
 } from 'react-native';
 import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from '../components/Chip';
 import { HomeAtmosphere } from '../components/HomeAtmosphere';
+import { HubCard } from '../components/HubCard';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
 import { Skeleton } from '../components/Skeleton';
 import { useAuth } from '../hooks/useAuth';
 import { useBidCounts } from '../hooks/useBidCounts';
+import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
 import { useReducedMotion } from '../hooks/useReducedMotion';
@@ -35,10 +37,11 @@ import {
   type OpenJob,
 } from '../lib/jobs';
 import { alertAsync } from '../lib/dialog';
+import { ATTENTION_CAP, attentionItems } from '../lib/homeAttention';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { openOwnJob } from '../lib/ownJobCard';
 import { HOME_SERVICE_ROWS, MORE_SERVICES } from '../lib/skillCategories';
-import { greetingFor } from '../lib/time';
+import { formatTimeAgo, greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
@@ -446,6 +449,39 @@ export function HomeScreen() {
   const preview = useMemo(() => jobs.slice(0, PREVIEW_COUNT), [jobs]);
   const bidCounts = useBidCounts(useMemo(() => preview.map((job) => job.id), [preview]));
 
+  // a2 (2026-09-05) — "Needs your attention" reads the My Jobs hub's OWN
+  // aggregation (docs/DECISIONS.md 2026-09-05 entry (4)): no new RPC, and no
+  // second copy of the lifecycle derivation on this screen. The hook's
+  // worker-side reads run too — that is the price of one aggregation (P3-31),
+  // and it is a page the signed-in user is entitled to either way. The three
+  // names that collide with the open-jobs feed above are aliased; nothing
+  // else about the call differs from screens/MyJobsHubScreen.tsx.
+  const {
+    posted,
+    payments,
+    openDisputeJobIds,
+    reviewedJobIds,
+    names,
+    error: myJobsError,
+    refresh: refreshMyJobs,
+  } = useMyJobsHub();
+
+  // Same refresh-on-focus the hub does: coming back from approving, paying or
+  // reviewing has to change what this section says.
+  useFocusEffect(
+    useCallback(() => {
+      void refreshMyJobs();
+    }, [refreshMyJobs])
+  );
+
+  // One clock reading per data load — the hub's rule, so a card's countdown
+  // and its rank cannot be read at two different instants.
+  const nowMs = useMemo(() => Date.now(), [posted, payments]);
+  const items = useMemo(
+    () => attentionItems({ posted, payments, openDisputeJobIds, reviewedJobIds, nowMs }),
+    [posted, payments, openDisputeJobIds, reviewedJobIds, nowMs]
+  );
+
   useEffect(() => {
     if (reducedMotion === null) return;
 
@@ -811,6 +847,86 @@ export function HomeScreen() {
               accessibilityIgnoresInvertColors
             />
           </LitSurface>
+
+          {/* a2 — WHAT NEEDS THE CUSTOMER'S MOVE, directly below the promo
+              card and above Nearby (docs/DECISIONS.md 2026-09-05 entry (4)).
+              THE POSITION IS NOT A TASTE CHOICE: the E2E money walk finds
+              "Post a job" on Home WITHOUT scrolling (.maestro/sign-in.yml's
+              HOME_MARK, then money-walk.yml's tap), Maestro taps nothing laid
+              out below the 852pt fold, and the E2E customer fixture owns
+              staging jobs that need attention — so a block ABOVE the card
+              would push the pill off-screen and break the walk without a flow
+              change, which the chain forbids. The ruling's "leads with" is met
+              as the FIRST job section; the Figma pass decides the final order.
+
+              No entrance animation: MOTION1's three indices are the search
+              field, the chips and Nearby, and this section does not take a
+              fourth. Every style here already existed, and every card is the
+              hub's own HubCard with the hub's own props — the line included,
+              which myJobsNextAction() derives once for both surfaces. */}
+          {myJobsError || items.length > 0 ? (
+            <View style={styles.section}>
+              <View style={styles.liveNearbyHeader}>
+                <Text style={styles.sectionTitle}>Needs your attention</Text>
+                {items.length > ATTENTION_CAP ? (
+                  <Pressable
+                    style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
+                    accessibilityRole="button"
+                    accessibilityLabel="See all in My jobs"
+                    onPress={() => navigateAcrossTabs('MyJobs')}
+                  >
+                    <Text style={[styles.viewAllText, isDark && styles.viewAllTextDark]}>
+                      See all
+                    </Text>
+                    <Ionicons
+                      name="arrow-forward"
+                      size={19}
+                      color={isDark ? colors.emerald : colors.forest}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
+
+              {myJobsError ? (
+                // A failed read must never render as "nothing needs your
+                // attention". Nearby's own error pattern, one notice for the
+                // whole section.
+                <View style={styles.notice}>
+                  <Text style={styles.noticeError}>Couldn’t load your jobs.</Text>
+                  <Pressable onPress={refreshMyJobs} hitSlop={8} accessibilityRole="button">
+                    <Text style={styles.retry}>Try again</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <View style={styles.cardList}>
+                  {items.slice(0, ATTENTION_CAP).map(({ job, line }) => (
+                    <HubCard
+                      key={`attention-${job.id}`}
+                      icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+                      category={job.category}
+                      title={job.title}
+                      subtitle={
+                        job.assigned_worker_id
+                          ? `Worker · ${names[job.assigned_worker_id] ?? 'Worker'}`
+                          : job.bid_count > 0
+                            ? `${job.bid_count} ${job.bid_count === 1 ? 'bid' : 'bids'} received`
+                            : 'Awaiting bids'
+                      }
+                      thumbnailUrl={jobThumbnailUrl(job)}
+                      timeLabel={formatTimeAgo(job.created_at)}
+                      priceCents={job.final_amount_cents ?? job.budget_cents}
+                      status={job.status}
+                      nextAction={line}
+                      // The hub's read returns the FULL row, so the detail
+                      // screen opens on it — no re-fetch (n5's own-card path
+                      // re-fetches because that card holds an OpenJob).
+                      onPress={() => navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job })}
+                    />
+                  ))}
+                </View>
+              )}
+            </View>
+          ) : null}
 
           <Animated.View style={[styles.section, sectionEntrance]}>
             <View style={styles.liveNearbyHeader}>
