@@ -23,13 +23,15 @@ const EARNING_STATUSES = ['held', 'released', 'paid_out'] as const;
 /**
  * Every money row where the user is the payee (job payments AND tips), with
  * job titles resolved in one batched read. RLS scopes both queries to what
- * the payee may see.
+ * the payee may see. release_requested_at rides along (n4b, 2026-09-05) so
+ * Payouts can tell an approved stripe row still waiting on its transfer —
+ * lib/payments.ts payoutSetupNotice() — from one that is merely held.
  */
 export async function fetchMyEarnings(userId: string) {
   const { data, error } = await supabase
     .from('payments')
     .select(
-      'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at'
+      'id, job_id, offer_id, payer_id, payee_id, kind, amount_cents, platform_fee_cents, provider, provider_ref, status, authorized_at, held_at, released_at, release_reason, paid_out_at, created_at, updated_at, release_requested_at'
     )
     .eq('payee_id', userId)
     .in('status', [...EARNING_STATUSES])

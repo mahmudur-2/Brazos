@@ -68,8 +68,10 @@ const {
   PAYOUTS_STATUSES,
   PAYOUTS_RESPONSE_MALFORMED,
   PAYOUTS_STATUS_UNREADABLE,
+  PAYOUT_SETUP_NOTICE,
   classifyTipPoll,
   isPayoutsStatus,
+  payoutSetupNotice,
   payoutsCta,
   validatePayoutsOnboardingResponse,
   validatePayoutsStatusResponse,
@@ -424,4 +426,48 @@ test('[static] 8 · the route is registered on the shared profile stack and type
   assert.match(nav, /Payouts: \{ from\?: PayoutsLinkFrom; at\?: number \} \| undefined;/);
   const profileList = nav.slice(nav.indexOf('export type ProfileStackParamList'), nav.indexOf('export type ProfileStackNavigation'));
   assert.ok(profileList.includes('Payouts:'), 'Payouts lives in the ProfileStackParamList, beside Earnings');
+});
+
+// ---------------------------------------------------------------------------
+// n4b (2026-09-05) — the payout setup notice, EXECUTED over the decided cases,
+// and the screen's two reads pinned as text.
+// ---------------------------------------------------------------------------
+
+test('12 · payoutSetupNotice (n4b): the sentence only when payouts are not enabled AND an approved stripe row is still waiting on its transfer', () => {
+  const waiting = { provider: 'stripe', status: 'held', release_requested_at: '2026-09-05T00:40:39Z' };
+  const merelyHeld = { provider: 'stripe', status: 'held', release_requested_at: null };
+  const sandbox = { ...waiting, provider: 'sandbox' };
+
+  assert.equal(payoutSetupNotice('enabled', [waiting]), null, 'enabled: the drain will send it; nothing to say');
+  assert.equal(payoutSetupNotice('none', []), null, 'no rows: nothing is waiting');
+  assert.equal(payoutSetupNotice('none', [merelyHeld]), null, 'held without release_requested_at is not yet approved');
+  assert.equal(payoutSetupNotice('action_needed', [waiting]), PAYOUT_SETUP_NOTICE, 'action_needed + an approved stripe row: the sentence');
+  assert.equal(payoutSetupNotice('action_needed', [sandbox]), null, 'a sandbox row never waits on a payout account');
+  assert.equal(payoutSetupNotice(null, [waiting]), null, 'a null status is unknown, and unknown says nothing');
+  // The other two not-enabled states say it too, one waiting row among
+  // others is enough, and the sentence follows the payment state machine:
+  // approved — never paid, never released.
+  assert.equal(payoutSetupNotice('none', [merelyHeld, waiting]), PAYOUT_SETUP_NOTICE);
+  assert.equal(payoutSetupNotice('under_review', [waiting]), PAYOUT_SETUP_NOTICE);
+  assert.equal(
+    PAYOUT_SETUP_NOTICE,
+    'An approved payment is waiting on your payout setup before it can be sent to you.'
+  );
+  assert.match(PAYOUT_SETUP_NOTICE, /approved/i);
+  assert.doesNotMatch(PAYOUT_SETUP_NOTICE, /\bpaid\b|released|verif|stripe/i);
+});
+
+test('[static] 13 · PayoutsScreen (n4b) reads the ledger beside the status read, feeds both to payoutSetupNotice, and renders the sentence in the ready branch only', () => {
+  const src = read('screens/PayoutsScreen.tsx');
+  const code = stripComments(src);
+  assert.match(code, /import \{ payoutSetupNotice, payoutsCta, type PayoutsStatus \} from '\.\.\/lib\/payments';/);
+  assert.match(code, /import \{ fetchMyEarnings, type EarningsRow \} from '\.\.\/lib\/earnings';/);
+  assert.match(code, /await fetchMyEarnings\(userId\)/);
+  // Null is unknown: no status yet, or no rows yet, renders nothing.
+  assert.match(code, /status && rows \? payoutSetupNotice\(status, rows\) : null/);
+  // One <Text> in the screen's existing body style, directly above the one
+  // action button — inside the action bar, so it is in the ready branch only.
+  assert.match(code, /\{setupNotice \? <Text style=\{styles\.body\}>\{setupNotice\}<\/Text> : null\}\s*\{actionButton\}/);
+  // The ledger read never writes the status: still exactly one setStatus call.
+  assert.equal((code.match(/setStatus\(/g) ?? []).length, 1);
 });

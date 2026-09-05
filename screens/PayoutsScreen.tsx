@@ -10,12 +10,13 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentsMode } from '../lib/adapters/payments';
-import { payoutsCta, type PayoutsStatus } from '../lib/payments';
+import { payoutSetupNotice, payoutsCta, type PayoutsStatus } from '../lib/payments';
 import {
   beginPayoutsOnboarding,
   fetchMyPayoutsStatus,
   refreshPayoutsStatus,
 } from '../lib/payments/stripe';
+import { fetchMyEarnings, type EarningsRow } from '../lib/earnings';
 import type { ProfileStackParamList } from '../lib/navigation';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
 
@@ -75,6 +76,10 @@ export function PayoutsScreen() {
   const at = params?.at;
 
   const [status, setStatus] = useState<PayoutsStatus | null>(null);
+  // n4b (2026-09-05): the payee's own ledger rows, read beside the status so
+  // the notice can say when an approved payment is waiting on setup. Null
+  // until read — unknown, and unknown renders nothing.
+  const [rows, setRows] = useState<EarningsRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -93,8 +98,13 @@ export function PayoutsScreen() {
   }, []);
 
   const stripe = paymentsMode === 'stripe';
+  const userId = user?.id ?? null;
 
-  /** The cheap read: the stored state, nothing asked of the provider. */
+  /** The cheap read: the stored state, nothing asked of the provider — then
+   *  (n4b) the same ledger read Earnings makes, so the notice above the action
+   *  button can say when an approved payment is waiting on setup. A failed
+   *  ledger read leaves the rows null, and the notice stays silent rather
+   *  than guessing; it never touches the status. */
   const readStatus = useCallback(async () => {
     if (!stripe) return;
     const { data, error } = await fetchMyPayoutsStatus();
@@ -105,7 +115,11 @@ export function PayoutsScreen() {
     }
     setLoadError(null);
     setStatus(data);
-  }, [stripe]);
+    if (!userId) return;
+    const earnings = await fetchMyEarnings(userId);
+    if (!activeRef.current) return;
+    setRows(earnings.data?.rows ?? null);
+  }, [stripe, userId]);
 
   /** The refresh: connect-status, then the re-read. The stored state is the
    *  truth either way — a failed refresh leaves the last read standing. */
@@ -195,6 +209,22 @@ export function PayoutsScreen() {
   }
 
   const view = status ? payoutsCta(status) : null;
+  // n4b: both reads or nothing — null is unknown, and unknown says nothing.
+  const setupNotice = status && rows ? payoutSetupNotice(status, rows) : null;
+
+  /** The one button of the action bar: the setup CTA for none and
+   *  action_needed, Refresh for under_review, nothing when enabled. */
+  const actionButton = view?.cta ? (
+    <Button title={view.cta} onPress={() => void openSetup()} loading={opening} disabled={opening} />
+  ) : view?.refresh ? (
+    <Button
+      title="Refresh"
+      variant="secondary"
+      onPress={() => void refresh()}
+      loading={refreshing}
+      disabled={refreshing}
+    />
+  ) : undefined;
 
   const state: ScreenState = !user
     ? { kind: 'permissionDenied', title: 'Sign in required', body: '' }
@@ -295,16 +325,11 @@ export function PayoutsScreen() {
             ]
       }
       actionBar={
-        view?.cta ? (
-          <Button title={view.cta} onPress={() => void openSetup()} loading={opening} disabled={opening} />
-        ) : view?.refresh ? (
-          <Button
-            title="Refresh"
-            variant="secondary"
-            onPress={() => void refresh()}
-            loading={refreshing}
-            disabled={refreshing}
-          />
+        actionButton ? (
+          <>
+            {setupNotice ? <Text style={styles.body}>{setupNotice}</Text> : null}
+            {actionButton}
+          </>
         ) : undefined
       }
     />

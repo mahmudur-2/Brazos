@@ -398,6 +398,33 @@ export function payoutsCta(status: PayoutsStatus): PayoutsView {
   return PAYOUTS_VIEWS[status];
 }
 
+/**
+ * n4b (2026-09-05): the one sentence Payouts says when an APPROVED payment is
+ * waiting on the worker's own setup. From the worker's side, "approved and
+ * not yet sent" is a stripe row still `held` with `release_requested_at` set
+ * — lib/paymentRules.ts isReleaseRequested (D23), spelled out here the way
+ * lib/jobLifecycle.ts spells it, because this module re-exports that
+ * predicate without binding it and the node harnesses that execute this file
+ * rewrite its one paymentRules import specifier — and process-settlements sends
+ * nothing to a payee whose payment_accounts.payouts_enabled is false, which
+ * is every status but 'enabled'. Never "paid", never "released": the
+ * transfer has not landed. A null status is unknown, and unknown says
+ * nothing; a sandbox row never waits on a payout account.
+ */
+export const PAYOUT_SETUP_NOTICE =
+  'An approved payment is waiting on your payout setup before it can be sent to you.';
+
+export function payoutSetupNotice(
+  status: PayoutsStatus | null,
+  rows: ReadonlyArray<Pick<Payment, 'provider' | 'status' | 'release_requested_at'>>
+): string | null {
+  if (status === null || status === 'enabled') return null;
+  const waiting = rows.some(
+    (row) => row.provider === 'stripe' && row.status === 'held' && !!row.release_requested_at
+  );
+  return waiting ? PAYOUT_SETUP_NOTICE : null;
+}
+
 export const PAYOUTS_STATUS_UNREADABLE = 'Your payout status could not be read right now. Try again.';
 
 // The cheap read itself — my_payouts_status() — lives in
