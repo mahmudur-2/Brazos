@@ -57,7 +57,7 @@ export const DEFAULT_PREFS: Omit<NotificationPrefs, 'user_id'> = {
   bids: true,
   job_updates: true,
   hire_requests: true,
-  nearby_jobs: false,
+  nearby_jobs: true,
   nearby_radius_miles: 5,
   home_lat: null,
   home_lng: null,

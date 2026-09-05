@@ -198,6 +198,32 @@ test('every emitted category is gated by the notification_prefs column it claims
   );
 });
 
+test('the client default for nearby_jobs mirrors the schema default, and both are true', async () => {
+  // night1 (n2). docs/SCOPE.md lists "default-on nearby alerts" under In v1;
+  // n1 flipped the column default (docs/DECISIONS.md 2026-09-04, night1 n1
+  // entry 1) and DEFAULT_PREFS is what the settings screen shows for the
+  // window before the row is read, so the two have to say the same thing —
+  // a client default of false would show the switch OFF on a fresh account
+  // whose row the database created ON.
+  const prefsLib = await read('lib/notificationPrefs.ts');
+  const start = prefsLib.indexOf('export const DEFAULT_PREFS');
+  assert.ok(start > -1, 'DEFAULT_PREFS must exist');
+  const defaults = prefsLib.slice(start, prefsLib.indexOf('};', start));
+  assert.match(defaults, /nearby_jobs: true,/, 'the client default must be true');
+
+  // The migration is found by its name, not restated: one file, one clause.
+  const migrations = dir('supabase/migrations').filter((file) =>
+    file.endsWith('_nearby_alerts_default.sql')
+  );
+  assert.equal(
+    migrations.length,
+    1,
+    `expected exactly one *_nearby_alerts_default.sql migration, found ${migrations.length}`
+  );
+  const sql = await read(`supabase/migrations/${migrations[0]}`);
+  assert.match(sql, /alter column nearby_jobs set default true/);
+});
+
 test('every client map over the outbox is reconciled against the inventory', async () => {
   const routes = await read('lib/notificationRoutes.ts');
   const feed = await read('screens/NotificationsScreen.tsx');
