@@ -234,10 +234,16 @@ export function WelcomeScreen() {
           than left as a hole. */}
       <Animated.View style={[styles.actions, step(STAGGER.actions)]}>
         <AuthButton
+          title="Continue with email"
+          themed
+          onPress={() => navigation.navigate('EmailCreateAccount')}
+          accessibilityHint="Create an account with your email"
+        />
+        <AuthButton
           title="Continue with phone"
           themed
           onPress={() => navigation.navigate('CreateAccount')}
-          accessibilityHint="Create an account"
+          accessibilityHint="Create an account with your phone number"
         />
         <AuthButton
           title="I already have an account"

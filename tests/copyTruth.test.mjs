@@ -36,7 +36,10 @@ test('C5 · the brand is out of prose at the named sites', () => {
   }
   assert.match(code('screens/AccountSafetyScreen.tsx'), /sub: 'How your data is protected\.'/);
   assert.match(code('screens/DeleteAccountScreen.tsx'), /'Your account has been deleted\. Reviews you wrote or received stay on the marketplace/);
-  assert.match(code('screens/WelcomeScreen.tsx'), /accessibilityHint="Create an account"/);
+  // n5 (2026-09-04): Welcome leads with email and keeps phone second; both
+  // create-account hints stay brand-free (tests/firstSession.test.mjs pins the order).
+  assert.match(code('screens/WelcomeScreen.tsx'), /accessibilityHint="Create an account with your email"/);
+  assert.match(code('screens/WelcomeScreen.tsx'), /accessibilityHint="Create an account with your phone number"/);
 });
 
 /** Every .tsx under screens/ and components/. */
