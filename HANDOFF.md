@@ -97,6 +97,44 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN n2-harness-registry COMPLETED (2026-09-04) - client nearby default on; registry widened to every renderable v1 screen
+
+Dispatch `C:\Users\mdmah\runs\night1\n2-harness-registry.txt`; base `b4f4d3d` (an ancestor), HEAD `d806576`, branch `mainexpo`,
+tree clean, HEAD equal to origin/mainexpo (FRESH; executed 2026-09-05 after n1 — the planner's 2026-09-04 date stands on the
+tick, the GATES text and this heading). Report `.shots/night1/reports/n2-harness-registry.md`. Nothing under supabase/ changed
+(no staging pipeline; ci.yml ran verify); no dependency added; no screen file edited; the guard directory, `.gitignore` and the
+production project untouched.
+
+**Commits.** C1 `91e39aa` — `lib/notificationPrefs.ts` DEFAULT_PREFS.nearby_jobs false → true, mirroring n1's migration
+`20260930000300_nearby_alerts_default.sql`; `tests/notificationFeed.test.mjs` gains 'the client default for nearby_jobs mirrors
+the schema default, and both are true' (reads the DEFAULT_PREFS block, finds the one `*_nearby_alerts_default.sql` file, asserts
+its `alter column nearby_jobs set default true`); `docs/GATES.md` Gate 2 box 3 TICKED 2026-09-04. C2 `3a142c2` — `scripts/shots.mjs`:
+two registry fields and no other harness change — `session: false` (no session, setup record or mode key seeded; the app lands on
+Welcome) and `setup: false` (session and mode seeded, setup record not; the app lands on Setup), threaded into seedPage() the way
+`jobs` is into stubResponse, absent meaning today's seeding; twelve targets — auth-welcome, auth-signin, auth-email-signin,
+auth-create-account, auth-email-create-account, auth-setup, dark and light — so the registry is 74 targets, 37 surfaces;
+`tests/shotHarness.test.mjs` field list, the `jobs: true` count turned into an allow-list (still the one RUN JOBS1 entry), count 74,
+one new test pinning the twelve names, the opt-outs' threading and every auth locator; `docs/GATES.md` Gate 2 box 2 rewritten,
+still OPEN on "reviewed". C3 — this record. Render: one `node scripts/shots.mjs --build`, 74/74 PNGs into `.shots/`, no failed
+target, no escaped host (2026-09-05 03:24–03:29). Proof: `verify` lint clean, 1301/0 (C1) and 1302/0 (C2, C3) before each commit;
+each pushed with the bare `git push origin mainexpo`.
+
+**UNRENDERED — 24 screens, reasons in GATES box 2.** By construction (no worker, offer, conversation, assigned job or payment row
+is ever invented): 18 — another person's profile, the report dialog, chat, bid sent, the client's job detail, compare bids, bid
+detail, counteroffer, checkout, job confirmed, worker job, work checklist, route & arrival, track worker, approve or dispute,
+review & tip, the map and its cell list (tile hosts). By code at this HEAD: 6 — Verify phone (`lib/phoneAuth/mode.ts` resolves
+`disabled` outside development), the legal gate (needs a third stub flag), Profile reviews (link gated on a revealed total),
+Payouts (Earnings shows it in stripe mode only; the export is sandbox), and worker job detail + Submit Bid — D8 said ATTEMPT, but
+`hooks/useJobDetail.ts` re-reads the job by id on focus with no open-status filter, the seeded-jobs branch answers only the feed
+read, and the screen flips to "This job is no longer available" after its first paint, so any pass would have photographed the
+wrong screen; not attempted, and answering that read is a stub change beyond D6/D7 (one line, the operator's call).
+
+**Exceptions.** (1) The two ATTEMPT targets above were classified by reading, not by a failed render, for the reason given.
+(2) No pre-existing registry entry changed, so every earlier PNG is byte-identical in content; the files were rewritten by the
+full run. (3) The registry count fence moved 62 → 74, an expected-constant update, no logic weakened. **NEEDS THE OPERATOR.** The
+review of the 74 renders under `.shots/` (the run reads no image and makes no appearance judgement); Gate 2 box 2 ticks on that
+review. Next: n5 (Welcome/Setup copy and the take-home line) re-renders `auth-*` after its edits.
+
 ## RUN n1-nearby-schema COMPLETED (2026-09-04) - nearby alerts default on; Gate 2 box 1 ticked
 
 Dispatch `C:\Users\mdmah\runs\night1\n1-nearby-schema.txt`; base `b4f4d3d` (an ancestor), HEAD `5a95430`, branch `mainexpo`,
