@@ -269,9 +269,12 @@ jobs:
       # drift from the file, and stripe-webhook depends on `verify_jwt = false`
       # being what actually takes effect.
       #
-      # So send-push, translate and worker-search are redeployed on every run
-      # even though their source has not changed. That is intended and harmless
-      # — not a mistake to be "fixed" by narrowing this to changed functions.
+      # So send-push and worker-search are redeployed on every run even though
+      # their source has not changed. That is intended and harmless — not a
+      # mistake to be "fixed" by narrowing this to changed functions. translate
+      # is the one exception, and not by a flag here: supabase/config.toml sets
+      # `[functions.translate] enabled = false` (night1, n8), so the uniform
+      # deploy skips it — drafted, deliberately not deployed (docs/SCOPE.md).
       #
       # verify_jwt IS NEVER PASSED AS A FLAG HERE. supabase/config.toml is its
       # single source, and a flag on this line would silently override a
