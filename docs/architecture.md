@@ -186,7 +186,11 @@ is `open → assigned → in_progress → completed`, and writes go through
 `create_job()`, `update_job_details()` (edits only while `open` with zero bids)
 and `transition_job_status()`. **`transition_job_status()` is the only status
 mover and `accept_offer()` is the only assignment path** — the client never
-sets `status` or `assigned_worker_id`.
+sets `status` or `assigned_worker_id`. `pricing_mode` (`open_bids` |
+`posted_price`, default `open_bids`; migration
+`20260930000400_job_pricing_mode.sql`) records the customer's posting choice:
+a posted-price job carries one `budget_cents` and no range, a worker's request
+at that price is an ordinary offer, and `accept_offer()` never reads the mode.
 
 Everything richer than those four values is *derived* in exactly one place,
 `lib/jobLifecycle.ts`, from four facts: job status, payment state, the phase51
