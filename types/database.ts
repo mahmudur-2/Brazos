@@ -900,6 +900,7 @@ export type Database = {
           location: string | null
           location_text: string | null
           photos: Json
+          pricing_mode: string
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
@@ -936,6 +937,7 @@ export type Database = {
           location?: string | null
           location_text?: string | null
           photos?: Json
+          pricing_mode?: string
           property_id?: string | null
           scheduled_date?: string | null
           scheduled_for?: string | null
@@ -972,6 +974,7 @@ export type Database = {
           location?: string | null
           location_text?: string | null
           photos?: Json
+          pricing_mode?: string
           property_id?: string | null
           scheduled_date?: string | null
           scheduled_for?: string | null
@@ -2687,6 +2690,7 @@ export type Database = {
           location: string | null
           location_text: string | null
           photos: Json
+          pricing_mode: string
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
@@ -2774,6 +2778,7 @@ export type Database = {
           p_lng?: number
           p_location: string
           p_photos?: Json
+          p_pricing_mode?: string
           p_scheduled_date?: string
           p_title: string
           p_videos?: Json
@@ -2806,6 +2811,7 @@ export type Database = {
           location: string | null
           location_text: string | null
           photos: Json
+          pricing_mode: string
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
@@ -3183,6 +3189,7 @@ export type Database = {
           location: string | null
           location_text: string | null
           photos: Json
+          pricing_mode: string
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
@@ -3854,6 +3861,7 @@ export type Database = {
           location: string | null
           location_text: string | null
           photos: Json
+          pricing_mode: string
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null
@@ -3886,6 +3894,7 @@ export type Database = {
           p_lng?: number
           p_location: string
           p_photos?: Json
+          p_pricing_mode?: string
           p_scheduled_date?: string
           p_title: string
           p_videos?: Json
@@ -3918,6 +3927,7 @@ export type Database = {
           location: string | null
           location_text: string | null
           photos: Json
+          pricing_mode: string
           property_id: string | null
           scheduled_date: string | null
           scheduled_for: string | null

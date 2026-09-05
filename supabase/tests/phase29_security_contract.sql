@@ -47,9 +47,10 @@ select ok(not has_table_privilege('authenticated', 'public.job_locations', 'DELE
 -- the hardened RPCs stay reachable from the app, under their live signatures
 select ok(has_function_privilege('authenticated', 'public.get_my_profile()', 'EXECUTE'), 'authenticated may execute get_my_profile()');
 select ok(has_function_privilege('authenticated', 'public.update_my_profile(jsonb)', 'EXECUTE'), 'authenticated may execute update_my_profile(jsonb)');
+-- a3 (2026-09-05): create_job gained p_pricing_mode as its sixteenth, last parameter; the fifteen-parameter identity no longer exists.
 select ok(has_function_privilege('authenticated',
-  'public.create_job(text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text)', 'EXECUTE'),
-  'authenticated may execute create_job under its fifteen-parameter signature');
+  'public.create_job(text, text, public.job_category, text, integer, jsonb, double precision, double precision, jsonb, integer, integer, date, smallint, smallint, text, text)', 'EXECUTE'),
+  'authenticated may execute create_job under its sixteen-parameter signature (a3, 2026-09-05: p_pricing_mode)');
 select ok(has_function_privilege('authenticated', 'public.create_bid(uuid, integer, text)', 'EXECUTE'), 'authenticated may execute create_bid(uuid, integer, text) (deprecated shim, signature unchanged)');
 select ok(has_function_privilege('authenticated', 'public.accept_bid(uuid, uuid)', 'EXECUTE'), 'authenticated may execute accept_bid(uuid, uuid) (deprecated shim, signature unchanged)');
 select ok(has_function_privilege('authenticated', 'public.transition_job_status(uuid, text, jsonb, jsonb)', 'EXECUTE'), 'authenticated may execute transition_job_status under its four-parameter signature');
