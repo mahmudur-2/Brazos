@@ -97,6 +97,34 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN n1-nearby-schema COMPLETED (2026-09-04) - nearby alerts default on; Gate 2 box 1 ticked
+
+Dispatch `C:\Users\mdmah\runs\night1\n1-nearby-schema.txt`; base `b4f4d3d` (an ancestor), HEAD `5a95430`, branch `mainexpo`,
+tree clean, HEAD equal to origin/mainexpo (FRESH; executed 2026-09-05 after n3, n6 and n7 — the planner's 2026-09-04 date
+stands on the decisions, the tick and this heading). Report `.shots/night1/reports/n1-nearby-schema.md`. No app file changed
+(`lib/notificationPrefs.ts` is n2's); only the local stack was contacted; no dependency added; the guard directory,
+`.gitignore` and the production project untouched.
+
+**Commits.** C1 `1565f7e` — `supabase/migrations/20260930000300_nearby_alerts_default.sql`: `alter column nearby_jobs set
+default true`, the decided backfill (`update … set nearby_jobs = true, updated_at = now() where nearby_jobs = false`) and the
+column comment — nothing else, no destructive shape (`staging-scan.sh` ok) — plus `supabase/tests/100_nearby_alerts_default.sql`
+(plan 3: both column defaults by `col_default_is`, and a fresh account's prefs row reading true through the real
+`profiles_default_notification_prefs` trigger path); pushed `5a95430..1565f7e`, which started the staging pipeline (verify →
+scan → migrate → deploy). C2 `a7aa879` — `docs/DECISIONS.md` 2026-09-04 — night1 (n1), five entries (nearby default ON; one
+theme; `accepting_work` already ON since the baseline; the audit waiver; D-4's take-home line built in n5 from
+`quote_job_price()`); `docs/GATES.md` Gate 2 box 1 TICKED on entry (2) (boxes 2 and 3 untouched — n2's); `docs/SCOPE.md`
+dark-theme bullet's pointer; `docs/BACKLOG.md` §v1.2 nine parked bullets plus the "after n7" marker. C3 — this record.
+Proof: `db:reset` clean; `db:test` `Files=15, Tests=1567` `Result: PASS`; `db:types` unchanged; `verify` lint clean,
+1300/0 before each commit; each pushed with the bare `git push origin mainexpo`.
+
+**Exceptions.** (1) D5 applied: the planner's version 20260930000000 was superseded because n3 (…000100) and n6 (…000200)
+landed first; the file, DECISIONS entry (1) and the C1 subject name 20260930000300. (2) D10's §v1 bugs item was NOT added:
+`docs/BACKLOG.md` line 15 already carries it, added and marked FIXED by n3 (`88ba77e`); a second copy ending "fix scheduled:
+n3" would describe a closed bug as open. (3) The backfill is unprovable on a fresh local stack (every prefs row postdates the
+migration); its proof is the statement's shape and staging's list-after step — no pre-migration row was faked. (4) db:test
+files are 15, not the prompt's 13 (110 and 120 landed after the prompt was written). **NEEDS THE OPERATOR.** None. Next: n2
+mirrors the default in `lib/notificationPrefs.ts` and closes Gate 2 box 3.
+
 ## RUN n7-reputation-client COMPLETED (2026-09-04) - every list reads the revealed per-role summary; rating_avg / rating_count read nowhere
 
 Dispatch `C:\Users\mdmah\runs\night1\n7-reputation-client.txt`; base `b4f4d3d` (an ancestor), HEAD `44040af`, branch `mainexpo`, tree clean,
