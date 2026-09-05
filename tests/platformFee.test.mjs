@@ -43,12 +43,22 @@ test('quoteJobPrice validates every figure the screens show, and never invents o
   // Executed: lib/payments.ts with the supabase client stubbed to a canned
   // rpc(), the tests/fundingPath arrangement.
   const js = stripTypeScriptTypes(await read('lib/payments.ts'), { mode: 'strip' });
+  // n5 (2026-09-04): lib/payments.ts imports formatBudget for the take-home
+  // line; the REAL one is inlined (the tests/conversion pattern, function
+  // replacer because the source carries `$$`) so the module stays loadable.
+  const jobsJs = stripTypeScriptTypes(await read('lib/jobs.ts'), { mode: 'strip' });
+  const fbStart = jobsJs.indexOf('export function formatBudget');
+  const fbEnd = jobsJs.indexOf('\n}', fbStart);
+  assert.ok(fbStart > 0 && fbEnd > fbStart, 'formatBudget must exist in lib/jobs.ts');
+  const formatBudgetSource = jobsJs.slice(fbStart, fbEnd + 2);
   const load = async (rpc) => {
     const stubbed = js
       .replace(/import \{ supabase \} from '\.\/supabase';/, `const supabase = { rpc: ${rpc} };`)
-      .replace(/from '\.\/paymentRules';/, `from '${rulesUrl}';`);
+      .replace(/from '\.\/paymentRules';/, `from '${rulesUrl}';`)
+      .replace(/import \{ formatBudget \} from '\.\/jobs';/, () => formatBudgetSource);
     assert.notEqual(stubbed, js, 'the supabase import must be found and stubbed');
     assert.match(stubbed, /paymentRules\.ts';/, 'the pure re-export must be re-pointed to an absolute URL');
+    assert.ok(!stubbed.includes("'./jobs'"), 'the jobs import must be inlined');
     return import(toDataUrl(stubbed));
   };
   const row = {

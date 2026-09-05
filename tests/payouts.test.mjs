@@ -42,17 +42,26 @@ globalThis.__payouts_supabase = {
 
 let js = stripTypeScriptTypes(read('lib/payments.ts'), { mode: 'strip' });
 const rulesUrl = pathToFileURL(join(root, 'lib/paymentRules.ts')).href;
+// n5 (2026-09-04): lib/payments.ts imports formatBudget for the take-home
+// line; the REAL one is inlined (the tests/conversion pattern) so the module
+// stays loadable. Function replacers: the inlined source carries `$$`.
+const jobsJs = stripTypeScriptTypes(read('lib/jobs.ts'), { mode: 'strip' });
+const fbStart = jobsJs.indexOf('export function formatBudget');
+const fbEnd = jobsJs.indexOf('\n}', fbStart);
+assert.ok(fbStart > 0 && fbEnd > fbStart, 'formatBudget must exist in lib/jobs.ts');
+const formatBudgetSource = jobsJs.slice(fbStart, fbEnd + 2);
 const replacements = [
   ["import { supabase } from './supabase';", 'const supabase = globalThis.__payouts_supabase;'],
   ["from './paymentRules';", `from '${rulesUrl}';`],
+  ["import { formatBudget } from './jobs';", formatBudgetSource],
 ];
 for (const [from, to] of replacements) {
   assert.ok(js.includes(from), `expected the import: ${from}`);
-  js = js.replace(from, to);
+  js = js.replace(from, () => to);
 }
 assert.ok(
-  !js.includes("'./supabase'") && !js.includes("'./paymentRules'"),
-  'every runtime import must be stubbed or made absolute before the module loads'
+  !js.includes("'./supabase'") && !js.includes("'./paymentRules'") && !js.includes("'./jobs'"),
+  'every runtime import must be stubbed, inlined or made absolute before the module loads'
 );
 
 const {

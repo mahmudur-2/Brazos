@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
+import { stripTypeScriptTypes } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
 /**
@@ -134,4 +135,95 @@ test('SubmitBid and BidSent are registered wherever JobDetail is mounted', async
   for (const route of ['CompareBids', 'BidDetail', 'Counteroffer', 'Checkout', 'JobConfirmed']) {
     assert.match(myJobs, new RegExp(`name="${route}"`), `MyJobs registers ${route}`);
   }
+});
+
+// ---------------------------------------------------------------------------
+// n5 (2026-09-04) — the take-home line: what the worker receives for the
+// amount typed, from quote_job_price() and nothing else.
+// ---------------------------------------------------------------------------
+
+const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+const toDataUrl = (js) =>
+  'data:text/javascript;charset=utf-8;base64,' + Buffer.from(js, 'utf8').toString('base64');
+
+/**
+ * lib/payments.ts executed for real: the supabase client stubbed to refuse
+ * every call, paymentRules made absolute, and lib/jobs.ts's REAL formatBudget
+ * inlined (the tests/conversion pattern) so the money string asserted is the
+ * one users see. Function replacers throughout: the inlined source carries
+ * `$$`, which a string replacement would rewrite.
+ */
+async function loadPayments() {
+  const jobsJs = stripTypeScriptTypes(await read('lib/jobs.ts'), { mode: 'strip' });
+  const start = jobsJs.indexOf('export function formatBudget');
+  const end = jobsJs.indexOf('\n}', start);
+  assert.ok(start > 0 && end > start, 'formatBudget must exist in lib/jobs.ts');
+  const formatBudgetSource = jobsJs.slice(start, end + 2);
+
+  let js = stripTypeScriptTypes(await read('lib/payments.ts'), { mode: 'strip' });
+  const rulesUrl = pathToFileURL(join(root, 'lib/paymentRules.ts')).href;
+  for (const [from, to] of [
+    [
+      "import { supabase } from './supabase';",
+      "const supabase = { rpc() { throw new Error('no RPC in this test'); }, from() { throw new Error('no reads in this test'); } };",
+    ],
+    ["from './paymentRules';", `from '${rulesUrl}';`],
+    ["import { formatBudget } from './jobs';", formatBudgetSource],
+  ]) {
+    assert.ok(js.includes(from), `expected the import: ${from}`);
+    js = js.replace(from, () => to);
+  }
+  assert.ok(!/from '\.\//.test(js), 'every runtime import is stubbed, inlined or absolute');
+  return import(toDataUrl(js));
+}
+
+test('n5 · workerTakeLine renders the quoted take as returned, and null for anything unknown', async () => {
+  const { workerTakeLine } = await loadPayments();
+  const quote = {
+    job_price_cents: 5000,
+    customer_fee_cents: 375,
+    tax_cents: 0,
+    total_cents: 5375,
+    worker_fee_cents: 375,
+    worker_receives_cents: 4625,
+  };
+  assert.equal(workerTakeLine(quote), 'You receive $46.25 after the fee');
+  // formatBudget's own tiers: whole dollars bare, cents to two places.
+  assert.equal(workerTakeLine({ worker_receives_cents: 5000 }), 'You receive $50 after the fee');
+  assert.equal(workerTakeLine({ worker_receives_cents: 0 }), 'You receive $0 after the fee');
+  // Unknown is null, never a number.
+  assert.equal(workerTakeLine(null), null);
+  assert.equal(workerTakeLine(undefined), null);
+  assert.equal(workerTakeLine({ worker_receives_cents: -1 }), null);
+  assert.equal(workerTakeLine({ worker_receives_cents: 46.25 }), null, 'cents are integers');
+  assert.equal(workerTakeLine({ worker_receives_cents: Number.NaN }), null);
+});
+
+test('n5 · the composer reads the quote through the one wrapper and does no fee arithmetic of its own', async () => {
+  const composer = stripComments(await read('components/OfferComposer.tsx'));
+  assert.match(
+    composer,
+    /import \{ quoteJobPrice, workerTakeLine, type JobPriceQuote \} from '\.\.\/lib\/payments';/
+  );
+  assert.match(composer, /quoteJobPrice\(quoteCents\)/);
+  assert.match(composer, /workerTakeLine\(takeQuote\.quote\)/);
+  // Debounced, cancelled on change and unmount; the answer is kept with the
+  // amount it was asked for and rendered only while that amount stands.
+  assert.match(composer, /const TAKE_LINE_DEBOUNCE_MS = 400;/);
+  assert.match(composer, /setTimeout\(\(\) => \{\s*\n\s*quoteJobPrice\(quoteCents\)/);
+  assert.match(composer, /clearTimeout\(timer\);/);
+  assert.match(composer, /takeQuote\.cents === quoteCents/);
+  // Bid context only — a customer's counter is not a worker's take — and the
+  // line is a <Text> directly under the amount field.
+  assert.match(composer, /<\/OfferAmountField>|editable=\{!submitting\}\s*\n\s*\/>\s*\n\s*\{isBid && takeLine \? \(\s*\n\s*<Text/);
+  // No numeric literal between 0 and 1 multiplying an amount, no rate, no
+  // percentage, and the figure is never operated on: the platformFee fence
+  // covers the constant, this covers the composer.
+  assert.doesNotMatch(composer, /\*\s*0?\.\d+\b|\b0?\.\d+\s*\*/, 'no fractional multiplier');
+  assert.doesNotMatch(composer, /_bps|PLATFORM_FEE|\d+(\.\d+)?\s*%/, 'no rate or percentage');
+  assert.doesNotMatch(
+    composer,
+    /worker_receives_cents\s*[-+*/]|[-+*/]\s*[\w.]*worker_receives_cents/,
+    'the figure is shown as returned'
+  );
 });

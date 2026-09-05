@@ -139,8 +139,9 @@ test('the registry photographs where a category chip lands, in both schemes', ()
     assert.ok(names.includes(existing), `${existing} disappeared from the registry`);
   }
   // 60 through RUN SHOTS1, plus the two RUN JOBS1 populated-Home targets,
-  // plus RUN n2's twelve signed-out and not-yet-set-up targets.
-  assert.equal(names.length, 74, `registry is ${names.length} targets, expected 74`);
+  // plus RUN n2's twelve signed-out and not-yet-set-up targets, plus RUN n5's
+  // two Submit Bid targets.
+  assert.equal(names.length, 76, `registry is ${names.length} targets, expected 76`);
 });
 
 test('that target is reached by tapping a chip, never by naming the route', async () => {
@@ -297,11 +298,12 @@ test('the populated Home targets exist, and are the only ones seeded with jobs',
   // exactly, so a `jobs: true` that drifts onto any other entry fails offline
   // rather than changing a PNG minutes into a capture run. The promise the
   // count made is kept because no PRE-EXISTING entry changed: the list still
-  // names the one RUN JOBS1 entry and nothing else — n2 registered no further
-  // opted-in target (its two candidates, the worker's job detail and Submit
-  // Bid, are UNRENDERED at this HEAD; docs/GATES.md Gate 2 box 2 says why).
-  // Comments are stripped first, so the prose explaining the flag cannot be
-  // what satisfies this.
+  // names the one RUN JOBS1 entry and, since RUN n5, the Submit Bid entry —
+  // n2 registered no further opted-in target (its two candidates, the
+  // worker's job detail and Submit Bid, were UNRENDERED at its HEAD because
+  // the by-id read went unanswered); n5 answered that read from the same
+  // rows and registered Submit Bid. Comments are stripped first, so the
+  // prose explaining the flag cannot be what satisfies this.
   const code = codeOnly(harness);
   const optedIn = [...code.matchAll(/jobs:\s*true/g)].map((match) => {
     const nameAt = code.lastIndexOf('name:', match.index);
@@ -313,7 +315,7 @@ test('the populated Home targets exist, and are the only ones seeded with jobs',
   });
   assert.deepEqual(
     optedIn.sort(),
-    ['`customer-home-jobs-${colorScheme}`'],
+    ['`customer-home-jobs-${colorScheme}`', '`worker-submit-bid-${colorScheme}`'],
     '`jobs: true` appears on an entry outside the allow-list'
   );
 
@@ -387,4 +389,47 @@ test('the auth and setup targets are listed, both schemes, and reach their trees
   assert.match(codeOnly(signIn), /title="Use Email Instead"/);
   assert.match(codeOnly(createAccount), /title="Use Email Instead"/);
   assert.match(codeOnly(setup), />FINAL SETUP</);
+});
+
+// RUN n5 — SUBMIT BID, THE COMPOSER'S HOST, AND THE ONE-ROW READ THAT KEEPS
+// THE WORKER'S JOB DETAIL ON THE JOB IT PAINTED.
+test('the Submit Bid targets are listed, both schemes, reach the composer through a visible card, and the by-id read is answered from the seeded rows', async () => {
+  const names = registry();
+  for (const scheme of ['dark', 'light']) {
+    assert.ok(names.includes(`worker-submit-bid-${scheme}`), `no worker-submit-bid-${scheme} target`);
+  }
+
+  const code = codeOnly(await read('scripts/shots.mjs'));
+  const start = code.indexOf('name: `worker-submit-bid-${colorScheme}`');
+  assert.ok(start > -1, 'the Submit Bid target is gone from the registry');
+  const waitAt = code.indexOf('wait:', start);
+  assert.ok(waitAt > start, 'the Submit Bid target has no wait');
+  const entry = code.slice(start, code.indexOf('\n', waitAt));
+  assert.match(entry, /mode: 'worker',/);
+  assert.match(entry, /jobs: true,/);
+  // The card is tapped on Worker Home, where it is visible — never after
+  // "View all open jobs", where the same title also sits on the hidden Home
+  // screen first in the DOM.
+  assert.match(entry, /\{ press: SEEDED_JOBS\[0\]\.title \}/);
+  assert.doesNotMatch(entry, /View all open jobs/);
+  assert.match(entry, /\{ press: 'Write a bid' \}/);
+  assert.match(entry, /wait: 'When can you start',/);
+
+  // Every locator is a string the app renders.
+  const [card, detail, composer] = await Promise.all([
+    read('components/WorkerJobCard.tsx'),
+    read('screens/JobDetailScreen.tsx'),
+    read('components/OfferComposer.tsx'),
+  ]);
+  assert.match(codeOnly(card), /accessibilityLabel=\{job\.title\}/);
+  assert.match(codeOnly(detail), /title="Write a bid"/);
+  assert.match(codeOnly(composer), />When can you start</);
+
+  // The one-row read: flag-guarded, answered from the same rows, and only for
+  // an id among them — anything else falls through to the empty answer.
+  assert.match(
+    code,
+    /if \(jobs && pathname\.endsWith\('\/rest\/v1\/jobs'\) && \(query\.get\('id'\) \?\? ''\)\.startsWith\('eq\.'\)\)/
+  );
+  assert.match(code, /seededJobRows\(\)\.find\(\(seed\) => seed\.id === wanted\)/);
 });

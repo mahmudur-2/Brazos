@@ -34,7 +34,11 @@ import {
   isCounterLimitError,
   type Offer,
 } from '../lib/offers';
+import { quoteJobPrice, workerTakeLine, type JobPriceQuote } from '../lib/payments';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+
+/** How long after the last keystroke the take-home quote is asked for. */
+const TAKE_LINE_DEBOUNCE_MS = 400;
 
 /**
  * The one offer-terms form (BRAZOS_MASTER_PLAN.md §E: "OfferComposer — one
@@ -196,6 +200,34 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
           ? { kind: 'day', label: pickedDay.label }
           : null;
 
+  // n5 (2026-09-04) — the take-home line. What the worker receives for the
+  // amount typed, read from quote_job_price() through the one wrapper and
+  // shown AS RETURNED: no rate and no arithmetic live here (R6a D10). Asked
+  // 400 ms after the last keystroke that left a valid amount, for a bid only
+  // (a customer's counter is not a worker's take). The answer is kept with
+  // the amount it was asked for and rendered only while that amount is still
+  // in the field, so a slow earlier quote can never label a later figure.
+  // Pending, invalid and failed all render nothing — null is unknown, never
+  // a number.
+  const { amountCents: quoteCents } = validateOfferAmount(amount);
+  const [takeQuote, setTakeQuote] = useState<{ cents: number; quote: JobPriceQuote } | null>(null);
+  useEffect(() => {
+    if (!isBid || quoteCents == null) return;
+    let active = true;
+    const timer = setTimeout(() => {
+      quoteJobPrice(quoteCents).then(({ data }) => {
+        if (!active || !data) return;
+        setTakeQuote({ cents: quoteCents, quote: data });
+      });
+    }, TAKE_LINE_DEBOUNCE_MS);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [isBid, quoteCents]);
+  const takeLine =
+    takeQuote && takeQuote.cents === quoteCents ? workerTakeLine(takeQuote.quote) : null;
+
   async function handleSubmit() {
     if (submittingRef.current) return;
 
@@ -319,6 +351,10 @@ export function OfferComposer({ context, onSubmitted, palette: paletteProp }: Of
         label={isBid ? 'Your bid (USD)' : 'Your counter-offer (USD)'}
         editable={!submitting}
       />
+
+      {isBid && takeLine ? (
+        <Text style={styles.chipReason}>{takeLine}</Text>
+      ) : null}
 
       {isBid ? (
         <TextField

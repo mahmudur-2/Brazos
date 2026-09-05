@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { formatBudget } from './jobs';
 
 /**
  * The money ledger's client types and reads (BRAZOS_MASTER_PLAN.md §G/§H.3).
@@ -112,6 +113,22 @@ export type Payment = {
  */
 export function workerTakeCents(row: Pick<Payment, 'amount_cents' | 'platform_fee_cents'>): number {
   return row.amount_cents - row.platform_fee_cents;
+}
+
+/**
+ * n5 (2026-09-04): the bid composer's take-home line, from a quote_job_price()
+ * row and nothing else. `worker_receives_cents` is shown AS RETURNED — no
+ * rate, no subtraction, no client arithmetic (R6a D10 stands). A missing
+ * quote, or a figure that is not a non-negative integer, is null: unknown is
+ * never rendered as a number. formatBudget is the one money formatter.
+ */
+export function workerTakeLine(
+  quote: Pick<JobPriceQuote, 'worker_receives_cents'> | null | undefined
+): string | null {
+  if (!quote) return null;
+  const cents = quote.worker_receives_cents;
+  if (!Number.isInteger(cents) || cents < 0) return null;
+  return `You receive ${formatBudget(cents)} after the fee`;
 }
 
 /**

@@ -813,6 +813,41 @@ const TARGETS = [
       wait: 'FINAL SETUP',
     },
   ]),
+
+  // =========================================================================
+  // RUN n5 — Submit Bid, the OfferComposer's host, and the second target that
+  // opts in to the seeded job rows. Reached the way a worker reaches it: the
+  // first seeded card on Worker Home (its accessibility label is the job
+  // title) opens the worker's job detail, and "Write a bid" opens the
+  // composer. NOT through "View all open jobs": with the rows seeded, the same
+  // title also sits on Worker Home, which stays in the DOM, hidden and FIRST,
+  // once the results screen is pushed over it — the hazard the worker-results
+  // entry records — so the card is tapped where it is visible.
+  //
+  // The worker's job detail re-reads its job by id on focus; stubResponse
+  // answers that read from the same four rows (THE ONE-ROW READ), which is
+  // what keeps the screen on the job it painted long enough to be tapped.
+  //
+  // The take-home line ("You receive … after the fee") is ABSENT here by
+  // design: quote_job_price gets the empty answer every other RPC gets, and
+  // null renders nothing. Its copy is proven by tests/offerComposer.test.mjs;
+  // this render proves the host still renders.
+  // =========================================================================
+  ...['dark', 'light'].flatMap((colorScheme) => [
+    {
+      name: `worker-submit-bid-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      jobs: true,
+      recipe: [
+        { expect: 'Get hired.' },
+        { press: SEEDED_JOBS[0].title },
+        { press: 'Write a bid' },
+      ],
+      // A chip-group label only the bid composer draws.
+      wait: 'When can you start',
+    },
+  ]),
 ];
 
 const MIME = {
@@ -976,8 +1011,8 @@ function legalVersions() {
  * Everything the app asks the network for, answered locally.
  *
  * `jobs` is the target's opt-in, threaded down from the registry entry: false
- * for every target but the two RUN JOBS1 ones, and the branches it guards are
- * unreachable without it.
+ * for every target but the two RUN JOBS1 ones and the two RUN n5 ones, and the
+ * branches it guards are unreachable without it.
  */
 function stubResponse({ pathname, query, headers, postData, jobs }) {
   const single = String(headers.accept ?? '').includes('vnd.pgrst.object');
@@ -1049,6 +1084,21 @@ function stubResponse({ pathname, query, headers, postData, jobs }) {
       videos: sent.p_videos ?? [],
     };
     return { status: 200, body: single ? row : [row] };
+  }
+
+  // THE ONE-ROW READ, for a target that opted in. The worker's job detail
+  // re-reads its job by id on focus (hooks/useJobDetail.ts → fetchOpenJobById:
+  // `id=eq.<id>`, no status filter); answered from the SAME four rows and
+  // nothing else, so a row the feed served cannot flip the screen to "This
+  // job is no longer available" after its first paint. An id outside the
+  // four falls through to the empty answer at the bottom. RUN n5.
+  if (jobs && pathname.endsWith('/rest/v1/jobs') && (query.get('id') ?? '').startsWith('eq.')) {
+    const wanted = query.get('id').slice('eq.'.length);
+    const row = seededJobRows().find((seed) => seed.id === wanted);
+    if (row) {
+      const projected = projectColumns(row, query.get('select'));
+      return { status: 200, body: single ? projected : [projected] };
+    }
   }
 
   // THE OPEN-JOBS FEED, for a target that opted in. Gated on the predicate
