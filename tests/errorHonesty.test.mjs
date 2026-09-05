@@ -214,6 +214,14 @@ const legalGateModule = (async () => {
     // that resolves to null off-device) and null here, so the capture beside
     // the console.error is a no-op.
     ["import { Sentry } from '../lib/observability/sentry';", 'const Sentry = null;'],
+    // m1: the render-time derivation (lib/gateAnswer.ts) is pure and real
+    // here — it loads by absolute file URL because a data: module cannot
+    // resolve a relative specifier. Not a stub: the fail-closed rule below is
+    // proven through the same derivation the app uses.
+    [
+      "import { deriveGateAnswer } from '../lib/gateAnswer';",
+      `import { deriveGateAnswer } from '${pathToFileURL(join(root, 'lib/gateAnswer.ts')).href}';`,
+    ],
   ];
   for (const [from, to] of replacements) {
     assert.ok(js.includes(from), `expected the runtime import: ${from}`);

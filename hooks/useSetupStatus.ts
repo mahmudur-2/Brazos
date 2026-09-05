@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
+import { deriveGateAnswer } from '../lib/gateAnswer';
+import type { GateAnswer } from '../lib/gateAnswer';
 import { readSetupRecord } from '../lib/setupStorage';
 import { DEFAULT_LANDING, type LandingPreference } from '../lib/setupState';
 import { useAuth } from './useAuth';
 
 type SetupState = 'loading' | 'complete' | 'incomplete';
+
+/** Signed out there is nothing to gate, so setup counts as complete. */
+const SIGNED_OUT: SetupState = 'complete';
 
 /**
  * Whether this user still owes the final setup step.
@@ -21,8 +26,18 @@ export function useSetupStatus() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
 
-  const [state, setState] = useState<SetupState>('loading');
+  // The stored answer, tagged with the user it was read or marked for.
+  const [answer, setAnswer] = useState<GateAnswer<SetupState>>({
+    forUser: null,
+    value: SIGNED_OUT,
+  });
   const [landing, setLanding] = useState<LandingPreference>(DEFAULT_LANDING);
+
+  /** Stores `value` as the current user's answer (tagged signed-out when there is none). */
+  const setState = useCallback(
+    (value: SetupState) => setAnswer({ forUser: userId, value }),
+    [userId]
+  );
 
   useEffect(() => {
     if (!userId) {
@@ -47,11 +62,21 @@ export function useSetupStatus() {
     };
   }, [userId]);
 
+  // m1 (2026-09-05): derived for the CURRENT user in the same render the user
+  // appears. The effect above used to flip to 'loading' one render late, and
+  // for that render this hook still said 'complete' from its signed-out
+  // branch — long enough for MainTabs to mount and resolve the mode before
+  // Setup could park its "Start in" choice. See lib/gateAnswer.ts.
+  const state = deriveGateAnswer(userId, answer, SIGNED_OUT);
+
   /** Called by the setup screen once completion has actually been written. */
-  const markComplete = useCallback((next: LandingPreference) => {
-    setLanding(next);
-    setState('complete');
-  }, []);
+  const markComplete = useCallback(
+    (next: LandingPreference) => {
+      setLanding(next);
+      setState('complete');
+    },
+    [setState]
+  );
 
   return { state, landing, markComplete };
 }
