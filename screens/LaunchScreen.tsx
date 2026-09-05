@@ -39,18 +39,19 @@ const LAUNCH_MARK_RADIUS_RATIO = 0.187;
  *   150    wave lines wash in underneath and stay low-contrast
  *   320    gold BRAZOS wordmark rises into place
  *   550    "Any Task, Handled." arrives
- *   1120   earliest the layer may begin handing over
- *   1500   crossfade complete, layer unmounted
+ *   …      the crossfade (EXIT_MS) starts the moment the session resolves
  *
- * MIN_VISIBLE is a floor, not a wait: session hydration runs in parallel (see
- * components/LaunchGate.tsx) and the exit starts at whichever comes later —
- * the floor, or the session resolving.
+ * There is no visibility floor (n5, 2026-09-04): the layer lasts exactly as
+ * long as session restore. Session hydration runs in parallel — the host is
+ * App.tsx, which renders this layer with `sessionReady={!loading}` — and the
+ * exit starts when `sessionReady` turns true, whether that lands before or
+ * after the entrance above has finished playing. The entrance animations are
+ * untouched; the crossfade simply may cut them short.
  */
 const LOGO_DELAY = 120;
 const WAVES_DELAY = 150;
 const WORDMARK_DELAY = 320;
 const TAGLINE_DELAY = 550;
-const MIN_VISIBLE = 1120;
 const EXIT_MS = 380;
 
 // The layer covers the entire app, so it must never be able to outlive its own
@@ -61,10 +62,9 @@ const EXIT_MS = 380;
 // release it.
 const EXIT_GRACE_MS = 400;
 
-// Reduced motion: same routing, same structure, no transforms and a shorter
-// floor — there is nothing to watch, so there is nothing to wait for.
+// Reduced motion: same routing, same structure, no transforms and shorter
+// fades — there is nothing to watch, so nothing lingers.
 const REDUCED_FADE_MS = 220;
-const REDUCED_MIN_VISIBLE = 700;
 const REDUCED_EXIT_MS = 240;
 
 type LaunchScreenProps = {
@@ -90,7 +90,6 @@ export function LaunchScreen({ sessionReady, onFinish }: LaunchScreenProps) {
   const waves = useRef(new Animated.Value(0)).current;
   const exit = useRef(new Animated.Value(1)).current;
 
-  const [floorReached, setFloorReached] = useState(false);
   const [exiting, setExiting] = useState(false);
   const exitStarted = useRef(false);
 
@@ -128,19 +127,15 @@ export function LaunchScreen({ sessionReady, onFinish }: LaunchScreenProps) {
         ]);
 
     animation.start();
-    const timer = setTimeout(
-      () => setFloorReached(true),
-      reducedMotion ? REDUCED_MIN_VISIBLE : MIN_VISIBLE
-    );
 
     return () => {
       animation.stop();
-      clearTimeout(timer);
     };
   }, [reducedMotion, logo, wordmark, tagline, waves]);
 
   useEffect(() => {
-    if (!floorReached || !sessionReady || exitStarted.current) return;
+    // The exit starts when the session has resolved; nothing else is waited on.
+    if (!sessionReady || exitStarted.current) return;
     exitStarted.current = true;
     setExiting(true);
 
@@ -163,7 +158,7 @@ export function LaunchScreen({ sessionReady, onFinish }: LaunchScreenProps) {
 
     const failsafe = setTimeout(release, duration + EXIT_GRACE_MS);
     return () => clearTimeout(failsafe);
-  }, [floorReached, sessionReady, still, exit, onFinish]);
+  }, [sessionReady, still, exit, onFinish]);
 
   const logoStyle = {
     opacity: logo,

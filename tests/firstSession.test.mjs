@@ -59,3 +59,27 @@ test('n5 · Welcome leads with Continue with email; phone stays second; sign-in 
   assert.match(code('screens/AuthFlow.tsx'), /<Stack\.Screen name="EmailCreateAccount"/);
   assert.match(code('lib/navigation.ts'), /EmailCreateAccount: undefined;/);
 });
+
+// ---------------------------------------------------------------------------
+// STEP 3 — the launch overlay lasts exactly as long as session restore. The
+// 1120 ms / 700 ms visibility floor is gone; the exit starts when the host's
+// `sessionReady` turns true. The one timer left is the crossfade failsafe,
+// whose delay is derived, never a literal number of milliseconds.
+// ---------------------------------------------------------------------------
+
+test('n5 · the launch overlay has no visibility floor: the exit starts on sessionReady alone', () => {
+  const launch = code('screens/LaunchScreen.tsx');
+  assert.doesNotMatch(launch, /MIN_VISIBLE|floorReached|setFloorReached/);
+
+  // Exactly one setTimeout, and it is the crossfade failsafe with a derived delay.
+  assert.equal((launch.match(/setTimeout\(/g) ?? []).length, 1, 'one timer: the crossfade failsafe');
+  assert.match(launch, /const failsafe = setTimeout\(release, duration \+ EXIT_GRACE_MS\);/);
+  assert.doesNotMatch(launch, /setTimeout\([^)]*,\s*\d+\s*\)/, 'no timer with a literal-millisecond delay');
+
+  // The exit condition is the session and nothing else.
+  assert.match(launch, /if \(!sessionReady \|\| exitStarted\.current\) return;/);
+  assert.match(launch, /\}, \[sessionReady, still, exit, onFinish\]\);/);
+  // The entrance still plays, and the host still hands over the session flag.
+  assert.match(launch, /fade\(logo, LOGO_DELAY, 400\)/);
+  assert.match(code('App.tsx'), /sessionReady=\{!loading\}/);
+});
