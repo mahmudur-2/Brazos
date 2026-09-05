@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -32,6 +33,7 @@ import { SegmentedControl } from '../components/SegmentedControl';
 import { TextField } from '../components/TextField';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
+import { SUPPORT_EMAIL, supportMailtoUrl } from '../lib/appLinks';
 import { alertAsync, confirmAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
@@ -73,13 +75,35 @@ const LANGUAGE_OPTIONS = [
 // full paragraph that dominates either layout.
 const MAX_BIO_LENGTH = 200;
 
-/** Master 45's five settings rows, in the order it draws them. */
-const HUB_SETTINGS: {
-  route: 'NotificationSettings' | 'Notifications' | 'Earnings' | 'ServicesPricing' | 'SavedWorkers';
+/**
+ * A settings row either opens a route in this stack or opens the support
+ * mailto — discriminated, so the one Pressable that draws them cannot dispatch
+ * the wrong one and cannot read a `route` that is not there.
+ */
+type SettingsRow = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   sub: string;
-}[] = [
+} & (
+  | {
+      route:
+        | 'NotificationSettings'
+        | 'Notifications'
+        | 'Earnings'
+        | 'ServicesPricing'
+        | 'SavedWorkers';
+    }
+  | { mailto: true }
+);
+
+/**
+ * Master 45's five settings rows, in the order it draws them, and a sixth the
+ * master does not draw: Contact support, last (a1, 2026-09-05 —
+ * `docs/DECISIONS.md` 2026-09-05 entry (3)). The five above it gain nothing
+ * and lose nothing; the sixth renders through the same map, the same styles
+ * and the same dials.
+ */
+const HUB_SETTINGS: SettingsRow[] = [
   {
     route: 'NotificationSettings',
     icon: 'notifications-outline',
@@ -110,7 +134,34 @@ const HUB_SETTINGS: {
     label: 'Saved & past workers',
     sub: 'Rehire people you trust.',
   },
+  {
+    mailto: true,
+    icon: 'mail-outline',
+    label: 'Contact support',
+    // The address is never retyped here — lib/appLinks.ts spells it once.
+    sub: `Email ${SUPPORT_EMAIL}`,
+  },
 ];
+
+/**
+ * The support row's action. `Linking.openURL` is the house shape (see
+ * screens/PayoutsScreen.tsx) — expo-web-browser is not installed and this run
+ * adds no dependency.
+ *
+ * `Linking.canOpenURL` is deliberately NOT called: on iOS it needs an
+ * `LSApplicationQueriesSchemes` entry in app.config.ts that this app does not
+ * carry, so it would answer false on a device that can in fact send mail. The
+ * direct call's own rejection is already the answer, and the failure message
+ * names the address — so the contact is published even where no mail app is
+ * configured.
+ */
+async function openSupportMail(): Promise<void> {
+  try {
+    await Linking.openURL(supportMailtoUrl());
+  } catch {
+    await alertAsync('Could not open your mail app', `Write to ${SUPPORT_EMAIL}.`);
+  }
+}
 
 
 export function ProfileScreen() {
@@ -786,7 +837,8 @@ export function ProfileScreen() {
             />
           )}
 
-          {/* Master 45's settings card: five rows and an "Account" chip into
+          {/* Master 45's settings card: six rows now — the master's five plus
+              Contact support (a1) — and an "Account" chip into
               the account & safety page (decision 10). Payment, the two legal
               documents, Appearance, the moderator entry, the dev catalog,
               Log out and Delete all moved there — every route still exists
@@ -807,13 +859,17 @@ export function ProfileScreen() {
 
             {HUB_SETTINGS.map((row, index) => (
               <Pressable
-                key={row.route}
+                key={row.label}
                 style={[
                   styles.settingsRow,
                   { minHeight: settingsRowHeight },
                   index > 0 && styles.settingsRowDivider,
                 ]}
-                onPress={() => navigation.navigate(row.route)}
+                onPress={
+                  'route' in row
+                    ? () => navigation.navigate(row.route)
+                    : () => void openSupportMail()
+                }
                 accessibilityRole="button"
                 accessibilityLabel={row.label}
               >
