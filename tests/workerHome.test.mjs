@@ -604,7 +604,9 @@ test('D5: every notification preference uses the same shared toggle', async () =
   for (const file of sourceFiles) {
     if (/<Switch\b/.test(stripComments(await read(file)))) switchUsers.push(file);
   }
-  assert.deepEqual(switchUsers.sort(), ['screens/SetupScreen.tsx']);
+  // n5 (2026-09-04): SetupScreen's permission rows are gone (permissions are
+  // asked at first need), so the set is EMPTY — still pinned as a set.
+  assert.deepEqual(switchUsers.sort(), []);
   for (const path of [
     'screens/WorkerHomeScreen.tsx',
     'screens/ServicesPricingScreen.tsx',

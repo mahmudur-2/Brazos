@@ -291,9 +291,14 @@ test('the four permission states are distinguished, and blocked is one of them',
   // Denied can be asked again; blocked cannot, and a switch that silently
   // does nothing is the worst outcome of the three.
   assert.match(perms, /return canAskAgain \? 'denied' : 'blocked';/);
-  assert.match(setup, /state === 'blocked'/);
-  assert.match(setup, /Turn this on in device Settings/);
-  assert.match(setup, /Not available on this device/);
+  // n5 (2026-09-04): Setup renders no permission row any more, so the
+  // distinction is pinned on the hook that still draws it — the union names
+  // blocked and unavailable, and a throw becomes 'unavailable', not a crash.
+  assert.match(perms, /\| 'blocked'/);
+  assert.match(perms, /\| 'unavailable';/);
+  assert.match(perms, /setLocation\('unavailable'\)/);
+  assert.match(perms, /setNotifications\('unavailable'\)/);
+  assert.doesNotMatch(setup, /state === 'blocked'|Turn this on in device Settings|Not available on this device/);
 });
 
 test('a permission row is never a dead control', () => {
@@ -307,21 +312,26 @@ test('a permission row is never a dead control', () => {
   assert.match(perms, /return state === 'granted' \|\| state === 'blocked';/);
   assert.match(perms, /Linking\.openSettings\(\)/);
 
-  // Row and switch run the same action, so no combination of taps does nothing.
-  assert.match(setup, /onPress=\{interactive \? act : undefined\}/);
-  assert.match(setup, /onValueChange=\{act\}/);
-  assert.match(setup, /disabled=\{requesting\}/);
-  assert.match(setup, /value=\{granted\}/);
+  // n5 (2026-09-04): the rows left Setup — permissions are asked at first
+  // need — so the row half of this fence is that Setup draws none: no
+  // PermissionSetupRow, no hook, no hand-rolled switch. The hook keeps one
+  // action per row (`act`), which is what a row that returns would wire.
+  assert.match(perms, /act: actOnLocation,/);
+  assert.match(perms, /act: actOnNotifications,/);
+  // Usage forms, not the name in prose: the header comment says where the
+  // hook went, and that sentence must not be what fails this.
+  assert.doesNotMatch(setup, /<PermissionSetupRow|useSetupPermissions\(|hooks\/useSetupPermissions'|<Switch\b/);
 });
 
 test('the row says which of the two things a tap will do', () => {
-  assert.match(setup, /opensSettings\s*\n?\s*\?\s*'Opens your device settings'/);
-  assert.match(setup, /`Asks for \$\{title\.toLowerCase\(\)\} permission`/);
-  // Replaced rather than appended, so the hint cannot push the row onto a
-  // cramped second line.
-  assert.match(setup, /state === 'blocked'\s*\n\s*\? settingsHint/);
-  assert.match(setup, /settingsHint="Enable this in device Settings"/);
-  assert.match(setup, /settingsHint="Turn this on in device Settings"/);
+  // n5 (2026-09-04): the permission rows left Setup, so the "which of the
+  // two" answer is pinned on the hook: `opensSettings` is true exactly when
+  // `act` leaves for Settings rather than prompting, for both permissions.
+  assert.match(perms, /opensSettings: boolean;/);
+  assert.match(perms, /opensSettings: needsSettings\(location\),/);
+  assert.match(perms, /opensSettings: needsSettings\(notifications\),/);
+  // And Setup carries neither the row copy nor an appended hint.
+  assert.doesNotMatch(setup, /settingsHint|Opens your device settings|Asks for \$\{title/);
   assert.doesNotMatch(setup, /\$\{subtitle\} ·/, 'no appended hint');
 });
 
@@ -341,16 +351,29 @@ test('permissions never block finishing setup', () => {
 // The screen itself
 // ---------------------------------------------------------------------------
 
-test('all three rows are present and share one row component', () => {
-  for (const label of ['Location', 'Notifications', 'Terms & Privacy']) {
-    assert.match(setup, new RegExp(`title="${label.replace('&', '&')}"`), `${label} row`);
-  }
-  assert.match(setup, /Required for nearby jobs and workers/);
-  assert.match(setup, /Messages, bids and arrival updates/);
+test('the Terms row is present, uses the shared SetupRow, and no permission row renders on Setup', () => {
+  // n5 (2026-09-04): Location and Notifications left this screen —
+  // permissions are asked at first need (lib/geolocation.ts
+  // resolveCurrentPlace() where coordinates are first needed;
+  // maybePromptForPush after the first post or bid). Terms stays, on the
+  // shared row, exactly as it was.
+  assert.match(setup, /title="Terms & Privacy"/);
+  assert.match(setup, /import \{ SetupRow \} from '\.\.\/components\/SetupRow';/);
+  assert.match(setup, /<SetupRow\b/);
   assert.match(setup, /Review both documents to continue/);
   assert.match(setup, /Terms and Privacy reviewed/);
-  // One component, so the three rows cannot drift apart — and every subtitle
-  // is sized to hold one line, so no row stands taller than its neighbours.
+  for (const gone of [
+    'title="Location"',
+    'title="Notifications"',
+    'Required for nearby jobs and workers',
+    'Messages, bids and arrival updates',
+  ]) {
+    assert.ok(!setup.includes(gone), `${gone} must not render on Setup`);
+  }
+  // Usage forms only — the header comment names the hook file in prose.
+  assert.doesNotMatch(setup, /<PermissionSetupRow|useSetupPermissions\(|hooks\/useSetupPermissions'/);
+  // One row component, sized to hold one line, so a row that returns cannot
+  // drift from the one that stayed.
   assert.match(row, /minHeight: 72/);
   assert.match(row, /minWidth: 46/);
   assert.match(row, /fontSize: 12,\s*\n\s*lineHeight: 16\.5,/);

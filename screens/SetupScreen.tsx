@@ -1,11 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
-  ActivityIndicator,
   Animated,
   Pressable,
   StyleSheet,
-  Switch,
   Text,
   View,
 } from 'react-native';
@@ -17,7 +15,6 @@ import { SetupChoiceCard } from '../components/SetupChoiceCard';
 import { SetupRow } from '../components/SetupRow';
 import { useAuth } from '../hooks/useAuth';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { useSetupPermissions, type PermissionRow } from '../hooks/useSetupPermissions';
 import { authColors, authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
 import type { OnboardingStackNavigation } from '../lib/navigation';
 import { setPendingLanding } from '../lib/setupLanding';
@@ -38,15 +35,20 @@ type SetupScreenProps = {
 /**
  * The final setup step, shown once between authentication and the app.
  *
- * It owns three things and delegates everything else: two OS permissions
- * (read through hooks/useSetupPermissions, never requested on render), the
- * legal review (which is the existing LegalGateScreen, pushed as a route —
- * this screen only reflects its result), and a landing preference.
+ * It owns two things and delegates everything else: the legal review (which
+ * is the existing LegalGateScreen, pushed as a route — this screen only
+ * reflects its result), and a landing preference.
  *
  * That last one is a *preference*, not a role. Choosing "Find work" changes
  * which screen opens next and nothing else — not identity, not authorisation,
  * not what any query may read. The repository's marketplace invariant is that
  * one account both hires and works, and this screen does not bend it.
+ *
+ * It asks for no OS permission (n5, 2026-09-04). Location is requested where
+ * a screen first needs coordinates — the nearby results and the Post-a-Job
+ * Location step, both through lib/geolocation.ts resolveCurrentPlace() — and
+ * notifications after the first post or bid, through maybePromptForPush.
+ * hooks/useSetupPermissions.ts stays on disk, unimported, with its own tests.
  *
  * There is no back button because there is nothing behind this screen: it is
  * the root of its own stack, and a chevron here would be a dead control. The
@@ -55,7 +57,6 @@ type SetupScreenProps = {
 export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
   const navigation = useNavigation<OnboardingStackNavigation>();
   const { user, logout } = useAuth();
-  const permissions = useSetupPermissions();
   const reducedMotion = useReducedMotion();
 
   const [landing, setLanding] = useState<LandingPreference>(DEFAULT_LANDING);
@@ -188,22 +189,6 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
         </Animated.View>
 
         <Animated.View style={[styles.card, stagger(0.14, 0.62)]}>
-          <PermissionSetupRow
-            icon="location-outline"
-            title="Location"
-            subtitle="Required for nearby jobs and workers"
-            settingsHint="Enable this in device Settings"
-            permission={permissions.location}
-          />
-          <PermissionSetupRow
-            icon="notifications-outline"
-            title="Notifications"
-            subtitle="Messages, bids and arrival updates"
-            settingsHint="Turn this on in device Settings"
-            permission={permissions.notifications}
-            divider
-          />
-
           <View>
             <Animated.View
               style={[styles.pulseOverlay, pulseStyle]}
@@ -297,92 +282,6 @@ export function SetupScreen({ legalComplete, onFinished }: SetupScreenProps) {
   );
 }
 
-/**
- * A permission row that stays useful in every state the OS can be in.
- *
- * The failure this replaces: once a permission was denied for good, the switch
- * was disabled and the row did nothing. The user was left holding a control
- * that could not be operated and was not told where the real one lives. That
- * is a dead control, and it is worse than no control.
- *
- * Now there is one action per row and it always leads somewhere. While the OS
- * will still prompt, tapping asks. Once it won't — denied for good, or granted,
- * which the app equally cannot undo — tapping opens Settings, which is the
- * only place the answer can actually change. The subtitle says which of those
- * is about to happen, so nothing has to be guessed from the switch alone.
- *
- * Both the row and the switch run the same action, so there is no combination
- * of taps that does nothing.
- */
-function PermissionSetupRow({
-  icon,
-  title,
-  subtitle,
-  settingsHint,
-  permission,
-  divider,
-}: {
-  icon: React.ComponentProps<typeof SetupRow>['icon'];
-  title: string;
-  subtitle: string;
-  /** Shown instead of the subtitle once Settings is the only way through. */
-  settingsHint: string;
-  permission: PermissionRow;
-  divider?: boolean;
-}) {
-  const { state, requesting, act, opensSettings } = permission;
-  const granted = state === 'granted';
-  const interactive = state !== 'unknown' && state !== 'unavailable';
-
-  // Replaced, not appended: the old version tacked the hint onto the end with
-  // a separator, which pushed every affected row onto a cramped second line.
-  const detail =
-    state === 'blocked'
-      ? settingsHint
-      : state === 'unavailable'
-        ? 'Not available on this device'
-        : subtitle;
-
-  return (
-    <SetupRow
-      icon={icon}
-      title={title}
-      subtitle={detail}
-      done={granted}
-      divider={divider}
-      onPress={interactive ? act : undefined}
-      accessibilityLabel={`${title}. ${granted ? 'Allowed.' : 'Not allowed.'} ${detail}`}
-      accessibilityHint={
-        !interactive
-          ? undefined
-          : opensSettings
-            ? 'Opens your device settings'
-            : `Asks for ${title.toLowerCase()} permission`
-      }
-      control={
-        state === 'unknown' ? (
-          <ActivityIndicator color={authColors.placeholder} />
-        ) : state === 'unavailable' ? (
-          <Text style={styles.controlNote}>—</Text>
-        ) : (
-          <Switch
-            value={granted}
-            // Never disabled while the row is interactive: flicking it always
-            // does the same useful thing the row does. It snaps back when the
-            // real answer did not change, which is the honest outcome.
-            disabled={requesting}
-            onValueChange={act}
-            trackColor={{ false: authColors.line, true: authColors.forest }}
-            thumbColor={authColors.surface}
-            ios_backgroundColor={authColors.line}
-            accessibilityLabel={`${title} permission`}
-          />
-        )
-      }
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   body: {
     flexGrow: 1,
@@ -462,9 +361,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: authColors.muted,
-  },
-  controlNote: {
-    ...authType.note,
-    color: authColors.placeholder,
   },
 });
