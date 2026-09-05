@@ -58,9 +58,16 @@ const W = {
 const FLOOR = Number(edgeFn.match(/const MIN_SIMILARITY = ([0-9.]+);/)[1]);
 const RESULT_LIMIT = Number(workerSearch.match(/WORKER_RESULT_LIMIT = (\d+);/)[1]);
 
+// n7: the rating term reads the worker-role REVEALED summary — shownAverage
+// and revealedTotal, profile_review_summaries' row — which is what
+// lib/workerSearch.ts's ratingScore() takes since n7 (the profile's legacy
+// rating_avg / rating_count are read nowhere in the app;
+// tests/legacyAggregateFence.test.mjs proves it). The shrinkage is the same
+// formula phase40's blend applies server-side over its own columns until
+// their retirement (docs/BACKLOG.md §v1.2); only the fixture field names moved.
 function ratingScore(worker) {
-  const count = worker.ratingCount ?? 0;
-  const avg = Math.min(Math.max((worker.ratingAvg ?? 0) / 5, 0), 1);
+  const count = worker.revealedTotal ?? 0;
+  const avg = Math.min(Math.max((worker.shownAverage ?? 0) / 5, 0), 1);
   return 0.6 + (avg - 0.6) * Math.min(count / 5, 1);
 }
 
@@ -107,8 +114,8 @@ const PACKER = {
   categories: ['moving'],
   relatedCompleted: 0,
   completedTotal: 3,
-  ratingAvg: 4.6,
-  ratingCount: 4,
+  shownAverage: 4.6,
+  revealedTotal: 4,
 };
 
 const GENERIC = {
@@ -119,8 +126,8 @@ const GENERIC = {
   relatedCompleted: 0,
   completedTotal: 0,
   // Deliberately a perfect rating: it must not be enough on its own.
-  ratingAvg: 5,
-  ratingCount: 2,
+  shownAverage: 5,
+  revealedTotal: 2,
 };
 
 // ===========================================================================
@@ -136,8 +143,8 @@ test('1 · similar meaning with different wording outranks a literal category ma
     categories: ['handyman'],
     relatedCompleted: 0,
     completedTotal: 2,
-    ratingAvg: 4.2,
-    ratingCount: 3,
+    shownAverage: 4.2,
+    revealedTotal: 3,
   };
   const literal = {
     id: id(4),
@@ -145,8 +152,8 @@ test('1 · similar meaning with different wording outranks a literal category ma
     categories: ['moving'],
     relatedCompleted: 0,
     completedTotal: 0,
-    ratingAvg: 4.8,
-    ratingCount: 6,
+    shownAverage: 4.8,
+    revealedTotal: 6,
   };
 
   const ordered = rank([literal, paraphrase], { searched: ['moving'] });
@@ -175,8 +182,8 @@ test('3 · exact category compatibility decides between equally relevant workers
     similarity: 0.6,
     relatedCompleted: 0,
     completedTotal: 1,
-    ratingAvg: 4.5,
-    ratingCount: 3,
+    shownAverage: 4.5,
+    revealedTotal: 3,
   };
   const compatible = { ...base, id: id(5), categories: ['packing'] };
   const incompatible = { ...base, id: id(6), categories: ['dog_walking'] };
@@ -190,8 +197,8 @@ test('4 · more relevant completed jobs wins when relevance and category are equ
     similarity: 0.65,
     categories: ['moving'],
     completedTotal: 6,
-    ratingAvg: 4.4,
-    ratingCount: 5,
+    shownAverage: 4.4,
+    revealedTotal: 5,
   };
   const experienced = { ...base, id: id(7), relatedCompleted: 4 };
   const novice = { ...base, id: id(8), relatedCompleted: 1 };
@@ -207,8 +214,8 @@ test('rating alone cannot lift an irrelevant worker over a clearly relevant one'
     categories: [],
     relatedCompleted: 0,
     completedTotal: 0,
-    ratingAvg: null,
-    ratingCount: 0,
+    shownAverage: null,
+    revealedTotal: 0,
   };
   const decorated = {
     id: id(2),
@@ -216,8 +223,8 @@ test('rating alone cannot lift an irrelevant worker over a clearly relevant one'
     categories: ['packing'],
     relatedCompleted: 0,
     completedTotal: 10,
-    ratingAvg: 5,
-    ratingCount: 50,
+    shownAverage: 5,
+    revealedTotal: 50,
   };
 
   const ordered = rank([decorated, relevant], { searched: ['packing'] });
@@ -250,8 +257,8 @@ test('5 · an unrelated worker is dropped rather than used to fill the page', ()
     categories: ['dog_walking'],
     relatedCompleted: 0,
     completedTotal: 20,
-    ratingAvg: 5,
-    ratingCount: 40,
+    shownAverage: 5,
+    revealedTotal: 40,
   };
 
   const ordered = rank([PACKER, unrelated], { searched: ['packing'] });
@@ -318,8 +325,8 @@ test('8 · ordering is stable across runs and independent of input order', () =>
     categories: ['moving'],
     relatedCompleted: 2,
     completedTotal: 5,
-    ratingAvg: 4.5,
-    ratingCount: 5,
+    shownAverage: 4.5,
+    revealedTotal: 5,
   }));
 
   const forwards = rank(tied, { searched: ['moving'] }).map((w) => w.id);

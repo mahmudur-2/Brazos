@@ -1,6 +1,7 @@
 import { supabase } from './supabase';
 import { JOB_CATEGORY_LABELS, type JobCategory } from './jobs';
 import { PUBLIC_PROFILE_COLUMNS, type Profile } from './profiles';
+import { fetchProfileReviewSummaries, type ProfileReviewSummaryRow } from './reviews';
 import { SKILL_CATEGORIES, skillCategoryLabel } from './skillCategories';
 
 /**
@@ -44,8 +45,9 @@ import { SKILL_CATEGORIES, skillCategoryLabel } from './skillCategories';
  *  drag the whole profiles table onto the device. */
 const CANDIDATE_LIMIT = 60;
 
-/** Results actually shown — also the number of worker_job_stats() calls made,
- *  so this is a request-count budget as much as a layout choice. */
+/** Results actually shown — also the number of worker_job_stats() calls made
+ *  (the rating read is ONE batch call however many rows there are), so this
+ *  is a request-count budget as much as a layout choice. */
 export const WORKER_RESULT_LIMIT = 12;
 
 /**
@@ -385,10 +387,16 @@ export type WorkerMatch = {
 // factual lib/compareBids.ts rule — the old blended offerValueScore these
 // conventions once mirrored was deleted 2026-08-18.)
 
-function ratingScore(profile: Profile): number {
-  const count = profile.rating_count ?? 0;
-  if (count === 0) return 0.6; // neutral for a worker with no reviews yet
-  const avg = Math.max(0, Math.min((profile.rating_avg ?? 0) / 5, 1));
+/** What the rating term reads (n7): the worker-role REVEALED summary —
+ *  profile_review_summaries' row for this worker — never the profile's legacy
+ *  mixed aggregate. Null is UNKNOWN (the batch unanswered or failed) and
+ *  scores exactly as no reviews do: neutral. */
+type RatingSummary = Pick<ProfileReviewSummaryRow, 'total' | 'shownAverage'> | null;
+
+function ratingScore(summary: RatingSummary): number {
+  const count = summary?.total ?? 0;
+  if (count === 0) return 0.6; // neutral for a worker with no revealed reviews yet
+  const avg = Math.max(0, Math.min((summary?.shownAverage ?? 0) / 5, 1));
   // Two five-star reviews should not outrank twenty four-star ones outright,
   // so the average is pulled toward neutral until there is enough of it.
   const confidence = Math.min(count / 5, 1);
@@ -406,7 +414,10 @@ function scoreMatch(
   matchedCategories: string[],
   searchedCategories: string[],
   completedInCategory: number,
-  completedTotal: number
+  completedTotal: number,
+  // Trailing and defaulting to null (neutral) so the positional shape the
+  // tests know stays put; the rating term reads this row and never `profile`.
+  summary: RatingSummary = null
 ): number {
   const categoryScore =
     searchedCategories.length === 0
@@ -418,7 +429,7 @@ function scoreMatch(
 
   return (
     0.4 * categoryScore +
-    0.25 * ratingScore(profile) +
+    0.25 * ratingScore(summary) +
     0.15 * normalizedPercent(profile.completion_rate, 0.7) +
     0.08 * normalizedPercent(profile.on_time_pct, 0.7) +
     0.12 * experienceScore
@@ -498,6 +509,14 @@ export async function searchWorkers({
     }
   }
 
+  // The rating term (n7): ONE profile_review_summaries() call over every
+  // candidate — worker role, revealed reviews only — before anything is
+  // ranked, so the cut below still weighs reputation exactly as it did when
+  // the columns rode along on the profile row. A failed read is null:
+  // every candidate then scores neutral on rating, never zero.
+  const { data: summaries } = await fetchProfileReviewSummaries([...byId.keys()], 'worker');
+  const summaryFor = (id: string): RatingSummary => summaries?.get(id) ?? null;
+
   const searched = new Set(searchedCategories);
   const provisional = Array.from(byId.values()).map((profile) => {
     const matchedCategories = (profile.categories ?? []).filter((c) => searched.has(c));
@@ -506,7 +525,14 @@ export async function searchWorkers({
       matchedCategories,
       completedInCategory: 0,
       completedTotal: 0,
-      score: scoreMatch(profile, matchedCategories, searchedCategories, 0, 0),
+      score: scoreMatch(
+        profile,
+        matchedCategories,
+        searchedCategories,
+        0,
+        0,
+        summaryFor(profile.id)
+      ),
     };
   });
 
@@ -541,7 +567,8 @@ export async function searchWorkers({
         match.matchedCategories,
         searchedCategories,
         completedInCategory,
-        completedTotal
+        completedTotal,
+        summaryFor(match.profile.id)
       ),
     };
   });
@@ -560,13 +587,15 @@ export async function searchWorkers({
 const SERVER_RANK_TIMEOUT_MS = 8000;
 
 /** One row of the `worker-search` contract. Everything the card needs and
- *  nothing else — no vectors, no job text, no contact details. */
+ *  nothing else — no vectors, no job text, no contact details. The response
+ *  still carries ratingAvg / ratingCount (the function is untouched; its
+ *  retirement rides with the columns', docs/BACKLOG.md §v1.2) — since n7
+ *  they are simply not read: the card's rating is the revealed summary the
+ *  screen fetches for the ids it renders. */
 type ServerMatch = {
   workerId?: string;
   fullName?: string | null;
   avatarUrl?: string | null;
-  ratingAvg?: number | null;
-  ratingCount?: number | null;
   categories?: string[] | null;
   matchedCategories?: string[] | null;
   evidenceCategories?: string[] | null;
@@ -597,8 +626,6 @@ function toWorkerMatch(row: ServerMatch): WorkerMatch | null {
       id: row.workerId,
       full_name: row.fullName ?? null,
       avatar_url: row.avatarUrl ?? null,
-      rating_avg: row.ratingAvg ?? null,
-      rating_count: row.ratingCount ?? null,
       categories: row.categories ?? [],
       // Not in the server contract, deliberately — a search result has no
       // business carrying contact or moderation fields.

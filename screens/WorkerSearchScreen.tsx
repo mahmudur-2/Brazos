@@ -39,6 +39,7 @@ import { fetchRehirableWorkerIds } from '../lib/jobs';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchProfilesByIds } from '../lib/profiles';
 import { rebookStripItems, type RebookStripItem } from '../lib/rebook';
+import { fetchProfileReviewSummaries, type ProfileReviewSummaryRow } from '../lib/reviews';
 import { fetchSavedWorkers } from '../lib/savedWorkers';
 import { SKILL_CATEGORIES, skillCategoryLabel } from '../lib/skillCategories';
 import {
@@ -111,6 +112,13 @@ export function WorkerSearchScreen() {
     params?.category ?? null
   );
   const [state, setState] = useState<SearchState>({ kind: 'idle' });
+  // The result cards' rating (n7): ONE profile_review_summaries() call over
+  // the ids the list renders — worker role, revealed reviews only — re-run
+  // only when that id set changes. Null until it answers (or when it failed):
+  // UNKNOWN, so a card prints no number and no "New" rather than a zero.
+  const [summaries, setSummaries] = useState<Map<string, ProfileReviewSummaryRow> | null>(
+    null
+  );
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   // §4.4 — the Saved / Worked-for-you-before sections collapsed into one
   // horizontal strip at the top of this surface's landing state.
@@ -218,6 +226,32 @@ export function WorkerSearchScreen() {
     },
     [user?.id]
   );
+
+  // Effects compare by identity and each search builds a fresh array, so the
+  // read is keyed on the sorted distinct ids — one call per id set, not one
+  // per render. An empty key (no results on screen) issues no request.
+  const resultIdKey =
+    state.kind === 'results'
+      ? [...new Set(state.matches.map((match) => match.profile.id))].sort().join(',')
+      : '';
+
+  useEffect(() => {
+    if (!resultIdKey) {
+      setSummaries(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data } = await fetchProfileReviewSummaries(resultIdKey.split(','), 'worker');
+      if (!active) return;
+      // A failed read is null — UNKNOWN — never an empty map standing in
+      // for "no reviews".
+      setSummaries(data);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [resultIdKey]);
 
   // Runs the search a caller arrived with (a chip tapped on Home), so the
   // screen opens on results rather than on an empty field.
@@ -555,7 +589,11 @@ export function WorkerSearchScreen() {
                 </View>
               }
               renderItem={({ item }) => (
-                <WorkerResultCard match={item} onPress={() => openWorker(item)} />
+                <WorkerResultCard
+                  match={item}
+                  summary={summaries?.get(item.profile.id) ?? null}
+                  onPress={() => openWorker(item)}
+                />
               )}
             />
           </FadeIn>
@@ -645,9 +683,12 @@ function SearchStateCard({
  */
 function WorkerResultCard({
   match,
+  summary,
   onPress,
 }: {
   match: WorkerMatch;
+  /** The worker-role revealed summary for this row, or null while UNKNOWN. */
+  summary: ProfileReviewSummaryRow | null;
   onPress: () => void;
 }) {
   const { palette: colors, isDark } = useThemeColors();
@@ -655,7 +696,19 @@ function WorkerResultCard({
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const { profile, matchedCategories } = match;
   const name = profile.full_name?.trim() || 'Worker';
-  const ratingCount = profile.rating_count ?? 0;
+  // The rating line reads the summary and nothing else (R8b-c D1): the word
+  // "New" while the reputation is under three revealed reviews, the shrunk
+  // shown_average to one decimal once it is not, and nothing while the row is
+  // unknown. The count beside it is REVEALED reviews only.
+  const ratingCount = summary?.total ?? null;
+  const ratingText =
+    summary == null
+      ? ''
+      : summary.isNew
+        ? 'New'
+        : summary.shownAverage != null && summary.total > 0
+          ? summary.shownAverage.toFixed(1)
+          : '';
   // Whatever the ranking can actually support, or nothing at all. Never a
   // claim about skill, availability or standing that isn't a stored count.
   const reason = matchReasonText(match);
@@ -683,13 +736,13 @@ function WorkerResultCard({
 
           <View style={styles.proofRow}>
             <Ionicons name="star" size={13} color={starColors(colors, isDark).filled} />
-            <Text style={styles.proofStrong}>
-              {ratingCount > 0 ? (profile.rating_avg ?? 0).toFixed(1) : 'New'}
-            </Text>
+            <Text style={styles.proofStrong}>{ratingText}</Text>
             <Text style={styles.proofMuted} numberOfLines={1}>
-              {ratingCount > 0
-                ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
-                : 'no reviews yet'}
+              {ratingCount == null
+                ? ''
+                : ratingCount > 0
+                  ? `(${ratingCount} ${ratingCount === 1 ? 'review' : 'reviews'})`
+                  : 'no reviews yet'}
             </Text>
           </View>
         </View>

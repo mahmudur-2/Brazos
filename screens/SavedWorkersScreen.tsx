@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,7 @@ import { fetchRehirableWorkerIds } from '../lib/jobs';
 import { goBackOrHome, navigateAcrossTabs } from '../lib/navigationRef';
 import { fetchProfilesByIds, type Profile } from '../lib/profiles';
 import { canHire, pastOnlyIds } from '../lib/rebook';
+import { fetchProfileReviewSummaries, type ProfileReviewSummaryRow } from '../lib/reviews';
 import { fetchSavedWorkers, unsaveWorker } from '../lib/savedWorkers';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes/ModeProvider';
@@ -26,9 +27,11 @@ import {
 } from '../lib/theme';
 
 /** The lightest shape a row needs — the batch profile read returns a subset
- *  of Profile, and the rating/availability extras render only when present. */
+ *  of Profile, and the availability extra renders only when present. The
+ *  rating is not on the profile at all (n7): it is the worker-role revealed
+ *  summary, fetched once for every id on the screen and looked up by id. */
 type PersonRow = Pick<Profile, 'id' | 'full_name' | 'avatar_url'> &
-  Partial<Pick<Profile, 'rating_avg' | 'rating_count' | 'accepting_work'>>;
+  Partial<Pick<Profile, 'accepting_work'>>;
 
 /**
  * Screen 46 + the Rebook 08 fold-in (Phase 9) — the customer's people
@@ -50,6 +53,41 @@ export function SavedWorkersScreen() {
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // The rows' rating (n7): ONE profile_review_summaries() call over every id
+  // this screen renders — saved and past, worker role, revealed reviews only
+  // — re-run only when that id set changes. Null until it answers (or when
+  // it failed): UNKNOWN, so a row prints nothing rather than a zero.
+  const [summaries, setSummaries] = useState<Map<string, ProfileReviewSummaryRow> | null>(
+    null
+  );
+
+  // Effects compare by identity and both lists are fresh arrays per read;
+  // keying on the sorted distinct ids is what makes this one call per id set.
+  const rowIdKey = useMemo(
+    () =>
+      [...new Set([...saved.map((r) => r.worker_id), ...past.map((p) => p.id)])]
+        .sort()
+        .join(','),
+    [saved, past]
+  );
+
+  useEffect(() => {
+    if (!rowIdKey) {
+      setSummaries(null);
+      return;
+    }
+    let active = true;
+    (async () => {
+      const { data } = await fetchProfileReviewSummaries(rowIdKey.split(','), 'worker');
+      if (!active) return;
+      // A failed read is null — UNKNOWN — never an empty map standing in
+      // for "no reviews".
+      setSummaries(data);
+    })();
+    return () => {
+      active = false;
+    };
+  }, [rowIdKey]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -125,75 +163,92 @@ export function SavedWorkersScreen() {
             }
           : { kind: 'ready' };
 
-  const row = (profile: PersonRow, options: { saved: boolean }) => (
-    <View key={`${options.saved ? 's' : 'p'}:${profile.id}`} style={styles.row}>
-      <Pressable
-        style={styles.rowMain}
-        onPress={() =>
-          navigation.navigate('WorkerProfile', {
-            workerId: profile.id,
-            workerName: profile.full_name ?? undefined,
-          })
-        }
-        accessibilityRole="button"
-        accessibilityLabel={`View ${profile.full_name ?? 'worker'}`}
-      >
-        <Avatar name={profile.full_name} uri={profile.avatar_url} size={44} />
-        <View style={styles.rowCopy}>
-          <Text style={styles.rowName} numberOfLines={1}>
-            {profile.full_name ?? 'Worker'}
-          </Text>
-          {/* Master 22 draws this row's star in the set's gold, like every
-              other rating in the app. It was inheriting the meta line's grey
-              because it is a glyph inside the sentence, so it gets its own
-              span — painted through the one star treatment in BOTH palettes
-              (gold in dark, the Heritage `star` gold in light). */}
-          <Text style={styles.rowMeta}>
-            {(profile.rating_count ?? 0) > 0 ? (
-              <>
-                <Text style={{ color: starColors(colors, isDark).filled }}>★</Text>
-                {` ${(profile.rating_avg ?? 0).toFixed(1)} (${profile.rating_count})`}
-              </>
-            ) : (
-              'No reviews yet'
-            )}
-            {profile.accepting_work === false ? ' · Not taking work right now' : ''}
-          </Text>
-        </View>
-      </Pressable>
-      {/* A tombstoned account cannot complete a hire, so its row carries no
-          Hire control — the label and any historical reviews still render,
-          because those are real. */}
-      {canHire(profile.full_name) ? (
+  // What the meta line prints in the number's place (R8b-c D1): the shrunk
+  // shown_average to one decimal, or the word "New" while the reputation is
+  // under three revealed reviews. Null is UNKNOWN — the batch unanswered or
+  // failed, or a row with nothing displayable — and prints nothing.
+  const ratingWord = (summary: ProfileReviewSummaryRow): string | null =>
+    summary.isNew
+      ? 'New'
+      : summary.shownAverage != null
+        ? summary.shownAverage.toFixed(1)
+        : null;
+
+  const row = (profile: PersonRow, options: { saved: boolean }) => {
+    const summary = summaries?.get(profile.id) ?? null;
+    const word = summary != null && summary.total > 0 ? ratingWord(summary) : null;
+    return (
+      <View key={`${options.saved ? 's' : 'p'}:${profile.id}`} style={styles.row}>
         <Pressable
-          style={[styles.hireButton, isDark && styles.hireButtonDark]}
+          style={styles.rowMain}
           onPress={() =>
-            navigation.navigate('PostJob', {
-              hireWorkerId: profile.id,
-              hireWorkerName: profile.full_name ?? 'this worker',
+            navigation.navigate('WorkerProfile', {
+              workerId: profile.id,
+              workerName: profile.full_name ?? undefined,
             })
           }
           accessibilityRole="button"
-          accessibilityLabel={`Hire ${profile.full_name ?? 'worker'} again`}
+          accessibilityLabel={`View ${profile.full_name ?? 'worker'}`}
         >
-          <Text style={[styles.hireButtonText, isDark && styles.hireButtonTextDark]}>
-            Hire
-          </Text>
+          <Avatar name={profile.full_name} uri={profile.avatar_url} size={44} />
+          <View style={styles.rowCopy}>
+            <Text style={styles.rowName} numberOfLines={1}>
+              {profile.full_name ?? 'Worker'}
+            </Text>
+            {/* Master 22 draws this row's star in the set's gold, like every
+                other rating in the app. It was inheriting the meta line's grey
+                because it is a glyph inside the sentence, so it gets its own
+                span — painted through the one star treatment in BOTH palettes
+                (gold in dark, the Heritage `star` gold in light). */}
+            <Text style={styles.rowMeta}>
+              {summary != null && word != null ? (
+                <>
+                  <Text style={{ color: starColors(colors, isDark).filled }}>★</Text>
+                  {` ${word} (${summary.total})`}
+                </>
+              ) : summary != null && summary.total === 0 ? (
+                'No reviews yet'
+              ) : (
+                ''
+              )}
+              {profile.accepting_work === false ? ' · Not taking work right now' : ''}
+            </Text>
+          </View>
         </Pressable>
-      ) : null}
-      {options.saved ? (
-        <Pressable
-          onPress={() => removeSaved(profile.id)}
-          disabled={busyId === profile.id}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Remove from saved"
-        >
-          <Ionicons name="bookmark" size={20} color={colors.emerald} />
-        </Pressable>
-      ) : null}
-    </View>
-  );
+        {/* A tombstoned account cannot complete a hire, so its row carries no
+            Hire control — the label and any historical reviews still render,
+            because those are real. */}
+        {canHire(profile.full_name) ? (
+          <Pressable
+            style={[styles.hireButton, isDark && styles.hireButtonDark]}
+            onPress={() =>
+              navigation.navigate('PostJob', {
+                hireWorkerId: profile.id,
+                hireWorkerName: profile.full_name ?? 'this worker',
+              })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Hire ${profile.full_name ?? 'worker'} again`}
+          >
+            <Text style={[styles.hireButtonText, isDark && styles.hireButtonTextDark]}>
+              Hire
+            </Text>
+          </Pressable>
+        ) : null}
+        {options.saved ? (
+          <Pressable
+            onPress={() => removeSaved(profile.id)}
+            disabled={busyId === profile.id}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Remove from saved"
+          >
+            <Ionicons name="bookmark" size={20} color={colors.emerald} />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  };
 
   return (
     <DetailScreen

@@ -3,14 +3,20 @@ import { supabase } from './supabase';
 // Combined profile shape. Public reads deliberately omit `phone`, `is_admin`,
 // and `banned`; get_my_profile() is the only client-facing read that returns
 // those self-only fields after phase29.
+//
+// The legacy rating columns (rating_avg / rating_count — the trigger-kept
+// aggregate that mixes both roles and counts reviews the blind window still
+// holds back) are NOT here and NOT in PUBLIC_PROFILE_COLUMNS since n7: every
+// rating the app shows or ranks on is a per-role REVEALED summary
+// (lib/reviews.ts — profile_review_summary for one person,
+// profile_review_summaries for a list). The columns stay in the database
+// until their retirement (docs/BACKLOG.md §v1.2); nothing here reads them.
 export type Profile = {
   id: string;
   full_name: string | null;
   phone: string | null;
   avatar_url: string | null;
   role: string | null;
-  rating_avg: number | null;
-  rating_count: number | null;
   bio?: string | null;
   language?: string | null;
   categories?: string[] | null;
@@ -43,7 +49,7 @@ export type ProfileUpdate = {
 };
 
 export const PUBLIC_PROFILE_COLUMNS =
-  'id, full_name, avatar_url, role, rating_avg, rating_count, bio, language, categories, completion_rate, on_time_pct, response_time, accepting_work, availability_note';
+  'id, full_name, avatar_url, role, bio, language, categories, completion_rate, on_time_pct, response_time, accepting_work, availability_note';
 
 const SELF_PROFILE_COLUMNS = `${PUBLIC_PROFILE_COLUMNS}, phone, is_admin, banned`;
 
