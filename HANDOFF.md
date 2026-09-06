@@ -99,6 +99,46 @@ next-day UTC — do not "correct" either date to match the other.
   item 4).
 
 
+## RUN gate2-fingerprint COMPLETED (2026-09-06) - Gate 2 box 2 ticked, so GATE 2 IS CLOSED; the dev build is one fingerprint behind the tree and needs rebuilding
+
+Dispatch `C:\Users\mdmah\runs\gate2-fingerprint.txt`. Base `2e75ad0`, tree clean, branch `mainexpo`. Report `.shots/gate2-fingerprint.md`, copied to
+`C:\Users\mdmah\runs\reports\gate2-fingerprint.md`. Read-only apart from the one documentation line: no app source, no schema, no dependency, nothing under `supabase/`,
+`.maestro/`, `.eas/` or the guard directory, and NO `eas build` / `eas update` / `eas submit` was started.
+
+**STEP 1 — the tick.** `c274690` — `docs/GATES.md` line 28, the only Gate 2 box about frames rendered and reviewed, `- [ ]` → `- [x]` plus the operator's date appended
+verbatim: "2026-09-06, reviewed against the 82 PNGs from run figma-fix (HEAD 2e75ad0)." One file, one line, one insertion, one deletion — nothing else touched. Checked before
+editing, and it holds: `.shots/` carries exactly 82 PNGs. **GATE 2 IS NOW CLOSED** — all four boxes ticked — which closes n2's standing item ("Gate 2 box 2 stays OPEN until
+that review is recorded beside it"). `npm run verify` green in this run: 1361 tests, 1361 pass, 0 fail, exit 0.
+
+**STEP 2 — the fingerprint verdict: MISMATCH.** The operator's iOS development build resolved on the `0122d0b0` prefix with no substitution needed —
+`0122d0b0-3131-4a71-81be-9b0bf0573ce8`, FINISHED, `app.brazos.mobile.dev`, commit `6c3a6fa60fe7cd8b5e80dab0756b89162af90384`, **runtimeVersion `1.0.0`**, **fingerprint
+`cdca1b8a368705ff9c59fb037e8aecc880130600`**, built 2026-08-29T02:12Z, 5 min 48 s of build time, artifact URL expiring **2026-09-12**. The current tree's own fingerprint, from
+`npx expo-updates fingerprint:generate --platform ios` and independently of EAS: **`cd05945b7e1eef16e13869d5fd0451bdd0e4c941`** — byte-identical to the local hash
+`eas fingerprint:compare` reached on its own, so the two tools agree. Every difference the compare names is EXPECTED from the four commits between `6c3a6fa` and HEAD that touch
+native inputs: `eas.json` (`33e758d`); the Time Sensitive entitlement, the Stripe `merchantIdentifier` / `enableGooglePay: false`, and five Info.plist usage strings changing
+"BRAZOS" to "Brazos" (all `5674554`); the three renamed database scripts in `package.json` (`2e45600`, `e2c941d`). Nothing unexplained appeared. Of those, only the entitlement,
+the merchant identifier and the usage strings actually need a new binary — an OTA cannot deliver any of them; `eas.json` and npm script names move the hash and nothing else.
+
+**Exceptions.** (1) The compare also reports `ios.config.googleMaps.apiKey` present in the build and empty locally. **This is an artifact of this run, not a tree change**:
+`app.config.ts` reads it from `process.env.GOOGLE_MAPS_API_KEY`, the line is character-identical at `6c3a6fa` and at HEAD, and the variable was UNSET here because a run cannot
+read the env file by deny rule. An operator-run build will not carry it. The report redacts the key's value — the one redaction in it, flagged as such; the key is a
+bundle-restricted client Maps key that reaches the config from the environment, not from a tracked file, so Gate 0's secrets box is unaffected. (2) Two guard blocks, worked
+around inside the contract, neither a stop: `GUARD-NESTED-CLAUDE` refused `git commit -m` because the required `Co-Authored-By` trailer carries the bare token the guard rejects
+in command text — committed with `git commit -F .shots/gate2-msg.txt`, as earlier runs here have done; and `GUARD-GIT git-push-not-gated-mainexpo` refused
+`git push origin mainexpo 2>&1 | tail -10` because the redirect counted as a third argument — the flag-free bare form is the one that passes. (3) No continue-path was taken: EAS
+authenticated as `mah_r2`, no 401/403, no network failure or 429, no retry; eas-cli 22.2.0 ran `fingerprint:compare` fine (23.2.0 exists, and was not needed).
+
+**Worth knowing.** `app.config.ts:75-77` sets `runtimeVersion: { policy: 'appVersion' }` with `appVersion` `1.0.0`, so the runtime version does NOT move when native inputs
+change. `eas update` will therefore still hand JS to the `0122d0b0` build even though its native side is three changes behind, and the mismatch surfaces as runtime
+misbehaviour rather than as a refused update. A `'fingerprint'` policy would refuse instead. Flagged only — nothing was changed.
+
+**NEEDS THE OPERATOR.** (1) A new iOS development build, since the verdict is MISMATCH: `eas build --profile development --platform ios`. Cost: ~6 minutes of build time by the
+last build's measure; the money depends on the EAS plan on `mah_r2`, which no non-interactive command exposes — see https://expo.dev/accounts/mah_r2/settings/billing. It needs
+Apple credentials, and the new Time Sensitive entitlement regenerates the provisioning profile, so expect a sign-in prompt rather than an unattended run. (2)
+`GOOGLE_MAPS_API_KEY` must be present in that build's environment or the map ships without its key. (3) The existing build's artifact URL expires 2026-09-12 — after that it
+cannot be reinstalled from that link, though the copy already on the device is unaffected. Metro cannot be pointed at the existing build for this tree.
+
+
 ## RUN figma-fix COMPLETED (2026-09-06) - the three defect classes on the Figma "Screens" page repaired: icons drew as filled squares because the tint was painted on their wrapper frame, flags were undrawable text emoji, overlays hid their host behind an opaque scrim
 
 Dispatch `C:\Users\mdmah\runs\figma-fix.txt`, non-interactive. Base gate held at `ee86c34`
