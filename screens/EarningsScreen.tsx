@@ -1,4 +1,4 @@
-import { useCallback, useState, type ComponentProps } from 'react';
+import { useCallback, useMemo, useState, type ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,14 +12,11 @@ import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
 import { paymentProvider, paymentsMode } from '../lib/adapters/payments';
-import {
-  isReleaseRequested,
-  payoutsCta,
-  workerTakeCents,
-  type PayoutsStatus,
-} from '../lib/payments';
+import { payoutsCta, workerTakeCents, type PayoutsStatus } from '../lib/payments';
 import { fetchMyPayoutsStatus } from '../lib/payments/stripe';
 import { deriveEarnings, fetchMyEarnings, type EarningsSummary } from '../lib/earnings';
+import { earningsRowMeta } from '../lib/earningsCopy';
+import { releaseCountdownLabel, releaseDeadlineMs } from '../lib/jobLifecycle';
 import { formatBudget } from '../lib/jobs';
 import type { ProfileStackNavigation } from '../lib/navigation';
 import { formatTimeAgo } from '../lib/time';
@@ -118,6 +115,9 @@ export function EarningsScreen() {
   const take = s
     ? deriveEarnings(s.rows.map((row) => ({ ...row, amount_cents: workerTakeCents(row) })))
     : null;
+  // One clock reading per load, so every ledger line below is measured
+  // against the same instant rather than each drifting on its own render.
+  const nowMs = useMemo(() => Date.now(), [summary]);
 
   return (
     <>
@@ -190,17 +190,25 @@ export function EarningsScreen() {
                                 {row.job_title ?? 'Job'}
                               </Text>
                               <Text style={styles.rowMeta}>
-                                {row.status === 'held'
-                                  ? // D23: approved, payout pending — the row
-                                    // stays held until the transfer lands.
-                                    isReleaseRequested(row)
-                                    ? 'Approved — payout on its way'
-                                    : 'Held in protection'
-                                  : row.status === 'released'
-                                    ? row.release_reason === 'auto_approved'
-                                      ? `Released (auto) ${row.released_at ? formatTimeAgo(row.released_at) : ''}`
-                                      : `Released ${row.released_at ? formatTimeAgo(row.released_at) : ''}`
-                                    : `Transferred ${row.paid_out_at ? formatTimeAgo(row.paid_out_at) : ''}`}
+                                {/* a6: one sentence per payment state, from
+                                    lib/earningsCopy.ts — the release clock and
+                                    the relative times are the app's own single
+                                    implementations, injected. */}
+                                {earningsRowMeta(
+                                  {
+                                    status: row.status,
+                                    provider: row.provider,
+                                    release_requested_at: row.release_requested_at,
+                                    release_reason: row.release_reason,
+                                    released_at: row.released_at,
+                                    paid_out_at: row.paid_out_at,
+                                    releaseDeadlineMs: releaseDeadlineMs({
+                                      completed_at: row.job_completed_at ?? null,
+                                    }),
+                                  },
+                                  nowMs,
+                                  { countdown: releaseCountdownLabel, timeAgo: formatTimeAgo }
+                                )}
                               </Text>
                             </View>
                             <MoneyText cents={workerTakeCents(row)} state={row.status} captionHidden />

@@ -7,7 +7,16 @@ import type { Payment } from './payments';
  * the fetching; this owns the math.
  */
 
-export type EarningsRow = Payment & { job_title: string | null };
+/**
+ * `job_completed_at` is OPTIONAL (a6, 2026-09-05): it feeds the ledger line's
+ * release clock through lib/jobLifecycle.ts's releaseDeadlineMs, and a row
+ * built without it — a legacy job with no completed_at, or a fixture — simply
+ * has no clock and keeps the plain sentence.
+ */
+export type EarningsRow = Payment & {
+  job_title: string | null;
+  job_completed_at?: string | null;
+};
 
 export type EarningsSummary = {
   pendingCents: number;

@@ -26,6 +26,12 @@ const EARNING_STATUSES = ['held', 'released', 'paid_out'] as const;
  * the payee may see. release_requested_at rides along (n4b, 2026-09-05) so
  * Payouts can tell an approved stripe row still waiting on its transfer —
  * lib/payments.ts payoutSetupNotice() — from one that is merely held.
+ *
+ * The job read carries completed_at beside the title (a6, 2026-09-05): it is
+ * the only input to the release clock (lib/jobLifecycle.ts releaseDeadlineMs),
+ * so the Earnings ledger can state the same countdown the hub's card shows
+ * both parties instead of inventing a second rule. Same read, same RLS scope,
+ * one more column.
  */
 export async function fetchMyEarnings(userId: string) {
   const { data, error } = await supabase
@@ -41,15 +47,28 @@ export async function fetchMyEarnings(userId: string) {
 
   const payments = (data ?? []) as Payment[];
   const jobIds = [...new Set(payments.map((p) => p.job_id))];
-  const titles = new Map<string, string>();
+  const jobs = new Map<string, { title: string; completed_at: string | null }>();
   if (jobIds.length > 0) {
-    const { data: jobs } = await supabase.from('jobs').select('id, title').in('id', jobIds);
-    for (const j of (jobs ?? []) as { id: string; title: string }[]) titles.set(j.id, j.title);
+    const { data: jobRows } = await supabase
+      .from('jobs')
+      .select('id, title, completed_at')
+      .in('id', jobIds);
+    for (const j of (jobRows ?? []) as {
+      id: string;
+      title: string;
+      completed_at: string | null;
+    }[]) {
+      jobs.set(j.id, { title: j.title, completed_at: j.completed_at });
+    }
   }
 
-  const rows: EarningsRow[] = payments.map((p) => ({
-    ...p,
-    job_title: titles.get(p.job_id) ?? null,
-  }));
+  const rows: EarningsRow[] = payments.map((p) => {
+    const job = jobs.get(p.job_id);
+    return {
+      ...p,
+      job_title: job?.title ?? null,
+      job_completed_at: job?.completed_at ?? null,
+    };
+  });
   return { data: deriveEarnings(rows), error: null };
 }
