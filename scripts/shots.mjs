@@ -333,6 +333,15 @@ function projectColumns(row, select) {
 //   setup        optional. `false` seeds the session and the mode key but
 //                NOT the setup record, so the app lands on Setup — the
 //                signed-in, not-yet-set-up tree. Absent is today's seeding.
+//   accepting    optional. `true` answers the profile fixture with
+//                `accepting_work: true`, so worker Home renders ONLINE
+//                ("Online", "Visible to customers"). Absent keeps the
+//                fixture's `false` — OFFLINE, which every worker target has
+//                always photographed — so every existing PNG stays
+//                byte-identical. A fixture rather than a tap on the toggle:
+//                the toggle writes through update_my_profile, whose empty
+//                stubbed answer would replace the whole profile (name
+//                included) instead of flipping one field. RUN figma-extract.
 //
 // A target with no recipe is photographed exactly where the app lands. The
 // four original Home targets do that, and their capture path is the one
@@ -411,8 +420,13 @@ const TO_ACCOUNT_SAFETY = [
 const TARGETS = [
   { name: 'customer-home-dark', mode: 'customer', colorScheme: 'dark', wait: 'Take a task' },
   { name: 'customer-home-light', mode: 'customer', colorScheme: 'light', wait: 'Take a task' },
-  { name: 'worker-home-dark', mode: 'worker', colorScheme: 'dark', wait: 'Get hired.' },
-  { name: 'worker-home-light', mode: 'worker', colorScheme: 'light', wait: 'Get hired.' },
+  // Worker Home in its OFFLINE state — the profile fixture's `accepting_work:
+  // false` — and its empty feed. The ONLINE and populated states are their
+  // own entries (RUN figma-extract, at the end of the registry). The wait is
+  // the status word only the offline card draws, so this entry proves its
+  // state and not just its arrival; "Get hired." is still on the page.
+  { name: 'worker-home-dark', mode: 'worker', colorScheme: 'dark', wait: 'Offline' },
+  { name: 'worker-home-light', mode: 'worker', colorScheme: 'light', wait: 'Offline' },
 
   ...['dark', 'light'].flatMap((colorScheme) => [
     {
@@ -848,6 +862,57 @@ const TARGETS = [
       wait: 'When can you start',
     },
   ]),
+
+  // =========================================================================
+  // RUN figma-extract — STATE VARIANTS. Worker Home's ONLINE state, and the
+  // POPULATED worker surfaces: the two screens whose populated state the four
+  // seeded rows can reach. Every other empty-state surface in this registry
+  // (inboxes, the job hubs, the notification feed, earnings, services, saved
+  // workers, profile details, discovery) is populated only by people, offers,
+  // conversations, payments or profile facts this harness deliberately does
+  // not invent, so it stays at its one honest empty entry.
+  // =========================================================================
+  ...['dark', 'light'].flatMap((colorScheme) => [
+    {
+      // Worker Home ONLINE, by the profile fixture (see `accepting` in the
+      // registry header). Empty feed, exactly as the OFFLINE entry. The wait
+      // is the status word ONLY this state draws: "Visible to customers" is
+      // a substring of the offline caption and could not prove it.
+      name: `worker-home-online-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      accepting: true,
+      wait: 'Online',
+    },
+    {
+      // Worker Home POPULATED (offline, as the baseline is): the third
+      // target that opts in to the seeded rows. WorkerHomeScreen slices its
+      // preview to PREVIEW_COUNT, which is 3, sorted skill matches first
+      // then newest; the fixture profile has no categories, so the three
+      // newest draw. The wait is the LAST of those three — text only a
+      // populated preview draws, taken from the end so a short feed fails
+      // loudly rather than photographing short.
+      name: `worker-home-jobs-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      jobs: true,
+      wait: SEEDED_JOBS[2].title,
+    },
+    {
+      // The open-jobs list POPULATED, by worker Home's own "view all" path.
+      // Mode 'all' with no persisted radius reads the plain feed, so all four
+      // rows draw as full cards. The wait is the FOURTH seeded title: worker
+      // Home — hidden but first in the DOM once this screen is pushed over
+      // it — spells only the three its preview draws, so the fourth is text
+      // this screen alone renders.
+      name: `worker-results-jobs-${colorScheme}`,
+      mode: 'worker',
+      colorScheme,
+      jobs: true,
+      recipe: [{ expect: 'Get hired.' }, { press: 'View all open jobs' }],
+      wait: SEEDED_JOBS[SEEDED_JOBS.length - 1].title,
+    },
+  ]),
 ];
 
 const MIME = {
@@ -1011,10 +1076,12 @@ function legalVersions() {
  * Everything the app asks the network for, answered locally.
  *
  * `jobs` is the target's opt-in, threaded down from the registry entry: false
- * for every target but the two RUN JOBS1 ones and the two RUN n5 ones, and the
- * branches it guards are unreachable without it.
+ * for every target but the two RUN JOBS1 ones, the two RUN n5 ones and the
+ * four RUN figma-extract populated-worker ones, and the branches it guards are
+ * unreachable without it. `accepting` is threaded the same way and flips one
+ * field of the profile fixture, nothing else.
  */
-function stubResponse({ pathname, query, headers, postData, jobs }) {
+function stubResponse({ pathname, query, headers, postData, jobs, accepting }) {
   const single = String(headers.accept ?? '').includes('vnd.pgrst.object');
 
   // The legal gate, answered by PASSING it with the versions the app itself
@@ -1036,6 +1103,11 @@ function stubResponse({ pathname, query, headers, postData, jobs }) {
   // own name, it lives only in this file, and nothing writes it anywhere.
   // fetchMyProfile() tries the get_my_profile RPC before the table, so both
   // shapes have to answer or the name never arrives.
+  //
+  // `accepting_work` is the one field a target may flip (`accepting: true`
+  // on the registry entry): false is the OFFLINE state every worker target
+  // photographed before RUN figma-extract, and it stays the answer for every
+  // entry that does not opt in.
   if (
     pathname.includes('/rest/v1/profiles') ||
     pathname.endsWith('/rest/v1/rpc/get_my_profile')
@@ -1044,7 +1116,7 @@ function stubResponse({ pathname, query, headers, postData, jobs }) {
       id: USER_ID,
       full_name: 'Mahmudur Rahman',
       active_mode: null,
-      accepting_work: false,
+      accepting_work: accepting === true,
     };
     return { status: 200, body: single ? profile : [profile] };
   }
@@ -1245,6 +1317,8 @@ async function main() {
           postData: route.request().postData(),
           // THE OPT-IN, per target and nowhere else.
           jobs: shot.jobs === true,
+          // THE AVAILABILITY FIXTURE, read the same way (RUN figma-extract).
+          accepting: shot.accepting === true,
         });
         return route.fulfill({
           status: stub.status,
