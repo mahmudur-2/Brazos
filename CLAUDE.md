@@ -267,3 +267,11 @@ reaches no database. It is a comparison aid for `docs/mockups/`, not a check
 ## Gates
 
 `docs/GATES.md` is the phase gate and `docs/SCOPE.md` the feature list; both are binding. No screen or feature run while Gate 1 has an open box. A feature not in SCOPE.md is appended to `docs/BACKLOG.md` under v1.2 and the run continues without building it. A gate box is ticked only with the evidence path written beside it — a file, a test name, a HANDOFF line — never from a plan or a prompt. `docs/DECISIONS.md` carries dated taste decisions (font, colour, asset, spacing); none is reversed within 48 hours.
+
+## Standing invariants
+
+- HANDOFF.md is the current operational context and is rewritten as the last act of
+  every run, after every other commit. Read it before naming what is blocked or what
+  just happened. Never state repo facts from memory.
+- "Done" requires evidence in the same report: command output, a rendered screen, or
+  a diff. Without evidence, the word is "landed, unverified".
