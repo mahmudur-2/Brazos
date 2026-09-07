@@ -1,43 +1,57 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-07 03:41 EDT.
+WRITTEN: 2026-09-07 04:20 EDT.
 
-This file was an 85 KB accumulated log. It has been archived and replaced with
-current context only. It is rewritten as the last act of every run.
+Rewritten as the last act of every run. Read it before naming what is blocked or
+what just happened.
 
 ## What this run landed
 
-- `docs: append standing invariants to CLAUDE.md` — two invariants added. A third
-  was skipped as already present: CLAUDE.md's source-of-truth table already says
-  machine state is read from git.
-- `docs: inventory the dispatch pipeline's human steps` — new file
-  `docs/HUMAN-STEPS.md`, 21 rows, prompt to landed commit.
-- `docs: rotate HANDOFF.md, replace the log with current context` — this file, plus
-  the old one at `docs/archive/HANDOFF_archive_2026-09-07.md`.
+- `dispatch: one in-repo launcher for a single run, plus the chain scripts` —
+  `scripts/dispatch/dispatch.ps1`, plus byte-for-byte copies of `chainA.ps1`,
+  `night2.ps1` and `make-bundles.ps1`.
+- `chore: ignore the run's commit-message scratch file and the launcher log` —
+  `commit-msg.txt` at any depth, and `.audit-scratch/dispatch/`.
+- `docs: dispatch prompts move into the repository; procedure files follow` —
+  prompts now live in `docs/dispatch/`; `docs/LAUNCH_CHECK.md` and
+  `docs/HUMAN-STEPS.md` updated to match.
 
 `npm run verify` green in this run: 1361 pass, 0 fail, exit 0.
 
+## How a run is launched now
+
+One line, from the repository root:
+
+```
+powershell -ExecutionPolicy Bypass -File scripts\dispatch\dispatch.ps1 -Prompt docs\dispatch\<name>.md -Model claude-opus-5 -Effort max
+```
+
+`-Mode` defaults to `bypass`. `-NoLaunch` prints the banner and stops.
+
 ## What is blocked
 
-- **Reading `docs/archive/` and `docs/handoff-archive/`.** `.claude/hooks/evidence-guard.ps1`
-  refuses them: "bulk history under docs/archive and docs/handoff-archive requires
-  operator authorization". A run may move a file there but never read one back. The
-  archived HANDOFF is therefore write-only history from now on.
-- **Three dispatch steps blocked only by GUARD-PATH-ESCAPE** — writing the next
-  run's prompt file, naming it freshly, and fixing the launcher scripts. The guard
-  refuses any write outside the repository (`'GUARD-PATH-ESCAPE' 'outside-project-dir'`)
-  and all three live in the operator's runs folder. Moving them inside removes all
-  three; nothing else has to change. `docs/HUMAN-STEPS.md` rows 4, 6 and 20.
+- **A run cannot start an agent, and that boundary was not approached.** Three
+  independent layers refuse it: the deny matrix (`"Bash(claude *)"`), `guard.ps1`
+  rule 2 (`'GUARD-NESTED-CLAUDE' 'nested-claude-session'`), and
+  `evidence-guard.ps1` on `dangerously-skip-permissions`. The launcher is
+  therefore untested end to end — the first real launch is the operator's.
+- **Improving `preflight.ps1` is still GUARD-PATH-ESCAPE-blocked.** It stays in
+  the operator's runs folder by decision: it is the only gate before dispatch, and
+  moving the checker in the same change that replaced the launcher would be two
+  changes fighting.
+- **Reading `docs/archive/` and `docs/handoff-archive/`** — `evidence-guard.ps1`
+  refuses them.
 
 ## Waiting on the operator
 
-- **Deciding whether to move prompt files and the launcher scripts into the
-  repository.** A run cannot make that decision or move files it cannot write to.
-- **`docs/LAUNCH_CHECK.md` line 3 is a dead gate.** It asks for a tick that
-  `preflight.ps1` line 41 (`if ($false)`) can never fail. Delete the line or
-  re-enable the check — an operator edit, since the script is outside the repository.
-- **Gate 3 items.** Open boxes are in `docs/GATES.md`, which owns them; they are not
-  copied here.
+- **The first real launch**, which proves the parts a run cannot reach: the phone
+  pushes, the ninety-second liveness check, retry and the finally block.
+- **Deleting four files outside the repository** now that copies live in
+  `scripts/dispatch/`. Listed in this run's report. A run may not delete outside
+  the repository.
+- **A known consequence of the START line.** The launcher writes into `HANDOFF.md`
+  before the agent starts, so the agent sees a dirty tree. A dispatch prompt whose
+  base gate demands a clean tree must allowlist `HANDOFF.md`.
 
 ## Open gates
 
