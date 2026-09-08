@@ -1076,9 +1076,15 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   const barFlat = flatten(read('ui/primitives/BottomNav.tsx'));
   const shared = /createButton: \{([^}]*)\}/.exec(barFlat);
   assert.ok(shared, 'the control must keep a shared style');
+  // RUN N3 (2026-09-08): the radius is navBar.createRadius (18) rather than
+  // radius.lg (17). WHAT THIS FENCE ASSERTS IS UNCHANGED — that there is ONE
+  // radius and ONE ring weight, on the style both themes share, so a
+  // light-only corner can never come back. Only the token supplying it moved,
+  // and it moved because 18 is not on the radius scale and the scale is not
+  // being re-cut for one control.
   assert.match(
     shared[1],
-    /borderRadius: radius\.lg, borderWidth: 1,/,
+    /borderRadius: navBar\.createRadius, borderWidth: 1,/,
     'the ring weight and the radius are one set of numbers for both themes'
   );
   for (const key of ['createButtonDark', 'createButtonLight']) {
@@ -1740,13 +1746,21 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
 
   // home(18) — THE MASTER'S SHARE, and a share of the PILL because that is what
   // the control has to fit inside. Master 44 draws no [ + ] at all (its bar is
-  // the five classic tabs), so 85-88% is the dispatch's bound rather than a
+  // the five classic tabs), so the band is a dispatch bound rather than a
   // measurement, and it is recorded as such.
+  //
+  // RUN N3 (2026-09-08) — THE CEILING MOVES, 0.88 → 0.89, AND NOTHING ELSE
+  // ABOUT THIS CHECK DOES. The operator dialled the control to 62 in the new
+  // 70pt bar; 62 / 70 = 88.6%, which sat one half of a point outside home(18)'s
+  // 85-88 bound. The bound was never the constraint — CONTAINMENT is, and it is
+  // asserted below from the source's own numbers, unchanged and still passing
+  // with 4pt of clearance top and bottom. What moved is the recorded band, to
+  // the value the operator chose.
   const shareOfPill = size / pillHeight;
   assert.ok(
-    shareOfPill >= 0.85 && shareOfPill <= 0.88,
+    shareOfPill >= 0.85 && shareOfPill <= 0.89,
     `the [ + ] is ${(shareOfPill * 100).toFixed(1)}% of the pill's height; it belongs between ` +
-      '85% and 88%'
+      '85% and 89%'
   );
 
   // Parity 2026-08-22: ONE geometry for both themes — the frozen light square
@@ -1756,10 +1770,17 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // FILLED GOLD, dark only. The FILL is the operator reversal this fence
   // exists for; the RING is free to be any dark token — what it may not be is
   // the fill's own colour, which paints a ring that is not there.
-  assert.match(
-    flat,
-    /createButtonDark: \{ backgroundColor: colors\.gold,/,
-    'the dark control must be FILLED with palette gold'
+  // RUN N3 (2026-09-08): the FILL's token surface widened exactly as D14
+  // widened the ring's. It was `colors.gold`, the palette metal; it is now
+  // `navBar.gold`, the control's own — one step warmer, dark only, so the
+  // palette's gold keeps drawing the line-work it draws everywhere else.
+  // WHAT THIS PINS IS UNCHANGED IN KIND: the control must still be FILLED,
+  // from a token surface, never from a hex spelled at the call site.
+  const darkFill =
+    /createButtonDark: \{ backgroundColor: (colors|navBar)\.(\w+),/.exec(flat);
+  assert.ok(
+    darkFill,
+    'the dark control must be FILLED from a token surface — the palette or ui/tokens.ts navBar'
   );
   // RUN S3 (D14): the ring's hue moved from the palette to ui/tokens.ts's
   // `navBar` — the control's own line-work rather than a role either theme
@@ -1767,17 +1788,21 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // TOKEN READ, never a hex spelled at the call site, and never the fill's
   // own colour. Only which token surface it comes from widened.
   const darkRing =
-    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: (colors|navBar)\.(\w+),/.exec(flat);
+    /createButtonDark: \{ backgroundColor: (?:colors|navBar)\.\w+, borderColor: (colors|navBar)\.(\w+),/.exec(flat);
   assert.ok(
     darkRing,
     'the dark control must still declare a ring, and it must come from a token surface — the ' +
       'palette or ui/tokens.ts navBar — a raw hex here would be a new colour spelled at the call site'
   );
   // home(18) ADDS THE HALF home(11) COULD NOT, because it was red until now.
+  // RUN N3: compared against the FILL this control actually declares rather
+  // than against the literal name 'gold', so the check keeps meaning "a ring
+  // the colour of its own fill is not a ring" now that the fill has its own
+  // token. Same rule, read off the source instead of restated.
   assert.notEqual(
-    darkRing[2],
-    'gold',
-    'a gold ring on a gold fill is not a ring; it must be a dark token'
+    `${darkRing[1]}.${darkRing[2]}`,
+    `${darkFill[1]}.${darkFill[2]}`,
+    'a ring the colour of its own fill is not a ring; it must be a different dark token'
   );
   // RUN H2 — THE COLOURS FORK PER THEME AGAIN AND THE GEOMETRY DOES NOT, which
   // is the split the parity pass was actually protecting. What these
@@ -1786,8 +1811,13 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // is written as a hex at the call site. Only the values moved.
   // S2 (C6): the glyph colour is its dial, DEFAULTING to the per-theme
   // palette read — the fork and its tokens are pinned exactly as before.
+  // RUN N3 (2026-09-08): dark's half reads ui/tokens.ts navBar now — the token
+  // it took, `postPillGreen`, is THEME-CONSTANT and also fills light's tile,
+  // so the dark glyph could not move while it stayed on the palette. The
+  // widening is the ring's D14 widening again, and the two assertions under
+  // it are untouched: a per-theme read off a token surface, never a hex.
   const glyphColour =
-    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? colors\.(\w+) : colors\.(\w+)\)\}/.exec(flat);
+    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? (?:colors|navBar)\.(\w+) : colors\.(\w+)\)\}/.exec(flat);
   assert.ok(
     glyphColour,
     'the glyph must read its colour per theme, off the resolved palette — a hex here would be a ' +
@@ -1814,7 +1844,12 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
 
   // The shared style is the part that really is shared. A fill or a ring
   // reappearing on it would silently paint BOTH themes again.
-  const base = /createButton: \{ borderRadius: radius\.lg, borderWidth: 1,([^}]*)\}/.exec(flat);
+  // RUN N3 (2026-09-08): the corner is navBar.createRadius (18) rather than
+  // radius.lg (17) — the operator dialled 18, which is not on the radius
+  // scale, and the scale does not move for one control. What this pins is
+  // unchanged: the corner is GEOMETRY, so it stays on the style both themes
+  // share, and neither a fill nor a ring may reappear beside it.
+  const base = /createButton: \{ borderRadius: navBar\.createRadius, borderWidth: 1,([^}]*)\}/.exec(flat);
   assert.ok(base, 'the shared style must keep the geometry it never forked on');
   assert.doesNotMatch(
     base[1],
@@ -2277,13 +2312,21 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   const channels = (value) => [1, 3, 5].map((i) => parseInt(value.slice(i, i + 2), 16));
 
   // ---- C1, the glyph ------------------------------------------------------
-  // The ternary still forks on theme and still reads the resolved palette. Only
-  // the LIGHT arm moved, and the dark arm is pinned BY NAME so a future edit
+  // The ternary still forks on theme and still reads a token surface. Only the
+  // LIGHT arm moved in H3, and BOTH arms are pinned BY NAME so a future edit
   // that "unifies" the two fails here rather than in a screenshot.
+  //
+  // RUN N3 (2026-09-08) — THE DARK ARM MOVED, and H3's own claim is intact:
+  // H3 was light-only and this line is not evidence that it drifted. What
+  // moved the dark arm is N3, on operator instruction — postPillGreen is
+  // theme-CONSTANT and also fills light's tile three lines down, so the dark
+  // glyph could not change while it read the palette. The pin follows it to
+  // ui/tokens.ts's navBar and stays a pin: light is asserted UNCHANGED just
+  // below, which is the half H3 exists to protect.
   const glyph =
-    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? colors\.(\w+) : colors\.(\w+)\)\}/.exec(bar);
-  assert.ok(glyph, 'the [ + ] glyph must still take its colour per theme, off the resolved palette');
-  assert.equal(glyph[1], 'postPillGreen', 'C1 is LIGHT ONLY — the dark glyph must not move');
+    /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? (?:colors|navBar)\.(\w+) : colors\.(\w+)\)\}/.exec(bar);
+  assert.ok(glyph, 'the [ + ] glyph must still take its colour per theme, off a token surface');
+  assert.equal(glyph[1], 'glyphColorDark', "the dark glyph is the control's own green (N3)");
   assert.equal(glyph[2], 'gold', "the light glyph is the LIGHT palette's gold");
 
   // ---- C1, the ring -------------------------------------------------------
@@ -2315,10 +2358,17 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   // token `navBar.ringColorDark`. H3's claim is unaffected: the branch is
   // still asserted whole here, and it still says the dark tile keeps its gold
   // FILL, which is the half H3 was about. The slate is what changed.
+  //
+  // RUN N3 (2026-09-08) moved the dark FILL to `navBar.gold` — the control's
+  // own metal, one step warmer, on operator instruction. H3's claim survives
+  // in the form that matters: the branch is STILL asserted whole, so nothing
+  // may move in it unnoticed, and the tile is still GOLD-FILLED. What N3 did
+  // not do is give light any of it — the light branch above is pinned
+  // unchanged, which is what "light only" was ever a claim about.
   assert.match(
     bar,
-    /createButtonDark: \{ backgroundColor: colors\.gold, borderColor: navBar\.ringColorDark, \}/,
-    "H3 is LIGHT ONLY and the dark tile keeps its gold fill; S3 D14 owns the dark ring's hue"
+    /createButtonDark: \{ backgroundColor: navBar\.gold, borderColor: navBar\.ringColorDark, \}/,
+    "the dark tile keeps its gold fill, on the control's own token; S3 D14 owns the ring's hue"
   );
 
   // ---- the derivation, so "one shade down" cannot become a taste edit ------

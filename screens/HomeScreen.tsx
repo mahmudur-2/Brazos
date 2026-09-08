@@ -1044,9 +1044,9 @@ function OpenJobCard({
   // RUN T2 (C1) — the Nearby card's four dials. `gap` inherits
   // `theme.spacing.md` because this file imports `spacing` from lib/theme;
   // the other three answer to no token and carry their own literal.
-  const jobCardPadding = useDialNumber('home.jobCard.padding') ?? 14;
+  const jobCardPadding = useDialNumber('home.jobCard.padding') ?? 12;
   const jobCardGap = useDialNumber('home.jobCard.gap') ?? spacing.md;
-  const jobThumbSize = useDialNumber('home.jobCard.thumbSize') ?? 104;
+  const jobThumbSize = useDialNumber('home.jobCard.thumbSize') ?? 110;
   const jobMetaPaddingY = useDialNumber('home.jobCard.metaPaddingY') ?? 10;
   const accent = categoryAccent(job.category);
   const [thumbFailed, setThumbFailed] = useState(false);

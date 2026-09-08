@@ -317,16 +317,27 @@ export function PostJobScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // RUN T2 (C3) — POST A JOB'S OWN DIALS. Each falls back to the value this
-  // file drew before the dial existed, spelled here and nowhere else. The four
-  // that answer to a token take the `theme.*` scale, because this file imports
+  // file draws, spelled here and nowhere else. Whichever still answers to a
+  // token takes the `theme.*` scale, because this file imports
   // `spacing`/`radius` from lib/theme; ui/tokens' bare `spacing.xl` is 20
   // against theme's 24, so the wrong parent would move the gutter by four
   // points the moment the operator turned it.
-  const contentPaddingX = useDialNumber('postJob.content.paddingX') ?? spacing.xl;
-  const contentGap = useDialNumber('postJob.content.gap') ?? spacing.xl;
-  const progressHeight = useDialNumber('postJob.progress.height') ?? 4;
-  const stepFieldsGap = useDialNumber('postJob.stepFields.gap') ?? spacing.lg;
-  const descriptionHeight = useDialNumber('postJob.description.height') ?? 110;
+  //
+  // RUN N3 (2026-09-08) — FOUR OF THESE ARE NOW LITERALS THAT WERE TOKEN
+  // READS, and that is the change rather than a slip. The operator dialled
+  // the gutter to 20, the section gap to 21 and the field gap to 20; the
+  // gutter and the section gap had been ONE number (`spacing.xl`, 24) and are
+  // now two, and 21 is on no scale at all. A dial may not keep a parent it no
+  // longer ships at — the registry fences that — so the three left theirs,
+  // and the reason 20 is written out rather than taken from ui/tokens'
+  // `spacing.xl` (also 20) is the paragraph above: this file reads the theme
+  // scale, and a parent off the Emerald one would sit right until it moved.
+  // `reviewCardRadius` is the one that still inherits.
+  const contentPaddingX = useDialNumber('postJob.content.paddingX') ?? 20;
+  const contentGap = useDialNumber('postJob.content.gap') ?? 21;
+  const progressHeight = useDialNumber('postJob.progress.height') ?? 6;
+  const stepFieldsGap = useDialNumber('postJob.stepFields.gap') ?? 20;
+  const descriptionHeight = useDialNumber('postJob.description.height') ?? 120;
   const reviewCardRadius = useDialNumber('postJob.reviewCard.radius') ?? radius.xl;
   // home(7): the Back/Continue footer is PINNED above the pill, not scrolled
   // under it, so it no longer takes useFloatingNavClearance() — that reserved

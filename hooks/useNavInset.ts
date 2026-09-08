@@ -12,9 +12,20 @@ import { useDesignDial, useOverrideNumber } from '../lib/designOverrides';
  *
  *     navBottomPad = max(insetBottom − NAV_FLUSH_TUCK, NAV_FLUSH_MIN_PAD)
  *
- * — the icon/label row tucks 16pt into the inset zone and never sits closer
+ * — the icon/label row tucks 22pt into the inset zone and never sits closer
  * than 6pt to the edge. The design studio's navBottomPad dial REPLACES the
  * formula outright when set, so the operator can tune the real bar live.
+ *
+ * RUN N3 (2026-09-08) — THE TUCK DEEPENS, 16 → 22, AND 12 IS NOT WRITTEN
+ * ANYWHERE. The operator dialled the bar's bottom padding to 12 on a phone
+ * whose bottom inset is 34pt, and 12 is a DEVICE READING, not a constant:
+ * baking it as one would give a device with a different inset the wrong
+ * padding, which is the whole reason this is a formula. So the TERM moved
+ * instead — max(34 − 22, 6) = 12 on that phone, and the shape is untouched.
+ * NAV_FLUSH_MIN_PAD stays 6, so every device whose inset is 28pt or less —
+ * a zero-inset device included — gets exactly the 6 it got before: the
+ * change is confined to devices with a home indicator, which is where the
+ * operator's 12 was measured.
  *
  * `useNavInset()` is the height CONTENT must clear:
  *
@@ -35,7 +46,7 @@ import { useDesignDial, useOverrideNumber } from '../lib/designOverrides';
  */
 
 /** How far the icon/label row tucks into the safe-area inset zone. */
-export const NAV_FLUSH_TUCK = 16;
+export const NAV_FLUSH_TUCK = 22;
 
 /** The least padding the row keeps above the physical edge. */
 export const NAV_FLUSH_MIN_PAD = 6;

@@ -809,7 +809,11 @@ test('nav dials: defaults mirror the tokens, the [+] derives from the live bar, 
         tokens.navBar.createGlyphRatio,
     ),
   );
-  assert.equal(byKey.get('nav.activeColor').defaultValue(ctx), tokens.dark.emerald, 'dark ctx');
+  assert.equal(
+    byKey.get('nav.activeColor').defaultValue(ctx),
+    tokens.navBar.activeColorDark,
+    "N3: dark ships the bar's own green, not the palette's live-state emerald",
+  );
   assert.ok(byKey.get('create.size').min >= 44, 'the [+] can never dial under the touch floor');
 
   try {
@@ -886,7 +890,11 @@ test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster i
     "light keeps H3's deepened gold",
   );
   // Nothing else about the [+] moved.
-  assert.match(bar, /backgroundColor: colors\.gold,/, 'the fill stays');
+  // RUN N3 (2026-09-08): the fill stays, on the control's OWN gold token —
+  // `navBar.gold`, one step warmer and dark only. The palette's `dark.gold`
+  // did not move; tests/goldOnForest still sees this as the tree's one
+  // allowed gold fill, which is why the property is named `gold`.
+  assert.match(bar, /backgroundColor: navBar\.gold,/, 'the fill stays');
   assert.match(bar, /borderColor: colors\.goldDeep,/, "light's ring stays");
 
   // ---- D16, NO RASTER IN THE BAR (a proof, not a change) ----------------

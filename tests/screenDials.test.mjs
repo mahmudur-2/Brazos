@@ -48,9 +48,17 @@ const SCHEMA_SOURCE = await read('ui/designStudioSchema.ts');
 const CEILING = 12;
 
 /**
- * The dials each screen declares, with the value that screen DREW before T2
- * quoted beside it. `parent` is the registry's `inheritsFrom`, or null for a
- * value that corresponds to no token in its own file's scale.
+ * The dials each screen declares, with the value that screen SHIPS quoted
+ * beside it. `parent` is the registry's `inheritsFrom`, or null for a value
+ * that corresponds to no token in its own file's scale.
+ *
+ * `drew` was "what the screen drew before T2" until RUN N3 (2026-09-08), when
+ * the operator's dialled values were baked as the shipped defaults. Nine rows
+ * moved, and five of those lost a `parent`: an inheriting dial must ship at
+ * its parent's value (tests/designStudio's T1 chain fence), and 20, 21, 10 and
+ * 12 are not the 24, 16 and 8 those parents ship at. Dropping the chain is
+ * what keeps the row TRUE — the alternative was moving a shared spacing step
+ * for one screen. The fence's logic is untouched; only these constants moved.
  */
 const SCREENS = [
   {
@@ -63,9 +71,9 @@ const SCREENS = [
     dials: [
       { key: 'home.promoCard.radius', drew: 22, parent: null, fallback: '22' },
       { key: 'home.modeSwitch.paddingX', drew: 10, parent: null, fallback: '10' },
-      { key: 'home.jobCard.padding', drew: 14, parent: null, fallback: '14' },
+      { key: 'home.jobCard.padding', drew: 12, parent: null, fallback: '12' },
       { key: 'home.jobCard.gap', drew: 12, parent: 'theme.spacing.md', fallback: 'spacing.md' },
-      { key: 'home.jobCard.thumbSize', drew: 104, parent: null, fallback: '104' },
+      { key: 'home.jobCard.thumbSize', drew: 110, parent: null, fallback: '110' },
       { key: 'home.jobCard.metaPaddingY', drew: 10, parent: null, fallback: '10' },
     ],
   },
@@ -88,11 +96,11 @@ const SCREENS = [
     prefix: 'postJob',
     scale: 'theme',
     dials: [
-      { key: 'postJob.progress.height', drew: 4, parent: null, fallback: '4' },
-      { key: 'postJob.content.paddingX', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
-      { key: 'postJob.content.gap', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
-      { key: 'postJob.stepFields.gap', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
-      { key: 'postJob.description.height', drew: 110, parent: null, fallback: '110' },
+      { key: 'postJob.progress.height', drew: 6, parent: null, fallback: '6' },
+      { key: 'postJob.content.paddingX', drew: 20, parent: null, fallback: '20' },
+      { key: 'postJob.content.gap', drew: 21, parent: null, fallback: '21' },
+      { key: 'postJob.stepFields.gap', drew: 20, parent: null, fallback: '20' },
+      { key: 'postJob.description.height', drew: 120, parent: null, fallback: '120' },
       { key: 'postJob.reviewCard.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'radius.xl' },
     ],
   },
@@ -128,10 +136,10 @@ const SCREENS = [
     prefix: 'messages',
     scale: 'theme',
     dials: [
-      { key: 'messages.filterPill.height', drew: 34, parent: null, fallback: 'FILTER_PILL_HEIGHT' },
+      { key: 'messages.filterPill.height', drew: 36, parent: null, fallback: 'FILTER_PILL_HEIGHT' },
       { key: 'messages.list.gap', drew: 12, parent: 'theme.spacing.md', fallback: 'spacing.md' },
       { key: 'messages.list.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
-      { key: 'messages.filterRow.gap', drew: 8, parent: 'theme.spacing.sm', fallback: 'spacing.sm' },
+      { key: 'messages.filterRow.gap', drew: 10, parent: null, fallback: '10' },
     ],
   },
   {

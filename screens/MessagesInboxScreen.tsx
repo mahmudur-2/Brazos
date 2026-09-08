@@ -102,7 +102,7 @@ import {
  * measures once the stretch is gone, not a cap hiding it. `radius.pill` is
  * 999, so the corner is half the height at whatever this says.
  */
-const FILTER_PILL_HEIGHT = 34;
+const FILTER_PILL_HEIGHT = 36;
 
 /**
  * What the sheets act on. `jobId` is null in a direct thread (phase36), so
@@ -118,11 +118,15 @@ export function MessagesInboxScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // RUN T2 (C6) — THE INBOX'S OWN FOUR. The filter pill's height keeps the
-  // named constant it has always had as its fallback, so the number 34 is
-  // still spelled exactly once in this file and the fence that prices it
-  // against the 32-36pt band still reads it there.
+  // named constant it has always had as its fallback, so the number is still
+  // spelled exactly once in this file and the fence that prices it against
+  // the 32-36pt band still reads it there.
+  //
+  // RUN N3 (2026-09-08): the pill is 36 (was 34) and the row gap is 10 (was
+  // `spacing.sm`, 8). The gap stopped inheriting because 10 is not on the
+  // theme scale and an inheriting dial has to ship at its parent's value.
   const filterPillHeight = useDialNumber('messages.filterPill.height') ?? FILTER_PILL_HEIGHT;
-  const filterRowGap = useDialNumber('messages.filterRow.gap') ?? spacing.sm;
+  const filterRowGap = useDialNumber('messages.filterRow.gap') ?? 10;
   const listGap = useDialNumber('messages.list.gap') ?? spacing.md;
   const listPaddingX = useDialNumber('messages.list.paddingX') ?? spacing.lg;
   const navigation = useNavigation<MessagesStackNavigation>();

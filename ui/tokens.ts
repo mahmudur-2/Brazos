@@ -292,18 +292,25 @@ export const THEME_RADIUS_DEFAULTS = {
  * numbers — so a change to the bar's height can never desynchronise the
  * screens that have to clear it.
  *
- * RUN PJ1 (C9) — THE BAR IS ATTACHED AND LARGER, on confirmed operator
- * decision, reversing the floating pill (56ff86a / RUN GROUND1 era): flush
- * to the bottom edge, full width, no side insets, with the home-indicator
- * inset carried INSIDE the bar as bottom padding. The content height rises
- * 25% (70 → 88) with the glyphs and labels scaled in proportion — the newest
- * Home master (44, 853x1844) still draws the ~65pt floating pill this
- * decision reverses, so its bar proportions are recorded in the run report
- * rather than matched. FLOATING_NAV_GAP survives as a design quantity, not a
- * float: it is the breathing room a pinned footer or composer keeps above
- * the bar (PINNED_FOOTER_BOTTOM_PADDING derives from it).
+ * RUN PJ1 (C9) — THE BAR IS ATTACHED, on confirmed operator decision,
+ * reversing the floating pill (56ff86a / RUN GROUND1 era): flush to the
+ * bottom edge, full width, no side insets, with the home-indicator inset
+ * carried INSIDE the bar as bottom padding. FLOATING_NAV_GAP survives as a
+ * design quantity, not a float: it is the breathing room a pinned footer or
+ * composer keeps above the bar (PINNED_FOOTER_BOTTOM_PADDING derives from
+ * it).
+ *
+ * RUN N3 (2026-09-08) — THE 25% RISE IS REVERSED. PJ1 took the content
+ * height 70 → 88 and scaled the glyphs and labels with it (28/11 → 35/14);
+ * the operator dialled all three back on the device and this run bakes what
+ * they landed on — 88 → 70, 35 → 30, 14 → 12. That is a REVERSAL of PJ1's
+ * bar rise, recorded as one in docs/DECISIONS.md rather than as a tightening
+ * of it: the height returns to exactly the number PJ1 raised it from, and
+ * the glyph and label land BELOW their pre-rise 28/11 values rather than on
+ * them. The newest Home master (44, 853x1844) draws a ~65pt bar, which this
+ * moves toward without matching.
  */
-const FLOATING_NAV_HEIGHT = 88;
+const FLOATING_NAV_HEIGHT = 70;
 const FLOATING_NAV_GAP = 12;
 
 /**
@@ -691,14 +698,35 @@ export const materials: Record<MaterialName, MaterialSpec> = {
  * narrow typography exception, held by tests/designStudio.test.mjs.
  */
 export const navBar = {
-  iconSize: 35,
-  labelFontSize: 14,
+  // RUN N3 (2026-09-08): 30/12, dialled on the device. PJ1's 35/14 were its
+  // 25% bar rise applied to emerald D3's 28/11; the rise is reversed, and
+  // these land below 28/11 rather than back on them — see FLOATING_NAV_HEIGHT
+  // above, and docs/DECISIONS.md, where the reversal is named as one.
+  iconSize: 30,
+  labelFontSize: 12,
   /** The 2pt breath between the glyph and its label (label marginTop). */
   iconLabelGap: 2,
-  /** home(18): the centre control's height as a share of the bar's. */
-  createSizeRatio: 0.857,
-  /** The glyph inside it, as a share of the control — 32 on 52, as shipped. */
-  createGlyphRatio: 0.615,
+  /**
+   * home(18): the centre control's height as a share of the bar's.
+   *
+   * RUN N3 — STILL A SHARE, AND DELIBERATELY SO. The operator dialled the
+   * control to 62 in the new 70pt bar; 62 is NOT written here, because a
+   * fixed number would silently reverse home(18)'s finding that a control
+   * which must sit inside the bar has to be measured against the bar. The
+   * ratio is the same decision at the new value: 62 / 70 = 0.885714…, three
+   * decimal places (as 0.857 was) = 0.886, and Math.round(70 × 0.886) =
+   * Math.round(62.02) = 62. It rounds to 62 for any ratio in
+   * [0.878571, 0.892857), so 0.886 sits essentially at that window's centre
+   * and cannot tip to 61 or 63 on a rounding change.
+   */
+  createSizeRatio: 0.886,
+  /**
+   * The glyph inside it, as a share of the control. RUN N3: 40 on the new
+   * 62 — 40 / 62 = 0.645161…, so 0.645, and Math.round(62 × 0.645) =
+   * Math.round(39.99) = 40. The window that rounds to 40 is
+   * [0.637097, 0.653226); 0.645 is its centre. Was 0.615 (32 on 52).
+   */
+  createGlyphRatio: 0.645,
   /** RUN H2's operator dial: the dark [ + ]'s gold-glow strength. */
   createGlowAlpha: 0.25,
   /**
@@ -712,6 +740,46 @@ export const navBar = {
    * Dark only: light keeps `goldDeep` (RUN H3), untouched.
    */
   ringColorDark: '#E6D19A',
+  /**
+   * RUN N3 (2026-09-08) — THREE DARK-ONLY HUES THE OPERATOR DIALLED ON THE
+   * DEVICE, declared HERE for exactly the reason `ringColorDark` is: they
+   * are the bar's and the centre control's own values, not roles either
+   * theme resolves, and ui/tokens.ts is the one file a new hex may be
+   * spelled in.
+   *
+   * NARROW BY CONSTRUCTION. Each of the three replaced a SHARED token at the
+   * call site, and moving that token would have repainted the whole tree:
+   *
+   *   activeColorDark  was `dark.emerald` (#5FAE81) — the palette's
+   *                    live-state green, which also draws prices, Open and
+   *                    every "live" mark. Untouched: only the focused tab
+   *                    reads this instead.
+   *   gold             was `dark.gold` (#D4A24C) — the Prestige metal, which
+   *                    is line-work everywhere else in the tree. Untouched.
+   *   glyphColorDark   was `postPillGreen` (= brand.emerald, #0D6B52), which
+   *                    is THEME-CONSTANT and also fills light's [ + ].
+   *                    Untouched, so light's tile is the colour it was.
+   *
+   * LIGHT READS NONE OF THESE. Every call site keeps its light branch
+   * exactly as it was, so light renders unchanged.
+   *
+   * WHY THE FILL IS NAMED `gold` AND NOT `fillColorDark`: tests/goldOnForest
+   * sweeps the tree for `backgroundColor: <something>.gold` and holds the
+   * dark [ + ] as one of two recorded exceptions to "gold is line-work,
+   * never a fill". A property named anything else would slip out of that
+   * sweep and the exception would go stale — the fence would stop seeing the
+   * one gold fill it exists to watch. The name keeps it sighted.
+   */
+  activeColorDark: '#49C481',
+  gold: '#D8A448',
+  glyphColorDark: '#107257',
+  /**
+   * RUN N3 — the centre control's corner, dialled to 18. It read
+   * `radius.lg` (17), a scale step a great deal of the tree draws; 18 is not
+   * on that scale and the scale is not moving for one control, so the
+   * control carries its own corner, like its own fill and its own ring.
+   */
+  createRadius: 18,
 } as const;
 
 // ---------------------------------------------------------------------------

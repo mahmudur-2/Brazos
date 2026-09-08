@@ -559,7 +559,10 @@ function navigationDialEntries(): StudioEntry[] {
       tier: 'basic',
       kind: 'color',
       scope: 'local',
-      defaultValue: (ctx) => (ctx.isDark ? ctx.appDark : ctx.appLight).emerald ?? '',
+      // N3: dark ships the bar's own green (ui/tokens navBar.activeColorDark),
+      // which is what BottomNavItem draws; light still resolves the palette's
+      // emerald. Reset therefore lands on what shipped, in both themes.
+      defaultValue: (ctx) => (ctx.isDark ? navBar.activeColorDark : (ctx.appLight.emerald ?? '')),
       contrastGround: (ctx) => ({
         label: 'background',
         hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
@@ -635,7 +638,13 @@ function navigationDialEntries(): StudioEntry[] {
     }),
     create({
       key: 'create.radius',
-      inheritsFrom: 'radius.lg',
+      // N3: it no longer INHERITS. It was radius.lg's child and shipped at
+      // that scale step's 17; the operator dialled 18, which is not on the
+      // scale. An inheriting dial has to ship at its parent's value or the
+      // chain is a lie, and the alternative — moving radius.lg — would have
+      // rounded a great deal of the tree for one control. So the control
+      // carries its own corner (ui/tokens navBar.createRadius), as it already
+      // carries its own fill and its own ring.
       plainLabel: 'Corner roundness',
       technicalKey: 'create.radius',
       description: 'The centre [+] tile’s corner radius.',
@@ -646,7 +655,7 @@ function navigationDialEntries(): StudioEntry[] {
       min: 0,
       max: 48,
       step: 1,
-      defaultValue: () => tokenRadius.lg,
+      defaultValue: () => navBar.createRadius,
     }),
     create({
       key: 'create.fill',
@@ -656,8 +665,11 @@ function navigationDialEntries(): StudioEntry[] {
       tier: 'basic',
       kind: 'color',
       scope: 'local',
+      // N3: dark ships navBar.gold, the control's own metal — the palette's
+      // dark.gold is line-work everywhere else and did not move. Light is
+      // untouched.
       defaultValue: (ctx) =>
-        ctx.isDark ? (ctx.appDark.gold ?? '') : (ctx.appLight.postPillGreen ?? ''),
+        ctx.isDark ? navBar.gold : (ctx.appLight.postPillGreen ?? ''),
       contrastGround: (ctx) => ({
         label: 'background',
         hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
@@ -710,8 +722,11 @@ function navigationDialEntries(): StudioEntry[] {
       tier: 'advanced',
       kind: 'color',
       scope: 'local',
+      // N3: dark ships navBar.glyphColorDark. It read postPillGreen, which is
+      // theme-CONSTANT and also fills light's tile just above — so the value
+      // had to leave the palette for the dark branch to move alone.
       defaultValue: (ctx) =>
-        ctx.isDark ? (ctx.appDark.postPillGreen ?? '') : (ctx.appLight.gold ?? ''),
+        ctx.isDark ? navBar.glyphColorDark : (ctx.appLight.gold ?? ''),
     }),
     create({
       key: 'create.glyphOffsetX',
@@ -1676,6 +1691,11 @@ function screenDialEntries(): StudioEntry[] {
         step: 1,
         defaultValue: 10,
       },
+      // N3: 12, dialled. NOT re-pointed at theme.spacing.md, which also ships
+      // at 12 and is what the gap below inherits — that would tie the padding
+      // to a dial it has never followed. (This note sits OUTSIDE the row: the
+      // rows in this function are parsed as TEXT, in a fixed field order, by
+      // tests/screenDials.test.mjs, and a comment between fields breaks it.)
       {
         key: 'home.jobCard.padding',
         label: 'Job card — inner padding',
@@ -1685,7 +1705,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 0,
         max: 32,
         step: 1,
-        defaultValue: 14,
+        defaultValue: 12,
       },
       {
         key: 'home.jobCard.gap',
@@ -1708,7 +1728,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 56,
         max: 160,
         step: 2,
-        defaultValue: 104,
+        defaultValue: 110,
       },
       {
         key: 'home.jobCard.metaPaddingY',
@@ -1805,8 +1825,13 @@ function screenDialEntries(): StudioEntry[] {
         min: 1,
         max: 16,
         step: 1,
-        defaultValue: 4,
+        defaultValue: 6,
       },
+      // N3: 20, dialled — and the theme.spacing.xl chain GOES, because an
+      // inheriting dial has to ship at its parent's value and that step is 24.
+      // NOT re-pointed at ui/tokens' spacing.xl, which happens to be 20:
+      // PostJobScreen imports the theme scale, so a parent off the Emerald one
+      // would sit right until the operator turned it and then jump by four.
       {
         key: 'postJob.content.paddingX',
         label: 'Screen gutter',
@@ -1816,9 +1841,11 @@ function screenDialEntries(): StudioEntry[] {
         min: 0,
         max: 40,
         step: 1,
-        inheritsFrom: 'theme.spacing.xl',
-        defaultValue: THEME_SPACING_DEFAULTS.xl,
+        defaultValue: 20,
       },
+      // N3: 21, dialled — off every scale, and no longer theme.spacing.xl's
+      // child. The gutter above left the same parent for 20, which is the
+      // point: the two were one number and are now two.
       {
         key: 'postJob.content.gap',
         label: 'Section gap',
@@ -1828,9 +1855,9 @@ function screenDialEntries(): StudioEntry[] {
         min: 0,
         max: 48,
         step: 1,
-        inheritsFrom: 'theme.spacing.xl',
-        defaultValue: THEME_SPACING_DEFAULTS.xl,
+        defaultValue: 21,
       },
+      // N3: 20, dialled; theme.spacing.lg ships at 16, so the chain goes.
       {
         key: 'postJob.stepFields.gap',
         label: 'Field gap',
@@ -1840,8 +1867,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 0,
         max: 40,
         step: 1,
-        inheritsFrom: 'theme.spacing.lg',
-        defaultValue: THEME_SPACING_DEFAULTS.lg,
+        defaultValue: 20,
       },
       {
         key: 'postJob.description.height',
@@ -1852,7 +1878,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 60,
         max: 260,
         step: 2,
-        defaultValue: 110,
+        defaultValue: 120,
       },
       {
         key: 'postJob.reviewCard.radius',
@@ -2014,7 +2040,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 24,
         max: 56,
         step: 1,
-        defaultValue: 34,
+        defaultValue: 36,
       },
       {
         key: 'messages.list.gap',
@@ -2040,6 +2066,7 @@ function screenDialEntries(): StudioEntry[] {
         inheritsFrom: 'theme.spacing.lg',
         defaultValue: THEME_SPACING_DEFAULTS.lg,
       },
+      // N3: 10, dialled; theme.spacing.sm ships at 8, so the chain goes.
       {
         key: 'messages.filterRow.gap',
         label: 'Filter pill gap',
@@ -2049,8 +2076,7 @@ function screenDialEntries(): StudioEntry[] {
         min: 0,
         max: 24,
         step: 1,
-        inheritsFrom: 'theme.spacing.sm',
-        defaultValue: THEME_SPACING_DEFAULTS.sm,
+        defaultValue: 10,
       },
     ]),
     // C7 — screens/ClientJobDetailScreen.tsx. `theme.*` scale. Left undialled:

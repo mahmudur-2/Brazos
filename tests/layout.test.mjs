@@ -23,7 +23,7 @@ test('main tab screens do not reserve redundant gaps above the safe tab bar', as
   }
   // PJ1 (C9): the bar is ATTACHED — full width, flush to the bottom edge,
   // with its bottom padding carried INSIDE. G1 (C4), the flush fix: that
-  // padding is navBottomPad — max(inset − 16, 6), or the studio dial — so
+  // padding is navBottomPad — max(inset − 22, 6), or the studio dial — so
   // the row sits lower than the full inset used to put it; the arithmetic's
   // one home is hooks/useNavInset.ts and nothing floats by margin.
   // S2 (C6): the content height is the 'nav.barHeight' dial, DEFAULTING to
@@ -240,8 +240,12 @@ test('the nav glyphs are D3 size and every slot still fits its label', async () 
 
   // PJ1 (C9): emerald D3's 28/11 scaled in proportion with the bar's 25%
   // content-height rise — 35pt glyphs, 14pt labels. S2 (C6): tokenised.
-  assert.equal(navToken('iconSize'), 35);
-  assert.equal(navToken('labelFontSize'), 14);
+  // RUN N3 (2026-09-08): THE RISE IS REVERSED and these go with it, to the
+  // 30/12 the operator dialled — below 28/11 rather than back on them. The
+  // bar's own height reverses in the same run (88 → 70); the stack check
+  // below is what proves the three still fit together.
+  assert.equal(navToken('iconSize'), 30);
+  assert.equal(navToken('labelFontSize'), 12);
 
   // FENCED AGAINST RETURN (S2 C6): the two sizes may never come back as
   // literals in the bar — the token, read through the override layer, is the
@@ -550,13 +554,13 @@ test('a PINNED footer takes its own padding, never the scroll clearance', async 
 });
 
 test('the flush arithmetic lives in hooks/useNavInset.ts alone (G1 C6)', async () => {
-  // The inset contract: the bar's bottom padding is max(inset − 16, 6) — or
+  // The inset contract: the bar's bottom padding is max(inset − 22, 6) — or
   // the studio dial, which REPLACES the formula — and the height content must
   // clear is content + pad + the safe-area remainder the pad no longer
   // absorbs. One hook owns every number; the bar and all nineteen clearance
   // consumers read it, so the dial moves everything at once.
   const hook = await read('hooks/useNavInset.ts');
-  assert.match(hook, /export const NAV_FLUSH_TUCK = 16;/);
+  assert.match(hook, /export const NAV_FLUSH_TUCK = 22;/);
   assert.match(hook, /export const NAV_FLUSH_MIN_PAD = 6;/);
   assert.match(
     hook,
@@ -575,6 +579,17 @@ test('the flush arithmetic lives in hooks/useNavInset.ts alone (G1 C6)', async (
   // bar's derived numbers (106 and 122 with pad and inset folded in) may not
   // appear as code anywhere a screen computes clearance, and nothing outside
   // the bar and the hook may do arithmetic on the bar-height tokens.
+  //
+  // RUN N3 (2026-09-08) — 106 AND 122 ARE THE PRE-N3 FOOTPRINT AND STAY
+  // FENCED, but they are no longer the live one: with the bar at 70 and the
+  // tuck at 22 it is 82 (70 + 12) and 104 (70 + 34). Those two are NOT swapped
+  // in, deliberately — `\b82\b` matches the `0.82` pressed-opacity a dozen
+  // screens declare and `\b104\b` matches a 104pt thumbnail on two of them, so
+  // fencing them would fail on numbers that have nothing to do with the bar.
+  // The live guard is the token-arithmetic assertion below, which is
+  // value-independent and catches the real regression; this literal sweep is
+  // belt-and-braces and keeps the two numbers a screen might still have
+  // hand-typed from the PJ1 era.
   const codeOf = (source) =>
     source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
   for (const [root, files] of [

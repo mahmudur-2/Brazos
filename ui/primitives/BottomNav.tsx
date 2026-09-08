@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
 import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { glow, layout, radius, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
+import { glow, layout, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
 import { navBar } from '../tokens';
 import { tap } from '../../lib/haptics';
 import {
@@ -340,7 +340,16 @@ export function BottomNavItem({
   const tab = TAB_BY_KEY.get(routeName);
   const [active, inactive] = tab?.icons ?? (['ellipse', 'ellipse-outline'] as const);
   const label = tab?.label ?? routeName;
-  const tint = (focused ? activeColor : inactiveColor) ?? color;
+  // RUN N3 (2026-09-08) — THE FOCUSED TINT IS THE BAR'S OWN GREEN IN DARK.
+  // `color` is what the library hands down from tabBarActiveTintColor /
+  // tabBarInactiveTintColor, i.e. palette.emerald when focused; dark now
+  // draws navBar.activeColorDark instead. NARROW ON BOTH AXES: only the
+  // FOCUSED item is redirected (the resting ones still take `color`), and
+  // only in dark — light falls through to the palette exactly as before, so
+  // `dark.emerald` keeps painting every price, Open pill and live mark it
+  // painted yesterday. The dial still wins over both.
+  const shippedTint = focused && isDark ? navBar.activeColorDark : color;
+  const tint = (focused ? activeColor : inactiveColor) ?? shippedTint;
   // Decision 4: the active glyph and label glow softly. A dark-Prestige
   // treatment — light keeps its flat Heritage bar; the shape lives at token
   // level (glow.text), only the colour is resolved here.
@@ -796,7 +805,12 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         <Ionicons
           name="add"
           size={glyph}
-          color={glyphColorDial ?? (isDark ? colors.postPillGreen : colors.gold)}
+          // RUN N3 (2026-09-08): dark's glyph is the control's own green.
+          // It read `postPillGreen`, which is THEME-CONSTANT and also fills
+          // light's tile below — moving that token would have repainted
+          // light's [ + ] too, so the value lives on `navBar` and only the
+          // dark branch reads it. Light is byte-identical.
+          color={glyphColorDial ?? (isDark ? navBar.glyphColorDark : colors.gold)}
           style={
             glyphOffsetX || glyphOffsetY
               ? { transform: [{ translateX: glyphOffsetX }, { translateY: glyphOffsetY }] }
@@ -905,7 +919,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // ternary — `colors` is the RESOLVED palette (this factory runs once per
     // palette), so dark draws #D4A24C and light draws #C8A15B from the same
     // line.
-    borderRadius: radius.lg,
+    // RUN N3 (2026-09-08): 18, the control's own corner. It was radius.lg
+    // (17), a scale step a great deal of the tree draws — and 18 is not on
+    // that scale, so the control carries its corner the way it already
+    // carries its fill and its ring rather than the scale moving for it.
+    // GEOMETRY, so it stays on the SHARED style and both themes get it.
+    borderRadius: navBar.createRadius,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -945,7 +964,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // belongs, and this branch stays COLOUR-ONLY — the fill, the geometry and
   // the depth are all untouched.
   createButtonDark: {
-    backgroundColor: colors.gold,
+    // RUN N3 (2026-09-08): the control's own gold, one step warmer than the
+    // palette's — `dark.gold` (#D4A24C) is the Prestige metal the whole tree
+    // draws as line-work and it is untouched. Named `gold` on `navBar` so
+    // tests/goldOnForest's tree-wide "gold is line-work, never a fill" sweep
+    // keeps seeing this, the one control it holds an exception for.
+    backgroundColor: navBar.gold,
     borderColor: navBar.ringColorDark,
   },
   // RUN H2: light stops sharing dark's tile. It fills with the light Post-a-job
