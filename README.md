@@ -8,9 +8,10 @@ and taking work), presented as two switchable UI modes.
 
 ## Stack
 
-- **App:** Expo SDK 54 (`expo` 54.0.36) / React Native 0.81 / React 19 /
-  TypeScript 5.9. iOS is the shipping target; Android is deferred (config
-  exists, nothing is built or tested for it); the web/PWA surface is frozen.
+- **App:** Expo / React Native / React / TypeScript — exact versions in
+  `package.json`, which is the single source (`AGENTS.md` forbids pinning one
+  here). iOS is the shipping target; Android is deferred (config exists,
+  nothing is built or tested for it); the web/PWA surface is frozen.
 - **Backend:** Supabase (`@supabase/supabase-js`), with all
   assignment/lifecycle writes behind SQL RPCs and row-level security.
 - **Navigation:** React Navigation, two separately-typed trees
@@ -58,13 +59,20 @@ runs the same check in CI.
 
 ## Database migrations
 
-Schema changes are numbered files, `supabase/phaseNN_*.sql`. They are
-**hand-applied by the operator** (staging first; production only through the
-human-executed queue in `PROD_APPLY.md`) — no tool in this repository
-executes SQL. A migration counts as applied only when
-`node scripts/verify-schema.mjs` (which needs `.env` and live staging)
-comes back green. Applied migration files are history: they are never
-edited, renamed or reordered.
+Schema changes are timestamped files under `supabase/migrations/`. A push that
+touches `supabase/` starts `.github/workflows/staging.yml`, which verifies, then
+applies every pending migration, then deploys the edge functions — in that order,
+so a function never reaches staging ahead of the migration it depends on. There
+is no SQL Editor step for staging and no operator tap. The one exception is a
+migration that drops or renames a database object: the safety scan stops the
+pipeline and a human decides.
+
+**Production is never automated.** It stays hand-applied by the operator, one
+migration at a time; no job in this repository targets it. Applied migration
+files are history — never edited, renamed or reordered.
+
+`CLAUDE.md` §Supabase owns this policy; the lines above are a pointer to it, not
+a second copy.
 
 ## Design authority
 
@@ -81,6 +89,8 @@ operator-authored reference material.
 | Document | Role |
 | --- | --- |
 | `CLAUDE.md` | Permanent policy and invariants. Binding on all automated work. |
+| `docs/GATES.md` | The phase gates. Binding — imported by `CLAUDE.md`. |
+| `docs/SCOPE.md` | The v1 feature list, plus the frozen list of what already exists beyond it. Binding — imported by `CLAUDE.md`. |
 | `AGENTS.md` | Reading order for an agent starting a session. |
 | `HANDOFF.md` | Current operational context (live edge only; per-run history is in `docs/handoff-archive/`). |
 | `BRAZOS_MASTER_PLAN.md` | Roadmap intent — never current state. |
