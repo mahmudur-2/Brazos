@@ -1,16 +1,28 @@
 #requires -Version 5.1
 <#
-  BRAZOS — project knowledge bundle generator.
+  BRAZOS — project knowledge bundle generator. FALLBACK, not the path.
+
+  SUPERSEDED 2026-09-07. The project reads the repository through claude.ai's
+  GitHub integration, so nothing generates or uploads a bundle any more. This
+  script is kept for when that integration is unavailable. What may never enter
+  project knowledge is ruled in docs\DECISIONS.md 2026-09-07; the live selection
+  is in docs\HUMAN-STEPS.md.
+
+  BEFORE USING IT, FIX THE EXCLUSIONS BELOW. They do NOT match that ruling:
+  docs\archive, docs\handoff-archive and supabase\archive are absent from
+  $ExcludeDirs, so every bundle carried history — including a 596 KB handoff
+  archive — into the one surface that answers as if it were current. That is
+  the defect the GitHub sync replaced this script to avoid.
 
   Concatenates the repo's text sources into a handful of .txt files sized to
-  fit Claude's project-knowledge budget, which is a TOKEN budget, not the
-  30 MB per-file limit. Code is token-dense, so the practical ceiling is
-  roughly 5.3 MB of source across all uploaded files.
+  fit Claude's project-knowledge budget. The file picker's own folder
+  percentages put that budget at 6.24 MB of raw bytes, binaries counted,
+  measured 2026-09-07; the 5.3 MB this script shipped with was an estimate.
 
   Never reads or writes anything inside the repo. Output goes to $Out.
 
   Usage (plain PowerShell, from anywhere):
-      powershell -File C:\Users\mdmah\runs\make-bundles.ps1
+      powershell -File C:\Users\mdmah\BRAZOS\scripts\dispatch\make-bundles.ps1
 
   Deliberately EXCLUDED and never written into a bundle:
       .env  ·  start.ps1  ·  .git  ·  node_modules  ·  ios  ·  android
@@ -153,9 +165,9 @@ Write-Host ("Total          : {0} MB" -f [math]::Round($totalKB / 1024, 2))
 Write-Host ("Tests          : {0} MB   <-- DO NOT UPLOAD" -f [math]::Round($testKB / 1024, 2)) -ForegroundColor Yellow
 Write-Host ("To upload      : {0} MB" -f [math]::Round($uploadKB / 1024, 2)) -ForegroundColor Green
 
-if ($uploadKB / 1024 -gt 5.4) {
+if ($uploadKB / 1024 -gt 6.24) {
   Write-Host ""
-  Write-Host "OVER BUDGET. Project knowledge refuses above roughly 5.4 MB." -ForegroundColor Red
+  Write-Host "OVER BUDGET. Project knowledge holds 6.24 MB (measured 2026-09-07)." -ForegroundColor Red
   Write-Host "Drop the largest docs bundle and re-check." -ForegroundColor Red
 }
 
