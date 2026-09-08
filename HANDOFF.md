@@ -37,6 +37,12 @@ contradicted that or itself.
   repo session has to remember. The rest of that audit is superseded: it predates
   the launcher, `docs/HUMAN-STEPS.md` and the standing invariants, and its central
   finding — that no launcher exists — was answered by `e9eebe3`.
+- `docs: the frame says what the guard refuses on command text alone` — three guard
+  rules fire on a command's text rather than on what it does. Two are incidental
+  (the bare token that refuses the co-author trailer, and a printed heading naming a
+  remote); the third protects the credential file and is not friction. The frame now
+  draws that line, because grouped together they read as one annoyance and the
+  temptation is to route around all three.
 
 `npm run verify` green in this run: 1361 pass, 0 fail, exit 0.
 
