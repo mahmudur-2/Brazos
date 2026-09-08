@@ -34,6 +34,7 @@ const ACTIVE_DOCS = [
   'BRAZOS_MASTER_PLAN.md',
   'docs/architecture.md',
   'docs/README.md',
+  'docs/PROJECT-CHAT.md',
   'BRAZOS_BUILD_STATE.md',
 ];
 

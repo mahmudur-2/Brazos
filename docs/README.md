@@ -35,6 +35,7 @@ appears in no document.
 | `docs/DECISIONS.md` | The top-level dated decision log, append-only. The root `DECISIONS.md` and `docs/emerald-v2/DECISIONS.md` are its prior history. |
 | `docs/BACKLOG.md` | The only place unscheduled work lives. A dispatch reads an item from here, never from chat memory. |
 | `docs/LAUNCH_CHECK.md` | The pre-run checklist for an overnight dispatch; every line ticks before the launch command. |
+| `docs/PROJECT-CHAT.md` | The frame pasted into the claude.ai project's instructions box, mirrored here so it is versioned. The live copy is the box; edit both together. Never synced into project knowledge — what is synced is ruled in `docs/DECISIONS.md` 2026-09-07 and inventoried in `docs/HUMAN-STEPS.md`. |
 | `AGENTS.md` | Reading order for an agent starting a session. |
 | `HANDOFF.md` | Current operational context: last work, blockers, next steps. |
 | `docs/architecture.md` | Implemented architecture, reconstructed from source. |
