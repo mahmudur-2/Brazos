@@ -45,10 +45,14 @@ Chat writes the spec: goal, constraints, what "done" looks like, what must not c
 (DB-only lifecycle, RPC-write-only tables, integer cents, RLS) so a run cannot break
 one quietly. I paste that into a Claude Code session in the repo; it reads the real
 files, writes docs/dispatch/<name>.md — inside the repo, because the guard blocks any
-write outside it — and prints five checks: self-contradiction; every path exists; no
-gate stops the run before its first commit; every predictable stop has a
-continue-path; model and effort named. Defects go back to the repo session; chat
-never patches a prompt file. (8-12, 8-20, 8-28, 9-07)
+write outside it — and prints seven checks. Two of them are what preflight FAILs on, so
+a prompt missing either is refused before it launches: the constraint header on ONE
+unbroken line carrying AS THEY EXIST AT RUN START, never wrapped; and an ancestry base
+gate, git merge-base --is-ancestor <anchor> HEAD, never an exact HEAD. Then the other
+five: self-contradiction; every path exists; no gate stops the run before its first
+commit; every predictable stop has a continue-path; model and effort named. Defects go
+back to the repo session; chat never patches a prompt file.
+(8-12, 8-20, 8-28, 9-07, 9-08)
 
 STEPS I PERFORM
 Rule 2 of my general preferences, in full. This file holds no length rule to compete
@@ -119,3 +123,18 @@ frame carries routing and never content:
 - "The UI atlas is dead." `docs/architecture.md` says it better and names the
   replacement: the atlas-48 browse screen was unmounted in 4D-1b and deleted in
   Batch F, and every job-list intent lands on `WorkerResults{mode:'all'}`.
+
+## Added 2026-09-08 — the two checks preflight refuses without
+
+`preflight.ps1` FAILs a prompt on two conditions, and both are invisible until the
+operator runs it. The constraint header must be ONE unbroken line containing
+`AS THEY EXIST AT RUN START` — line 55 matches that literal against the raw file
+including newlines, so a header wrapped across two lines does not match and the
+prompt fails. And an ancestry base gate must be present — line 59, with
+`project_instructions.txt:12` listing it as a required element of every dispatch
+prompt. The 2026-09-07 audit found a finished prompt failing on exactly these two,
+exit 2, after two chats had reviewed it.
+
+They belong in the frame rather than in the repo session's memory because they fail
+every prompt, not one prompt. Naming them here ends the failure class; catching them
+in review repairs one instance of it.
