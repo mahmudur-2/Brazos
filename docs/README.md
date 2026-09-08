@@ -87,3 +87,4 @@ pointer stub, not a log.
 | `LEASES_2026-08-09.md` | File-lease protocol for one 2026-08-09 run. |
 | `RUN_REPORT_2026-08.md` | Report from that run. |
 | `FINDINGS_2026-08-12.md` | Durable memory of the 2026-08-12 fix-and-harden run. |
+| `BRAZOS_RETROSPECTIVE_2026-08-30.md` | Build retrospective covering 2026-08-08 → 2026-08-30, recovered from project knowledge 2026-09-07. Its header dates the claims that have since become false. Part 5 is a rule set for a future project, not an instruction to a run. |
