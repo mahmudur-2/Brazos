@@ -52,7 +52,12 @@ gate, git merge-base --is-ancestor <anchor> HEAD, never an exact HEAD. Then the 
 five: self-contradiction; every path exists; no gate stops the run before its first
 commit; every predictable stop has a continue-path; model and effort named. Defects go
 back to the repo session; chat never patches a prompt file.
-(8-12, 8-20, 8-28, 9-07, 9-08)
+The guard reads command TEXT, not intent: a command whose text contains the token
+"claude" or the words "git remote" is refused even when it only prints a heading, so
+never ask a run to narrate its work in shell echoes, and the commit trailer travels by
+git commit -F, never -m. start.ps1 is refused by the same mechanism and that one is not
+friction — it holds credentials, is gitignored, has never been committed on any ref,
+and nothing routes around it. (8-12, 8-20, 8-28, 9-07, 9-08)
 
 STEPS I PERFORM
 Rule 2 of my general preferences, in full. This file holds no length rule to compete
@@ -138,3 +143,17 @@ exit 2, after two chats had reviewed it.
 They belong in the frame rather than in the repo session's memory because they fail
 every prompt, not one prompt. Naming them here ends the failure class; catching them
 in review repairs one instance of it.
+
+Also added that day: what the guard refuses on command text alone. Two of its rules
+fire on commands that do nothing. The nested-session rule matches a bare token and
+therefore refuses the co-author trailer, which killed a commit during the same
+sitting that wrote this file; `ddca24c` exists because of it, and the message travels
+by file to `git commit -F` instead. The git rule refuses a printed heading naming a
+remote. Neither command was executing anything.
+
+The third refusal looks identical and is not the same thing at all. The credential
+file is refused because it holds credentials, and the block is defence in depth: the
+step after naming a credential file is reading it. Writing the distinction down is
+the point — grouped with two annoyances, the deliberate one reads as a third
+annoyance, and the temptation is to route around all three. Two are friction. One is
+the fence.
