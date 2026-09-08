@@ -1,6 +1,6 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-07 23:19 EDT.
+WRITTEN: 2026-09-08 00:15 EDT.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
@@ -29,6 +29,14 @@ contradicted that or itself.
   of its claims are not. Now in `docs/archive/` with a header dating each
   falsified claim against the evidence that falsified it.
 - `docs: HANDOFF rewrite - the project-knowledge sync`.
+- `docs: the frame carries the two checks preflight refuses without` — the
+  2026-09-07 audit (run against `90eced8`, thirteen commits back) found a finished
+  dispatch prompt failing preflight with exit 2 on a wrapped constraint header and
+  a missing ancestry base gate. Both are FAIL conditions on every prompt, so they
+  moved into `docs/PROJECT-CHAT.md`'s checklist rather than staying something a
+  repo session has to remember. The rest of that audit is superseded: it predates
+  the launcher, `docs/HUMAN-STEPS.md` and the standing invariants, and its central
+  finding — that no launcher exists — was answered by `e9eebe3`.
 
 `npm run verify` green in this run: 1361 pass, 0 fail, exit 0.
 
