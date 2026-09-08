@@ -24,6 +24,10 @@ contradicted that or itself.
 - `docs: PROJECT-CHAT.md mirrors the frame pasted into the project` — the new file,
   its `docs/README.md` classification row, and its addition to ACTIVE_DOCS in
   `tests/governance.test.mjs` so it is fenced like every other active document.
+- `docs: archive the 2026-08-30 build retrospective` — it was in project
+  knowledge, where a retrieved fragment answers as if it were current, and three
+  of its claims are not. Now in `docs/archive/` with a header dating each
+  falsified claim against the evidence that falsified it.
 - `docs: HANDOFF rewrite - the project-knowledge sync`.
 
 `npm run verify` green in this run: 1361 pass, 0 fail, exit 0.
