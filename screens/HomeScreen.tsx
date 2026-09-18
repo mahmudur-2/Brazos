@@ -650,8 +650,11 @@ export function HomeScreen() {
               >
                 Take a task{'\n'}off your plate.
               </Text>
+              {/* 2026-09-17: the break after "Hire help." is EXPLICIT, the way
+                  the headline's is — operator decision, not a wrap the 73%
+                  column happens to produce. One string, so both themes. */}
               <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
-                Describe it. Hire help. Get it handled.
+                Describe it. Hire help.{'\n'}Get it handled.
               </Text>
             </View>
           </View>
@@ -1140,8 +1143,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     letterSpacing: -0.3,
     color: colors.ink,
   },
-  // home(23)'s 14/10 (one line, master 44's own cap), both themes since the
-  // parity pass — light's 16/8 two-line setting is retired.
+  // home(23)'s 14/10 (master 44's own cap), both themes since the parity pass
+  // — light's 16/8 setting is retired. 2026-09-17: the copy breaks onto two
+  // lines by an explicit newline in the string; nothing here moved for it.
   heroSubtitle: {
     maxWidth: '73%',
     marginTop: 10,
