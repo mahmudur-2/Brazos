@@ -89,10 +89,21 @@ const GOLD_FILL_ALLOWLIST = new Set(['components/ModeTransitionOverlay.tsx']);
  * them. Gold is the Prestige set's attention metal and is not otherwise a fill,
  * which is exactly why this needs recording here rather than passing quietly.
  */
-const GOLD_FILL_EXCEPTIONS = new Set([
-  'ui/primitives/BottomNav.tsx::createButtonDark',
-  'components/ConversationRow.tsx::dot',
-]);
+/**
+ * 2026-09-17 — AND THE FIRST OF THOSE TWO IS GONE, which is the deepEqual
+ * below doing its job rather than a rule being relaxed.
+ *
+ * The operator reversed the gold on the centre [ + ]: the dark control now
+ * fills with the dark "Post a job" pill's own green, lit through
+ * ui/primitives/LitSurface.tsx, so `createButtonDark` is not a gold fill any
+ * more and the entry recorded for it stopped matching anything. A stale
+ * exception is a hole standing open for a future gold fill nobody reviewed —
+ * the comment above says so, and the assertion below enforces it — so it is
+ * DELETED here rather than kept "in case". `decision 3`'s "no gold fills
+ * anywhere" is therefore unqualified again for every control in the tree, in
+ * both themes, and the unread dot is the one remaining exception.
+ */
+const GOLD_FILL_EXCEPTIONS = new Set(['components/ConversationRow.tsx::dot']);
 
 /**
  * The one shape decision 3's "no gold fills" was never about: the filled part

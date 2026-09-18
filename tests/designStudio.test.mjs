@@ -879,8 +879,19 @@ test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster i
   assert.equal(byKey.get('material.chrome.fallbackScrimAlpha').defaultValue(ctx), 1);
 
   // ---- D14, THE [+] RING GOES CHAMPAGNE (dark only) ---------------------
+  //
+  // 2026-09-17 STOPS DRAWING THAT RING, on operator instruction: the dark
+  // control has no outline at all. D14's token is NOT deleted and this block
+  // still owns it — the studio's `create.border` dial launches at it and
+  // turning that dial still paints a ring, so the hue is live where a dial can
+  // reach it. What moved is the shipped default, and the DIAL half of D14 is
+  // asserted exactly as it was.
   assert.equal(tokens.navBar.ringColorDark, '#E6D19A');
-  assert.match(bar, /borderColor: navBar\.ringColorDark,/, 'the dark ring reads the token');
+  assert.match(
+    bar,
+    /borderColor: 'transparent',/,
+    "the dark control declares no ring — by colour, so no geometry forks with it",
+  );
   assert.doesNotMatch(bar, /#E6D19A/i, 'the hex belongs in ui/tokens.ts, never at the call site');
   // The registry default follows the token; LIGHT is untouched.
   assert.equal(byKey.get('create.border').defaultValue({ ...ctx, isDark: true }), '#E6D19A');
@@ -889,12 +900,13 @@ test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster i
     ctx.appLight.goldDeep,
     "light keeps H3's deepened gold",
   );
-  // Nothing else about the [+] moved.
-  // RUN N3 (2026-09-08): the fill stays, on the control's OWN gold token —
-  // `navBar.gold`, one step warmer and dark only. The palette's `dark.gold`
-  // did not move; tests/goldOnForest still sees this as the tree's one
-  // allowed gold fill, which is why the property is named `gold`.
-  assert.match(bar, /backgroundColor: navBar\.gold,/, 'the fill stays');
+  // RUN N3 (2026-09-08) put the fill on the control's OWN gold token; 2026-09-17
+  // reverses the gold and hands the control the dark "Post a job" pill's recipe
+  // — `postPillGreen` under ui/primitives/LitSurface.tsx's wash. So the tree has
+  // no gold FILL in this file at all now, which is why tests/goldOnForest's
+  // recorded exception for it is deleted rather than left standing.
+  assert.match(bar, /backgroundColor: colors\.postPillGreen,/, "the fill is the pill's green");
+  assert.match(bar, /liftAlpha: navBar\.createLiftAlpha,/, 'lit with the pill’s own alpha');
   assert.match(bar, /borderColor: colors\.goldDeep,/, "light's ring stays");
 
   // ---- D16, NO RASTER IN THE BAR (a proof, not a change) ----------------

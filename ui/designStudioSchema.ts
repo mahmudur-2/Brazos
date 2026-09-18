@@ -665,11 +665,13 @@ function navigationDialEntries(): StudioEntry[] {
       tier: 'basic',
       kind: 'color',
       scope: 'local',
-      // N3: dark ships navBar.gold, the control's own metal — the palette's
-      // dark.gold is line-work everywhere else and did not move. Light is
-      // untouched.
-      defaultValue: (ctx) =>
-        ctx.isDark ? navBar.gold : (ctx.appLight.postPillGreen ?? ''),
+      // 2026-09-17: the tile is the Post-a-job pill's green in BOTH themes
+      // now. `postPillGreen` is theme-constant, so one read answers both and
+      // the ternary N3 needed for its dark-only navBar.gold is gone with it.
+      // The SHIPPED dark tile lights that green through
+      // ui/primitives/LitSurface.tsx; a colour dial can only name the flat
+      // far stop, which is what this is — turning it moves the wash with it.
+      defaultValue: (ctx) => ctx.appLight.postPillGreen ?? '',
       contrastGround: (ctx) => ({
         label: 'background',
         hex: (ctx.isDark ? ctx.appDark : ctx.appLight).background,
@@ -722,11 +724,13 @@ function navigationDialEntries(): StudioEntry[] {
       tier: 'advanced',
       kind: 'color',
       scope: 'local',
-      // N3: dark ships navBar.glyphColorDark. It read postPillGreen, which is
-      // theme-CONSTANT and also fills light's tile just above — so the value
-      // had to leave the palette for the dark branch to move alone.
+      // 2026-09-17: dark ships the app's cream — the dark palette's `onForest`,
+      // the content colour a green fill takes and the value the dark
+      // "Post a job" label is already set in. N3's navBar.glyphColorDark was
+      // a green for reading against a GOLD tile and no longer applies. Light
+      // is untouched.
       defaultValue: (ctx) =>
-        ctx.isDark ? navBar.glyphColorDark : (ctx.appLight.gold ?? ''),
+        ctx.isDark ? (ctx.appDark.onForest ?? '') : (ctx.appLight.gold ?? ''),
     }),
     create({
       key: 'create.glyphOffsetX',

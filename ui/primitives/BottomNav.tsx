@@ -14,6 +14,7 @@ import {
   useOverrideString,
 } from '../../lib/designOverrides';
 import { useNavInset } from '../../hooks/useNavInset';
+import { litFill } from './LitSurface';
 import { Surface } from './Surface';
 
 /**
@@ -659,19 +660,34 @@ export const HIDDEN_TAB_ITEM_OPTIONS: BottomTabNavigationOptions = {
 };
 
 /**
- * home(8) — THE CENTRE [ + ] IS A FILLED GOLD CONTROL IN DARK.
+ * home(8) — THE CENTRE [ + ] WAS A FILLED GOLD CONTROL IN DARK, AND IS NOT ANY
+ * MORE (2026-09-17). The record is kept because the gold was itself a reversal
+ * and the next reader has to be able to see both moves.
  *
- * This REVERSES decision 3's "no gold fills anywhere" for exactly this one
- * control, on operator instruction. It was a gold glyph and a gold ring on the
- * deep-green conversion fill; it is now palette gold, filled, with dark
- * content. The masters draw this control with a gradient; no gradient library
- * exists here and none is being added, so flat palette gold is the accepted
- * approximation and is recorded as such.
+ * home(8) reversed decision 3's "no gold fills anywhere" for exactly this one
+ * control, on operator instruction: a gold glyph and a gold ring on the
+ * deep-green conversion fill became palette gold, filled, with dark content.
+ * RUN N3 then moved that fill to the control's own warmer `navBar.gold`.
  *
- * tests/goldOnForest.test.mjs still forbids gold fills tree-wide. The
- * exception is recorded there as one file-and-style-key pair, not as a
- * file-wide allowlist, so a second gold fill in this same file is still an
- * offender.
+ * 2026-09-17 REVERSES THE GOLD, on operator instruction, and hands this
+ * control the SAME RECIPE the dark "Post a job" pill already draws —
+ * `postPillGreen` under ui/primitives/LitSurface.tsx's lit wash, with no
+ * highlight edge, no ring at all, and the app's cream as the glyph. The two
+ * controls are now identical BY CONSTRUCTION rather than by two descriptions
+ * agreeing, which is the whole point of taking the recipe instead of a colour:
+ * no new hue enters the app and the screen's one conversion control and the
+ * bar's one creation control cannot drift apart.
+ *
+ * WHAT THAT MEANS FOR tests/goldOnForest.test.mjs: the tree now has no gold
+ * FILL in this file at all, so the exception that file recorded for
+ * `createButtonDark` is deleted rather than left standing — its own deepEqual
+ * treats a stale exception as a failure, which is why that is the correct
+ * move and not a loosening.
+ *
+ * LIGHT IS UNTOUCHED, in every respect — fill, ring, glyph and glow. `flat:
+ * !isDark` is what makes that true by construction: litFill returns
+ * `undefined` in light, which React Native drops from a style array, so there
+ * is no key, no node and no pixel.
  *
  * SIZE IS A SHARE OF THE PILL — see home(18) below. Home parity 2026-08-22:
  * light shares dark's whole geometry (size, centring, inset) and keeps only
@@ -766,11 +782,49 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
       ? [{ translateY: -raise }, { scale: 0.96 }]
       : [{ translateY: -raise }],
   });
-  // The gold glow (RUN H2's operator dial, tokenised as navBar.createGlowAlpha
-  // and dial-replaceable): glow.halo pins shadowOpacity at 1 on native, so the
-  // alpha here is the one dilution. Applied inline, identically in both
-  // themes — the depth never forks, only colours do.
-  const halo = glow.halo(withAlpha(glowColorDial ?? colors.gold, glowDial ?? navBar.createGlowAlpha));
+  // The glow (RUN H2's operator dial, tokenised as navBar.createGlowAlpha and
+  // dial-replaceable): glow.halo pins shadowOpacity at 1 on native, so the
+  // alpha here is the one dilution. ONE SHAPE, declared once, applied inline in
+  // both themes — the depth never forks, only colours do, which is the rule
+  // tests/themeTokens.test.mjs enforces tree-wide.
+  //
+  // 2026-09-17: the glow follows the FILL, as it always has. It was
+  // `colors.gold` on both sides of the palette — dark's metal under dark's gold
+  // tile, light's under light's green one — and dark's tile is no longer gold,
+  // so dark's halo takes the new fill and light's is left exactly as it was.
+  // A ternary on the COLOUR only: the shape, the radius and the alpha are one
+  // declaration still, so this is a palette translation and not a second depth.
+  const halo = glow.halo(
+    withAlpha(
+      glowColorDial ?? (isDark ? colors.postPillGreen : colors.gold),
+      glowDial ?? navBar.createGlowAlpha
+    )
+  );
+
+  // 2026-09-17 — THE TILE IS LIT, NOT FLAT, AND IT IS THE PILL'S OWN RECIPE.
+  //
+  // screens/HomeScreen.tsx lights the dark "Post a job" pill with exactly this
+  // call — `postPillGreen` as the far stop, the palette's `emerald` as the
+  // lift, lit(3)'s solved alpha — and the operator asked for the two controls
+  // to be one thing. `highlight: false` is the one difference the operator
+  // named: the pill carries a 1pt lighter top edge and this control does not.
+  //
+  // THE FILL DIAL STAYS LIVE. `create.fill` is the gradient's own far stop
+  // rather than a flat colour underneath it, because a gradient whose last
+  // stop is opaque paints over whatever `backgroundColor` sits below — so
+  // reading the dial here is what keeps turning it doing something. With no
+  // dial set this is byte-for-byte the pill's recipe.
+  //
+  // `flat: !isDark` returns `undefined` in light, which React Native drops
+  // from a style array: no key, no node, no pixel. That is what makes "dark
+  // only" a fact about the render rather than a claim about the source.
+  const litTile = litFill({
+    surface: fillDial ?? colors.postPillGreen,
+    lift: colors.emerald,
+    liftAlpha: navBar.createLiftAlpha,
+    highlight: false,
+    flat: !isDark,
+  });
 
   return (
     <View style={[styles.createSlot, centerClearance ? { marginHorizontal: centerClearance } : null]}>
@@ -790,6 +844,9 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
           // resolve through different properties, so "the later one wins" is
           // not a thing that can be relied on. One branch, one depth.
           isDark ? styles.createButtonDark : styles.createButtonLight,
+          // The lit wash sits directly on the fill it lights. In light it is
+          // `undefined` and this entry costs nothing at all.
+          litTile,
           halo,
           { width: size, height: size },
           radiusDial != null ? { borderRadius: radiusDial } : null,
@@ -805,12 +862,14 @@ export function CenterCreateButton({ onPress }: { onPress: () => void }) {
         <Ionicons
           name="add"
           size={glyph}
-          // RUN N3 (2026-09-08): dark's glyph is the control's own green.
-          // It read `postPillGreen`, which is THEME-CONSTANT and also fills
-          // light's tile below — moving that token would have repainted
-          // light's [ + ] too, so the value lives on `navBar` and only the
-          // dark branch reads it. Light is byte-identical.
-          color={glyphColorDial ?? (isDark ? navBar.glyphColorDark : colors.gold)}
+          // 2026-09-17: dark's glyph is the APP'S CREAM — `onForest`, which is
+          // the dark palette's ink and the very value the dark "Post a job"
+          // pill sets its label in. RUN N3's `navBar.glyphColorDark` was a
+          // green for reading against a GOLD tile; the tile is that green now,
+          // so the glyph has to be the content colour a green fill takes, and
+          // the palette already names it. Referenced, never retyped. Light is
+          // byte-identical: its arm is untouched.
+          color={glyphColorDial ?? (isDark ? colors.onForest : colors.gold)}
           style={
             glyphOffsetX || glyphOffsetY
               ? { transform: [{ translateX: glyphOffsetX }, { translateY: glyphOffsetY }] }
@@ -957,20 +1016,28 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // These two branches differ in COLOUR and in nothing else, which is what
   // makes them a palette translation rather than two designs.
   //
-  // RUN S3 (D14) — THE RING GOES CHAMPAGNE, dark only. `greetingSlate` was
-  // the light greeting grey borrowed across the palettes; a warm pale metal
-  // reads as a ring around the gold tile rather than as a cold seam. The hue
-  // lives in ui/tokens.ts (`navBar.ringColorDark`), which is where a new hex
-  // belongs, and this branch stays COLOUR-ONLY — the fill, the geometry and
-  // the depth are all untouched.
+  // RUN S3 (D14) gave this ring the champagne `navBar.ringColorDark`, and
+  // 2026-09-17 STOPS DRAWING A RING HERE AT ALL, on operator instruction: the
+  // dark control has no outline of any kind. The token stays in ui/tokens.ts
+  // — the studio's `create.border` dial still launches at it, and turning that
+  // dial still paints a ring — but nothing draws it by default any more.
+  //
+  // THE RING GOES BY COLOUR, NOT BY WIDTH, and that is load-bearing rather
+  // than tidy. `borderWidth: 1` lives on the shared style above because RN
+  // lays a border INSIDE the box: zeroing it in one theme would move that
+  // theme's content box by a point, which is a GEOMETRY fork and exactly what
+  // tests/themeTokens.test.mjs forbids. 'transparent' removes the ring and
+  // moves nothing — the same way screens/HomeScreen.tsx's `heroButtonDark`
+  // already un-rings the dark "Post a job" pill, which is the control this one
+  // is now built to match.
   createButtonDark: {
-    // RUN N3 (2026-09-08): the control's own gold, one step warmer than the
-    // palette's — `dark.gold` (#D4A24C) is the Prestige metal the whole tree
-    // draws as line-work and it is untouched. Named `gold` on `navBar` so
-    // tests/goldOnForest's tree-wide "gold is line-work, never a fill" sweep
-    // keeps seeing this, the one control it holds an exception for.
-    backgroundColor: navBar.gold,
-    borderColor: navBar.ringColorDark,
+    // 2026-09-17: the flat far stop of the lit wash applied at render — the
+    // light Post-a-job pill's green, theme-constant, and therefore the same
+    // hue light's tile below carries. It is declared here and not on the
+    // shared style because a fill on the shared style paints BOTH themes, and
+    // the two branches must stay separately answerable.
+    backgroundColor: colors.postPillGreen,
+    borderColor: 'transparent',
   },
   // RUN H2: light stops sharing dark's tile. It fills with the light Post-a-job
   // pill's own green. Still an OPAQUE fill, so the shared elevation cannot

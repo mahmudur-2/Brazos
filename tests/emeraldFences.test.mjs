@@ -1767,14 +1767,11 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // and its lift are retired; light keeps only its colours.
   assert.doesNotMatch(bar, /CREATE_BUTTON_LIGHT_SIZE|CREATE_BUTTON_LIGHT_RAISE/);
 
-  // FILLED GOLD, dark only. The FILL is the operator reversal this fence
-  // exists for; the RING is free to be any dark token — what it may not be is
-  // the fill's own colour, which paints a ring that is not there.
-  // RUN N3 (2026-09-08): the FILL's token surface widened exactly as D14
-  // widened the ring's. It was `colors.gold`, the palette metal; it is now
-  // `navBar.gold`, the control's own — one step warmer, dark only, so the
-  // palette's gold keeps drawing the line-work it draws everywhere else.
-  // WHAT THIS PINS IS UNCHANGED IN KIND: the control must still be FILLED,
+  // FILLED FROM A TOKEN SURFACE, dark only. home(8) made that fill GOLD, which
+  // is the operator reversal this fence was built around; 2026-09-17 REVERSES
+  // THE GOLD, on operator instruction, and gives the control the dark
+  // "Post a job" pill's own recipe instead. What this pins is unchanged in
+  // KIND and is the half that has never moved: the control must be FILLED,
   // from a token surface, never from a hex spelled at the call site.
   const darkFill =
     /createButtonDark: \{ backgroundColor: (colors|navBar)\.(\w+),/.exec(flat);
@@ -1782,27 +1779,38 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
     darkFill,
     'the dark control must be FILLED from a token surface — the palette or ui/tokens.ts navBar'
   );
-  // RUN S3 (D14): the ring's hue moved from the palette to ui/tokens.ts's
-  // `navBar` — the control's own line-work rather than a role either theme
-  // resolves. What this pins is UNCHANGED IN KIND: the ring must still be a
-  // TOKEN READ, never a hex spelled at the call site, and never the fill's
-  // own colour. Only which token surface it comes from widened.
-  const darkRing =
-    /createButtonDark: \{ backgroundColor: (?:colors|navBar)\.\w+, borderColor: (colors|navBar)\.(\w+),/.exec(flat);
-  assert.ok(
-    darkRing,
-    'the dark control must still declare a ring, and it must come from a token surface — the ' +
-      'palette or ui/tokens.ts navBar — a raw hex here would be a new colour spelled at the call site'
+  // AND THE WASH OVER IT IS THE PILL'S, not a second description of it. The
+  // recipe is read off the source so "identical by construction" stays a fact
+  // about this file rather than a claim in a comment: the same primitive, the
+  // same far stop, the same lift, the shared alpha token — and `flat: !isDark`,
+  // which is the whole of "dark only" (litFill returns undefined in light, and
+  // React Native drops undefined from a style array).
+  assert.match(
+    flat,
+    /const litTile = litFill\(\{ surface: fillDial \?\? colors\.postPillGreen, lift: colors\.emerald, liftAlpha: navBar\.createLiftAlpha, highlight: false, flat: !isDark, \}\);/,
+    "the dark tile must be lit with the Post-a-job pill's own recipe, dark only"
   );
-  // home(18) ADDS THE HALF home(11) COULD NOT, because it was red until now.
-  // RUN N3: compared against the FILL this control actually declares rather
-  // than against the literal name 'gold', so the check keeps meaning "a ring
-  // the colour of its own fill is not a ring" now that the fill has its own
-  // token. Same rule, read off the source instead of restated.
-  assert.notEqual(
-    `${darkRing[1]}.${darkRing[2]}`,
+  assert.equal(
     `${darkFill[1]}.${darkFill[2]}`,
-    'a ring the colour of its own fill is not a ring; it must be a different dark token'
+    'colors.postPillGreen',
+    "the flat far stop under the wash must be the pill's green, so the two controls cannot drift"
+  );
+  // 2026-09-17: THE RING IS GONE IN DARK, and it went by COLOUR rather than by
+  // width. `borderWidth: 1` stays on the shared style — RN lays a border inside
+  // the box, so zeroing it in one theme moves that theme's content box by a
+  // point, which is the geometry fork tests/themeTokens.test.mjs forbids. So
+  // what replaces "the ring must be a token, and never the fill's own colour"
+  // is the stronger statement that there is no ring at all, spelled the way
+  // screens/HomeScreen.tsx already un-rings the dark pill.
+  assert.match(
+    flat,
+    /createButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent', \}/,
+    "the dark control declares NO ring — 'transparent', so no geometry forks with it"
+  );
+  assert.match(
+    flatten(read('screens/HomeScreen.tsx')),
+    /heroButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent' \}/,
+    'and it is the same spelling the dark Post-a-job pill uses, which is the control it matches'
   );
   // RUN H2 — THE COLOURS FORK PER THEME AGAIN AND THE GEOMETRY DOES NOT, which
   // is the split the parity pass was actually protecting. What these
@@ -1875,10 +1883,16 @@ test('home(8) fence: the [ + ] is filled gold in dark, and the bar footprint is 
   // same shared shape, the strength now the create.glowAlpha dial defaulting
   // to the ui/tokens.ts navBar token — and applied in the one style array
   // both themes share, so the depth still never forks.
+  // 2026-09-17: the glow follows the FILL, which is what it has always done —
+  // it was `colors.gold` when the tile was gold on one side of the palette and
+  // light's gold on the other. Dark's tile is the pill's green now, so dark's
+  // halo is too, and LIGHT'S ARM IS PINNED UNCHANGED beside it. One shape, one
+  // alpha, one declaration: the ternary reaches the COLOUR only, so the depth
+  // still does not fork.
   assert.match(
     flat,
-    /const halo = glow\.halo\(withAlpha\(glowColorDial \?\? colors\.gold, glowDial \?\? navBar\.createGlowAlpha\)\);/,
-    'the control lifts with a gold glow built from the shared glow shape'
+    /const halo = glow\.halo\( withAlpha\( glowColorDial \?\? \(isDark \? colors\.postPillGreen : colors\.gold\), glowDial \?\? navBar\.createGlowAlpha \) \);/,
+    "the control lifts with a glow the colour of its own fill, built from the shared glow shape"
   );
   const glowAlphaMatch = /createGlowAlpha: ([\d.]+),/.exec(stripComments(read('ui/tokens.ts')));
   assert.ok(glowAlphaMatch, 'navBar.createGlowAlpha must be a plain number in ui/tokens.ts');
@@ -2326,7 +2340,13 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   const glyph =
     /<Ionicons name="add" size=\{glyph\} color=\{glyphColorDial \?\? \(isDark \? (?:colors|navBar)\.(\w+) : colors\.(\w+)\)\}/.exec(bar);
   assert.ok(glyph, 'the [ + ] glyph must still take its colour per theme, off a token surface');
-  assert.equal(glyph[1], 'glyphColorDark', "the dark glyph is the control's own green (N3)");
+  // 2026-09-17 MOVES THE DARK ARM AGAIN, and H3's own claim is intact for the
+  // same reason it survived N3: H3 was light-only, and light is asserted
+  // UNCHANGED on the next line. N3's `navBar.glyphColorDark` was a green for
+  // reading against a GOLD tile; the tile is that green now, so the glyph is
+  // the content colour a green fill takes — the palette's `onForest`, the app's
+  // cream, and the value the dark "Post a job" label is already set in.
+  assert.equal(glyph[1], 'onForest', "the dark glyph is the app's cream on the pill's green");
   assert.equal(glyph[2], 'gold', "the light glyph is the LIGHT palette's gold");
 
   // ---- C1, the ring -------------------------------------------------------
@@ -2360,15 +2380,18 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
   // FILL, which is the half H3 was about. The slate is what changed.
   //
   // RUN N3 (2026-09-08) moved the dark FILL to `navBar.gold` — the control's
-  // own metal, one step warmer, on operator instruction. H3's claim survives
-  // in the form that matters: the branch is STILL asserted whole, so nothing
-  // may move in it unnoticed, and the tile is still GOLD-FILLED. What N3 did
-  // not do is give light any of it — the light branch above is pinned
-  // unchanged, which is what "light only" was ever a claim about.
+  // own metal, one step warmer, on operator instruction.
+  //
+  // 2026-09-17 REVERSES THE GOLD ALTOGETHER, on operator instruction: the dark
+  // tile takes the dark "Post a job" pill's green and drops its ring. H3's
+  // claim survives in the form that matters, exactly as it survived N3 — the
+  // branch is STILL asserted WHOLE, so nothing may move in it unnoticed, and
+  // the light branch above is still pinned unchanged, which is what "light
+  // only" was ever a claim about. What is gone is the gold, not the fence.
   assert.match(
     bar,
-    /createButtonDark: \{ backgroundColor: navBar\.gold, borderColor: navBar\.ringColorDark, \}/,
-    "the dark tile keeps its gold fill, on the control's own token; S3 D14 owns the ring's hue"
+    /createButtonDark: \{ backgroundColor: colors\.postPillGreen, borderColor: 'transparent', \}/,
+    "the dark tile takes the Post-a-job pill's green and declares no ring; light is untouched"
   );
 
   // ---- the derivation, so "one shade down" cannot become a taste edit ------

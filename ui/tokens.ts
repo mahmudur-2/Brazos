@@ -727,8 +727,26 @@ export const navBar = {
    * [0.637097, 0.653226); 0.645 is its centre. Was 0.615 (32 on 52).
    */
   createGlyphRatio: 0.645,
-  /** RUN H2's operator dial: the dark [ + ]'s gold-glow strength. */
+  /** RUN H2's operator dial: the dark [ + ]'s glow strength. */
   createGlowAlpha: 0.25,
+  /**
+   * 2026-09-17 — THE DARK [ + ]'s LIT WASH, at the strength the dark
+   * "Post a job" pill already carries.
+   *
+   * The operator's instruction for this control is that the two be IDENTICAL
+   * BY CONSTRUCTION, so this is the same MEASUREMENT rather than a second
+   * opinion: screens/HomeScreen.tsx's `CTA_LIFT_ALPHA` is lit(3)'s solved
+   * alpha for master 44's pill (see the block above it, which shows the
+   * arithmetic), and this is that number.
+   *
+   * IT IS WRITTEN TWICE, AND THAT IS RECORDED RATHER THAN HIDDEN. The value
+   * could not be imported: it lives in a SCREEN, and a ui/ primitive reaching
+   * into screens/ would invert the dependency this whole directory is arranged
+   * around. So the two are one decision in two places — move either and the
+   * other has to move with it. Naming it here is what gives the next reader
+   * somewhere to find that out.
+   */
+  createLiftAlpha: 0.13,
   /**
    * RUN S3 (D14) — THE DARK [ + ]'s RING GOES CHAMPAGNE. It was
    * `greetingSlate`, the light greeting grey borrowed across the palettes;
