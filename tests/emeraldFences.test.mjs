@@ -983,13 +983,20 @@ test('home(25) fence: the promo card’s height is master 44’s, term by term',
 // master, and the margin is read out of the source. Any of the three moving
 // alone goes red.
 // ---------------------------------------------------------------------------
-test('home(26) fence: Live Nearby lands on master 44’s own gap below the card', () => {
+test('home(26) fence: the first job section lands on master 44’s own gap below the card', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
   const sectionGap = Number(/sectionGap: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
   // Parity 2026-08-22: the corrective margin is part of the section's one
   // shared style — the dark-only override is retired.
+  //
+  // 2026-09-17 — RE-POINTED, on operator instruction, and the MEASUREMENT is
+  // untouched. This fence was written about "Live Nearby"; Nearby left the
+  // customer Home and "Your jobs" took its slot, wearing the same `section`
+  // style, the same 44pt header row and the same 20pt serif title. The gap the
+  // master measures is the one from the card's bottom edge to the first
+  // section heading's cap, and that is still exactly what is computed below.
   const margin = Number(/section: \{ gap: 12, marginTop: (-?\d+) \}/.exec(flat)?.[1]);
-  assert.ok(Number.isFinite(margin), 'the Live Nearby section keeps its corrective margin');
+  assert.ok(Number.isFinite(margin), 'the section below the card keeps its corrective margin');
 
   // The distance from the section's top to the title's cap, measured in
   // .shots/customer-home-dark.png: the header row is 44pt for the touch floor
@@ -998,7 +1005,7 @@ test('home(26) fence: Live Nearby lands on master 44’s own gap below the card'
   const inkGap = sectionGap + margin + HEADER_LEAD_TO_CAP;
   assert.ok(
     Math.abs(inkGap - 28.4) <= 2,
-    `the card's bottom edge to the L of Live Nearby is ${inkGap}pt; master 44 measures 28.4`
+    `the card's bottom edge to the first section heading is ${inkGap}pt; master 44 measures 28.4`
   );
   assert.doesNotMatch(flat, /sectionDark/, 'one section rhythm for both themes');
 });
@@ -2431,10 +2438,20 @@ test('RUN H3 fence: the light [ + ] goes gold, the light pill goes cream, dark d
 
 test('RUN H2 fence: the renamed sections, the unread marker and the offline dot', () => {
   const home = flatten(read('screens/HomeScreen.tsx'));
-  assert.match(home, /<Text style=\{styles\.sectionTitle\}>Nearby<\/Text>/);
+  // 2026-09-17 — RE-POINTED, on operator instruction. H2 renamed this heading
+  // "Live Nearby" -> "Nearby"; the section itself has now LEFT the customer
+  // Home and "Your jobs" holds its slot. What this pins is unchanged in kind —
+  // the heading is one text node, spelled once, in the shared section style —
+  // and the retired copy is still fenced against returning.
+  assert.match(home, /<Text style=\{styles\.sectionTitle\}>Your jobs<\/Text>/);
   assert.doesNotMatch(home, /Live Nearby<\/Text>/, '"Live Nearby" is retired copy');
-  // The live INDICATOR stays — the word went because the pulse already says it.
-  assert.match(home, /<View style=\{styles\.liveDot\} \/>/);
+  assert.doesNotMatch(home, />Nearby<\/Text>/, 'Nearby is Discover’s surface and worker mode’s');
+  // AND THE LIVE INDICATOR WENT WITH IT. H2 kept the pulsing mark because the
+  // pulse was the word's real meaning; there is nothing live about a customer's
+  // own postings, so the mark has nothing left to say and is gone from this
+  // screen. The two palette hues it drew (homeLive / homeLiveHalo) are
+  // untouched — worker mode still draws a feed dot with them.
+  assert.doesNotMatch(home, /styles\.liveDot|styles\.liveIndicator/);
 
   const bar = flatten(read('ui/primitives/BottomNav.tsx'));
   assert.match(

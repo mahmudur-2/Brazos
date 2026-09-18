@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Animated,
   Image,
@@ -12,7 +12,6 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
-import { RemoteImage } from '../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,21 +19,13 @@ import { Chip } from '../components/Chip';
 import { HomeAtmosphere } from '../components/HomeAtmosphere';
 import { HubCard } from '../components/HubCard';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
-import { Skeleton } from '../components/Skeleton';
-import { useAuth } from '../hooks/useAuth';
-import { useBidCounts } from '../hooks/useBidCounts';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
-import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
-import { useReducedMotion } from '../hooks/useReducedMotion';
 import {
-  categoryAccent,
   fetchJobById,
-  formatBudget,
   JOB_CATEGORY_ICONS,
-  JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
-  type OpenJob,
+  type Job,
 } from '../lib/jobs';
 import { alertAsync } from '../lib/dialog';
 import { ATTENTION_CAP, attentionItems } from '../lib/homeAttention';
@@ -58,7 +49,6 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { litFill, LitSurface, SearchBar, useFloatingNavClearance } from '../ui/primitives';
-import { USE_NATIVE_DRIVER } from '../lib/motion';
 
 // lit(3) — THE TWO ALPHAS ARE MEASUREMENTS, NOT PREFERENCES.
 //
@@ -147,7 +137,16 @@ const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png
 // ('baked-feathered') rather than being rounded to the nearer one.
 const PRESTIGE_HERO_ART_LIGHT = require('../assets/prestige/hero_armchair_customer_light.png');
 const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
-const PREVIEW_COUNT = 4;
+/**
+ * 2026-09-17 — how many of the customer's own postings "Your jobs" draws.
+ *
+ * Three, newest first, ANY status — open, hired, in progress, finished,
+ * cancelled. Drafts never reach it, and not by a filter written here:
+ * lib/jobs.ts's `fetchJobsByClient` already excludes them at the read, because
+ * a draft row is an outgoing direct offer rather than a job anybody posted.
+ * The rest are behind "View all".
+ */
+const YOUR_JOBS_COUNT = 3;
 
 // ---------------------------------------------------------------------------
 // home(2) — THE B DRAPE'S GEOMETRY.
@@ -338,31 +337,26 @@ const HERO_ART_DARK = { width: 184, height: 162, right: -33, top: 70 } as const;
  */
 const HEADLINE_LEADING = 38 / 31;
 
-function similarPostedToday(jobs: OpenJob[], job: OpenJob): number {
-  const midnight = new Date();
-  midnight.setHours(0, 0, 0, 0);
-
-  return jobs.filter(
-    (other) =>
-      other.id !== job.id &&
-      other.category === job.category &&
-      new Date(other.created_at) >= midnight
-  ).length;
-}
-
-/** Home cards intentionally show only the neighborhood; job details retain the full location. */
-function previewNeighborhood(location: string): string {
-  return location.split(',')[0]?.trim() || location;
+/**
+ * The counterparty line both job sections put on a HubCard — ONE
+ * implementation, called twice (P3-31). "Needs your attention" and "Your jobs"
+ * draw the same card about the same rows, so a second copy of this rule is
+ * how the two would start describing one job differently.
+ *
+ * It states only what the hub's own read already holds: the hired worker's
+ * name once there is one, and otherwise how many bids have come in.
+ */
+function counterpartyLine(job: Job, names: Record<string, string | null>): string {
+  if (job.assigned_worker_id) return `Worker · ${names[job.assigned_worker_id] ?? 'Worker'}`;
+  if (job.bid_count > 0) return `${job.bid_count} ${job.bid_count === 1 ? 'bid' : 'bids'} received`;
+  return 'Awaiting bids';
 }
 
 /** Customer Home to golden master 44 (Prestige 1a), retaining the existing
  *  data and routes; light keeps the approved Heritage composition. */
 export function HomeScreen() {
   const { profile } = useProfile();
-  const { user } = useAuth();
-  const { jobs, loading, error, refresh } = useOpenJobs();
   const navigation = useNavigation<CustomerHomeStackNavigation>();
-  const reducedMotion = useReducedMotion();
   const design = useHomeDesignSettings();
   const { switchMode, switching } = useMode();
   const { palette: colors, isDark } = useThemeColors();
@@ -443,25 +437,28 @@ export function HomeScreen() {
 
   const [query, setQuery] = useState('');
   const [moreOpen, setMoreOpen] = useState(false);
-  const livePulse = useRef(new Animated.Value(0)).current;
 
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
-  const preview = useMemo(() => jobs.slice(0, PREVIEW_COUNT), [jobs]);
-  const bidCounts = useBidCounts(useMemo(() => preview.map((job) => job.id), [preview]));
 
   // a2 (2026-09-05) — "Needs your attention" reads the My Jobs hub's OWN
   // aggregation (docs/DECISIONS.md 2026-09-05 entry (4)): no new RPC, and no
   // second copy of the lifecycle derivation on this screen. The hook's
   // worker-side reads run too — that is the price of one aggregation (P3-31),
   // and it is a page the signed-in user is entitled to either way. The three
-  // names that collide with the open-jobs feed above are aliased; nothing
+  // names that collided with the open-jobs feed are still aliased; nothing
   // else about the call differs from screens/MyJobsHubScreen.tsx.
+  //
+  // 2026-09-17: this is Home's ONLY job read now. Nearby left the screen, and
+  // `useOpenJobs()` — the open-market feed it drew — went with it, because
+  // nothing else here consumed it. The hook itself is untouched: Discover and
+  // worker mode still use it.
   const {
     posted,
     payments,
     openDisputeJobIds,
     reviewedJobIds,
     names,
+    loading: myJobsLoading,
     error: myJobsError,
     refresh: refreshMyJobs,
   } = useMyJobsHub();
@@ -482,55 +479,21 @@ export function HomeScreen() {
     [posted, payments, openDisputeJobIds, reviewedJobIds, nowMs]
   );
 
-  useEffect(() => {
-    if (reducedMotion === null) return;
+  // 2026-09-17 — "YOUR JOBS": the three most recent postings, whatever state
+  // they are in. No selection rule and no derivation, which is the difference
+  // between this and the attention block above it: `fetchJobsByClient` already
+  // returns the customer's own rows newest first and already leaves drafts
+  // out, so this is a slice of the read and nothing more. A job that needs the
+  // customer's move appears in BOTH sections; the operator chose that, because
+  // "what is waiting on me" and "what have I posted" are two questions and the
+  // same job is a true answer to each.
+  const yourJobs = useMemo(() => posted.slice(0, YOUR_JOBS_COUNT), [posted]);
 
-    livePulse.stopAnimation();
-    if (reducedMotion) {
-      livePulse.setValue(0);
-      return;
-    }
-
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(livePulse, { toValue: 1, duration: 900, useNativeDriver: USE_NATIVE_DRIVER }),
-        Animated.timing(livePulse, { toValue: 0, duration: 900, useNativeDriver: USE_NATIVE_DRIVER }),
-      ])
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [livePulse, reducedMotion]);
-
-  const livePulseStyle = {
-    opacity: livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.72] }),
-    transform: [
-      { scale: livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.86, 1.3] }) },
-    ],
-  };
-
-  // PHASE 2 WIRING (unchanged by the Prestige restyle).
-  //
-  // "View all" and the Live Nearby cards both used to push worker surfaces
-  // (Worker Home / the worker bid screen) onto the customer's own Home stack —
-  // the "customer View All crosses into worker behaviour" leak. Those routes no
-  // longer exist in CustomerHomeStackParamList, so this is now a compile-time
-  // guarantee, not a convention.
-  //
-  // Until Phase 8 builds the customer-safe MarketJobPreview route (§E/§F), the
-  // honest behaviour for a customer asking to see the open-job marketplace is
-  // §F's cross-mode rule: never switch silently, always confirm. switchMode()
-  // is the only path, so the panel plays, the mode persists, and the stacks
-  // reset — none of which the old plain push did.
-  function browseOpenJobs() {
-    void switchMode('worker', {
-      confirm: {
-        title: 'Switch to Worker Mode?',
-        message:
-          'Browsing every open job happens in Worker Mode, where you can bid on them. Your posted jobs stay exactly where they are.',
-        confirmText: 'Switch',
-      },
-    });
-  }
+  // 2026-09-17: the live-nearby pulse left with the section it marked, and
+  // `browseOpenJobs()` — the confirmed Worker Mode switch every Nearby card
+  // and its "View all" ran — left with it too. Neither had another caller on
+  // this screen. The customer still reaches the open market the same way they
+  // always did: the "Switch to Worker" pill below, through switchMode().
 
   // The mode-switch pill. Same deliberate switch as before — now through the
   // one authoritative switchMode() rather than a navigate() dressed up as one.
@@ -905,13 +868,7 @@ export function HomeScreen() {
                       icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
                       category={job.category}
                       title={job.title}
-                      subtitle={
-                        job.assigned_worker_id
-                          ? `Worker · ${names[job.assigned_worker_id] ?? 'Worker'}`
-                          : job.bid_count > 0
-                            ? `${job.bid_count} ${job.bid_count === 1 ? 'bid' : 'bids'} received`
-                            : 'Awaiting bids'
-                      }
+                      subtitle={counterpartyLine(job, names)}
                       thumbnailUrl={jobThumbnailUrl(job)}
                       timeLabel={formatTimeAgo(job.created_at)}
                       priceCents={job.final_amount_cents ?? job.budget_cents}
@@ -928,23 +885,25 @@ export function HomeScreen() {
             </View>
           ) : null}
 
+          {/* 2026-09-17 — "YOUR JOBS" TAKES NEARBY'S SLOT, and takes it whole:
+              the same position, the same section style, the same entrance
+              index (MOTION1's third and last). Nearby itself is not deleted
+              from the app — it is the DISCOVER surface's and worker mode's,
+              where a feed of other people's open jobs is what the screen is
+              for. What it stopped being is the customer's own Home, where a
+              card offering to switch you into Worker Mode was the last thing
+              between a customer and their own postings.
+
+              ALWAYS PRESENT, populated or empty — a customer who has posted
+              nothing still learns that this is where their jobs will be. */}
           <Animated.View style={[styles.section, sectionEntrance]}>
             <View style={styles.liveNearbyHeader}>
-              <View style={styles.liveNearbyTitle}>
-                <View style={styles.liveIndicator} accessibilityLabel="Live nearby jobs">
-                  <Animated.View style={[styles.liveDotHalo, livePulseStyle]} />
-                  <View style={styles.liveDot} />
-                </View>
-                {/* RUN H2: "Live Nearby" -> "Nearby". The live INDICATOR beside
-                    it is untouched — the pulse still says "live", so the word
-                    was saying it twice. */}
-                <Text style={styles.sectionTitle}>Nearby</Text>
-              </View>
+              <Text style={styles.sectionTitle}>Your jobs</Text>
               <Pressable
-                onPress={browseOpenJobs}
+                onPress={() => navigateAcrossTabs('MyJobs')}
                 style={({ pressed }) => [styles.viewAll, pressed && styles.viewAllPressed]}
                 accessibilityRole="button"
-                accessibilityLabel="View all open jobs"
+                accessibilityLabel="View all your jobs"
               >
                 <Text style={[styles.viewAllText, isDark && styles.viewAllTextDark]}>View all</Text>
                 <Ionicons
@@ -955,55 +914,50 @@ export function HomeScreen() {
               </Pressable>
             </View>
 
-            {loading ? (
+            {yourJobs.length > 0 ? (
               <View style={styles.cardList}>
-                <View style={[styles.skeletonCard, isDark && shadows.cardDark]}>
-                  <Skeleton style={styles.skeletonThumb} />
-                  <View style={styles.skeletonText}>
-                    <Skeleton style={styles.skeletonLine} />
-                    <Skeleton style={[styles.skeletonLine, styles.skeletonLineShort]} />
-                  </View>
-                </View>
+                {yourJobs.map((job) => (
+                  <HubCard
+                    key={`posted-${job.id}`}
+                    icon={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
+                    category={job.category}
+                    title={job.title}
+                    subtitle={counterpartyLine(job, names)}
+                    thumbnailUrl={jobThumbnailUrl(job)}
+                    timeLabel={formatTimeAgo(job.created_at)}
+                    priceCents={job.final_amount_cents ?? job.budget_cents}
+                    status={job.status}
+                    // NO nextAction, and that is the difference between this
+                    // list and the attention block: a recency list makes no
+                    // claim about what is owed, so the card falls back to its
+                    // own "View details" affordance rather than a line this
+                    // screen would have to derive (P3-31).
+                    onPress={() =>
+                      void openOwnJob(
+                        { fetchJob: fetchJobById, navigate: navigateAcrossTabs, alert: alertAsync },
+                        job.id
+                      )
+                    }
+                  />
+                ))}
               </View>
-            ) : error ? (
-              <View style={styles.notice}>
-                <Text style={styles.noticeError}>Couldn’t load open jobs.</Text>
-                <Pressable onPress={refresh} hitSlop={8} accessibilityRole="button">
-                  <Text style={styles.retry}>Try again</Text>
-                </Pressable>
-              </View>
-            ) : preview.length === 0 ? (
-              <Text style={styles.empty}>
-                No open jobs right now — new jobs appear here automatically as clients post them.
-              </Text>
+            ) : myJobsLoading || myJobsError ? (
+              // NOTHING, on purpose. A failed or unfinished read is not "no job
+              // has ever been posted", and saying so would be the screen
+              // inventing a fact it does not have. The attention block above
+              // already carries the ONE notice for this read — a second copy of
+              // "Couldn’t load your jobs" under the next heading says nothing
+              // new and offers the same Try again twice.
+              null
             ) : (
-              <View style={styles.cardList}>
-                {preview.map((job) => {
-                  const isOwn = !!user && user.id === job.client_id;
-                  // n5 (2026-09-04): the poster's own card opens its client
-                  // job detail (lib/ownJobCard.ts — the full row is fetched
-                  // first, since ClientJobDetail takes a Job, not the card's
-                  // OpenJob); every other card keeps the confirmed switch
-                  // into Worker Mode.
-                  return (
-                    <OpenJobCard
-                      key={job.id}
-                      job={job}
-                      isOwn={isOwn}
-                      bidCount={bidCounts[job.id]}
-                      similarToday={similarPostedToday(jobs, job)}
-                      onPress={
-                        isOwn
-                          ? () =>
-                              void openOwnJob(
-                                { fetchJob: fetchJobById, navigate: navigateAcrossTabs, alert: alertAsync },
-                                job.id
-                              )
-                          : browseOpenJobs
-                      }
-                    />
-                  );
-                })}
+              <View style={styles.emptyRow}>
+                <View style={styles.emptyMark}>
+                  <Ionicons name="briefcase-outline" size={24} color={colors.emerald} />
+                </View>
+                {/* ONE line, and it is only ever drawn when the customer's own
+                    read came back with nothing at all — so it is true whenever
+                    it is on screen (tests/copyTruth, tests/copyHonesty). */}
+                <Text style={styles.emptyTitle}>No jobs have been posted yet</Text>
               </View>
             )}
           </Animated.View>
@@ -1025,153 +979,11 @@ export function HomeScreen() {
   );
 }
 
-function OpenJobCard({
-  job,
-  isOwn,
-  bidCount,
-  similarToday,
-  onPress,
-}: {
-  job: OpenJob;
-  isOwn: boolean;
-  bidCount: number | undefined;
-  similarToday: number;
-  onPress: () => void;
-}) {
-  const design = useHomeDesignSettings();
-  const { palette: colors, isDark } = useThemeColors();
-  const styles = stylesFor(colors);
-  // RUN T2 (C1) — the Nearby card's four dials. `gap` inherits
-  // `theme.spacing.md` because this file imports `spacing` from lib/theme;
-  // the other three answer to no token and carry their own literal.
-  const jobCardPadding = useDialNumber('home.jobCard.padding') ?? 12;
-  const jobCardGap = useDialNumber('home.jobCard.gap') ?? spacing.md;
-  const jobThumbSize = useDialNumber('home.jobCard.thumbSize') ?? 110;
-  const jobMetaPaddingY = useDialNumber('home.jobCard.metaPaddingY') ?? 10;
-  const accent = categoryAccent(job.category);
-  const [thumbFailed, setThumbFailed] = useState(false);
-  const thumbUrl = jobThumbnailUrl(job);
-  const showThumb = !!thumbUrl && !thumbFailed;
-  const interest =
-    bidCount === undefined
-      ? null
-      : bidCount === 0
-        ? isOwn
-          ? 'No bids yet'
-          : 'Be the first to bid'
-        : `${bidCount} ${bidCount === 1 ? 'pro' : 'pros'} interested`;
-
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.jobCard,
-        isDark && styles.jobCardDark,
-        isDark && shadows.cardDark,
-        { borderRadius: design.jobCardRadius },
-        pressed && styles.jobCardPressed,
-      ]}
-      accessibilityRole="button"
-      accessibilityLabel={job.title}
-    >
-      <View style={[styles.jobBody, { gap: jobCardGap, padding: jobCardPadding }]}>
-        {showThumb ? (
-          <RemoteImage
-            uri={thumbUrl}
-            style={[styles.jobThumb, { width: jobThumbSize, height: jobThumbSize }]}
-            contentFit="cover"
-            onError={() => setThumbFailed(true)}
-          />
-        ) : (
-          // Masters (12/44): the no-photo tile is the deep-green tile with the
-          // gold category glyph in dark; light keeps the category accents.
-          <View
-            style={[
-              styles.jobThumb,
-              styles.jobThumbFallback,
-              { width: jobThumbSize, height: jobThumbSize },
-              isDark ? styles.jobThumbFallbackDark : { backgroundColor: accent.bg },
-            ]}
-          >
-            <Ionicons
-              name={JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal'}
-              size={28}
-              color={isDark ? colors.gold : accent.icon}
-            />
-          </View>
-        )}
-        <View style={styles.jobMain}>
-          <View style={styles.jobHeadRow}>
-            <Text style={styles.jobTitle} numberOfLines={2}>
-              {job.title}
-            </Text>
-            <View style={styles.jobPriceBlock}>
-              {/* Eyebrow law (decision 6): structural label gold in dark,
-                  money value emerald serif; light keeps the Heritage pair. */}
-              <Text style={[styles.jobPriceCaption, isDark && styles.jobPriceCaptionDark]}>
-                EST. PRICE
-              </Text>
-              <Text style={[styles.jobPrice, isDark && styles.jobPriceDark]} numberOfLines={1}>
-                {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
-              </Text>
-            </View>
-          </View>
-          {job.location ? (
-            <View style={styles.jobPlaceRow}>
-              <Ionicons name="location-outline" size={16} color={colors.homeSlate} />
-              <Text style={styles.jobPlace} numberOfLines={1}>
-                {previewNeighborhood(job.location)}
-              </Text>
-            </View>
-          ) : null}
-          {/* a2 (2026-09-05) — docs/BACKLOG.md's parked card-facts item: this
-              was the ONE card in the app carrying the bid count and no
-              posted-ago line, and how long a job has sat unanswered is what
-              tells a browsing worker whether it is worth a bid. Always drawn —
-              jobs.created_at is NOT NULL — in the neighbourhood row's own two
-              styles, with the clock glyph WorkerJobCard's "Posted" row uses. */}
-          <View style={styles.jobPlaceRow}>
-            <Ionicons name="time-outline" size={16} color={colors.homeSlate} />
-            <Text style={styles.jobPlace} numberOfLines={1}>
-              Posted {formatTimeAgo(job.created_at)}
-            </Text>
-          </View>
-          <View style={styles.jobFootRow}>
-            <View style={styles.jobTags}>
-              {isOwn ? <Chip label="Your job" variant="soft" size="sm" /> : null}
-              <Chip label={JOB_CATEGORY_LABELS[job.category] ?? job.category} variant="soft" size="sm" />
-            </View>
-            {interest ? (
-              <View style={styles.jobInterest}>
-                <Ionicons name="people-outline" size={17} color={colors.homeSlate} />
-                <Text style={styles.jobInterestText} numberOfLines={1}>
-                  {interest}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-      </View>
-      {similarToday > 0 ? (
-        <View style={[styles.jobMeta, { paddingVertical: jobMetaPaddingY }]}>
-          <View style={styles.demandRow}>
-            <Ionicons
-              name="trending-up"
-              size={16}
-              color={isDark ? colors.emerald : colors.forest}
-            />
-            {/* States exactly what similarPostedToday() measures — same
-                category, posted since midnight. No distance term is computed,
-                so no geographic claim is made (F-024). */}
-            <Text style={[styles.demandText, isDark && styles.demandTextDark]} numberOfLines={1}>
-              {similarToday} similar {similarToday === 1 ? 'job' : 'jobs'} posted today
-            </Text>
-          </View>
-        </View>
-      ) : null}
-    </Pressable>
-  );
-}
+// 2026-09-17: `OpenJobCard` lived here — the open-market card Nearby drew, with
+// its own four studio dials, its thumbnail, its EST. PRICE block, its bid-count
+// interest line and its "N similar jobs posted today" footer. It went with the
+// section that was its only caller. The card the customer's own postings draw
+// is components/HubCard.tsx, which My Jobs already draws them with.
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
@@ -1596,9 +1408,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // one to the INK, so the layout gap has to be 14.2 for the ink gap to be
   // 28.4. -6 is that difference; there is no smaller lever, because the 44 is
   // CLAUDE.md's and the 20 is the studio's one global number.
+  // 2026-09-17: the measurement above is unchanged and still governs, because
+  // the section in this slot is unchanged in SHAPE — a 44pt header row with a
+  // 20pt serif title centred in it, over the same 20pt sectionGap. Only the
+  // word in the title moved, from "Nearby" to "Your jobs".
   section: { gap: 12, marginTop: -6 },
+  // The name is a leftover and is kept deliberately: BOTH job sections wear
+  // this row — "Needs your attention" (untouched by the 2026-09-17 change) and
+  // "Your jobs" — so renaming it would edit the attention block for no pixel.
   liveNearbyHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
-  liveNearbyTitle: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   // home(16)/home(26)'s ladder rung (serifSize(30) = 20), in BOTH themes since
   // the parity pass — light's 22 is retired.
   sectionTitle: {
@@ -1607,15 +1425,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontWeight: '700',
     color: colors.ink,
   },
-  liveIndicator: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
-  liveDotHalo: {
-    position: 'absolute',
-    width: 14,
-    height: 14,
-    borderRadius: radius.pill,
-    backgroundColor: colors.homeLiveHalo,
-  },
-  liveDot: { width: 10, height: 10, borderRadius: radius.pill, backgroundColor: colors.homeLive },
+  // 2026-09-17: liveNearbyTitle / liveIndicator / liveDotHalo / liveDot were
+  // removed with the pulsing mark they drew. "Your jobs" is the customer's own
+  // postings and nothing about it is live, so there is nothing for a live
+  // indicator to say. `homeLive` and `homeLiveHalo` stay in the palette —
+  // worker mode still draws a feed dot with them.
   // home(9): mapPill / mapPillPressed / mapPillText / mapPillTextDark were
   // removed with the control they painted. The Map ROUTE is untouched.
   viewAll: { flexShrink: 0, flexDirection: 'row', alignItems: 'center', gap: spacing.xs, minHeight: 44 },
@@ -1629,64 +1443,33 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   viewAllTextDark: { color: colors.emerald },
   cardList: { gap: spacing.md },
-  // The 1pt hairline is part of the card box in both themes (parity
-  // 2026-08-22); light draws it transparent over its shadow treatment.
-  jobCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-    ...shadows.card,
-  },
-  jobCardDark: { borderColor: colors.border },
-  jobCardPressed: { opacity: 0.9 },
-  jobBody: { flexDirection: 'row' },
-  jobThumb: { borderRadius: radius.md, backgroundColor: colors.neutralBg },
-  jobThumbFallback: { alignItems: 'center', justifyContent: 'center' },
-  jobThumbFallbackDark: { backgroundColor: colors.mint },
-  jobMain: { flex: 1, gap: spacing.xs + 2 },
-  jobHeadRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
-  jobTitle: { flex: 1, fontSize: 18, lineHeight: 22, fontWeight: '700', color: colors.ink },
-  jobPriceBlock: { alignItems: 'flex-end', maxWidth: 102 },
-  jobPriceCaption: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: colors.homeSlate },
-  jobPriceCaptionDark: { color: colors.gold },
-  jobPrice: { fontFamily: fonts.display, fontSize: 24, fontWeight: '800', color: colors.forest },
-  jobPriceDark: { color: colors.emerald },
-  jobPlaceRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  jobPlace: { flex: 1, fontSize: 14, color: colors.homeSlate },
-  jobFootRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: spacing.sm },
-  jobTags: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs + 2 },
-  jobInterest: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  jobInterestText: { fontSize: 12, color: colors.homeSlate },
-  jobMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-    paddingHorizontal: 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-  },
-  demandRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs + 2, flexShrink: 1 },
-  demandText: { fontSize: 13, fontWeight: '600', color: colors.forest },
-  demandTextDark: { color: colors.emerald },
+  // The attention block's own notice, and the only one on this screen: one
+  // failed read, one place that says so.
   notice: { gap: spacing.xs },
   noticeError: { fontSize: 14, color: colors.danger },
   retry: { fontSize: 14, fontWeight: '700', color: colors.forest },
-  empty: { fontSize: 14, color: colors.homeSlate, lineHeight: 20 },
-  skeletonCard: {
-    flexDirection: 'row',
+  // 2026-09-17 — "YOUR JOBS" WITH NOTHING IN IT YET.
+  //
+  // A row, not a centred panel: ui/primitives/EmptyState.tsx is the shared
+  // "nothing here" surface and is the right answer for a whole SCREEN — it is
+  // `flex: 1`, centred, with a body sentence and an optional action — and this
+  // is a section on a scrolling page with four things above it. What is taken
+  // from it is the part that is a decision rather than a layout: the mark is a
+  // mint disc with the glyph in `emerald`, exactly as that primitive resolves
+  // them, so the two read as one family.
+  //
+  // 54 and the 17pt title are docs/mockups/html/home-redesign.html's own
+  // numbers for this state. ONE line: the mockup's second line ("Your requests
+  // will appear here.") is not drawn, on operator instruction.
+  emptyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  emptyMark: {
+    width: 54,
+    height: 54,
+    borderRadius: radius.pill,
     alignItems: 'center',
-    gap: spacing.md,
-    padding: 14,
-    borderRadius: 20,
-    backgroundColor: colors.surface,
-    ...shadows.card,
+    justifyContent: 'center',
+    backgroundColor: colors.mint,
   },
-  skeletonThumb: { width: 104, height: 104, borderRadius: radius.md },
-  skeletonText: { flex: 1, gap: spacing.sm },
-  skeletonLine: { height: 12 },
-  skeletonLineShort: { width: '55%' },
+  emptyTitle: { flex: 1, fontSize: 17, lineHeight: 22, fontWeight: '700', color: colors.ink },
   }),
 );

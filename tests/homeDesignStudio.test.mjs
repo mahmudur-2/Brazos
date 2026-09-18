@@ -40,7 +40,10 @@ test('Home Design Studio defaults preserve the current Home geometry and control
     'searchRadius: 35',
     'ctaHeight: 48',
     'ctaRadius: 24',
-    'jobCardRadius: 20',
+    // 2026-09-17: `jobCardRadius: 20` left this list with the setting. It
+    // rounded the Nearby list's card, and Nearby left the customer Home; a
+    // setting whose reader is gone moves nothing, so it was deleted rather
+    // than left as a slider that lies. Seven settings, not eight.
   ]) {
     assert.match(settings, new RegExp(value));
   }
@@ -53,7 +56,6 @@ test('Home Design Studio defaults preserve the current Home geometry and control
     'Search radius',
     'Post a job CTA height',
     'Post a job CTA radius',
-    'Job-card radius',
   ]) {
     assert.match(studio, new RegExp(label));
   }
@@ -68,5 +70,5 @@ test('Home Design Studio defaults preserve the current Home geometry and control
   assert.match(home, /design\.screenPadding/);
   assert.match(home, /design\.searchHeight/);
   assert.match(home, /design\.ctaHeight/);
-  assert.match(home, /design\.jobCardRadius/);
+  assert.match(home, /design\.ctaRadius/);
 });

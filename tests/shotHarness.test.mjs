@@ -352,17 +352,30 @@ test('the populated Home targets exist, and are the only ones seeded with jobs',
   assert.match(entry, /mode: 'customer',/);
   assert.match(entry, /jobs: true,/);
 
-  // The wait is the LAST seeded card's title, read from the data rather than
-  // restated as a literal: text only a populated card draws, so a target that
-  // failed to populate fails loudly instead of photographing the empty state
-  // and passing — and taken from the END of the list, so a feed that arrives
-  // short fails too rather than being photographed short.
-  assert.match(entry, /wait: SEEDED_JOBS\[SEEDED_JOBS\.length - 1\]\.title,/);
+  // The wait is the last card the section DRAWS, read from the data rather
+  // than restated as a literal: text only a populated card shows, so a target
+  // that failed to populate fails loudly instead of photographing the empty
+  // state and passing — and taken from the END of what is drawn, so a list
+  // that arrives short fails too rather than being photographed short.
+  //
+  // 2026-09-17 — AN EXPECTED CONSTANT MOVED, and only that. The populated
+  // section on customer Home is "Your jobs" now, the customer's own postings,
+  // and it draws the THREE most recent of the four seeded rows (which are
+  // declared newest first) where Nearby drew all four. So the last card drawn
+  // is index 2 rather than the last of the array.
+  assert.match(entry, /wait: SEEDED_JOBS\[2\]\.title,/);
 
-  // Both stub branches are guarded by the flag, and the flag is read off the
+  // Every stub branch is guarded by the flag, and the flag is read off the
   // registry entry — which is what makes "every other target still gets the
-  // empty answer" a fact rather than an intention.
-  assert.match(code, /if \(jobs && pathname\.endsWith\('\/rest\/v1\/jobs'\)/);
+  // empty answer" a fact rather than an intention. The `jobs` table is asked
+  // by three different reads now: the customer's own postings (client_id), the
+  // open-market feed (status=eq.open) and the worker's by-id re-read.
+  assert.equal(
+    (code.match(/if \(jobs && pathname\.endsWith\('\/rest\/v1\/jobs'\)/g) ?? []).length,
+    3,
+    'every jobs-table branch must be gated on the opt-in flag'
+  );
+  assert.match(code, /query\.get\('client_id'\) === `eq\.\$\{USER_ID\}`/);
   assert.match(code, /if \(jobs && pathname\.endsWith\('\/rest\/v1\/rpc\/job_offer_counts'\)/);
   assert.match(code, /jobs: shot\.jobs === true,/);
 });

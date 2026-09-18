@@ -539,8 +539,9 @@ const TARGETS = [
     {
       // The customer's job hub, by its standing customer path: the [ + ]
       // sheet's "My jobs" action (the hub has no customer bar item). EMPTY
-      // state: this target does not opt in to the seeded job rows — and that
-      // hub reads jobs by client_id, which those rows would not answer anyway.
+      // state, and it stays empty by the opt-in alone: this target does not
+      // set `jobs: true`, so the own-jobs read customer Home's "Your jobs"
+      // section now answers comes back empty here, exactly as it always has.
       name: `customer-myjobs-${colorScheme}`,
       mode: 'customer',
       colorScheme,
@@ -721,9 +722,11 @@ const TARGETS = [
   // registry that opt in to the seeded job rows. Every entry above keeps the
   // empty answer.
   //
-  // No recipe: Home is where the app lands, and the four cards under "Nearby"
-  // are the whole surface. HomeScreen slices the feed to PREVIEW_COUNT, which
-  // is 4, and there are four rows, so all four draw.
+  // No recipe: Home is where the app lands, and the cards are the whole
+  // surface. 2026-09-17: the section they fill is "Your jobs" — the customer's
+  // OWN postings, read by client_id — where it used to be "Nearby", the open
+  // market. The same four rows answer both reads (see THE CUSTOMER'S OWN
+  // POSTED JOBS in stubResponse); the section draws the three most recent.
   // =========================================================================
   ...['dark', 'light'].flatMap((colorScheme) => [
     {
@@ -731,12 +734,14 @@ const TARGETS = [
       mode: 'customer',
       colorScheme,
       jobs: true,
-      // The LAST seeded card's title. It has to be text only a populated card
-      // draws — never something Home spells anyway — or a target that failed
-      // to populate would quietly photograph the empty state and pass. Taking
-      // it from the end of the list rather than the start also means a feed
-      // that arrives short fails loudly instead of being photographed short.
-      wait: SEEDED_JOBS[SEEDED_JOBS.length - 1].title,
+      // The LAST card the section DRAWS. It has to be text only a populated
+      // card shows — never something Home spells anyway — or a target that
+      // failed to populate would quietly photograph the empty state and pass.
+      // Taking it from the end of what is drawn rather than the start also
+      // means a list that arrives short fails loudly instead of being
+      // photographed short. Index 2 is the third of the four seeded rows,
+      // which are declared newest first, and "Your jobs" draws three.
+      wait: SEEDED_JOBS[2].title,
     },
   ]),
 
@@ -1173,12 +1178,37 @@ function stubResponse({ pathname, query, headers, postData, jobs, accepting }) {
     }
   }
 
+  // THE CUSTOMER'S OWN POSTED JOBS, for a target that opted in. 2026-09-17:
+  // customer Home's "Your jobs" section reads hooks/useMyJobsHub.ts, which
+  // asks lib/jobs.ts's fetchJobsByClient — `client_id=eq.<me>`, drafts
+  // excluded, newest first — and that is a DIFFERENT read from the feed
+  // below. Until Nearby left that screen the feed was the only job read Home
+  // made, and this one went unanswered; answering it is what keeps the
+  // populated Home target populated.
+  //
+  // THE SAME FOUR ROWS AND NOTHING ELSE. No fifth row, no new field, no
+  // invented fact — only the ownership changes, and it has to: these rows
+  // ARE the signed-in customer's postings in this read, where in the feed
+  // below they are a stranger's (POSTER_ID, so a browsing worker's view is
+  // what the feed target photographs). One set of facts, read from two sides,
+  // which is exactly what the two queries mean.
+  //
+  // Gated on the predicate the hub itself sends, so it answers THAT read and
+  // no other: the feed carries `status=eq.open` and never a client_id, and a
+  // target that did not opt in still gets the empty answer at the bottom.
+  if (jobs && pathname.endsWith('/rest/v1/jobs') && query.get('client_id') === `eq.${USER_ID}`) {
+    const select = query.get('select');
+    const rows = seededJobRows().map((row) =>
+      projectColumns({ ...row, client_id: USER_ID }, select)
+    );
+    return { status: 200, body: single ? (rows[0] ?? {}) : rows };
+  }
+
   // THE OPEN-JOBS FEED, for a target that opted in. Gated on the predicate
   // the feed itself sends (lib/jobs.ts, fetchOpenJobs: status=eq.open), so
-  // this answers THAT read and no other read of the same table: a "my jobs"
-  // query carries no such filter and still comes back empty, which is right —
-  // POSTER_ID is not the signed-in account and none of these is the
-  // operator's.
+  // this answers THAT read and no other read of the same table: the own-jobs
+  // query above carries a client_id instead, and every other read of this
+  // table still comes back empty.
   if (jobs && pathname.endsWith('/rest/v1/jobs') && query.get('status') === 'eq.open') {
     const select = query.get('select');
     const rows = seededJobRows().map((row) => projectColumns(row, select));

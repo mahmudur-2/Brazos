@@ -71,10 +71,12 @@ const SCREENS = [
     dials: [
       { key: 'home.promoCard.radius', drew: 22, parent: null, fallback: '22' },
       { key: 'home.modeSwitch.paddingX', drew: 10, parent: null, fallback: '10' },
-      { key: 'home.jobCard.padding', drew: 12, parent: null, fallback: '12' },
-      { key: 'home.jobCard.gap', drew: 12, parent: 'theme.spacing.md', fallback: 'spacing.md' },
-      { key: 'home.jobCard.thumbSize', drew: 110, parent: null, fallback: '110' },
-      { key: 'home.jobCard.metaPaddingY', drew: 10, parent: null, fallback: '10' },
+      // 2026-09-17: the four `home.jobCard.*` rows are gone from both sides —
+      // the registry and this table. They dialled `OpenJobCard`, the card the
+      // Nearby list drew, and Nearby left the customer Home. Rule 1 above is
+      // exactly why they could not simply be left standing: a dial its wearer
+      // no longer reads is a control that lies. Nothing about this fence's
+      // logic moved; two rows did.
     ],
   },
   {

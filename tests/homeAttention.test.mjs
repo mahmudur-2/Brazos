@@ -221,7 +221,7 @@ test('a2 · the cap is 3 and the function itself returns every item', () => {
   assert.equal(items.slice(0, ATTENTION_CAP).length, 3);
 });
 
-test('a2 · Home reads the hub, derives nothing itself, and sits below the pill and above Nearby', () => {
+test('a2 · Home reads the hub, derives nothing itself, and sits below the pill and above the next job section', () => {
   const home = stripComments(read('screens/HomeScreen.tsx'));
 
   assert.match(home, /import \{ useMyJobsHub \} from '\.\.\/hooks\/useMyJobsHub';/);
@@ -236,7 +236,15 @@ test('a2 · Home reads the hub, derives nothing itself, and sits below the pill 
   // The hub's local metaLine helper is NOT duplicated here (P3-31).
   assert.doesNotMatch(home, /metaLineFor/);
 
-  // POSITION: below the promo card's pill, above Nearby.
+  // POSITION: below the promo card's pill, above the next job section.
+  //
+  // 2026-09-17 — RE-POINTED, and the CLAIM is untouched. This fence read the
+  // section below as "Nearby"; Nearby left the customer Home on operator
+  // instruction and "Your jobs" took its slot. The two things asserted are
+  // exactly what they were — the block must not push the pill off-screen (the
+  // E2E money walk taps that pill without scrolling), and it must LEAD the job
+  // sections rather than follow them, which is the 2026-09-05 ruling's own
+  // word. Only the heading naming the section below it moved.
   const pill = 'Post a job ›';
   assert.equal((home.match(/Post a job ›/g) ?? []).length, 1, 'the walk taps one pill');
   assert.equal(
@@ -248,10 +256,10 @@ test('a2 · Home reads the hub, derives nothing itself, and sits below the pill 
   assert.equal(heading, 1, 'the section heading is written once');
   const pillAt = home.indexOf(pill);
   const attentionAt = home.indexOf('Needs your attention');
-  const nearbyAt = home.indexOf('>Nearby</Text>');
-  assert.ok(pillAt > -1 && attentionAt > -1 && nearbyAt > -1);
+  const nextSectionAt = home.indexOf('>Your jobs</Text>');
+  assert.ok(pillAt > -1 && attentionAt > -1 && nextSectionAt > -1);
   assert.ok(attentionAt > pillAt, 'the block must not push the pill off-screen');
-  assert.ok(attentionAt < nearbyAt, 'and it leads the job sections, above Nearby');
+  assert.ok(attentionAt < nextSectionAt, 'and it leads the job sections, above "Your jobs"');
 
   // The card opens the full row it already holds; See all opens the hub.
   assert.match(home, /navigateAcrossTabs\('MyJobs', 'ClientJobDetail', \{ job \}\)/);
@@ -265,26 +273,50 @@ test('a2 · Home reads the hub, derives nothing itself, and sits below the pill 
   }
 });
 
-test('a2 · the Nearby card says when the job was posted, once, in the row above it', () => {
+// 2026-09-17 — RE-POINTED ONTO THE CARD THAT SURVIVED, not deleted.
+//
+// This test used to read `OpenJobCard`, the Nearby list's own card, and pin
+// the posted-ago line docs/BACKLOG.md's card-facts item added to it. Nearby
+// left the customer Home on operator instruction and that card went with it,
+// so the SUBJECT moved — but the FACT it was protecting did not: every job
+// card on this screen must still say how long the job has been sitting, and
+// must still say who it is with. Both of Home's lists draw
+// components/HubCard.tsx now, so both are read here.
+test('a2 · every job card on Home says when it was posted and who it is with', () => {
   const home = stripComments(read('screens/HomeScreen.tsx'));
-  const card = home.slice(home.indexOf('function OpenJobCard('));
-  assert.ok(card.length > 0, 'OpenJobCard must still be in this file');
 
-  // docs/BACKLOG.md's parked card-facts item: this was the one card carrying
-  // the bid count and no posted-ago line. Written once, and always drawn —
-  // jobs.created_at is NOT NULL, so there is no branch to get wrong.
+  // TWO lists — "Needs your attention" and "Your jobs" — and each hands the
+  // card the posting's own age. Always drawn: jobs.created_at is NOT NULL, so
+  // there is no branch to get wrong.
   assert.equal(
-    (card.match(/Posted \{formatTimeAgo\(job\.created_at\)\}/g) ?? []).length,
+    (home.match(/timeLabel=\{formatTimeAgo\(job\.created_at\)\}/g) ?? []).length,
+    2,
+    'both job lists label the card with the posting’s age'
+  );
+  assert.equal(
+    (home.match(/<HubCard/g) ?? []).length,
+    2,
+    'both lists draw the hub’s own card, and this screen defines no card of its own'
+  );
+
+  // THE COUNTERPARTY LINE IS ONE IMPLEMENTATION, CALLED TWICE (P3-31). It is
+  // what carries the bid count, and two copies is how the same job would come
+  // to be described differently one section apart.
+  assert.equal(
+    (home.match(/function counterpartyLine\(/g) ?? []).length,
     1,
-    'the posted-ago line is written once'
+    'the counterparty line is written once'
   );
-  // No new style and no new prop: the neighbourhood row's own two styles.
+  assert.equal(
+    (home.match(/subtitle=\{counterpartyLine\(job, names\)\}/g) ?? []).length,
+    2,
+    'and both lists call it rather than restating it'
+  );
   assert.match(
-    card,
-    /<View style=\{styles\.jobPlaceRow\}>\s*<Ionicons name="time-outline" size=\{16\} color=\{colors\.homeSlate\} \/>\s*<Text style=\{styles\.jobPlace\} numberOfLines=\{1\}>\s*Posted \{formatTimeAgo\(job\.created_at\)\}/
+    home,
+    /if \(job\.bid_count > 0\) return `\$\{job\.bid_count\} \$\{job\.bid_count === 1 \? 'bid' : 'bids'\} received`;/,
+    'the bid count is stated from the row, never rounded or invented'
   );
-  // The interest line is untouched — tests/customerCore.test.mjs requires it.
-  assert.match(card, /pros?' : 'pro'|'pro' : 'pros'|pros interested|\$\{bidCount === 1 \? 'pro' : 'pros'\} interested/);
 });
 
 test('a2 · the selection rule lives in lib/homeAttention.ts and imports only the derivation', () => {

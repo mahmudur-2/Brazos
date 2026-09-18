@@ -87,7 +87,7 @@ test('n5 · a null row alerts with the existing generic sentence and opens nothi
   ]);
 });
 
-test('n5 · Home wires the own card to openOwnJob, and the route pair is named once, in OWN_JOB_ROUTE', () => {
+test('n5 · Home wires its own-job cards to openOwnJob, and the route pair is named once, in OWN_JOB_ROUTE', () => {
   const home = stripComments(read('screens/HomeScreen.tsx'));
   assert.match(home, /import \{ openOwnJob \} from '\.\.\/lib\/ownJobCard';/);
   assert.match(home, /import \{ alertAsync \} from '\.\.\/lib\/dialog';/);
@@ -96,8 +96,16 @@ test('n5 · Home wires the own card to openOwnJob, and the route pair is named o
     home,
     /openOwnJob\(\s*\{ fetchJob: fetchJobById, navigate: navigateAcrossTabs, alert: alertAsync \},\s*job\.id\s*\)/
   );
-  // The own card takes this path; every other card keeps the confirmed switch.
-  assert.match(home, /onPress=\{\s*isOwn\s*\?[\s\S]*?openOwnJob[\s\S]*?:\s*browseOpenJobs\s*\}/);
+  // 2026-09-17 — RE-POINTED. This pinned the Nearby card's own ternary
+  // (`isOwn ? openOwnJob : browseOpenJobs`), which is how a customer's own
+  // posting used to be told apart from a stranger's on a feed of both. Nearby
+  // left the customer Home and took the mixed feed with it; what is on Home now
+  // is "Your jobs", where EVERY card is the customer's own. So the branch has
+  // nothing left to decide and the rule is stronger rather than weaker: no card
+  // on this screen may offer the Worker Mode switch, and the own-job path is
+  // the only one wired.
+  assert.doesNotMatch(home, /browseOpenJobs/, 'no card on customer Home crosses into worker mode');
+  assert.doesNotMatch(home, /\bisOwn\b/, 'every job card on this screen is the customer’s own');
   assert.doesNotMatch(home, /Alert\.alert\(/);
 
   const own = stripComments(read('lib/ownJobCard.ts'));

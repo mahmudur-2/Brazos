@@ -8,7 +8,10 @@ export type HomeDesignSettings = {
   searchRadius: number;
   ctaHeight: number;
   ctaRadius: number;
-  jobCardRadius: number;
+  // 2026-09-17: `jobCardRadius` is gone. It rounded `OpenJobCard`, the card the
+  // Nearby list drew on the customer Home, and Nearby left that screen — so the
+  // setting had no reader and its slider moved nothing. The customer's own
+  // postings draw components/HubCard.tsx, which carries its own corner.
 };
 
 /** Defaults are visually identical to the approved Customer Home. */
@@ -25,7 +28,6 @@ export const DEFAULT_HOME_DESIGN_SETTINGS: HomeDesignSettings = {
   searchRadius: 35,
   ctaHeight: 48,
   ctaRadius: 24,
-  jobCardRadius: 20,
 };
 
 const HomeDesignStudioContext = createContext<HomeDesignSettings>(DEFAULT_HOME_DESIGN_SETTINGS);

@@ -205,13 +205,29 @@ test('Customer Home retains approved Emerald reference copy without adding paid-
   ]);
   const customerCode = codeOnly(sources.join('\n'));
 
-  assert.match(customerCode, /Live Nearby|pros? interested/i);
+  // 2026-09-17 — THE REFERENCE COPY THIS PINNED IS THE NEARBY LIST'S, and
+  // Nearby left the customer Home on operator instruction. Every pin below
+  // that named a surviving surface is untouched; the four that named the
+  // removed one are replaced by the copy that took its place, so this test
+  // still asserts that Home carries the approved reference language rather
+  // than quietly asserting less.
+  //
+  //   "Live Nearby" / "N pros interested"  -> the section is gone, and with it
+  //                                          the card that counted bidders for
+  //                                          a browsing worker.
+  //   PREVIEW_COUNT = 4                    -> YOUR_JOBS_COUNT = 3, the customer's
+  //                                          three most recent postings.
+  //   previewNeighborhood()                -> gone with the card that showed a
+  //                                          stranger's job's neighbourhood.
+  //   useReducedMotion / Animated.loop     -> the live dot's pulse, which was
+  //                                          the one looping animation here.
+  //                                          The entrance animations stay and
+  //                                          are their own fence's.
+  assert.match(customerCode, /Your jobs|No jobs have been posted yet/i);
   assert.doesNotMatch(customerCode, /Open near you|Live activity in your area/i);
   assert.match(customerCode, /Switch to Worker|EST\. PRICE|BRAZOS handles the rest/i);
-  assert.match(customerCode, /const PREVIEW_COUNT = 4/);
-  assert.match(customerCode, /function previewNeighborhood/);
-  assert.match(customerCode, /useReducedMotion\(\)/);
-  assert.match(customerCode, /Animated\.loop/);
+  assert.match(customerCode, /const YOUR_JOBS_COUNT = 3/);
+  assert.match(customerCode, /function counterpartyLine/);
   // "Arrival window" left this list in Phase 4: phase49 gave it a real
   // schema (jobs.arrival_start_hour/arrival_end_hour) and a real wizard
   // field, so it is no longer an unbacked reference-mock claim.

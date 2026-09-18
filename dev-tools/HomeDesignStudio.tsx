@@ -24,7 +24,6 @@ const CONTROLS: Control[] = [
   { key: 'searchRadius', label: 'Search radius', step: 2, min: 0, max: 36, suffix: 'pt' },
   { key: 'ctaHeight', label: 'Post a job CTA height', step: 2, min: 44, max: 88, suffix: 'pt' },
   { key: 'ctaRadius', label: 'Post a job CTA radius', step: 2, min: 0, max: 28, suffix: 'pt' },
-  { key: 'jobCardRadius', label: 'Job-card radius', step: 2, min: 0, max: 28, suffix: 'pt' },
 ];
 
 /** Web-only proof of concept: real MainTabs in an iPhone-sized viewport plus controls. */

@@ -1695,56 +1695,18 @@ function screenDialEntries(): StudioEntry[] {
         step: 1,
         defaultValue: 10,
       },
-      // N3: 12, dialled. NOT re-pointed at theme.spacing.md, which also ships
-      // at 12 and is what the gap below inherits — that would tie the padding
-      // to a dial it has never followed. (This note sits OUTSIDE the row: the
-      // rows in this function are parsed as TEXT, in a fixed field order, by
-      // tests/screenDials.test.mjs, and a comment between fields breaks it.)
-      {
-        key: 'home.jobCard.padding',
-        label: 'Job card — inner padding',
-        description: 'The breathing room inside every card in the Nearby list.',
-        tier: 'advanced',
-        scope: 'local',
-        min: 0,
-        max: 32,
-        step: 1,
-        defaultValue: 12,
-      },
-      {
-        key: 'home.jobCard.gap',
-        label: 'Job card — photo-to-text gap',
-        description: 'Between a Nearby card’s thumbnail and the title beside it.',
-        tier: 'advanced',
-        scope: 'local',
-        min: 0,
-        max: 32,
-        step: 1,
-        inheritsFrom: 'theme.spacing.md',
-        defaultValue: THEME_SPACING_DEFAULTS.md,
-      },
-      {
-        key: 'home.jobCard.thumbSize',
-        label: 'Job card — photo size',
-        description: 'The square thumbnail on a Nearby card, width and height together.',
-        tier: 'advanced',
-        scope: 'local',
-        min: 56,
-        max: 160,
-        step: 2,
-        defaultValue: 110,
-      },
-      {
-        key: 'home.jobCard.metaPaddingY',
-        label: 'Job card — demand strip height',
-        description: 'Above and below the “N similar jobs posted today” line under a card.',
-        tier: 'advanced',
-        scope: 'local',
-        min: 0,
-        max: 24,
-        step: 1,
-        defaultValue: 10,
-      },
+      // 2026-09-17: the four `home.jobCard.*` rows are GONE — inner padding,
+      // photo-to-text gap, photo size and the demand strip's height. Every one
+      // of them dialled `OpenJobCard`, the card the Nearby list drew, and
+      // Nearby left the customer Home; the card went with it. A registry row
+      // whose wearer no longer reads it is a dead control — it renders in the
+      // panel, moves nothing, and is worse than an absent dial because it
+      // lies — so they are deleted rather than left pointing at nothing. The
+      // customer's own postings draw components/HubCard.tsx, which My Jobs
+      // already draws them with and which carries no screen dial of Home's.
+      // (Notes sit OUTSIDE a row: the rows in this function are parsed as
+      // TEXT, in a fixed field order, by tests/screenDials.test.mjs, and a
+      // comment between fields breaks the parser.)
     ]),
     // C2 — screens/WorkerHomeScreen.tsx. Also on the `theme.*` scale. Left
     // undialled on purpose: the search field (its shape, height and roundness
