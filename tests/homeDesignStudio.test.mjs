@@ -36,8 +36,12 @@ test('Home Design Studio defaults preserve the current Home geometry and control
     'sectionGap: 20',
     // 70 -> 65 in the same pass; searchRadius stays 35 and is no longer half
     // the height, which is deliberate and is why they are two settings.
-    'searchHeight: 65',
-    'searchRadius: 35',
+    // 2026-09-18: 65 -> 44 and 35 -> 17 — the field moved inside the task
+    // card (docs/mockups/html/home-redesign.html `.field`: 44 tall, radius
+    // 17). Two constants moved; the fence's claim — the studio launches at
+    // the geometry the screen ships — is unchanged.
+    'searchHeight: 44',
+    'searchRadius: 17',
     'ctaHeight: 48',
     'ctaRadius: 24',
     // 2026-09-17: `jobCardRadius: 20` left this list with the setting. It

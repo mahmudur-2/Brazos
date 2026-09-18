@@ -97,6 +97,27 @@ export const colors = {
    *  primary button "forest/white", so this is that white, given a name so
    *  callers stop writing '#FFFFFF' inline. */
   onForest: '#FFFFFF',
+
+  /**
+   * 2026-09-18 — THE CUSTOMER HOME'S TASK CARD: lit in dark, flat in light.
+   *
+   * docs/mockups/html/home-redesign.html draws the dark card as a
+   * top-to-bottom gradient between two shades inside its own edge — three
+   * values no palette carried, so they are named here (the `dark` block
+   * below holds the mockup's hexes) and the screen names the tokens, never a
+   * hex. LIGHT DRAWS THE SAME CARD FLAT: `surface` inside a `line` hairline,
+   * which is exactly what the three resolve to on this side — restated
+   * rather than referenced because an object literal cannot read its own
+   * keys, the same reason `dark.onForest` restates `dark.ink`. One card, one
+   * set of roles, two palettes; screens/HomeScreen.tsx reads all three in
+   * both themes and gates only the GRADIENT on the theme.
+   */
+  /** The card's top stop. Light: `surface`. */
+  taskCardLitTop: '#FFFFFF',
+  /** The card's bottom stop, and its flat fill under the gradient. Light: `surface`. */
+  taskCardLitBottom: '#FFFFFF',
+  /** The card's 1pt edge. Light: `line`. */
+  taskCardEdge: '#DDE2DD',
 } as const;
 
 export type ColorToken = keyof typeof colors;
@@ -154,6 +175,12 @@ export const dark = {
   navInactive: '#7C8A80',
   onForest: '#F1EDE1',
   warn: '#F2B04F',
+  // 2026-09-18 — the task card's lit shades, docs/mockups/html/home-redesign.html
+  // `.theme-dark .card` verbatim: lighter at the top, settling to the bottom
+  // stop inside its own edge. See the `colors` block above for the roles.
+  taskCardLitTop: '#15362B',
+  taskCardLitBottom: '#0B2019',
+  taskCardEdge: '#27473A',
 } as const satisfies Record<ColorToken, string>;
 
 export { withAlpha } from './colorAlpha';

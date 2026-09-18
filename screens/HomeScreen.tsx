@@ -48,30 +48,34 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { litFill, LitSurface, SearchBar, useFloatingNavClearance } from '../ui/primitives';
+import { litFill, SearchBar, useFloatingNavClearance } from '../ui/primitives';
+import { litBetween } from '../ui/primitives/LitSurface';
 
-// lit(3) — THE TWO ALPHAS ARE MEASUREMENTS, NOT PREFERENCES.
+// lit(3) — THE PILL'S ALPHA IS A MEASUREMENT, NOT A PREFERENCE.
 //
-// Master 44 lights the promo card and the Post-a-job pill along a 135° axis;
-// the app drew both flat. `node scripts/master-diff.mjs` reports each control's
-// DIAGONAL LUMINANCE DELTA — the median luminance of a clean 7x7 patch at 10%
-// along its top-left→bottom-right diagonal, minus the one at 90% — and on the
-// control render both read exactly 0.00 against the master's +2.29 (card) and
-// +6.72 (pill).
+// Master 44 lights the Post-a-job pill along a 135° axis; the app drew it
+// flat. `node scripts/master-diff.mjs` reports each control's DIAGONAL
+// LUMINANCE DELTA — the median luminance of a clean 7x7 patch at 10% along its
+// top-left→bottom-right diagonal, minus the one at 90% — and on the control
+// render the pill read exactly 0.00 against the master's +6.72.
 //
-// Each number below is the alpha that reproduces its master's delta, solved
-// rather than guessed. `LitSurface`'s wash composites to an effective overlay
-// opacity of alpha x (1 - g) at gradient fraction g, and luminance is linear in
-// RGB, so delta = alpha x (g90 - g10) x (Y_lift - Y_surface) — and the tool
-// then confirms the prediction on a fresh render.
+// The number below is the alpha that reproduces that delta, solved rather
+// than guessed. `litFill`'s wash composites to an effective overlay opacity of
+// alpha x (1 - g) at gradient fraction g, and luminance is linear in RGB, so
+// delta = alpha x (g90 - g10) x (Y_lift - Y_surface) — and the tool then
+// confirms the prediction on a fresh render.
 //
-//   card  (g90-g10 = 0.433, emerald 153.95 over surface 20.66)  2.29 / 57.7
-//   pill  (g90-g10 = 0.752, emerald 153.95 over pill    85.21)  6.72 / 51.7
+//   pill  (g90-g10 = 0.752, emerald 153.95 over pill 85.21)  6.72 / 51.7
 //
-// `emerald` is the lift in both because the master's own lift is green-weighted
-// — its pill rises +3/+8/+5 in R/G/B, which a cream lift cannot do and emerald
-// at ~0.05 does.
-const CARD_LIFT_ALPHA = 0.04;
+// `emerald` is the lift because the master's own lift is green-weighted — its
+// pill rises +3/+8/+5 in R/G/B, which a cream lift cannot do and emerald at
+// ~0.05 does.
+//
+// 2026-09-18: the promo card's own wash (CARD_LIFT_ALPHA 0.04, solved the same
+// way against the master's +2.29) left with the promo card. The task card that
+// replaced it is not a lifted surface at all — it is lit BETWEEN two named
+// stops, the reference's own (`litBetween`, tokens `taskCardLitTop` /
+// `taskCardLitBottom`), so there is no alpha to calibrate.
 const CTA_LIFT_ALPHA = 0.13;
 // The pill's 1pt top edge. Anchored on the master's own edge row, which peaks
 // at luminance 117.2 over a 46.5 fill: 0.38 of emerald over the pill's lit top
@@ -84,14 +88,13 @@ const CTA_EDGE_ALPHA = 0.38;
 // Light keeps the approved Heritage brand crops; dark renders the Prestige
 // master-44 artwork (assets/prestige is dark-only by standing decision).
 //
-// home(1): the light mark used to be assets/brand/customer-home-post-mark-hd.png.
-// That file was deleted from disk while the transparent cut-outs were being
-// installed, and this line still named it. Metro resolves an asset `require`
-// at BUNDLE time, so that was not a light-mode blemish — it failed the whole
-// build, in both themes. It is repointed at the brand-folder drape installed
-// in the same batch (byte-identical to the prestige one; kept under
-// assets/brand so light never mounts an assets/prestige file).
-const POST_MARK = require('../assets/brand/brazos_b_drape.png');
+// 2026-09-18: the gold B mark is GONE FROM THIS SCREEN. Both of its files —
+// assets/brand/brazos_b_drape.png (light, home(1)) and
+// assets/prestige/brazos_b_drape.png (dark) — stay on disk, required by
+// nothing, and left tests/themeResolution's BAKED_ART roster with their
+// mounts, which is what that roster's added-or-removed assertion demands of a
+// raster the app stops drawing. They drew the promo card's mark, and the
+// promo card is the task card now (see the card below).
 // 2026-08-23: the light hero's own file is GONE FROM THE SOURCE. It was
 // assets/brand/customer-home-chair.png and it is still on disk, required by
 // nothing — see the <Image> below for why, and note that it left the
@@ -136,7 +139,6 @@ const PRESTIGE_HERO_ART = require('../assets/prestige/hero_armchair_customer.png
 // neither of the two bakes the roster knew, so it carries its own word there
 // ('baked-feathered') rather than being rounded to the nearer one.
 const PRESTIGE_HERO_ART_LIGHT = require('../assets/prestige/hero_armchair_customer_light.png');
-const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 /**
  * 2026-09-17 — how many of the customer's own postings "Your jobs" draws.
  *
@@ -149,63 +151,12 @@ const PRESTIGE_B_DRAPE = require('../assets/prestige/brazos_b_drape.png');
 const YOUR_JOBS_COUNT = 3;
 
 // ---------------------------------------------------------------------------
-// home(2) — THE B DRAPE'S GEOMETRY.
-//
-// The drape was a FIXED 92x75 box, and the headline column was a fixed 96pt of
-// paddingRight cut out to clear it. Between them they left the promo card's
-// heading about 222pt on a 390pt phone, which is what wrapped "Describe the
-// job. BRAZOS handles the rest." onto three lines. The heading's font size is
-// not the problem and is not touched.
-//
-// WHY A RATIO AND NOT A SMALLER FIXED NUMBER. The target is a share of the
-// SCREEN — and a fixed pt width cannot hold one. Across the supported range
-// (320pt to 440pt) any single number swings by nearly a third: 71pt is 22.2%
-// of a 320 and 16.1% of a 440. Only a proportion is the same everywhere, so
-// the mechanism itself changes from a constant to a fraction.
-//
-// The height is derived from the artwork's own pixel aspect rather than
-// declared, so the box can never be given a shape the image does not have.
-// (`resizeMode="contain"` would letterbox rather than distort, but then the
-// reserved box and the drawn ink stop agreeing, and the headline's column is
-// measured off the box.)
-// home(15) — 0.183 WAS THE BOX AND THE EYE MEASURES THE INK.
-//
-// assets/prestige/brazos_b_drape.png IS the file master 44 draws this mark
-// from — a transparent-backed gold B with its leaf, and nothing else. (The
-// name is a leftover: there is no drape in it. The dark green fabric behind the
-// B on the master is a separate thing that exists in no asset here; see the run
-// report, where it is recorded as artwork still owed.) The file was never
-// wrong. Only its size was, and only because this number described the box.
-//
-// Its ink covers 60.7% of its canvas's width, so a box at 18.3% of the screen
-// drew a mark 11.1% of the screen wide — 12.4% of the card against master 44's
-// measured 18.7%. The ratio below is the box that DRAWS the master's ink:
-//   0.187 of the card / 0.6067 of the canvas, over 353/393 of the screen
-// which lands at 0.277 and resolves to a 109pt box drawing 66pt of mark.
-const B_DRAPE_WIDTH_RATIO = 0.277;
-/** Both copies of brazos_b_drape.png (brand and prestige) are 918 x 753. */
-const B_DRAPE_ASPECT = 918 / 753;
-/**
- * How far the headline column is allowed to run PAST the drape's left edge.
- *
- * home(15): this is no longer "a few points". The box's left 19.2% is empty —
- * that is where the asset's own margin lives — so the copy may run that far in
- * and still stop clear of the ink. Master 44 does exactly that: its heading
- * column ends 171px = 71.4pt from the card's content right edge, which is the
- * B's ink edge and not the box's. 109 - 38 = 71 is that number, and holding the
- * column there is what keeps the heading on the master's three lines while the
- * mark grows by half.
- */
-const B_DRAPE_COPY_OVERLAP = 38;
-/**
- * The drape's inset from the card's right edge — see `heroMarkDark`.
- *
- * home(15): zero, because the ink's own right margin IS the inset now. Master
- * 44 puts the B's ink 52px = 21.7pt from the card's inner right edge; the box's
- * empty right margin is 20.2% of 109 = 22pt. Insetting the box on top of that
- * would double it.
- */
-const B_DRAPE_RIGHT_INSET = 0;
+// 2026-09-18 — home(2)'s B-drape geometry (B_DRAPE_WIDTH_RATIO 0.277, the
+// artwork aspect, the 38pt copy overlap, the zero inset) and the promo
+// heading's copy column that was reserved from it are GONE with the promo
+// card. The task card carries no mark and reserves no column: its title, its
+// field and its pill each take the card's full inner width.
+// ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
 // home(16) — THE SERIF LADDER, MEASURED OFF MASTER 44 RATHER THAN CHOSEN.
@@ -239,7 +190,9 @@ const B_DRAPE_RIGHT_INSET = 0;
 // home(20) — EVERY NUMBER BELOW WAS RE-MEASURED. The master file on disk was
 // REPLACED: it is 853x1844 where the file these caps were first read off was
 // 941x1672. Nothing here survived unchanged except the promo heading's rung,
-// which lands on the same 22 by coincidence of two different pixel grids.
+// which landed on the same 22 by coincidence of two different pixel grids.
+// (2026-09-18: that rung — `promoHeading`, the D's 33px stem — left this
+// table with the promo heading it sized; nothing on the screen reads it.)
 //
 // The conversion is now the VERTICAL one. A cap height is a vertical measure,
 // and the old master's 0.5628 aspect meant only its width transferred to a
@@ -253,8 +206,6 @@ const GEORGIA_CAP_RATIO = 0.692;
 const MASTER_SERIF_CAPS = {
   /** "Take a task", the T's stem: y 351..402 = 52px. */
   heroHeadline: 52,
-  /** "Describe the job.", the D's stem: y 1217..1249 = 33px. */
-  promoHeading: 33,
   /** "Live Nearby", the L's stem: y 1571..1600 = 30px. */
   sectionTitle: 30,
   /** "Post a job", the P's stem: y 1406..1434 = 29px. Frozen at 24 — see below. */
@@ -293,10 +244,9 @@ const sansSize = (capPx: number) =>
 //     6.6pt clear. Master 44 never runs that type over that artwork.
 //     RECORDED, not taken: 4pt of size, 2.6pt of cap height.
 //
-//   promo heading   22 by cap  ->  25 UNCHANGED. The rung is unmoved by the
-//     master replacement (37px of 1672 and 33px of 1844 both convert to 22pt
-//     of Georgia), so the 3pt this pin owes the ladder is the same 3pt.
-//     What the new master DOES change is the line count — see home(25).
+//   promo heading   RETIRED 2026-09-18 with the promo card. It sat at 19/30
+//     against a 22 ladder rung; the task card's title is 20/24 sans and takes
+//     no rung — see the card below.
 //
 //   section title   20 by cap  ->  20 SHIPPED. A REVERSAL of home(16), which
 //     shrank it from 22 to 16 against the old master's 26px cap. The new
@@ -366,7 +316,13 @@ export function HomeScreen() {
   // drew before the dial existed, which is why it is spelled here and not in
   // the stylesheet: one place per value, so the studio's default and the
   // shipped pixel cannot drift apart.
-  const promoCardRadius = useDialNumber('home.promoCard.radius') ?? 22;
+  //
+  // 2026-09-18: the dial is the TASK CARD's corner now — the card that took
+  // the promo card's place under the hero. Its KEY keeps the old name on
+  // purpose: a stored studio override is keyed on it, and
+  // tests/screenDials.test.mjs pins this exact read. The mockup's card is 22
+  // (radius.xxl), the same corner the promo card had.
+  const taskCardRadius = useDialNumber('home.promoCard.radius') ?? 22;
   // THE MODE PILL'S DIAL, AND THE TWENTY-SIX PIXELS IT WAS WRONGLY BLAMED FOR.
   //
   // T2's render gate found one capture that would not go byte-identical:
@@ -409,22 +365,13 @@ export function HomeScreen() {
   // MOTION1 (C2): the three sections below the greeting arrive in reading
   // order. The hook returns a STYLE, so each of these rides the node the
   // screen already renders — no wrapper, no layout change, and nothing at all
-  // under reduced motion. Index 0 is the search field the service row sits
-  // under; index 1 is that row (the chips' slot, 2026-09-17 — the tile row
-  // took it whole).
-  const chipsEntrance = useEntrance(1);
-  const cardEntrance = useEntrance(2);
+  // under reduced motion. 2026-09-18: the task card sits directly under the
+  // hero and the tile row under it, so the indices follow the new order —
+  // the card first (1), the row second (2), the job section last (3). Three
+  // entrances, as before; only their order moved, with the sections.
+  const cardEntrance = useEntrance(1);
+  const rowEntrance = useEntrance(2);
   const sectionEntrance = useEntrance(3);
-
-  // home(2): the drape's box and the headline column it clears, both derived
-  // from one fraction of the screen so they can never drift apart.
-  const bDrape = useMemo(() => {
-    const width = Math.round(screenWidth * B_DRAPE_WIDTH_RATIO);
-    return {
-      art: { width, height: Math.round(width / B_DRAPE_ASPECT) },
-      copyPaddingRight: width + B_DRAPE_RIGHT_INSET - B_DRAPE_COPY_OVERLAP,
-    };
-  }, [screenWidth]);
 
   // home(23): the dark headline's column ends where the hero artwork's INK
   // starts, not where its box does and not at a share of the screen. Derived
@@ -661,51 +608,132 @@ export function HomeScreen() {
             </View>
           </View>
 
-          {/* The shared SearchBar (Prestige 1a): the mic is the REAL voice
-              search, rendered only when the on-device boundary is available —
-              master 44's contract — replacing the old always-on stub that
-              apologised when tapped. The trailing slot holds the gold submit
-              arrow. */}
-          <SearchBar
-            value={query}
-            onChangeText={setQuery}
-            onSubmit={submitSearch}
-            placeholder="Describe a service or project"
-            autoCapitalize="sentences"
-            autoCorrect
+          {/* 2026-09-18 — THE TASK CARD, directly under the hero: the
+              standalone search bar and the "FASTEST WAY TO START" promo card
+              (its eyebrow, its two-line heading, the gold B mark and the copy
+              column reserved from it) are gone, and ONE card holds what a
+              customer does here — a title, the search field, and the live
+              "Post a job" pill moved inside it, unchanged.
+              docs/mockups/html/home-redesign.html `.card`: padding 17, gap 14,
+              radius 22 (the same dial the promo card wore). Light is the flat
+              card the mockup draws — `taskCardLitTop`/`Bottom` resolve to the
+              surface and `taskCardEdge` to the line hairline, under
+              shadows.card. Dark is LIT between the mockup's two stops through
+              `litBetween`, the same platform branch the pill's `litFill`
+              uses; `flat: !isDark` returns undefined in light, which React
+              Native drops from the array — no key, no pixel. The node is the
+              plain Animated.View a LitSurface is underneath, so the entrance
+              style rides it exactly as it rode the promo card. */}
+          <Animated.View
             style={[
-              styles.searchField,
-              { minHeight: design.searchHeight, borderRadius: design.searchRadius },
+              styles.taskCard,
+              { borderRadius: taskCardRadius },
+              litBetween({
+                top: colors.taskCardLitTop,
+                bottom: colors.taskCardLitBottom,
+                flat: !isDark,
+              }),
+              cardEntrance,
             ]}
-            trailing={
-              <>
-                <View style={styles.searchDivider} />
-                {/* The submit affordance, not decoration: same submitSearch()
-                    the keyboard return fires, and an empty query is a no-op
-                    inside it. The worker Home arrow carries the same
-                    contract (tests/voiceSearch.test.mjs pins both). */}
-                <Pressable
-                  onPress={submitSearch}
-                  hitSlop={10}
-                  style={({ pressed }) => pressed && styles.searchGoPressed}
-                  accessibilityRole="button"
-                  accessibilityLabel="Search"
-                >
-                  <Ionicons name="arrow-forward" size={23} color={colors.gold} />
-                </Pressable>
-              </>
-            }
-          />
+          >
+            <Text style={styles.taskCardTitle} maxFontSizeMultiplier={1.3}>
+              What do you need done?
+            </Text>
+
+            {/* The shared SearchBar (Prestige 1a), the SAME instance this
+                screen has always had — value, onChangeText, submitSearch, the
+                sentence posture — now inside the card at the card's own
+                44/17 (lib/homeDesignStudio.tsx). The mic is the REAL voice
+                search, rendered by SearchBar itself only when the on-device
+                boundary is available; nothing about voice changes. The
+                leading glyph is omitted here and only here, because the
+                magnifier lives at the trailing end of this field — it IS the
+                submit — and two of them in one field would be two. */}
+            <SearchBar
+              value={query}
+              onChangeText={setQuery}
+              onSubmit={submitSearch}
+              placeholder="Describe your task..."
+              autoCapitalize="sentences"
+              autoCorrect
+              disableLeadingIcon
+              style={[
+                styles.searchField,
+                { minHeight: design.searchHeight, borderRadius: design.searchRadius },
+              ]}
+              trailing={
+                <>
+                  <View style={styles.searchDivider} />
+                  {/* The submit affordance, not decoration: same submitSearch()
+                      the keyboard return fires, and an empty query is a no-op
+                      inside it. 2026-09-18: the glyph is the magnifier where
+                      it was the gold arrow — same slot, same size, same gold,
+                      same press, same label. The worker Home arrow carries the
+                      same contract (tests/voiceSearch.test.mjs pins both). */}
+                  <Pressable
+                    onPress={submitSearch}
+                    hitSlop={10}
+                    style={({ pressed }) => pressed && styles.searchGoPressed}
+                    accessibilityRole="button"
+                    accessibilityLabel="Search"
+                  >
+                    <Ionicons name="search" size={23} color={colors.gold} />
+                  </Pressable>
+                </>
+              }
+            />
+
+            {/* THE LIVE PILL, MOVED, NOT REDESIGNED: the same styles.heroButton,
+                the same litFill recipe, the same label, the same startJobDraft.
+                Full width inside the card under the field, at the card's gap.
+                It is the screen's ONE conversion control (decision 3), and the
+                E2E money walk taps it on Home without scrolling (.maestro/
+                sign-in.yml HOME_MARK, money-walk.yml Act 1) — it sits higher on
+                the screen than it did in the promo card. */}
+            <Pressable
+              onPress={() => startJobDraft()}
+              style={({ pressed }) => [
+                styles.heroButton,
+                isDark && styles.heroButtonDark,
+                {
+                  minHeight: design.ctaHeight,
+                  borderRadius: design.ctaRadius,
+                },
+                // The pill is a Pressable, so it cannot BECOME a LitSurface
+                // without losing its press target — it takes the same lit
+                // fill through the same one implementation instead. In light
+                // `flat` returns undefined, which React Native drops from a
+                // style array: no key, no node, no pixel, which is what keeps
+                // the light render byte-identical.
+                litFill({
+                  surface: colors.postPillGreen,
+                  lift: colors.emerald,
+                  liftAlpha: CTA_LIFT_ALPHA,
+                  highlight: true,
+                  highlightAlpha: CTA_EDGE_ALPHA,
+                  flat: !isDark,
+                }),
+                pressed && styles.heroButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Post a job"
+            >
+              <Text style={[styles.heroButtonText, isDark && styles.heroButtonTextDark]}>
+                Post a job ›
+              </Text>
+            </Pressable>
+          </Animated.View>
 
           {/* 2026-09-17 — THE SERVICE ROW: one sliding row of every service,
-              shared with worker Home (components/ServiceTileRow.tsx), in the
-              slot the two chip rows held and with their entrance. The row
+              shared with worker Home (components/ServiceTileRow.tsx). The row
               owns its tiles; this screen owns what a tap does — the same
               category search a chip ran, and the same "Other" sheet below.
               The heading is this screen's alone: worker Home passes none.
               The inset is the column's own padding, so the row runs edge to
-              edge and its first tile sits on the column. */}
-          <Animated.View style={chipsEntrance}>
+              edge and its first tile sits on the column. 2026-09-18: the row
+              sits directly under the task card — it moved up with the card's
+              arrival and nothing about the row itself changed. */}
+          <Animated.View style={rowEntrance}>
             <ServiceTileRow
               heading="Popular services"
               inset={design.screenPadding}
@@ -714,82 +742,9 @@ export function HomeScreen() {
             />
           </Animated.View>
 
-          {/* Master 44's promo card: dark is a hairlined surface card with the
-              gold B drape and the screen's ONE conversion pill (decision 3).
-              2026-08-23: light is the SAME design in the light palette, not a
-              second design — its pill was a solid white fill with an invisible
-              ring, and is now the outlined treatment dark draws. */}
-          <LitSurface
-            // C4: the card shadow in the stylesheet is a light-palette shadow
-            // and casts nothing on this ground. The dark token is ADDED rather
-            // than swapped in, so light keeps exactly what it had.
-            style={[
-              styles.heroCard,
-              isDark && styles.heroCardDark,
-              isDark && shadows.cardDark,
-              { borderRadius: promoCardRadius },
-              cardEntrance,
-            ]}
-            surface={colors.surface}
-            lift={colors.emerald}
-            liftAlpha={CARD_LIFT_ALPHA}
-            flat={!isDark}
-          >
-            <View style={styles.heroBody}>
-              {/* Parity 2026-08-22: one copy column, reserved from the B
-                  drape's own computed width in both themes (home(2)). */}
-              <View style={[styles.heroCopy, { paddingRight: bDrape.copyPaddingRight }]}>
-                <Text style={styles.heroEyebrow}>FASTEST WAY TO START</Text>
-                <Text
-                  style={[styles.heroHeadline, isDark && styles.heroHeadlineDark]}
-                  maxFontSizeMultiplier={1.3}
-                >
-                  Describe the job.{'\n'}BRAZOS handles the rest.
-                </Text>
-              </View>
-              <Pressable
-                onPress={() => startJobDraft()}
-                style={({ pressed }) => [
-                  styles.heroButton,
-                  isDark && styles.heroButtonDark,
-                  {
-                    minHeight: design.ctaHeight,
-                    borderRadius: design.ctaRadius,
-                  },
-                  // The pill is a Pressable, so it cannot BECOME a LitSurface
-                  // without losing its press target — it takes the same lit
-                  // fill through the same one implementation instead. In light
-                  // `flat` returns undefined, which React Native drops from a
-                  // style array: no key, no node, no pixel, which is what keeps
-                  // the light render byte-identical.
-                  litFill({
-                    surface: colors.postPillGreen,
-                    lift: colors.emerald,
-                    liftAlpha: CTA_LIFT_ALPHA,
-                    highlight: true,
-                    highlightAlpha: CTA_EDGE_ALPHA,
-                    flat: !isDark,
-                  }),
-                  pressed && styles.heroButtonPressed,
-                ]}
-                accessibilityRole="button"
-                accessibilityLabel="Post a job"
-              >
-                <Text style={[styles.heroButtonText, isDark && styles.heroButtonTextDark]}>
-                  Post a job ›
-                </Text>
-              </Pressable>
-            </View>
-            <Image
-              source={isDark ? PRESTIGE_B_DRAPE : POST_MARK}
-              style={[styles.heroMark, bDrape.art]}
-              resizeMode="contain"
-              accessibilityIgnoresInvertColors
-            />
-          </LitSurface>
-
-          {/* a2 — WHAT NEEDS THE CUSTOMER'S MOVE, directly below the promo
-              card and above Nearby (docs/DECISIONS.md 2026-09-05 entry (4)).
+          {/* a2 — WHAT NEEDS THE CUSTOMER'S MOVE, the first job section
+              (docs/DECISIONS.md 2026-09-05 entry (4), and the 2026-09-18
+              entry that puts the tile row between it and the card).
               THE POSITION IS NOT A TASTE CHOICE: the E2E money walk finds
               "Post a job" on Home WITHOUT scrolling (.maestro/sign-in.yml's
               HOME_MARK, then money-walk.yml's tap), Maestro taps nothing laid
@@ -797,13 +752,16 @@ export function HomeScreen() {
               staging jobs that need attention — so a block ABOVE the card
               would push the pill off-screen and break the walk without a flow
               change, which the chain forbids. The ruling's "leads with" is met
-              as the FIRST job section; the Figma pass decides the final order.
+              as the FIRST job section; the ruling's REASON — the pill reachable
+              without scrolling — is more than intact now that the pill sits in
+              the task card directly under the hero.
 
-              No entrance animation: MOTION1's three indices are the search
-              field, the chips and Nearby, and this section does not take a
-              fourth. Every style here already existed, and every card is the
-              hub's own HubCard with the hub's own props — the line included,
-              which myJobsNextAction() derives once for both surfaces. */}
+              No entrance animation: MOTION1's three indices are the task
+              card, the tile row and "Your jobs", and this section does not
+              take a fourth. Every style here already existed, and every card
+              is the hub's own HubCard with the hub's own props — the line
+              included, which myJobsNextAction() derives once for both
+              surfaces. */}
           {myJobsError || items.length > 0 ? (
             <View style={styles.section}>
               <View style={styles.liveNearbyHeader}>
@@ -1165,9 +1123,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // Laid over the shared SearchBar so the reference geometry wins; the input,
   // clear control and (when available) the voice mic ride SearchBar itself.
-  // home(24): the 8pt marginTop is the control's Y against master 44 — a REAL
-  // gap on this one section, not a change to `sectionGap` — and it applies in
-  // both themes since the parity pass (2026-08-22).
+  // home(24): the 8pt marginTop was the control's Y against master 44 — a REAL
+  // gap on that one section, not a change to `sectionGap`. 2026-09-18: GONE
+  // with the standalone field. The field sits inside the task card now, under
+  // the title at the card's own 14pt gap, and a margin on top of that gap
+  // would have been 22 where the mockup draws 14.
   // 2026-08-23: THE FIELD IS A HAIRLINE, NOT A CARD, in both themes. Dark drew
   // it as a near-transparent pill under a dim-gold hairline; light drew the
   // same box as an elevated WHITE card, because `surface` is #FFFFFF there and
@@ -1183,7 +1143,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   //           hairline reads as against its own ground.
   //   depth   shadows.card removed. An outlined field does not float.
   searchField: {
-    marginTop: 8,
     gap: spacing.md,
     paddingHorizontal: 18,
     borderWidth: 1,
@@ -1198,98 +1157,39 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // out. The service row is components/ServiceTileRow.tsx now, which carries
   // its own geometry for both screens; a stylesheet entry that draws nothing
   // is a lie.
-  // home(24): master 44 leaves 22.6pt between the chip rows and this card,
-  // against the 20 `sectionGap` gives every section — the 3pt marginTop is
-  // that per-section correction, both themes since the parity pass. The 1pt
-  // border is part of the box in both; light draws it transparent so only the
-  // colours differ. 2026-09-17: the tile row sits where the chip rows did and
-  // the 3 is deliberately NOT re-tuned against it.
-  heroCard: {
-    marginTop: 3,
+  //
+  // 2026-09-18 — THE TASK CARD, in the promo card's place and the promo card's
+  // styles' place: heroCard / heroCardDark / heroBody / heroCopy / heroEyebrow
+  // / heroHeadline / heroHeadlineDark / heroMark (home(25)'s term-by-term
+  // height, the 3pt marginTop, the 16/20 body, the 19/30 heading, the B mark
+  // at top 21) are gone with the card they drew. What is here is the mockup's
+  // card (docs/mockups/html/home-redesign.html `.card`): padding 17 and a
+  // 14pt gap between its three rows, a 1pt edge, the flat fill under the
+  // gradient, and the light card shadow. Every colour is a palette role read
+  // in BOTH themes — `taskCardLitBottom` is the surface in light and the
+  // gradient's bottom stop in dark, `taskCardEdge` the line hairline in light
+  // and the mockup's edge in dark — so there is no *Dark fork here at all;
+  // the theme decides only whether the gradient is drawn (see the call site).
+  //
+  // NO marginTop: the mockup puts the card 28 under the sub-copy, and that is
+  // what `sectionGap` (20) plus `intro`'s paddingBottom (8) already give.
+  // shadows.card is the light-palette shadow it always was — theme-blind on
+  // the shared style, casting nothing on the dark ground (see ui/tokens.ts's
+  // cardDark docblock); the mockup's dark card carries no shadow and none is
+  // added.
+  taskCard: {
+    padding: 17,
+    gap: 14,
     borderWidth: 1,
-    borderColor: 'transparent',
-    backgroundColor: colors.forest,
-    overflow: 'hidden',
+    borderColor: colors.taskCardEdge,
+    backgroundColor: colors.taskCardLitBottom,
     ...shadows.card,
   },
-  heroCardDark: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-  },
-  // home(25): master 44 leaves 40.9pt between the heading's second cap top
-  // and the "Post a job" pill's top edge; gap 12 left 34.6, so 20. Both
-  // themes since the parity pass.
-  heroBody: { padding: 16, gap: 20 },
-  // The copy column's reserve is computed from the drape's own width (home(2))
-  // and applied at the call site — one number, both themes.
-  heroCopy: { gap: 8 },
-  heroEyebrow: { fontSize: 12, fontWeight: '700', letterSpacing: 1.1, color: colors.gold },
-  // home(25)'s 19/30 (the master's two-line setting with its own leading), in
-  // BOTH themes since the parity pass — light's 25/29 three-line setting is
-  // retired, and with it the size gap that grew the wrap. Colour stays
-  // per-theme: white on light's forest card, ink on dark's surface card.
-  heroHeadline: {
-    fontFamily: fonts.display,
-    fontSize: 19,
-    lineHeight: 30,
-    letterSpacing: -0.25,
-    fontWeight: '700',
-    color: colors.white,
-  },
-  // home(25), DARK ONLY — 25/27 -> 18/28, and 18 is what puts it on TWO lines.
-  //
-  // The replaced master sets this heading on TWO lines, not the three the old
-  // file drew and this app copied: "Describe the job." / "BRAZOS handles the
-  // rest.", the second measuring 232.7pt of ink and ending 251.1pt from the
-  // card's left edge, 18pt clear of the B mark's own ink.
-  //
-  // THE COLUMN WAS TRIED FIRST, as instructed, and it cannot do it. The copy
-  // column is 248pt — 319pt of card content less the 71pt reserved from the B
-  // drape's own width (home(2)) — and the mark's ink starts 2pt past its right
-  // edge, so there is nothing to widen into.
-  //
-  // WHICH SIZE, then. Georgia sets "BRAZOS handles the rest." at 12.92pt of ink
-  // per point of size (323pt at 25, measured in a real 393pt viewport). 19 is
-  // the largest that FITS — 245.5pt of 248 — but it ends 4.5pt from the mark,
-  // and master 44 leaves 18. 18pt sets 232.6pt against the master's own 232.7:
-  // the same line, the same length, ending within 1.5pt of where the master
-  // ends it. The line, not the leftover space, is the thing being matched.
-  //
-  // AND THE MASTER'S CAP AGREES ON THE DIRECTION: its 33px stem is 15.25pt,
-  // which is 22pt of Georgia — three points BELOW the 25 this shipped. 18 is
-  // four points below that again, and those 4pt are the face: RECORDED, not
-  // met, at 2.8pt of cap height. Light keeps 25/29 and is fenced.
-  //
-  // The leading is the master's own: 60px of line pitch = 27.7pt, so 28.
-  //
-  // home(25b) — AND THE BREAK IS EXPLICIT, because at 18 the column stopped
-  // making it. Two lines is not the same statement as the master's two lines:
-  // at 19pt "Describe the job. BRAZOS" measured 248pt and the column forced
-  // the break after "job." by accident; at 18 it measures 235 and fits, so the
-  // wrap slid one word right and set "Describe the job. BRAZOS" / "handles the
-  // rest." A break that depends on a line being exactly too long is not a
-  // break, so the copy now carries the master's own, the way the hero headline
-  // already does. LIGHT is unmoved by it: at 25pt in the same column the
-  // natural wrap already fell after "job." and again after "handles", which is
-  // exactly what the explicit break plus one natural wrap produces.
-  heroHeadlineDark: { color: colors.ink },
-  // No width/height here on purpose: the box is B_DRAPE_WIDTH_RATIO of the
-  // screen, measured at render (home(2)) and applied in BOTH themes since the
-  // parity pass — light's fixed 79x101 at (12, 10) is retired, which is what
-  // makes the B render the same size in both modes. `right` must stay in step
-  // with B_DRAPE_RIGHT_INSET, which is what the headline column is reserved
-  // from.
-  //
-  // home(25): top 21, re-measured on the replaced master. The B's ink starts
-  // 48px = 22.2pt below the card's OUTER top edge; `top` is measured from the
-  // padding box, inside the 1pt border, and the asset has no empty margin above
-  // its ink, so 21 puts the ink at 22.
-  //
-  // RECORDED, not moved: B_DRAPE_WIDTH_RATIO stays 0.277. The new master's mark
-  // measures 61.7pt of ink against the 63 this draws — 0.272 by the same
-  // arithmetic home(15) used — and the difference is smaller than the
-  // measurement's own threshold sensitivity on a downscaled screenshot.
-  heroMark: { position: 'absolute', top: 21, right: 0 },
+  // The mockup's `.card-title`: 20/24, 700, the ink — the system sans like
+  // every heading role here, not the hero's serif (tests/themeTokens' one-serif
+  // fence), and no ladder rung: this is the reference's own number, not a cap
+  // measured off master 44.
+  taskCardTitle: { fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors.ink },
   // The 1pt ring is part of the box in both themes (parity 2026-08-22), and
   // since 2026-08-23 it is DRAWN in both.
   //
@@ -1359,6 +1259,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // the section in this slot is unchanged in SHAPE — a 44pt header row with a
   // 20pt serif title centred in it, over the same 20pt sectionGap. Only the
   // word in the title moved, from "Nearby" to "Your jobs".
+  // 2026-09-18: what sits ABOVE the first job section is the tile row now, not
+  // the card — the card moved up under the hero and the row came with it. The
+  // -6 is deliberately NOT re-tuned against the row's label baseline; it is
+  // the same corrective margin, on the same header row, and moving it would
+  // be a spacing decision this change did not make.
   section: { gap: 12, marginTop: -6 },
   // The name is a leftover and is kept deliberately: BOTH job sections wear
   // this row — "Needs your attention" (untouched by the 2026-09-17 change) and

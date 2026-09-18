@@ -23,9 +23,14 @@ export const DEFAULT_HOME_DESIGN_SETTINGS: HomeDesignSettings = {
   heroFontSize: 33,
   screenPadding: 20,
   sectionGap: 20,
-  searchHeight: 65,
-  // Half the default height is visually identical to the existing pill token.
-  searchRadius: 35,
+  // 2026-09-18: 65 -> 44 and 35 -> 17 — the search field moved INSIDE the
+  // task card under its title (docs/mockups/html/home-redesign.html `.field`:
+  // height 44, radius 17), where the standalone 65pt pill would have been a
+  // second card inside the card. 44 is CLAUDE.md's touch floor exactly, and
+  // the studio's slider still runs from it. The radius is no longer half the
+  // height, and 17 is emeraldRadius.lg — a corner, not a capsule.
+  searchHeight: 44,
+  searchRadius: 17,
   ctaHeight: 48,
   ctaRadius: 24,
 };

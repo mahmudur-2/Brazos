@@ -94,23 +94,73 @@ export function litGradient({
 }
 
 /**
- * The lit fill as a style object, or `undefined` when flat.
+ * A gradient string as the style that draws it.
  *
- * THE ONE IMPLEMENTATION OF THE PLATFORM BRANCH. `LitSurface` below uses it,
- * and so does any caller whose container cannot become a View — the "Post a
- * job" pill is a `Pressable` with an `onPress`, so it takes this style into
- * its own style array instead. `undefined` in that array is ignored by React
- * Native, which is why the flat path adds nothing at all.
+ * THE ONE IMPLEMENTATION OF THE PLATFORM BRANCH. Both fills below go through
+ * it, and so does `LitSurface` — a caller whose container cannot become a View
+ * (the "Post a job" pill is a `Pressable` with an `onPress`) takes the
+ * returned style into its own style array instead. react-native-web forwards
+ * `backgroundImage` to CSS, but React Native's own ViewStyle has no such key —
+ * hence the single cast, here and nowhere else (RN 0.81 View style docs).
+ */
+function backgroundImageStyle(image: string): ViewStyle {
+  return Platform.OS === 'web'
+    ? ({ backgroundImage: image } as unknown as ViewStyle)
+    : { experimental_backgroundImage: image };
+}
+
+/**
+ * The lit fill as a style object, or `undefined` when flat. `undefined` in a
+ * style array is ignored by React Native, which is why the flat path adds
+ * nothing at all.
  */
 export function litFill(fill: LitFill): ViewStyle | undefined {
   if (fill.flat) return undefined;
-  const image = litGradient(fill);
-  return Platform.OS === 'web'
-    ? // react-native-web forwards `backgroundImage` to CSS, but React Native's
-      // own ViewStyle has no such key — hence the single cast, here and nowhere
-      // else (RN 0.81 View style docs).
-      ({ backgroundImage: image } as unknown as ViewStyle)
-    : { experimental_backgroundImage: image };
+  return backgroundImageStyle(litGradient(fill));
+}
+
+/**
+ * 2026-09-18 — A SURFACE LIT BETWEEN TWO EXPLICIT STOPS.
+ *
+ * `litFill` lights a surface by lifting its OWN colour toward a palette lift
+ * and letting it settle back — one flat fill, one calibrated alpha. The
+ * customer Home's task card is a different statement: the reference
+ * (docs/mockups/html/home-redesign.html, `.theme-dark .card`) draws it as a
+ * straight top-to-bottom gradient between two NAMED shades, and the palette
+ * now carries both (`taskCardLitTop` settling into `taskCardLitBottom`). So
+ * this takes the two stops as given and draws them through the same platform
+ * branch above — no third mechanism, no library. Every stop is still a
+ * palette token through `withAlpha`, at full opacity: this file writes no
+ * colour of its own here either.
+ */
+export type LitBetween = {
+  /** The top stop. A palette token. */
+  top: string;
+  /** The bottom stop — also the flat fill a caller declares under it. A palette token. */
+  bottom: string;
+  /** Renders nothing: no gradient, no style key. The light card is flat. */
+  flat?: boolean;
+};
+
+/**
+ * Straight down. The reference card is lighter at its top edge and darker at
+ * its bottom one, not lit from a corner — a different axis from the wash's,
+ * and like `DIAGONAL` it is not a prop.
+ */
+const VERTICAL = '180deg';
+
+/** The gradient string, exported so a fence can read it without rendering. */
+export function litBetweenGradient({ top, bottom }: LitBetween): string {
+  return (
+    `linear-gradient(${VERTICAL}, ` +
+    `${withAlpha(top, 1)} 0%, ${withAlpha(bottom, 1)} 100%)`
+  );
+}
+
+/** The explicit-stops fill as a style object, or `undefined` when flat. */
+export function litBetween(fill: LitBetween): ViewStyle | undefined {
+  if (fill.flat) return undefined;
+  return backgroundImageStyle(litBetweenGradient(fill));
 }
 
 export type LitSurfaceProps = ViewProps &

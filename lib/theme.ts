@@ -2,6 +2,7 @@ import { Platform, type TextStyle, type ViewStyle } from 'react-native';
 import {
   brand,
   dark as emeraldDark,
+  light as emeraldLight,
   constantAccents,
   metricGeneration,
   metricGroup,
@@ -99,6 +100,12 @@ export const colors = {
    *  the Prestige emerald family in dark. */
   homeLive: '#0DBC5A',
   homeLiveHalo: '#7DE7A4',
+  /** 2026-09-18 — the customer Home's task card, by reference from the ONE
+   *  definition in ui/tokens.ts (light: flat `surface` inside a `line`
+   *  hairline; dark: the mockup's lit shades, on `darkColors` below). */
+  taskCardLitTop: emeraldLight.taskCardLitTop,
+  taskCardLitBottom: emeraldLight.taskCardLitBottom,
+  taskCardEdge: emeraldLight.taskCardEdge,
 
   text: '#1F2E22',
   textMuted: '#6B7566',
@@ -199,6 +206,11 @@ export const darkColors: ColorPalette = {
   homeHairline: '#55482E',
   homeLive: emeraldDark.emerald,
   homeLiveHalo: emeraldDark.mint2,
+  // 2026-09-18 — the task card's lit shades, by reference: ui/tokens.ts `dark`
+  // is the one home of the mockup's three hexes.
+  taskCardLitTop: emeraldDark.taskCardLitTop,
+  taskCardLitBottom: emeraldDark.taskCardLitBottom,
+  taskCardEdge: emeraldDark.taskCardEdge,
 
   text: '#F1EDE1',
   textMuted: '#93A096',

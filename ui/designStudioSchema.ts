@@ -1674,10 +1674,16 @@ function screenDialEntries(): StudioEntry[] {
     // so a per-screen dial would break the invariant it exists to protect, and
     // 2026-09-17 ruled no dials for the tiles at all).
     ...dialEntries('screens', 'Customer Home', [
+      // 2026-09-18: the promo card became the TASK CARD — the title, the
+      // search field and the Post-a-job pill in one card under the hero — and
+      // this dial is its corner now. The KEY keeps its name on purpose: a
+      // stored override is keyed on it, and the screen's read
+      // (`useDialNumber('home.promoCard.radius') ?? 22`) is what
+      // tests/screenDials.test.mjs pins. Only the label and description moved.
       {
         key: 'home.promoCard.radius',
-        label: 'Promo card — corner roundness',
-        description: 'The “Describe the job” card’s corners. Home’s alone — the job cards below it keep their own.',
+        label: 'Task card — corner roundness',
+        description: 'The “What do you need done?” card’s corners — the search field and the Post-a-job pill sit inside it. Home’s alone — the job cards below it keep their own.',
         tier: 'basic',
         scope: 'local',
         min: 0,

@@ -82,6 +82,11 @@ type SearchBarProps = {
   /** Rendered inside the field after the mic — the submit-arrow slot the
    *  converted screens keep. Absent by default. */
   trailing?: ReactNode;
+  /** Omit the leading search glyph — for a field whose submit control draws
+   *  the magnifier at its trailing end (customer Home's task card, 2026-09-18),
+   *  where a second one in front of the input would be two. Default false:
+   *  every other caller keeps the glyph exactly as it was. */
+  disableLeadingIcon?: boolean;
 };
 
 export function SearchBar({
@@ -98,6 +103,7 @@ export function SearchBar({
   autoCorrect = false,
   disableClear = false,
   trailing,
+  disableLeadingIcon = false,
 }: SearchBarProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -242,12 +248,14 @@ export function SearchBar({
         {/* Masters 43 and 44 draw the search glyph cream, not gold (master 1's
             gold glyph is that screen's own gold-heavy treatment); light keeps
             its Heritage emerald. */}
-        <Ionicons
-          name="search"
-          size={iconGlyphSize}
-          color={isDark ? colors.ink : colors.emerald}
-          style={iconDialStyle}
-        />
+        {disableLeadingIcon ? null : (
+          <Ionicons
+            name="search"
+            size={iconGlyphSize}
+            color={isDark ? colors.ink : colors.emerald}
+            style={iconDialStyle}
+          />
+        )}
         {/* Plain Text, not a disabled TextInput: a disabled input stays
             focusable on some platforms and reads as broken rather than as a
             button. */}
@@ -264,12 +272,14 @@ export function SearchBar({
 
   return (
     <View style={[styles.field, fieldDial, focusDial, style]}>
-      <Ionicons
-        name="search"
-        size={iconGlyphSize}
-        color={isDark ? colors.ink : colors.emerald}
-        style={iconDialStyle}
-      />
+      {disableLeadingIcon ? null : (
+        <Ionicons
+          name="search"
+          size={iconGlyphSize}
+          color={isDark ? colors.ink : colors.emerald}
+          style={iconDialStyle}
+        />
+      )}
       <TextInput
         keyboardAppearance={isDark ? 'dark' : 'light'}
         style={[styles.input, showingInterim && styles.inputInterim]}

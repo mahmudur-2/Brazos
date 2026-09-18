@@ -468,7 +468,13 @@ const BAKED_ART = {
   // per-theme pair. Mounting a light composition under the dark palette is the
   // mirror of the fault that put the gate back on.
   'assets/prestige/hero_armchair_customer_light.png': { bake: 'baked-feathered', gate: true },
-  'assets/prestige/brazos_b_drape.png': { bake: 'transparent', gate: true },
+  // GONE 2026-09-18 — assets/prestige/brazos_b_drape.png, the dark B mark
+  // (transparent, gated). It drew the customer Home promo card's mark, and the
+  // promo card became the task card, which carries no mark; screens/
+  // HomeScreen.tsx no longer requires it, so it leaves this roster BECAUSE the
+  // added-or-removed assertion below demands exactly that of a raster the app
+  // stops mounting. The file stays on disk, byte for byte, required by
+  // nothing — the change is one `git revert` away.
   'assets/prestige/hero_toolbox_worker.png': { bake: 'transparent', gate: true },
   // home(4)'s fixed atmosphere behind both homes. GATE DECISION: gated, and it
   // is the strongest case on the roster — this one is genuinely still baked
@@ -493,17 +499,17 @@ const BAKED_ART = {
   // exactly that of a raster the app stops mounting — the entry is not being
   // hidden, it is being retired with its mount. The file itself stays on disk,
   // required by nothing.
-  // The LIGHT mark on the promo card. It used to be
-  // assets/brand/customer-home-post-mark-hd.png, which was DELETED from disk
-  // during the cut-out install while screens/HomeScreen.tsx still `require`d
-  // it. That is not a light-mode-only fault: Metro resolves an asset
-  // `require` at BUNDLE time, so a missing file fails the whole build in both
-  // themes, and the app would not have started at all. home(1) repointed the
-  // light mark at the brand-folder drape installed alongside the cut-outs
-  // (byte-identical to the prestige one, but under assets/brand, so the
-  // dark-only standing decision on assets/prestige is not violated). Gated,
-  // because it is still the LIGHT half of a per-theme pair.
-  'assets/brand/brazos_b_drape.png': { bake: 'transparent', gate: true },
+  // GONE 2026-09-18 — assets/brand/brazos_b_drape.png, the LIGHT mark on the
+  // promo card. It used to be assets/brand/customer-home-post-mark-hd.png,
+  // which was DELETED from disk during the cut-out install while
+  // screens/HomeScreen.tsx still `require`d it — not a light-mode-only fault:
+  // Metro resolves an asset `require` at BUNDLE time, so a missing file fails
+  // the whole build in both themes. home(1) repointed the light mark at the
+  // brand-folder drape (byte-identical to the prestige one, under
+  // assets/brand so the dark-only decision on assets/prestige held), gated as
+  // the LIGHT half of the per-theme pair. The pair left the screen together
+  // with the promo card (see its dark half above), so this entry retires with
+  // its mount as the assertion below demands. The file stays on disk.
   // Transparent: no background to leak, so no gate is owed.
   'assets/brand/brazos-b-leaf.png': { bake: 'transparent', gate: false },
   // The app icon, and now the LaunchScreen mark as well: one file for both, so
@@ -702,9 +708,14 @@ test('[static] every roster bake claim is re-derived from the file, both ways', 
   // RUN H2: 5 -> 6 as the light hero joined the roster. The floor tracks the
   // roster's composition and rises with it; it is never lowered to let
   // something through.
+  // 2026-09-18: 6 -> 4 as the two B-drape entries LEFT the roster with their
+  // mount (the promo card is the task card, which draws no mark). Nothing
+  // slipped past: the two files still exist, still transparent, and are
+  // simply not required by the app any more — the floor follows the roster's
+  // composition down exactly as it followed it up.
   assert.ok(opaqueChecked >= 2, `the opaque half must stay measured (saw ${opaqueChecked})`);
   assert.ok(
-    transparentChecked >= 6,
+    transparentChecked >= 4,
     `the transparent half must stay measured (saw ${transparentChecked})`,
   );
 });
@@ -732,12 +743,14 @@ test('[static] each hero raster is the bake the roster records', async () => {
   // a feathered edge is built out of it (31488 samples, 22.43%). Both branches
   // below now pin that from BOTH sides, so neither file can drift into the
   // other's word.
+  // 2026-09-18: assets/prestige/brazos_b_drape.png left this list with the
+  // roster entry it checked against — the app no longer mounts it (the promo
+  // card's mark went with the promo card). Three heroes stay measured.
   let checked = 0;
   for (const asset of [
     'assets/prestige/hero_armchair_customer.png',
     'assets/prestige/hero_armchair_customer_light.png',
     'assets/prestige/hero_toolbox_worker.png',
-    'assets/prestige/brazos_b_drape.png',
   ]) {
     const recorded = BAKED_ART[asset]?.bake;
     assert.ok(recorded, `${asset} must stay on the roster`);
@@ -806,7 +819,7 @@ test('[static] each hero raster is the bake the roster records', async () => {
       );
     }
   }
-  assert.equal(checked, 4, 'all four hero rasters must stay measured');
+  assert.equal(checked, 3, 'all three hero rasters must stay measured');
 });
 
 test('[static] a theme-specific asset is mounted only behind an isDark decision', async () => {

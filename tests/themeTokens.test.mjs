@@ -86,7 +86,10 @@ const themeModule = (async () => {
       // failing an assertion — so the stub is widened, never the assertions.
       // RUN T1 (C2) added `metricGeneration` (themedStyles keys on it) and
       // `metricGroup` (this file's own two scales are live too).
-      'const { brand, dark: emeraldDark, constantAccents, metricGeneration, metricGroup, shadows: tokenShadows, THEME_RADIUS_DEFAULTS, THEME_SPACING_DEFAULTS, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
+      // 2026-09-18 added `light as emeraldLight`: the task card's three roles
+      // are defined once in ui/tokens.ts and lib/theme.ts takes BOTH palettes'
+      // values by reference, the light side included.
+      'const { brand, dark: emeraldDark, light: emeraldLight, constantAccents, metricGeneration, metricGroup, shadows: tokenShadows, THEME_RADIUS_DEFAULTS, THEME_SPACING_DEFAULTS, withAlpha: alpha } = globalThis.__THEME_TOKENS__;',
     )
     .replace(/export \{[^}]*\} from '\.\.\/ui\/tokens';\n/g, '')
     .replace(/export \{[^}]*\} from '\.\.\/hooks\/useThemeColors';\n/g, '');

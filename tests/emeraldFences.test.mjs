@@ -454,12 +454,9 @@ test('emerald D1 fence: hiding a tab item never unregisters its route', () => {
 // pass.
 // ===========================================================================
 
-/** The width/height an 8-byte-signature PNG declares in its IHDR. */
-const pngSize = (path) => {
-  const bytes = readFileSync(join(root, path));
-  assert.equal(bytes.toString('ascii', 12, 16), 'IHDR', `${path} is not a PNG`);
-  return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
-};
+// 2026-09-18: `pngSize` — the IHDR reader home(2) used to check the B drape's
+// aspect against both files on disk — left with that assertion; nothing else
+// read it.
 
 /** A bare number assigned to `name` at module scope. */
 const constantOf = (source, name) => {
@@ -470,190 +467,129 @@ const constantOf = (source, name) => {
 };
 
 // ---------------------------------------------------------------------------
-// H2 — the B drape is a FRACTION OF THE SCREEN, and the headline column that
-// clears it is computed from the same number.
+// H2 — RETIRED AND RE-POINTED 2026-09-18, on operator instruction (dispatch
+// home-task-card, Phase 0.5). This fence pinned the promo card's gold B drape
+// — a box that was a fraction of the screen, the copy column reserved from
+// it, the promo heading's size, its break and where its long line ended. The
+// promo card is GONE: the task card that took its place under the hero
+// carries no mark, reserves no column and sets no serif heading, so every one
+// of those assertions described a card that no longer exists. In its place
+// is the fence for the card that DOES exist.
 //
-// CATCHES: the fixed 92x75 box coming back (it made the drape ~a fifth to a
-// third of the screen depending on the device, and the fixed 96pt reserve it
-// needed is what wrapped the promo heading onto three lines); the heading's
-// font size being shrunk instead, which was explicitly NOT the problem; and
-// the box being given an aspect the artwork does not have.
+// CATCHES: the promo card coming back — its eyebrow, its heading, the B mark
+// or either of its asset requires; the task card losing one of its three
+// rows (title, field, pill) or the pill leaving it; the field growing a
+// second magnifier; the card's colours written as hexes rather than the three
+// palette roles, or those roles leaving either palette; a *Dark fork of the
+// card's geometry; the mockup's padding and gap being "tidied"; the tile row
+// or the job sections moving above the card.
+//
+// WHY NOT VACUOUS: every claim is read out of the screen's own source; the
+// card's three rows are located INSIDE the card's JSX rather than anywhere in
+// the file; the light values of the three roles are compared to the palette's
+// own `surface` and `line` rather than restated; and the retired copy is
+// asserted ABSENT — so a revert of the change fails here rather than passing
+// quietly.
 // ---------------------------------------------------------------------------
-test('home(2) fence: the B drape is a fraction of the screen, and the copy column follows it', () => {
+test('home(2) fence: the task card holds the title, the field and the pill, and the promo card is gone', () => {
   const home = stripComments(read('screens/HomeScreen.tsx'));
   const flat = flatten(read('screens/HomeScreen.tsx'));
 
-  const ratio = constantOf(home, 'B_DRAPE_WIDTH_RATIO');
+  // THE PROMO CARD IS GONE — its copy, its mark, its geometry, both requires.
+  assert.doesNotMatch(home, /FASTEST WAY TO START|Describe the job\.|BRAZOS handles the rest/);
+  assert.doesNotMatch(home, /brazos_b_drape\.png/, 'the B mark is required by nothing on this screen');
+  assert.doesNotMatch(home, /PRESTIGE_B_DRAPE|POST_MARK|B_DRAPE_|\bbDrape\b|CARD_LIFT_ALPHA/);
+  // The STYLE objects, anchored on their opening brace: `heroHeadline: 52` is
+  // the hero's own ladder cap and stays.
+  assert.doesNotMatch(
+    flat,
+    /heroCard: \{|heroCardDark: \{|heroBody: \{|heroCopy: \{|heroEyebrow: \{|heroHeadline: \{|heroHeadlineDark: \{|heroMark: \{/,
+    'the promo card’s styles left with it'
+  );
+  assert.doesNotMatch(home, /promoHeading:/, 'the promo heading’s ladder rung left with the heading');
+  assert.doesNotMatch(home, /<LitSurface/, 'the card is not a lifted surface; it is lit between two stops');
 
-  // home(11) — THIS USED TO PIN THE RATIO AT 0.183 AND THAT WAS THE WRONG
-  // QUANTITY. 0.183 is the share of the screen the BOX takes. The drape is a
-  // cut-out that covers only 60.7% of its own canvas, so the box drew a mark
-  // 11.1% of the screen wide and this assertion never saw it. The pin is
-  // replaced by the number the eye actually measures — the INK — derived from
-  // the file rather than declared, so a replacement drape with different
-  // margins moves the arithmetic instead of silently shrinking the mark.
-  // home(15) sets the master's band on the ink; what stays here is the shape of
-  // the relationship, and the bound that says a box and its ink are not the
-  // same number.
-  const ink = inkBounds(join(root, 'assets/prestige/brazos_b_drape.png'));
-  assert.ok(ink.hasAlphaChannel, 'the dark mark is a cut-out; a re-bake changes what this measures');
-  assert.ok(
-    ink.width < 0.95,
-    `brazos_b_drape.png covers ${(ink.width * 100).toFixed(1)}% of its canvas — if that reaches ` +
-      'the edges the box IS the ink and this fence is measuring the wrong thing'
-  );
-  const inkShareOfScreen = ratio * ink.width;
-  assert.ok(
-    inkShareOfScreen < ratio,
-    'the ink cannot be wider than the box that draws it; the measurement is wrong'
-  );
-
-  // home(15) — THE MASTER'S BAND, on the ink, as a share of the CARD.
-  // Measured on docs/mockups/44_customer_home_dark.png: the gold ink spans
-  // x 684..843 (160px) inside a card 856px wide, i.e. 18.7%. The screen padding
-  // is what turns a share of the card into a share of the screen, so it is read
-  // from the design settings rather than restated.
-  const padding = /screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'));
-  assert.ok(padding, 'the screen padding must stay a plain number in the design settings');
-  const cardShareOfScreen = (393 - 2 * Number(padding[1])) / 393;
-  const inkShareOfCard = inkShareOfScreen / cardShareOfScreen;
-  assert.ok(
-    Math.abs(inkShareOfCard - 0.187) <= 0.02,
-    `the drawn mark is ${(inkShareOfCard * 100).toFixed(1)}% of the card's width; master 44 ` +
-      'measures 18.7% (+/- 2%)'
-  );
-
-  // And the copy stops where the master's does, at the INK's left edge rather
-  // than the box's — the box's left fifth is the asset's own empty margin, and
-  // reserving it as well is what made the heading's column too narrow.
-  const inset = constantOf(home, 'B_DRAPE_RIGHT_INSET');
-  const overlap = constantOf(home, 'B_DRAPE_COPY_OVERLAP');
-  const boxWidth = Math.round(393 * ratio);
-  const reservedForMark = boxWidth + inset - overlap;
-  const inkLeftFromBoxRight = boxWidth * (1 - ink.left);
-  assert.ok(
-    reservedForMark <= Math.round(inkLeftFromBoxRight) + 2,
-    `the copy column reserves ${reservedForMark}pt but the mark's ink only starts ` +
-      `${inkLeftFromBoxRight.toFixed(1)}pt in — the empty margin is being reserved twice`
-  );
-  assert.ok(
-    reservedForMark > 0,
-    'the copy column must still clear the mark; a reserve of zero puts text under the B'
-  );
-
-  // The aspect is the ARTWORK's, re-derived from both files on disk — so a
-  // replacement drape of a different shape fails here rather than silently
-  // letterboxing inside a box the headline column was measured from.
-  const declaredAspect = constantOf(home, 'B_DRAPE_ASPECT');
-  for (const path of ['assets/brand/brazos_b_drape.png', 'assets/prestige/brazos_b_drape.png']) {
-    const { width, height } = pngSize(path);
-    assert.ok(
-      Math.abs(declaredAspect - width / height) < 0.001,
-      `${path} is ${width}x${height}; B_DRAPE_ASPECT says ${declaredAspect}`
+  // THE TASK CARD: one node, lit between the two palette stops and flat in
+  // light, wearing the entrance the promo card wore, holding three rows.
+  const card =
+    /<Animated\.View style=\{\[ styles\.taskCard, \{ borderRadius: taskCardRadius \}, litBetween\(\{ top: colors\.taskCardLitTop, bottom: colors\.taskCardLitBottom, flat: !isDark, \}\), cardEntrance, \]\} >([\s\S]*?)<\/Animated\.View>/.exec(
+      flat
     );
+  assert.ok(card, 'the task card must be one Animated.View lit between the two palette stops');
+  const inside = card[1];
+  const titleAt = inside.indexOf('What do you need done?');
+  const fieldAt = inside.indexOf('<SearchBar');
+  const pillAt = inside.indexOf('accessibilityLabel="Post a job"');
+  assert.ok(titleAt > -1 && fieldAt > -1 && pillAt > -1, 'the card holds the title, the field and the pill');
+  assert.ok(titleAt < fieldAt && fieldAt < pillAt, 'in that order: title, field, pill');
+  assert.match(inside, /<Text style=\{styles\.taskCardTitle\} maxFontSizeMultiplier=\{1\.3\}> What do you need done\? <\/Text>/);
+  // The field is the SAME instance — the studio's height and radius, the
+  // sentence posture, submitSearch — with the mockup's placeholder and no
+  // leading glyph, because the magnifier is its trailing submit.
+  assert.match(inside, /placeholder="Describe your task\.\.\."/);
+  assert.match(inside, /onSubmit=\{submitSearch\}/);
+  assert.match(inside, /autoCapitalize="sentences" autoCorrect disableLeadingIcon/);
+  assert.match(inside, /\{ minHeight: design\.searchHeight, borderRadius: design\.searchRadius \}/);
+  assert.match(inside, /<Ionicons name="search" size=\{23\} color=\{colors\.gold\} \/>/);
+  assert.equal((inside.match(/name="search"/g) ?? []).length, 1, 'one magnifier in the field');
+  // The pill is the live one, moved: its style, its recipe, its label.
+  assert.match(inside, /styles\.heroButton, isDark && styles\.heroButtonDark,/);
+  assert.match(inside, /onPress=\{\(\) => startJobDraft\(\)\}/);
+  assert.match(inside, /Post a job ›/);
+  const dial = "useDialNumber('home.promoCard.radius') ?? 22";
+  assert.ok(home.includes(dial), 'the card’s corner is the dial the promo card wore, at 22');
+
+  // THE CARD'S GEOMETRY is the mockup's (docs/mockups/html/home-redesign.html
+  // `.card`: padding 17, gap 14) and its COLOURS are the three palette roles,
+  // read in BOTH themes — there is no *Dark fork; the theme gates the
+  // gradient alone.
+  const cardStyle = /taskCard: \{([^}]*)\}/.exec(flat);
+  assert.ok(cardStyle, 'the task card keeps a plain style object');
+  assert.match(cardStyle[1], /padding: 17,/, "the mockup's 17pt padding");
+  assert.match(cardStyle[1], /gap: 14,/, "the mockup's 14pt row gap");
+  assert.match(cardStyle[1], /borderWidth: 1, borderColor: colors\.taskCardEdge,/);
+  assert.match(cardStyle[1], /backgroundColor: colors\.taskCardLitBottom,/);
+  assert.match(cardStyle[1], /\.\.\.shadows\.card,/, 'the light card shadow, on the shared style');
+  assert.doesNotMatch(flat, /taskCardDark/, 'no *Dark fork: the roles resolve per palette');
+  assert.match(
+    flat,
+    /taskCardTitle: \{ fontSize: 20, lineHeight: 24, fontWeight: '700', color: colors\.ink \}/,
+    "the mockup's .card-title: 20/24, 700, the ink"
+  );
+  assert.doesNotMatch(home, /#15362B|#0B2019|#27473A/i, 'the screen names the tokens, never the hexes');
+
+  // THE THREE ROLES: defined once in ui/tokens.ts — the mockup's exact dark
+  // shades; light's flat card, i.e. the palette's own surface and line — and
+  // reached by lib/theme.ts BY REFERENCE on both sides.
+  const tokens = read('ui/tokens.ts');
+  const darkBlock = tokens.slice(tokens.indexOf('export const dark = {'), tokens.indexOf('export { withAlpha }'));
+  assert.match(darkBlock, /\n  taskCardLitTop: '#15362B',/);
+  assert.match(darkBlock, /\n  taskCardLitBottom: '#0B2019',/);
+  assert.match(darkBlock, /\n  taskCardEdge: '#27473A',/);
+  const lightBlock = tokens.slice(tokens.indexOf('export const colors = {'), tokens.indexOf('export type ColorToken'));
+  const lightHex = (key) => {
+    const hit = new RegExp(`\\n  ${key}: '(#[0-9A-Fa-f]{6})'`).exec(lightBlock);
+    assert.ok(hit, `light ${key} must stay a plain hex in ui/tokens.ts`);
+    return hit[1];
+  };
+  assert.equal(lightHex('taskCardLitTop'), lightHex('surface'), 'light draws the card flat: the top stop IS the surface');
+  assert.equal(lightHex('taskCardLitBottom'), lightHex('surface'), 'and so is the bottom stop');
+  assert.equal(lightHex('taskCardEdge'), lightHex('line'), 'inside the line hairline');
+  const theme = stripComments(read('lib/theme.ts'));
+  for (const role of ['taskCardLitTop', 'taskCardLitBottom', 'taskCardEdge']) {
+    assert.match(theme, new RegExp(`\\n  ${role}: emeraldLight\\.${role},`), `${role} reaches the light palette by reference`);
+    assert.match(theme, new RegExp(`\\n  ${role}: emeraldDark\\.${role},`), `${role} reaches the dark palette by reference`);
   }
 
-  // The mechanism: one width, measured at render, feeding BOTH the art box and
-  // the headline's reserve.
-  assert.match(
-    flat,
-    /const width = Math\.round\(screenWidth \* B_DRAPE_WIDTH_RATIO\);/,
-    'the drape width must be measured off the live screen width'
+  // THE ORDER ON THE SCREEN (dispatch C4): hero -> the task card -> the tile
+  // row -> the attention block -> "Your jobs".
+  const order = ['Take a task', 'What do you need done?', '<ServiceTileRow', 'Needs your attention', '>Your jobs</Text>'].map(
+    (needle) => flat.indexOf(needle)
   );
-  assert.match(
-    flat,
-    /art: \{ width, height: Math\.round\(width \/ B_DRAPE_ASPECT\) \}/,
-    'the drape height must be derived from the artwork aspect, never declared'
-  );
-  assert.match(
-    flat,
-    /copyPaddingRight: width \+ B_DRAPE_RIGHT_INSET - B_DRAPE_COPY_OVERLAP/,
-    'the headline column must be reserved FROM the drape width, not from a literal'
-  );
-  // Home parity 2026-08-22: ONE mark box and ONE copy reserve, both themes.
-  // The dark-only gates (heroMarkDark, the isDark paddingRight) are retired —
-  // light renders the same computed geometry with its own artwork file.
-  assert.match(flat, /style=\{\[styles\.heroMark, bDrape\.art\]\}/);
-  assert.match(flat, /style=\{\[styles\.heroCopy, \{ paddingRight: bDrape\.copyPaddingRight \}\]\}/);
-  // home(25)'s row gap rides the shared style now — a gap, not a second
-  // fixed reserve.
-  assert.match(flat, /heroCopy: \{ gap: \d+ \}/);
-
-  // The fixed pair must not return, in either place.
-  assert.doesNotMatch(
-    flat,
-    /heroMark: \{[^}]*width:/,
-    'heroMark must not declare a fixed width again — a pt value cannot be a share of the screen'
-  );
-  assert.doesNotMatch(
-    flat,
-    /heroCopyDark|heroMarkDark/,
-    'the per-theme mark/reserve styles must not come back; the geometry is one computed pair'
-  );
-
-  // The drape's stylesheet inset and the constant the copy is reserved from
-  // are two halves of one number.
-  const styleRight = /heroMark: \{ position: 'absolute', top: \d+, right: (\d+) \}/.exec(flat);
-  assert.ok(styleRight, 'heroMark must keep a plain `right` inset');
-  assert.equal(
-    Number(styleRight[1]),
-    inset,
-    'heroMark.right and B_DRAPE_RIGHT_INSET must stay the same number'
-  );
-
-  // The promo heading is ONE size in both themes (parity 2026-08-22 retired
-  // light's 25pt Heritage setting): the replaced master sets it on TWO lines,
-  // the size is the largest that fits two inside the column the drape leaves,
-  // and the arithmetic is here rather than in a screenshot.
-  const darkSize = Number(
-    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: (\d+),/.exec(flat)?.[1]
-  );
-  assert.ok(darkSize > 0, 'the promo heading must keep a plain size');
-  assert.doesNotMatch(
-    flat,
-    /heroHeadlineDark: \{[^}]*fontSize/,
-    'the promo heading must stay one size for both themes — only its colour is per-theme'
-  );
-  const cardInner = 393 - 2 * Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]) - 2;
-  const copyColumn = cardInner - 2 * 16 - (Math.round(393 * ratio) + inset - overlap);
-  // "BRAZOS handles the rest." measured at 25pt of Georgia in a real 393pt
-  // viewport: 323pt of ink, so 12.92 per point of size.
-  const secondLine = 12.92 * darkSize;
-  assert.ok(
-    secondLine <= copyColumn,
-    `at ${darkSize}pt the promo heading's second line sets ${secondLine.toFixed(1)}pt into ` +
-      `${copyColumn}pt of column and wraps to a third. Master 44 draws two`
-  );
-  // AND IT ENDS WHERE THE CANON PUTS IT. Fitting is not the same as matching,
-  // and the two answers part company here. Master 44 ran this line to 251.1pt
-  // from the card's left edge at 18pt; the operator's tuning pass took the
-  // heading to 19/30, which runs it to 262.5 and leaves 2.5pt of the column
-  // rather than the master's 18. That is the approved composition. What the
-  // fence keeps is the shape of the claim: the line has ONE right edge, it is
-  // derived from the size actually shipped, and moving the size moves it here.
-  const lineEnd = 1 + 16 + secondLine;
-  assert.ok(
-    Math.abs(lineEnd - 262.5) <= 6,
-    `the promo heading's long line ends ${lineEnd.toFixed(1)}pt from the card's left edge; the ` +
-      'approved 19/30 heading ends it at 262.5'
-  );
-
-  // home(25b) — AND THE BREAK IS THE MASTER'S, not the column's. Two lines is
-  // not the same statement as master 44's two lines: at 19pt the column forced
-  // the break after "job." because "Describe the job. BRAZOS" was one point too
-  // long for it, and at 18 it fits and the wrap slides a word right. A break
-  // that depends on a line being exactly too long is not a break.
-  assert.match(
-    flat,
-    /Describe the job\.\{'\\n'\}BRAZOS handles the rest\./,
-    "master 44 breaks the promo heading after 'job.'; a natural wrap cannot be relied on to"
-  );
-  const firstLine = 8.40 * darkSize;
-  assert.ok(
-    firstLine <= copyColumn,
-    `at ${darkSize}pt "Describe the job." sets ${firstLine.toFixed(1)}pt into ${copyColumn}pt of ` +
-      'column, so the explicit break becomes three lines rather than two'
-  );
+  assert.ok(order.every((at) => at > -1), 'every landmark is on the screen');
+  for (let i = 1; i < order.length; i += 1) {
+    assert.ok(order[i] > order[i - 1], `the screen reads hero, card, row, attention, your jobs — landmark ${i} is out of order`);
+  }
 });
 
 // ---------------------------------------------------------------------------
@@ -900,14 +836,30 @@ test('home(24) fence: four service tiles fit on the screen and the fifth is cut'
 
   // PER-SECTION SPACING, not one global gap. Master 44's own gaps below the
   // hero are five different numbers; `sectionGap` is one. Each per-section
-  // number below is the difference between them, measured, and shared by both
+  // number was the difference between them, measured, and shared by both
   // themes since the parity pass:
   //   search      237.0pt from the content top   (+8 on a 229 flow)
   //   promo card  449.1                          (+3 on a 20pt sectionGap)
   // (The chip rows' own 10pt rhythm left with them; the tile row carries its
-  // rhythm in the component and the 3 below was not re-tuned against it.)
-  assert.match(flat, /searchField: \{ marginTop: 8,/);
-  assert.match(flat, /heroCard: \{ marginTop: 3,/);
+  // rhythm in the component and the 3 was not re-tuned against it.)
+  //
+  // 2026-09-18 — BOTH CORRECTIONS LEFT WITH THE SURFACES THEY CORRECTED, on
+  // operator instruction (dispatch home-task-card): the field sits INSIDE the
+  // task card at the card's own 14pt gap (a marginTop on top of that would be
+  // 22 where the mockup draws 14), and the card sits directly under the hero
+  // with NO margin of its own — the mockup's 28 is what `sectionGap` (20) plus
+  // `intro`'s paddingBottom (spacing.sm, 8) already give. The two pins become
+  // absences, so neither number can creep back, and the 28 is re-derived.
+  const field = /searchField: \{([^}]*)\}/.exec(flat);
+  assert.ok(field, 'the field keeps a plain style object');
+  assert.doesNotMatch(field[1], /margin/, 'the field carries no margin inside the card');
+  const card = /taskCard: \{([^}]*)\}/.exec(flat);
+  assert.ok(card, 'the task card keeps a plain style object');
+  assert.doesNotMatch(card[1], /margin/, 'the card carries no margin — sectionGap and the hero’s own padding place it');
+  assert.match(flat, /intro: \{ position: 'relative', minHeight: 160, paddingBottom: spacing\.sm \}/);
+  const sm = Number(/\bsm: (\d+)/.exec(themeSpacing)[1]);
+  const sectionGap = Number(/sectionGap: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
+  assert.equal(sectionGap + sm, 28, 'hero to card is the mockup’s 28: sectionGap plus the hero’s sm padding');
   assert.ok(
     !/gap: design\.sectionGap \+/.test(flat),
     'the rhythm is per-section; sectionGap stays the one number the studio shows'
@@ -915,64 +867,61 @@ test('home(24) fence: four service tiles fit on the screen and the fifth is cut'
 });
 
 // ---------------------------------------------------------------------------
-// H25 — THE PROMO CARD IS AS TALL AS MASTER 44'S, AND IT IS A SUM.
+// H25 — THE TASK CARD IS AS TALL AS THE MOCKUP'S, AND IT IS A SUM.
 //
-// The card has no declared height: it is two borders, two paddings, four gaps
-// and a button, and every one of those is somewhere else in the file. That is
-// why it stood 14pt too tall for three commits without anyone being able to
-// point at the number — there wasn't one.
+// RE-POINTED 2026-09-18, on operator instruction (dispatch home-task-card,
+// Phase 0.5). This fence priced the promo card term by term against master 44
+// — two borders, two paddings, an eyebrow, a two-line heading, two gaps, the
+// pill, and the gold B's top. That card is gone; the task card that replaced
+// it is a sum of the same kind, and the same lesson applies: it has no
+// declared height, every term lives somewhere else in the file, and a card
+// that is a sum drifts one term at a time unless the total is watched.
 //
-// CATCHES: the heading's leading being "tidied" back to something rounder (two
-// lines of it are 60 of the card's 186); either gap being reverted; the CTA
-// height being changed in the studio without the card being re-checked; and
-// the gold B sliding back down to where the old master had it.
+// THE TERMS, and where each is read from: the 1pt border twice (the
+// stylesheet), the mockup's 17pt padding twice and its 14pt row gap twice
+// (the stylesheet), the title's 24pt line box (the stylesheet), the field's
+// 44 and the pill's 48 (lib/homeDesignStudio.tsx — the studio's values, which
+// the screen reads live). 2 + 34 + 24 + 14 + 44 + 14 + 48 = 180.
+// docs/mockups/html/home-redesign.html says "task card — height 174" for a
+// 44pt CTA with the border outside the count; the app's pill is 48 by the
+// studio's standing value (CLAUDE.md's floor is 44, the operator's is 48), and
+// the border is part of the box here, so 174 + 4 + 2 = 180 is the mockup's
+// own number in this app's terms.
+//
+// CATCHES: the padding or the gap being "tidied" to a token step; the title
+// growing a taller line box; the field's height moving in the studio without
+// the card being re-checked; the CTA height moving likewise.
 //
 // WHY NOT VACUOUS: every term is read out of the source and the total is
-// compared against a MEASURED master, so any one of them moving alone goes red.
+// compared against the mockup's own number, so any one of them moving alone
+// goes red.
 // ---------------------------------------------------------------------------
-test('home(25) fence: the promo card’s height is master 44’s, term by term', () => {
+test('home(25) fence: the task card’s height is the mockup’s, term by term', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
+  const studio = read('lib/homeDesignStudio.tsx');
 
-  // Parity 2026-08-22: every term below is ONE number for both themes.
-  const copyGap = Number(/heroCopy: \{ gap: (\d+) \}/.exec(flat)?.[1]);
-  const bodyGap = Number(/heroBody: \{ padding: 16, gap: (\d+) \}/.exec(flat)?.[1]);
-  const leading = Number(
-    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: \d+, lineHeight: (\d+),/.exec(flat)?.[1]
-  );
-  const cta = Number(/ctaHeight: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))?.[1]);
-  assert.ok(copyGap && bodyGap && leading && cta, 'every term of the card’s height must stay a plain number');
-
-  // The eyebrow declares no lineHeight, so the platform gives it one: 14pt at
-  // its 12pt size, measured in .shots/customer-home-dark.png. It is the only
-  // term here that is not written down in the source.
-  const EYEBROW_LINE_BOX = 14;
-  const height = 2 + 2 * 16 + EYEBROW_LINE_BOX + copyGap + 2 * leading + bodyGap + cta + 2;
-  // 180.7 was master 44's own measurement, and it was met at 18/28. The tuning
-  // pass took the heading to 19/30, and two lines of 2pt more leading is the
-  // whole of the 5.3 between the two totals -- every other term is untouched.
-  // 186 is the approved stack; the band stays 2.5, so any ONE term moving on
-  // its own still goes red.
+  const cardStyle = /taskCard: \{([^}]*)\}/.exec(flat)?.[1] ?? '';
+  const padding = Number(/padding: (\d+),/.exec(cardStyle)?.[1]);
+  const gap = Number(/gap: (\d+),/.exec(cardStyle)?.[1]);
+  const border = Number(/borderWidth: (\d+),/.exec(cardStyle)?.[1]);
+  const titleLine = Number(/taskCardTitle: \{ fontSize: \d+, lineHeight: (\d+),/.exec(flat)?.[1]);
+  const field = Number(/searchHeight: (\d+)/.exec(studio)?.[1]);
+  const cta = Number(/ctaHeight: (\d+)/.exec(studio)?.[1]);
   assert.ok(
-    Math.abs(height - 186) <= 2.5,
-    `the promo card stacks to ${height}pt; the approved 19/30 heading stacks it to 186 (master 44 ` +
-      'measured 180.7 at the 18/28 it replaced)'
+    padding && gap && border && titleLine && field && cta,
+    'every term of the card’s height must stay a plain number'
   );
 
-  // Master 44 ran 60px = 27.7pt of pitch on this heading, against an 18pt
-  // size. The tuning pass set 30 against 19 -- 1.58, the master's own ratio.
-  assert.ok(
-    Math.abs(leading - 30) <= 1.5,
-    `the heading's leading is ${leading}; the approved heading runs 30pt of line pitch`
-  );
+  const height = 2 * border + 2 * padding + titleLine + gap + field + gap + cta;
+  assert.equal(height, 180, `the task card stacks to ${height}pt; the mockup's card is 180 in this app's terms`);
 
-  // THE GOLD B'S TOP. Its ink starts 22.2pt below the card's outer top edge on
-  // the master; `top` is measured from the padding box, inside the 1pt border,
-  // and the asset carries no empty margin above its ink.
-  const markTop = Number(/heroMark: \{ position: 'absolute', top: (\d+), right: \d+ \}/.exec(flat)?.[1]);
-  assert.ok(
-    Math.abs(markTop + 1 - 22.2) <= 2,
-    `the B mark's ink starts ${markTop + 1}pt below the card's top edge; master 44 puts it at 22.2`
-  );
+  // The two studio terms are the mockup's own, and the field is exactly the
+  // touch floor — a smaller field is the one move this sum would not catch as
+  // a sum, so it is pinned by name.
+  assert.equal(field, 44, 'the field is the mockup’s 44 — CLAUDE.md’s touch floor, exactly');
+  assert.equal(Number(/searchRadius: (\d+)/.exec(studio)?.[1]), 17, 'at the mockup’s 17 radius');
+  assert.equal(cta, 48, 'the pill’s 48 did not move');
+  assert.equal(Number(/ctaRadius: (\d+)/.exec(studio)?.[1]), 24, 'nor its 24 radius');
 });
 
 // ---------------------------------------------------------------------------
@@ -1004,6 +953,12 @@ test('home(26) fence: the first job section lands on master 44’s own gap below
   // style, the same 44pt header row and the same 20pt serif title. The gap the
   // master measures is the one from the card's bottom edge to the first
   // section heading's cap, and that is still exactly what is computed below.
+  //
+  // 2026-09-18: what sits above the first job section is the TILE ROW now —
+  // the card moved up under the hero and the row came with it (dispatch
+  // home-task-card, C4). The corrective margin is the same number on the same
+  // header row and was deliberately NOT re-tuned against the row's labels; the
+  // arithmetic below is unchanged and still what the source computes.
   const margin = Number(/section: \{ gap: 12, marginTop: (-?\d+) \}/.exec(flat)?.[1]);
   assert.ok(Number.isFinite(margin), 'the section below the card keeps its corrective margin');
 
@@ -1068,7 +1023,11 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   // still forbidden — see `resizeMode={isDark` below.)
   assert.match(home, /source=\{isDark \? PRESTIGE_HERO_ART : PRESTIGE_HERO_ART_LIGHT\}/);
   assert.doesNotMatch(home, /HOME_HERO_ART/, "light's retired hero must not come back");
-  assert.match(home, /source=\{isDark \? PRESTIGE_B_DRAPE : POST_MARK\}/);
+  // 2026-09-18: the per-theme B mark (`isDark ? PRESTIGE_B_DRAPE : POST_MARK`)
+  // left with the promo card — RETIRED here, on operator instruction; the
+  // hero is the screen's one per-palette raster now, and home(2) holds the
+  // mark absent.
+  assert.doesNotMatch(home, /PRESTIGE_B_DRAPE|POST_MARK/, 'the promo card’s mark is gone with the card');
   assert.match(home, /resizeMode="cover"/);
   assert.doesNotMatch(home, /resizeMode=\{isDark/);
 
@@ -1313,16 +1272,13 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     /headline: \{[^}]*fontSize: \d+/,
     'the hero headline takes its size from the studio value, never a stylesheet literal'
   );
-  // home(25) took this to 18/28 off the replaced master's 60px = 27.7pt of
-  // pitch; the tuning pass took it to 19/30, which keeps that ratio and still
-  // sets it on TWO lines -- home(2) asserts both the fit and the line's end.
-  // One size for both themes; dark's override is colour alone.
-  assert.match(
-    flat,
-    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 19, lineHeight: 30,/,
-    'the promo heading’s size and leading are both master 44’s'
-  );
-  assert.match(flat, /heroHeadlineDark: \{ color: colors\.ink \}/);
+  // home(25) took the promo heading to 18/28 off the replaced master's 60px =
+  // 27.7pt of pitch; the tuning pass took it to 19/30. 2026-09-18: RETIRED —
+  // the promo card and its heading are gone (dispatch home-task-card); the
+  // task card's title is 20/24 sans and takes no rung, and home(2) pins it.
+  // What is asserted here now is the absence, so the heading cannot come back
+  // under the old name and quietly re-enter the ladder.
+  assert.doesNotMatch(flat, /heroHeadline: \{|heroHeadlineDark: \{/, 'the promo heading left with its card');
 
   // THE HERO IS GOVERNED BY ITS COLUMN, not by its cap — and home(23) makes
   // the column a real geometric statement rather than a subtraction of the
@@ -1375,13 +1331,11 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
     `the cap height says ${ladder('heroHeadline')}pt; the column says less. The smaller wins`
   );
 
-  // THE TWO DELIBERATE DIVERGENCES, asserted as divergences.
-  assert.match(
-    flat,
-    /heroHeadline: \{ fontFamily: fonts\.display, fontSize: 19,/,
-    'the promo heading is pinned at 19 — see the H2 fence; the ladder says 22 and that 3pt is owed'
-  );
-  assert.equal(ladder('promoHeading'), 22, 'the recorded gap for the promo heading is 3pt');
+  // THE DELIBERATE DIVERGENCE, asserted as a divergence. (There were two: the
+  // promo heading's 19 against a 22 rung was the other, and it left the
+  // ladder with the promo card on 2026-09-18 — `promoHeading` is asserted
+  // absent from MASTER_SERIF_CAPS so a rung nothing reads cannot stand in it.)
+  assert.doesNotMatch(caps[1], /promoHeading/, 'the promo heading’s rung left with the heading it sized');
   assert.match(
     flat,
     /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24,/,

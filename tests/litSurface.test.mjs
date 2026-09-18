@@ -50,11 +50,29 @@ test('[static] LitSurface paints on web and native, and writes no colour of its 
   assert.match(code, /'linear-gradient\(180deg, '/);
 
   // 4. EVERY COLOUR STOP IS A PALETTE TOKEN THROUGH withAlpha — two on the
-  //    diagonal, three on the top edge. An equality, not a floor: adding a
-  //    sixth stop is a design decision and has to be made here, on purpose.
+  //    diagonal, three on the top edge, and (2026-09-18) two on the
+  //    explicit-stops gradient `litBetween` draws for the customer Home's
+  //    task card: its top and bottom tokens at full opacity. An equality, not
+  //    a floor: 5 -> 7 was made here, on purpose, and the next stop must be
+  //    too.
   const stops = [...code.matchAll(/\$\{withAlpha\(/g)];
-  assert.equal(stops.length, 5, 'the gradient has exactly five stops, all through withAlpha');
+  assert.equal(stops.length, 7, 'the gradients have exactly seven stops, all through withAlpha');
   assert.match(code, /import \{ withAlpha \} from '\.\./);
+  // 4b. THE EXPLICIT-STOPS GRADIENT IS STRAIGHT DOWN AND TAKES ITS TWO STOPS
+  //     AS GIVEN — the reference card is lighter at its top edge, not lit from
+  //     a corner — and its axis, like DIAGONAL, is not a prop.
+  assert.match(code, /const VERTICAL = '180deg';/);
+  assert.match(code, /linear-gradient\(\$\{VERTICAL\}, /);
+  assert.match(
+    flat,
+    /export function litBetween\(fill: LitBetween\): ViewStyle \| undefined \{ if \(fill\.flat\) return undefined; return backgroundImageStyle\(litBetweenGradient\(fill\)\); \}/,
+    'litBetween is flat-or-gradient through the ONE platform branch, exactly as litFill is'
+  );
+  assert.match(
+    flat,
+    /export function litFill\(fill: LitFill\): ViewStyle \| undefined \{ if \(fill\.flat\) return undefined; return backgroundImageStyle\(litGradient\(fill\)\); \}/,
+    'litFill reaches the platform branch through the same one function'
+  );
 
   // 5. NO LITERAL COLOUR ANYWHERE IN THE FILE, comments included.
   assert.doesNotMatch(source, /#[0-9a-fA-F]{3,8}\b/, 'a hex literal is back in LitSurface');
