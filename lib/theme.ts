@@ -106,6 +106,11 @@ export const colors = {
   taskCardLitTop: emeraldLight.taskCardLitTop,
   taskCardLitBottom: emeraldLight.taskCardLitBottom,
   taskCardEdge: emeraldLight.taskCardEdge,
+  /** The task card's field ring, by reference to ui/tokens.ts: the green-grey
+   *  secondary border (light #CBE0D7, dark #2F5140) that the HTML mockup's
+   *  .field rule draws. Exposed 2026-09-18 because Home needed it and this
+   *  palette had only `border`, which in dark is the warm hairline. */
+  secondaryBorder: emeraldLight.secondaryBorder,
 
   text: '#1F2E22',
   textMuted: '#6B7566',
@@ -211,6 +216,7 @@ export const darkColors: ColorPalette = {
   taskCardLitTop: emeraldDark.taskCardLitTop,
   taskCardLitBottom: emeraldDark.taskCardLitBottom,
   taskCardEdge: emeraldDark.taskCardEdge,
+  secondaryBorder: emeraldDark.secondaryBorder,
 
   text: '#F1EDE1',
   textMuted: '#93A096',

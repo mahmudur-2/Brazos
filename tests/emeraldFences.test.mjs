@@ -530,7 +530,11 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   assert.match(inside, /onSubmit=\{submitSearch\}/);
   assert.match(inside, /autoCapitalize="sentences" autoCorrect disableLeadingIcon/);
   assert.match(inside, /\{ minHeight: design\.searchHeight, borderRadius: design\.searchRadius \}/);
-  assert.match(inside, /<Ionicons name="search" size=\{23\} color=\{colors\.gold\} \/>/);
+  // 2026-09-18, later the same day: the magnifier takes the mic's own size and
+  // colour (20, navInactive) so the field reads as one quiet control — the
+  // operator's call against the HTML mockup, where the gold was the old bar's
+  // accent. Same slot, same press, same label; only the glyph's two constants.
+  assert.match(inside, /<Ionicons name="search" size=\{20\} color=\{colors\.navInactive\} \/>/);
   assert.equal((inside.match(/name="search"/g) ?? []).length, 1, 'one magnifier in the field');
   // The pill is the live one, moved: its style, its recipe, its label.
   assert.match(inside, /styles\.heroButton, isDark && styles\.heroButtonDark,/);

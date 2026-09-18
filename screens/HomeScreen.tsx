@@ -659,6 +659,7 @@ export function HomeScreen() {
               disableLeadingIcon
               style={[
                 styles.searchField,
+                isDark && styles.searchFieldDark,
                 { minHeight: design.searchHeight, borderRadius: design.searchRadius },
               ]}
               trailing={
@@ -667,17 +668,21 @@ export function HomeScreen() {
                   {/* The submit affordance, not decoration: same submitSearch()
                       the keyboard return fires, and an empty query is a no-op
                       inside it. 2026-09-18: the glyph is the magnifier where
-                      it was the gold arrow — same slot, same size, same gold,
-                      same press, same label. The worker Home arrow carries the
-                      same contract (tests/voiceSearch.test.mjs pins both). */}
+                      it was the gold arrow — same slot, same press, same label.
+                      Later the same day (operator, against the HTML mockup):
+                      it takes the mic's own size and colour, 20 in navInactive,
+                      so the field reads as ONE quiet control — the gold was the
+                      old bar's accent, not this card's. hitSlop keeps the tap
+                      target. The worker Home arrow carries the same contract
+                      (tests/voiceSearch.test.mjs pins both). */}
                   <Pressable
                     onPress={submitSearch}
-                    hitSlop={10}
+                    hitSlop={12}
                     style={({ pressed }) => pressed && styles.searchGoPressed}
                     accessibilityRole="button"
                     accessibilityLabel="Search"
                   >
-                    <Ionicons name="search" size={23} color={colors.gold} />
+                    <Ionicons name="search" size={20} color={colors.navInactive} />
                   </Pressable>
                 </>
               }
@@ -1142,14 +1147,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   //           to the #DDD6C4 warm hairline, which is what dark's gold
   //           hairline reads as against its own ground.
   //   depth   shadows.card removed. An outlined field does not float.
+  // 2026-09-18 (operator, against docs/mockups/html/home-redesign.html's
+  // .field rule): the ring is secondaryBorder, not border — dark's `border`
+  // is the warm #55482E hairline and read as gold inside the green card. The
+  // fill is surface (white in light) with mint in dark, as the mockup draws
+  // it. The trailing cluster — mic, divider, magnifier — hugs the right edge:
+  // sm gap between them, a shorter right pad, a 20pt divider in the same ring
+  // colour. No margin: home(25) places the field by the card's own gap.
   searchField: {
-    gap: spacing.md,
-    paddingHorizontal: 18,
+    gap: spacing.sm,
+    paddingLeft: 18,
+    paddingRight: 12,
     borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: 'transparent',
+    borderColor: colors.secondaryBorder,
+    backgroundColor: colors.surface,
   },
-  searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
+  searchFieldDark: { backgroundColor: colors.mint },
+  searchDivider: { width: 1, height: 20, backgroundColor: colors.secondaryBorder },
   searchGoPressed: { opacity: 0.7 },
   // 2026-09-17: serviceRows / serviceRow / serviceChip / compactServiceChip /
   // goldOutlineChip / otherChip — home(24)'s two-row chip geometry, held
