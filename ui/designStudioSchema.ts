@@ -1669,9 +1669,10 @@ function screenDialEntries(): StudioEntry[] {
     // search pill, the CTA's height and roundness, the screen padding, the
     // section gap and the job card's corner (lib/homeDesignStudio.tsx already
     // dials every one of those, and a second dial for the same pixel is worse
-    // than none); the service chip row (tests/workerHome.test.mjs holds it
-    // byte-identical to Worker Home's, so a per-screen dial would break the
-    // invariant it exists to protect).
+    // than none); the service tile row (components/ServiceTileRow.tsx, ONE
+    // component both Homes render — tests/workerHome.test.mjs holds it shared,
+    // so a per-screen dial would break the invariant it exists to protect, and
+    // 2026-09-17 ruled no dials for the tiles at all).
     ...dialEntries('screens', 'Customer Home', [
       {
         key: 'home.promoCard.radius',
@@ -1713,8 +1714,8 @@ function screenDialEntries(): StudioEntry[] {
     // are the operator's standing rejection), the hero crop (same), the count
     // pills and the summary divider (tests/workerHome.test.mjs prices the
     // 4D-6 card term by term, and lifting those would cost the fence its
-    // arithmetic rather than one regex), and the service chip row (held
-    // byte-identical to Customer Home's by the same file).
+    // arithmetic rather than one regex), and the service tile row (the same
+    // shared component Customer Home renders, held so by the same file).
     ...dialEntries('screens', 'Worker Home', [
       {
         key: 'workerHome.summaryCard.radius',
@@ -1754,7 +1755,7 @@ function screenDialEntries(): StudioEntry[] {
       {
         key: 'workerHome.content.gap',
         label: 'Section gap',
-        description: 'Between every block down the screen — hero, search, chips, card, feed.',
+        description: 'Between every block down the screen — hero, search, service tiles, card, feed.',
         tier: 'advanced',
         scope: 'local',
         min: 0,

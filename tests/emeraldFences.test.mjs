@@ -842,62 +842,71 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 // Worker Home. This fence is what keeps that true without a browser.
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
-// H24 — THE SERVICE CHIPS FIT ON TWO ROWS, and the arithmetic says so.
+// H24 — FOUR TILES FIT, THE FIFTH IS CUT, and the arithmetic says so.
 //
-// Master 44 draws five pills on two rows. This app drew six-across-THREE, with
-// "Other" alone on the last one, because row 2 wanted 359pt of a 353pt content
-// width. Nothing about that wrap was visible in a stylesheet: it is a sum.
+// 2026-09-17 — RE-POINTED, on operator instruction. This fence was written
+// about master 44's five service chips on two rows, a layout that no longer
+// exists: both Home screens draw ONE sliding row of square tiles now
+// (components/ServiceTileRow.tsx, docs/mockups/html/home-redesign.html's
+// `.tiles`), and the two-row arithmetic it priced described nothing. What the
+// mockup specifies instead is also a sum: four tiles fully visible and the
+// fifth cut in half, so the slide is obvious without an affordance.
 //
-// CATCHES: the dark paddings drifting back up (10pt each side puts row 2 over
-// again on the first device that renders it), the row gap going back to
-// spacing.sm, and the screen gutter widening without the pills being paid for.
+// CATCHES: the tile growing or the gap widening until the fourth tile no
+// longer fits; the screen gutter or the tile shrinking until the fifth tile
+// is whole and the row reads as a grid that happens to end; and the chip-row
+// styles creeping back into the screen's stylesheet.
 //
-// WHY NOT VACUOUS: the three content widths below are MEASURED — icon, gap and
-// label, in a real 393pt viewport, from .shots/customer-home-dark.png — and
-// every other term is read out of the source. Raise a padding by two and this
-// goes red before a screenshot could show it.
+// WHY NOT VACUOUS: the tile, the gap and the gutter are read out of three
+// files that do not import each other's numbers — the component, the token
+// table and the studio's defaults — and priced against the 393pt viewport
+// every render here is taken in.
 // ---------------------------------------------------------------------------
-test('home(24) fence: master 44’s five service chips fit on master 44’s two rows', () => {
+test('home(24) fence: four service tiles fit on the screen and the fifth is cut', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
+  const rowSource = flatten(read('components/ServiceTileRow.tsx'));
   const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
 
-  // Home parity 2026-08-22: one chip geometry for both themes — the dark-only
-  // styles are retired and light shares home(24)'s paddings and gaps.
-  const chipPad = Number(/compactServiceChip: \{ paddingHorizontal: (\d+) \}/.exec(flat)?.[1]);
-  const rowGap = Number(
-    /serviceRow: \{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: (\d+) \}/.exec(
-      flat
-    )?.[1]
-  );
-  assert.ok(chipPad > 0 && rowGap > 0, 'the chip row keeps its own padding and gap');
+  const tile = Number(/export const TILE_SIZE = (\d+);/.exec(rowSource)?.[1]);
+  assert.ok(tile > 0, 'the tile is a plain number in the component');
+  // The gap is the live lg step; its shipped value is the token table's.
+  assert.match(rowSource, /row: \{ flexDirection: 'row', gap: spacing\.lg \}/);
+  const themeSpacing = /export const THEME_SPACING_DEFAULTS = \{([^}]*)\}/.exec(read('ui/tokens.ts'))[1];
+  const gap = Number(/\blg: (\d+)/.exec(themeSpacing)[1]);
+  assert.match(rowSource, /width: TILE_SIZE, height: TILE_SIZE, borderRadius: emeraldRadius\.md,/);
+  assert.match(flat, /<ServiceTileRow heading="Popular services" inset=\{design\.screenPadding\}/);
 
-  // icon (16) + gap (6) + label at 14pt, measured per pill. Row 2 is
-  // "House Cleaning", "TV Mounting" and "Other".
-  const ROW_2_CONTENT = [122, 105, 56];
-  const wanted =
-    ROW_2_CONTENT.reduce((sum, w) => sum + w + 2 * chipPad, 0) + rowGap * (ROW_2_CONTENT.length - 1);
-  const available = 393 - 2 * padding;
+  const SCREEN = 393;
+  const fourth = padding + 4 * tile + 3 * gap;
+  assert.ok(fourth <= SCREEN, `four tiles need ${fourth}pt of ${SCREEN}; the mockup shows four whole`);
+  const fifthStart = padding + 4 * (tile + gap);
+  const fifthVisible = SCREEN - fifthStart;
   assert.ok(
-    wanted <= available,
-    `row 2 wants ${wanted}pt of ${available}pt, so "Other" wraps to a third row. Master 44 draws two`
+    fifthVisible > 0 && fifthVisible < tile,
+    `the fifth tile shows ${fifthVisible}pt of ${tile}; the mockup cuts it, not whole and not absent`
+  );
+  assert.ok(
+    Math.abs(fifthVisible / tile - 0.5) <= 0.15,
+    `the fifth tile is ${Math.round((100 * fifthVisible) / tile)}% visible; the mockup cuts it in half`
   );
 
-  // The per-theme chip styles must not come back: one geometry, colour-only
-  // theme differences (light's gold outline is a borderColor alone).
+  // The chip-row styles must not come back to the screen — one geometry, in
+  // the component, for both Homes.
+  assert.doesNotMatch(
+    flat,
+    /serviceRows:|serviceRow:|serviceChip:|compactServiceChip:|goldOutlineChip:|otherChip:/
+  );
   assert.doesNotMatch(flat, /compactChipDark|serviceRowsDark|serviceRowDark|serviceChipDark/);
-  assert.match(flat, /goldOutlineChip: \{ borderColor: colors\.gold \}/);
-  assert.match(flat, /serviceChip: \{ paddingHorizontal: 12 \}/);
 
   // PER-SECTION SPACING, not one global gap. Master 44's own gaps below the
   // hero are five different numbers; `sectionGap` is one. Each per-section
   // number below is the difference between them, measured, and shared by both
   // themes since the parity pass:
   //   search      237.0pt from the content top   (+8 on a 229 flow)
-  //   chip row 1  328.0                          (sectionGap, unchanged)
-  //   chip row 2  382.6                          (row gap 8 -> 10)
   //   promo card  449.1                          (+3 on a 20pt sectionGap)
+  // (The chip rows' own 10pt rhythm left with them; the tile row carries its
+  // rhythm in the component and the 3 below was not re-tuned against it.)
   assert.match(flat, /searchField: \{ marginTop: 8,/);
-  assert.match(flat, /serviceRows: \{ gap: 10 \}/);
   assert.match(flat, /heroCard: \{ marginTop: 3,/);
   assert.ok(
     !/gap: design\.sectionGap \+/.test(flat),

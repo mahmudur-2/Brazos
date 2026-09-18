@@ -84,6 +84,7 @@ test('4 · [static] search, browse, worker services and Home tiles never see the
     'screens/WorkerSearchScreen.tsx',
     'screens/ServicesPricingScreen.tsx',
     'screens/HomeScreen.tsx',
+    'components/ServiceTileRow.tsx',
     'lib/skillCategories.ts',
   ]) {
     assert.doesNotMatch(read(file), /LAUNCH_EXCLUDED_CATEGORIES|POSTABLE_CATEGORIES/, `${file} reads the shared map as before`);

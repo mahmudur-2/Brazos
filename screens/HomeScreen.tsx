@@ -15,10 +15,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
-import { Chip } from '../components/Chip';
 import { HomeAtmosphere } from '../components/HomeAtmosphere';
 import { HubCard } from '../components/HubCard';
 import { ServicePickerSheet } from '../components/ServicePickerSheet';
+import { ServiceTileRow } from '../components/ServiceTileRow';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useProfile } from '../hooks/useProfile';
 import {
@@ -31,7 +31,7 @@ import { alertAsync } from '../lib/dialog';
 import { ATTENTION_CAP, attentionItems } from '../lib/homeAttention';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { openOwnJob } from '../lib/ownJobCard';
-import { HOME_SERVICE_ROWS, MORE_SERVICES } from '../lib/skillCategories';
+import { MORE_SERVICES } from '../lib/skillCategories';
 import { formatTimeAgo, greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
 import { useMode } from '../modes';
@@ -409,7 +409,9 @@ export function HomeScreen() {
   // MOTION1 (C2): the three sections below the greeting arrive in reading
   // order. The hook returns a STYLE, so each of these rides the node the
   // screen already renders — no wrapper, no layout change, and nothing at all
-  // under reduced motion. Index 0 is the search field the chips sit under.
+  // under reduced motion. Index 0 is the search field the service row sits
+  // under; index 1 is that row (the chips' slot, 2026-09-17 — the tile row
+  // took it whole).
   const chipsEntrance = useEntrance(1);
   const cardEntrance = useEntrance(2);
   const sectionEntrance = useEntrance(3);
@@ -504,7 +506,7 @@ export function HomeScreen() {
 
   // The "Post a job" CTA's own entry point — carries over whatever the
   // customer already typed in the search field so a fresh post doesn't start
-  // blank. Category chips are a separate action (searchCategory below): they
+  // blank. Service tiles are a separate action (searchCategory below): they
   // find matching workers, not start a job draft.
   function startJobDraft() {
     navigation.navigate('PostJob', {
@@ -695,49 +697,21 @@ export function HomeScreen() {
             }
           />
 
-          <Animated.View style={[styles.serviceRows, chipsEntrance]}>
-            {HOME_SERVICE_ROWS.map((row, rowIndex) => (
-              <View key={`service-row-${rowIndex}`} style={styles.serviceRow}>
-                {row.map((service) => (
-                  <Chip
-                    key={service.label}
-                    label={service.label}
-                    icon={service.icon}
-                    variant="service"
-                    style={[
-                      // Parity 2026-08-22: one pill geometry (home(24)'s
-                      // paddings) in both themes; light keeps only the gold
-                      // outline COLOUR over the Chip's shared 1pt border.
-                      !isDark && styles.goldOutlineChip,
-                      rowIndex === 1 ? styles.compactServiceChip : styles.serviceChip,
-                      // C4: these carried no depth at all. On the near-black
-                      // ground a chip's hairline was the only thing holding it
-                      // off the page; the dark card shadow gives the row the
-                      // same lift the cards below it have. Light is untouched.
-                      isDark && shadows.cardDark,
-                    ]}
-                    onPress={() => searchCategory(service.key)}
-                    accessibilityHint={`Find ${service.label.toLowerCase()} help`}
-                  />
-                ))}
-                {rowIndex === HOME_SERVICE_ROWS.length - 1 ? (
-                  <Chip
-                    label="Other"
-                    icon="chevron-down"
-                    variant="service"
-                    style={[
-                      !isDark && styles.goldOutlineChip,
-                      styles.compactServiceChip,
-                      styles.otherChip,
-                      isDark && shadows.cardDark,
-                    ]}
-                    onPress={() => setMoreOpen(true)}
-                    accessibilityLabel="Other services"
-                    accessibilityHint="Opens the full list of services"
-                  />
-                ) : null}
-              </View>
-            ))}
+          {/* 2026-09-17 — THE SERVICE ROW: one sliding row of every service,
+              shared with worker Home (components/ServiceTileRow.tsx), in the
+              slot the two chip rows held and with their entrance. The row
+              owns its tiles; this screen owns what a tap does — the same
+              category search a chip ran, and the same "Other" sheet below.
+              The heading is this screen's alone: worker Home passes none.
+              The inset is the column's own padding, so the row runs edge to
+              edge and its first tile sits on the column. */}
+          <Animated.View style={chipsEntrance}>
+            <ServiceTileRow
+              heading="Popular services"
+              inset={design.screenPadding}
+              onSelect={searchCategory}
+              onOther={() => setMoreOpen(true)}
+            />
           </Animated.View>
 
           {/* Master 44's promo card: dark is a hairlined surface card with the
@@ -1218,49 +1192,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   searchDivider: { width: 1, height: 32, backgroundColor: colors.border },
   searchGoPressed: { opacity: 0.7 },
-  // home(24)'s row rhythm — gap 10 between rows, 6.4 -> 6 inside them — in
-  // BOTH themes since the parity pass (light's spacing.sm pair is retired).
-  serviceRows: { gap: 10 },
-  serviceRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
-  // home(24) — WHAT PUTS THE CHIPS ON TWO ROWS, which is the whole point.
-  //
-  // Master 44 draws five pills on two rows; this app drew six-across-three,
-  // with "Other" alone on a row of its own. Row 2 needed 360pt of a 353pt
-  // content width — over by 7 — so nothing about the wrap was subtle.
-  //
-  // The lever is the PILL's horizontal padding. The master's own padding is
-  // LARGER than this app's (17.5pt on row 1, ~14 on row 2), and its pills are
-  // still narrower, because its label face is narrower than the platform sans
-  // at 14pt. That label lives in components/Chip.tsx and is shared by every
-  // chip in the app, so it is not Home's to move; the padding is. What the
-  // numbers buy, measured:
-  //
-  //   row 1   Furniture Assembly 172 -> 168  (master 167.7)
-  //           Moving Help        133 -> 129  (master 126.7)
-  //   row 2   House Cleaning     142 -> 138  (master 137.3)
-  //           TV Mounting        126 -> 122  (master 120.7)
-  //           Other               76 ->  81  (master  84.8, grown by flexGrow
-  //                                           into what the row has left)
-  //
-  // Parity 2026-08-22: the paddings apply in both themes (light's 14/10 pair
-  // is retired with its 8pt gaps).
-  serviceChip: { paddingHorizontal: 12 },
-  compactServiceChip: { paddingHorizontal: 8 },
-  // Same gold hairline COLOUR as the "Switch to Worker" pill above, so the
-  // quick-service row reads as part of the same control family (light only —
-  // dark wears the Chip's sage treatment). The WIDTH is the Chip's own 1pt in
-  // both themes since the parity pass.
-  goldOutlineChip: { borderColor: colors.gold },
-  // Fills whatever room is left in row 2 next to House Cleaning/TV Mounting —
-  // flexShrink keeps it from forcing a wrap to a 3rd row if space is tight,
-  // flexGrow claims any leftover space when there's room to spare, so it's
-  // always as wide as it can be without ever leaving this row.
-  otherChip: { flexGrow: 1, flexShrink: 1, justifyContent: 'center' },
+  // 2026-09-17: serviceRows / serviceRow / serviceChip / compactServiceChip /
+  // goldOutlineChip / otherChip — home(24)'s two-row chip geometry, held
+  // byte-identical to worker Home's — were removed with the chips they laid
+  // out. The service row is components/ServiceTileRow.tsx now, which carries
+  // its own geometry for both screens; a stylesheet entry that draws nothing
+  // is a lie.
   // home(24): master 44 leaves 22.6pt between the chip rows and this card,
   // against the 20 `sectionGap` gives every section — the 3pt marginTop is
   // that per-section correction, both themes since the parity pass. The 1pt
   // border is part of the box in both; light draws it transparent so only the
-  // colours differ.
+  // colours differ. 2026-09-17: the tile row sits where the chip rows did and
+  // the 3 is deliberately NOT re-tuned against it.
   heroCard: {
     marginTop: 3,
     borderWidth: 1,

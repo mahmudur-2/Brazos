@@ -193,8 +193,9 @@ test('that target is reached by tapping a chip, never by naming the route', asyn
 });
 
 test('every locator that recipe introduces is a string the app renders', async () => {
-  const [home, sheet, categories, search, lib] = await Promise.all([
+  const [home, tileRow, sheet, categories, search, lib] = await Promise.all([
     read('screens/HomeScreen.tsx'),
+    read('components/ServiceTileRow.tsx'),
     read('components/ServicePickerSheet.tsx'),
     read('lib/skillCategories.ts'),
     read('screens/WorkerSearchScreen.tsx'),
@@ -203,7 +204,10 @@ test('every locator that recipe introduces is a string the app renders', async (
 
   // `press` matches an accessibility label; `expect`/`pressText` match rendered
   // text. Each locator is checked against the file that actually carries it.
-  assert.match(codeOnly(home), /accessibilityLabel="Other services"/);
+  // 2026-09-17: the "Other" control moved from the screen's chip row into the
+  // shared tile row both Homes render, so its label is read there.
+  assert.match(codeOnly(tileRow), /accessibilityLabel="Other services"/);
+  assert.match(codeOnly(home), /<ServiceTileRow\b/);
   assert.match(codeOnly(home), /title="All services"/);
   assert.match(codeOnly(sheet), /accessibilityLabel=\{service\.label\}/);
   // The empty-state title IS the shutter's wait, and it is no longer a literal

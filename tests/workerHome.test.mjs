@@ -76,39 +76,108 @@ test("the search field mirrors the locked 48's dispatch and sits above the toggl
   assert.match(field, /borderColor: colors\.border/, 'the hairline is the palette border in both themes');
 });
 
-test('the category pills mirror customer Home and land on WorkerResults seeded', async () => {
-  // 2026-08-22: the pill row under the worker search bar is customer Home's
-  // row — same component (Chip, service variant), same categories, same
-  // geometry — with every tap landing on the EXISTING list surface.
+test('the service row mirrors customer Home and lands on WorkerResults seeded', async () => {
+  // 2026-08-22: the row under the worker search bar is customer Home's row.
+  // It was two rows of chips held byte-identical across the two stylesheets;
+  // 2026-09-17 RE-POINTED this test, on operator instruction, at what
+  // replaced them — ONE shared component, components/ServiceTileRow.tsx, a
+  // sliding row of every service — so the purpose is unchanged (the two rows
+  // cannot drift) and the mechanism is now a single file rather than two
+  // copies the fence had to hold together.
   //
-  // Same rows: ONE shared arrangement, defined once in lib/skillCategories.
-  assert.match(code, /HOME_SERVICE_ROWS\.map/);
+  // 1. BOTH SCREENS RENDER THE SHARED COMPONENT, and neither keeps a chip row
+  //    or its styles. Customer Home passes the heading; worker Home passes
+  //    none (its row sits under its search field).
   const customer = stripComments(await read('screens/HomeScreen.tsx'));
-  assert.match(customer, /HOME_SERVICE_ROWS\.map/);
-  assert.match(
-    stripComments(await read('lib/skillCategories.ts')),
-    /export const HOME_SERVICE_ROWS: SkillCategory\[\]\[\] = \[\s*HOME_QUICK_SERVICES\.slice\(0, 2\),\s*HOME_QUICK_SERVICES\.slice\(2, 4\),\s*\]/
-  );
-  // Same component and the same "Other" sheet behind the trailing chip.
-  assert.match(code, /variant="service"/);
-  assert.match(code, /<ServicePickerSheet/);
-  assert.match(code, /services=\{MORE_SERVICES\}/);
-  // Same geometry: the row's style entries are byte-identical between the two
-  // screens' stylesheets, so the copies cannot drift apart.
-  for (const entry of [
-    /serviceRows: \{ gap: 10 \}/,
-    /serviceRow: \{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 \}/,
-    /serviceChip: \{ paddingHorizontal: 12 \}/,
-    /compactServiceChip: \{ paddingHorizontal: 8 \}/,
-    /goldOutlineChip: \{ borderColor: colors\.gold \}/,
-    /otherChip: \{ flexGrow: 1, flexShrink: 1, justifyContent: 'center' \}/,
+  for (const [path, source] of [
+    ['screens/WorkerHomeScreen.tsx', code],
+    ['screens/HomeScreen.tsx', customer],
   ]) {
-    assert.match(code, entry, `worker Home must carry ${entry}`);
-    assert.match(customer, entry, `customer Home must carry ${entry}`);
+    assert.match(source, /import \{ ServiceTileRow \} from '\.\.\/components\/ServiceTileRow';/, path);
+    assert.match(source, /<ServiceTileRow\b/, `${path} must render the shared row`);
+    assert.doesNotMatch(source, /HOME_SERVICE_ROWS|<Chip\b|components\/Chip'/, `${path} must not keep a chip row`);
+    assert.doesNotMatch(
+      source,
+      /serviceRows:|serviceRow:|serviceChip:|compactServiceChip:|goldOutlineChip:|otherChip:/,
+      `${path} must not keep a chip-row style — an entry that draws nothing is a lie`
+    );
+    // Each screen's tap still lands on ITS OWN existing search, and "Other"
+    // still opens ITS OWN sheet — the row hands both taps back.
+    const element = /<ServiceTileRow\b([\s\S]*?)\/>/.exec(source)?.[1];
+    assert.ok(element, `${path}: the row element must close`);
+    assert.match(element, /onSelect=\{searchCategory\}/, `${path}: a tile runs the screen's search`);
+    assert.match(element, /onOther=\{\(\) => setMoreOpen\(true\)\}/, `${path}: Other opens the screen's sheet`);
+    assert.match(source, /<ServicePickerSheet/);
+    assert.match(source, /services=\{MORE_SERVICES\}/);
+    assert.match(
+      source,
+      /onSelect=\{\(categoryKey\) => \{\s*setMoreOpen\(false\);\s*searchCategory\(categoryKey\);\s*\}\}/,
+      `${path}: the sheet's rows run the same search a tile does`
+    );
   }
-  // The dispatch: the existing WorkerResults surface with a category seed —
-  // no new screen — and the seed is allow-listed against the category map,
-  // feeding the SAME filter model the sheet's own category chips drive.
+  const customerRow = /<ServiceTileRow\b([\s\S]*?)\/>/.exec(customer)[1];
+  const workerRow = /<ServiceTileRow\b([\s\S]*?)\/>/.exec(code)[1];
+  assert.match(customerRow, /heading="Popular services"/);
+  assert.doesNotMatch(workerRow, /heading=/, 'worker Home passes no heading');
+  assert.match(customerRow, /inset=\{design\.screenPadding\}/, "the customer inset is the column's own padding");
+  assert.match(workerRow, /inset=\{contentPaddingX\}/, "the worker inset is the column's own padding");
+
+  // 2. THE TILE SET is built from the two shared lists, in their order, and
+  //    the component draws "Other" last. lib/skillCategories.ts is EXECUTED
+  //    so the list is proven on the real constants, not on a regex.
+  const { stripTypeScriptTypes } = await import('node:module');
+  const categoriesJs = stripTypeScriptTypes(await read('lib/skillCategories.ts'), { mode: 'strip' });
+  const { HOME_QUICK_SERVICES, MORE_SERVICES, HOME_SERVICE_TILES } = await import(
+    'data:text/javascript;charset=utf-8;base64,' + Buffer.from(categoriesJs, 'utf8').toString('base64')
+  );
+  assert.deepEqual(
+    HOME_SERVICE_TILES.map(({ key, label, icon }) => ({ key, label, icon })),
+    [...HOME_QUICK_SERVICES, ...MORE_SERVICES],
+    'every tile carries an entry\'s own key, label and icon, in the two lists\' order'
+  );
+  // The operator's 25 labels (docs/dispatch/home-slider-and-subcopy.md B2),
+  // the twenty-fifth being the component's own "Other".
+  assert.deepEqual(HOME_SERVICE_TILES.map((t) => t.tileLabel), [
+    'Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Plumbing', 'Yard work',
+    'Repairs', 'Electrical', 'Painting', 'Appliances', 'Junk removal', 'Shelf hanging',
+    'Pressure washing', 'Gutters', 'Carpet cleaning', 'Windows', 'Pest control', 'Organizing',
+    'Landscaping', 'Snow removal', 'Pet sitting', 'Errands', 'Packing', 'Drywall',
+  ]);
+  assert.equal(HOME_SERVICE_TILES.length, 24);
+  assert.doesNotMatch(
+    stripComments(categoriesJs),
+    /HOME_SERVICE_ROWS/,
+    'the two-row arrangement is gone with the chips'
+  );
+
+  const row = stripComments(await read('components/ServiceTileRow.tsx'));
+  assert.match(row, /HOME_SERVICE_TILES\.map\(\(service\) =>/);
+  const tiles = row.indexOf('HOME_SERVICE_TILES.map(');
+  const other = row.indexOf('accessibilityLabel="Other services"');
+  assert.ok(tiles > 0 && other > tiles, 'the "Other" tile is drawn after every service tile');
+  assert.match(row, /name="ellipsis-horizontal"/, 'Other carries the mockup\'s glyph');
+  assert.match(row.slice(other), /Other\s*<\/Text>/);
+  assert.match(row, /onPress=\{onOther\}/);
+  assert.match(row, /onPress=\{\(\) => onSelect\(service\.key\)\}/);
+  assert.match(row, /accessibilityHint="Opens the full list of services"/);
+  // The tile draws the short label and announces the full name.
+  assert.match(row, /\{service\.tileLabel\}/);
+  assert.match(row, /accessibilityLabel=\{service\.label\}/);
+  // The heading is the customer Home's own section-title rung: re-derive it
+  // from the screen's ladder and compare, so the two cannot drift.
+  const ladder = customer;
+  const toDevice = /const MASTER_TO_DEVICE = (\d+) \/ (\d+);/.exec(ladder);
+  const capRatio = Number(/const GEORGIA_CAP_RATIO = ([\d.]+);/.exec(ladder)?.[1]);
+  const sectionCap = Number(/sectionTitle: (\d+),/.exec(ladder)?.[1]);
+  assert.ok(toDevice && capRatio && sectionCap, 'the customer Home ladder must stay readable');
+  const rung = Math.round((sectionCap * (Number(toDevice[1]) / Number(toDevice[2]))) / capRatio);
+  assert.equal(Number(/const HEADING_FONT_SIZE = (\d+);/.exec(row)?.[1]), rung);
+  assert.match(customer, /sectionTitle: \{\s*fontFamily: fonts\.display,\s*fontSize: serifSize\(MASTER_SERIF_CAPS\.sectionTitle\),\s*fontWeight: '700',\s*color: colors\.ink,/);
+  assert.match(row, /heading: \{\s*fontFamily: fonts\.display,\s*fontSize: HEADING_FONT_SIZE,\s*fontWeight: '700',\s*color: colors\.ink,/);
+
+  // 3. THE DISPATCH: the existing WorkerResults surface with a category seed —
+  //    no new screen — and the seed is allow-listed against the category map,
+  //    feeding the SAME filter model the sheet's own category chips drive.
   assert.match(
     code,
     /navigation\.navigate\('WorkerResults', \{ mode: 'all', category: categoryKey \}\)/
