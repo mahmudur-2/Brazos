@@ -1,154 +1,167 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-17 (run home-plus-and-your-jobs).
+WRITTEN: 2026-09-17 (run home-slider-and-subcopy).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
 
 ## What this run landed
 
-Two changes to the customer Home, one commit each so the operator can revert
-either alone, plus this docs commit.
+Two changes, one commit each so the operator can revert either alone, plus
+this docs commit.
 
-- `27adc77` — **feat(nav): the dark centre button takes the Post-a-job green,
-  no ring.** Six files: `ui/tokens.ts`, `ui/primitives/BottomNav.tsx`,
-  `ui/designStudioSchema.ts` and three fences.
-- `a1e2c81` — **feat(home): "Your jobs" replaces Nearby on the customer Home.**
-  Twelve files: `screens/HomeScreen.tsx`, `ui/designStudioSchema.ts`,
-  `lib/homeDesignStudio.tsx`, `dev-tools/HomeDesignStudio.tsx`,
-  `scripts/shots.mjs` and seven fences.
-- `docs: the green centre button and "Your jobs" — decision, backlog, handoff`
-  (this commit) — `docs/DECISIONS.md`, `docs/BACKLOG.md`, this file.
+- `e205714` — **feat(home): the hero sub-copy breaks after "Hire help."** One
+  file: `screens/HomeScreen.tsx`. "Describe it. Hire help." then an explicit
+  `{'\n'}`, then "Get it handled." — the way the headline above it breaks.
+  Nothing else about the line moved.
+- `753d71b` — **feat(home): one sliding tile row of every service, shared by
+  both Homes.** Nine files: NEW `components/ServiceTileRow.tsx`;
+  `lib/skillCategories.ts`, `screens/HomeScreen.tsx`,
+  `screens/WorkerHomeScreen.tsx`, `ui/designStudioSchema.ts` and four fences
+  (`tests/workerHome.test.mjs`, `tests/emeraldFences.test.mjs`,
+  `tests/shotHarness.test.mjs`, `tests/launchCategories.test.mjs`).
+- `docs: the two-line sub-copy and the service tile row - decision, handoff`
+  (this commit) — `docs/DECISIONS.md` (one dated entry, two items),
+  `docs/BACKLOG.md` (the previous run's nav cleanup note, one line), this file.
 
 `npm run verify` green before every commit: **1361 pass, 0 fail, exit 0**. The
 suite count did not move — no test was added or deleted, only re-pointed.
 
-**THE BUTTON, by token.** Dark only. Fill `colors.postPillGreen` under
-`litFill({ surface, lift: colors.emerald, liftAlpha: navBar.createLiftAlpha,
-highlight: false, flat: !isDark })` — the dark "Post a job" pill's own recipe,
-so the two controls are identical by construction and no new hue entered the
-app. Glyph `colors.onForest`. Ring NONE (`borderColor: 'transparent'`, by
-colour and not by width, so no geometry forks). Glow follows the fill: one
-`glow.halo`, one shape, one alpha, a ternary on the colour alone.
+**THE ROW, by number.** `components/ServiceTileRow.tsx` renders
+`lib/skillCategories.ts`'s `HOME_SERVICE_TILES` — `[...HOME_QUICK_SERVICES,
+...MORE_SERVICES]` mapped onto the short `TILE_LABELS` — then its own "Other"
+tile last: 25 tiles. Tile 68x68 (`TILE_SIZE`) at `emeraldRadius.md` (14), gap
+`spacing.lg` (16), glyph 28 in `colors.emerald` on `colors.mint`, label 13/16
+in `colors.textMuted`, two lines allowed; `snapToInterval` = 68 + 16, start
+aligned, `decelerationRate="fast"`. Full bleed inside each screen's padded
+column by `marginHorizontal: -inset` and `paddingHorizontal: inset` on the
+content, where `inset` is the number the screen already pads its column
+with — customer `design.screenPadding` (20), worker `contentPaddingX` (16).
+Props: `inset`, `onSelect(key)`, `onOther()`, optional `heading`. The
+accessibility hint is worded from `useModePerspective()` ("… help" /
+"… jobs"), the wording each screen's chips had.
 
-**LIGHT DID NOT MOVE, proven:** `customer-home-light` and
-`customer-home-jobs-light`, before against afterA, **0 differing pixels on both
-pairs**. Dark's 54 pixels above the bar are 1/255 on one channel each, confined
-to the "Switch to Worker" ring at rows 24–54 — the same browser rasterisation
-artefact `screens/HomeScreen.tsx` already documents at that exact ring; nothing
-in the change can reach it.
+**MEASURED ON THE AFTER RENDERS (both themes, `tests/pngGeometry.mjs`):**
+customer Home tiles at x 20/104/188/272, each 68, the fifth at 356..392 = 37
+of 68 on screen; worker Home tiles at x 16/100/184/268, the fifth at 352..392
+= 41 of 68. "Popular services" ink at rows 360..379 on customer Home; zero ink
+between the worker field (ends 265) and its tiles (start 282). "Post a job"
+moved from rows 576..622 (before) to 595..641 (after A, +19) to 644..687
+(after B, +47) — the bar's hairline is at 776, so the pill keeps 88px in the
+harness and about 24pt on a notched device. The worker "Search" disc still
+sits at the field's right end (x 328..359, row 234).
 
-**HOME'S SECTION ORDER NOW:** greeting → hero → search → service chips → promo
-card with "Post a job" → "Needs your attention" (only when non-empty, position
-unmoved) → "Your jobs" (always present). "Post a job" is above the fold: its
-ink sits at y 576..623 of the 852pt screen, and every row above 671 is
-byte-identical to the render taken before Change B.
+**SNAPPING ON WEB (B10): no fallback was needed.** react-native-web's
+ScrollView forwards only the props it knows, so `snapToInterval`,
+`snapToAlignment` and `decelerationRate` are dropped silently and the scroll
+renders horizontally; no `Platform.OS` branch exists in the component.
 
 ## What a following run must know
 
-- **THREE TOKENS ARE NOW ORPHANED OR DISAGREE WITH THE RENDER**, left standing
-  because the dispatch scoped this run to two studio rows. `navBar.gold`
-  (#D8A448) and `navBar.glyphColorDark` (#107257) have **no call site at all**
-  — nothing in the app or the registry reads them. And two live dials launch at
-  values the app no longer draws: `create.border` at `navBar.ringColorDark`
-  (the dark button has no ring) and `create.glowColor` at the palette gold
-  (dark's halo is `postPillGreen` now). That is the obvious next nav dispatch.
-- **`navBar.createLiftAlpha` (0.13) and `CTA_LIFT_ALPHA` in
-  `screens/HomeScreen.tsx` are ONE decision written twice.** It could not be
-  imported — the value lives in a screen and a `ui/` primitive must not reach
-  into `screens/`. Both docblocks say so. Move either and the other has to move
-  with it, or the [ + ] and the Post-a-job pill stop matching.
-- **Six of the nineteen N3 values are still held by no fence** — `nav.barHeight`
-  70, `nav.activeColor` #49C481, `create.radius` 18, `create.glyphSize`'s 0.645
-  ratio, and (as of this run) `create.fill` and `create.glyphColor` at their new
-  values. `create.fill` and `create.glyphColor` are now pinned BY TOKEN NAME in
-  `tests/emeraldFences.test.mjs` (home(8) and RUN H3) and
-  `tests/designStudio.test.mjs`, which is stronger than N3 left them but still
-  not a value pin. Closing that gap is still un-dispatched.
-- **`tests/layout.test.mjs` still fences the literals 106 and 122**, which were
-  the bar's footprint before N3. The live footprint is 82 (70 + 12) and 104
-  (70 + 34); `\b82\b` and `\b104\b` cannot be swapped in because they match a
-  pressed-opacity and a thumbnail elsewhere. The value-independent half of that
-  fence — no screen may do arithmetic on the bar-height tokens — is the live
-  guard.
-- **The registry's screen rows are parsed as TEXT**, in a fixed field order, by
-  `tests/screenDials.test.mjs`. A comment between two fields of a row breaks the
-  parser. Notes go ABOVE the row's opening brace.
-- **Customer Home now declares TWO screen dials, not six.** The four
-  `home.jobCard.*` rows and the `jobCardRadius` home-design setting were deleted
-  with `OpenJobCard`, the only thing that read them. A dial whose wearer is gone
-  is a control that lies, which is `tests/screenDials.test.mjs`'s own charter.
+- **`ServiceTileRow` takes THREE props plus the heading, not "the tap handler
+  and an optional heading" alone.** `onOther` exists because the "Other"
+  sheet stays the SCREEN's — the two Homes word its subtitle differently
+  ("Pick what you need help with" / "Pick the kind of work you're after"),
+  and a component-owned sheet would have needed that as a prop instead.
+  `inset` exists because a full-bleed row inside a padded column has to know
+  the padding, and the two columns differ (20 / 16). Both are the screen's own
+  numbers and neither is new data.
+- **The mint box carries no ring.** The mockup's `.tile-box` has none and the
+  dispatch named none, so in dark the box is `mint` #0E1F18 on the #02110D
+  ground — faint, as `components/ServicePickerSheet.tsx`'s `rowIcon` docblock
+  already records for the same pair (it added a `mint2` ring for that reason).
+  If the operator wants the tiles to read harder in dark, that ring is the
+  precedent; it is a colour-only change and not this run's.
+- **The heading rung is a literal, cross-checked.** `HEADING_FONT_SIZE = 20`
+  in the component; `tests/workerHome.test.mjs` re-derives the customer
+  Home's `sectionTitle` rung from `MASTER_TO_DEVICE`, `GEORGIA_CAP_RATIO` and
+  the 30px cap and compares. Move the ladder and this fence moves with it.
+- **`scripts/shots.mjs` carries a stale comment** (lines 387-390: "Dog walking
+  is not one of the four pills HOME_SERVICE_ROWS draws") — the constant it
+  names is deleted. The recipe itself is unchanged and still works: it presses
+  "Other services" (the tile's label) and the sheet row. The file was outside
+  this run's scope; a one-line comment fix is owed.
+- **The registry's screen rows are parsed as TEXT**, in a fixed field order,
+  by `tests/screenDials.test.mjs`. A comment between two fields of a row
+  breaks the parser. Notes go ABOVE the row's opening brace. No Customer Home
+  dial reached the chips, so B8 deleted nothing; the two registry comments and
+  the one `workerHome.content.gap` description that said "chips" now say
+  "service tiles".
+- **The previous run's nav cleanup is now on the backlog** (`docs/BACKLOG.md`
+  v1 bugs, last line): `navBar.gold` and `navBar.glyphColorDark` orphaned,
+  `create.border` and `create.glowColor` launching at values the app no
+  longer draws.
 
 ### The fences this run touched, and how
 
-Two authorised re-pointings per change, plus expected constants. No fence's
-logic was weakened and none was deleted.
+Two authorised re-pointings, two constant moves. No fence's logic was
+weakened and none was deleted.
 
 | File | What moved |
 |-|-|
-| `tests/emeraldFences.test.mjs` | home(8): the fill pins as `colors.postPillGreen`, the lit recipe is read off the source, and the two ring assertions ("a token, never the fill's own colour") become the stronger "no ring at all", cross-checked against the dark pill's own spelling. RUN H3: the dark glyph is `onForest`; the dark branch is still asserted WHOLE and light is still pinned unchanged. RUN H2: the heading text node → "Your jobs", and the live dot is asserted GONE. home(26): re-pointed at "the first job section"; the measurement is untouched. |
-| `tests/designStudio.test.mjs` | S3 nav paint: the dark ring reads `'transparent'`, the fill reads `colors.postPillGreen`, the lit alpha is pinned. D14's token and BOTH `create.border` dial defaults are asserted exactly as before. |
-| `tests/goldOnForest.test.mjs` | The recorded gold-fill exception `ui/primitives/BottomNav.tsx::createButtonDark` is DELETED — it stopped matching anything, and that file's own deepEqual treats a stale exception as a failure. The unread dot is the one exception left. |
-| `tests/homeAttention.test.mjs` | The position claim is unchanged (above the pill forbidden, leading the job sections required); it reads `">Your jobs</Text>"` as the section below. Its second test is re-pointed off the deleted `OpenJobCard` onto the card that survived: both lists must still say when a job was posted and who it is with. |
-| `tests/ownJobCard.test.mjs` | The `isOwn ? openOwnJob : browseOpenJobs` ternary is gone with the mixed feed. The rule is stronger: `browseOpenJobs` and `isOwn` must appear nowhere in the file. |
-| `tests/customerCore.test.mjs` | Four pins that named the removed section replaced by the copy that took its place — `YOUR_JOBS_COUNT = 3` and `counterpartyLine` for `PREVIEW_COUNT = 4` and `previewNeighborhood`; "Your jobs" for "Live Nearby / N pros interested"; the two motion pins went with the live dot's pulse. Every `doesNotMatch` is untouched. |
-| `tests/screenDials.test.mjs` | Customer Home's table drops the four `home.jobCard.*` rows. |
-| `tests/homeDesignStudio.test.mjs` | Drops `jobCardRadius` from the defaults list and the control list; the Home read moves to `design.ctaRadius`. |
-| `tests/shotHarness.test.mjs` | The populated-Home wait is `SEEDED_JOBS[2].title`; the jobs-table stub branches are counted at three, all flag-gated. |
+| `tests/workerHome.test.mjs` | "the category pills mirror customer Home and land on WorkerResults seeded" → "the service row mirrors customer Home and lands on WorkerResults seeded" (AUTHORISED, B7). Before: `HOME_SERVICE_ROWS.map` on both screens, the two-slice definition, `variant="service"`, the sheet, six style entries byte-identical. After: both screens import and render `<ServiceTileRow` with `onSelect={searchCategory}` and `onOther={() => setMoreOpen(true)}`, neither keeps `HOME_SERVICE_ROWS`, a `<Chip` or the six styles; customer passes `heading="Popular services"` and `inset={design.screenPadding}`, worker passes no heading and `inset={contentPaddingX}`; both keep `<ServicePickerSheet` + `services={MORE_SERVICES}` with an onSelect that calls `searchCategory`; `lib/skillCategories.ts` is EXECUTED and `HOME_SERVICE_TILES` must equal the two lists in order with the 24 short labels; the component draws Other after the map with `ellipsis-horizontal` and "Other services"; the heading rung is re-derived from the screen's ladder. The three dispatch assertions (WorkerResults mode 'all' + category; the allow-list; the Set) are verbatim. |
+| `tests/emeraldFences.test.mjs` | home(24) "master 44's five service chips fit on master 44's two rows" → "four service tiles fit on the screen and the fifth is cut" (AUTHORISED, B7). The two-row sum (chip paddings, row gap, three measured widths) is replaced by `padding + 4·tile + 3·gap ≤ 393` and `0 < 393 − (padding + 4·(tile+gap)) < tile`, within 15% of half — tile from the component's `TILE_SIZE`, gap from `THEME_SPACING_DEFAULTS.lg`, padding from the studio's `screenPadding`. Kept verbatim: `searchField: { marginTop: 8,`, `heroCard: { marginTop: 3,`, no `gap: design.sectionGap +`, no `*ChipDark` styles. Dropped with the layout: `serviceRows: { gap: 10 }`, `serviceChip`/`goldOutlineChip` pins (now asserted ABSENT). |
+| `tests/shotHarness.test.mjs` | Constant: `accessibilityLabel="Other services"` is read from `components/ServiceTileRow.tsx`, the file that carries it; the screen is asserted to render `<ServiceTileRow`. |
+| `tests/launchCategories.test.mjs` | Constant: `components/ServiceTileRow.tsx` joins the files that never see the allowlist. |
 
-### The populated render — continue-path (a) was taken
+Read and found not to move: `tests/customerCore.test.mjs`,
+`tests/workerDiscovery.test.mjs`, `tests/screenDials.test.mjs`,
+`tests/layout.test.mjs`, `tests/homeDesignStudio.test.mjs`,
+`tests/designStudio.test.mjs`. No test quoted the one-line sub-copy (A3).
 
-`customer-home-jobs-*` would have photographed the empty state: "Your jobs"
-reads jobs by `client_id`, a different query from the open-market feed, and the
-harness answered only the feed. `scripts/shots.mjs` now answers that read too,
-**with the same four rows it already seeds** — no fifth row, no new field; only
-the ownership changes, and it has to, because those rows ARE the signed-in
-customer's postings in that read where they are a stranger's in the feed. Still
-gated on `jobs: true`, so every target that did not opt in keeps the empty
-answer. The wait moved from the last of the four to the last of the THREE drawn.
-The populated variant rendered green in both schemes — the wait is a title only
-a drawn card shows, so that is the proof it populated.
+### E2E (B9), read from both flows
+
+Strings either Home renders that a flow taps, waits for or asserts: "Post a
+job" (sign-in.yml `HOME_MARK`, money-walk.yml tap — the promo pill's
+`accessibilityLabel`); "Create" (the bar's [ + ], Acts 3 and 5); "Search for
+jobs or areas" (worker `HOME_MARK` and the field tap); "Search" (the disc's
+label); "My Jobs" (the worker bar tab, Act 4). No chip label is tapped by any
+flow. All five are untouched by this run; the pill's position is measured
+above. The flows were not edited.
 
 ## What is blocked
 
 - **Image reads.** `.claude/hooks/evidence-guard.ps1` refuses them for a run
   launched without operator authorization, and this run was. Every claim about
   a render here was produced by scripted pixel analysis over
-  `tests/pngGeometry.mjs`; no one has LOOKED at these PNGs. The visual review is
-  the operator's.
-- **A run cannot start an agent.** Three independent layers refuse it: the deny
-  matrix, `guard.ps1` rule 2, and `evidence-guard.ps1`. Unchanged by this run.
+  `tests/pngGeometry.mjs` (`.shots/slider-subcopy/{rowdiff,shift,probe,ink}.mjs`);
+  no one has LOOKED at these PNGs. The visual review is the operator's.
+- **A run cannot start an agent.** Unchanged.
 - **The co-author trailer cannot appear in a Bash command's text.** All three
   commits were made with `git commit -F <file>`, the message written by the
   Write tool under the gitignored `.shots/`.
-- **Improving `preflight.ps1`** is still GUARD-PATH-ESCAPE-blocked, and reading
-  `docs/archive/` and `docs/handoff-archive/` is still refused.
+- **`git config` is refused** (GUARD-GIT git-config-write), even to read
+  `core.autocrlf`; the "LF will be replaced by CRLF" warnings on add are
+  git's normalisation notice and changed no content.
 
 ## Waiting on the operator
 
-- **THE NINETEEN NAV VALUES ARE CONFIRMED ON THE DEVICE — 2026-09-17, by the
-  operator.** That wait-list item is CLEARED. N3's "landed, unverified" is
-  closed, including the 34pt-inset assumption behind `navBottomPad` = 12.
-- **Everything this run landed is itself "landed, unverified" on a device.** No
-  device ran it; the proof here is the offline suite and the web-export renders.
-  The green [ + ] and "Your jobs" reach a phone through
-  `npm run update:preview` and two app launches.
-- **The visual review.** Twelve PNGs are in `.shots/plus-yourjobs/`
-  (`before-`, `afterA-`, `afterB-` × customer Home dark/light, empty and
-  populated). The harness is a comparison aid, not a check `npm run verify`
-  runs.
+- **Everything this run landed is "landed, unverified" on a device.** No
+  device ran it; the proof here is the offline suite and the web-export
+  renders. The two-line sub-copy and the tile row reach a phone through
+  `npm run update:preview` and two app launches. The snap-per-tile behaviour
+  and the Other tile's sheet on a real horizontal scroll are device facts the
+  harness cannot show.
+- **The visual review.** Twenty-four PNGs are in `.shots/slider-subcopy/`
+  (`before-` × 10 Home targets, `afterA-` × 4 customer Home targets,
+  `afterB-` × 10 Home targets).
+- **The two revert lines:** `git revert e205714` puts the sub-copy back on one
+  line; `git revert 753d71b` brings the chip rows back on both Homes.
 - Nothing on the push: `npm run verify` exited 0 in this run, so the autonomy
   contract's one permitted push — flag-free `git push origin mainexpo` — was
-  run, and the three commits are on the remote. Staging's pipeline has no work
-  here: this run touches no migration and no edge function.
+  run after this commit (see the run report for the result). Staging's
+  pipeline has no work here: this run touches no migration and no edge
+  function.
 
 ## Open gates
 
 See `docs/GATES.md`. Gates 0, 1 and 2 are closed. Gate 3 is the live one. This
-run ticks no box: it is design and structure work on a surface Gate 2 already
-recorded as rendered and reviewed, and it puts the customer Home one render set
-ahead of the 2026-09-06 review that box cites.
+run ticks no box: it is design and structure work on surfaces Gate 2 already
+recorded as rendered and reviewed, and it puts both Homes one render set ahead
+of the 2026-09-06 review that box cites.
 
 ## Dispatch log
 
 DISPATCH START 2026-09-17 22:17 - prompt home-plus-and-your-jobs, model claude-opus-5, effort max, mode bypass, log C:\Users\mdmah\BRAZOS\.audit-scratch\dispatch\home-plus-and-your-jobs-2026-09-17_2217.log
+DISPATCH END 2026-09-17 22:49 - exit 0 - log C:\Users\mdmah\BRAZOS\.audit-scratch\dispatch\home-plus-and-your-jobs-2026-09-17_2217.log
+DISPATCH START 2026-09-17 23:14 - prompt home-slider-and-subcopy, model claude-opus-5, effort max, mode bypass, log C:\Users\mdmah\BRAZOS\.audit-scratch\dispatch\home-slider-and-subcopy-2026-09-17_2314.log
