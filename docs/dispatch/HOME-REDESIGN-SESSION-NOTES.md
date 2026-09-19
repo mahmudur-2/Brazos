@@ -75,7 +75,7 @@ palettes, 851×1848. `design-reference/` is read-only to runs.
 
 ---
 
-## 3. The [+] popup — DECIDED, NOT YET BUILT
+## 3. The [+] popup — DECIDED, and BUILT 2026-09-18 in a chat session (`830a6e3`; light = L2 Frost, dark scrim stays 0.55; HANDOFF.md and docs/DECISIONS.md 2026-09-18 are the record — the rest of this section is the plan as it stood)
 
 The operator chose **G1 "Clear"** from glass-sheet.html: the most see-through — dark
 scrim at 40%, heavy blur, a thin white rim, a 1pt bright top edge, nothing else.
