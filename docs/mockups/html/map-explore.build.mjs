@@ -152,13 +152,14 @@ const THEMES = {
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
     cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824',
     viewList: '#a77824', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
-    // the flat panes: the reference's light glass colours made opaque, no blur
+    // the flat panes (operator, 2026-09-19): plain white, the app's line
+    // hairline, the app's card shadow - no gradient, no sheen, no edge, no blur
     lqBlur: null,
-    lqGlass: 'linear-gradient(125deg,#e6f1e7,#f8fcf4 55%,#fffffc)', lqRim: 'rgba(101,153,113,.61)', lqRim2: 'rgba(35,134,88,.10)',
-    lqSpec: 'rgba(255,255,255,.95)', lqInner: 'rgba(35,134,88,.05)', lqSheen: 'rgba(255,255,255,.45)', lqSheen2: 'rgba(255,255,255,.15)',
-    lqShadow: '0 6px 22px rgba(52,83,59,.17)', lqChipFill: 'rgba(35,134,88,.07)',
-    lqSheetGlass: 'linear-gradient(125deg,#e6f1e7,#f8fcf4 55%,#fffffc)', lqRow: 'linear-gradient(160deg,rgba(35,134,88,.10),rgba(35,134,88,.03))', lqRowRim: 'rgba(56,97,65,.22)',
-    lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(35,134,88,.10)',
+    lqGlass: '#FFFFFF', lqRim: '#DDE2DD', lqRim2: 'transparent',
+    lqSpec: 'transparent', lqInner: 'transparent', lqSheen: 'transparent', lqSheen2: 'transparent',
+    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#E5F1EC',
+    lqSheetGlass: '#FFFFFF', lqRow: '#FFFFFF', lqRowRim: '#DDE2DD',
+    lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(19,32,27,.05)',
   },
 };
 
