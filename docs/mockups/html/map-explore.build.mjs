@@ -32,11 +32,11 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..', '..');
 const cacheDir = join(root, '.shots', 'map-tiles');
-// --liquid: the exploratory iOS liquid-glass variant (2026-09-19) — the tab
-// bar as a floating glass pill with a lens on the active tab; the search bar
-// and chips lighter, sheened, brighter-rimmed. Written to .shots/mockups/ so
-// the approved pages stay what they are.
-const LIQUID = process.argv.includes('--liquid');
+// 2026-09-19, third pass: the liquid-glass treatment IS the page — dark's
+// panes are glass (blur, specular top edge, diagonal sheen, bright rim, the
+// card as a lens); light is the same composition with FLAT, opaque panes
+// (operator: "same way but flat"). The nav bar is the app's solid strip in
+// both, as live.
 
 // ---------------------------------------------------------------------------
 // The map: Flatbush, Brooklyn — the reference's centre — at zoom 14, shown at
@@ -106,7 +106,8 @@ async function mapLayer(style) {
 const THEMES = {
   dark: {
     ink: '#e5e8e5', muted: '#a1aaa4', emerald: '#84dfaa', gold: '#edb65d', mint: '#0E1F18',
-    navInactive: '#7C8A80', navActive: '#49C481', chrome: '#061b13', chromeLine: 'rgba(229,241,236,0.20)',
+    // the nav bar is the app's, as live: ui/tokens.ts chrome (GLASS_SCRIM at 1), the mint hairline at .2, navBar.activeColorDark
+    navInactive: '#7C8A80', navActive: '#49C481', chrome: '#071B15', chromeLine: 'rgba(229,241,236,0.20)',
     statusInk: '#fff', battInk: '#1f2a26',
     // --glass-bottom → --panel (55%) → --glass-top at 125deg, --edge rim, the sheet's insets and --shadow
     glass: 'linear-gradient(125deg,rgba(2,16,13,.96),rgba(2,20,14,.91) 55%,rgba(9,37,25,.94))', glassBlur: '14px',
@@ -124,7 +125,8 @@ const THEMES = {
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
     cardFill: 'rgba(1,15,12,.50)', cardRim: 'rgba(183,203,186,.22)', photoBg: '#15362B', photoRing: '#edb65d',
     viewList: '#edb65d', estLabel: '#a1aaa4', estPay: '#edb65d', catFill: 'rgba(132,223,170,.10)', catRim: 'rgba(183,203,186,.22)',
-    // --liquid
+    // the liquid panes
+    lqBlur: '30px',
     lqGlass: 'linear-gradient(125deg,rgba(2,19,13,.90),rgba(8,38,25,.82))', lqRim: 'rgba(170,235,200,.40)', lqRim2: 'rgba(255,255,255,.08)',
     lqSpec: 'rgba(255,255,255,.30)', lqInner: 'rgba(132,223,170,.09)', lqSheen: 'rgba(255,255,255,.09)', lqSheen2: 'rgba(255,255,255,.04)',
     lqSheetGlass: 'linear-gradient(125deg,rgba(2,19,13,.92),rgba(8,38,25,.84))', lqRow: 'linear-gradient(160deg,rgba(132,223,170,.11),rgba(132,223,170,.03))', lqRowRim: 'rgba(170,235,200,.30)',
@@ -133,7 +135,8 @@ const THEMES = {
   },
   light: {
     ink: '#173429', muted: '#637569', emerald: '#238658', gold: '#a77824', mint: '#E5F1EC',
-    navInactive: '#637569', navActive: '#238658', chrome: '#e2f8ef', chromeLine: 'rgba(56,97,65,.22)',
+    // the nav bar is the app's, as live: the light surface, the line hairline, emerald active, navInactive
+    navInactive: '#839087', navActive: '#0D6B52', chrome: '#FFFFFF', chromeLine: '#DDE2DD',
     statusInk: '#21392d', battInk: '#f8fcf5',
     glass: 'linear-gradient(125deg,rgba(230,241,231,.9),rgba(248,252,244,.87) 55%,rgba(255,255,252,.86))', glassBlur: '14px',
     glassRim: 'rgba(101,153,113,.61)', glassEdge: '#ffffff13', glassInsetLow: '#65b9810d', glassShadow: '0 6px 22px rgba(52,83,59,.17)',
@@ -149,7 +152,13 @@ const THEMES = {
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
     cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824',
     viewList: '#a77824', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
-    // (no --liquid recipe: the operator rules on light later; the variant is dark-only)
+    // the flat panes: the reference's light glass colours made opaque, no blur
+    lqBlur: null,
+    lqGlass: 'linear-gradient(125deg,#e6f1e7,#f8fcf4 55%,#fffffc)', lqRim: 'rgba(101,153,113,.61)', lqRim2: 'rgba(35,134,88,.10)',
+    lqSpec: 'rgba(255,255,255,.95)', lqInner: 'rgba(35,134,88,.05)', lqSheen: 'rgba(255,255,255,.45)', lqSheen2: 'rgba(255,255,255,.15)',
+    lqShadow: '0 6px 22px rgba(52,83,59,.17)', lqChipFill: 'rgba(35,134,88,.07)',
+    lqSheetGlass: 'linear-gradient(125deg,#e6f1e7,#f8fcf4 55%,#fffffc)', lqRow: 'linear-gradient(160deg,rgba(35,134,88,.10),rgba(35,134,88,.03))', lqRowRim: 'rgba(56,97,65,.22)',
+    lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(35,134,88,.10)',
   },
 };
 
@@ -172,6 +181,7 @@ const sprite = `<svg width="0" height="0" style="position:absolute" aria-hidden=
 <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
 <symbol id="i-loc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.7-6-11a6 6 0 0 1 12 0c0 5.3-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></symbol>
 <symbol id="i-arrow" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3 3 10.5l8.5 2 2 8.5z"/></symbol>
+<symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21M9 21h6"/></symbol>
 <symbol id="i-tree" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 5.5 11h3L5 16.5h5.5V22h3v-5.5H19L15.5 11h3z"/></symbol>
 <symbol id="i-cross" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></symbol>
 <symbol id="i-cap" viewBox="0 0 24 24" fill="currentColor"><path d="M12 4 1.5 9.5 12 15l8.5-4.4V17h2V9.5zM5 12.7v4.3c0 1.7 3.1 3.5 7 3.5s7-1.8 7-3.5v-4.3l-7 3.6z"/></symbol>
@@ -213,11 +223,12 @@ const css = (t) => `
   /* glass — the concept's: deep green pane, mint rim, a lift */
   .glass{background:var(--glass);backdrop-filter:blur(${t.glassBlur}) saturate(1.25);-webkit-backdrop-filter:blur(${t.glassBlur}) saturate(1.25);border:1px solid var(--glassRim);box-shadow:inset 0 1px 1px var(--glassEdge),inset 0 -1px 3px ${t.glassInsetLow},${t.glassShadow}}
   /* search */
-  .search{position:absolute;left:17px;right:17px;top:62px;height:56px;border-radius:28px;display:flex;align-items:center;padding:0 8px 0 20px;gap:13px}
+  .search{position:absolute;left:17px;right:17px;top:62px;height:56px;border-radius:28px;display:flex;align-items:center;padding:0 8px 0 20px;gap:10px}
+  .search .mic{width:22px;height:22px;color:var(--ink);opacity:.85;flex:0 0 auto;margin-right:2px}
   .search .mag{width:24px;height:24px;color:var(--ink);opacity:.92;flex:0 0 auto}
   .search .ph{flex:1;font-size:18px;color:var(--ink);opacity:.94;letter-spacing:-.1px}
-  .search .dist{display:flex;align-items:center;gap:8px;height:32px;padding:0 15px 0 13px;border-radius:21px;border:1px solid ${t.distRim};background:${t.distFill};color:var(--gold);font-size:17px;font-weight:600}
-  .search .dist svg{width:21px;height:21px}
+  .search .dist{display:flex;align-items:center;gap:6px;height:32px;padding:0 11px 0 10px;border-radius:21px;border:1px solid ${t.distRim};background:${t.distFill};color:var(--gold);font-size:16px;font-weight:600}
+  .search .dist svg{width:18px;height:18px}
   /* chips */
   .chips{position:absolute;left:17px;top:132px;display:flex;gap:10px}
   .chip{display:flex;align-items:center;gap:9px;height:42px;padding:0 17px 0 14px;border-radius:21px;font-size:16px;font-weight:500;color:var(--ink);background:${t.chipGrad};border-color:${t.chipRim}}
@@ -265,27 +276,28 @@ const css = (t) => `
   .nav .item.active svg{filter:drop-shadow(0 0 8px rgba(73,196,129,.55))}
   .nav .item.active span{color:var(--navActive)}
   .nav .item.active span{font-weight:600}
-${LIQUID ? liquid(t) : ''}
+${panes(t)}
 `;
 
-/** The liquid-glass overrides: the bar floats, every glass recipe gets a
- *  specular top edge, a diagonal sheen, a brighter rim and heavier blur, and
- *  the active tab sits in a lens. */
-const liquid = (t) => `
-  .search,.chip{background:${t.lqGlass};backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -6px 14px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
-  .search::before,.chip::before,.nav::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 38%,transparent 68%,${t.lqSheen2} 100%);pointer-events:none}
+/** The panes: the search bar, the chips, the sheet and the card. Dark is
+ *  liquid glass — blur, a specular top edge, a diagonal sheen, a bright rim,
+ *  the card as a lens; light is the same composition FLAT: opaque fills, no
+ *  blur, the same edges. The nav bar is not a pane: it is the app's strip. */
+const panes = (t) => {
+  const blur = t.lqBlur ? `backdrop-filter:blur(${t.lqBlur}) saturate(1.9);-webkit-backdrop-filter:blur(${t.lqBlur}) saturate(1.9);` : '';
+  return `
+  .search,.chip{background:${t.lqGlass};${blur}border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -6px 14px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
+  .search::before,.chip::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 38%,transparent 68%,${t.lqSheen2} 100%);pointer-events:none}
   .chip{position:relative}
   .search>*,.chip>*{position:relative}
   .search .dist{position:relative;overflow:hidden;background:${t.lqChipFill};border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqRim2}}
   .search .dist>*{position:relative}
-  .nav{left:16px;right:16px;bottom:22px;height:66px;border-radius:33px;border:1px solid ${t.lqRim};background:${t.lqGlass};backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -1px 0 ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};padding:0 8px;align-items:center;overflow:hidden}
-  .nav .item{position:relative;height:54px;justify-content:center;border-radius:27px;gap:1px}
-  .nav .item.active{background:${t.lqLens};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqLensRim},0 2px 10px ${t.lqLensGlow}}
-  .sheet{bottom:104px;background:${t.lqSheetGlass};backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -8px 18px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
+  .sheet{background:${t.lqSheetGlass};${blur}border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -8px 18px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
   .sheet::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 34%,transparent 70%,${t.lqSheen2} 100%);pointer-events:none}
   .sheet>*{position:relative}
   .card{background:${t.lqRow};border:1px solid ${t.lqRowRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqRim2},0 2px 10px ${t.lqLensGlow}}
 `;
+};
 
 // The reference's pin: a --pin-top → --pin-bottom → --pin-end fill and a
 // three-stop green stroke, both gradients; the selected pin differs by its
@@ -395,6 +407,7 @@ ${pins}
     <div class="search glass">
       <svg class="mag"><use href="#i-search"/></svg>
       <div class="ph">Explore nearby jobs</div>
+      <svg class="mic"><use href="#i-mic"/></svg>
       <div class="dist"><svg><use href="#i-sliders"/></svg>5 mi</div>
     </div>
     <div class="chips">
@@ -438,11 +451,8 @@ ${pins}
 `;
 }
 
-for (const theme of LIQUID ? ['dark'] : ['dark', 'light']) {
+for (const theme of ['dark', 'light']) {
   const html = await page(theme);
-  const name = `map-explore${LIQUID ? '-liquid' : ''}-${theme}.html`;
-  const dir = LIQUID ? join(root, '.shots', 'mockups') : here;
-  mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, name), html);
-  console.log(`wrote ${name} (${(html.length / 1024).toFixed(0)} KB)${LIQUID ? ' to .shots/mockups/' : ''}`);
+  writeFileSync(join(here, `map-explore-${theme}.html`), html);
+  console.log(`wrote map-explore-${theme}.html (${(html.length / 1024).toFixed(0)} KB)`);
 }
