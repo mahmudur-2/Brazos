@@ -146,13 +146,7 @@ export function CreateSheet({
                 accessibilityRole="button"
                 accessibilityLabel={item.label}
               >
-                <View
-                  style={[
-                    styles.disc,
-                    item.primary && styles.discPrimary,
-                    item.primary && isDark && styles.discPrimaryDark,
-                  ]}
-                >
+                <View style={[styles.disc, item.primary && styles.discPrimary]}>
                   {item.primary ? (
                     <PlusGlyph color={colors.onForest} />
                   ) : item.icon ? (
@@ -189,8 +183,10 @@ export function CreateSheet({
 }
 
 /**
- * The mockup's plus: two 2pt bars, 13 long — heavier than any Ionicons plus
- * at this size, and the one glyph in the sheet that is not an icon-font glyph.
+ * The mockup's plus (create-sheet.html's i-plus at the 22px glyph size: a
+ * 2.6/24 stroke, 14/24 long): two bars, 14 long, 2.5 thick — heavier than
+ * any Ionicons plus, and the one glyph in the sheet that is not an icon-font
+ * glyph.
  */
 function PlusGlyph({ color }: { color: string }) {
   const styles = stylesFor(useThemeColors().palette);
@@ -367,22 +363,23 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       borderWidth: 1,
       borderColor: 'transparent',
     },
-    // Post a job: solid emerald in light; in dark the emerald as GLASS — the
-    // mockup's translucent green disc with its own lighter ring.
+    // Post a job: the "2 · List" disc of docs/mockups/html/create-sheet.html
+    // (operator, 2026-09-19) — a 40pt rounded square, radius 12, SOLID in
+    // the Post-a-job pill's own theme-constant green, both themes, instead of
+    // G1's translucent circle. Geometry shared; the fill is one token.
     discPrimary: {
-      backgroundColor: colors.emerald,
-      borderColor: colors.emerald,
-    },
-    discPrimaryDark: {
-      backgroundColor: withAlpha(colors.emerald, 0.28),
-      borderColor: withAlpha(colors.emerald, 0.45),
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor: colors.postPillGreen,
+      borderColor: colors.postPillGreen,
     },
     discRinged: { borderColor: colors.secondaryBorder },
     discRingedDark: { borderColor: withAlpha(colors.text, 0.12) },
-    plus: { width: 13, height: 13, alignItems: 'center', justifyContent: 'center' },
-    plusBar: { position: 'absolute', borderRadius: 1 },
-    plusAcross: { width: 13, height: 2 },
-    plusDown: { width: 2, height: 13 },
+    plus: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center' },
+    plusBar: { position: 'absolute', borderRadius: 1.25 },
+    plusAcross: { width: 14, height: 2.5 },
+    plusDown: { width: 2.5, height: 14 },
     rowLabel: {
       flex: 1,
       fontSize: 16,
