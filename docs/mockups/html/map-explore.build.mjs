@@ -32,6 +32,11 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..', '..');
 const cacheDir = join(root, '.shots', 'map-tiles');
+// --liquid: the exploratory iOS liquid-glass variant (2026-09-19) — the tab
+// bar as a floating glass pill with a lens on the active tab; the search bar
+// and chips lighter, sheened, brighter-rimmed. Written to .shots/mockups/ so
+// the approved pages stay what they are.
+const LIQUID = process.argv.includes('--liquid');
 
 // ---------------------------------------------------------------------------
 // The map: Flatbush, Brooklyn — the reference's centre — at zoom 14, shown at
@@ -119,6 +124,11 @@ const THEMES = {
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
     cardFill: 'rgba(1,15,12,.50)', cardRim: 'rgba(183,203,186,.22)', photoBg: '#15362B', photoRing: '#edb65d',
     viewList: '#edb65d', estLabel: '#a1aaa4', estPay: '#edb65d', catFill: 'rgba(132,223,170,.10)', catRim: 'rgba(183,203,186,.22)',
+    // --liquid
+    lqGlass: 'linear-gradient(125deg,rgba(2,16,13,.52),rgba(9,37,25,.44))', lqRim: 'rgba(170,235,200,.42)', lqRim2: 'rgba(255,255,255,.10)',
+    lqSpec: 'rgba(255,255,255,.36)', lqInner: 'rgba(132,223,170,.08)', lqSheen: 'rgba(255,255,255,.13)', lqSheen2: 'rgba(255,255,255,.05)',
+    lqShadow: '0 12px 30px rgba(0,0,0,.48)', lqChipFill: 'rgba(132,223,170,.10)',
+    lqLens: 'linear-gradient(160deg,rgba(132,223,170,.22),rgba(132,223,170,.06))', lqLensRim: 'rgba(170,235,200,.38)', lqLensGlow: 'rgba(73,196,129,.22)',
   },
   light: {
     ink: '#173429', muted: '#637569', emerald: '#238658', gold: '#a77824', mint: '#E5F1EC',
@@ -138,6 +148,11 @@ const THEMES = {
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
     cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824',
     viewList: '#a77824', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
+    // --liquid
+    lqGlass: 'linear-gradient(125deg,rgba(255,255,255,.58),rgba(236,246,238,.50))', lqRim: 'rgba(255,255,255,.92)', lqRim2: 'rgba(35,134,88,.14)',
+    lqSpec: 'rgba(255,255,255,.95)', lqInner: 'rgba(35,134,88,.06)', lqSheen: 'rgba(255,255,255,.55)', lqSheen2: 'rgba(255,255,255,.18)',
+    lqShadow: '0 12px 30px rgba(52,83,59,.18)', lqChipFill: 'rgba(35,134,88,.07)',
+    lqLens: 'linear-gradient(160deg,rgba(35,134,88,.16),rgba(35,134,88,.05))', lqLensRim: 'rgba(35,134,88,.28)', lqLensGlow: 'rgba(35,134,88,.16)',
   },
 };
 
@@ -253,6 +268,23 @@ const css = (t) => `
   .nav .item.active svg{filter:drop-shadow(0 0 8px rgba(73,196,129,.55))}
   .nav .item.active span{color:var(--navActive)}
   .nav .item.active span{font-weight:600}
+${LIQUID ? liquid(t) : ''}
+`;
+
+/** The liquid-glass overrides: the bar floats, every glass recipe gets a
+ *  specular top edge, a diagonal sheen, a brighter rim and heavier blur, and
+ *  the active tab sits in a lens. */
+const liquid = (t) => `
+  .search,.chip{background:${t.lqGlass};backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -6px 14px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
+  .search::before,.chip::before,.nav::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 38%,transparent 68%,${t.lqSheen2} 100%);pointer-events:none}
+  .chip{position:relative}
+  .search>*,.chip>*{position:relative}
+  .search .dist{position:relative;overflow:hidden;background:${t.lqChipFill};border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqRim2}}
+  .search .dist>*{position:relative}
+  .nav{left:16px;right:16px;bottom:22px;height:66px;border-radius:33px;border:1px solid ${t.lqRim};background:${t.lqGlass};backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -1px 0 ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};padding:0 8px;align-items:center;overflow:hidden}
+  .nav .item{position:relative;height:54px;justify-content:center;border-radius:27px;gap:1px}
+  .nav .item.active{background:${t.lqLens};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqLensRim},0 2px 10px ${t.lqLensGlow}}
+  .sheet{bottom:104px}
 `;
 
 // The reference's pin: a --pin-top → --pin-bottom → --pin-end fill and a
@@ -408,6 +440,9 @@ ${pins}
 
 for (const theme of ['dark', 'light']) {
   const html = await page(theme);
-  writeFileSync(join(here, `map-explore-${theme}.html`), html);
-  console.log(`wrote map-explore-${theme}.html (${(html.length / 1024).toFixed(0)} KB)`);
+  const name = `map-explore${LIQUID ? '-liquid' : ''}-${theme}.html`;
+  const dir = LIQUID ? join(root, '.shots', 'mockups') : here;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, name), html);
+  console.log(`wrote ${name} (${(html.length / 1024).toFixed(0)} KB)${LIQUID ? ' to .shots/mockups/' : ''}`);
 }
