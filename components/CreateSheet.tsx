@@ -23,8 +23,9 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
 export type CreateSheetItem = {
   key: string;
   label: string;
-  icon: IoniconName;
-  /** The sheet's first action: the heavier label and the green glass disc. */
+  /** The row's glyph. A `primary` row draws the heavy plus instead. */
+  icon?: IoniconName;
+  /** The sheet's first action: the heavier label, the green glass disc, the plus. */
   primary?: boolean;
   onPress: () => void;
 };
@@ -89,6 +90,9 @@ export function CreateSheet({
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const insets = useSafeAreaInsets();
+  // The mockup's chevrons: the cream at 35% on the dark glass, the nav's
+  // inactive grey in light — colour only, per theme.
+  const chevron = isDark ? withAlpha(colors.text, 0.35) : colors.navInactive;
   // The sheet family's shared backdrop dials (RUN S2 C7), as ActionSheet and
   // ui/primitives/Sheet.tsx read them. The pane itself is the clear
   // material's, dialled under Blur & Material.
@@ -130,11 +134,15 @@ export function CreateSheet({
           <NeedsYou onOpen={onOpenJob} />
 
           <View style={styles.rows}>
-            {items.map((item) => (
+            {items.map((item, index) => (
               <Pressable
                 key={item.key}
                 onPress={item.onPress}
-                style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+                style={({ pressed }) => [
+                  styles.row,
+                  index === 0 && styles.rowFirst,
+                  pressed && styles.pressed,
+                ]}
                 accessibilityRole="button"
                 accessibilityLabel={item.label}
               >
@@ -145,16 +153,16 @@ export function CreateSheet({
                     item.primary && isDark && styles.discPrimaryDark,
                   ]}
                 >
-                  <Ionicons
-                    name={item.icon}
-                    size={20}
-                    color={item.primary ? colors.onForest : colors.emerald}
-                  />
+                  {item.primary ? (
+                    <PlusGlyph color={colors.onForest} />
+                  ) : item.icon ? (
+                    <Ionicons name={item.icon} size={20} color={colors.emerald} />
+                  ) : null}
                 </View>
                 <Text style={[styles.rowLabel, item.primary && styles.rowLabelPrimary]}>
                   {item.label}
                 </Text>
-                <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+                <Ionicons name="chevron-forward" size={18} color={chevron} />
               </Pressable>
             ))}
           </View>
@@ -168,11 +176,11 @@ export function CreateSheet({
             accessibilityHint="Confirms first, then opens the jobs you can bid on"
             accessibilityState={{ disabled: switching }}
           >
-            <View style={[styles.disc, styles.discRinged]}>
+            <View style={[styles.disc, styles.discRinged, isDark && styles.discRingedDark]}>
               <Ionicons name="swap-horizontal" size={18} color={colors.emerald} />
             </View>
             <Text style={styles.rowLabel}>Switch to Worker</Text>
-            <Text style={styles.hint}>confirms first</Text>
+            <Text style={[styles.hint, isDark && styles.hintDark]}>confirms first</Text>
           </Pressable>
         </Surface>
       </View>
@@ -180,10 +188,25 @@ export function CreateSheet({
   );
 }
 
+/**
+ * The mockup's plus: two 2pt bars, 13 long — heavier than any Ionicons plus
+ * at this size, and the one glyph in the sheet that is not an icon-font glyph.
+ */
+function PlusGlyph({ color }: { color: string }) {
+  const styles = stylesFor(useThemeColors().palette);
+  return (
+    <View style={styles.plus} accessible={false}>
+      <View style={[styles.plusBar, styles.plusAcross, { backgroundColor: color }]} />
+      <View style={[styles.plusBar, styles.plusDown, { backgroundColor: color }]} />
+    </View>
+  );
+}
+
 /** The one job most in need of the customer's move, or nothing. */
 function NeedsYou({ onOpen }: { onOpen: (job: Job) => void }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const chevron = isDark ? withAlpha(colors.text, 0.35) : colors.navInactive;
   const { posted, payments, openDisputeJobIds, reviewedJobIds, loading, error, refresh } =
     useMyJobsHub();
   // Inside the Modal, so this is the sheet opening: one batched read per open.
@@ -224,7 +247,7 @@ function NeedsYou({ onOpen }: { onOpen: (job: Job) => void }) {
           {job.title}
         </Text>
       </View>
-      <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+      <Ionicons name="chevron-forward" size={18} color={chevron} />
     </Pressable>
   );
 }
@@ -320,8 +343,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       marginTop: 1,
     },
     rows: { marginTop: 2 },
-    // One hairline expression for both themes: the ink at 8% in light, the
-    // cream at 8% in dark. 12 + 34 + 12 = 58, over CLAUDE.md's 44 floor.
+    // One hairline expression for both themes: the ink at 6% in light, the
+    // cream at 6% in dark — the mockup's. 12 + 34 + 12 = 58, over CLAUDE.md's
+    // 44 floor. The first row draws none: nothing above it to rule off.
     row: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -330,8 +354,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       paddingHorizontal: 2,
       minHeight: 44,
       borderTopWidth: 1,
-      borderTopColor: withAlpha(colors.text, 0.08),
+      borderTopColor: withAlpha(colors.text, 0.06),
     },
+    rowFirst: { borderTopWidth: 0 },
     pressed: { opacity: 0.7 },
     disc: {
       width: 34,
@@ -352,7 +377,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       backgroundColor: withAlpha(colors.emerald, 0.28),
       borderColor: withAlpha(colors.emerald, 0.45),
     },
-    discRinged: { borderColor: withAlpha(colors.text, 0.16) },
+    discRinged: { borderColor: colors.secondaryBorder },
+    discRingedDark: { borderColor: withAlpha(colors.text, 0.12) },
+    plus: { width: 13, height: 13, alignItems: 'center', justifyContent: 'center' },
+    plusBar: { position: 'absolute', borderRadius: 1 },
+    plusAcross: { width: 13, height: 2 },
+    plusDown: { width: 2, height: 13 },
     rowLabel: {
       flex: 1,
       fontSize: 16,
@@ -364,11 +394,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     switchRow: {
       marginTop: 4,
       paddingBottom: 0,
-      borderTopColor: withAlpha(colors.text, 0.12),
+      borderTopColor: withAlpha(colors.text, 0.1),
     },
     hint: {
       fontSize: 13,
       color: colors.textMuted,
     },
+    hintDark: { color: withAlpha(colors.text, 0.45) },
   }),
 );

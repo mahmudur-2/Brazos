@@ -229,7 +229,6 @@ export function CustomerRoot() {
           {
             key: 'post-job',
             label: 'Post a job',
-            icon: 'add',
             primary: true,
             onPress: () => runCreateAction(() => navigateAcrossTabs('Home', 'PostJob')),
           },
