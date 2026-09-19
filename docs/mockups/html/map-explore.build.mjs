@@ -265,7 +265,7 @@ const css = (t) => `
   .card .meta{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--emerald)}
   .card .cat{display:inline-flex;align-items:center;height:23px;padding:0 10px;border-radius:12px;background:${t.catFill};color:var(--emerald);font-size:12.5px;font-weight:600;border:1px solid ${t.catRim}}
   .card .loc{display:flex;align-items:center;gap:5px;font-size:13.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .card .loc svg{width:13px;height:13px;color:var(--emerald);flex:0 0 auto}
+  .card .loc svg{width:16px;height:16px;color:var(--emerald);flex:0 0 auto;margin-left:-1px;position:relative;top:-.5px}
   .card .est{text-align:right;flex:0 0 auto}
   .card .est .lbl{font-size:10px;font-weight:700;letter-spacing:.7px;color:${t.estLabel}}
   .card .est .amt{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.5px;color:${t.estPay}}
