@@ -27,10 +27,18 @@ sitting's:
   `tests/blurBoundary.test.mjs` (the boundary test renamed and extended, every prior
   assertion verbatim; ONE new test — `backdrop-filter` only in the boundary — so the
   suite is **1362**).
-- the docs commit (this file, `docs/DECISIONS.md` 2026-09-19).
+- `6634c9d` — docs (this file, `docs/DECISIONS.md` 2026-09-19 entries (1) and (2)).
+- `889d50e` — **fix(create): the Post-a-job disc is the "2 List" one** — a 40pt rounded
+  square, radius 12, solid `postPillGreen`, the white plus at 14 × 2.5, both themes;
+  `components/CreateSheet.tsx` only (the operator's pick after seeing the phone;
+  `docs/DECISIONS.md` 2026-09-19 entry (3)).
+- the docs commit for that (this file, DECISIONS).
 
-`npm run verify` after both code commits: **1362 pass, 0 fail, exit 0**. The verify
-before the docs commit is in the session report.
+`npm run verify` after every code commit: **1362 pass, 0 fail, exit 0**. The verify
+before the last docs commit is in the session report.
+
+**SEEN ON THE PHONE (operator, 2026-09-19):** "it looks good" — the docked glass sheet
+after the OTA, dark; the one change asked for was the disc above.
 
 **WHAT THE CREATE SHEET IS NOW** (`830a6e3` + `0030dd4`): `components/CreateSheet.tsx`,
 mounted by `CustomerRoot.tsx` where `<ActionSheet>` was (ActionSheet untouched, still
@@ -40,9 +48,10 @@ dark — 0.55, the operator's choice over the mockup's 0.30), then ONE
 `<Surface material="clear" corners="top">`: the 36×4 handle; "What do you need?"
 (17/22/600); the **Needs you** card (a child inside the Modal — `useMyJobsHub()` +
 `attentionItems()` on mount, the first item, hidden while loading / on error / when
-empty; tap → `onOpenJob`); three action rows from `items` (**Post a job** primary with
-the two-bar plus, **Hire again**, **My jobs**), 12 + 34 + 12 on 6% hairlines, none
-above the first; **Switch to Worker** set apart under a 10% hairline, ringed disc, hint
+empty; tap → `onOpenJob`); three action rows from `items` (**Post a job** primary — the "2 List" disc, a
+40pt solid `postPillGreen` rounded square with the white two-bar plus — **Hire again**,
+**My jobs**), 12 + 34 + 12 on 6% hairlines (the primary row 12 + 40 + 12), none above
+the first; **Switch to Worker** set apart under a 10% hairline, ringed disc, hint
 "confirms first", `disabled={switching}`. Labels are the accessibility labels; the E2E
 walk's "Create" → "What do you need?" → "My jobs" is untouched and lands in the harness.
 
@@ -134,8 +143,9 @@ tests, `tests/mode.test.mjs`, `tests/goldOnForest.test.mjs`, `tests/shotHarness.
   on the customer); the confirm from the sheet's Switch row; the slide.
 - **The renders**: `.shots/harness-blur/after-customer-create-sheet-{dark,light}.png`
   beside `docs/mockups/html/create-sheet-decide.html`'s G1S and L2 frames.
-- **Revert lines:** `git revert f3ef985` (the harness blur), `git revert 0030dd4` (the
-  row fixes), `git revert 830a6e3` (the sheet and the pill, together).
+- **Revert lines:** `git revert 889d50e` (the solid disc), `git revert f3ef985` (the
+  harness blur), `git revert 0030dd4` (the row fixes), `git revert 830a6e3` (the sheet
+  and the pill, together).
 - The push: `npm run verify` exited 0 in this session, so the one permitted push —
   flag-free `git push origin mainexpo` — was run after the docs commit (result in the
   session report). Staging's pipeline has no work here: no migration, no edge function.
