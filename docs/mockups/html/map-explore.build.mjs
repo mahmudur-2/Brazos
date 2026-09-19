@@ -152,14 +152,14 @@ const THEMES = {
     badgeGrad: 'linear-gradient(140deg,#dcecd9,#a0c4a6)', badgeInk: '#254f30', badgeRing: '#77bc8b',
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
     cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824',
-    viewList: '#a77824', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
+    viewList: '#13201B', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
     // the flat panes (operator, 2026-09-19): plain white, the app's line
     // hairline, the app's card shadow - no gradient, no sheen, no edge, no blur
     lqBlur: null,
     lqGlass: '#FFFFFF', lqRim: '#DDE2DD', lqRim2: 'transparent',
     lqSpec: 'transparent', lqInner: 'transparent', lqSheen: 'transparent', lqSheen2: 'transparent',
-    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F3E7CE', lqChipRim: 'rgba(200,161,91,.38)', lqChipInk: '#13201B', lqChipWeight: 700,
-    lqSheetGlass: '#FFFFFF', lqRow: '#F3E7CE', lqRowRim: 'rgba(200,161,91,.38)',
+    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F9F3E7', lqChipRim: 'rgba(200,161,91,.26)', lqChipInk: '#13201B', lqChipWeight: 700,
+    lqSheetGlass: '#FFFFFF', lqRow: '#F9F3E7', lqRowRim: 'rgba(200,161,91,.26)',
     lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(19,32,27,.05)',
   },
 };
@@ -425,7 +425,7 @@ ${pins}
           <h2>6 open jobs</h2>
           <div class="sub">Near you <i></i> Within 5 miles</div>
         </div>
-        <div class="view">View list <svg><use href="#i-chev"/></svg></div>
+        <div class="view">View <svg><use href="#i-chev"/></svg></div>
       </div>
       <div class="card">
         <div class="photo"><img src="${photo(theme)}" alt=""></div>
