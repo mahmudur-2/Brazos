@@ -36,11 +36,21 @@ import { BlurLayer } from '../../lib/blur';
  * is: the mix is data in the materials table, not an accident of a missing
  * module.
  *
- * LIGHT IS NOT GLASS THIS RUN. In the light theme this renders the solid
- * theme surface with the ordinary hairline — no blur, no scrim — so light
- * keeps its Heritage look while dark wears the glass. Geometry (radius,
- * border weight) is shared between the themes; only colours fork, which is
- * the parity rule tests/themeTokens.test.mjs enforces tree-wide.
+ * LIGHT IS NOT GLASS — WITH ONE NAMED EXCEPTION. In the light theme this
+ * renders the solid theme surface with the ordinary hairline — no blur, no
+ * scrim — so light keeps its Heritage look while dark wears the glass.
+ * 2026-09-18: a material MAY carry a `light` recipe (ui/tokens.ts
+ * LightGlassSpec), and then it wears glass in light too, from THOSE numbers.
+ * Only the [+] create sheet's `clear` does (operator decision, "L2 Frost",
+ * for that sheet alone); the other three carry no block and stay flat by
+ * construction. Geometry (radius, border weight) is shared between the
+ * themes; only colours fork, which is the parity rule
+ * tests/themeTokens.test.mjs enforces tree-wide.
+ *
+ * THE FIFTH LAYER, OPTIONAL: a 1pt bright inner edge along the top
+ * (`highlightAlpha`), the specular line a lit pane shows. It is inset by
+ * the corner radius so it never crosses the arcs, and sits just under the
+ * hairline — the mockup's `inset 0 1px 0`.
  */
 
 export type SurfaceProps = PropsWithChildren<{
@@ -120,14 +130,21 @@ export function Surface({
   const hairline: ViewStyle = border === 'top' ? { borderTopWidth: 1 } : { borderWidth: 1 };
 
   const flat = Platform.OS === 'web' || reduceTransparency;
-  const scrimAlpha = flat ? spec.fallbackScrimAlpha : spec.scrimAlpha;
+  // 2026-09-18 — WHICH RECIPE THIS THEME WEARS. Dark: the material itself.
+  // Light: the material's `light` block when it carries one (only `clear`
+  // does), else no glass at all — the flat theme surface, exactly as before.
+  // One resolved shape, so the fill, the blur and the edge below read one
+  // set of numbers whichever theme is on.
+  const glass = isDark ? spec : spec.light ?? null;
+  const scrimAlpha = glass ? (flat ? glass.fallbackScrimAlpha : glass.scrimAlpha) : 1;
 
-  const fill = isDark
+  const fill = glass
     ? {
-        backgroundColor: withAlpha(spec.scrimColor, scrimAlpha),
-        borderColor: withAlpha(spec.borderColor, spec.borderAlpha),
+        backgroundColor: withAlpha(glass.scrimColor, scrimAlpha),
+        borderColor: withAlpha(glass.borderColor, glass.borderAlpha),
       }
     : { backgroundColor: colors.surface, borderColor: colors.border };
+  const highlightAlpha = glass?.highlightAlpha ?? 0;
 
   const halo =
     glowColor && isDark
@@ -142,10 +159,23 @@ export function Surface({
           chrome material is exactly that since D11 (blur 0, scrim 1), so the
           nav bar stops mounting a BlurView it cannot use. Sheet and menu are
           unaffected — both still blur under a translucent scrim. */}
-      {isDark && !flat && spec.blur > 0 && scrimAlpha < 1 ? (
+      {glass && !flat && glass.blur > 0 && scrimAlpha < 1 ? (
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, corner, styles.clip]}>
-          <BlurLayer intensity={spec.blur} />
+          <BlurLayer intensity={glass.blur} />
         </View>
+      ) : null}
+      {glass && highlightAlpha > 0 ? (
+        <View
+          pointerEvents="none"
+          style={[
+            styles.highlight,
+            {
+              left: cornerRadius,
+              right: cornerRadius,
+              backgroundColor: withAlpha(glass.borderColor, highlightAlpha),
+            },
+          ]}
+        />
       ) : null}
       {children}
     </View>
@@ -157,4 +187,7 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   // view's own background, which already respects its radius. Clipping the
   // OUTER view instead would cancel the optional glow on iOS.
   clip: { overflow: 'hidden' },
+  // The specular top edge: 1pt, just under the hairline, inset by the radius
+  // at render so it stops where the arcs begin.
+  highlight: { position: 'absolute', top: 0, height: 1 },
 }));

@@ -225,7 +225,12 @@ test('Customer Home retains approved Emerald reference copy without adding paid-
   //                                          are their own fence's.
   assert.match(customerCode, /Your jobs|No jobs have been posted yet/i);
   assert.doesNotMatch(customerCode, /Open near you|Live activity in your area/i);
-  assert.match(customerCode, /Switch to Worker|EST\. PRICE|BRAZOS handles the rest/i);
+  // 2026-09-18: "Switch to Worker" left customer Home for the [+] sheet
+  // (navigation/CustomerRoot.tsx, not one of the files above) and "BRAZOS
+  // handles the rest" left with the promo card; the approved copy this pin
+  // holds is the task card's title and the tile row's heading.
+  assert.match(customerCode, /What do you need done\?|Popular services/i);
+  assert.doesNotMatch(customerCode, /Switch to Worker/, 'the customer screens draw no mode pill');
   assert.match(customerCode, /const YOUR_JOBS_COUNT = 3/);
   assert.match(customerCode, /function counterpartyLine/);
   // "Arrival window" left this list in Phase 4: phase49 gave it a real

@@ -197,8 +197,20 @@ test('there is one transition owner', () => {
   assert.doesNotMatch(provider, /setTimeout\(/);
 });
 
-test('customer Home switches through switchMode() and nothing else', () => {
-  assert.match(home, /void switchMode\('worker'\)/);
+test('the customer switches through switchMode() and nothing else, from the [+] sheet', () => {
+  // 2026-09-18: the switch left customer Home for the [+] create sheet's
+  // bottom row. The call is the same one and it lives in the customer tree,
+  // where the sheet is mounted; Home carries no switch and no navigate that
+  // could stand in for one.
+  const codeOnly = (source) =>
+    source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+  assert.match(customerRoot, /onSwitchMode=\{\(\) => runCreateAction\(\(\) => void switchMode\('worker'\)\)\}/);
+  assert.match(customerRoot, /const \{ switchMode, switching \} = useMode\(\);/);
+  assert.doesNotMatch(codeOnly(home), /switchMode\(|useMode\(|Switch to Worker/);
+  // The sheet's row is the label the confirm dialog is reached from.
+  const sheet = codeOnly(read('components/CreateSheet.tsx'));
+  assert.match(sheet, /accessibilityLabel="Switch to Worker"/);
+  assert.match(sheet, /onPress=\{onSwitchMode\}/);
 });
 
 // ---------------------------------------------------------------------------

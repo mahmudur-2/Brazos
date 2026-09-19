@@ -1041,8 +1041,9 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   assert.match(home, /content: \{ flexGrow: 1, backgroundColor: colors\.homeBackground,/);
   assert.match(stripComments(read('components/HomeAtmosphere.tsx')), /if \(!isDark\) return null;/);
 
-  // THE MODE SWITCH — one 1pt ring, per-theme ring colours.
-  assert.match(/modeSwitch: \{([^}]*)\}/.exec(home)[1], /borderWidth: 1, borderColor: colors\.gold/);
+  // THE MODE SWITCH left this screen on 2026-09-18 (the [+] sheet's bottom
+  // row carries it); its ring pin lives on in home(17), re-pointed.
+  assert.doesNotMatch(home, /modeSwitch/);
 
   // THE [ + ] — one pill-ratio GEOMETRY, which is what this fence is for. The
   // 2026-08-23 unification of its COLOURS is reversed by RUN H2 (dark keeps the
@@ -1091,81 +1092,51 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
 });
 
 // ---------------------------------------------------------------------------
-// H17 — "Switch to Worker" is ringed in the hairline token in dark, and LIGHT
-// keeps the gold it has always had.
+// H17 — "Switch to Worker" LIVES IN THE [+] SHEET, NOT ON CUSTOMER HOME.
 //
-// CATCHES: the ring going back to palette gold, or to any weight above a
-// hairline, on the one control that sits highest on the screen and next to the
-// artwork; and the dark treatment leaking into light, which is frozen.
+// RE-POINTED 2026-09-18 (operator decision, docs/DECISIONS.md 2026-09-18): the
+// pill this fence measured — its 1pt ring, its per-theme ring colour, its
+// sans-ladder label and its 149.5pt width — is gone from customer Home. What
+// it protected was the customer's one deliberate way into worker mode; that
+// row is the create sheet's now, through the same switchMode() with its
+// confirm, and this fence follows it.
 //
-// WHY NOT VACUOUS: the dark override and the base are read separately and
-// compared to each other, so the fence fails if either the override disappears
-// or the base picks the dark values up.
+// CATCHES: the pill creeping back onto Home under any style name; the sheet
+// losing the row, its exact label (the E2E walk and VoiceOver both read it),
+// or its "confirms first" hint; a switch that bypasses switchMode(); Worker
+// Home's own pill being dragged along (it stays, untouched).
+//
+// WHY NOT VACUOUS: the sheet's row, its handler and the tree's dispatch are
+// read separately and each pinned; the Home side is a doesNotMatch over the
+// code with comments stripped, so a comment that names the pill cannot
+// satisfy it and a pill cannot hide in one.
 // ---------------------------------------------------------------------------
-test('home(17) fence: the mode switch wears the hairline in dark, gold in light', () => {
-  const flat = flatten(read('screens/HomeScreen.tsx'));
+test('home(17) fence: the mode switch lives in the [+] sheet, not on customer Home', () => {
+  const home = stripComments(read('screens/HomeScreen.tsx'));
+  assert.doesNotMatch(home, /modeSwitch|switchToWorker|Switch to Worker|useMode\(/);
+  assert.doesNotMatch(home, /home\.modeSwitch\.paddingX/);
 
-  const base = /modeSwitch: \{([^}]*)\}/.exec(flat);
-  assert.ok(base, 'modeSwitch must stay a plain style object');
-  assert.match(base[1], /borderColor: colors\.gold/, 'light keeps the gold ring COLOUR');
-  assert.match(base[1], /minHeight: 44/, "44 is CLAUDE.md's touch floor; master 44 is under it");
-
-  const dark = /modeSwitchDark: \{([^}]*)\}/.exec(flat);
-  assert.ok(dark, 'dark must override the ring colour rather than repainting it for both themes');
-  // home(26) REVERSED THE COLOUR HALF of home(17). `border` was chosen against
-  // a ring the OLD master peaked at #A9814B — a warm olive. The replaced
-  // master's ring peaks at #AFACA4, a near-neutral light grey at luminance
-  // 151..168 against `border`'s 73. It is not a dim gold hairline at all.
-  // The tuning pass gave that neutral its OWN token. `homeSlate` is the
-  // secondary TEXT colour and other screens read it; the ring is a different
-  // role, so it moved to `homeModeRing` and the two can be tuned apart. The
-  // invariant is unchanged and is the whole point of this fence: dark overrides
-  // the ring with a TOKEN -- never a literal, and never with light's gold.
-  assert.match(
-    dark[1],
-    /borderColor: colors\.homeModeRing/,
-    'the dark ring is its own neutral token, not the gold hairline and not a literal'
-  );
-  // THE WEIGHT: home(17) took dark to 1pt (master 44 rings at 0.92, and 1 is
-  // the nearest real weight); the 2026-08-22 parity pass gave light the SAME
-  // 1pt — one weight in the base, no per-theme width override.
-  assert.match(base[1], /borderWidth: 1,/, 'the ring is one point in both themes');
-  assert.doesNotMatch(dark[1], /borderWidth/, 'the dark override carries colour only');
-
-  assert.match(
-    flat,
-    /styles\.modeSwitch, isDark && styles\.modeSwitchDark,/,
-    'the override has to reach the control, in that order'
-  );
-
-  // home(26) — THE PILL'S OUTER WIDTH, which the label is the only elastic term
-  // of. Master 44 draws it 156.2pt wide; at 15pt this rendered 171. The two
-  // paddings, the gap and the glyph are fixed, so the box is
-  // `fixed + label`, and the label scales with its size. Parity 2026-08-22:
-  // the ladder size lives on the BASE label style, both themes.
-  const labelSize = /modeSwitchText: \{ fontSize: sansSize\(MASTER_SANS_CAPS\.switchLabel\), fontWeight: '600', color: colors\.forest,? \}/.test(flat)
-    ? sansLadder(read('screens/HomeScreen.tsx'), 'switchLabel')
-    : 0;
-  assert.ok(labelSize > 0, 'the label size must come off the sans ladder, not a literal');
-  assert.match(
-    flat,
-    /modeSwitchTextDark: \{ color: colors\.emerald \}/,
-    'the dark label override carries colour only'
-  );
-  // "Switch to Worker" measured 116pt of ink at 15pt in a real 393pt viewport,
-  // inside a 171pt box -- and that box was measured while the pill padded its
-  // label by 13 a side. The tuning pass took the padding to 10, which comes off
-  // the FIXED term twice and off the elastic one not at all, so the box the
-  // same ink measurement sits in is 165.
-  const pillWidth = 165 - 116 + (116 * labelSize) / 15;
+  const sheet = flatten(read('components/CreateSheet.tsx'));
+  assert.match(sheet, /accessibilityLabel="Switch to Worker"/);
+  assert.match(sheet, /<Text style=\{styles\.rowLabel\}>Switch to Worker<\/Text>/);
+  assert.match(sheet, /<Text style=\{styles\.hint\}>confirms first<\/Text>/);
+  assert.match(sheet, /onPress=\{onSwitchMode\} disabled=\{switching\}/);
+  // The row is the last thing on the sheet, set apart under its own hairline.
+  assert.match(sheet, /styles\.switchRow/);
   assert.ok(
-    Math.abs(pillWidth - 149.5) <= 5,
-    `the pill resolves to ${pillWidth.toFixed(1)}pt wide; the approved 10pt padding draws it 149.5 ` +
-      '(master 44 drew 156.2 at the 13 it replaced)'
+    sheet.indexOf('styles.switchRow') > sheet.indexOf('accessibilityLabel={item.label}'),
+    'the switch row sits below the action rows'
   );
-  // RECORDED, NOT MET: its height. Master 44 draws 40.2pt and CLAUDE.md's touch
-  // floor is 44, so the floor wins and the 3.8pt stays a difference.
-  assert.match(base[1], /minHeight: 44/);
+
+  const tree = stripComments(read('navigation/CustomerRoot.tsx'));
+  assert.match(tree, /const \{ switchMode, switching \} = useMode\(\);/);
+  assert.match(tree, /onSwitchMode=\{\(\) => runCreateAction\(\(\) => void switchMode\('worker'\)\)\}/);
+  assert.match(tree, /switching=\{switching\}/);
+
+  // WORKER HOME IS UNTOUCHED: its pill, its dial and its switch stay.
+  const worker = stripComments(read('screens/WorkerHomeScreen.tsx'));
+  assert.match(worker, /void switchMode\('customer'\)/);
+  assert.match(worker, /useDialNumber\('workerHome\.modeSwitch\.paddingX'\)/);
 });
 
 /** A rung off `MASTER_SANS_CAPS`, recomputed here rather than trusted. */

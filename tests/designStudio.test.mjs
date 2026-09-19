@@ -352,7 +352,8 @@ test('registry: defaults mirror the token surfaces value by value', async () => 
   const ctx = await contextFor();
   const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
 
-  for (const material of ['chrome', 'sheet', 'menu']) {
+  // 2026-09-18: 'clear' — the [+] create sheet's pane — is the fourth.
+  for (const material of ['chrome', 'sheet', 'menu', 'clear']) {
     for (const prop of ['blur', 'scrimAlpha', 'borderAlpha', 'fallbackScrimAlpha']) {
       const entry = byKey.get(`material.${material}.${prop}`);
       assert.ok(entry, `material.${material}.${prop} must be in the registry`);
@@ -456,6 +457,7 @@ test('[static] the panel renders from the registry — zero hand-wired rows, no 
     /'chrome'/,
     /'sheet'/,
     /'menu'/,
+    /'clear'/,
   ]) {
     assert.doesNotMatch(panel, banned, `the panel hand-wires a token: ${banned}`);
   }
@@ -864,11 +866,20 @@ test('S3 nav paint: solid chrome ground, the champagne [+] ring, and no raster i
     assert.ok(tokens.materials[name].blur > 0, `${name} must still blur`);
     assert.ok(tokens.materials[name].scrimAlpha < 1, `${name}'s scrim must stay translucent`);
   }
-  // The blur mounts ONLY where it can be seen.
+  // The blur mounts ONLY where it can be seen. 2026-09-18: the condition
+  // reads the RESOLVED recipe (`glass` — the material in dark, its `light`
+  // block in light, null for a flat light surface), so the same three
+  // clauses now also keep the blur off every light surface that carries no
+  // recipe. The rule did not move; the name it reads did.
   assert.match(
     surface.replace(/\s+/g, ' '),
-    /\{isDark && !flat && spec\.blur > 0 && scrimAlpha < 1 \?/,
+    /\{glass && !flat && glass\.blur > 0 && scrimAlpha < 1 \?/,
     'the BlurLayer must not mount behind an opaque scrim or at zero blur',
+  );
+  assert.match(
+    surface.replace(/\s+/g, ' '),
+    /const glass = isDark \? spec : spec\.light \?\? null;/,
+    'light wears glass only from a material’s own light block — never the dark recipe',
   );
   // The registry's chrome dials read the tokens, so they launch at the new
   // values and keep working — a solid ground is a default, not a removal.
@@ -1238,7 +1249,7 @@ test('sheet and menu dials: defaults mirror the shipped values, and the wearers 
 
   // The material colour dials joined the Blur & Material category (C7):
   // fill/tint and hairline colour per material, defaulting to the table.
-  for (const material of ['chrome', 'sheet', 'menu']) {
+  for (const material of ['chrome', 'sheet', 'menu', 'clear']) {
     assert.equal(
       byKey.get(`material.${material}.scrimColor`).defaultValue(ctx),
       tokens.materials[material].scrimColor,

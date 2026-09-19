@@ -589,13 +589,40 @@ const overWhite = (hex, alpha) => {
 
 test('G1 materials: the table is as dispatched, worn from one scrim ink and the brand mint', async () => {
   const { materials, brand } = await tokensModule;
-  assert.deepEqual(Object.keys(materials), ['chrome', 'sheet', 'menu']);
+  // 2026-09-18: 'clear' is the fourth — the [+] create sheet's pane.
+  assert.deepEqual(Object.keys(materials), ['chrome', 'sheet', 'menu', 'clear']);
   for (const [name, expected] of Object.entries(MATERIALS_AS_DISPATCHED)) {
     for (const [key, value] of Object.entries(expected)) {
       assert.equal(materials[name][key], value, `materials.${name}.${key} moved off the dispatched value`);
     }
     assert.equal(materials[name].scrimColor, '#071B15', `materials.${name} left the one scrim ink`);
     assert.equal(materials[name].borderColor, brand.mint, `materials.${name}'s hairline must be the brand mint`);
+  }
+  // CLEAR (2026-09-18, G1 "Clear" of docs/mockups/html/glass-sheet.html): the
+  // same scrim ink at the see-through 0.40, a WHITE rim — the mockup's, and
+  // the one exception to the mint rule above, because a mint hairline reads
+  // green on glass this clear — the specular top edge, and the one light
+  // recipe in the table ("L2 Frost", for this sheet alone). Every other
+  // material carries no light block, which is what keeps light flat.
+  const { colors: lightPalette } = await tokensModule;
+  assert.equal(materials.clear.scrimColor, '#071B15');
+  assert.equal(materials.clear.scrimAlpha, 0.4);
+  assert.equal(materials.clear.borderColor, lightPalette.surface, 'the rim is the one white');
+  assert.equal(materials.clear.borderAlpha, 0.14);
+  assert.equal(materials.clear.highlightAlpha, 0.22);
+  assert.equal(materials.clear.fallbackScrimAlpha, materials.sheet.fallbackScrimAlpha, 'no blur, no clearer pane');
+  assert.deepEqual([materials.clear.radius, materials.clear.radiusTopOnly], [28, true], 'docked: top corners');
+  assert.deepEqual(materials.clear.light, {
+    blur: 50,
+    scrimColor: lightPalette.surface,
+    scrimAlpha: 0.72,
+    borderColor: lightPalette.surface,
+    borderAlpha: 0.85,
+    fallbackScrimAlpha: 0.96,
+    highlightAlpha: 0.95,
+  });
+  for (const name of ['chrome', 'sheet', 'menu']) {
+    assert.equal(materials[name].light, undefined, `${name} must stay flat in light — no light recipe`);
   }
 });
 

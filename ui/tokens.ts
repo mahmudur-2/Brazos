@@ -633,7 +633,27 @@ export const glow = {
  */
 const GLASS_SCRIM = '#071B15';
 
-export type MaterialName = 'chrome' | 'sheet' | 'menu';
+export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear';
+
+/**
+ * 2026-09-18 — A LIGHT-THEME GLASS RECIPE. Surface's light path has always
+ * rendered the flat theme surface; a material that carries this block wears
+ * glass in light too, with these values in place of the dark ones. Only the
+ * [+] create sheet's `clear` carries one (operator decision 2026-09-18, "L2
+ * Frost", for that sheet alone) — every other material leaves it absent and
+ * stays flat in light BY CONSTRUCTION, not by a flag.
+ */
+export type LightGlassSpec = {
+  blur: number;
+  /** The frost: `scrimColor` at `scrimAlpha` — white, in the mockup. */
+  scrimColor: string;
+  scrimAlpha: number;
+  borderColor: string;
+  borderAlpha: number;
+  fallbackScrimAlpha: number;
+  /** The 1pt bright inner top edge, `borderColor` at this alpha. */
+  highlightAlpha: number;
+};
 
 export type MaterialSpec = {
   /** expo-blur intensity under the scrim — dark theme, native, transparency allowed. */
@@ -654,13 +674,22 @@ export type MaterialSpec = {
   radius: number | null;
   /** Sheets round their top corners only; everything else rounds all four. */
   radiusTopOnly: boolean;
+  /**
+   * A 1pt bright inner edge along the top, `borderColor` at this alpha — the
+   * specular line a lit pane of glass shows (the G1 mockup's
+   * `inset 0 1px 0`). Absent or 0: no edge is drawn.
+   */
+  highlightAlpha?: number;
+  /** See LightGlassSpec. Absent: flat theme surface in light, as always. */
+  light?: LightGlassSpec;
 };
 
 /**
- * Three materials, as data. chrome is the nav bar's wear; sheet is the docked
+ * Four materials, as data. chrome is the nav bar's wear; sheet is the docked
  * and floating dialog surfaces; menu is the densest glass, for anchored
- * popovers. Consumed ONLY through ui/primitives/Surface.tsx, and tunable live
- * through lib/designOverrides.ts (RUN G1 C2) — these are the launch defaults.
+ * popovers; clear is the [+] create sheet's see-through pane (2026-09-18).
+ * Consumed ONLY through ui/primitives/Surface.tsx, and tunable live through
+ * lib/designOverrides.ts (RUN G1 C2) — these are the launch defaults.
  */
 export const materials: Record<MaterialName, MaterialSpec> = {
   // RUN S3 (D11) — SOLID NAV GROUND. The chrome material stops being glass:
@@ -700,6 +729,46 @@ export const materials: Record<MaterialName, MaterialSpec> = {
     fallbackScrimAlpha: 0.95,
     radius: 16,
     radiusTopOnly: false,
+  },
+  // 2026-09-18 — CLEAR: the [+] create sheet's glass, G1 "Clear" of the nine
+  // treatments in docs/mockups/html/glass-sheet.html (operator, 2026-09-18).
+  // The most see-through material: the same scrim ink at 0.40 (sheet is
+  // 0.72), so the page reads through, and a HEAVIER blur than sheet's because
+  // more shows through and the rows must stay legible over it. The rim is
+  // WHITE, not the mint — on glass this clear a mint hairline reads green
+  // against the near-black; the mockup's rim is white at 0.14 — and the
+  // pane carries the specular top edge (0.22). Radius 28, top corners: the
+  // sheet is docked. Web and Reduce Transparency fall back to the sheet
+  // material's own 0.92: without a blur the page would show through a
+  // clearer pane UNBLURRED, which is noise behind the rows, not glass — the
+  // harness render proved it at 0.80 (tests/themeTokens keeps the cream
+  // ≥4.5:1 over the fallback on white).
+  //
+  // LIGHT — the one material that is glass in light: "L2 Frost" from
+  // docs/mockups/html/create-sheet-decide.html — white at 0.72 over a blur,
+  // a white rim at 0.85 and a bright top edge at 0.95, falling back to a
+  // 0.96 white pane where blur cannot draw, for the same reason. The backdrop scrim behind it is
+  // the sheet family's own (components/CreateSheet.tsx), not part of the
+  // material.
+  clear: {
+    blur: 60,
+    scrimColor: GLASS_SCRIM,
+    scrimAlpha: 0.4,
+    borderColor: colors.surface,
+    borderAlpha: 0.14,
+    fallbackScrimAlpha: 0.92,
+    radius: 28,
+    radiusTopOnly: true,
+    highlightAlpha: 0.22,
+    light: {
+      blur: 50,
+      scrimColor: colors.surface,
+      scrimAlpha: 0.72,
+      borderColor: colors.surface,
+      borderAlpha: 0.85,
+      fallbackScrimAlpha: 0.96,
+      highlightAlpha: 0.95,
+    },
   },
 };
 

@@ -34,7 +34,6 @@ import { openOwnJob } from '../lib/ownJobCard';
 import { MORE_SERVICES } from '../lib/skillCategories';
 import { formatTimeAgo, greetingFor } from '../lib/time';
 import type { CustomerHomeStackNavigation } from '../lib/navigation';
-import { useMode } from '../modes';
 import { useHomeDesignSettings } from '../lib/homeDesignStudio';
 import { useDialNumber } from '../lib/designOverrides';
 import { useShellGround } from '../lib/shellGround';
@@ -214,20 +213,19 @@ const MASTER_SERIF_CAPS = {
 const serifSize = (capPx: number) =>
   Math.round((capPx * MASTER_TO_DEVICE) / GEORGIA_CAP_RATIO);
 
-// home(26) — THE SAME LADDER, FOR THE TWO LABELS THAT ARE NOT SERIF.
+// home(26) — THE SAME LADDER, FOR THE LABEL THAT IS NOT SERIF.
 //
-// "View all" and "Switch to Worker" are drawn SANS on master 44 — checked at
-// 1:1, they carry no serifs and no stroke contrast — so putting their caps
-// through the serif conversion would size them against the wrong face. Same
-// measurement, same arithmetic, one different divisor. What they must NOT be
-// is two literals chosen by eye, which is what they were.
+// "View all" is drawn SANS on master 44 — checked at 1:1, it carries no
+// serifs and no stroke contrast — so putting its cap through the serif
+// conversion would size it against the wrong face. Same measurement, same
+// arithmetic, one different divisor. What it must NOT be is a literal chosen
+// by eye, which is what it was. ("Switch to Worker" sat on this ladder too
+// until 2026-09-18, when the pill left this screen for the [+] sheet.)
 /** The platform sans's cap height as a fraction of its em. */
 const SYSTEM_CAP_RATIO = 0.6875;
 const MASTER_SANS_CAPS = {
   /** "View all", the V's stem: y 1577..1597 = 21px. */
   viewAll: 21,
-  /** "Switch to Worker", the S: y 181..200 = 20px. */
-  switchLabel: 20,
 } as const;
 const sansSize = (capPx: number) =>
   Math.round((capPx * MASTER_TO_DEVICE) / SYSTEM_CAP_RATIO);
@@ -308,7 +306,6 @@ export function HomeScreen() {
   const { profile } = useProfile();
   const navigation = useNavigation<CustomerHomeStackNavigation>();
   const design = useHomeDesignSettings();
-  const { switchMode, switching } = useMode();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const { width: screenWidth } = useWindowDimensions();
@@ -323,27 +320,13 @@ export function HomeScreen() {
   // tests/screenDials.test.mjs pins this exact read. The mockup's card is 22
   // (radius.xxl), the same corner the promo card had.
   const taskCardRadius = useDialNumber('home.promoCard.radius') ?? 22;
-  // THE MODE PILL'S DIAL, AND THE TWENTY-SIX PIXELS IT WAS WRONGLY BLAMED FOR.
-  //
-  // T2's render gate found one capture that would not go byte-identical:
-  // `customer-services-sheet-dark`, 26 pixels, every build and every capture,
-  // each differing by one unit on one channel. All 26 sit on THIS pill's ring
-  // — right edge x372, bottom y54, both bottom corner arcs — so this dial was
-  // the obvious suspect and was tried in three forms: applied unconditionally,
-  // applied only when set (so an untouched screen adds no style member at
-  // all), and removed outright with the pill restored byte-for-byte to
-  // 9d889bb. All three produced the SAME 26 pixels. The dial is not the cause,
-  // so it stands, in the same shape as every other dial in the run.
-  //
-  // WHAT IS ACTUALLY KNOWN, recorded because the next run should not re-chase
-  // it: `customer-home-dark` and `customer-home-light` — the same pill, same
-  // screen, no scrim over it — are byte-identical against the pre-run baseline
-  // through every build, so no value on this screen moved. The rest of the
-  // dimmed area in the sheet capture is identical too, which rules out the
-  // scrim's own alpha. What is left is how the browser rasterises this one
-  // high-contrast ring beneath an overlay, and 26 pixels of 1/255 is the whole
-  // of it.
-  const modeSwitchPaddingX = useDialNumber('home.modeSwitch.paddingX') ?? 10;
+  // 2026-09-18: the "Switch to Worker" pill and its `home.modeSwitch.paddingX`
+  // dial left this screen — the customer's mode switch is the [+] create
+  // sheet's bottom row now (components/CreateSheet.tsx, mounted by
+  // navigation/CustomerRoot.tsx), through the same switchMode(). Worker Home
+  // keeps its own pill. The twenty-six-pixel investigation that lived here
+  // (customer-services-sheet-dark's ring pixels under a scrim) is closed with
+  // the ring: it was a rasterisation artefact, never a value on this screen.
 
   // RUN H3 (C3): this screen's page ground is `homeBackground`, not the
   // palette's `background`, and the floating nav pill's margins are painted by
@@ -441,14 +424,9 @@ export function HomeScreen() {
   // 2026-09-17: the live-nearby pulse left with the section it marked, and
   // `browseOpenJobs()` — the confirmed Worker Mode switch every Nearby card
   // and its "View all" ran — left with it too. Neither had another caller on
-  // this screen. The customer still reaches the open market the same way they
-  // always did: the "Switch to Worker" pill below, through switchMode().
-
-  // The mode-switch pill. Same deliberate switch as before — now through the
-  // one authoritative switchMode() rather than a navigate() dressed up as one.
-  function switchToWorker() {
-    void switchMode('worker');
-  }
+  // this screen. The customer reaches the open market through the [+] sheet's
+  // "Switch to Worker" row (2026-09-18), through the one authoritative
+  // switchMode(); this screen no longer carries a switch of its own.
 
 
   // The "Post a job" CTA's own entry point — carries over whatever the
@@ -561,25 +539,6 @@ export function HomeScreen() {
                     </Text>
                   ) : null}
                 </View>
-                <Pressable
-                  onPress={switchToWorker}
-                  disabled={switching}
-                  style={({ pressed }) => [
-                    styles.modeSwitch,
-                    isDark && styles.modeSwitchDark,
-                    { paddingHorizontal: modeSwitchPaddingX },
-                    pressed && styles.modeSwitchPressed,
-                  ]}
-                  accessibilityRole="button"
-                  accessibilityLabel="Switch to Worker"
-                  accessibilityHint="Opens the jobs you can bid on"
-                  accessibilityState={{ disabled: switching }}
-                >
-                  <Ionicons name="build" size={23} color={isDark ? colors.emerald : colors.forest} />
-                  <Text style={[styles.modeSwitchText, isDark && styles.modeSwitchTextDark]}>
-                    Switch to Worker
-                  </Text>
-                </Pressable>
               </View>
 
               <Text
@@ -981,68 +940,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // agree on a single accent hue instead of the name simply going unaccented.
   // Colour only: `greeting` above still carries every number.
   greetingNameLight: { color: colors.postPillGreen },
-  // Parity 2026-08-22: the ring is ONE point in both themes (home(17)'s
-  // weight, which light now inherits); only the ring's colour is per-theme.
-  modeSwitch: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    minHeight: 44,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: colors.gold,
-    backgroundColor: colors.surface,
-  },
-  // home(17) — DARK ONLY: the ring is the HAIRLINE token, at one point.
-  //
-  // It resolved `colors.gold` (#DCAB60) at 1.25pt, which is the brightest
-  // colour in the palette drawn heavier than any other line on the screen.
-  // Master 44 rings this control at an effective 1.66px of its 941 — 0.69pt —
-  // so the weight goes to 1, the nearest real weight below what shipped.
-  //
-  // The colour goes to `border`, which lib/theme.ts documents as "the flat
-  // equivalent of gold at hairline alpha". RECORDED DIFFERENCE: the master's
-  // own ring peaks at #A9814B, brighter than #55482E and brighter than the
-  // hairline it draws that card with (#6C5941 peak) — so master 44 does
-  // distinguish the two and this does not. Reaching #A9814B means either a new
-  // hex or an alpha blend of gold, and the palette is frozen; the token is the
-  // instruction and the gap is written down instead.
-  //
-  // THE HEIGHT DOES NOT MOVE. Master 44 draws this pill 79px = 33pt tall and
-  // CLAUDE.md's touch floor is 44 — the master is under the floor, so the floor
-  // wins and `minHeight: 44` stays. That is the whole of the "~21% taller"
-  // difference; nothing about it is a styling choice.
-  //
-  // home(26) — A REVERSAL OF THE COLOUR HALF, AND ONLY THE COLOUR HALF.
-  //
-  // The WEIGHT above survives: the replaced master rings this control at 2px of
-  // its 1844 = 0.92pt, so 1 is still the nearest real weight and 1.25 is still
-  // too heavy. What does not survive is `border`. That choice was made against
-  // a ring the old file "peaks at #A9814B" — a warm olive. The replaced
-  // master's ring peaks at #AFACA4 and integrates to #A4A29B..#989790 across
-  // the plausible line widths: a near-neutral light grey at luminance 151..168,
-  // against `border`'s 73. It is not a dim gold hairline at all.
-  //
-  // `homeSlate` (#93A096) is the closest token in the dark palette by a wide
-  // margin — 9/255 on its worst channel against the mid estimate, where the
-  // next nearest (`neutral`) is 11 and `border` is 62. The prompt's tolerance
-  // is 8, and 9 is one over it; a new token would be inventing precision the
-  // measurement does not have, because the estimate's own spread — 151 to 168
-  // depending on whether the ring is 0.92pt or 1.00pt — is twice that gap.
-  // RECORDED: the difference, and the fact that no token is inside 8.
-  modeSwitchDark: { borderColor: colors.homeModeRing },
-  // Phase 1's tactile answer to the tap — the press state itself, so the
-  // feedback lands on touch-down rather than after an animation starts.
-  modeSwitchPressed: { opacity: 0.82, transform: [{ scale: 0.97 }] },
-  // home(26)'s sans-ladder 13, now in BOTH themes (parity 2026-08-22): the
-  // label is the pill's only elastic term, and one size keeps one pill width.
-  modeSwitchText: {
-    fontSize: sansSize(MASTER_SANS_CAPS.switchLabel),
-    fontWeight: '600',
-    color: colors.forest,
-  },
-  modeSwitchTextDark: { color: colors.emerald },
+  // 2026-09-18: the five modeSwitch* styles are gone with the pill (the
+  // switch is the [+] sheet's). `homeModeRing` stays in the palette for now,
+  // read by nothing on this screen.
   // home(23) — THE GAP ABOVE THE HEADLINE IS REAL SPACING.
   //
   // marginTop 30, not 15. Master 44 puts the headline's cap top at 95.0pt below
@@ -1113,11 +1013,10 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // scene 23pt short of it.
   //
   // `top: 35`. The master's box top is 34.9pt below the content box's top and
-  // its ink starts 7.9pt into the box, at 42.8. This app's "Switch to Worker"
-  // pill is 44pt tall against the master's 40.2 — CLAUDE.md's touch floor, and
-  // the master is under it — so its bottom sits at 47 and covers the art's
-  // first 4.2pt. RECORDED: the master's number is kept and the taller pill hides
-  // a sliver of scene behind an opaque fill, which is the smaller difference.
+  // its ink starts 7.9pt into the box, at 42.8. (Until 2026-09-18 the
+  // "Switch to Worker" pill, 44pt tall against the master's 40.2, covered the
+  // art's first 4.2pt; the pill is gone and the sliver shows — the master's
+  // number was kept throughout.)
   homeHeroArt: {
     position: 'absolute',
     zIndex: 0,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useNavBottomPad } from '../hooks/useNavInset';
-import { ActionSheet } from '../components/ActionSheet';
+import { CreateSheet } from '../components/CreateSheet';
 import { navigateAcrossTabs } from '../lib/navigationRef';
 import { useThemeColors } from '../lib/theme';
 import type {
@@ -12,6 +12,7 @@ import type {
 } from '../lib/navigation';
 import { HomeScreen } from '../screens/HomeScreen';
 import { PostJobScreen } from '../screens/PostJobScreen';
+import { useMode } from '../modes';
 import { ProfileReviewsScreen } from '../screens/ProfileReviewsScreen';
 import { WorkerProfileScreen } from '../screens/WorkerProfileScreen';
 import { WorkerSearchScreen } from '../screens/WorkerSearchScreen';
@@ -151,6 +152,10 @@ export function CustomerRoot() {
   useNavBarContainerDials();
   const { palette } = useThemeColors();
   const [createOpen, setCreateOpen] = useState(false);
+  // 2026-09-18: the customer's mode switch moved off Home and into the
+  // sheet's bottom row — the same switchMode() the Home pill called, which
+  // confirms before it swaps trees (modes/ModeProvider.tsx).
+  const { switchMode, switching } = useMode();
 
   /** Close the sheet, then dispatch through the one guarded cross-tab path. */
   function runCreateAction(dispatch: () => void) {
@@ -210,23 +215,27 @@ export function CustomerRoot() {
         />
       </Tab.Navigator>
 
-      {/* The [ + ] creation sheet — exactly the three actions it carried
-          before prestige(0d) retired it, reusing the existing ActionSheet
-          rather than a new sheet component. Every destination goes through
-          navigateAcrossTabs(), the one guarded cross-tab dispatch path. */}
-      <ActionSheet
+      {/* The [ + ] creation sheet — the three actions it has carried since
+          prestige(0d) restored it, now on the docked glass CreateSheet
+          (2026-09-18, G1 "Clear") with two contextual rows of its own: the
+          job that needs the customer's move, and the mode switch that left
+          customer Home. Every destination still goes through
+          navigateAcrossTabs(), the one guarded cross-tab dispatch path, and
+          every dispatch stays in THIS file: the sheet draws, it never routes. */}
+      <CreateSheet
         visible={createOpen}
         title="What do you need?"
         items={[
           {
             key: 'post-job',
             label: 'Post a job',
-            icon: 'add-circle-outline',
+            icon: 'add',
+            primary: true,
             onPress: () => runCreateAction(() => navigateAcrossTabs('Home', 'PostJob')),
           },
           {
             key: 'hire-again',
-            label: 'Hire someone again',
+            label: 'Hire again',
             icon: 'people-outline',
             onPress: () => runCreateAction(() => navigateAcrossTabs('Profile', 'SavedWorkers')),
           },
@@ -237,6 +246,15 @@ export function CustomerRoot() {
             onPress: () => runCreateAction(() => navigateAcrossTabs('MyJobs')),
           },
         ]}
+        // The attention card opens the job the way Home's own card does — on
+        // the hub's full row, no re-fetch.
+        onOpenJob={(job) =>
+          runCreateAction(() => navigateAcrossTabs('MyJobs', 'ClientJobDetail', { job }))
+        }
+        // The sheet closes first; switchMode() then asks, and only a yes swaps
+        // the trees.
+        onSwitchMode={() => runCreateAction(() => void switchMode('worker'))}
+        switching={switching}
         onClose={() => setCreateOpen(false)}
       />
     </>

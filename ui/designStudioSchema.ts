@@ -264,6 +264,10 @@ const MATERIAL_SUBCATEGORY: Record<MaterialName, string> = {
   chrome: 'Nav bar chrome',
   sheet: 'Sheet glass',
   menu: 'Menu glass',
+  // 2026-09-18: the [+] create sheet's see-through pane. Its dials are the
+  // DARK recipe, like every material's; the light "Frost" block it also
+  // carries (ui/tokens.ts LightGlassSpec) is not dialled.
+  clear: 'Create sheet glass',
 };
 
 function materialDial(
@@ -1691,17 +1695,12 @@ function screenDialEntries(): StudioEntry[] {
         step: 1,
         defaultValue: 22,
       },
-      {
-        key: 'home.modeSwitch.paddingX',
-        label: 'Switch-to-Worker pill — side padding',
-        description: 'How much room the mode pill keeps either side of its label, which is what sets its width.',
-        tier: 'basic',
-        scope: 'local',
-        min: 0,
-        max: 28,
-        step: 1,
-        defaultValue: 10,
-      },
+      // 2026-09-18: the `home.modeSwitch.paddingX` row is GONE with the
+      // customer Home's "Switch to Worker" pill — the switch lives in the
+      // [+] create sheet now (components/CreateSheet.tsx), which draws no
+      // pill and reads no dial. Same rule as the jobCard rows below: a dial
+      // its wearer no longer reads is a control that lies. Worker Home's own
+      // pill and its `workerHome.modeSwitch.paddingX` row are untouched.
       // 2026-09-17: the four `home.jobCard.*` rows are GONE — inner padding,
       // photo-to-text gap, photo size and the demand strip's height. Every one
       // of them dialled `OpenJobCard`, the card the Nearby list drew, and
@@ -2418,6 +2417,7 @@ export const STUDIO_REGISTRY: readonly StudioEntry[] = [
   ...materialDials('chrome'),
   ...materialDials('sheet'),
   ...materialDials('menu'),
+  ...materialDials('clear'),
   ...navigationDialEntries(),
   ...sheetDialEntries(),
   ...menuDialEntries(),

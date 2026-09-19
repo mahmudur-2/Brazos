@@ -70,7 +70,10 @@ const SCREENS = [
     scale: 'theme',
     dials: [
       { key: 'home.promoCard.radius', drew: 22, parent: null, fallback: '22' },
-      { key: 'home.modeSwitch.paddingX', drew: 10, parent: null, fallback: '10' },
+      // 2026-09-18: `home.modeSwitch.paddingX` is gone from both sides too —
+      // the "Switch to Worker" pill left customer Home for the [+] sheet
+      // (components/CreateSheet.tsx), which draws no pill and reads no dial.
+      // Worker Home's row below is untouched.
       // 2026-09-17: the four `home.jobCard.*` rows are gone from both sides —
       // the registry and this table. They dialled `OpenJobCard`, the card the
       // Nearby list drew, and Nearby left the customer Home. Rule 1 above is

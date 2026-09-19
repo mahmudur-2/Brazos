@@ -370,6 +370,7 @@ test('[static] every modal scrim in dark is the one shared strength', () => {
   const scrimFiles = [
     'components/ActionSheet.tsx',
     'components/AmountPrompt.tsx',
+    'components/CreateSheet.tsx',
     'components/ConfirmDialog.tsx',
     'components/ReactionPicker.tsx',
     'components/ReportDialog.tsx',
@@ -414,6 +415,11 @@ test('[static] the creation sheet clears the home indicator', () => {
   const sheet = stripComments(read('components/ActionSheet.tsx'));
   assert.match(sheet, /const insets = useSafeAreaInsets\(\);/);
   assert.match(sheet, /\{ paddingBottom: insets\.bottom \+ spacing\.lg \}/);
+  // 2026-09-18: the creation sheet is components/CreateSheet.tsx now (the
+  // long-press menus keep ActionSheet); it reserves the inset the same way.
+  const createSheet = stripComments(read('components/CreateSheet.tsx'));
+  assert.match(createSheet, /const insets = useSafeAreaInsets\(\);/);
+  assert.match(createSheet, /\{ paddingBottom: insets\.bottom \+ spacing\.lg \}/);
   assert.match(
     stripComments(read('ui/primitives/Sheet.tsx')),
     /paddingBottom: insets\.bottom \+ spacing\.lg/,
