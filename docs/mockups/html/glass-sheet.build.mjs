@@ -2,7 +2,8 @@
 // eight treatments over the real dark Home render. One template, eight material
 // recipes, so a variant is a few CSS lines and not a copy of the markup.
 //
-//   node docs/mockups/html/glass-sheet.build.mjs   (then embed-backdrop-glass)
+//   node docs/mockups/html/glass-sheet.build.mjs             (then embed-backdrop-glass)
+//   node docs/mockups/html/glass-sheet.build.mjs --decide    (then embed-backdrop-glass create-sheet-decide.html)
 
 import { writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -68,10 +69,14 @@ const variants = [
   },
 ];
 
+// The light palette, as CSS variables named after ui/tokens.ts keys — one
+// definition for every light frame.
+const LIGHT_VARS = '--emerald:#0D6B52;--gold:#C8A15B;--mint:#E5F1EC;--ink:#13201B;--muted:#6E7771;--navInactive:#839087';
+
 variants.push({
     id: 'g1l', name: 'G1 in light', blurb: 'the chosen layout on the light sheet the app already has: flat white with a hairline (glass is dark-only in this app)',
     light: true,
-    css: `.g1l .theme{--emerald:#0D6B52;--gold:#C8A15B;--mint:#E5F1EC;--ink:#13201B;--muted:#6E7771;--navInactive:#839087}
+    css: `.g1l .theme{${LIGHT_VARS}}
 .g1l .sheet{background:#FFFFFF;border:1px solid #DDE2DD;border-bottom:0;box-shadow:0 -8px 30px rgba(19,32,27,0.10)}
 .g1l .scrim{background:rgba(19,32,27,0.35)}
 .g1l .grab{background:rgba(19,32,27,0.18)}
@@ -81,6 +86,40 @@ variants.push({
 .g1l .needs .chev,.g1l .row .chev{color:#839087}
 .g1l .switch{border-top-color:#DDE2DD}.g1l .switch .circ{border-color:#CBE0D7}.g1l .switch .hint{color:#6E7771}`,
   });
+
+// --decide: the two decisions still open after G1 was chosen, on one page.
+//   (1) DARK SCRIM. The mockup dims the page at 0.30; the app dims every modal
+//       at ONE fenced strength, SCRIM_DARK_ALPHA 0.55 (tests/goldOnForest,
+//       emerald D8). g1s is G1 under the scrim that will actually ship.
+//   (2) LIGHT. Flat white as today (g1l), or frosted — three strengths, all
+//       under the app's real light scrim (withAlpha(ink, 0.35), what
+//       components/ActionSheet.tsx paints), so each frame is buildable.
+const g1 = variants.find((v) => v.id === 'g1');
+const g1l = variants.find((v) => v.id === 'g1l');
+const g1s = {
+  id: 'g1s', name: 'G1 · as it ships', blurb: 'the same G1 glass under the app’s one dark scrim strength (0.55, fenced app-wide) — the mockup’s 0.30 is the only difference',
+  css: g1.css.split('.g1 ').join('.g1s ').replace('rgba(2,17,13,0.30)', 'rgba(2,17,13,0.55)'),
+};
+const frost = ({ id, name, blurb, fill, blur, rim, needs }) => ({
+  id, name, blurb, light: true,
+  css: `.${id} .theme{${LIGHT_VARS}}
+.${id} .sheet{background:${fill};backdrop-filter:blur(${blur}px) saturate(160%);-webkit-backdrop-filter:blur(${blur}px) saturate(160%);border:1px solid ${rim};border-bottom:0;box-shadow:inset 0 1px 0 rgba(255,255,255,0.95),0 -8px 30px rgba(19,32,27,0.10)}
+.${id} .scrim{background:rgba(19,32,27,0.35)}
+.${id} .grab{background:rgba(19,32,27,0.18)}
+.${id} .needs{background:${needs};border:1px solid rgba(19,32,27,0.08);box-shadow:inset 0 1px 0 rgba(255,255,255,0.90)}
+.${id} .needs .circ{background:rgba(13,107,82,0.10);border-color:rgba(13,107,82,0.18)}
+.${id} .row{border-top-color:rgba(19,32,27,0.08)}.${id} .row .sq.primary{background:#0D6B52;border-color:#0D6B52;box-shadow:none;color:#FFFFFF}
+.${id} .needs .chev,.${id} .row .chev{color:#839087}
+.${id} .switch{border-top-color:rgba(19,32,27,0.12)}.${id} .switch .circ{border-color:rgba(13,107,82,0.25)}.${id} .switch .hint{color:#6E7771}`,
+});
+const decideVariants = [
+  g1,
+  g1s,
+  g1l,
+  frost({ id: 'l1', name: 'Clear frost', blurb: 'G1’s own recipe in light: white at 55%, heavy blur, a white rim, a bright top edge — the page reads through', fill: 'rgba(255,255,255,0.55)', blur: 34, rim: 'rgba(255,255,255,0.80)', needs: 'rgba(255,255,255,0.55)' }),
+  frost({ id: 'l2', name: 'Frost', blurb: 'the same at 72%: milkier, the page only hinted at behind it', fill: 'rgba(255,255,255,0.72)', blur: 30, rim: 'rgba(255,255,255,0.85)', needs: 'rgba(255,255,255,0.60)' }),
+  frost({ id: 'l3', name: 'Mint frost', blurb: 'the brand mint as the frost (62%), an emerald rim — the green reads through the glass as it does in dark', fill: 'rgba(229,241,236,0.62)', blur: 30, rim: 'rgba(13,107,82,0.18)', needs: 'rgba(255,255,255,0.50)' }),
+];
 
 const sprite = `<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="i-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></symbol>
@@ -151,27 +190,44 @@ const frame = (v) => `
     </div>
   </div>`;
 
-const html = `<!doctype html>
+const page = (title, comment, list) => `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BRAZOS — the [+] popup as green glass, eight ways</title>
-<!-- Generated by glass-sheet.build.mjs. The rows are fixed (operator, 2026-09-18):
-     Needs you · Post a job · Hire again · My jobs · Switch to Worker. Only the glass differs.
-     The sheet on the device is expo-blur over a scrim (materials.sheet); refraction is not drawable. -->
+<title>${title}</title>
+<!-- ${comment} -->
 <style>${base}
-${variants.map((v) => v.css).join('\n')}
+${list.map((v) => v.css).join('\n')}
 </style>
 </head>
 <body>
 ${sprite}
 <div class="stage">
-${variants.map(frame).join('\n')}
+${list.map(frame).join('\n')}
 </div>
 </body>
 </html>
 `;
 
-writeFileSync(join(here, 'glass-sheet.html'), html);
-console.log(`wrote glass-sheet.html with ${variants.length} variants`);
+if (process.argv.includes('--decide')) {
+  const html = page(
+    'BRAZOS — the [+] sheet: the dark scrim, and light flat or frosted',
+    `Generated by glass-sheet.build.mjs --decide. G1 is chosen; two decisions remain.
+     Frames 1-2: G1 at the mockup's 0.30 scrim, then under the app's fenced 0.55.
+     Frames 3-6: light flat (today's sheet), then frosted at three strengths.`,
+    decideVariants,
+  );
+  writeFileSync(join(here, 'create-sheet-decide.html'), html);
+  console.log(`wrote create-sheet-decide.html with ${decideVariants.length} frames`);
+} else {
+  const html = page(
+    'BRAZOS — the [+] popup as green glass, eight ways',
+    `Generated by glass-sheet.build.mjs. The rows are fixed (operator, 2026-09-18):
+     Needs you · Post a job · Hire again · My jobs · Switch to Worker. Only the glass differs.
+     The sheet on the device is expo-blur over a scrim (materials.sheet); refraction is not drawable.`,
+    variants,
+  );
+  writeFileSync(join(here, 'glass-sheet.html'), html);
+  console.log(`wrote glass-sheet.html with ${variants.length} variants`);
+}
