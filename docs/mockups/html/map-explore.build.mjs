@@ -95,40 +95,49 @@ async function mapLayer(style) {
 // The two palettes — ui/tokens.ts values, named after their keys — plus the
 // mockup-only grading of the map and the concept's glass.
 // ---------------------------------------------------------------------------
+// 2026-09-19 (second pass): every colour below is the operator's reference
+// sheet's (nearby-jobs-dark.html, its :root and [data-theme=light] blocks),
+// named after that sheet's own variables where it has one.
 const THEMES = {
   dark: {
-    ink: '#F1EDE1', muted: '#93A096', emerald: '#5FAE81', gold: '#D4A24C', mint: '#0E1F18',
-    navInactive: '#7C8A80', navActive: '#49C481', chrome: '#071B15', chromeLine: 'rgba(229,241,236,0.20)',
-    statusInk: '#FFFFFF',
-    // the concept's glass: a deep green pane, a bright mint rim, a soft lift
-    glass: 'rgba(6,24,18,0.60)', glassBlur: '22px', glassRim: 'rgba(120,205,150,0.34)', glassEdge: 'rgba(229,241,236,0.16)',
-    glassShadow: '0 12px 34px rgba(0,0,0,0.45)', chipFill: 'rgba(95,174,129,0.10)',
+    ink: '#e5e8e5', muted: '#a1aaa4', emerald: '#84dfaa', gold: '#edb65d', mint: '#0E1F18',
+    navInactive: '#7C8A80', navActive: '#49C481', chrome: '#061b13', chromeLine: 'rgba(229,241,236,0.20)',
+    statusInk: '#fff', battInk: '#1f2a26',
+    // --glass-bottom → --panel (55%) → --glass-top at 125deg, --edge rim, the sheet's insets and --shadow
+    glass: 'linear-gradient(125deg,rgba(2,16,13,.96),rgba(2,20,14,.91) 55%,rgba(9,37,25,.94))', glassBlur: '14px',
+    glassRim: 'rgba(133,214,158,.8)', glassEdge: '#ffffff13', glassInsetLow: '#65b9810d', glassShadow: '0 6px 22px rgba(0,13,8,.35)',
+    chipGrad: 'linear-gradient(125deg,rgba(9,37,25,.94),rgba(2,16,13,.96))', chipRim: 'rgba(186,193,153,.43)',
+    distRim: 'rgba(171,189,157,.39)', distFill: 'rgba(0,7,5,.12)',
     // the map: Apple's dark slate, streets lifted, no purple
     mapGround: '#1C2029', tileFilter: 'brightness(2.15) contrast(1.85) brightness(0.62)',
     mapTint: '#46506B', mapTintBlend: 'color', mapTintOpacity: 0.85,
     label: 'rgba(196,204,201,0.72)', labelShadow: 'rgba(10,14,20,0.9)', road: 'rgba(196,204,201,0.50)', big: 'rgba(225,230,226,0.85)',
     park: 'rgba(58,132,88,0.38)', poi: '#E8ECF0', poiPark: '#5FAE81', poiHosp: '#E0594F', poiEdu: '#C7A26A',
-    pinFill: '#0F2119', pinStroke: '#5FAE81', pinGlyph: '#F1EDE1', pinGlow: 'rgba(95,174,129,0.45)',
-    badge: '#49C481', badgeInk: '#FFFFFF', badgeRing: '#0B1512',
-    userDot: '#2F7BF6', userHalo: 'rgba(47,123,246,0.26)',
-    cardFill: 'rgba(255,255,255,0.05)', cardRim: 'rgba(120,205,150,0.22)', photoBg: '#15362B',
-    estLabel: '#D4A24C', estPay: '#5FAE81', catFill: 'rgba(95,174,129,0.14)', catRim: 'rgba(95,174,129,0.35)',
+    pinTop: '#224634', pinBottom: '#06180f', pinEnd: '#0a2418', pinGlyph: '#eee4c4', pinGlow: '#0004',
+    selGlow: '#eac36d', groundDot: '#ebc675', groundRing: '#f8de99', groundGlow: '0 0 9px 6px #55db9059,0 0 17px 10px #61ea7f20',
+    badgeGrad: 'linear-gradient(135deg,#247344,#0c281b)', badgeInk: '#d6f5dd', badgeRing: '#77bc8b',
+    userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
+    cardFill: 'rgba(1,15,12,.50)', cardRim: 'rgba(183,203,186,.22)', photoBg: '#15362B', photoRing: '#edb65d',
+    viewList: '#edb65d', estLabel: '#a1aaa4', estPay: '#edb65d', catFill: 'rgba(132,223,170,.10)', catRim: 'rgba(183,203,186,.22)',
   },
   light: {
-    ink: '#13201B', muted: '#6E7771', emerald: '#0D6B52', gold: '#C8A15B', mint: '#E5F1EC',
-    navInactive: '#839087', navActive: '#0D6B52', chrome: '#FFFFFF', chromeLine: '#DDE2DD',
-    statusInk: '#13201B',
-    glass: 'rgba(255,255,255,0.74)', glassBlur: '22px', glassRim: 'rgba(13,107,82,0.22)', glassEdge: 'rgba(255,255,255,0.95)',
-    glassShadow: '0 10px 30px rgba(19,32,27,0.12)', chipFill: 'rgba(13,107,82,0.08)',
+    ink: '#173429', muted: '#637569', emerald: '#238658', gold: '#a77824', mint: '#E5F1EC',
+    navInactive: '#637569', navActive: '#238658', chrome: '#e2f8ef', chromeLine: 'rgba(56,97,65,.22)',
+    statusInk: '#21392d', battInk: '#f8fcf5',
+    glass: 'linear-gradient(125deg,rgba(230,241,231,.9),rgba(248,252,244,.87) 55%,rgba(255,255,252,.86))', glassBlur: '14px',
+    glassRim: 'rgba(101,153,113,.61)', glassEdge: '#ffffff13', glassInsetLow: '#65b9810d', glassShadow: '0 6px 22px rgba(52,83,59,.17)',
+    chipGrad: 'linear-gradient(125deg,rgba(255,255,252,.86),rgba(230,241,231,.9))', chipRim: 'rgba(186,193,153,.43)',
+    distRim: 'rgba(171,189,157,.39)', distFill: 'rgba(0,7,5,.12)',
     mapGround: '#F1EEE6', tileFilter: 'brightness(1.02)',
     mapTint: '#DCD1B2', mapTintBlend: 'multiply', mapTintOpacity: 0.8,
     label: 'rgba(70,78,74,0.78)', labelShadow: 'rgba(255,255,255,0.9)', road: 'rgba(70,78,74,0.55)', big: 'rgba(40,48,44,0.9)',
     park: 'rgba(96,176,126,0.32)', poi: '#2F3A34', poiPark: '#2E7D4F', poiHosp: '#D9463B', poiEdu: '#8B6A3E',
-    pinFill: '#FFFFFF', pinStroke: '#0D6B52', pinGlyph: '#0D6B52', pinGlow: 'rgba(13,107,82,0.25)',
-    badge: '#0D6B52', badgeInk: '#FFFFFF', badgeRing: '#FFFFFF',
-    userDot: '#2F7BF6', userHalo: 'rgba(47,123,246,0.20)',
-    cardFill: 'rgba(255,255,255,0.65)', cardRim: 'rgba(13,107,82,0.16)', photoBg: '#E5F1EC',
-    estLabel: '#C8A15B', estPay: '#0D6B52', catFill: 'rgba(13,107,82,0.08)', catRim: 'rgba(13,107,82,0.22)',
+    pinTop: '#f9fdf4', pinBottom: '#e4f2df', pinEnd: '#c6dfc5', pinGlyph: '#426d48', pinGlow: '#0004',
+    selGlow: '#eac36d', groundDot: '#ebc675', groundRing: '#f8de99', groundGlow: '0 0 9px 6px #5cbb6a37',
+    badgeGrad: 'linear-gradient(140deg,#dcecd9,#a0c4a6)', badgeInk: '#254f30', badgeRing: '#77bc8b',
+    userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
+    cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824',
+    viewList: '#a77824', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
   },
 };
 
@@ -188,49 +197,50 @@ const css = (t) => `
   .bars{display:flex;align-items:flex-end;gap:1.5px;height:11px}.bars i{display:block;width:3px;background:${t.statusInk};border-radius:1px}
   .bars i:nth-child(1){height:4px}.bars i:nth-child(2){height:6px}.bars i:nth-child(3){height:8.5px}.bars i:nth-child(4){height:11px}
   .wifi{width:16px;height:12px}
-  .batt{height:15px;padding:0 5px;border-radius:5px;background:${t.statusInk};color:${t.mapGround};font-size:11px;font-weight:700;display:flex;align-items:center}
+  .batt{height:15px;padding:0 5px;border-radius:5px;background:${t.statusInk};color:${t.battInk};font-size:11px;font-weight:700;display:flex;align-items:center}
   /* glass — the concept's: deep green pane, mint rim, a lift */
-  .glass{background:var(--glass);backdrop-filter:blur(${t.glassBlur}) saturate(140%);-webkit-backdrop-filter:blur(${t.glassBlur}) saturate(140%);border:1px solid var(--glassRim);box-shadow:inset 0 1px 0 var(--glassEdge),${t.glassShadow}}
+  .glass{background:var(--glass);backdrop-filter:blur(${t.glassBlur}) saturate(1.25);-webkit-backdrop-filter:blur(${t.glassBlur}) saturate(1.25);border:1px solid var(--glassRim);box-shadow:inset 0 1px 1px var(--glassEdge),inset 0 -1px 3px ${t.glassInsetLow},${t.glassShadow}}
   /* search */
   .search{position:absolute;left:17px;right:17px;top:62px;height:56px;border-radius:28px;display:flex;align-items:center;padding:0 8px 0 20px;gap:13px}
   .search .mag{width:24px;height:24px;color:var(--ink);opacity:.92;flex:0 0 auto}
   .search .ph{flex:1;font-size:18px;color:var(--ink);opacity:.94;letter-spacing:-.1px}
-  .search .dist{display:flex;align-items:center;gap:8px;height:42px;padding:0 15px 0 13px;border-radius:21px;border:1px solid var(--glassRim);background:${t.chipFill};color:var(--gold);font-size:17px;font-weight:600;box-shadow:inset 0 1px 0 var(--glassEdge)}
+  .search .dist{display:flex;align-items:center;gap:8px;height:32px;padding:0 15px 0 13px;border-radius:21px;border:1px solid ${t.distRim};background:${t.distFill};color:var(--gold);font-size:17px;font-weight:600}
   .search .dist svg{width:21px;height:21px}
   /* chips */
   .chips{position:absolute;left:17px;top:132px;display:flex;gap:10px}
-  .chip{display:flex;align-items:center;gap:9px;height:42px;padding:0 17px 0 14px;border-radius:21px;font-size:16px;font-weight:500;color:var(--ink)}
+  .chip{display:flex;align-items:center;gap:9px;height:42px;padding:0 17px 0 14px;border-radius:21px;font-size:16px;font-weight:500;color:var(--ink);background:${t.chipGrad};border-color:${t.chipRim}}
   .chip svg{width:19px;height:19px;color:var(--emerald)}
   /* pins */
-  .pin{position:absolute;width:46px;height:60px;transform:translate(-50%,-100%);filter:drop-shadow(0 0 9px ${t.pinGlow}) drop-shadow(0 4px 6px rgba(0,0,0,.35))}
+  .pin{position:absolute;width:46px;height:60px;transform:translate(-50%,-100%);filter:drop-shadow(0 2px 3px ${t.pinGlow})}
   .pin svg.body{position:absolute;inset:0;width:46px;height:60px}
   .pin .glyph{position:absolute;left:13px;top:11px;width:20px;height:20px;color:${t.pinGlyph}}
-  .pin .count{position:absolute;right:-5px;top:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:${t.badge};color:${t.badgeInk};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px ${t.badgeRing}}
-  .pin.sel{width:60px;height:78px;filter:drop-shadow(0 0 16px rgba(212,162,76,.6)) drop-shadow(0 0 5px rgba(212,162,76,.7))}
+  .pin .count{position:absolute;right:-5px;top:-6px;min-width:22px;height:22px;padding:0 6px;border-radius:11px;background:${t.badgeGrad};color:${t.badgeInk};font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center;border:1px solid ${t.badgeRing};box-shadow:0 1px 3px #0008}
+  .pin.sel{width:60px;height:78px;filter:drop-shadow(0 0 6px ${t.selGlow}) drop-shadow(0 3px 6px #10221460)}
   .pin.sel svg.body{width:60px;height:78px}
   .pin.sel .glyph{left:17px;top:15px;width:26px;height:26px}
-  .seldot{position:absolute;width:9px;height:9px;border-radius:5px;background:var(--gold);transform:translate(-50%,-50%);box-shadow:0 0 12px rgba(212,162,76,.85)}
-  .selglow{position:absolute;width:150px;height:76px;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(closest-side,rgba(95,174,129,.34),rgba(95,174,129,0));pointer-events:none}
-  .you{position:absolute;width:24px;height:24px;border-radius:12px;background:${t.userDot};border:3px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.15),0 2px 8px rgba(0,0,0,.4);transform:translate(-50%,-50%)}
-  .youhalo{position:absolute;width:72px;height:72px;border-radius:36px;background:${t.userHalo};transform:translate(-50%,-50%)}
+  .seldot{position:absolute;width:9px;height:9px;border-radius:5px;background:${t.groundDot};border:.5px solid ${t.groundRing};transform:translate(-50%,-50%);box-shadow:${t.groundGlow}}
+  .selglow{position:absolute;width:150px;height:76px;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(closest-side,#55db9030,#61ea7f00);pointer-events:none}
+  .you{position:absolute;width:24px;height:24px;border-radius:12px;background:${t.userDot};border:3px solid ${t.userDotRing};box-shadow:0 0 0 .5px #70b6d8,0 1px 3px #00467b8c;transform:translate(-50%,-50%)}
+  .youhalo{position:absolute;width:72px;height:72px;border-radius:36px;background:${t.userHalo};border:.65px solid ${t.userHaloRim};box-shadow:inset 0 0 9px #18b1ff0b;transform:translate(-50%,-50%)}
+  .youring{position:absolute;width:50px;height:50px;border-radius:25px;border:1px solid ${t.userRing};transform:translate(-50%,-50%)}
   /* the sheet */
   .sheet{position:absolute;left:16px;right:16px;bottom:100px;border-radius:30px;padding:12px 22px 22px;display:flex;flex-direction:column;gap:14px}
   .grab{width:44px;height:4px;border-radius:2px;background:var(--muted);opacity:.45;margin:0 auto}
   .head{display:flex;align-items:flex-start;justify-content:space-between}
   .head h2{margin:0;font-size:30px;line-height:34px;font-weight:700;letter-spacing:-.5px;color:var(--ink)}
   .head .sub{display:flex;align-items:center;gap:9px;margin-top:5px;font-size:16px;color:var(--muted)}
-  .head .sub i{display:block;width:7px;height:7px;border-radius:4px;background:var(--emerald);box-shadow:0 0 8px rgba(95,174,129,.6)}
-  .view{display:flex;align-items:center;gap:3px;margin-top:8px;color:var(--emerald);font-size:18px;font-weight:600}
+  .head .sub i{display:block;width:7px;height:7px;border-radius:4px;background:var(--emerald)}
+  .view{display:flex;align-items:center;gap:3px;margin-top:8px;color:${t.viewList};font-size:18px;font-weight:600}
   .view svg{width:22px;height:22px}
-  .card{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 11px;border-radius:20px;background:${t.cardFill};border:1px solid ${t.cardRim};box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
-  .card .photo{width:52px;height:52px;border-radius:26px;background:${t.photoBg};overflow:hidden;flex:0 0 auto;border:2px solid rgba(212,162,76,.75);box-shadow:0 0 12px rgba(212,162,76,.25)}
+  .card{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 11px;border-radius:20px;background:${t.cardFill};border:1px solid ${t.cardRim};box-shadow:inset 0 1px 1px #fff03}
+  .card .photo{width:52px;height:52px;border-radius:26px;background:${t.photoBg};overflow:hidden;flex:0 0 auto;border:1px solid ${t.photoRing};box-shadow:inset 0 1px 4px #ffffff13}
   .card .photo img{width:100%;height:100%;object-fit:cover;object-position:60% 55%;transform:scale(1.4)}
   .card .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
   .card .title{font-size:16px;font-weight:600;letter-spacing:-.3px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .card .meta{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--muted)}
+  .card .meta{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--emerald)}
   .card .cat{display:inline-flex;align-items:center;height:23px;padding:0 10px;border-radius:12px;background:${t.catFill};color:var(--emerald);font-size:12.5px;font-weight:600;border:1px solid ${t.catRim}}
   .card .loc{display:flex;align-items:center;gap:5px;font-size:13.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .card .loc svg{width:13px;height:13px;color:var(--gold);flex:0 0 auto}
+  .card .loc svg{width:13px;height:13px;color:var(--emerald);flex:0 0 auto}
   .card .est{text-align:right;flex:0 0 auto}
   .card .est .lbl{font-size:10px;font-weight:700;letter-spacing:.7px;color:${t.estLabel}}
   .card .est .amt{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.5px;color:${t.estPay}}
@@ -241,10 +251,18 @@ const css = (t) => `
   .nav .item svg{width:30px;height:30px}
   .nav .item.active{color:var(--navActive)}
   .nav .item.active svg{filter:drop-shadow(0 0 8px rgba(73,196,129,.55))}
+  .nav .item.active span{color:var(--navActive)}
   .nav .item.active span{font-weight:600}
 `;
 
-const pinSvg = (sel, t) => `<svg class="body" viewBox="0 0 46 60"><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="${t.pinFill}" stroke="${sel ? t.gold : t.pinStroke}" stroke-width="${sel ? 2.6 : 2}"/></svg>`;
+// The reference's pin: a --pin-top → --pin-bottom → --pin-end fill and a
+// three-stop green stroke, both gradients; the selected pin differs by its
+// gold glow (drawn on the wrapper), not by its stroke.
+let pinSeq = 0;
+const pinSvg = (sel, t) => {
+  const id = `p${pinSeq++}`;
+  return `<svg class="body" viewBox="0 0 46 60"><defs><linearGradient id="${id}f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${t.pinTop}"/><stop offset=".52" stop-color="${t.pinBottom}"/><stop offset="1" stop-color="${t.pinEnd}"/></linearGradient><linearGradient id="${id}s" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#a0dba5"/><stop offset=".6" stop-color="#53a969"/><stop offset="1" stop-color="#478a56"/></linearGradient></defs><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="url(#${id}f)" stroke="url(#${id}s)" stroke-width="${sel ? 2.6 : 2}"/></svg>`;
+};
 
 // The six pins, the user, the labels: frame px — the concept's composition.
 const PINS = [
@@ -329,6 +347,7 @@ ${labels}
 ${pois}
 
     <div class="youhalo" style="left:${YOU.x}px;top:${YOU.y}px"></div>
+    <div class="youring" style="left:${YOU.x}px;top:${YOU.y}px"></div>
 ${pins}
     <div class="you" style="left:${YOU.x}px;top:${YOU.y}px"></div>
 
