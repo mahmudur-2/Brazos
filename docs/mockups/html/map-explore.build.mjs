@@ -135,7 +135,7 @@ const THEMES = {
     lqLens: 'linear-gradient(160deg,rgba(132,223,170,.22),rgba(132,223,170,.06))', lqLensRim: 'rgba(170,235,200,.38)', lqLensGlow: 'rgba(73,196,129,.22)',
   },
   light: {
-    ink: '#173429', muted: '#637569', emerald: '#238658', gold: '#a77824', mint: '#E5F1EC',
+    ink: '#13201B', muted: '#637569', emerald: '#238658', gold: '#a77824', mint: '#E5F1EC',
     // the nav bar is the app's, as live: the light surface, the line hairline, emerald active, navInactive
     navInactive: '#839087', navActive: '#0D6B52', chrome: '#FFFFFF', chromeLine: '#DDE2DD',
     statusInk: '#21392d', battInk: '#f8fcf5',
@@ -158,7 +158,7 @@ const THEMES = {
     lqBlur: null,
     lqGlass: '#FFFFFF', lqRim: '#DDE2DD', lqRim2: 'transparent',
     lqSpec: 'transparent', lqInner: 'transparent', lqSheen: 'transparent', lqSheen2: 'transparent',
-    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F9F3E7', lqChipRim: 'rgba(200,161,91,.26)', lqChipInk: '#13201B', lqChipWeight: 700,
+    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F9F3E7', lqChipRim: 'rgba(200,161,91,.26)', lqChipInk: '#13201B', lqChipWeight: 500,
     lqSheetGlass: '#FFFFFF', lqRow: '#F9F3E7', lqRowRim: 'rgba(200,161,91,.26)',
     lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(19,32,27,.05)',
   },
@@ -256,7 +256,7 @@ const css = (t) => `
   .head .sub{display:flex;align-items:center;gap:9px;margin-top:5px;font-size:16px;color:var(--muted)}
   .head .sub i{display:block;width:7px;height:7px;border-radius:4px;background:var(--emerald)}
   .view{display:flex;align-items:center;gap:3px;margin-top:8px;color:${t.viewList};font-size:18px;font-weight:600}
-  .view svg{width:22px;height:22px}
+  .view svg{width:20px;height:20px;position:relative;top:1.5px}
   .card{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 11px;border-radius:20px;background:${t.cardFill};border:1px solid ${t.cardRim};box-shadow:inset 0 1px 1px #fff03}
   .card .photo{width:52px;height:52px;border-radius:26px;background:${t.photoBg};overflow:hidden;flex:0 0 auto;border:1px solid ${t.photoRing};box-shadow:inset 0 1px 4px #ffffff13}
   .card .photo img{width:100%;height:100%;object-fit:cover;object-position:60% 55%;transform:scale(1.4)}
