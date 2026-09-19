@@ -10,7 +10,7 @@ import {
 import { glow, withAlpha, type MaterialName } from '../tokens';
 import { useDesignOverrides, useMaterials } from '../../lib/designOverrides';
 import { metricStyles, useThemeColors } from '../../lib/theme';
-import { BlurLayer } from '../../lib/blur';
+import { BlurLayer, canBlur } from '../../lib/blur';
 
 /**
  * RUN G1 (C1) — THE ONE GLASS SURFACE.
@@ -28,13 +28,14 @@ import { BlurLayer } from '../../lib/blur';
  * optional outer glow. The scrim carries legibility; the blur is decoration —
  * which is why the two fallback paths below lose only the blur.
  *
- * TWO FALLBACK PATHS, ONE BRANCH. Web never reaches expo-blur at all
- * (lib/blur.tsx short-circuits before the require), and Reduce Transparency
- * is the same request made by a person, so both render scrim-only at the
- * material's deeper `fallbackScrimAlpha` — the harness's web shots stay
- * meaningful and the accessibility rendering looks intentional, because it
- * is: the mix is data in the materials table, not an accident of a missing
- * module.
+ * ONE FALLBACK RULE. Where no blur can draw — Reduce Transparency, or a
+ * binary without the native module (`canBlur`) — the surface renders
+ * scrim-only at the material's deeper `fallbackScrimAlpha`, so the
+ * accessibility rendering looks intentional, because it is: the mix is data
+ * in the materials table, not an accident of a missing module. 2026-09-19:
+ * web is no longer such a place — lib/blur.tsx blurs there with a colourless
+ * CSS backdrop-filter — so the screenshot harness renders every glass
+ * surface at the material's REAL mix, the way the phone does.
  *
  * LIGHT IS NOT GLASS — WITH ONE NAMED EXCEPTION. In the light theme this
  * renders the solid theme surface with the ordinary hairline — no blur, no
@@ -129,7 +130,7 @@ export function Surface({
     : { borderRadius: cornerRadius };
   const hairline: ViewStyle = border === 'top' ? { borderTopWidth: 1 } : { borderWidth: 1 };
 
-  const flat = Platform.OS === 'web' || reduceTransparency;
+  const flat = reduceTransparency || !canBlur;
   // 2026-09-18 — WHICH RECIPE THIS THEME WEARS. Dark: the material itself.
   // Light: the material's `light` block when it carries one (only `clear`
   // does), else no glass at all — the flat theme surface, exactly as before.
