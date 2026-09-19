@@ -129,7 +129,8 @@ const THEMES = {
     lqBlur: '30px',
     lqGlass: 'linear-gradient(125deg,rgba(2,19,13,.90),rgba(8,38,25,.82))', lqRim: 'rgba(170,235,200,.40)', lqRim2: 'rgba(255,255,255,.08)',
     lqSpec: 'rgba(255,255,255,.30)', lqInner: 'rgba(132,223,170,.09)', lqSheen: 'rgba(255,255,255,.09)', lqSheen2: 'rgba(255,255,255,.04)',
-    lqSheetGlass: 'linear-gradient(125deg,rgba(2,19,13,.92),rgba(8,38,25,.84))', lqRow: 'linear-gradient(160deg,rgba(132,223,170,.11),rgba(132,223,170,.03))', lqRowRim: 'rgba(170,235,200,.30)',
+    lqSheetGlass: 'linear-gradient(125deg,rgba(2,19,13,.92),rgba(8,38,25,.84))', lqRow: 'rgba(1,15,12,.50)', lqRowRim: 'rgba(183,203,186,.22)',
+    lqChipRim: 'rgba(171,189,157,.39)', lqChipInk: '#edb65d', lqChipWeight: 600,
     lqShadow: '0 12px 30px rgba(0,0,0,.48)', lqChipFill: 'rgba(132,223,170,.10)',
     lqLens: 'linear-gradient(160deg,rgba(132,223,170,.22),rgba(132,223,170,.06))', lqLensRim: 'rgba(170,235,200,.38)', lqLensGlow: 'rgba(73,196,129,.22)',
   },
@@ -157,8 +158,8 @@ const THEMES = {
     lqBlur: null,
     lqGlass: '#FFFFFF', lqRim: '#DDE2DD', lqRim2: 'transparent',
     lqSpec: 'transparent', lqInner: 'transparent', lqSheen: 'transparent', lqSheen2: 'transparent',
-    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#E5F1EC',
-    lqSheetGlass: '#FFFFFF', lqRow: '#FFFFFF', lqRowRim: '#DDE2DD',
+    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F3E7CE', lqChipRim: 'rgba(200,161,91,.38)', lqChipInk: '#13201B', lqChipWeight: 700,
+    lqSheetGlass: '#FFFFFF', lqRow: '#F3E7CE', lqRowRim: 'rgba(200,161,91,.38)',
     lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(19,32,27,.05)',
   },
 };
@@ -291,12 +292,12 @@ const panes = (t) => {
   .search::before,.chip::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 38%,transparent 68%,${t.lqSheen2} 100%);pointer-events:none}
   .chip{position:relative}
   .search>*,.chip>*{position:relative}
-  .search .dist{position:relative;overflow:hidden;background:${t.lqChipFill};border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqRim2}}
+  .search .dist{position:relative;overflow:hidden;background:${t.lqChipFill};border:1px solid ${t.lqChipRim};color:${t.lqChipInk};font-weight:${t.lqChipWeight};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqRim2}}
   .search .dist>*{position:relative}
   .sheet{background:${t.lqSheetGlass};${blur}border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -8px 18px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
   .sheet::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 34%,transparent 70%,${t.lqSheen2} 100%);pointer-events:none}
   .sheet>*{position:relative}
-  .card{background:${t.lqRow};border:1px solid ${t.lqRowRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqRim2},0 2px 10px ${t.lqLensGlow}}
+  .card{background:${t.lqRow};border:1px solid ${t.lqRowRim};box-shadow:inset 0 1px 1px #fff03}
 `;
 };
 
