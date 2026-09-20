@@ -32,6 +32,12 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..', '..');
 const cacheDir = join(root, '.shots', 'map-tiles');
+// --filters (2026-09-19): the Filters sheet up over this screen — the app's
+// docked sheet carrying the one job-filter vocabulary (lib/jobFilters.ts) as
+// tap chips: distance, minimum budget, when, categories, sort. Written as
+// map-explore-filters-{theme}.html beside the map pages.
+const FILTERS = process.argv.includes('--filters');
+
 // 2026-09-19, third pass: the liquid-glass treatment IS the page — dark's
 // panes are glass (blur, specular top edge, diagonal sheen, bright rim, the
 // card as a lens); light is the same composition with FLAT, opaque panes
@@ -131,6 +137,11 @@ const THEMES = {
     lqSpec: 'rgba(255,255,255,.30)', lqInner: 'rgba(132,223,170,.09)', lqSheen: 'rgba(255,255,255,.09)', lqSheen2: 'rgba(255,255,255,.04)',
     lqSheetGlass: 'linear-gradient(125deg,rgba(2,19,13,.92),rgba(8,38,25,.84))', lqRow: 'rgba(1,15,12,.50)', lqRowRim: 'rgba(183,203,186,.22)',
     lqChipRim: 'rgba(171,189,157,.39)', lqChipInk: '#edb65d', lqChipWeight: 600,
+    // the Filters sheet
+    fScrim: 'rgba(2,17,13,.55)', fPane: 'linear-gradient(125deg,rgba(2,19,13,.94),rgba(8,38,25,.90))', fHair: 'rgba(183,203,186,.18)',
+    fChip: 'rgba(255,255,255,.045)', fChipRim: 'rgba(183,203,186,.22)', fChipInk: '#e5e8e5',
+    fSel: 'rgba(132,223,170,.16)', fSelRim: 'rgba(132,223,170,.48)', fSelInk: '#84dfaa',
+    fDone: '#edb65d', fTrack: 'rgba(255,255,255,.05)', fPrimary: '#0D6B52', fPrimaryInk: '#F1EDE1', fPrimaryLift: 'rgba(95,174,129,.18)',
     lqShadow: '0 12px 30px rgba(0,0,0,.48)', lqChipFill: 'rgba(132,223,170,.10)',
     lqLens: 'linear-gradient(160deg,rgba(132,223,170,.22),rgba(132,223,170,.06))', lqLensRim: 'rgba(170,235,200,.38)', lqLensGlow: 'rgba(73,196,129,.22)',
   },
@@ -161,6 +172,11 @@ const THEMES = {
     lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F9F3E7', lqChipRim: 'rgba(200,161,91,.26)', lqChipInk: '#13201B', lqChipWeight: 500,
     lqSheetGlass: '#FFFFFF', lqRow: '#F9F3E7', lqRowRim: 'rgba(200,161,91,.26)',
     lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(19,32,27,.05)',
+    // the Filters sheet, flat
+    fScrim: 'rgba(19,32,27,.35)', fPane: '#FFFFFF', fHair: '#DDE2DD',
+    fChip: '#FFFFFF', fChipRim: '#DDE2DD', fChipInk: '#13201B',
+    fSel: '#E5F1EC', fSelRim: '#CBE0D7', fSelInk: '#0D6B52',
+    fDone: '#0D6B52', fTrack: '#F1F3F1', fPrimary: '#0D6B52', fPrimaryInk: '#FFFFFF', fPrimaryLift: 'transparent',
   },
 };
 
@@ -279,7 +295,58 @@ const css = (t) => `
   .nav .item.active span{color:var(--navActive)}
   .nav .item.active span{font-weight:600}
 ${panes(t)}
+${FILTERS ? filtersCss(t) : ''}
 `;
+
+const filtersCss = (t) => `
+  .fscrim{position:absolute;inset:0;background:${t.fScrim};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:${t.fPane};${t.lqBlur ? 'backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);' : ''}border:1px solid ${t.lqRim};border-bottom:0;box-shadow:inset 0 1px 0 ${t.lqSpec},0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  .fsheet .grab{margin:0 auto 10px}
+  .fhead{display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px;border-bottom:1px solid ${t.fHair}}
+  .fhead h2{margin:0;font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
+  .fhead .done{font-size:17px;font-weight:600;color:${t.fDone}}
+  .fbody{padding:8px 20px 4px;display:flex;flex-direction:column;gap:18px}
+  .chips-row.scroll{flex-wrap:nowrap;overflow:hidden;margin:0 -20px;padding:0 20px;mask-image:linear-gradient(90deg,#000 88%,transparent);-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}
+  .fsec{display:flex;flex-direction:column;gap:10px}
+  .fsec .lbl{font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+  .fsec .note{font-size:12.5px;color:var(--muted);margin-top:-2px}
+  .chips-row{display:flex;flex-wrap:wrap;gap:8px}
+  .fchip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:18px;background:${t.fChip};border:1px solid ${t.fChipRim};color:${t.fChipInk};font-size:14px;font-weight:500;white-space:nowrap}
+  .fchip.on{background:${t.fSel};border-color:${t.fSelRim};color:${t.fSelInk};font-weight:600}
+  .fchip.skills{padding-left:11px}
+  .fchip svg{width:15px;height:15px}
+  .seg{display:flex;padding:3px;border-radius:14px;background:${t.fTrack};border:1px solid ${t.fChipRim}}
+  .seg div{flex:1;text-align:center;height:34px;line-height:34px;border-radius:11px;font-size:14px;font-weight:500;color:${t.fChipInk}}
+  .seg div.on{background:${t.fSel};color:${t.fSelInk};font-weight:600;box-shadow:inset 0 0 0 1px ${t.fSelRim}}
+  .ffoot{display:flex;align-items:center;gap:14px;padding:14px 20px 34px;border-top:1px solid ${t.fHair}}
+  .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
+  .ffoot .show{flex:1;height:50px;border-radius:25px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,${t.fPrimaryLift},transparent 60%),${t.fPrimary};color:${t.fPrimaryInk};font-size:17px;font-weight:700;letter-spacing:-.2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
+`;
+
+const CATEGORIES = ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Plumbing', 'Yard work', 'Repairs', 'Electrical', 'Painting', 'Appliances', 'Junk removal', 'Shelf hanging', 'Pressure washing', 'Gutters', 'Carpet cleaning', 'Windows', 'Pest control', 'Organizing', 'Landscaping', 'Snow removal', 'Pet sitting', 'Errands', 'Packing', 'Drywall', 'Other'];
+const MY_SKILLS = new Set(['Assembly', 'Moving', 'TV mounting']);
+
+const filtersSheet = () => `
+    <div class="fscrim"></div>
+    <div class="fsheet">
+      <div class="grab"></div>
+      <div class="fhead"><h2>Filters</h2><div class="done">Done</div></div>
+      <div class="fbody">
+        <div class="fsec"><div class="lbl">Distance</div>
+          <div class="chips-row"><div class="fchip">Any</div><div class="fchip">2 mi</div><div class="fchip on">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div></div></div>
+        <div class="fsec"><div class="lbl">Minimum budget</div>
+          <div class="chips-row"><div class="fchip on">Any</div><div class="fchip">$25+</div><div class="fchip">$50+</div><div class="fchip">$100+</div><div class="fchip">$250+</div></div>
+          <div class="note">Jobs with no budget set are always shown.</div></div>
+        <div class="fsec"><div class="lbl">When</div>
+          <div class="chips-row"><div class="fchip">Any date</div><div class="fchip on">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div></div></div>
+        <div class="fsec"><div class="lbl">Categories</div>
+          <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Jobs I can do</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
+          <div class="note">Nothing selected means every category.</div></div>
+        <div class="fsec"><div class="lbl">Sort</div>
+          <div class="seg"><div class="on">Newest</div><div>Highest budget</div><div>Closest</div></div></div>
+      </div>
+      <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+    </div>`;
 
 /** The panes: the search bar, the chips, the sheet and the card. Dark is
  *  liquid glass — blur, a specular top edge, a diagonal sheen, a bright rim,
@@ -446,6 +513,7 @@ ${pins}
       <div class="item"><svg><use href="#i-chat"/></svg><span>Inbox</span></div>
       <div class="item"><svg><use href="#i-person"/></svg><span>Profile</span></div>
     </div>
+${FILTERS ? filtersSheet() : ''}
   </div>
 </div>
 </body>
@@ -455,6 +523,7 @@ ${pins}
 
 for (const theme of ['dark', 'light']) {
   const html = await page(theme);
-  writeFileSync(join(here, `map-explore-${theme}.html`), html);
-  console.log(`wrote map-explore-${theme}.html (${(html.length / 1024).toFixed(0)} KB)`);
+  const name = `map-explore${FILTERS ? '-filters' : ''}-${theme}.html`;
+  writeFileSync(join(here, name), html);
+  console.log(`wrote ${name} (${(html.length / 1024).toFixed(0)} KB)`);
 }
