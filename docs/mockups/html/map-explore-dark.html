@@ -78,10 +78,28 @@
   .card{display:flex;align-items:center;gap:12px;padding:11px 12px 11px 11px;border-radius:20px;background:rgba(1,15,12,.50);border:1px solid rgba(183,203,186,.22);box-shadow:inset 0 1px 1px #fff03}
   .card .photo.glyph{display:flex;align-items:center;justify-content:center}
   .card .photo.glyph svg{width:22px;height:22px;color:#edb65d}
-  .card .meta{white-space:nowrap}
-  .card .est{align-self:flex-start;margin-top:2px;margin-left:6px}
-  .sheet.open{top:186px;bottom:100px;overflow:hidden}
-  .sheet.open .list{display:flex;flex-direction:column;gap:10px}
+  /* the day word never overlaps the pay column, and never costs a line:
+     it sits beside the chip when the two fit the body's width, and moves to
+     the end of the location line when the chip alone fills the row (the
+     widest chips: "TV mounting", "Handyman / Repairs"). "Tomorrow" is
+     "Tmrw". The body clips as a last guarantee. */
+  .card .body{overflow:hidden}
+  .card .meta>*{white-space:nowrap}
+  .card .loc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .loc .day{color:var(--emerald);margin-left:6px}
+  /* the pay column lives INSIDE the body, over its top two lines: the title
+     and the category line keep 62px clear of it (its 56 plus 6 of air), the
+     location line runs the full width beneath. The label pins to the top,
+     the amount centres on the body. */
+  .card .body{position:relative}
+  .card .title,.card .meta{padding-right:62px}
+  .card .est{position:absolute;top:0;bottom:0;right:0;width:56px;display:flex;flex-direction:column;justify-content:center}
+  .card .est .lbl{position:absolute;top:1px;right:0}
+  /* the open sheet takes the height its rows need, up to the line under the
+     search pill (the operator's red line): 3 rows stop short, 5 rows cap and
+     the list scrolls. bottom:100 is the nav bar plus the inset. */
+  .sheet.open{box-sizing:border-box;top:auto;bottom:100px;max-height:calc(852px - 130px - 100px);overflow:hidden}
+  .sheet.open .list{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
   .view svg.down{transform:rotate(90deg)}
   .card .photo{width:52px;height:52px;border-radius:26px;background:#15362B;overflow:hidden;flex:0 0 auto;border:1px solid #edb65d;box-shadow:inset 0 1px 4px #ffffff13}
   .card .photo i{display:block;width:100%;height:100%;background-size:cover;background-position:60% 55%;transform:scale(1.4)}
@@ -93,7 +111,7 @@
   .card .loc svg{width:16px;height:16px;color:var(--emerald);flex:0 0 auto;margin-left:-1px;position:relative;top:-.5px}
   .card .est{text-align:right;flex:0 0 auto}
   .card .est .lbl{font-size:10px;font-weight:700;letter-spacing:.7px;color:#a1aaa4}
-  .card .est .amt{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.5px;color:#edb65d}
+  .card .est .amt{font-size:26px;line-height:30px;font-weight:700;letter-spacing:-.5px;color:#edb65d}
   .card .chev{width:16px;height:16px;color:var(--muted);flex:0 0 auto;margin-left:-4px}
   /* the nav bar — the app's: 70 of content + 12 of home-indicator pad */
   .nav{position:absolute;left:0;right:0;bottom:0;height:82px;background:var(--chrome);border-top:1px solid var(--chromeLine);display:flex;align-items:flex-start;padding:10px 6px 0}
@@ -104,14 +122,14 @@
   .nav .item.active span{color:var(--navActive)}
   .nav .item.active span{font-weight:600}
 
-  .search,.chip{background:linear-gradient(125deg,rgba(2,19,13,.90),rgba(8,38,25,.82));backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);border:1px solid rgba(170,235,200,.40);box-shadow:inset 0 1px 0 rgba(255,255,255,.30),inset 0 -6px 14px rgba(132,223,170,.09),inset 0 0 0 .5px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.48);overflow:hidden}
-  .search::before,.chip::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,rgba(255,255,255,.09) 0%,transparent 38%,transparent 68%,rgba(255,255,255,.04) 100%);pointer-events:none}
+  .search,.chip{background:linear-gradient(125deg,rgba(3,24,16,.92),rgba(10,48,32,.84));backdrop-filter:blur(30px) saturate(2.1);-webkit-backdrop-filter:blur(30px) saturate(2.1);border:1px solid rgba(170,235,200,.46);box-shadow:inset 0 1px 0 rgba(200,255,225,.30),inset 0 -6px 14px rgba(132,223,170,.12),inset 0 0 0 .5px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.48);overflow:hidden}
+  .search::before,.chip::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,rgba(150,235,190,.10) 0%,transparent 38%,transparent 68%,rgba(150,235,190,.04) 100%);pointer-events:none}
   .chip{position:relative}
   .search>*,.chip>*{position:relative}
-  .search .dist{position:relative;overflow:hidden;background:rgba(132,223,170,.10);border:1px solid rgba(171,189,157,.39);color:#edb65d;font-weight:600;box-shadow:inset 0 1px 0 rgba(255,255,255,.30),inset 0 0 0 .5px rgba(255,255,255,.08)}
+  .search .dist{position:relative;overflow:hidden;background:rgba(132,223,170,.10);border:1px solid rgba(171,189,157,.39);color:#edb65d;font-weight:600;box-shadow:inset 0 1px 0 rgba(200,255,225,.30),inset 0 0 0 .5px rgba(255,255,255,.08)}
   .search .dist>*{position:relative}
-  .sheet{background:linear-gradient(125deg,rgba(2,19,13,.92),rgba(8,38,25,.84));backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);border:1px solid rgba(170,235,200,.40);box-shadow:inset 0 1px 0 rgba(255,255,255,.30),inset 0 -8px 18px rgba(132,223,170,.09),inset 0 0 0 .5px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.48);overflow:hidden}
-  .sheet::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,rgba(255,255,255,.09) 0%,transparent 34%,transparent 70%,rgba(255,255,255,.04) 100%);pointer-events:none}
+  .sheet{background:linear-gradient(125deg,rgba(3,24,16,.93),rgba(10,48,32,.86));backdrop-filter:blur(30px) saturate(2.1);-webkit-backdrop-filter:blur(30px) saturate(2.1);border:1px solid rgba(170,235,200,.46);box-shadow:inset 0 1px 0 rgba(200,255,225,.30),inset 0 -8px 18px rgba(132,223,170,.12),inset 0 0 0 .5px rgba(255,255,255,.08),0 12px 30px rgba(0,0,0,.48);overflow:hidden}
+  .sheet::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,rgba(150,235,190,.10) 0%,transparent 34%,transparent 70%,rgba(150,235,190,.04) 100%);pointer-events:none}
   .sheet>*{position:relative}
   .card{background:rgba(1,15,12,.50);border:1px solid rgba(183,203,186,.22);box-shadow:inset 0 1px 1px #fff03}
 
@@ -249,8 +267,8 @@
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
           <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>

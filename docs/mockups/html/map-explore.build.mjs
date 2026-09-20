@@ -143,12 +143,12 @@ const THEMES = {
     viewList: '#edb65d', estLabel: '#a1aaa4', estPay: '#edb65d', catFill: 'rgba(132,223,170,.10)', catRim: 'rgba(183,203,186,.22)',
     // the liquid panes
     lqBlur: '30px',
-    lqGlass: 'linear-gradient(125deg,rgba(2,19,13,.90),rgba(8,38,25,.82))', lqRim: 'rgba(170,235,200,.40)', lqRim2: 'rgba(255,255,255,.08)',
-    lqSpec: 'rgba(255,255,255,.30)', lqInner: 'rgba(132,223,170,.09)', lqSheen: 'rgba(255,255,255,.09)', lqSheen2: 'rgba(255,255,255,.04)',
-    lqSheetGlass: 'linear-gradient(125deg,rgba(2,19,13,.92),rgba(8,38,25,.84))', lqRow: 'rgba(1,15,12,.50)', lqRowRim: 'rgba(183,203,186,.22)',
+    lqGlass: 'linear-gradient(125deg,rgba(3,24,16,.92),rgba(10,48,32,.84))', lqRim: 'rgba(170,235,200,.46)', lqRim2: 'rgba(255,255,255,.08)', lqSat: 2.1,
+    lqSpec: 'rgba(200,255,225,.30)', lqInner: 'rgba(132,223,170,.12)', lqSheen: 'rgba(150,235,190,.10)', lqSheen2: 'rgba(150,235,190,.04)',
+    lqSheetGlass: 'linear-gradient(125deg,rgba(3,24,16,.93),rgba(10,48,32,.86))', lqRow: 'rgba(1,15,12,.50)', lqRowRim: 'rgba(183,203,186,.22)',
     lqChipRim: 'rgba(171,189,157,.39)', lqChipInk: '#edb65d', lqChipWeight: 600,
     // the Filters sheet
-    fScrim: 'rgba(2,17,13,.55)', fPane: 'linear-gradient(125deg,rgba(2,19,13,.94),rgba(8,38,25,.90))', fHair: 'rgba(183,203,186,.18)',
+    fScrim: 'rgba(2,17,13,.55)', fPane: 'linear-gradient(125deg,rgba(3,24,16,.95),rgba(10,48,32,.91))', fHair: 'rgba(183,203,186,.20)',
     fChip: 'rgba(255,255,255,.045)', fChipRim: 'rgba(183,203,186,.22)', fChipInk: '#e5e8e5',
     fSel: 'rgba(132,223,170,.16)', fSelRim: 'rgba(132,223,170,.48)', fSelInk: '#84dfaa',
     fDone: '#edb65d', fTrack: 'rgba(255,255,255,.05)', fPrimary: '#0D6B52', fPrimaryInk: '#F1EDE1', fPrimaryLift: 'rgba(95,174,129,.18)',
@@ -347,7 +347,7 @@ ${FILTERS ? filtersCss(t) : ''}
 
 const filtersCss = (t) => `
   .fscrim{position:absolute;inset:0;background:${t.fScrim};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:${t.fPane};${t.lqBlur ? 'backdrop-filter:blur(30px) saturate(1.9);-webkit-backdrop-filter:blur(30px) saturate(1.9);' : ''}border:1px solid ${t.lqRim};border-bottom:0;box-shadow:inset 0 1px 0 ${t.lqSpec},0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:${t.fPane};${t.lqBlur ? `backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});-webkit-backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});` : ''}border-top:1px solid ${t.lqRim};box-shadow:0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
   .fsheet .grab{margin:0 auto 10px}
   .fhead{display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px;border-bottom:1px solid ${t.fHair}}
   .fhead h2{margin:0;font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
@@ -497,7 +497,7 @@ const filtersSheet = (st = {}) => {
  *  the card as a lens; light is the same composition FLAT: opaque fills, no
  *  blur, the same edges. The nav bar is not a pane: it is the app's strip. */
 const panes = (t) => {
-  const blur = t.lqBlur ? `backdrop-filter:blur(${t.lqBlur}) saturate(1.9);-webkit-backdrop-filter:blur(${t.lqBlur}) saturate(1.9);` : '';
+  const blur = t.lqBlur ? `backdrop-filter:blur(${t.lqBlur}) saturate(${t.lqSat ?? 1.9});-webkit-backdrop-filter:blur(${t.lqBlur}) saturate(${t.lqSat ?? 1.9});` : '';
   return `
   .search,.chip{background:${t.lqGlass};${blur}border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -6px 14px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
   .search::before,.chip::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 38%,transparent 68%,${t.lqSheen2} 100%);pointer-events:none}

@@ -71,7 +71,36 @@
   .head .sub i{display:block;width:7px;height:7px;border-radius:4px;background:var(--emerald)}
   .view{display:flex;align-items:center;gap:3px;margin-top:8px;color:#13201B;font-size:18px;font-weight:600}
   .view svg{width:20px;height:20px;position:relative;top:1.5px}
-  .card{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 11px;border-radius:20px;background:rgba(255,255,255,.59);border:1px solid rgba(56,97,65,.22);box-shadow:inset 0 1px 1px #fff03}
+  /* 2026-09-20 — the row's spacing, revised on the phone walk: the pay column
+     keeps its own 6px of air after the body (the day word never touches the
+     figure), EST. PAY top-aligns with the title, the photo and chevron stay
+     centred, and the location is the neighbourhood alone. */
+  .card{display:flex;align-items:center;gap:12px;padding:11px 12px 11px 11px;border-radius:20px;background:rgba(255,255,255,.59);border:1px solid rgba(56,97,65,.22);box-shadow:inset 0 1px 1px #fff03}
+  .card .photo.glyph{display:flex;align-items:center;justify-content:center}
+  .card .photo.glyph svg{width:22px;height:22px;color:#238658}
+  /* the day word never overlaps the pay column, and never costs a line:
+     it sits beside the chip when the two fit the body's width, and moves to
+     the end of the location line when the chip alone fills the row (the
+     widest chips: "TV mounting", "Handyman / Repairs"). "Tomorrow" is
+     "Tmrw". The body clips as a last guarantee. */
+  .card .body{overflow:hidden}
+  .card .meta>*{white-space:nowrap}
+  .card .loc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .loc .day{color:var(--emerald);margin-left:6px}
+  /* the pay column lives INSIDE the body, over its top two lines: the title
+     and the category line keep 62px clear of it (its 56 plus 6 of air), the
+     location line runs the full width beneath. The label pins to the top,
+     the amount centres on the body. */
+  .card .body{position:relative}
+  .card .title,.card .meta{padding-right:62px}
+  .card .est{position:absolute;top:0;bottom:0;right:0;width:56px;display:flex;flex-direction:column;justify-content:center}
+  .card .est .lbl{position:absolute;top:1px;right:0}
+  /* the open sheet takes the height its rows need, up to the line under the
+     search pill (the operator's red line): 3 rows stop short, 5 rows cap and
+     the list scrolls. bottom:100 is the nav bar plus the inset. */
+  .sheet.open{box-sizing:border-box;top:auto;bottom:100px;max-height:calc(852px - 130px - 100px);overflow:hidden}
+  .sheet.open .list{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
+  .view svg.down{transform:rotate(90deg)}
   .card .photo{width:52px;height:52px;border-radius:26px;background:#E5F1EC;overflow:hidden;flex:0 0 auto;border:1px solid #a77824;box-shadow:inset 0 1px 4px #ffffff13}
   .card .photo i{display:block;width:100%;height:100%;background-size:cover;background-position:60% 55%;transform:scale(1.4)}
   .card .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
@@ -82,7 +111,7 @@
   .card .loc svg{width:16px;height:16px;color:var(--emerald);flex:0 0 auto;margin-left:-1px;position:relative;top:-.5px}
   .card .est{text-align:right;flex:0 0 auto}
   .card .est .lbl{font-size:10px;font-weight:700;letter-spacing:.7px;color:#637569}
-  .card .est .amt{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.5px;color:#a77824}
+  .card .est .amt{font-size:26px;line-height:30px;font-weight:700;letter-spacing:-.5px;color:#a77824}
   .card .chev{width:16px;height:16px;color:var(--muted);flex:0 0 auto;margin-left:-4px}
   /* the nav bar — the app's: 70 of content + 12 of home-indicator pad */
   .nav{position:absolute;left:0;right:0;bottom:0;height:82px;background:var(--chrome);border-top:1px solid var(--chromeLine);display:flex;align-items:flex-start;padding:10px 6px 0}
@@ -106,7 +135,7 @@
 
 
   .fscrim{position:absolute;inset:0;background:rgba(19,32,27,.35);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:#FFFFFF;border:1px solid #DDE2DD;border-bottom:0;box-shadow:inset 0 1px 0 transparent,0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:#FFFFFF;border-top:1px solid #DDE2DD;box-shadow:0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
   .fsheet .grab{margin:0 auto 10px}
   .fhead{display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px;border-bottom:1px solid #DDE2DD}
   .fhead h2{margin:0;font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
@@ -185,6 +214,7 @@
 <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
 <symbol id="i-loc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.7-6-11a6 6 0 0 1 12 0c0 5.3-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></symbol>
 <symbol id="i-arrow" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3 3 10.5l8.5 2 2 8.5z"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6-5.6-1.9 5.6-1.9z"/><path d="M5 15l.9 2.6 2.6.9-2.6.9L5 22l-.9-2.6-2.6-.9 2.6-.9z"/><path d="M19 3l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
 <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21M9 21h6"/></symbol>
 <symbol id="i-tree" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 5.5 11h3L5 16.5h5.5V22h3v-5.5H19L15.5 11h3z"/></symbol>
 <symbol id="i-cross" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></symbol>
@@ -281,9 +311,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -407,9 +437,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -533,9 +563,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -659,9 +689,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -785,9 +815,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -911,9 +941,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1037,9 +1067,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1163,9 +1193,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1289,9 +1319,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1415,9 +1445,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1541,9 +1571,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1667,9 +1697,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1793,9 +1823,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -1919,9 +1949,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
@@ -2045,9 +2075,9 @@
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>

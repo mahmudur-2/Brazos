@@ -78,10 +78,28 @@
   .card{display:flex;align-items:center;gap:12px;padding:11px 12px 11px 11px;border-radius:20px;background:rgba(255,255,255,.59);border:1px solid rgba(56,97,65,.22);box-shadow:inset 0 1px 1px #fff03}
   .card .photo.glyph{display:flex;align-items:center;justify-content:center}
   .card .photo.glyph svg{width:22px;height:22px;color:#238658}
-  .card .meta{white-space:nowrap}
-  .card .est{align-self:flex-start;margin-top:2px;margin-left:6px}
-  .sheet.open{top:186px;bottom:100px;overflow:hidden}
-  .sheet.open .list{display:flex;flex-direction:column;gap:10px}
+  /* the day word never overlaps the pay column, and never costs a line:
+     it sits beside the chip when the two fit the body's width, and moves to
+     the end of the location line when the chip alone fills the row (the
+     widest chips: "TV mounting", "Handyman / Repairs"). "Tomorrow" is
+     "Tmrw". The body clips as a last guarantee. */
+  .card .body{overflow:hidden}
+  .card .meta>*{white-space:nowrap}
+  .card .loc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .loc .day{color:var(--emerald);margin-left:6px}
+  /* the pay column lives INSIDE the body, over its top two lines: the title
+     and the category line keep 62px clear of it (its 56 plus 6 of air), the
+     location line runs the full width beneath. The label pins to the top,
+     the amount centres on the body. */
+  .card .body{position:relative}
+  .card .title,.card .meta{padding-right:62px}
+  .card .est{position:absolute;top:0;bottom:0;right:0;width:56px;display:flex;flex-direction:column;justify-content:center}
+  .card .est .lbl{position:absolute;top:1px;right:0}
+  /* the open sheet takes the height its rows need, up to the line under the
+     search pill (the operator's red line): 3 rows stop short, 5 rows cap and
+     the list scrolls. bottom:100 is the nav bar plus the inset. */
+  .sheet.open{box-sizing:border-box;top:auto;bottom:100px;max-height:calc(852px - 130px - 100px);overflow:hidden}
+  .sheet.open .list{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
   .view svg.down{transform:rotate(90deg)}
   .card .photo{width:52px;height:52px;border-radius:26px;background:#E5F1EC;overflow:hidden;flex:0 0 auto;border:1px solid #a77824;box-shadow:inset 0 1px 4px #ffffff13}
   .card .photo i{display:block;width:100%;height:100%;background-size:cover;background-position:60% 55%;transform:scale(1.4)}
@@ -93,7 +111,7 @@
   .card .loc svg{width:16px;height:16px;color:var(--emerald);flex:0 0 auto;margin-left:-1px;position:relative;top:-.5px}
   .card .est{text-align:right;flex:0 0 auto}
   .card .est .lbl{font-size:10px;font-weight:700;letter-spacing:.7px;color:#637569}
-  .card .est .amt{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.5px;color:#a77824}
+  .card .est .amt{font-size:26px;line-height:30px;font-weight:700;letter-spacing:-.5px;color:#a77824}
   .card .chev{width:16px;height:16px;color:var(--muted);flex:0 0 auto;margin-left:-4px}
   /* the nav bar — the app's: 70 of content + 12 of home-indicator pad */
   .nav{position:absolute;left:0;right:0;bottom:0;height:82px;background:var(--chrome);border-top:1px solid var(--chromeLine);display:flex;align-items:flex-start;padding:10px 6px 0}
@@ -249,8 +267,8 @@
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
           <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
         <svg class="chev"><use href="#i-chev"/></svg>
       </div>
     </div>
