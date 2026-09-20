@@ -84,22 +84,27 @@ async function tileDataUri(style, z, x, y) {
   return `data:${mime};base64,${bytes.toString('base64')}`;
 }
 
-/** The tile grid that covers the phone, positioned so CENTER lands at MAP_MID_Y. */
+/** The tile grid that covers the phone, positioned so CENTER lands at MAP_MID_Y.
+ *  The bytes live ONCE per page as CSS classes (a gallery page draws the map
+ *  a dozen times); each frame's tiles are divs wearing those classes. */
 async function mapLayer(style) {
   const c = toTile(CENTER.lat, CENTER.lng, ZOOM);
   const x0 = Math.floor(c.x) - 2, x1 = Math.floor(c.x) + 2;
   const y0 = Math.floor(c.y) - 2, y1 = Math.floor(c.y) + 2;
-  const imgs = [];
+  const css = [], html = [];
+  let i = 0;
   for (let ty = y0; ty <= y1; ty++) {
     for (let tx = x0; tx <= x1; tx++) {
       const left = PHONE.w / 2 + (tx - c.x) * TILE_CSS;
       const top = MAP_MID_Y + (ty - c.y) * TILE_CSS;
       if (left + TILE_CSS < -1 || top + TILE_CSS < -1 || left > PHONE.w + 1 || top > PHONE.h + 1) continue;
       const src = await tileDataUri(style, ZOOM, tx, ty);
-      imgs.push(`<img class="tile" src="${src}" style="left:${left.toFixed(2)}px;top:${top.toFixed(2)}px" alt="">`);
+      css.push(`.t${i}{background-image:url("${src}")}`);
+      html.push(`<div class="tile t${i}" style="left:${left.toFixed(2)}px;top:${top.toFixed(2)}px"></div>`);
+      i++;
     }
   }
-  return imgs.join('\n');
+  return { css: css.join('\n'), html: html.join('\n') };
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +147,9 @@ const THEMES = {
     fChip: 'rgba(255,255,255,.045)', fChipRim: 'rgba(183,203,186,.22)', fChipInk: '#e5e8e5',
     fSel: 'rgba(132,223,170,.16)', fSelRim: 'rgba(132,223,170,.48)', fSelInk: '#84dfaa',
     fDone: '#edb65d', fTrack: 'rgba(255,255,255,.05)', fPrimary: '#0D6B52', fPrimaryInk: '#F1EDE1', fPrimaryLift: 'rgba(95,174,129,.18)',
+    // the popup: the app's menu material (ui/tokens.ts materials.menu: the scrim ink at .82, the mint hairline at .14, radius 16)
+    pPane: 'rgba(7,27,21,.90)', pRim: 'rgba(229,241,236,.14)', pShadow: '0 14px 34px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.10)', pHair: 'rgba(183,203,186,.10)',
+    pInk: '#e5e8e5', pOnInk: '#84dfaa', pCal: '#a1aaa4',
     lqShadow: '0 12px 30px rgba(0,0,0,.48)', lqChipFill: 'rgba(132,223,170,.10)',
     lqLens: 'linear-gradient(160deg,rgba(132,223,170,.22),rgba(132,223,170,.06))', lqLensRim: 'rgba(170,235,200,.38)', lqLensGlow: 'rgba(73,196,129,.22)',
   },
@@ -177,10 +185,14 @@ const THEMES = {
     fChip: '#FFFFFF', fChipRim: '#DDE2DD', fChipInk: '#13201B',
     fSel: '#E5F1EC', fSelRim: '#CBE0D7', fSelInk: '#0D6B52',
     fDone: '#0D6B52', fTrack: '#F1F3F1', fPrimary: '#0D6B52', fPrimaryInk: '#FFFFFF', fPrimaryLift: 'transparent',
+    // the popup, flat: the surface, the line hairline, the raised shadow
+    pPane: '#FFFFFF', pRim: '#DDE2DD', pShadow: '0 14px 34px rgba(19,32,27,.18)', pHair: '#EEF1EC',
+    pInk: '#13201B', pOnInk: '#0D6B52', pCal: '#6E7771',
   },
 };
 
-// The job photo: the app's own armchair art (assets/prestige), never stock.
+// The job photo: the app's own armchair art (assets/prestige), never stock —
+// one CSS class per page, worn by every frame's card.
 const photo = (theme) =>
   `data:image/png;base64,${readFileSync(join(root, 'assets', 'prestige', theme === 'dark' ? 'hero_armchair_customer.png' : 'hero_armchair_customer_light.png')).toString('base64')}`;
 
@@ -215,7 +227,7 @@ const css = (t) => `
   .phone{position:relative;width:${PHONE.w}px;height:${PHONE.h}px;overflow:hidden;border-radius:55px;background:${t.mapGround};box-shadow:0 0 0 1px rgba(255,255,255,.08),0 30px 80px rgba(0,0,0,.6)}
   /* the map */
   .map{position:absolute;inset:0;overflow:hidden;background:${t.mapGround}}
-  .map .tile{position:absolute;width:${TILE_CSS}px;height:${TILE_CSS}px;display:block;filter:${t.tileFilter}}
+  .map .tile{position:absolute;width:${TILE_CSS}px;height:${TILE_CSS}px;display:block;background-size:100% 100%;filter:${t.tileFilter}}
   .map .tint{position:absolute;inset:0;background:${t.mapTint};mix-blend-mode:${t.mapTintBlend};opacity:${t.mapTintOpacity};pointer-events:none}
   .map .topfade{position:absolute;left:0;right:0;top:0;height:170px;background:linear-gradient(180deg,${t.mapGround} 0%,transparent 100%);opacity:.7}
   .park{position:absolute;border-radius:50%;transform:translate(-50%,-50%);background:radial-gradient(closest-side,${t.park},transparent 78%);pointer-events:none}
@@ -275,7 +287,7 @@ const css = (t) => `
   .view svg{width:20px;height:20px;position:relative;top:1.5px}
   .card{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 11px;border-radius:20px;background:${t.cardFill};border:1px solid ${t.cardRim};box-shadow:inset 0 1px 1px #fff03}
   .card .photo{width:52px;height:52px;border-radius:26px;background:${t.photoBg};overflow:hidden;flex:0 0 auto;border:1px solid ${t.photoRing};box-shadow:inset 0 1px 4px #ffffff13}
-  .card .photo img{width:100%;height:100%;object-fit:cover;object-position:60% 55%;transform:scale(1.4)}
+  .card .photo i{display:block;width:100%;height:100%;background-size:cover;background-position:60% 55%;transform:scale(1.4)}
   .card .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
   .card .title{font-size:16px;font-weight:600;letter-spacing:-.3px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .card .meta{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--emerald)}
@@ -305,13 +317,13 @@ const filtersCss = (t) => `
   .fhead{display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px;border-bottom:1px solid ${t.fHair}}
   .fhead h2{margin:0;font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
   .fhead .done{font-size:17px;font-weight:600;color:${t.fDone}}
-  .fbody{padding:8px 20px 4px;display:flex;flex-direction:column;gap:18px}
+  .fbody{padding:8px 20px 4px;display:flex;flex-direction:column;gap:16px}
   .chips-row.scroll{flex-wrap:nowrap;overflow:hidden;margin:0 -20px;padding:0 20px;mask-image:linear-gradient(90deg,#000 88%,transparent);-webkit-mask-image:linear-gradient(90deg,#000 88%,transparent)}
   .fsec{display:flex;flex-direction:column;gap:10px}
   .fsec .lbl{font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
   .fsec .note{font-size:12.5px;color:var(--muted);margin-top:-2px}
-  .chips-row{display:flex;flex-wrap:wrap;gap:8px}
-  .fchip{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:18px;background:${t.fChip};border:1px solid ${t.fChipRim};color:${t.fChipInk};font-size:14px;font-weight:500;white-space:nowrap}
+  .chips-row{display:flex;flex-wrap:wrap;gap:5px}
+  .fchip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border-radius:17px;background:${t.fChip};border:1px solid ${t.fChipRim};color:${t.fChipInk};font-size:12.5px;font-weight:500;white-space:nowrap;letter-spacing:-.1px}
   .fchip.on{background:${t.fSel};border-color:${t.fSelRim};color:${t.fSelInk};font-weight:600}
   .fchip.skills{padding-left:11px}
   .fchip svg{width:15px;height:15px}
@@ -320,25 +332,95 @@ const filtersCss = (t) => `
   .seg div.on{background:${t.fSel};color:${t.fSelInk};font-weight:600;box-shadow:inset 0 0 0 1px ${t.fSelRim}}
   .ffoot{display:flex;align-items:center;gap:14px;padding:14px 20px 34px;border-top:1px solid ${t.fHair}}
   .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
+  .fchip{position:relative}
+  .fchip.open{z-index:6}
+  .popup{position:absolute;top:calc(100% + 6px);width:214px;padding:5px 0;border-radius:16px;background:${t.pPane};${t.lqBlur ? 'backdrop-filter:blur(25px) saturate(1.6);-webkit-backdrop-filter:blur(25px) saturate(1.6);' : ''}border:1px solid ${t.pRim};box-shadow:${t.pShadow};overflow:hidden;height:${POP_ROWS * ROW_H + 10}px;mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent)}
+  .fchip.right .popup{right:0}
+  .fchip.left .popup{left:0}
+  .fchip.up .popup{top:auto;bottom:calc(100% + 6px)}
+  .plist{display:flex;flex-direction:column}
+  .prow{display:flex;align-items:center;gap:8px;height:${ROW_H}px;padding:0 14px 0 10px;font-size:15px;font-weight:500;color:${t.pInk};border-top:1px solid ${t.pHair};white-space:nowrap}
+  .prow:first-child{border-top:0}
+  .prow.on{color:${t.pOnInk};font-weight:600}
+  .prow .tick{width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:${t.pOnInk}}
+  .prow .tick svg{width:16px;height:16px}
+  .prow .cal{display:inline-flex;align-items:flex-end;justify-content:center;width:20px;height:20px;border-radius:5px;border:1.4px solid ${t.pCal};position:relative;margin-right:2px;flex:0 0 auto}
+  .prow .cal::before{content:'';position:absolute;left:-1.4px;right:-1.4px;top:-1.4px;height:5px;border-radius:5px 5px 0 0;background:${t.pCal}}
+  .prow .cal i{font-style:normal;font-size:9.5px;font-weight:700;line-height:14px;color:${t.pCal}}
   .ffoot .show{flex:1;height:50px;border-radius:25px;display:flex;align-items:center;justify-content:center;background:linear-gradient(180deg,${t.fPrimaryLift},transparent 60%),${t.fPrimary};color:${t.fPrimaryInk};font-size:17px;font-weight:700;letter-spacing:-.2px;box-shadow:inset 0 1px 0 rgba(255,255,255,.18)}
 `;
+
+// THE CUSTOM LISTS, from the operator's rules (2026-09-19).
+// Distance: 1..10 by 1, 15..50 by 5, 60..100 by 10, 200..1000 by 100, 2000..3000 by 1000.
+const DISTANCE_VALUES = (() => { const v = []; for (let m = 1; m <= 10; m++) v.push(m); for (let m = 15; m <= 50; m += 5) v.push(m); for (let m = 60; m <= 100; m += 10) v.push(m); for (let m = 200; m <= 1000; m += 100) v.push(m); for (let m = 2000; m <= 3000; m += 1000) v.push(m); return v; })();
+// Budget: $5..$50 by 5, $60..$100 by 10, $125..$500 by 25, $600..$10,000 by 100.
+const BUDGET_VALUES = (() => { const v = []; for (let d = 5; d <= 50; d += 5) v.push(d); for (let d = 60; d <= 100; d += 10) v.push(d); for (let d = 125; d <= 500; d += 25) v.push(d); for (let d = 600; d <= 10000; d += 100) v.push(d); return v; })();
+// Dates: the 30 days after today (2026-09-19 in the mockup), no increments.
+const DATE_VALUES = (() => { const out = []; const base = new Date(2026, 8, 19); for (let i = 1; i <= 30; i++) { const d = new Date(base); d.setDate(base.getDate() + i); out.push(d); } return out; })();
+const fmtMiles = (m) => `${m.toLocaleString('en-US')} mi`;
+const fmtDollars = (d) => `$${d.toLocaleString('en-US')}`;
+const fmtDate = (d) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+const fmtShort = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const ROW_H = 44, POP_ROWS = 6;
+
+// THE MOMENTS: what each frame of the gallery shows.
+const STATES = [
+  { id: 'closed', label: '1 · the Custom pills' },
+  { id: 'dist-start', label: '2 · Distance custom — 1 to 10', open: 'distance', at: 0 },
+  { id: 'dist-mid', label: '3 · Distance custom — 50s to 100s', open: 'distance', at: DISTANCE_VALUES.indexOf(50) - 1 },
+  { id: 'dist-end', label: '4 · Distance custom — 1,000 to 3,000', open: 'distance', at: DISTANCE_VALUES.length - POP_ROWS },
+  { id: 'dist-picked', label: '5 · Distance picked — 35 mi', picked: { distance: 35 } },
+  { id: 'budget-start', label: '6 · Budget custom — $5 to $50', open: 'budget', at: 0 },
+  { id: 'budget-mid', label: '7 · Budget custom — $125 to $250', open: 'budget', at: BUDGET_VALUES.indexOf(125) },
+  { id: 'budget-end', label: '8 · Budget custom — $800 and up', open: 'budget', at: BUDGET_VALUES.indexOf(800) },
+  { id: 'budget-picked', label: '9 · Budget picked — $175', picked: { budget: 175 } },
+  { id: 'date-start', label: '10 · Date custom — from tomorrow', open: 'date', at: 0 },
+  { id: 'date-mid', label: '11 · Date custom — into October', open: 'date', at: 13 },
+  { id: 'date-picked', label: '12 · Date picked — Sep 27', picked: { date: 7 } },
+];
 
 const CATEGORIES = ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Plumbing', 'Yard work', 'Repairs', 'Electrical', 'Painting', 'Appliances', 'Junk removal', 'Shelf hanging', 'Pressure washing', 'Gutters', 'Carpet cleaning', 'Windows', 'Pest control', 'Organizing', 'Landscaping', 'Snow removal', 'Pet sitting', 'Errands', 'Packing', 'Drywall', 'Other'];
 const MY_SKILLS = new Set(['Assembly', 'Moving', 'TV mounting']);
 
-const filtersSheet = () => `
+const filtersSheet = (st = {}) => {
+  const picked = st.picked ?? {};
+  const open = st.open ?? null;
+  const checkSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>';
+  /** The popup under a Custom pill: POP_ROWS rows visible, scrolled to `at`,
+   *  the current value ticked; `kind` picks the list and the row shape. */
+  const popup = (kind, at, current) => {
+    let rows;
+    if (kind === 'distance') rows = DISTANCE_VALUES.map((m) => ({ key: m, html: fmtMiles(m) }));
+    else if (kind === 'budget') rows = BUDGET_VALUES.map((d) => ({ key: d, html: fmtDollars(d) }));
+    else rows = DATE_VALUES.map((d, i) => ({ key: i, html: `<span class="cal"><i>${d.getDate()}</i></span>${fmtDate(d)}` }));
+    const visible = kind === 'date' ? POP_ROWS - 1 : POP_ROWS;
+    const start = Math.max(0, Math.min(at, rows.length - visible));
+    const list = rows.map((r) => `<div class="prow${r.key === current ? ' on' : ''}"><span class="tick">${r.key === current ? checkSvg : ''}</span>${r.html}</div>`).join('');
+    return `<div class="popup ${kind}" style="height:${visible * ROW_H + 10}px"><div class="plist" style="margin-top:-${start * ROW_H}px">${list}</div></div>`;
+  };
+  /** A Custom pill: its label is the picked value when there is one. */
+  const customPill = (kind, label, current, anchor) => {
+    const isOpen = open === kind;
+    const has = label != null;
+    return `<div class="fchip custom${has || isOpen ? ' on' : ''}${isOpen ? ' open' : ''} ${anchor}">${has ? label : 'Custom'}${isOpen ? popup(kind, st.at ?? 0, current) : ''}</div>`;
+  };
+  const distanceCurrent = picked.distance ?? 5;
+  const budgetCurrent = picked.budget ?? null;
+  const dateCurrent = picked.date ?? null;
+  const on = (cond) => (cond ? ' on' : '');
+  return `
     <div class="fscrim"></div>
     <div class="fsheet">
       <div class="grab"></div>
       <div class="fhead"><h2>Filters</h2><div class="done">Done</div></div>
       <div class="fbody">
         <div class="fsec"><div class="lbl">Distance</div>
-          <div class="chips-row"><div class="fchip">Any</div><div class="fchip">2 mi</div><div class="fchip on">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div></div></div>
+          <div class="chips-row"><div class="fchip">Any</div><div class="fchip">2 mi</div><div class="fchip${on(picked.distance == null)}">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div>${customPill('distance', picked.distance != null ? fmtMiles(picked.distance) : null, distanceCurrent, 'right')}</div></div>
         <div class="fsec"><div class="lbl">Minimum budget</div>
-          <div class="chips-row"><div class="fchip on">Any</div><div class="fchip">$25+</div><div class="fchip">$50+</div><div class="fchip">$100+</div><div class="fchip">$250+</div></div>
+          <div class="chips-row"><div class="fchip${on(picked.budget == null)}">Any</div><div class="fchip">$25</div><div class="fchip">$50</div><div class="fchip">$100</div><div class="fchip">$250</div>${customPill('budget', picked.budget != null ? fmtDollars(picked.budget) : null, budgetCurrent, 'right')}</div>
           <div class="note">Jobs with no budget set are always shown.</div></div>
         <div class="fsec"><div class="lbl">When</div>
-          <div class="chips-row"><div class="fchip">Any date</div><div class="fchip on">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div></div></div>
+          <div class="chips-row"><div class="fchip">Any</div><div class="fchip${on(picked.date == null)}">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div>${customPill('date', picked.date != null ? fmtShort(DATE_VALUES[picked.date]) : null, dateCurrent, 'right up')}</div></div>
         <div class="fsec"><div class="lbl">Categories</div>
           <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Jobs I can do</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
           <div class="note">Nothing selected means every category.</div></div>
@@ -347,6 +429,7 @@ const filtersSheet = () => `
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
     </div>`;
+};
 
 /** The panes: the search bar, the chips, the sheet and the card. Dark is
  *  liquid glass — blur, a specular top edge, a diagonal sheen, a bright rim,
@@ -421,7 +504,16 @@ const POIS = [
 
 async function page(theme) {
   const t = THEMES[theme];
-  const map = await mapLayer(STYLES[theme]);
+  const tiles = await mapLayer(STYLES[theme]);
+  const map = tiles.html;
+  const sharedCss = `${tiles.css}\n.photoimg{background-image:url("${photo(theme)}")}`;
+  const states = FILTERS ? STATES : [null];
+  const frames = states.map((st) => frame(theme, t, map, st)).join('\n');
+  return shell(theme, t, sharedCss, frames);
+}
+
+/** One phone. `st` null = the map screen; a state = the Filters sheet at that moment. */
+function frame(theme, t, map, st) {
   const parks = PARKS.map((p) => `<div class="park" style="left:${p.x}px;top:${p.y}px;width:${p.w}px;height:${p.h}px"></div>`).join('\n');
   const labels = LABELS.map((l) => `<div class="nlabel${l.big ? ' big' : ''}" style="left:${l.x}px;top:${l.y}px">${l.text.replace('\n', '<br>')}</div>`).join('\n');
   const roads = ROADS.map((r) => `<div class="road" style="left:${r.x}px;top:${r.y}px;--r:${r.r}deg">${r.text}</div>`).join('\n');
@@ -435,20 +527,9 @@ async function page(theme) {
     ].join('');
   }).join('\n');
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BRAZOS — Explore nearby jobs (${theme})</title>
-<!-- Generated by map-explore.build.mjs. Map tiles © Esri, HERE, Garmin, OpenStreetMap
-     contributors; the phone draws Apple Maps (see the generator's header). -->
-<style>${css(t)}</style>
-</head>
-<body>
-${sprite}
-<div class="stage">
-  <div class="phone">
+  const shot = st ? `filters-${st.id}-${theme}` : `map-${theme}`;
+  return `${st ? `<div class="slot"><div class="slot-label">${st.label}</div>` : ''}
+  <div class="phone" data-shot="${shot}">
     <div class="map">
 ${map}
       <div class="tint"></div>
@@ -495,7 +576,7 @@ ${pins}
         <div class="view">View <svg><use href="#i-chev"/></svg></div>
       </div>
       <div class="card">
-        <div class="photo"><img src="${photo(theme)}" alt=""></div>
+        <div class="photo"><i class="photoimg"></i></div>
         <div class="body">
           <div class="title">Furniture Assembly</div>
           <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
@@ -513,8 +594,30 @@ ${pins}
       <div class="item"><svg><use href="#i-chat"/></svg><span>Inbox</span></div>
       <div class="item"><svg><use href="#i-person"/></svg><span>Profile</span></div>
     </div>
-${FILTERS ? filtersSheet() : ''}
-  </div>
+${st ? filtersSheet(st) : ''}
+  </div>${st ? '</div>' : ''}`;
+}
+
+function shell(theme, t, sharedCss, frames) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BRAZOS — ${FILTERS ? 'Filters, moment by moment' : 'Explore nearby jobs'} (${theme})</title>
+<!-- Generated by map-explore.build.mjs. Map tiles © Esri, HERE, Garmin, OpenStreetMap
+     contributors; the phone draws Apple Maps (see the generator's header). -->
+<style>${css(t)}
+${sharedCss}
+  .stage{flex-wrap:wrap;gap:28px;align-items:flex-start}
+  .slot{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .slot-label{font-size:13px;font-weight:600;letter-spacing:.03em;color:#9aa39e}
+</style>
+</head>
+<body>
+${sprite}
+<div class="stage">
+${frames}
 </div>
 </body>
 </html>
