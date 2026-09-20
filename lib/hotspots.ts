@@ -157,6 +157,11 @@ export type HotspotMapProps = {
    *  (the search capsule and the sheet are the only chrome). Default false
    *  keeps every other caller as it was. Native only. */
   hideLocateButton?: boolean;
+  /** 2026-09-20 (sitting 2): the worker's jobs pane rests on the nav bar and
+   *  would cover Apple's Legal link, which must stay visible — this raises
+   *  the link that many points above the map's bottom edge (the pane's
+   *  peek height plus a little air). Native only; web ignores it. */
+  legalLabelInsetBottom?: number;
 };
 
 /**

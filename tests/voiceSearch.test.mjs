@@ -830,7 +830,8 @@ test('[static] the mic is palette-fed and holds the 44pt touch floor', () => {
   assert.match(searchBarCode, /withAlpha\(colors\.emerald, 0\.15\)/);
   // 20pt glyph + spacing.xs (4pt) padding + 8pt hitSlop = 44pt effective.
   assert.match(searchBarCode, /hitSlop=\{8\}/);
-  assert.match(searchBarCode, /size=\{ink \? 22 : 20\}/);
+  // 23 in the ink emphasis since the map's pill grew to 62 (2026-09-20, sitting 2).
+  assert.match(searchBarCode, /size=\{ink \? 23 : 20\}/);
   assert.match(searchBarCode, /padding: spacing\.xs,/);
 });
 

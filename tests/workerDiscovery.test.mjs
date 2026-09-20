@@ -261,10 +261,29 @@ test('[static] B2 · the full worker card carries distance and the arrival windo
   // no second derivation of the window label.
   assert.match(card, /arrivalWindowLabel\(job\)/);
   assert.doesNotMatch(card, /formatHour/);
-  // Both are full-variant rows: the compact Home card keeps the locked
-  // reference's exact field list.
-  assert.match(card, /variant === 'full' && typeof distanceMiles === 'number'/);
-  assert.match(card, /variant === 'full' && arrivalWindowLabel\(job\)/);
+  // 2026-09-20 (sitting 2), layout "a1" — ONE card, one layout, Home and the
+  // results alike (the operator's "everywhere the card renders"): the facts
+  // ride on one line — distance (real only), the arrival date, the bid
+  // count and the age in their short spellings, joined by muted dots — under
+  // the location's own line; the picture is a square as tall as the text
+  // block, measured; the pay block rides over the top-right.
+  assert.match(
+    card,
+    /const facts = \[\s*typeof distanceMiles === 'number' \? formatDistanceMiles\(distanceMiles\) : null,\s*arrivalWindowLabel\(job\),\s*bidCount == null \? null : formatBidCountShort\(bidCount\),\s*formatTimeAgoShort\(job\.created_at\),\s*\]\.filter/
+  );
+  assert.doesNotMatch(card, /variant === 'full' &&/, 'no full-only rows remain — one layout');
+  assert.doesNotMatch(card, /so far|Posted \{|Arrive \{/, 'the long spellings are gone from the card');
+  assert.match(card, /onLayout=\{\(event\) => setInfoHeight\(event\.nativeEvent\.layout\.height\)\}/);
+  assert.match(card, /const thumbSize = Math\.max\(THUMB_SIZE, Math\.round\(infoHeight \?\? 0\)\);/);
+  assert.match(card, /\{ width: thumbSize, height: thumbSize \}/);
+  assert.match(card, /payBlock: \{\s*position: 'absolute',\s*top: spacing\.md,\s*right: spacing\.md,/);
+  assert.match(card, /const PAY_CLEAR = 96;/);
+  assert.match(card, /const META_GLYPH = 16;/);
+  // The short labels are the shared formatters' — no second copy of the rule.
+  const [jobs, time] = await Promise.all([read('lib/jobs.ts'), read('lib/time.ts')]);
+  assert.match(jobs, /export function formatBidCountShort\(count: number\): string \{\s*return count === 0 \? 'No bids' : formatBidCount\(count\);/);
+  assert.match(time, /export function formatTimeAgoShort\(iso: string\): string \{\s*return relativeAge\(iso, 'short'\);/);
+  assert.match(time, /export function formatTimeAgo\(iso: string\): string \{\s*return relativeAge\(iso, 'long'\);/);
 });
 
 test('[static] B2 · the no-photo state is the category-glyph tile, never stock imagery', async () => {
@@ -324,9 +343,22 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   // 2026-09-20: the room is the MOST the sheet may take — from under the
   // search pill (measured as a whole), so an open sheet may cover the chip
   // but never the field — and the sheet takes what its rows need up to it.
-  assert.match(map, /rootHeight - insets\.top - pillHeight - sheetGap - sheetInset/);
+  // 2026-09-20 (sitting 2): the sheet RESTS ON the nav bar — the room's floor
+  // is MAP_SHEET_BOTTOM (0), not the side inset, which stays the dial.
+  assert.match(map, /const MAP_SHEET_BOTTOM = 0;/);
+  assert.match(map, /rootHeight - insets\.top - pillHeight - sheetGap - MAP_SHEET_BOTTOM/);
+  assert.match(map, /insetBottom=\{MAP_SHEET_BOTTOM\}/);
   assert.match(map, /<View onLayout=\{onPillLayout\}>\s*<Surface material="pane" radius=\{searchRadius\}/);
   assert.match(map, /maxHeight=\{sheetMaxHeight\}/);
+  // Three stops, the peek by default and again whenever the map comes into
+  // view; the tuck is the user's own pull. Apple's Legal link rides above
+  // the resting pane rather than under it.
+  assert.match(map, /const \[sheetStop, setSheetStop\] = useState<PeekStop>\('peek'\);/);
+  assert.match(map, /useFocusEffect\(\s*useCallback\(\(\) => \{\s*setSheetStop\('peek'\);\s*\}, \[\]\)\s*\);/);
+  assert.match(map, /stop=\{sheetStop\}\s*onStopChange=\{setSheetStop\}\s*onPeekHeight=\{setPeekHeight\}/);
+  assert.match(map, /legalLabelInsetBottom=\{isWorker && peekHeight > 0 \? MAP_SHEET_BOTTOM \+ peekHeight \+ LEGAL_LINK_AIR : undefined\}/);
+  const nativeMap = await read('components/HotspotMap.native.tsx');
+  assert.match(nativeMap, /legalLabelInsets=\{\s*legalLabelInsetBottom != null\s*\? \{ top: 0, left: 0, bottom: legalLabelInsetBottom, right: 0 \}\s*: undefined\s*\}/);
 });
 
 test('[static] B3 · both discovery surfaces render the shared chips and persist through the one storage module', async () => {
@@ -363,6 +395,15 @@ test('[static] B3 · both discovery surfaces render the shared chips and persist
   assert.match(map, /distanceChipLabel/);
   // The sheet's Custom list and the clamp on the server are one ceiling.
   assert.match(await read('components/JobFilterSheet.tsx'), /DISTANCE_CUSTOM_VALUES/);
+  // 2026-09-20 (sitting 2): whole-number heights, so the chosen chip's outline
+  // is never clipped along its bottom — the chips 44, the row 44 + 2 × 8,
+  // centred, and the row never shrinks in its column.
+  assert.match(chips, /const CHIP_HEIGHT = 44;/);
+  assert.match(chips, /const rowHeight = \(\) => CHIP_HEIGHT \+ spacing\.sm \* 2;/);
+  assert.match(chips, /row: \{\s*flexGrow: 0,\s*flexShrink: 0,\s*height: rowHeight\(\),\s*\}/);
+  assert.match(chips, /content: \{\s*alignItems: 'center',\s*height: rowHeight\(\),/);
+  assert.match(chips, /chip: \{\s*height: CHIP_HEIGHT,\s*\}/);
+  assert.match(chips, /style=\{styles\.chip\}/);
 });
 
 // ---------------------------------------------------------------------------

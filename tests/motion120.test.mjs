@@ -1172,20 +1172,31 @@ test('[static] the peek sheet slides by a transform on both drivers, and the fal
   assert.match(fallback, /transform: \[\{ translateY: y \}\]/);
   assert.doesNotMatch(fallback, /height: y\b|\bheight: metrics/, 'the fallback must not animate the layout');
   assert.match(fallback, /gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\)/);
+  // 2026-09-20 (sitting 2), three stops: the head is a button when there is
+  // anything to open onto OR the pane is tucked (a tap restores the peek); a
+  // tap never tucks. The pull is offered when there is anywhere to go — the
+  // list beyond the peek, or the tuck below it.
   assert.match(
     shared,
-    /<Pressable\s+onPress=\{canOpen \? toggle : undefined\}/,
-    'the head is a button on both drivers — when there is anything beyond the peek to open onto'
+    /<Pressable\s+onPress=\{canToggle \? toggle : undefined\}/,
+    'the head is a button on both drivers — when there is anything beyond the peek to open onto, or the pane is tucked'
   );
-  assert.match(fast, /\.enabled\(metrics\.canOpen\)/, 'and the pull is offered under the same condition');
-  assert.match(shared, /const toggle = \(\) => onOpenChange\(!open\);/);
+  assert.match(shared, /const canToggle = canOpen \|\| stop === 'mini';/);
+  assert.match(fast, /\.enabled\(metrics\.canOpen \|\| metrics\.canMini\)/, 'and the pull is offered wherever there is somewhere to go');
+  assert.match(shared, /const toggle = \(\) => onStopChange\(stop === 'peek' \? 'open' : 'peek'\);/);
 
   // The fast path: the pan is on the HEAD (the shared seam), the update is a
   // worklet clamped between the rubber and the rest position, the release
   // springs on the UI thread and only then reports through runOnJS.
   assert.match(fast, /wrapHead=\{\(head\) => <GestureDetector gesture=\{pan\}>\{head\}<\/GestureDetector>\}/);
-  assert.match(fast, /y\.value = Math\.min\(closed\.value, Math\.max\(-OVERDRAG, next\)\);/);
-  assert.match(fast, /y\.value = withSpring\(shouldOpen \? 0 : closed\.value, SPRING\);\s*runOnJS\(settle\)\(shouldOpen\);/);
+  assert.match(fast, /y\.value = Math\.min\(mini\.value, Math\.max\(-OVERDRAG, next\)\);/, 'the finger goes as far as the tuck, a little past open, never further');
+  assert.match(fast, /y\.value = withSpring\(offsets\[toIndex\], SPRING\);\s*runOnJS\(settle\)\(next\);/, 'the release springs on the UI thread, then reports');
+  // A flick moves ONE stop in its direction from where the pull began; a
+  // slower release aims where the finger was heading and takes the nearest.
+  assert.match(fast, /if \(event\.velocityY < -FLING_VELOCITY\) \{\s*toIndex = Math\.max\(0, fromIndex - 1\);/);
+  assert.match(fast, /else if \(event\.velocityY > FLING_VELOCITY\) \{\s*toIndex = Math\.min\(offsets\.length - 1, fromIndex \+ 1\);/);
+  assert.match(fast, /const aim = y\.value \+ event\.velocityY \* RELEASE_PROJECTION_S;/);
+  assert.match(fast, /function offsetOf\(stop: PeekStop, closed: number, mini: number\): number \{\s*'worklet';/);
   assert.match(fast, /transform: \[\{ translateY: y\.value \}\]/);
   assert.doesNotMatch(fast, /height: y\.value/, 'the fast path must not animate the layout');
   // A release that already sprang must not be sprung again by the render it
@@ -1203,6 +1214,17 @@ test('[static] the peek sheet slides by a transform on both drivers, and the fal
     /const expandedHeight = ready \? Math\.max\(peekHeight, Math\.min\(contentHeight, maxHeight\)\) : maxHeight;/
   );
   assert.match(shared, /const canOpen = closedOffset > 0;/);
+  // The tuck: the rim, the pane's top padding, the handle, its gap and HALF
+  // the measured count line — never below the peek's rest.
+  assert.match(
+    shared,
+    /const miniHeight =\s*ready && titleHeight !== null\s*\? 1 \+ spacing\.md \+ PEEK_GRAB_HEIGHT \+ spacing\.md \+ Math\.round\(titleHeight \/ 2\)\s*: peekHeight;/
+  );
+  assert.match(shared, /const miniOffset = ready \? Math\.max\(closedOffset, expandedHeight - miniHeight\) : 0;/);
+  assert.match(shared, /const canMini = miniOffset > closedOffset;/);
+  assert.match(shared, /onLayout=\{onTitleLayout\}/, 'the count line reports its height');
+  // The fallback rests at whichever stop it is handed, and reaches only two.
+  assert.match(fallback, /const target = stop === 'open' \? 0 : stop === 'peek' \? metrics\.closedOffset : metrics\.miniOffset;/);
   assert.match(shared, /onRowLayout\(index, event\);/, 'every row reports its height');
   assert.match(shared, /pointerEvents="box-none"/);
   assert.match(shared, /frame: \{\s*position: 'absolute',\s*overflow: 'hidden',/);

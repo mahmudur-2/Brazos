@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { HotspotMap } from '../components/HotspotMap';
 import { JobFilterSheet } from '../components/JobFilterSheet';
-import { PeekSheet } from '../components/PeekSheet';
+import { PeekSheet, type PeekStop } from '../components/PeekSheet';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { SearchBar } from '../ui/primitives/SearchBar';
 import { Sheet } from '../ui/primitives/Sheet';
@@ -17,8 +17,8 @@ import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useHotspots } from '../hooks/useHotspots';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useOfferCounts } from '../hooks/useOfferCounts';
-import { useProfile } from '../hooks/useProfile';
-import { JOB_CATEGORIES, JOB_CATEGORY_LABELS, type JobCategory, type OpenJob } from '../lib/jobs';
+import { useWorkerSkills } from '../hooks/useWorkerSkills';
+import { JOB_CATEGORY_LABELS, type OpenJob } from '../lib/jobs';
 import {
   cellsWithinMiles,
   fetchJobsWithinRadius,
@@ -70,13 +70,25 @@ const INITIAL_LAT_DELTA = 0.08;
  * white in light, as ruled. The numbers below are that design's, spelled
  * once each and dialled from the studio.
  */
-const MAP_SEARCH_HEIGHT = 56;
-const MAP_SEARCH_RADIUS = 28;
+// 62 tall since 2026-09-20 (sitting 2, (6)): the operator's "slightly bigger",
+// option a of six rendered beside the 56 it was — the corner follows as
+// height / 2, the placeholder stays 18, the glyphs grow by 1 (SearchBar's
+// ink emphasis), the distance pill by 2.
+const MAP_SEARCH_HEIGHT = 62;
+const MAP_SEARCH_RADIUS = 31; // MAP_SEARCH_HEIGHT / 2 — the capsule
+const MAP_DISTANCE_PILL_HEIGHT = 34;
 /** The Today chip: 42pt tall, a capsule. */
 const MAP_CHIP_HEIGHT = 42;
 const MAP_CHIP_RADIUS = 21;
 /** The jobs sheet's corner. */
 const MAP_SHEET_RADIUS = 30;
+/** The jobs sheet RESTS ON the nav bar — no map strip under it — since
+ *  2026-09-20 (sitting 2), the operator's red line; the sides keep the
+ *  `map.sheet.inset` dial. A constant, not the dial: the dial drives the
+ *  sides and stays a dial. */
+const MAP_SHEET_BOTTOM = 0;
+/** Air between the jobs pane's top and Apple's Legal link above it. */
+const LEGAL_LINK_AIR = 8;
 
 /**
  * THE JOBS SHEET'S DATA, and the sheet.
@@ -111,8 +123,9 @@ function MapJobsSheet({
   onRadiusChange,
   userLoc,
   maxHeight,
-  open,
-  onOpenChange,
+  stop,
+  onStopChange,
+  onPeekHeight,
   onOpenJob,
   onSeeAll,
   sheetRadius,
@@ -131,8 +144,10 @@ function MapJobsSheet({
   userLoc: { lat: number; lng: number } | null;
   /** The most room the sheet may open into — from under the search pill. */
   maxHeight: number;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** Tucked, peeking, or open — the screen's state, the pane's rest. */
+  stop: PeekStop;
+  onStopChange: (stop: PeekStop) => void;
+  onPeekHeight: (height: number) => void;
   onOpenJob: (job: OpenJob) => void;
   onSeeAll: () => void;
   sheetRadius: number;
@@ -142,17 +157,11 @@ function MapJobsSheet({
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const feed = useOpenJobs();
-  const { profile } = useProfile();
+  // The worker's skills — profile categories AND listed services, one rule
+  // (hooks/useWorkerSkills.ts, 2026-09-20 sitting 2), with the state the
+  // Filters sheet's Categories note reads.
+  const { skills, state: skillsState } = useWorkerSkills();
   const { working } = useMyJobsHub();
-  const skills = useMemo(
-    () =>
-      new Set<JobCategory>(
-        (profile?.categories ?? []).filter((c): c is JobCategory =>
-          (JOB_CATEGORIES as readonly string[]).includes(c)
-        )
-      ),
-    [profile?.categories]
-  );
   const trackRecord = useMemo(() => completedByCategory(working), [working]);
   const withinRadius = radiusMiles != null && userLoc !== null;
   const nearbyKey = withinRadius ? `${radiusMiles}:${userLoc.lat}:${userLoc.lng}` : null;
@@ -209,8 +218,9 @@ function MapJobsSheet({
       {visible ? (
       <PeekSheet
         maxHeight={maxHeight}
-        open={open}
-        onOpenChange={onOpenChange}
+        stop={stop}
+        onStopChange={onStopChange}
+        onPeekHeight={onPeekHeight}
         title={title}
         subtitleLead="Near you"
         subtitle={subtitle}
@@ -239,6 +249,7 @@ function MapJobsSheet({
         radius={sheetRadius}
         paddingX={sheetPaddingX}
         inset={sheetInset}
+        insetBottom={MAP_SHEET_BOTTOM}
       />
       ) : null}
       {/* THE FILTERS SHEET — the approved design, over the one filter model.
@@ -254,6 +265,7 @@ function MapJobsSheet({
         distance={{ value: radiusMiles, onChange: onRadiusChange, available: userLoc !== null }}
         distanceAvailable={withinRadius}
         skills={skills}
+        skillsState={skillsState}
         countFor={(draft, draftDistance) =>
           source && draftDistance === radiusMiles
             ? applyJobFilters(source, draft, sortContext).length
@@ -301,8 +313,19 @@ export function MapScreen() {
   const [radiusMiles, setRadiusMiles] = useState<DistanceFilterMiles | null | undefined>(undefined);
   // The header filter sheet (2026-08-22): the budget and distance sliders.
   const [filterOpen, setFilterOpen] = useState(false);
-  // The jobs sheet: peeking, or pulled up to the list.
-  const [sheetOpen, setSheetOpen] = useState(false);
+  // The jobs sheet: tucked, peeking, or pulled up to the list. ALWAYS the
+  // peek when the map comes into view (the operator, 2026-09-20 sitting 2:
+  // "on default it shouldn't be on mini") — the tuck is the user's own pull
+  // and lasts only until they pull it back or leave the tab.
+  const [sheetStop, setSheetStop] = useState<PeekStop>('peek');
+  useFocusEffect(
+    useCallback(() => {
+      setSheetStop('peek');
+    }, [])
+  );
+  // The pane's measured peek height: Apple's Legal link rides that far above
+  // the map's bottom edge, since the pane rests on the bar and would cover it.
+  const [peekHeight, setPeekHeight] = useState(0);
   // The two measurements the sheet's room is derived from: the screen's own
   // height and the search pill's. Zero until the first layout pass.
   const [rootHeight, setRootHeight] = useState(0);
@@ -490,7 +513,7 @@ export function MapScreen() {
   const sheetGap = spacing.md;
   const sheetMaxHeight =
     rootHeight > 0 && pillHeight > 0
-      ? Math.max(0, rootHeight - insets.top - pillHeight - sheetGap - sheetInset)
+      ? Math.max(0, rootHeight - insets.top - pillHeight - sheetGap - MAP_SHEET_BOTTOM)
       : 0;
   const onRootLayout = (event: LayoutChangeEvent) => setRootHeight(event.nativeEvent.layout.height);
   const onPillLayout = (event: LayoutChangeEvent) => setPillHeight(event.nativeEvent.layout.height);
@@ -514,6 +537,7 @@ export function MapScreen() {
           // The approved design carries no locate button over the worker
           // map; the customer map keeps it, untouched.
           hideLocateButton={isWorker}
+          legalLabelInsetBottom={isWorker && peekHeight > 0 ? MAP_SHEET_BOTTOM + peekHeight + LEGAL_LINK_AIR : undefined}
           onRegionChangeComplete={
             isWorker ? (region) => setLatDelta(region.latitudeDelta) : undefined
           }
@@ -564,7 +588,11 @@ export function MapScreen() {
                   <Pressable
                     onPress={() => setFilterOpen(true)}
                     hitSlop={8}
-                    style={({ pressed }) => [styles.distancePill, pressed && styles.pressed]}
+                    style={({ pressed }) => [
+                      styles.distancePill,
+                      !isDark && styles.distancePillLight,
+                      pressed && styles.pressed,
+                    ]}
                     accessibilityRole="button"
                     accessibilityLabel={
                       radiusMiles != null
@@ -572,8 +600,8 @@ export function MapScreen() {
                         : 'Distance filter, any distance'
                     }
                   >
-                    <Ionicons name="options-outline" size={18} color={colors.gold} />
-                    <Text style={styles.distanceText} numberOfLines={1}>
+                    <Ionicons name="options-outline" size={18} color={isDark ? colors.gold : colors.ink} />
+                    <Text style={[styles.distanceText, !isDark && styles.distanceTextLight]} numberOfLines={1}>
                       {radiusMiles != null ? distanceChipLabel(radiusMiles) : 'Any'}
                     </Text>
                   </Pressable>
@@ -665,8 +693,9 @@ export function MapScreen() {
             onRadiusChange={selectRadius}
             userLoc={userLoc}
             maxHeight={sheetMaxHeight}
-            open={sheetOpen}
-            onOpenChange={setSheetOpen}
+            stop={sheetStop}
+            onStopChange={setSheetStop}
+            onPeekHeight={setPeekHeight}
             onOpenJob={(job) => navigation.navigate('JobDetail', { job })}
             sheetRadius={sheetRadius}
             sheetPaddingX={sheetPaddingX}
@@ -834,12 +863,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingRight: spacing.sm,
   },
   // The design's "5 mi": gold, on a faint ink wash under a sage hairline,
-  // narrow enough to leave the mic its room.
+  // narrow enough to leave the mic its room. 34 tall since the pill grew to
+  // 62 (2026-09-20, sitting 2, (6)). LIGHT (that sitting's item 1, the
+  // operator's "light cream same as the job info on bottom… the text to be
+  // black"): the peek row's cream, no rim, ink text and glyph — the rim is
+  // kept at 1pt and painted transparent so the pill's box is identical in
+  // both themes and only colours fork.
   distancePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs + 2,
-    height: 32,
+    height: MAP_DISTANCE_PILL_HEIGHT,
     paddingLeft: spacing.sm + 2,
     paddingRight: spacing.sm + 3,
     borderRadius: radius.pill,
@@ -847,10 +881,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     borderColor: withAlpha(colors.textMuted, 0.39),
     backgroundColor: withAlpha(colors.black, 0.12),
   },
+  distancePillLight: {
+    borderColor: 'transparent',
+    backgroundColor: colors.background,
+  },
   distanceText: {
     fontSize: 16,
     fontWeight: '600',
     color: colors.gold,
+  },
+  distanceTextLight: {
+    color: colors.ink,
   },
   pressed: { opacity: 0.8 },
   // The chip floats on the tiles beside the pill rather than inside it.

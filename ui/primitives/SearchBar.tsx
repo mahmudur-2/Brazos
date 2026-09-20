@@ -164,7 +164,9 @@ export function SearchBar({
       }
     : null;
   const ink = emphasis === 'ink';
-  const iconGlyphSize = iconSizeDial ?? (ink ? 24 : 18);
+  // The ink emphasis (the map's pill) draws its glyphs one point larger
+  // since the pill grew to 62 (2026-09-20, sitting 2, (6)): 25 and 23.
+  const iconGlyphSize = iconSizeDial ?? (ink ? 25 : 18);
   const leadingInk = ink ? withAlpha(colors.ink, 0.92) : isDark ? colors.ink : colors.emerald;
   const iconDialStyle =
     iconOffsetX || iconOffsetY
@@ -341,7 +343,7 @@ export function SearchBar({
           >
             <Ionicons
               name={listening ? 'mic' : 'mic-outline'}
-              size={ink ? 22 : 20}
+              size={ink ? 23 : 20}
               color={listening ? colors.emerald : ink ? withAlpha(colors.ink, 0.85) : colors.navInactive}
             />
           </Pressable>

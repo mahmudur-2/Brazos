@@ -36,6 +36,7 @@ export function HotspotMap({
   onUserLocation,
   selectedPinKey = null,
   hideLocateButton = false,
+  legalLabelInsetBottom,
 }: HotspotMapProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -192,6 +193,12 @@ export function HotspotMap({
         initialRegion={regionRef.current}
         showsUserLocation={perm === 'granted'}
         showsMyLocationButton={perm === 'granted' && !hideLocateButton}
+        // Apple's Legal link rides above the jobs pane rather than under it.
+        legalLabelInsets={
+          legalLabelInsetBottom != null
+            ? { top: 0, left: 0, bottom: legalLabelInsetBottom, right: 0 }
+            : undefined
+        }
         toolbarEnabled={false}
         // Apple Maps (MapKit) — no Google provider is configured, so
         // customMapStyle would be Google-only and inert here. Tiles follow

@@ -2306,13 +2306,13 @@ function screenDialEntries(): StudioEntry[] {
       {
         key: 'map.searchPill.radius',
         label: 'Search pill — corner roundness',
-        description: 'The glass search pill over the map; 28 is the capsule the design draws at 56 tall.',
+        description: 'The glass search pill over the map; 31 is the capsule the design draws at 62 tall.',
         tier: 'basic',
         scope: 'local',
         min: 0,
         max: 48,
         step: 1,
-        defaultValue: 28,
+        defaultValue: 31,
       },
       {
         key: 'map.sheet.radius',

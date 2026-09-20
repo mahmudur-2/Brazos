@@ -11,7 +11,7 @@ import {
   type PeekSheetProps,
 } from './PeekSheet.shared';
 
-export type { PeekSheetProps } from './PeekSheet.shared';
+export type { PeekSheetProps, PeekStop } from './PeekSheet.shared';
 
 /**
  * The map's floating jobs pane — on whichever driver this binary has.
@@ -19,6 +19,10 @@ export type { PeekSheetProps } from './PeekSheet.shared';
  * THE FALLBACK IS THE SAME PANE, MINUS THE DRAG. Without gesture-handler
  * there is nothing to recognise a pull, so the head is a button: a tap on the
  * handle, the count or "View ›" opens the list, and the same tap closes it.
+ * The MINI stop (2026-09-20, sitting 2) is a pull's destination alone, so
+ * this driver never reaches it: its two stops are the peek and the list, and
+ * a `stop` of 'mini' handed to it rests at the tuck's offset all the same
+ * (the arithmetic is shared) — it simply has no gesture that goes there.
  * The travel is the same `translateY` the fast path drives, run here by core
  * `Animated.spring` on the native driver — a transform, never a layout — so
  * both binaries move the same pane the same distance at the same tempo, and
@@ -31,14 +35,14 @@ export type { PeekSheetProps } from './PeekSheet.shared';
  * takes this fallback.
  */
 function PeekSheetFallback<T>(props: PeekSheetProps<T>) {
-  const { maxHeight, open, radius, inset } = props;
+  const { maxHeight, stop, radius, inset, insetBottom } = props;
   const metrics = usePeekMetrics(maxHeight, props.data.length, props.footer != null);
   const y = useRef(new Animated.Value(0)).current;
   const placed = useRef(false);
 
   useEffect(() => {
     if (!metrics.ready) return;
-    const target = open ? 0 : metrics.closedOffset;
+    const target = stop === 'open' ? 0 : stop === 'peek' ? metrics.closedOffset : metrics.miniOffset;
     // The first placement is a jump, not a slide: the pane has not been seen
     // yet (the frame is transparent until measured), so there is nothing to
     // animate from.
@@ -52,16 +56,27 @@ function PeekSheetFallback<T>(props: PeekSheetProps<T>) {
       useNativeDriver: USE_NATIVE_DRIVER,
       ...SHEET_SPRING,
     }).start();
-  }, [metrics.ready, metrics.closedOffset, open, y]);
+  }, [metrics.ready, metrics.closedOffset, metrics.miniOffset, stop, y]);
+
+  useEffect(() => {
+    if (metrics.ready) props.onPeekHeight?.(metrics.peekHeight);
+  }, [metrics.ready, metrics.peekHeight, props.onPeekHeight]);
 
   return (
-    <PeekSheetFrame expandedHeight={metrics.expandedHeight} radius={radius} inset={inset} ready={metrics.ready}>
+    <PeekSheetFrame
+      expandedHeight={metrics.expandedHeight}
+      radius={radius}
+      inset={inset}
+      insetBottom={insetBottom}
+      ready={metrics.ready}
+    >
       <Animated.View style={[stylesFor().mover, { transform: [{ translateY: y }] }]}>
         <PeekSheetPane
           {...props}
           expandedHeight={metrics.expandedHeight}
           canOpen={metrics.canOpen}
           onHeadLayout={metrics.onHeadLayout}
+          onTitleLayout={metrics.onTitleLayout}
           onFirstLayout={metrics.onFirstLayout}
           onRowLayout={metrics.onRowLayout}
           onFooterLayout={metrics.onFooterLayout}

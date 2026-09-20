@@ -18,15 +18,26 @@ import { fonts, spacing, themedStyles, useThemeColors, type ColorPalette } from 
  *
  * WHAT IT IS. The approved Map design's floating jobs pane
  * (docs/mockups/html/map-explore-{dark,light}.html, operator 2026-09-19): a
- * rounded pane inset from the screen's sides and floating a gap above the
- * nav bar, wearing the `pane` material — liquid glass in dark, flat white in
- * light. At rest it PEEKS: a grab handle, the count, the reach it was taken
- * under, "View ›", and ONE job row. Pulled up (the operator's "Draggable"
- * ruling) it grows to the height its rows need — three rows stop where the
- * third does — up to the room the parent measured for it (under the search
- * pill, operator 2026-09-20), and past that the same list scrolls; the first
- * row never moves, because the list IS the peek — the pane simply reveals
- * more of it. With nothing beyond the peek to show, it does not open at all.
+ * rounded pane inset from the screen's sides, RESTING ON the nav bar (its
+ * bottom edge is the bar's top — the operator's red line, 2026-09-20
+ * sitting 2; before that it floated a gap above), wearing the `pane`
+ * material — liquid glass in dark, flat white in light. At rest it PEEKS:
+ * a grab handle, the count, the reach it was taken under, "View ›", and
+ * ONE job row. Pulled up (the operator's "Draggable" ruling) it grows to
+ * the height its rows need — three rows stop where the third does — up to
+ * the room the parent measured for it (under the search pill, operator
+ * 2026-09-20), and past that the same list scrolls; the first row never
+ * moves, because the list IS the peek — the pane simply reveals more of it.
+ * With nothing beyond the peek to show, it does not open at all.
+ *
+ * THREE STOPS since 2026-09-20 (sitting 2). Pulled DOWN from the peek it
+ * TUCKS to a MINI stop: only the grab handle and the top half of the count
+ * line show above the bar (the operator's pick, "half", from three renders);
+ * pulled up it returns to the peek, and up again to the list. The pane
+ * ALWAYS opens at the peek — mini is entered only by the user's own pull
+ * and lasts only until they pull it back — and a tap on the tucked sliver
+ * restores the peek. The fallback (no recogniser) keeps its two stops: mini
+ * is a pull's destination alone.
  *
  * HOW IT MOVES, and why it is a transform. The pane is laid out at its open
  * height inside a clip the same size, and slides by `translateY`: closed is
@@ -59,8 +70,9 @@ export type PeekSheetProps<T> = {
    *  what its rows need up to this. Zero means "not measured yet" and the
    *  parent should not mount the sheet. */
   maxHeight: number;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
+  /** Where the pane rests: tucked to the handle, peeking, or open on the list. */
+  stop: PeekStop;
+  onStopChange: (stop: PeekStop) => void;
   /** "6 open jobs". */
   title: string;
   /** "Near you" — leads the subtitle, before the emerald dot. */
@@ -81,12 +93,22 @@ export type PeekSheetProps<T> = {
   radius: number;
   /** Inside the pane, left and right of everything. */
   paddingX: number;
-  /** The pane's side inset, and its gap above the screen's bottom edge. */
+  /** The pane's side inset — and its gap above the screen's bottom edge
+   *  unless `insetBottom` says otherwise. */
   inset: number;
+  /** The gap under the pane: 0 rests it on the nav bar (the map's, since
+   *  2026-09-20 sitting 2). Defaults to `inset`. */
+  insetBottom?: number;
   /** The toggle's word when closed ("View") and open ("Hide"). */
   openLabel?: string;
   closeLabel?: string;
+  /** The peek's measured height, whenever it changes — what the map raises
+   *  Apple's Legal link above (the pane rests on the bar and would cover it). */
+  onPeekHeight?: (height: number) => void;
 };
+
+/** The pane's three rests. */
+export type PeekStop = 'mini' | 'peek' | 'open';
 
 /** The grab handle: the design's 44 by 4, in the muted ink at under half. */
 export const PEEK_GRAB_WIDTH = 44;
@@ -99,6 +121,9 @@ export const OVERDRAG = 16;
 export const OPEN_THRESHOLD = 0.35;
 /** A flick faster than this decides on its own, whatever it covered. */
 export const FLING_VELOCITY = 600;
+/** A release aims where the finger was HEADING: the position plus this
+ *  much of a second's travel at its velocity, then the nearest stop. */
+export const RELEASE_PROJECTION_S = 0.12;
 
 /**
  * The settle. Firmer than the swipe row's — a pane this size overshooting
@@ -123,12 +148,17 @@ const paneBottom = () => spacing.xl - 2;
  */
 export function usePeekMetrics(maxHeight: number, rowCount: number, hasFooter: boolean) {
   const [headHeight, setHeadHeight] = useState<number | null>(null);
+  const [titleHeight, setTitleHeight] = useState<number | null>(null);
   const [firstHeight, setFirstHeight] = useState<number | null>(null);
   const [rowHeights, setRowHeights] = useState<Record<number, number>>({});
   const [footerHeight, setFooterHeight] = useState(0);
 
   const onHeadLayout = useCallback((event: LayoutChangeEvent) => {
     setHeadHeight(event.nativeEvent.layout.height);
+  }, []);
+  // The count line — the mini stop shows its top half.
+  const onTitleLayout = useCallback((event: LayoutChangeEvent) => {
+    setTitleHeight(event.nativeEvent.layout.height);
   }, []);
   // The first row (or the slot standing in for it) is the one the peek shows.
   const onFirstLayout = useCallback((event: LayoutChangeEvent) => {
@@ -165,13 +195,25 @@ export function usePeekMetrics(maxHeight: number, rowCount: number, hasFooter: b
     const expandedHeight = ready ? Math.max(peekHeight, Math.min(contentHeight, maxHeight)) : maxHeight;
     const closedOffset = ready ? Math.max(0, expandedHeight - peekHeight) : 0;
     const canOpen = closedOffset > 0;
+    // MINI: the rim, the pane's top padding, the handle, the gap under it,
+    // and HALF the count line — the same points on either binary, the title
+    // measured. Never below the peek's rest.
+    const miniHeight =
+      ready && titleHeight !== null
+        ? 1 + spacing.md + PEEK_GRAB_HEIGHT + spacing.md + Math.round(titleHeight / 2)
+        : peekHeight;
+    const miniOffset = ready ? Math.max(closedOffset, expandedHeight - miniHeight) : 0;
+    const canMini = miniOffset > closedOffset;
     return {
       ready,
       peekHeight,
       expandedHeight,
       closedOffset,
+      miniOffset,
       canOpen,
+      canMini,
       onHeadLayout,
+      onTitleLayout,
       onFirstLayout,
       onRowLayout,
       onFooterLayout,
@@ -181,10 +223,12 @@ export function usePeekMetrics(maxHeight: number, rowCount: number, hasFooter: b
     rowCount,
     hasFooter,
     headHeight,
+    titleHeight,
     firstHeight,
     rowHeights,
     footerHeight,
     onHeadLayout,
+    onTitleLayout,
     onFirstLayout,
     onRowLayout,
     onFooterLayout,
@@ -201,12 +245,14 @@ export function PeekSheetFrame({
   expandedHeight,
   radius,
   inset,
+  insetBottom = inset,
   ready,
   children,
 }: {
   expandedHeight: number;
   radius: number;
   inset: number;
+  insetBottom?: number;
   ready: boolean;
   children: ReactNode;
 }) {
@@ -217,7 +263,7 @@ export function PeekSheetFrame({
       pointerEvents="box-none"
       style={[
         styles.frame,
-        { left: inset, right: inset, bottom: inset, height: expandedHeight, borderRadius: radius },
+        { left: inset, right: inset, bottom: insetBottom, height: expandedHeight, borderRadius: radius },
         !ready && styles.frameUnmeasured,
       ]}
     >
@@ -235,8 +281,8 @@ export function PeekSheetFrame({
 export function PeekSheetPane<T>({
   expandedHeight,
   canOpen,
-  open,
-  onOpenChange,
+  stop,
+  onStopChange,
   title,
   subtitleLead,
   subtitle,
@@ -252,6 +298,7 @@ export function PeekSheetPane<T>({
   openLabel = 'View',
   closeLabel = 'Hide',
   onHeadLayout,
+  onTitleLayout,
   onFirstLayout,
   onRowLayout,
   onFooterLayout,
@@ -262,6 +309,7 @@ export function PeekSheetPane<T>({
   /** Whether there is anything beyond the peek to open onto. */
   canOpen: boolean;
   onHeadLayout: (event: LayoutChangeEvent) => void;
+  onTitleLayout: (event: LayoutChangeEvent) => void;
   onFirstLayout: (event: LayoutChangeEvent) => void;
   onRowLayout: (index: number, event: LayoutChangeEvent) => void;
   onFooterLayout: (event: LayoutChangeEvent) => void;
@@ -269,22 +317,28 @@ export function PeekSheetPane<T>({
 }) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const open = stop === 'open';
   const toggleLabel = open ? closeLabel : openLabel;
-  const toggle = () => onOpenChange(!open);
+  // A tap: tucked → the peek; peeking → the list; open → the peek. A tap
+  // never tucks — that is the pull's alone.
+  const canToggle = canOpen || stop === 'mini';
+  const toggle = () => onStopChange(stop === 'peek' ? 'open' : 'peek');
 
   const head = (
     <View onLayout={onHeadLayout} style={styles.head}>
       <Pressable
-        onPress={canOpen ? toggle : undefined}
+        onPress={canToggle ? toggle : undefined}
         style={styles.headPress}
-        accessibilityRole={canOpen ? 'button' : undefined}
-        accessibilityLabel={canOpen ? `${toggleLabel} the jobs list` : undefined}
+        accessibilityRole={canToggle ? 'button' : undefined}
+        accessibilityLabel={
+          stop === 'mini' ? 'Show the jobs' : canOpen ? `${toggleLabel} the jobs list` : undefined
+        }
         accessibilityState={canOpen ? { expanded: open } : undefined}
       >
         <View style={styles.grab} />
         <View style={styles.headRow}>
           <View style={styles.headText}>
-            <Text style={styles.title} numberOfLines={1}>
+            <Text style={styles.title} numberOfLines={1} onLayout={onTitleLayout}>
               {title}
             </Text>
             <View style={styles.subtitleRow}>

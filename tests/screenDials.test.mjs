@@ -208,7 +208,8 @@ const SCREENS = [
       // constants; the sheet's padding and inset sit on the theme scale.
       // (The old `themeRadius` alias is gone with the state it dodged: the
       // distance filter is `radiusMiles` now, so the token keeps its name.)
-      { key: 'map.searchPill.radius', drew: 28, parent: null, fallback: 'MAP_SEARCH_RADIUS' },
+      // 31 since 2026-09-20 (sitting 2): the pill is 62 tall, option a of six.
+      { key: 'map.searchPill.radius', drew: 31, parent: null, fallback: 'MAP_SEARCH_RADIUS' },
       { key: 'map.sheet.radius', drew: 30, parent: null, fallback: 'MAP_SHEET_RADIUS' },
       { key: 'map.sheet.paddingX', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
       { key: 'map.sheet.inset', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
