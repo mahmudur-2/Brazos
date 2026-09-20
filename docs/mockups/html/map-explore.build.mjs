@@ -328,9 +328,15 @@ const filtersCss = (t) => `
   .fchip.skills{padding-left:11px}
   .fchip.any{box-sizing:border-box;min-width:55px;justify-content:center}
   .fchip svg{width:15px;height:15px}
-  .seg{display:flex;padding:3px;border-radius:14px;background:${t.fTrack};border:1px solid ${t.fChipRim}}
-  .seg div{flex:1;text-align:center;height:34px;line-height:34px;border-radius:11px;font-size:14px;font-weight:500;color:${t.fChipInk}}
-  .seg div.on{background:${t.fSel};color:${t.fSelInk};font-weight:600;box-shadow:inset 0 0 0 1px ${t.fSelRim}}
+  .fchip.sortpill{padding-right:9px;gap:5px}
+  .fchip.sortpill .dim{color:var(--muted);font-weight:500;margin-right:1px}
+  .fchip.sortpill .caret{width:14px;height:14px;color:${t.fSelInk};opacity:.85}
+  .popup.sort{width:262px;mask-image:none;-webkit-mask-image:none}
+  .popup.sort .prow{height:52px;padding:0 14px 0 10px}
+  .prow .two{display:flex;flex-direction:column;gap:1px;line-height:1.15}
+  .prow .two b{font-weight:600;font-size:15px}
+  .prow.on .two b{color:${t.pOnInk}}
+  .prow .two small{font-size:11.5px;font-weight:400;color:var(--muted);letter-spacing:0}
   .ffoot{display:flex;align-items:center;gap:14px;padding:14px 20px 34px;border-top:1px solid ${t.fHair}}
   .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
   .fchip{position:relative}
@@ -363,6 +369,14 @@ const fmtDollars = (d) => `$${d.toLocaleString('en-US')}`;
 const fmtDate = (d) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const fmtShort = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const ROW_H = 44, POP_ROWS = 6;
+// THE SORTS (operator, 2026-09-19), each with the rule the app will implement.
+const SORTS = [
+  { key: 'newest', label: 'Newest', hint: 'Soonest job date first, then newest posted' },
+  { key: 'pay', label: 'Highest budget', hint: 'Best pay first' },
+  { key: 'distance', label: 'Closest', hint: 'Least travel first' },
+  { key: 'bids', label: 'Fewest bids', hint: 'Least competition, then closest' },
+  { key: 'smart', label: 'Smart Match', hint: 'Your strongest categories first, then your other skills' },
+];
 
 // THE MOMENTS: what each frame of the gallery shows.
 const STATES = [
@@ -378,6 +392,9 @@ const STATES = [
   { id: 'date-start', label: '10 · Date custom — from tomorrow', open: 'date', at: 0 },
   { id: 'date-mid', label: '11 · Date custom — into October', open: 'date', at: 13 },
   { id: 'date-picked', label: '12 · Date picked — Sep 27', picked: { date: 7 } },
+  { id: 'sort-open', label: '13 · Sort by — the five options', open: 'sort', at: 0 },
+  { id: 'sort-smart', label: '14 · Sort picked — Smart Match', picked: { sort: 'smart' } },
+  { id: 'sort-bids', label: '15 · Sort picked — Fewest bids', picked: { sort: 'bids' } },
 ];
 
 const CATEGORIES = ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Plumbing', 'Yard work', 'Repairs', 'Electrical', 'Painting', 'Appliances', 'Junk removal', 'Shelf hanging', 'Pressure washing', 'Gutters', 'Carpet cleaning', 'Windows', 'Pest control', 'Organizing', 'Landscaping', 'Snow removal', 'Pet sitting', 'Errands', 'Packing', 'Drywall', 'Other'];
@@ -393,11 +410,13 @@ const filtersSheet = (st = {}) => {
     let rows;
     if (kind === 'distance') rows = DISTANCE_VALUES.map((m) => ({ key: m, html: fmtMiles(m) }));
     else if (kind === 'budget') rows = BUDGET_VALUES.map((d) => ({ key: d, html: fmtDollars(d) }));
+    else if (kind === 'sort') rows = SORTS.map((o) => ({ key: o.key, html: `<span class="two"><b>${o.label}</b><small>${o.hint}</small></span>` }));
     else rows = DATE_VALUES.map((d, i) => ({ key: i, html: `<span class="cal"><i>${d.getDate()}</i></span>${fmtDate(d)}` }));
-    const visible = kind === 'date' ? POP_ROWS - 1 : POP_ROWS;
+    const visible = kind === 'sort' ? SORTS.length : kind === 'date' ? POP_ROWS - 1 : POP_ROWS;
     const start = Math.max(0, Math.min(at, rows.length - visible));
     const list = rows.map((r) => `<div class="prow${r.key === current ? ' on' : ''}"><span class="tick">${r.key === current ? checkSvg : ''}</span>${r.html}</div>`).join('');
-    return `<div class="popup ${kind}" style="height:${visible * ROW_H + 10}px"><div class="plist" style="margin-top:-${start * ROW_H}px">${list}</div></div>`;
+    const rowH = kind === 'sort' ? 52 : ROW_H;
+    return `<div class="popup ${kind}" style="height:${visible * rowH + 10}px"><div class="plist" style="margin-top:-${start * rowH}px">${list}</div></div>`;
   };
   /** A Custom pill: its label is the picked value when there is one. */
   const customPill = (kind, label, current, anchor) => {
@@ -426,7 +445,7 @@ const filtersSheet = (st = {}) => {
           <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Jobs I can do</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
           <div class="note">Nothing selected means every category.</div></div>
         <div class="fsec"><div class="lbl">Sort</div>
-          <div class="seg"><div class="on">Newest</div><div>Highest budget</div><div>Closest</div></div></div>
+          <div class="chips-row">${(() => { const cur = SORTS.find((o) => o.key === (picked.sort ?? 'newest')); const isOpen = open === 'sort'; return `<div class="fchip sortpill on${isOpen ? ' open' : ''} left up"><span class="dim">Sort by</span>${cur.label}<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>${isOpen ? popup('sort', 0, cur.key) : ''}</div>`; })()}</div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
     </div>`;
