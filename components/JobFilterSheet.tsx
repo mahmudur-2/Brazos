@@ -4,10 +4,13 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
 import {
   PickerPopover,
+  POPOVER_ROW_HEIGHT,
   POPOVER_VISIBLE_ROWS,
+  POPOVER_WIDTH,
   type PickerOption,
   type PopoverAnchor,
 } from './PickerPopover';
+import { useMaterials } from '../lib/designOverrides';
 import { Sheet } from '../ui/primitives/Sheet';
 import {
   BUDGET_CUSTOM_VALUES_CENTS,
@@ -41,6 +44,11 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 
+/** The design's sheet: 28pt top corners, and its sage hairline at 0.18 in
+ *  dark (the pane rim's own mint) where every other sheet draws `line`. */
+const SHEET_TOP_RADIUS = 28;
+const SHEET_HAIRLINE_ALPHA = 0.18;
+
 /**
  * THE FILTERS SHEET — the approved design (docs/mockups/html/map-explore-
  * filters-{dark,light}.html, fifteen moments the operator walked on
@@ -53,7 +61,10 @@ import {
  * "Sort by <rule>", opening the five rules with the sentence each one
  * follows. A Custom pill opens a checkmark list (components/PickerPopover)
  * over the ruled values — never typed, generated in lib — and then WEARS the
- * value it picked ("35 mi", "$175", "Sep 27"), as ruled.
+ * value it picked ("35 mi", "$175", "Sep 27"), as ruled. ONE popup, rendered
+ * into the Sheet's overlay and fed the list of whichever pill opened it —
+ * four popups in four nested Modals was the 2026-09-19 build, and the phone
+ * walk found the first one's list under every pill (see PickerPopover).
  *
  * THE DRAFT IS LOCAL until the sheet closes, and EVERY close applies it —
  * Done, the backdrop, "Show N jobs" — so a filter is never lost to the way
@@ -133,11 +144,16 @@ export function JobFilterSheet({
   skills,
   countFor,
 }: JobFilterSheetProps) {
-  const { palette: colors } = useThemeColors();
+  const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
+  const paneRim = useMaterials().pane.borderColor;
   const [draft, setDraft] = useState<JobFilterModel>(value);
   const [draftDistance, setDraftDistance] = useState<DistanceFilterMiles | null>(distance?.value ?? null);
   const [popover, setPopover] = useState<{ kind: PopoverKind; anchor: PopoverAnchor } | null>(null);
+  // The last kind opened, kept through the popup's exit fade so the panel
+  // that is fading out still shows the list it opened with.
+  const lastKindRef = useRef<PopoverKind>('distance');
+  if (popover) lastKindRef.current = popover.kind;
   const distanceRef = useRef<View>(null);
   const budgetRef = useRef<View>(null);
   const dateRef = useRef<View>(null);
@@ -227,191 +243,230 @@ export function JobFilterSheet({
     disabled: sort === 'distance' && !distanceAvailable,
   }));
 
+  // THE ONE POPUP: its list, its tick, its direction and shape all follow
+  // the pill that opened it. Sort and When sit low in the sheet and open
+  // upward; Distance and Budget open downward.
+  const openKind = popover?.kind ?? lastKindRef.current;
+  const popup =
+    openKind === 'distance'
+      ? {
+          options: distanceOptions as PickerOption<unknown>[],
+          value: (draftDistance ?? DISTANCE_FILTER_OPTIONS[1]) as unknown,
+          onSelect: (v: unknown) => setDraftDistance(v as number),
+          direction: 'down' as const,
+          align: 'right' as const,
+          width: POPOVER_WIDTH,
+          rowHeight: POPOVER_ROW_HEIGHT,
+          visibleRows: POPOVER_VISIBLE_ROWS,
+          accessibilityLabel: 'Custom distance, in miles',
+        }
+      : openKind === 'budget'
+        ? {
+            options: budgetOptions as PickerOption<unknown>[],
+            value: draft.minBudgetCents as unknown,
+            onSelect: (v: unknown) => setDraft((prev) => ({ ...prev, minBudgetCents: v as number })),
+            direction: 'down' as const,
+            align: 'right' as const,
+            width: POPOVER_WIDTH,
+            rowHeight: POPOVER_ROW_HEIGHT,
+            visibleRows: POPOVER_VISIBLE_ROWS,
+            accessibilityLabel: 'Custom minimum budget',
+          }
+        : openKind === 'date'
+          ? {
+              options: dateOptions as PickerOption<unknown>[],
+              value: (dateIsPreset ? null : draft.scheduledOn) as unknown,
+              onSelect: (v: unknown) =>
+                setDraft((prev) => ({ ...prev, scheduledOn: v as string, scheduledUntil: null })),
+              direction: 'up' as const,
+              align: 'right' as const,
+              width: POPOVER_WIDTH,
+              rowHeight: POPOVER_ROW_HEIGHT,
+              visibleRows: POPOVER_VISIBLE_ROWS - 1,
+              accessibilityLabel: 'Custom date',
+            }
+          : {
+              options: sortOptions as PickerOption<unknown>[],
+              value: draft.sort as unknown,
+              onSelect: (v: unknown) => setDraft((prev) => ({ ...prev, sort: v as JobSort })),
+              direction: 'up' as const,
+              align: 'left' as const,
+              width: SORT_POPOVER_WIDTH,
+              rowHeight: SORT_ROW_HEIGHT,
+              visibleRows: JOB_SORTS.length,
+              accessibilityLabel: 'Sort by',
+            };
+
+  const actions = (
+    <View style={styles.actions}>
+      <Pressable
+        onPress={reset}
+        disabled={isDefaultJobFilters(draft) && draftDistance === null}
+        hitSlop={8}
+        style={({ pressed }) => [styles.reset, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Reset filters"
+      >
+        <Text
+          style={[
+            styles.resetText,
+            isDefaultJobFilters(draft) && draftDistance === null && styles.resetTextDisabled,
+          ]}
+        >
+          Reset
+        </Text>
+      </Pressable>
+      {/* The mockup's capsule in the Post-a-job green (the operator's pick
+          over the app's forest rectangle, 2026-09-20): the Button primitive,
+          its shape and fill overridden and nothing else. */}
+      <Button title={showTitle} onPress={applyAndClose} style={styles.show} />
+    </View>
+  );
+
   return (
-    <Sheet visible={visible} onClose={applyAndClose} title="Filters" material="pane">
-      {distance ? (
-        <Section label="Distance" note={distance.available ? undefined : 'Location is off — the distance applies once it is on.'}>
-          <Pill label="Any" on={draftDistance === null} onPress={() => setDraftDistance(null)} wide />
-          {DISTANCE_FILTER_OPTIONS.map((miles) => (
+    <Sheet
+      visible={visible}
+      onClose={applyAndClose}
+      title="Filters"
+      material="pane"
+      topRadius={SHEET_TOP_RADIUS}
+      hairline={isDark ? withAlpha(paneRim, SHEET_HAIRLINE_ALPHA) : undefined}
+      footer={actions}
+      overlay={
+        <PickerPopover
+          visible={popover !== null}
+          anchor={popover?.anchor ?? null}
+          onClose={() => setPopover(null)}
+          {...popup}
+        />
+      }
+    >
+      <View style={styles.sections}>
+        {distance ? (
+          <Section label="Distance" note={distance.available ? undefined : 'Location is off — the distance applies once it is on.'}>
+            <Pill label="Any" on={draftDistance === null} onPress={() => setDraftDistance(null)} wide />
+            {DISTANCE_FILTER_OPTIONS.map((miles) => (
+              <Pill
+                key={miles}
+                label={distanceChipLabel(miles)}
+                on={draftDistance === miles}
+                onPress={() => setDraftDistance(miles)}
+              />
+            ))}
+            <View ref={distanceRef} collapsable={false}>
+              <Pill
+                label={distanceIsPreset ? 'Custom' : distanceChipLabel(draftDistance)}
+                on={!distanceIsPreset || popover?.kind === 'distance'}
+                onPress={() => openPopover('distance', distanceRef)}
+                accessibilityLabel="Custom distance"
+              />
+            </View>
+          </Section>
+        ) : null}
+
+        <Section label="Minimum budget" note="Jobs with no budget set are always shown.">
+          <Pill
+            label="Any"
+            on={draft.minBudgetCents === null}
+            onPress={() => setDraft((prev) => ({ ...prev, minBudgetCents: null }))}
+            wide
+          />
+          {BUDGET_FILTER_PRESETS_CENTS.map((cents) => (
             <Pill
-              key={miles}
-              label={distanceChipLabel(miles)}
-              on={draftDistance === miles}
-              onPress={() => setDraftDistance(miles)}
+              key={cents}
+              label={formatBudget(cents)}
+              on={draft.minBudgetCents === cents}
+              onPress={() => setDraft((prev) => ({ ...prev, minBudgetCents: cents }))}
             />
           ))}
-          <View ref={distanceRef} collapsable={false}>
+          <View ref={budgetRef} collapsable={false}>
             <Pill
-              label={distanceIsPreset ? 'Custom' : distanceChipLabel(draftDistance)}
-              on={!distanceIsPreset || popover?.kind === 'distance'}
-              onPress={() => openPopover('distance', distanceRef)}
-              accessibilityLabel="Custom distance"
+              label={budgetIsPreset ? 'Custom' : formatBudget(draft.minBudgetCents)}
+              on={!budgetIsPreset || popover?.kind === 'budget'}
+              onPress={() => openPopover('budget', budgetRef)}
+              accessibilityLabel="Custom minimum budget"
             />
           </View>
         </Section>
-      ) : null}
 
-      <Section label="Minimum budget" note="Jobs with no budget set are always shown.">
-        <Pill
-          label="Any"
-          on={draft.minBudgetCents === null}
-          onPress={() => setDraft((prev) => ({ ...prev, minBudgetCents: null }))}
-          wide
-        />
-        {BUDGET_FILTER_PRESETS_CENTS.map((cents) => (
+        <Section label="When" scroll>
           <Pill
-            key={cents}
-            label={formatBudget(cents)}
-            on={draft.minBudgetCents === cents}
-            onPress={() => setDraft((prev) => ({ ...prev, minBudgetCents: cents }))}
+            label="Any"
+            on={draft.scheduledOn === null}
+            onPress={() => setDraft((prev) => ({ ...prev, scheduledOn: null, scheduledUntil: null }))}
+            wide
           />
-        ))}
-        <View ref={budgetRef} collapsable={false}>
-          <Pill
-            label={budgetIsPreset ? 'Custom' : formatBudget(draft.minBudgetCents)}
-            on={!budgetIsPreset || popover?.kind === 'budget'}
-            onPress={() => openPopover('budget', budgetRef)}
-            accessibilityLabel="Custom minimum budget"
-          />
-        </View>
-      </Section>
+          {(
+            [
+              ['Today', windows.today],
+              ['Tomorrow', windows.tomorrow],
+              ['This week', windows.week],
+            ] as const
+          ).map(([label, window]) => (
+            <Pill
+              key={label}
+              label={label}
+              on={isWindow(window)}
+              onPress={() => setDraft((prev) => ({ ...prev, ...window }))}
+            />
+          ))}
+          <View ref={dateRef} collapsable={false}>
+            <Pill
+              label={dateIsPreset || draft.scheduledOn === null ? 'Custom' : shortDate(draft.scheduledOn)}
+              on={!dateIsPreset || popover?.kind === 'date'}
+              onPress={() => openPopover('date', dateRef)}
+              accessibilityLabel="Custom date"
+            />
+          </View>
+        </Section>
 
-      <Section label="When">
-        <Pill
-          label="Any"
-          on={draft.scheduledOn === null}
-          onPress={() => setDraft((prev) => ({ ...prev, scheduledOn: null, scheduledUntil: null }))}
-          wide
-        />
-        {(
-          [
-            ['Today', windows.today],
-            ['Tomorrow', windows.tomorrow],
-            ['This week', windows.week],
-          ] as const
-        ).map(([label, window]) => (
-          <Pill
-            key={label}
-            label={label}
-            on={isWindow(window)}
-            onPress={() => setDraft((prev) => ({ ...prev, ...window }))}
-          />
-        ))}
-        <View ref={dateRef} collapsable={false}>
-          <Pill
-            label={dateIsPreset || draft.scheduledOn === null ? 'Custom' : shortDate(draft.scheduledOn)}
-            on={!dateIsPreset || popover?.kind === 'date'}
-            onPress={() => openPopover('date', dateRef)}
-            accessibilityLabel="Custom date"
-          />
-        </View>
-      </Section>
-
-      <Section label="Categories" note="Nothing selected means every category." scroll>
-        {skills && skills.size > 0 ? (
-          <Pill
-            label="Best Match"
-            on={bestMatchOn}
-            lead={<Ionicons name="checkmark" size={15} color={colors.emerald} />}
-            onPress={() =>
-              setDraft((prev) => ({
-                ...prev,
-                categories: bestMatchOn ? new Set<JobCategory>() : new Set(skills),
-              }))
-            }
-            accessibilityLabel="Best Match — the categories in your skills"
-          />
-        ) : null}
-        {JOB_CATEGORY_CHIP_ORDER.map((category) => (
-          <Pill
-            key={category}
-            label={JOB_CATEGORY_CHIP_LABELS[category]}
-            on={draft.categories.has(category)}
-            onPress={() => toggleCategory(category)}
-          />
-        ))}
-      </Section>
-
-      <Section label="Sort">
-        <View ref={sortRef} collapsable={false}>
-          <Pill
-            label={sortNow.label}
-            on
-            dimLead="Sort by"
-            trailing={<Ionicons name="chevron-down" size={14} color={colors.emerald} />}
-            onPress={() => openPopover('sort', sortRef)}
-            accessibilityLabel={`Sort by ${sortNow.label}`}
-          />
-        </View>
-      </Section>
-
-      <View style={styles.actions}>
-        <Pressable
-          onPress={reset}
-          disabled={isDefaultJobFilters(draft) && draftDistance === null}
-          hitSlop={8}
-          style={({ pressed }) => [styles.reset, pressed && styles.pressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Reset filters"
+        <Section
+          label="Categories"
+          note={
+            skills && skills.size > 0
+              ? 'Nothing selected means every category.'
+              : 'Nothing selected means every category. Pick job categories on your profile to unlock Best Match.'
+          }
+          scroll
         >
-          <Text
-            style={[
-              styles.resetText,
-              isDefaultJobFilters(draft) && draftDistance === null && styles.resetTextDisabled,
-            ]}
-          >
-            Reset
-          </Text>
-        </Pressable>
-        <Button title={showTitle} onPress={applyAndClose} style={styles.show} />
-      </View>
+          {skills && skills.size > 0 ? (
+            <Pill
+              label="Best Match"
+              on={bestMatchOn}
+              lead={<Ionicons name="checkmark" size={15} color={colors.emerald} />}
+              onPress={() =>
+                setDraft((prev) => ({
+                  ...prev,
+                  categories: bestMatchOn ? new Set<JobCategory>() : new Set(skills),
+                }))
+              }
+              accessibilityLabel="Best Match — the categories in your skills"
+            />
+          ) : null}
+          {JOB_CATEGORY_CHIP_ORDER.map((category) => (
+            <Pill
+              key={category}
+              label={JOB_CATEGORY_CHIP_LABELS[category]}
+              on={draft.categories.has(category)}
+              onPress={() => toggleCategory(category)}
+            />
+          ))}
+        </Section>
 
-      {/* The four popups — one at a time, over the sheet, anchored to the pill
-          that opened them. Distance and Budget open downward; When and Sort
-          sit low in the sheet and open upward, as the design draws them. */}
-      <PickerPopover
-        visible={popover?.kind === 'distance'}
-        anchor={popover?.anchor ?? null}
-        onClose={() => setPopover(null)}
-        options={distanceOptions}
-        value={draftDistance ?? DISTANCE_FILTER_OPTIONS[1]}
-        onSelect={setDraftDistance}
-        accessibilityLabel="Custom distance, in miles"
-      />
-      <PickerPopover
-        visible={popover?.kind === 'budget'}
-        anchor={popover?.anchor ?? null}
-        onClose={() => setPopover(null)}
-        options={budgetOptions}
-        value={draft.minBudgetCents}
-        onSelect={(cents) => setDraft((prev) => ({ ...prev, minBudgetCents: cents }))}
-        accessibilityLabel="Custom minimum budget"
-      />
-      <PickerPopover
-        visible={popover?.kind === 'date'}
-        anchor={popover?.anchor ?? null}
-        onClose={() => setPopover(null)}
-        options={dateOptions}
-        value={dateIsPreset ? null : draft.scheduledOn}
-        onSelect={(key) => setDraft((prev) => ({ ...prev, scheduledOn: key, scheduledUntil: null }))}
-        direction="up"
-        visibleRows={POPOVER_VISIBLE_ROWS - 1}
-        accessibilityLabel="Custom date"
-      />
-      <PickerPopover
-        visible={popover?.kind === 'sort'}
-        anchor={popover?.anchor ?? null}
-        onClose={() => setPopover(null)}
-        options={sortOptions}
-        value={draft.sort}
-        onSelect={(sort) => setDraft((prev) => ({ ...prev, sort }))}
-        direction="up"
-        align="left"
-        width={SORT_POPOVER_WIDTH}
-        rowHeight={SORT_ROW_HEIGHT}
-        visibleRows={JOB_SORTS.length}
-        accessibilityLabel="Sort by"
-      />
+        <Section label="Sort">
+          <View ref={sortRef} collapsable={false}>
+            <Pill
+              label={sortNow.label}
+              on
+              dimLead="Sort by"
+              trailing={<Ionicons name="chevron-down" size={14} color={colors.emerald} />}
+              onPress={() => openPopover('sort', sortRef)}
+              accessibilityLabel={`Sort by ${sortNow.label}`}
+            />
+          </View>
+        </Section>
+
+      </View>
     </Sheet>
   );
 }
@@ -505,6 +560,11 @@ function Pill({
 
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
+    // The design's 16 between rows — one child of the sheet, so the sheet's
+    // own 12 never applies between them.
+    sections: {
+      gap: spacing.lg,
+    },
     section: {
       gap: spacing.sm + 2,
     },
@@ -584,8 +644,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     actions: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: spacing.md,
-      paddingTop: spacing.sm,
+      gap: spacing.md + 2,
     },
     reset: {
       minHeight: 44,
@@ -602,6 +661,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     },
     show: {
       flex: 1,
+      borderRadius: radius.pill,
+      backgroundColor: colors.postPillGreen,
     },
   })
 );

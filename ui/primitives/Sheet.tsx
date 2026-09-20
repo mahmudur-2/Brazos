@@ -1,6 +1,6 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { PropsWithChildren } from 'react';
+import type { PropsWithChildren, ReactNode } from 'react';
 import {
   controls,
   layout,
@@ -40,6 +40,25 @@ type SheetProps = PropsWithChildren<{
   /** The card's material. `sheet` is every dialog's; the Filters sheet
    *  (2026-09-19) wears `pane`, the approved Map design's deeper glass. */
   material?: MaterialName;
+  /** The top corners, when a design names its own (the Filters sheet's 28);
+   *  the studio dial and the xxl default otherwise. */
+  topRadius?: number;
+  /** The header's hairline and the footer's — `line` unless a design
+   *  names its own (the Filters sheet's sage in dark). */
+  hairline?: string;
+  /** A row pinned under the scrolling content, above the home indicator,
+   *  under its own hairline — the Filters sheet's Reset and Show. */
+  footer?: ReactNode;
+  /**
+   * 2026-09-20 — A LAYER OVER THE WHOLE SHEET, inside this Modal: what a
+   * popup anchored to a control in the scrolling content renders into.
+   * Absolute, full-window, `box-none`, so it takes no touch of its own and
+   * window coordinates from `measureInWindow` land where they should. It
+   * exists because a second Modal nested in this one misbehaves on iOS —
+   * the first one's content persists and everything behind it is
+   * re-composited to a different tint while it is up.
+   */
+  overlay?: ReactNode;
 }>;
 
 export function Sheet({
@@ -48,6 +67,10 @@ export function Sheet({
   title,
   dismissOnBackdropPress = true,
   material = 'sheet',
+  topRadius: topRadiusProp,
+  hairline,
+  footer,
+  overlay,
   children,
 }: SheetProps) {
   const { emerald: colors, isDark } = useThemeColors();
@@ -57,7 +80,10 @@ export function Sheet({
   // RUN S2 (C7) — the sheet dials, each defaulting to today's shipped value.
   // The card's fill, blur and hairline are the sheet MATERIAL's dials (Blur &
   // Material); what lives here is the geometry and the backdrop scrim.
-  const topRadius = useOverrideNumber('sheet.topRadius') ?? radius.xxl;
+  const topRadiusDial = useOverrideNumber('sheet.topRadius');
+  const topRadius = topRadiusProp ?? topRadiusDial ?? radius.xxl;
+  const headerHairline = hairline != null ? { borderBottomColor: hairline } : null;
+  const footerHairline = hairline != null ? { borderTopColor: hairline } : null;
   const maxHeightPct = useOverrideNumber('sheet.maxHeightPct');
   const headerPad = useOverrideNumber('sheet.headerPad');
   const contentPad = useOverrideNumber('sheet.contentPad');
@@ -139,7 +165,13 @@ export function Sheet({
         >
           <View style={[styles.handle, handleDial]} />
           {title ? (
-            <View style={[styles.header, headerPad != null ? { paddingHorizontal: headerPad } : null]}>
+            <View
+              style={[
+                styles.header,
+                headerHairline,
+                headerPad != null ? { paddingHorizontal: headerPad } : null,
+              ]}
+            >
               <Text style={styles.title} numberOfLines={1}>
                 {title}
               </Text>
@@ -167,7 +199,13 @@ export function Sheet({
           >
             {children}
           </ScrollView>
+          {footer ? <View style={[styles.footer, footerHairline]}>{footer}</View> : null}
         </Surface>
+        {overlay ? (
+          <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+            {overlay}
+          </View>
+        ) : null}
       </View>
     </Modal>
   );
@@ -230,10 +268,17 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   closeLabelDark: { color: colors.gold },
   scroll: {
     flexGrow: 0,
+    flexShrink: 1,
   },
   scrollContent: {
     padding: layout.screenGutter,
     gap: spacing.md,
+  },
+  footer: {
+    paddingHorizontal: layout.screenGutter,
+    paddingTop: spacing.md + 2,
+    borderTopWidth: 1,
+    borderTopColor: colors.line,
   },
   }),
 );

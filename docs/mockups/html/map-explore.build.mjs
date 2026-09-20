@@ -37,6 +37,11 @@ const cacheDir = join(root, '.shots', 'map-tiles');
 // tap chips: distance, minimum budget, when, categories, sort. Written as
 // map-explore-filters-{theme}.html beside the map pages.
 const FILTERS = process.argv.includes('--filters');
+// --card (2026-09-20): the jobs sheet OPEN, three rows, the card spacing the
+// operator asked to see before the app changes — the neighbourhood alone as
+// the location, the day word with room before the pay column, EST. PAY
+// top-aligned with the title.
+const CARD = process.argv.includes('--card');
 
 // 2026-09-19, third pass: the liquid-glass treatment IS the page — dark's
 // panes are glass (blur, specular top edge, diagonal sheen, bright rim, the
@@ -134,7 +139,7 @@ const THEMES = {
     selGlow: '#eac36d', groundDot: '#ebc675', groundRing: '#f8de99', groundGlow: '0 0 9px 6px #55db9059,0 0 17px 10px #61ea7f20',
     badgeGrad: 'linear-gradient(135deg,#247344,#0c281b)', badgeInk: '#d6f5dd', badgeRing: '#77bc8b',
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
-    cardFill: 'rgba(1,15,12,.50)', cardRim: 'rgba(183,203,186,.22)', photoBg: '#15362B', photoRing: '#edb65d',
+    cardFill: 'rgba(1,15,12,.50)', cardRim: 'rgba(183,203,186,.22)', photoBg: '#15362B', photoRing: '#edb65d', glyphInk: '#edb65d',
     viewList: '#edb65d', estLabel: '#a1aaa4', estPay: '#edb65d', catFill: 'rgba(132,223,170,.10)', catRim: 'rgba(183,203,186,.22)',
     // the liquid panes
     lqBlur: '30px',
@@ -170,7 +175,7 @@ const THEMES = {
     selGlow: '#eac36d', groundDot: '#ebc675', groundRing: '#f8de99', groundGlow: '0 0 9px 6px #5cbb6a37',
     badgeGrad: 'linear-gradient(140deg,#dcecd9,#a0c4a6)', badgeInk: '#254f30', badgeRing: '#77bc8b',
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
-    cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824',
+    cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824', glyphInk: '#238658',
     viewList: '#13201B', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
     // the flat panes (operator, 2026-09-19): plain white, the app's line
     // hairline, the app's card shadow - no gradient, no sheen, no edge, no blur
@@ -211,6 +216,7 @@ const sprite = `<svg width="0" height="0" style="position:absolute" aria-hidden=
 <symbol id="i-person" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
 <symbol id="i-loc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s-6-5.7-6-11a6 6 0 0 1 12 0c0 5.3-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/></symbol>
 <symbol id="i-arrow" viewBox="0 0 24 24" fill="currentColor"><path d="M21 3 3 10.5l8.5 2 2 8.5z"/></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6-5.6-1.9 5.6-1.9z"/><path d="M5 15l.9 2.6 2.6.9-2.6.9L5 22l-.9-2.6-2.6-.9 2.6-.9z"/><path d="M19 3l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7z"/></symbol>
 <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21M9 21h6"/></symbol>
 <symbol id="i-tree" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 5.5 11h3L5 16.5h5.5V22h3v-5.5H19L15.5 11h3z"/></symbol>
 <symbol id="i-cross" viewBox="0 0 24 24" fill="currentColor"><path d="M9 3h6v6h6v6h-6v6H9v-6H3V9h6z"/></symbol>
@@ -285,7 +291,36 @@ const css = (t) => `
   .head .sub i{display:block;width:7px;height:7px;border-radius:4px;background:var(--emerald)}
   .view{display:flex;align-items:center;gap:3px;margin-top:8px;color:${t.viewList};font-size:18px;font-weight:600}
   .view svg{width:20px;height:20px;position:relative;top:1.5px}
-  .card{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 11px;border-radius:20px;background:${t.cardFill};border:1px solid ${t.cardRim};box-shadow:inset 0 1px 1px #fff03}
+  /* 2026-09-20 — the row's spacing, revised on the phone walk: the pay column
+     keeps its own 6px of air after the body (the day word never touches the
+     figure), EST. PAY top-aligns with the title, the photo and chevron stay
+     centred, and the location is the neighbourhood alone. */
+  .card{display:flex;align-items:center;gap:12px;padding:11px 12px 11px 11px;border-radius:20px;background:${t.cardFill};border:1px solid ${t.cardRim};box-shadow:inset 0 1px 1px #fff03}
+  .card .photo.glyph{display:flex;align-items:center;justify-content:center}
+  .card .photo.glyph svg{width:22px;height:22px;color:${t.glyphInk}}
+  /* the day word never overlaps the pay column, and never costs a line:
+     it sits beside the chip when the two fit the body's width, and moves to
+     the end of the location line when the chip alone fills the row (the
+     widest chips: "TV mounting", "Handyman / Repairs"). "Tomorrow" is
+     "Tmrw". The body clips as a last guarantee. */
+  .card .body{overflow:hidden}
+  .card .meta>*{white-space:nowrap}
+  .card .loc{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .card .loc .day{color:var(--emerald);margin-left:6px}
+  /* the pay column lives INSIDE the body, over its top two lines: the title
+     and the category line keep 62px clear of it (its 56 plus 6 of air), the
+     location line runs the full width beneath. The label pins to the top,
+     the amount centres on the body. */
+  .card .body{position:relative}
+  .card .title,.card .meta{padding-right:62px}
+  .card .est{position:absolute;top:0;bottom:0;right:0;width:56px;display:flex;flex-direction:column;justify-content:center}
+  .card .est .lbl{position:absolute;top:1px;right:0}
+  /* the open sheet takes the height its rows need, up to the line under the
+     search pill (the operator's red line): 3 rows stop short, 5 rows cap and
+     the list scrolls. bottom:100 is the nav bar plus the inset. */
+  .sheet.open{box-sizing:border-box;top:auto;bottom:100px;max-height:calc(${PHONE.h}px - 130px - 100px);overflow:hidden}
+  .sheet.open .list{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
+  .view svg.down{transform:rotate(90deg)}
   .card .photo{width:52px;height:52px;border-radius:26px;background:${t.photoBg};overflow:hidden;flex:0 0 auto;border:1px solid ${t.photoRing};box-shadow:inset 0 1px 4px #ffffff13}
   .card .photo i{display:block;width:100%;height:100%;background-size:cover;background-position:60% 55%;transform:scale(1.4)}
   .card .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:5px}
@@ -296,7 +331,7 @@ const css = (t) => `
   .card .loc svg{width:16px;height:16px;color:var(--emerald);flex:0 0 auto;margin-left:-1px;position:relative;top:-.5px}
   .card .est{text-align:right;flex:0 0 auto}
   .card .est .lbl{font-size:10px;font-weight:700;letter-spacing:.7px;color:${t.estLabel}}
-  .card .est .amt{font-size:22px;line-height:26px;font-weight:700;letter-spacing:-.5px;color:${t.estPay}}
+  .card .est .amt{font-size:26px;line-height:30px;font-weight:700;letter-spacing:-.5px;color:${t.estPay}}
   .card .chev{width:16px;height:16px;color:var(--muted);flex:0 0 auto;margin-left:-4px}
   /* the nav bar — the app's: 70 of content + 12 of home-indicator pad */
   .nav{position:absolute;left:0;right:0;bottom:0;height:82px;background:var(--chrome);border-top:1px solid var(--chromeLine);display:flex;align-items:flex-start;padding:10px 6px 0}
@@ -533,10 +568,43 @@ async function page(theme) {
   const tiles = await mapLayer(STYLES[theme]);
   const map = tiles.html;
   const sharedCss = `${tiles.css}\n.photoimg{background-image:url("${photo(theme)}")}`;
-  const states = FILTERS ? STATES : [null];
+  const states = FILTERS ? STATES : CARD ? CARD_STATES : [null];
   const frames = states.map((st) => frame(theme, t, map, st)).join('\n');
   return shell(theme, t, sharedCss, frames);
 }
+
+/** The rows the --card gallery lists: the phone walk's E2E fixture (no photo,
+ *  a dated job), the concept's photo row (Today), and a long neighbourhood.
+ *  The day word is Today / Tomorrow / "Sep 2" - month and day, no weekday,
+ *  so the row keeps its air before the pay column on a 393pt phone. */
+const CARDS = [
+  { title: 'E2E 1788397497221', cat: 'Cleaning', day: 'Sep 2', loc: 'Brighton Beach', pay: '$50', photo: false },
+  { title: 'Furniture Assembly', cat: 'Assembly', day: 'Today', loc: 'Flatbush', pay: '$60', photo: true },
+  { title: 'Deep clean before a move-out', cat: 'Cleaning', day: 'Sep 26', loc: 'Bedford-Stuyvesant', pay: '$120', photo: false },
+  { title: 'Mount a 65" TV above the fireplace', cat: 'TV mounting', day: 'Tmrw', loc: 'Park Slope', pay: '$95', photo: false },
+  { title: 'Fix a leaking kitchen tap', cat: 'Handyman / Repairs', day: 'Sep 22', loc: 'Sunset Park', pay: '$70', photo: false },
+  { title: 'Help carry a couch down three flights', cat: 'Moving', day: 'Sep 24', loc: 'Crown Heights', pay: '$80', photo: false },
+];
+/** The two moments the --card gallery shows: three rows (the sheet stops
+ *  where its rows do) and five (capped under the search pill, the list scrolls). */
+const CARD_STATES = [
+  { id: 'open3', label: '3 jobs — the sheet is as tall as its rows', rows: CARDS.slice(0, 3) },
+  { id: 'open5', label: '6 jobs — capped under the search bar, the list scrolls', rows: CARDS },
+];
+/** Whether the chip and the day fit side by side in the body (about 138px at
+ *  393pt with the 26px amount): the widths the fonts draw, estimated the way
+ *  the app will measure them. */
+const dayBesideChip = (c) => 12.5 * 0.56 * c.cat.length + 22 + 9 + 14 * 0.56 * c.day.length <= 138;
+const cardRow = (c) => `<div class="card">
+        <div class="photo${c.photo ? '' : ' glyph'}">${c.photo ? '<i class="photoimg"></i>' : '<svg><use href="#i-sparkles"/></svg>'}</div>
+        <div class="body">
+          <div class="title">${c.title}</div>
+          <div class="meta"><span class="cat">${c.cat}</span>${dayBesideChip(c) ? `<span>${c.day}</span>` : ''}</div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>${c.loc}${dayBesideChip(c) ? '' : `<span class="day">· ${c.day}</span>`}</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">${c.pay}</div></div>
+        </div>
+        <svg class="chev"><use href="#i-chev"/></svg>
+      </div>`;
 
 /** One phone. `st` null = the map screen; a state = the Filters sheet at that moment. */
 function frame(theme, t, map, st) {
@@ -553,7 +621,7 @@ function frame(theme, t, map, st) {
     ].join('');
   }).join('\n');
 
-  const shot = st ? `filters-${st.id}-${theme}` : `map-${theme}`;
+  const shot = st ? `${CARD ? 'card' : 'filters'}-${st.id}-${theme}` : `map-${theme}`;
   return `${st ? `<div class="slot"><div class="slot-label">${st.label}</div>` : ''}
   <div class="phone" data-shot="${shot}">
     <div class="map">
@@ -592,25 +660,16 @@ ${pins}
 
     <div class="attrib">© Esri, HERE, Garmin, OpenStreetMap contributors</div>
 
-    <div class="sheet glass">
+    <div class="sheet glass${CARD ? ' open' : ''}">
       <div class="grab"></div>
       <div class="head">
         <div>
-          <h2>6 open jobs</h2>
-          <div class="sub">Near you <i></i> Within 5 miles</div>
+          <h2>${CARD ? st.rows.length : '6'} open jobs</h2>
+          <div class="sub">Near you <i></i> ${CARD ? 'Any distance' : 'Within 5 miles'}</div>
         </div>
-        <div class="view">View <svg><use href="#i-chev"/></svg></div>
+        <div class="view">${CARD ? 'Hide <svg class="down"><use href="#i-chev"/></svg>' : 'View <svg><use href="#i-chev"/></svg>'}</div>
       </div>
-      <div class="card">
-        <div class="photo"><i class="photoimg"></i></div>
-        <div class="body">
-          <div class="title">Furniture Assembly</div>
-          <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
-          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush, Brooklyn</div>
-        </div>
-        <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
-        <svg class="chev"><use href="#i-chev"/></svg>
-      </div>
+      ${CARD ? `<div class="list">${st.rows.map(cardRow).join('')}</div>` : cardRow(CARDS[1])}
     </div>
 
     <div class="nav">
@@ -620,7 +679,7 @@ ${pins}
       <div class="item"><svg><use href="#i-chat"/></svg><span>Inbox</span></div>
       <div class="item"><svg><use href="#i-person"/></svg><span>Profile</span></div>
     </div>
-${st ? filtersSheet(st) : ''}
+${st && !CARD ? filtersSheet(st) : ''}
   </div>${st ? '</div>' : ''}`;
 }
 
@@ -652,7 +711,7 @@ ${frames}
 
 for (const theme of ['dark', 'light']) {
   const html = await page(theme);
-  const name = `map-explore${FILTERS ? '-filters' : ''}-${theme}.html`;
+  const name = CARD ? `peek-card-${theme}.html` : `map-explore${FILTERS ? '-filters' : ''}-${theme}.html`;
   writeFileSync(join(here, name), html);
   console.log(`wrote ${name} (${(html.length / 1024).toFixed(0)} KB)`);
 }

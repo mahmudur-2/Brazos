@@ -31,8 +31,8 @@ export type { PeekSheetProps } from './PeekSheet.shared';
  * takes this fallback.
  */
 function PeekSheetFallback<T>(props: PeekSheetProps<T>) {
-  const { expandedHeight, open, radius, inset } = props;
-  const metrics = usePeekMetrics(expandedHeight);
+  const { maxHeight, open, radius, inset } = props;
+  const metrics = usePeekMetrics(maxHeight, props.data.length, props.footer != null);
   const y = useRef(new Animated.Value(0)).current;
   const placed = useRef(false);
 
@@ -55,12 +55,16 @@ function PeekSheetFallback<T>(props: PeekSheetProps<T>) {
   }, [metrics.ready, metrics.closedOffset, open, y]);
 
   return (
-    <PeekSheetFrame expandedHeight={expandedHeight} radius={radius} inset={inset} ready={metrics.ready}>
+    <PeekSheetFrame expandedHeight={metrics.expandedHeight} radius={radius} inset={inset} ready={metrics.ready}>
       <Animated.View style={[stylesFor().mover, { transform: [{ translateY: y }] }]}>
         <PeekSheetPane
           {...props}
+          expandedHeight={metrics.expandedHeight}
+          canOpen={metrics.canOpen}
           onHeadLayout={metrics.onHeadLayout}
           onFirstLayout={metrics.onFirstLayout}
+          onRowLayout={metrics.onRowLayout}
+          onFooterLayout={metrics.onFooterLayout}
         />
       </Animated.View>
     </PeekSheetFrame>

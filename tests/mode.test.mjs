@@ -243,7 +243,7 @@ test('the shared Map tab offers the worker job list only in worker mode', () => 
     // The filter chip row under it.
     /\{isWorker \? \(\s*<View style=\{styles\.chipRow\}>/,
     // The jobs sheet, which lists the worker's open feed.
-    /\{isWorker && sheetExpandedHeight > 0 \? \(\s*<MapJobsSheet/,
+    /\{isWorker && sheetMaxHeight > 0 \? \(\s*<MapJobsSheet/,
     // The search pill's dispatch, gated at the handler AND at the call site.
     /onSubmit=\{isWorker \? submitSearch : undefined\}/,
     /function submitSearch\(\) \{[\s\S]{0,400}?if \(!isWorker\) return;/,

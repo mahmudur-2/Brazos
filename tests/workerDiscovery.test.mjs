@@ -320,8 +320,13 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   assert.doesNotMatch(map, /NEAR YOU|mapCard|cardEyebrow|footerBar|MapRestingJob|View list/);
   // The sheet is mounted only once the screen has measured the room it may
   // open into, and never while the hotspots are loading or failed.
-  assert.match(map, /isWorker && sheetExpandedHeight > 0 \? \(\s*<MapJobsSheet\s*visible=\{!loading && !error\}/);
-  assert.match(map, /rootHeight - insets\.top - headerHeight - sheetGap - sheetInset/);
+  assert.match(map, /isWorker && sheetMaxHeight > 0 \? \(\s*<MapJobsSheet\s*visible=\{!loading && !error\}/);
+  // 2026-09-20: the room is the MOST the sheet may take — from under the
+  // search pill (measured as a whole), so an open sheet may cover the chip
+  // but never the field — and the sheet takes what its rows need up to it.
+  assert.match(map, /rootHeight - insets\.top - pillHeight - sheetGap - sheetInset/);
+  assert.match(map, /<View onLayout=\{onPillLayout\}>\s*<Surface material="pane" radius=\{searchRadius\}/);
+  assert.match(map, /maxHeight=\{sheetMaxHeight\}/);
 });
 
 test('[static] B3 · both discovery surfaces render the shared chips and persist through the one storage module', async () => {

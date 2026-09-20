@@ -87,6 +87,13 @@ type SearchBarProps = {
    *  where a second one in front of the input would be two. Default false:
    *  every other caller keeps the glyph exactly as it was. */
   disableLeadingIcon?: boolean;
+  /**
+   * 2026-09-20 — 'ink': the glyphs and the placeholder in the ink rather
+   * than the muted greys — the approved Map design's field (its placeholder
+   * at 0.94, the mic at 0.85, a 24pt magnifier at 0.92), which the phone
+   * walk found too dim against the map. Home keeps the default.
+   */
+  emphasis?: 'muted' | 'ink';
 };
 
 export function SearchBar({
@@ -104,6 +111,7 @@ export function SearchBar({
   disableClear = false,
   trailing,
   disableLeadingIcon = false,
+  emphasis = 'muted',
 }: SearchBarProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -155,7 +163,9 @@ export function SearchBar({
           : null),
       }
     : null;
-  const iconGlyphSize = iconSizeDial ?? 18;
+  const ink = emphasis === 'ink';
+  const iconGlyphSize = iconSizeDial ?? (ink ? 24 : 18);
+  const leadingInk = ink ? withAlpha(colors.ink, 0.92) : isDark ? colors.ink : colors.emerald;
   const iconDialStyle =
     iconOffsetX || iconOffsetY
       ? { transform: [{ translateX: iconOffsetX }, { translateY: iconOffsetY }] }
@@ -163,7 +173,9 @@ export function SearchBar({
   const placeholderInk =
     placeholderColorDial != null || placeholderAlphaDial != null
       ? withAlpha(placeholderColorDial ?? colors.muted, placeholderAlphaDial ?? 1)
-      : colors.muted;
+      : ink
+        ? withAlpha(colors.ink, 0.94)
+        : colors.muted;
   // The live session's provisional phrase — never query state. It paints the
   // field while listening and is cleared the moment the session ends, so the
   // field reverts to the parent-controlled value with nothing committed.
@@ -252,7 +264,7 @@ export function SearchBar({
           <Ionicons
             name="search"
             size={iconGlyphSize}
-            color={isDark ? colors.ink : colors.emerald}
+            color={leadingInk}
             style={iconDialStyle}
           />
         )}
@@ -276,7 +288,7 @@ export function SearchBar({
         <Ionicons
           name="search"
           size={iconGlyphSize}
-          color={isDark ? colors.ink : colors.emerald}
+          color={leadingInk}
           style={iconDialStyle}
         />
       )}
@@ -329,8 +341,8 @@ export function SearchBar({
           >
             <Ionicons
               name={listening ? 'mic' : 'mic-outline'}
-              size={20}
-              color={listening ? colors.emerald : colors.navInactive}
+              size={ink ? 22 : 20}
+              color={listening ? colors.emerald : ink ? withAlpha(colors.ink, 0.85) : colors.navInactive}
             />
           </Pressable>
         </Animated.View>

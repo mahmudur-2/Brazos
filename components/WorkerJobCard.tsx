@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { RemoteImage } from './RemoteImage';
 import { Ionicons } from '@expo/vector-icons';
 import { Chip } from './Chip';
@@ -27,11 +27,15 @@ import {
 } from '../lib/jobs';
 import { formatDistanceMiles } from '../lib/discoveryFilter';
 import { scheduledDayLabel } from '../lib/jobFilters';
+import { neighbourhoodLabel } from '../lib/locationPrivacy';
 import { formatTimeAgo } from '../lib/time';
 
 const THUMB_SIZE = 84;
 /** The peek card's round photo (the approved Map design: 52pt, gold ring). */
 const PEEK_PHOTO_SIZE = 52;
+/** The pay column over the row's top two lines: 56 wide, 6 of air before it. */
+const PEEK_PAY_WIDTH = 56;
+const PEEK_PAY_CLEAR = PEEK_PAY_WIDTH + 6;
 
 /**
  * A job as a worker evaluating it sees it: what the work is, roughly where,
@@ -103,70 +107,23 @@ export function WorkerJobCard({
   // shown for a job's own poster, and never shown when the count isn't known.
   const showBreakIce = !isOwn && bidCount === 0;
 
-  // 2026-09-19 — THE PEEK ROW (docs/mockups/html/map-explore-*.html). Its own
-  // drawing rather than a re-dressing of the compact card: the photo is a
-  // ring, the title is one line, the category is the SHORT chip name and the
-  // day sits beside it as a word, and the pay reads gold. Only colours differ
-  // between the themes; every number is shared. The day word comes from
-  // lib/jobFilters (Today / Tomorrow / the short date), so the card and the
-  // When filter agree on what "today" means.
+  // 2026-09-19 — THE PEEK ROW (docs/mockups/html/map-explore-*.html, redrawn
+  // on the 2026-09-20 phone walk as docs/mockups/html/peek-card-*.html). Its
+  // own drawing rather than a re-dressing of the compact card: the photo is a
+  // ring, the title is one line, the category is the SHORT chip name with the
+  // day beside it as a word, the location is the neighbourhood alone, and the
+  // pay reads gold. Only colours differ between the themes; every number is
+  // shared. The day word comes from lib/jobFilters (Today / Tmrw / "Sep 2"),
+  // so the card and the When filter agree on what "today" means.
+  //
+  // THE ROW NEVER GROWS A LINE AND NOTHING OVERLAPS THE PAY (operator,
+  // 2026-09-20). The pay column sits over the top two lines only — the title
+  // and the category line keep PEEK_PAY_CLEAR of it, the location line runs
+  // the full width beneath — and the day word sits beside the chip only when
+  // the two fit that width, measured, otherwise at the end of the location
+  // line ("Park Slope · Tmrw"). Until measured it renders unseen.
   if (variant === 'peek') {
-    const day = scheduledDayLabel(job.scheduled_date, new Date());
-    return (
-      <Pressable
-        onPress={onPress}
-        style={({ pressed }) => [styles.peek, isDark && styles.peekDark, pressed && styles.cardPressed]}
-        accessibilityRole="button"
-        accessibilityLabel={job.title}
-      >
-        {showImage ? (
-          <RemoteImage
-            uri={thumbUrl}
-            style={styles.peekPhoto}
-            contentFit="cover"
-            onError={() => setImageFailed(true)}
-            accessible
-            accessibilityLabel={`Photo for ${job.title}`}
-          />
-        ) : (
-          <View style={[styles.peekPhoto, styles.thumbFallback]}>
-            <Ionicons name={icon} size={22} color={isDark ? colors.gold : accent.icon} />
-          </View>
-        )}
-        <View style={styles.peekBody}>
-          <Text style={styles.peekTitle} numberOfLines={1}>
-            {job.title}
-          </Text>
-          <View style={styles.peekMeta}>
-            <View style={[styles.peekCategory, isDark && styles.peekCategoryDark]}>
-              <Text style={styles.peekCategoryText} numberOfLines={1}>
-                {JOB_CATEGORY_CHIP_LABELS[job.category] ?? job.category}
-              </Text>
-            </View>
-            {day ? (
-              <Text style={styles.peekDay} numberOfLines={1}>
-                {day}
-              </Text>
-            ) : null}
-          </View>
-          {job.location ? (
-            <View style={styles.peekLocation}>
-              <Ionicons name="location-outline" size={16} color={colors.emerald} />
-              <Text style={styles.peekLocationText} numberOfLines={1}>
-                {job.location}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-        <View style={styles.peekPay}>
-          <Text style={styles.peekPayCaption}>EST. PAY</Text>
-          <Text style={[styles.peekPayValue, isDark && styles.peekPayValueDark]} numberOfLines={1}>
-            {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
-          </Text>
-        </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.navInactive} />
-      </Pressable>
-    );
+    return <PeekRow job={job} onPress={onPress} />;
   }
 
   return (
@@ -299,6 +256,104 @@ export function WorkerJobCard({
 
 /** The same silhouette with nothing in it, so the feed does not jump when the
  *  data lands. */
+function PeekRow({ job, onPress }: { job: OpenJob; onPress: () => void }) {
+  const { palette: colors, isDark } = useThemeColors();
+  const styles = stylesFor(colors);
+  const accent = categoryAccent(job.category);
+  const icon = JOB_CATEGORY_ICONS[job.category] ?? 'ellipsis-horizontal';
+  const [imageFailed, setImageFailed] = useState(false);
+  const thumbUrl = jobThumbnailUrl(job);
+  const showImage = !!thumbUrl && !imageFailed;
+  const day = scheduledDayLabel(job.scheduled_date, new Date());
+  const hood = neighbourhoodLabel(job.location);
+  const category = JOB_CATEGORY_CHIP_LABELS[job.category] ?? job.category;
+
+  // Does the day fit beside the chip? Unknown until both have laid out;
+  // re-asked whenever the words change.
+  const [dayFits, setDayFits] = useState<boolean | null>(null);
+  const [metaWidth, setMetaWidth] = useState<number | null>(null);
+  const [dayRight, setDayRight] = useState<number | null>(null);
+  useEffect(() => {
+    setDayFits(null);
+    setDayRight(null);
+  }, [day, category]);
+  useEffect(() => {
+    if (dayFits !== null || metaWidth === null || dayRight === null) return;
+    setDayFits(dayRight <= metaWidth - PEEK_PAY_CLEAR);
+  }, [dayFits, metaWidth, dayRight]);
+  const onMetaLayout = (event: LayoutChangeEvent) => setMetaWidth(event.nativeEvent.layout.width);
+  const onDayLayout = (event: LayoutChangeEvent) =>
+    setDayRight(event.nativeEvent.layout.x + event.nativeEvent.layout.width);
+  const dayBeside = day !== null && dayFits !== false;
+
+  return (
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.peek, isDark && styles.peekDark, pressed && styles.cardPressed]}
+      accessibilityRole="button"
+      accessibilityLabel={job.title}
+    >
+      {showImage ? (
+        <RemoteImage
+          uri={thumbUrl}
+          style={styles.peekPhoto}
+          contentFit="cover"
+          onError={() => setImageFailed(true)}
+          accessible
+          accessibilityLabel={`Photo for ${job.title}`}
+        />
+      ) : (
+        <View style={[styles.peekPhoto, styles.thumbFallback]}>
+          <Ionicons name={icon} size={22} color={isDark ? colors.gold : accent.icon} />
+        </View>
+      )}
+      <View style={styles.peekBody}>
+        <Text style={[styles.peekTitle, styles.peekClearOfPay]} numberOfLines={1}>
+          {job.title}
+        </Text>
+        <View style={[styles.peekMeta, styles.peekClearOfPay]} onLayout={onMetaLayout}>
+          <View style={[styles.peekCategory, isDark && styles.peekCategoryDark]}>
+            <Text style={styles.peekCategoryText} numberOfLines={1}>
+              {category}
+            </Text>
+          </View>
+          {dayBeside ? (
+            <Text
+              style={[styles.peekDay, dayFits === null && styles.peekUnmeasured]}
+              numberOfLines={1}
+              onLayout={onDayLayout}
+            >
+              {day}
+            </Text>
+          ) : null}
+        </View>
+        {hood || (day && !dayBeside) ? (
+          <View style={styles.peekLocation}>
+            {hood ? <Ionicons name="location-outline" size={16} color={colors.emerald} /> : null}
+            {hood ? (
+              <Text style={styles.peekLocationText} numberOfLines={1}>
+                {hood}
+              </Text>
+            ) : null}
+            {day && !dayBeside ? (
+              <Text style={styles.peekDay} numberOfLines={1}>
+                {hood ? `· ${day}` : day}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+        <View style={styles.peekPay} pointerEvents="none">
+          <Text style={styles.peekPayCaption}>EST. PAY</Text>
+          <Text style={[styles.peekPayValue, isDark && styles.peekPayValueDark]} numberOfLines={1}>
+            {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
+          </Text>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.navInactive} />
+    </Pressable>
+  );
+}
+
 export function WorkerJobCardSkeleton() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -454,10 +509,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.mint,
     overflow: 'hidden',
   },
+  // The body holds the pay column too (absolute, over its top two lines), so
+  // the location line can run the full width beneath it. Clipped, as the
+  // last guarantee that nothing draws over the pay.
   peekBody: {
     flex: 1,
     minWidth: 0,
     gap: spacing.xs + 1,
+    overflow: 'hidden',
+  },
+  peekClearOfPay: {
+    paddingRight: PEEK_PAY_CLEAR,
   },
   peekTitle: {
     fontFamily: fonts.display,
@@ -492,6 +554,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 14,
     color: colors.emerald,
   },
+  peekUnmeasured: {
+    opacity: 0,
+  },
   peekLocation: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -502,10 +567,21 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 13,
     color: colors.textMuted,
   },
+  // The pay column: pinned to the body's right over its top two lines, the
+  // label at the top, the amount centred on the body.
   peekPay: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 0,
+    width: PEEK_PAY_WIDTH,
     alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   peekPayCaption: {
+    position: 'absolute',
+    top: 1,
+    right: 0,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.7,
@@ -513,8 +589,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   peekPayValue: {
     fontFamily: fonts.display,
-    fontSize: 22,
-    lineHeight: 26,
+    fontSize: 26,
+    lineHeight: 30,
     fontWeight: '700',
     letterSpacing: -0.5,
     color: colors.goldDeep,

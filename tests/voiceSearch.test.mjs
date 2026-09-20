@@ -821,11 +821,16 @@ test('[static] tap-to-talk: one tap toggles, and every exit path ends the sessio
 test('[static] the mic is palette-fed and holds the 44pt touch floor', () => {
   // Both mic states read the resolved palette (tests/themeResolution.test.mjs
   // separately guarantees no raw literal anywhere in ui/).
-  assert.match(searchBarCode, /color=\{listening \? colors\.emerald : colors\.navInactive\}/);
+  // 2026-09-20: the 'ink' emphasis (the map's field) lifts the idle mic to
+  // the ink at 0.85 and 22pt; the default keeps navInactive at 20.
+  assert.match(
+    searchBarCode,
+    /color=\{listening \? colors\.emerald : ink \? withAlpha\(colors\.ink, 0\.85\) : colors\.navInactive\}/
+  );
   assert.match(searchBarCode, /withAlpha\(colors\.emerald, 0\.15\)/);
   // 20pt glyph + spacing.xs (4pt) padding + 8pt hitSlop = 44pt effective.
   assert.match(searchBarCode, /hitSlop=\{8\}/);
-  assert.match(searchBarCode, /size=\{20\}/);
+  assert.match(searchBarCode, /size=\{ink \? 22 : 20\}/);
   assert.match(searchBarCode, /padding: spacing\.xs,/);
 });
 

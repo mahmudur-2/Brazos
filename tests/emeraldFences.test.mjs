@@ -2078,13 +2078,16 @@ test('map(1) fence: the map is the ground and the chrome floats on it, on the pa
     /<SafeAreaView style=\{styles\.safe\} edges=\{\['top'\]\} pointerEvents="box-none">/,
     'the chrome layer must be box-none or the map stops panning'
   );
-  assert.match(flat, /<View style=\{styles\.headerBlock\} onLayout=\{onHeaderLayout\} pointerEvents="box-none">/);
+  assert.match(flat, /<View style=\{styles\.headerBlock\} pointerEvents="box-none">/);
 
   // NO PANE NAMES ITS OWN GROUND. The search pill, the chip and the customer
   // count capsule are `pane` Surfaces; the field inside the pill hands its
   // ground to the pill; and the retired slabs — the header wrap, the footer
   // bar and their withAlpha floors — do not come back under any name.
-  assert.match(flat, /<Surface material="pane" radius=\{searchRadius\} corners="all" style=\{styles\.searchPill\}>/);
+  assert.match(flat, /<View onLayout=\{onPillLayout\}> <Surface material="pane" radius=\{searchRadius\} corners="all" style=\{styles\.searchPill\}>/);
+  // 2026-09-20: the field reads in the ink — the design's bright placeholder,
+  // mic and 24pt magnifier — through the SearchBar's own prop.
+  assert.match(flat, /emphasis="ink"/);
   assert.match(flat, /<Surface material="pane" radius=\{MAP_CHIP_RADIUS\} corners="all"/);
   assert.match(flat, /<Surface material="pane" radius=\{sheetRadius\} corners="all" style=\{\[styles\.countCapsule,/);
   assert.match(

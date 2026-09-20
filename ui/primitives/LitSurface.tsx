@@ -103,7 +103,7 @@ export function litGradient({
  * `backgroundImage` to CSS, but React Native's own ViewStyle has no such key —
  * hence the single cast, here and nowhere else (RN 0.81 View style docs).
  */
-function backgroundImageStyle(image: string): ViewStyle {
+export function backgroundImageStyle(image: string): ViewStyle {
   return Platform.OS === 'web'
     ? ({ backgroundImage: image } as unknown as ViewStyle)
     : { experimental_backgroundImage: image };

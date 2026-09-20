@@ -693,6 +693,15 @@ export type MaterialSpec = {
   highlightAlpha?: number;
   /** See LightGlassSpec. Absent: flat theme surface in light, as always. */
   light?: LightGlassSpec;
+  /**
+   * 2026-09-20 — A DIAGONAL SHEEN over the scrim, dark only: white at
+   * `fromAlpha` in the top-left corner fading out by a third of the way,
+   * back in to `toAlpha` at the bottom-right — the approved Map design's
+   * "liquid" read (docs/mockups/html/map-explore-dark.html, its lqSheen /
+   * lqSheen2). Drawn by Surface as one gradient view between the blur and
+   * the content; absent on every material that predates it.
+   */
+  sheen?: { fromAlpha: number; toAlpha: number };
 };
 
 /**
@@ -801,6 +810,9 @@ export const materials: Record<MaterialName, MaterialSpec> = {
     radius: 28,
     radiusTopOnly: true,
     highlightAlpha: 0.3,
+    // The liquid cue the phone walk found missing (2026-09-20): the
+    // mockup's white sheen, 0.09 in the top-left corner to 0.04 bottom-right.
+    sheen: { fromAlpha: 0.09, toAlpha: 0.04 },
   },
 };
 

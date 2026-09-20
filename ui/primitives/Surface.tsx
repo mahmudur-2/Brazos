@@ -11,6 +11,7 @@ import { glow, withAlpha, type MaterialName } from '../tokens';
 import { useDesignOverrides, useMaterials } from '../../lib/designOverrides';
 import { metricStyles, useThemeColors } from '../../lib/theme';
 import { BlurLayer, canBlur } from '../../lib/blur';
+import { backgroundImageStyle } from './LitSurface';
 
 /**
  * RUN G1 (C1) — THE ONE GLASS SURFACE.
@@ -146,6 +147,9 @@ export function Surface({
       }
     : { backgroundColor: colors.surface, borderColor: colors.border };
   const highlightAlpha = glass?.highlightAlpha ?? 0;
+  // The sheen is the dark recipe's alone (a light pane is flat by ruling),
+  // and it draws only where the glass does — never over a fallback scrim.
+  const sheen = isDark && !flat && spec.sheen ? spec.sheen : null;
 
   const halo =
     glowColor && isDark
@@ -164,6 +168,18 @@ export function Surface({
         <View pointerEvents="none" style={[StyleSheet.absoluteFill, corner, styles.clip]}>
           <BlurLayer intensity={glass.blur} />
         </View>
+      ) : null}
+      {sheen ? (
+        <View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            corner,
+            backgroundImageStyle(
+              `linear-gradient(115deg, ${withAlpha(colors.white, sheen.fromAlpha)} 0%, ${withAlpha(colors.white, 0)} 34%, ${withAlpha(colors.white, 0)} 70%, ${withAlpha(colors.white, sheen.toAlpha)} 100%)`
+            ),
+          ]}
+        />
       ) : null}
       {glass && highlightAlpha > 0 ? (
         <View

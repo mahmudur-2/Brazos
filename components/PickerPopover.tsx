@@ -3,7 +3,6 @@ import {
   Animated,
   Easing,
   FlatList,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -15,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { MENU_MOTION_MS, MENU_MOTION_OUT_MS } from '../lib/motion120';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { useMaterials } from '../lib/designOverrides';
 import { PANEL_SCALE_FROM, panelTravelFor } from './DropMenu.shared';
 import { Surface } from '../ui/primitives/Surface';
 import {
@@ -23,6 +23,7 @@ import {
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 
@@ -31,26 +32,30 @@ import {
  * (docs/mockups/html/map-explore-filters-*.html, operator 2026-09-19: "Menu
  * list with a checkmark", "the value itself" on the pill).
  *
- * WHAT IT IS. A scrolling list of options on the `menu` material — the same
- * glass DropMenu's panel wears — anchored to the pill that opened it: below
- * it and flush with its right edge for the Distance and Budget pills, above
- * it for the When pill and the Sort pill (which sit at the foot of the sheet).
- * Six rows show; the list scrolls to the current value, which carries the
- * tick. A date row draws a small calendar with its day number; a sort row
- * carries its rule as a second line.
+ * WHAT IT IS. A scrolling list of options anchored to the pill that opened
+ * it: below it and flush with its right edge for the Distance and Budget
+ * pills, above it for the When pill and the Sort pill (which sit at the foot
+ * of the sheet). Six rows show; the list opens on the current value, which
+ * carries the tick. A date row draws a small calendar with its day number; a
+ * sort row carries its rule as a second line. The panel wears the SHEET'S
+ * OWN GLASS (the `pane` material) under the menu's thinner rim, so the popup
+ * and the sheet read as one material — the mockup draws them from one ink.
  *
- * WHY ITS OWN MODAL. The pills live inside the Filters sheet's ScrollView,
- * which clips its content, and DropMenu's panel is laid out inside its
- * anchor's parent — a popup opening under a pill near the sheet's edge would
- * be cut. So the pill measures itself in WINDOW coordinates and the popup is
- * a second, transparent Modal over the sheet's own: the whole window is its
- * backdrop, and nothing between can clip it. It carries no `animationType`;
- * the entrance is DropMenu's own — a short fade with the panel's travel and
- * scale, on the native driver, skipped under Reduce Motion.
+ * WHERE IT RENDERS, and why that changed on 2026-09-20. The pills live inside
+ * the Filters sheet's ScrollView, which clips, so the popup has to render
+ * above the sheet's content. The first build made it a second Modal nested
+ * in the sheet's, and the phone walk showed what iOS does with that: the
+ * first popup's content persisted under every later pill, and everything
+ * behind the popup was re-composited to a different tint while it was up.
+ * So the popup now renders into the Sheet's `overlay` slot — a full-window
+ * layer INSIDE the sheet's own Modal — positioned from the pill's
+ * `measureInWindow`, with the whole window as its backdrop. No second Modal,
+ * nothing re-composited, one green.
  *
- * WHY NOT A DropMenu. That surface is a fixed row of ACTIONS; this is a
- * scrolling row of VALUES with a current one. Its constants are reused
- * (the travel, the scale, the two durations) so the two panels move alike.
+ * WHY NOT A DropMenu. That surface is a fixed row of ACTIONS laid out inside
+ * its anchor's parent; this is a scrolling row of VALUES with a current one.
+ * Its constants are reused (the travel, the scale, the two durations) so the
+ * two panels move alike.
  */
 
 export type PickerOption<V> = {
@@ -110,11 +115,13 @@ export function PickerPopover<V>({
 }: PickerPopoverProps<V>) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  const menu = useMaterials().menu;
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const progress = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(visible);
+  const listRef = useRef<FlatList<PickerOption<V>>>(null);
 
   useEffect(() => {
     if (visible) setMounted(true);
@@ -148,10 +155,15 @@ export function PickerPopover<V>({
   );
 
   // The list opens with the current value one row down from the top, the
-  // way a wheel shows what is chosen with what comes next under it.
+  // way a wheel shows what is chosen with what comes next under it. The
+  // offset is set three ways because none is reliable alone on a list that
+  // mounts inside an animating panel: the initial index for the render
+  // window, the content offset for the first paint, and a scroll on layout
+  // for the frames where the first two are ignored.
   const currentIndex = options.findIndex((option) => Object.is(option.value, value));
   const initialIndex =
     currentIndex < 0 ? 0 : Math.max(0, Math.min(currentIndex - 1, options.length - rows));
+  const initialOffset = initialIndex * rowHeight;
 
   const travel = panelTravelFor(direction);
   const panelStyle = {
@@ -163,7 +175,7 @@ export function PickerPopover<V>({
   };
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onClose} statusBarTranslucent>
+    <>
       <Pressable
         style={StyleSheet.absoluteFill}
         onPress={onClose}
@@ -175,12 +187,21 @@ export function PickerPopover<V>({
         accessibilityViewIsModal
         accessibilityLabel={accessibilityLabel}
       >
-        <Surface material="menu" radius={radius.lg} style={styles.material}>
+        <Surface
+          material="pane"
+          radius={radius.lg}
+          corners="all"
+          style={[styles.material, { borderColor: withAlpha(menu.borderColor, menu.borderAlpha) }]}
+        >
           <FlatList
+            ref={listRef}
             data={options}
             keyExtractor={(option) => String(option.value)}
             getItemLayout={(_, index) => ({ length: rowHeight, offset: rowHeight * index, index })}
             initialScrollIndex={initialIndex}
+            initialNumToRender={rows + 4}
+            contentOffset={{ x: 0, y: initialOffset }}
+            onLayout={() => listRef.current?.scrollToOffset({ offset: initialOffset, animated: false })}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => {
@@ -228,7 +249,7 @@ export function PickerPopover<V>({
           />
         </Surface>
       </Animated.View>
-    </Modal>
+    </>
   );
 }
 
@@ -282,7 +303,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       color: colors.textMuted,
       marginTop: 1,
     },
-    // The date rows' calendar: a 20pt page with a 5pt header bar and the day.
+    // The date rows' calendar: a 20pt page with a 4pt header bar and the day.
     calendar: {
       width: 20,
       height: 20,

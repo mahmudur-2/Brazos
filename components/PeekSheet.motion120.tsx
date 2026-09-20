@@ -45,8 +45,8 @@ import {
 const SPRING: WithSpringConfig = { ...SHEET_SPRING, overshootClamping: false };
 
 export function PeekSheet<T>(props: PeekSheetProps<T>) {
-  const { expandedHeight, open, onOpenChange, radius, inset } = props;
-  const metrics = usePeekMetrics(expandedHeight);
+  const { maxHeight, open, onOpenChange, radius, inset } = props;
+  const metrics = usePeekMetrics(maxHeight, props.data.length, props.footer != null);
   // 0 is open; `closed` is the rest offset — mirrored into a shared value so
   // the worklets can read it without a hop.
   const y = useSharedValue(0);
@@ -86,6 +86,8 @@ export function PeekSheet<T>(props: PeekSheetProps<T>) {
     // A sideways drag is the map's; a small vertical one is a tap's slop.
     .activeOffsetY([-6, 6])
     .failOffsetX([-12, 12])
+    // Nothing beyond the peek: nothing to pull.
+    .enabled(metrics.canOpen)
     .onBegin(() => {
       startY.value = y.value;
     })
@@ -111,12 +113,16 @@ export function PeekSheet<T>(props: PeekSheetProps<T>) {
   }));
 
   return (
-    <PeekSheetFrame expandedHeight={expandedHeight} radius={radius} inset={inset} ready={metrics.ready}>
+    <PeekSheetFrame expandedHeight={metrics.expandedHeight} radius={radius} inset={inset} ready={metrics.ready}>
       <Animated.View style={[stylesFor().mover, moverStyle]}>
         <PeekSheetPane
           {...props}
+          expandedHeight={metrics.expandedHeight}
+          canOpen={metrics.canOpen}
           onHeadLayout={metrics.onHeadLayout}
           onFirstLayout={metrics.onFirstLayout}
+          onRowLayout={metrics.onRowLayout}
+          onFooterLayout={metrics.onFooterLayout}
           wrapHead={(head) => <GestureDetector gesture={pan}>{head}</GestureDetector>}
         />
       </Animated.View>

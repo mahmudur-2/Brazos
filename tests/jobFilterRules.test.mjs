@@ -232,17 +232,35 @@ test('the radius RPC’s clamp rose to 3,000 in an additive migration that resta
 // ---------------------------------------------------------------------------
 const { scheduledDayLabel, localDateKey } = await import(pathToFileURL(join(root, 'lib/jobFilters.ts')).href);
 
-test('the day word is Today, Tomorrow, the short date, or nothing — in the local calendar', () => {
+test('the day word is Today, Tmrw, the short date, or nothing — in the local calendar', () => {
   const now = new Date(2026, 8, 19, 22, 30); // late evening, so UTC would already be the 20th
   assert.equal(scheduledDayLabel(localDateKey(now), now), 'Today');
-  assert.equal(scheduledDayLabel(localDateKeyAfter(now, 1), now), 'Tomorrow');
-  assert.equal(scheduledDayLabel('2026-09-26', now), 'Sat, Sep 26');
+  // Short, by the 2026-09-20 ruling: the row may not grow a line and the
+  // day may not reach the pay column.
+  assert.equal(scheduledDayLabel(localDateKeyAfter(now, 1), now), 'Tmrw');
+  assert.equal(scheduledDayLabel('2026-09-26', now), 'Sep 26');
   // No date is no word — never a guess — and a malformed key is treated the same.
   assert.equal(scheduledDayLabel(null, now), null);
   assert.equal(scheduledDayLabel('not-a-date', now), null);
   // The word and the Today filter agree on what today is: the same key function.
   assert.equal(scheduledDayLabel(dateWindowPreset('today', now).scheduledOn, now), 'Today');
-  assert.equal(scheduledDayLabel(dateWindowPreset('tomorrow', now).scheduledOn, now), 'Tomorrow');
+  assert.equal(scheduledDayLabel(dateWindowPreset('tomorrow', now).scheduledOn, now), 'Tmrw');
+});
+
+// ---------------------------------------------------------------------------
+// The peek row's location (2026-09-20): the neighbourhood alone.
+// ---------------------------------------------------------------------------
+const { neighbourhoodLabel, publicLocationLabel } = await import(pathToFileURL(join(root, 'lib/locationPrivacy.ts')).href);
+
+test('the neighbourhood is the public label cut at its first comma, never something more precise', () => {
+  assert.equal(neighbourhoodLabel('Brighton Beach, Brooklyn, NY'), 'Brighton Beach');
+  assert.equal(neighbourhoodLabel('Bedford-Stuyvesant, Brooklyn'), 'Bedford-Stuyvesant');
+  assert.equal(neighbourhoodLabel('Downtown'), 'Downtown');
+  assert.equal(neighbourhoodLabel(', Brooklyn'), ', Brooklyn', 'an empty first part keeps the label');
+  assert.equal(neighbourhoodLabel(null), null);
+  // Coordinates never become a label here either: the same refusal publicLocationLabel makes.
+  assert.equal(publicLocationLabel('40.6265, -73.9465'), null);
+  assert.equal(neighbourhoodLabel('40.6265, -73.9465'), null);
 });
 
 // ---------------------------------------------------------------------------
@@ -257,7 +275,7 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   const popover = stripComments(await read('components/PickerPopover.tsx'));
 
   // THE ROWS, in the design's order, each labelled as the design labels it.
-  const labels = [...sheet.matchAll(/<Section label="([^"]+)"/g)].map((m) => m[1]);
+  const labels = [...sheet.matchAll(/<Section\s+label="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(labels, ['Distance', 'Minimum budget', 'When', 'Categories', 'Sort']);
 
   // THE VALUES COME FROM LIB — presets and Custom lists alike — so a pill can
@@ -284,9 +302,25 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   assert.match(sheet, /label=\{distanceIsPreset \? 'Custom' : distanceChipLabel\(draftDistance\)\}/);
   assert.match(sheet, /label=\{budgetIsPreset \? 'Custom' : formatBudget\(draft\.minBudgetCents\)\}/);
   assert.match(sheet, /shortDate\(draft\.scheduledOn\)/);
-  assert.equal((sheet.match(/<PickerPopover/g) ?? []).length, 4, 'four popups: distance, budget, date, sort');
-  // The date and sort popups open upward, as the design draws them.
-  assert.equal((sheet.match(/direction="up"/g) ?? []).length, 2);
+  // ONE popup (2026-09-20), in the Sheet's overlay, fed by whichever pill
+  // opened it — four popups in four nested Modals showed the first one's
+  // list under every pill on the phone. The date and sort popups open
+  // upward, as the design draws them.
+  assert.equal((sheet.match(/<PickerPopover/g) ?? []).length, 1, 'one popup, in the overlay');
+  assert.match(sheet, /overlay=\{\s*<PickerPopover/);
+  assert.match(sheet, /const openKind = popover\?\.kind \?\? lastKindRef\.current;/);
+  assert.equal((sheet.match(/direction: 'up' as const/g) ?? []).length, 2);
+  assert.equal((sheet.match(/direction: 'down' as const/g) ?? []).length, 2);
+  // The sheet's own design props: 28pt corners, the sage hairline in dark,
+  // the actions pinned as the footer, the When row scrolling.
+  assert.match(sheet, /topRadius=\{SHEET_TOP_RADIUS\}/);
+  assert.match(sheet, /hairline=\{isDark \? withAlpha\(paneRim, SHEET_HAIRLINE_ALPHA\) : undefined\}/);
+  assert.match(sheet, /footer=\{actions\}/);
+  assert.match(sheet, /<Section label="When" scroll>/);
+  // The Show button is the mockup's capsule in the Post-a-job green.
+  assert.match(sheet, /show: \{\s*flex: 1,\s*borderRadius: radius\.pill,\s*backgroundColor: colors\.postPillGreen,\s*\}/);
+  // The note tells the worker why Best Match is absent.
+  assert.match(sheet, /Pick job categories on your profile to unlock Best Match\./);
   // The sort popup carries the five rules with their sentences.
   for (const sort of JOB_SORTS) {
     assert.ok(
@@ -302,7 +336,7 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
 
   // EVERY CLOSE APPLIES: Done and the backdrop go through the same function
   // the button does, and the distance writes only when it changed.
-  assert.match(sheet, /<Sheet visible=\{visible\} onClose=\{applyAndClose\} title="Filters" material="pane">/);
+  assert.match(sheet, /<Sheet\s+visible=\{visible\}\s+onClose=\{applyAndClose\}\s+title="Filters"\s+material="pane"/);
   assert.match(sheet, /<Button title=\{showTitle\} onPress=\{applyAndClose\}/);
   assert.match(sheet, /if \(distance && draftDistance !== distance\.value\) distance\.onChange\(draftDistance\);/);
   // The count is asked of the caller, and "Show jobs" stands in when unknown.
@@ -314,13 +348,19 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   assert.match(sheet, /pillOnDark: \{\s*backgroundColor: withAlpha\(colors\.emerald, 0\.16\),\s*borderColor: withAlpha\(colors\.emerald, 0\.48\),\s*\}/);
   assert.match(sheet, /pillTextOn: \{\s*fontWeight: '600',\s*color: colors\.emerald,\s*\}/);
 
-  // THE POPUP is its own Modal over the sheet's, anchored in window
-  // coordinates, on the menu material, scrolled to the current value, moved
-  // by the native driver on DropMenu's own constants.
+  // THE POPUP renders in the Sheet's overlay — NO Modal of its own, since
+  // 2026-09-20 — anchored in window coordinates, on the sheet's own pane
+  // glass under the menu's rim, opened on the current value three ways,
+  // moved by the native driver on DropMenu's own constants.
   assert.match(sheet, /ref\.current\?\.measureInWindow\(\(x, y, width, height\) => \{/);
-  assert.match(popover, /<Modal visible transparent animationType="none"/);
-  assert.match(popover, /<Surface material="menu" radius=\{radius\.lg\}/);
+  assert.doesNotMatch(popover, /<Modal/, 'a nested Modal is what broke the popups on the phone');
+  assert.match(popover, /<Surface\s+material="pane"\s+radius=\{radius\.lg\}/);
+  assert.match(popover, /borderColor: withAlpha\(menu\.borderColor, menu\.borderAlpha\)/);
   assert.match(popover, /initialScrollIndex=\{initialIndex\}/);
+  assert.match(popover, /contentOffset=\{\{ x: 0, y: initialOffset \}\}/);
+  assert.match(popover, /scrollToOffset\(\{ offset: initialOffset, animated: false \}\)/);
+  const sheetPrimitive = stripComments(await read('ui/primitives/Sheet.tsx'));
+  assert.match(sheetPrimitive, /<View style=\{StyleSheet\.absoluteFill\} pointerEvents="box-none">\s*\{overlay\}/);
   assert.match(popover, /useNativeDriver: USE_NATIVE_DRIVER/);
   assert.match(popover, /import \{ PANEL_SCALE_FROM, panelTravelFor \} from '\.\/DropMenu\.shared';/);
   assert.match(popover, /name="checkmark"/);

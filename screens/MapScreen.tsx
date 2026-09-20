@@ -110,7 +110,7 @@ function MapJobsSheet({
   radiusMiles,
   onRadiusChange,
   userLoc,
-  expandedHeight,
+  maxHeight,
   open,
   onOpenChange,
   onOpenJob,
@@ -129,7 +129,8 @@ function MapJobsSheet({
   radiusMiles: DistanceFilterMiles | null;
   onRadiusChange: (next: DistanceFilterMiles | null) => void;
   userLoc: { lat: number; lng: number } | null;
-  expandedHeight: number;
+  /** The most room the sheet may open into — from under the search pill. */
+  maxHeight: number;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onOpenJob: (job: OpenJob) => void;
@@ -207,7 +208,7 @@ function MapJobsSheet({
     <>
       {visible ? (
       <PeekSheet
-        expandedHeight={expandedHeight}
+        maxHeight={maxHeight}
         open={open}
         onOpenChange={onOpenChange}
         title={title}
@@ -303,9 +304,9 @@ export function MapScreen() {
   // The jobs sheet: peeking, or pulled up to the list.
   const [sheetOpen, setSheetOpen] = useState(false);
   // The two measurements the sheet's room is derived from: the screen's own
-  // height and the header block's. Zero until the first layout pass.
+  // height and the search pill's. Zero until the first layout pass.
   const [rootHeight, setRootHeight] = useState(0);
-  const [headerHeight, setHeaderHeight] = useState(0);
+  const [pillHeight, setPillHeight] = useState(0);
   // The search pill's own text. It is a DISPATCH field, not a live filter:
   // the map draws hotspot cells, which carry counts and categories and no
   // text to match against, so a query resolves on the list surface that
@@ -480,18 +481,19 @@ export function MapScreen() {
     navigation.navigate('JobDetail', { job });
   }
 
-  // The jobs sheet's room when open: from a gap under the chip row to its
-  // own inset above the screen's foot. Both heights are measured, so the
-  // open sheet never covers the search capsule on any device. The gap is
-  // read here, at use time, so a studio turn of the scale reaches it.
+  // The MOST room the jobs sheet may open into: from a gap under the search
+  // pill (the operator's line, 2026-09-20 — it may cover the Today chip) to
+  // its own inset above the screen's foot. The sheet takes what its rows
+  // need up to this. Both heights are measured, so the open sheet never
+  // covers the search capsule on any device. The gap is read here, at use
+  // time, so a studio turn of the scale reaches it.
   const sheetGap = spacing.md;
-  const sheetExpandedHeight =
-    rootHeight > 0 && headerHeight > 0
-      ? Math.max(0, rootHeight - insets.top - headerHeight - sheetGap - sheetInset)
+  const sheetMaxHeight =
+    rootHeight > 0 && pillHeight > 0
+      ? Math.max(0, rootHeight - insets.top - pillHeight - sheetGap - sheetInset)
       : 0;
   const onRootLayout = (event: LayoutChangeEvent) => setRootHeight(event.nativeEvent.layout.height);
-  const onHeaderLayout = (event: LayoutChangeEvent) =>
-    setHeaderHeight(event.nativeEvent.layout.height);
+  const onPillLayout = (event: LayoutChangeEvent) => setPillHeight(event.nativeEvent.layout.height);
 
   const chosen = selectedInDark(colors);
 
@@ -528,13 +530,15 @@ export function MapScreen() {
             together because the open sheet stops a gap under whatever is
             here. 4D-4: chrome and tiles resolve together — the MapView follows
             the in-app theme (HotspotMap.native userInterfaceStyle). */}
-        <View style={styles.headerBlock} onLayout={onHeaderLayout} pointerEvents="box-none">
+        <View style={styles.headerBlock} pointerEvents="box-none">
           {/* 2026-09-19 — ONE GLASS PILL, not a capsule around a field. The
               shared SearchBar keeps its behaviour — the mic, the clear, the
               dispatch — and hands its own ground to the `pane` Surface, so the
               tiles read through the pill in dark and the pill is flat white in
               light, as ruled. The distance pill rides inside it, at the right,
               where the design's "5 mi" sits. */}
+          {/* Measured as a whole (the sheet's room starts under it). */}
+          <View onLayout={onPillLayout}>
           <Surface material="pane" radius={searchRadius} corners="all" style={styles.searchPill}>
             <SearchBar
               value={query}
@@ -545,6 +549,10 @@ export function MapScreen() {
               autoCorrect
               style={styles.searchField}
               accessibilityLabel="Explore nearby jobs"
+              // The design's bright field: ink placeholder, ink mic, a 24pt
+              // magnifier — the phone walk found the muted default too dim
+              // over the map.
+              emphasis="ink"
               trailing={
                 // Worker-only, for the same §F reason the old "See all jobs"
                 // control was: the distance filter is worker discovery state,
@@ -573,6 +581,7 @@ export function MapScreen() {
               }
             />
           </Surface>
+          </View>
 
           {/* THE CHIP ROW, under the capsule and floating on the tiles like
               it. ONE chip. HOURLY IS ABSENT AND THAT IS DELIBERATE: `jobs`
@@ -644,7 +653,7 @@ export function MapScreen() {
             guessed; absent while the hotspots are loading or failed, like
             the count it carries. Its foot opens the real results list —
             the sheet is a window on that list, not a second one. */}
-        {isWorker && sheetExpandedHeight > 0 ? (
+        {isWorker && sheetMaxHeight > 0 ? (
           <MapJobsSheet
             visible={!loading && !error}
             onSeeAll={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
@@ -655,7 +664,7 @@ export function MapScreen() {
             radiusMiles={radiusMiles ?? null}
             onRadiusChange={selectRadius}
             userLoc={userLoc}
-            expandedHeight={sheetExpandedHeight}
+            maxHeight={sheetMaxHeight}
             open={sheetOpen}
             onOpenChange={setSheetOpen}
             onOpenJob={(job) => navigation.navigate('JobDetail', { job })}

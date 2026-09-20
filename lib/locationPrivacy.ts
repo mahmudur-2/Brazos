@@ -45,3 +45,17 @@ export function coordinateLocationError(location: string): string | null {
 export function publicLocationLabel(location: string | null): string | null {
   return location && !isCoordinateShapedLocation(location) ? location : null;
 }
+
+/**
+ * The neighbourhood alone — the first part of an area label before its
+ * first comma ("Brighton Beach" from "Brighton Beach, Brooklyn, NY"), for a
+ * row with one line to spend (the map's jobs sheet, operator 2026-09-20:
+ * "I don't want ... after location"). Still the public label and nothing
+ * more precise: a shorter cut of the same approximate area.
+ */
+export function neighbourhoodLabel(location: string | null): string | null {
+  const label = publicLocationLabel(location);
+  if (!label) return null;
+  const first = label.split(',')[0]?.trim();
+  return first ? first : label;
+}

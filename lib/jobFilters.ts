@@ -144,18 +144,20 @@ export function customDateKeys(from: Date, count = 30): string[] {
 
 /**
  * The one-word day a card shows beside its category (the approved Map
- * design's "Assembly · Today"): Today, Tomorrow, or the short date for
- * anything later — and null for a job with no date, which then shows nothing
- * rather than a guess. Keys compared in the caller's local calendar, like
- * every other date here.
+ * design's "Assembly · Today"): Today, Tmrw, or "Sep 2" — month and day, no
+ * weekday — for anything later, and null for a job with no date, which then
+ * shows nothing rather than a guess. Short on the operator's ruling
+ * (2026-09-20): "Tomorrow" and "Wed, Sep 2" ran into the pay column on the
+ * phone, and the row may not grow a line. Keys compared in the caller's
+ * local calendar, like every other date here.
  */
 export function scheduledDayLabel(scheduledDate: string | null, now: Date): string | null {
   if (!scheduledDate) return null;
   if (scheduledDate === localDateKey(now)) return 'Today';
-  if (scheduledDate === localDateKeyAfter(now, 1)) return 'Tomorrow';
+  if (scheduledDate === localDateKeyAfter(now, 1)) return 'Tmrw';
   const [y, m, d] = scheduledDate.split('-').map(Number);
   if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return new Date(y, m - 1, d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 /** The three preset windows a When row offers, as [on, until]. */

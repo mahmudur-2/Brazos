@@ -1172,7 +1172,12 @@ test('[static] the peek sheet slides by a transform on both drivers, and the fal
   assert.match(fallback, /transform: \[\{ translateY: y \}\]/);
   assert.doesNotMatch(fallback, /height: y\b|\bheight: metrics/, 'the fallback must not animate the layout');
   assert.match(fallback, /gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\)/);
-  assert.match(shared, /<Pressable\s+onPress=\{toggle\}/, 'the head is a button on both drivers');
+  assert.match(
+    shared,
+    /<Pressable\s+onPress=\{canOpen \? toggle : undefined\}/,
+    'the head is a button on both drivers — when there is anything beyond the peek to open onto'
+  );
+  assert.match(fast, /\.enabled\(metrics\.canOpen\)/, 'and the pull is offered under the same condition');
   assert.match(shared, /const toggle = \(\) => onOpenChange\(!open\);/);
 
   // The fast path: the pan is on the HEAD (the shared seam), the update is a
@@ -1191,11 +1196,19 @@ test('[static] the peek sheet slides by a transform on both drivers, and the fal
   // peek, the frame clips at the open size and takes no touch of its own.
   assert.match(shared, /const closedOffset = ready \? Math\.max\(0, expandedHeight - peekHeight\) : 0;/);
   assert.match(shared, /const peekHeight = ready \? 1 \+ headHeight \+ firstHeight \+ paneBottom\(\) : 0;/);
+  // 2026-09-20: the open height is what the rows need, capped at the room the
+  // parent measured — never more than the content, never a fixed height.
+  assert.match(
+    shared,
+    /const expandedHeight = ready \? Math\.max\(peekHeight, Math\.min\(contentHeight, maxHeight\)\) : maxHeight;/
+  );
+  assert.match(shared, /const canOpen = closedOffset > 0;/);
+  assert.match(shared, /onRowLayout\(index, event\);/, 'every row reports its height');
   assert.match(shared, /pointerEvents="box-none"/);
   assert.match(shared, /frame: \{\s*position: 'absolute',\s*overflow: 'hidden',/);
   // The list is the peek: its first row reports the height the peek shows,
   // and it cannot scroll under a finger until the pane is open.
-  assert.match(shared, /onLayout=\{index === 0 \? onFirstLayout : undefined\}/);
+  assert.match(shared, /if \(index === 0\) onFirstLayout\(event\);/);
   assert.match(shared, /scrollEnabled=\{open\}/);
   // ONE spring for both drivers, spelled once.
   assert.match(shared, /export const SHEET_SPRING = \{ damping: \d+, stiffness: \d+, mass: [\d.]+ \} as const;/);
