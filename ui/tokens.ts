@@ -655,6 +655,42 @@ const GLASS_SCRIM = '#071B15';
  */
 const PANE_SCRIM = '#062418';
 
+/**
+ * 2026-09-20 (sitting 2, item 13) — THE PANES' EDGES, per pane. The operator
+ * read the shared pane rim (brand.mint, a pale sage) as whitish on the phone
+ * and chose, from seven honest renders (a 1px rim in different greens under
+ * a glow of thin fading rings — exactly what Surface draws below, no shadow,
+ * no blur, so the dragged sheet keeps its frames): the search pill and the
+ * Today chip wear the DARK EMERALD rim at .70 under a soft glow (option C);
+ * the jobs sheet the BRIGHT GREEN at .60 under the same glow (option B);
+ * the Filters sheet keeps the pane's own rim one physical pixel thin, no glow.
+ * The rim is never thicker than 1pt ("don't change the thickness"). Dark
+ * only — light panes are flat by ruling and ignore these.
+ */
+const PANE_RIM_BRIGHT = '#7DE7A4';
+/** Each glow ring is this many points, outside the rim, fading outward. */
+export const PANE_HALO_RING = 2;
+
+export type PaneRim = { color: string; alpha: number; width?: number | 'hairline' };
+export type PaneHalo = { color: string; alphas: readonly number[] };
+
+export const paneEdges = {
+  /** The search pill and the Today chip — option C. */
+  search: {
+    rim: { color: dark.emerald, alpha: 0.7 } as PaneRim,
+    halo: { color: dark.emerald, alphas: [0.12, 0.06, 0.03] } as PaneHalo,
+  },
+  /** The jobs sheet — option B. */
+  sheet: {
+    rim: { color: PANE_RIM_BRIGHT, alpha: 0.6 } as PaneRim,
+    halo: { color: PANE_RIM_BRIGHT, alphas: [0.12, 0.06, 0.03] } as PaneHalo,
+  },
+  /** The Filters sheet — the pane's rim, a hairline, no glow. */
+  filters: {
+    rim: { color: brand.mint, alpha: 0.46, width: 'hairline' } as PaneRim,
+  },
+} as const;
+
 export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear' | 'pane';
 
 /**

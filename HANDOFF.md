@@ -50,7 +50,17 @@ notes). `npm run verify` after the last code commit: **1380 pass, 0 fail, exit 0
 `bottom: 93px`, a `mini` moment in `--card`), `docs/mockups/html/worker-results-card.{build.mjs,html}`
 (the card, a1, both themes).
 
-**NOT YET SEEN ON THE PHONE:** all three code commits. The OTA was published at the
+**THEN, ITEM 13 (the same sitting, after the OTA): THE PANES' OWN EDGES** — the
+operator's picks from seven honest renders: the search pill and the Today chip wear
+the dark emerald rim `#5FAE81` at .70 under a soft glow of three 2pt rings (option C);
+the jobs sheet the bright green `#7DE7A4` at .60 under the same rings (option B); the
+Filters sheet's top line is a hairline (one physical pixel), no glow. One table —
+`ui/tokens.ts` `paneEdges` + `PANE_HALO_RING`; `Surface` gained `rim` / `halo` (dark
+glass only; the rings are plain Views outside the box, no shadow); `Sheet` passes
+`rim`; the peek sheet's frame grows by `PEEK_HALO_REACH` (6) on the top and sides.
+DECISIONS (9). Verify after it: 1380 / 0. Published as a second OTA.
+
+**NOT YET SEEN ON THE PHONE:** all three code commits, and item 13's. The OTA was published at the
 end of this run (the operator's "yes — publish at the end"); the operator opens the
 Beta twice and walks it (below).
 
@@ -103,6 +113,11 @@ its rim (dark), at the mockup's padding.
   (the release picks the nearest stop); left in place, harmless — remove with the
   next touch of that file.
 - **Stale comments still owed** (unchanged): `scripts/shots.mjs` lines 387-390.
+- **The panes' edges are per pane now** (`paneEdges.search` / `.sheet` / `.filters`):
+  a rim is 1pt or a hairline, never thicker (fenced); a glow is rings, never a shadow.
+  A new pane names its edge from the table; the shared pane rim (brand.mint .46) is
+  what a pane gets when it names none. A parent that clips a haloed pane must leave
+  the rings their room (the peek frame is the model).
 
 ### The fences this session touched, and how
 

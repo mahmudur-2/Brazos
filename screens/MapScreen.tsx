@@ -47,6 +47,7 @@ import { navigateAcrossTabs } from '../lib/navigationRef';
 import { useDialNumber } from '../lib/designOverrides';
 import {
   fonts,
+  paneEdges,
   radius,
   selectedInDark,
   shadows,
@@ -562,8 +563,17 @@ export function MapScreen() {
               light, as ruled. The distance pill rides inside it, at the right,
               where the design's "5 mi" sits. */}
           {/* Measured as a whole (the sheet's room starts under it). */}
+          {/* The pill's own edge (2026-09-20 sitting 2, item 13): the dark emerald
+              rim under a soft glow of rings — option C, from ui/tokens.ts paneEdges. */}
           <View onLayout={onPillLayout}>
-          <Surface material="pane" radius={searchRadius} corners="all" style={styles.searchPill}>
+          <Surface
+            material="pane"
+            radius={searchRadius}
+            corners="all"
+            rim={paneEdges.search.rim}
+            halo={paneEdges.search.halo}
+            style={styles.searchPill}
+          >
             <SearchBar
               value={query}
               onChangeText={setQuery}
@@ -627,6 +637,8 @@ export function MapScreen() {
                 material="pane"
                 radius={MAP_CHIP_RADIUS}
                 corners="all"
+                rim={paneEdges.search.rim}
+                halo={paneEdges.search.halo}
                 style={[
                   styles.chipShell,
                   todayOn &&

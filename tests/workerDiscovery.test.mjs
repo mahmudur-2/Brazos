@@ -348,7 +348,16 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   assert.match(map, /const MAP_SHEET_BOTTOM = 0;/);
   assert.match(map, /rootHeight - insets\.top - pillHeight - sheetGap - MAP_SHEET_BOTTOM/);
   assert.match(map, /insetBottom=\{MAP_SHEET_BOTTOM\}/);
-  assert.match(map, /<View onLayout=\{onPillLayout\}>\s*<Surface material="pane" radius=\{searchRadius\}/);
+  assert.match(map, /<View onLayout=\{onPillLayout\}>\s*(\{\/\*[\s\S]*?\*\/\}\s*)?<Surface\s+material="pane"\s+radius=\{searchRadius\}/);
+  // 2026-09-20 (sitting 2, item 13): the panes' own edges, from the one table —
+  // the pill and the chip option C, the sheet option B, the Filters sheet a hairline.
+  assert.match(map, /rim=\{paneEdges\.search\.rim\}\s*halo=\{paneEdges\.search\.halo\}\s*style=\{styles\.searchPill\}/);
+  assert.match(map, /rim=\{paneEdges\.search\.rim\}\s*halo=\{paneEdges\.search\.halo\}\s*style=\{\[\s*styles\.chipShell/);
+  const peekShared = await read('components/PeekSheet.shared.tsx');
+  assert.match(peekShared, /rim=\{paneEdges\.sheet\.rim\}\s*halo=\{paneEdges\.sheet\.halo\}/);
+  assert.match(peekShared, /export const PEEK_HALO_REACH = PANE_HALO_RING \* paneEdges\.sheet\.halo\.alphas\.length;/);
+  assert.match(peekShared, /left: inset - reach,\s*right: inset - reach,\s*bottom: insetBottom,\s*height: expandedHeight \+ reach,\s*paddingTop: reach,\s*paddingHorizontal: reach,/);
+  assert.match(await read('components/JobFilterSheet.tsx'), /rim=\{paneEdges\.filters\.rim\}/);
   assert.match(map, /maxHeight=\{sheetMaxHeight\}/);
   // Three stops, the peek by default and again whenever the map comes into
   // view; the tuck is the user's own pull. Apple's Legal link rides above

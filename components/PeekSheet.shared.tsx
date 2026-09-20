@@ -9,7 +9,15 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Surface } from '../ui/primitives/Surface';
-import { fonts, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import {
+  fonts,
+  PANE_HALO_RING,
+  paneEdges,
+  spacing,
+  themedStyles,
+  useThemeColors,
+  type ColorPalette,
+} from '../lib/theme';
 
 /**
  * THE PEEK SHEET'S SHARED BODY — everything a user can name, in one module
@@ -109,6 +117,11 @@ export type PeekSheetProps<T> = {
 
 /** The pane's three rests. */
 export type PeekStop = 'mini' | 'peek' | 'open';
+
+/** How far the pane's glow reaches outside its rim (2026-09-20 sitting 2,
+ *  item 13 — option B's rings): the frame grows by this on the top and the
+ *  sides so the rings are not clipped; the bottom rests on the bar. */
+export const PEEK_HALO_REACH = PANE_HALO_RING * paneEdges.sheet.halo.alphas.length;
 
 /** The grab handle: the design's 44 by 4, in the muted ink at under half. */
 export const PEEK_GRAB_WIDTH = 44;
@@ -258,12 +271,28 @@ export function PeekSheetFrame({
 }) {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
+  // The frame reaches PEEK_HALO_REACH past the pane on the top and the
+  // sides — the glow's room — and pads the pane back in by the same; its top
+  // corners grow with it so the outermost ring's arc is the frame's, and its
+  // bottom corners stay the pane's (the pane's bottom edge is the floor).
+  const reach = PEEK_HALO_REACH;
   return (
     <View
       pointerEvents="box-none"
       style={[
         styles.frame,
-        { left: inset, right: inset, bottom: insetBottom, height: expandedHeight, borderRadius: radius },
+        {
+          left: inset - reach,
+          right: inset - reach,
+          bottom: insetBottom,
+          height: expandedHeight + reach,
+          paddingTop: reach,
+          paddingHorizontal: reach,
+          borderTopLeftRadius: radius + reach,
+          borderTopRightRadius: radius + reach,
+          borderBottomLeftRadius: radius,
+          borderBottomRightRadius: radius,
+        },
         !ready && styles.frameUnmeasured,
       ]}
     >
@@ -378,6 +407,8 @@ export function PeekSheetPane<T>({
       material="pane"
       radius={radius}
       corners="all"
+      rim={paneEdges.sheet.rim}
+      halo={paneEdges.sheet.halo}
       style={[styles.pane, { height: expandedHeight, paddingHorizontal: paddingX }]}
     >
       {wrapHead(head)}

@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
-import { glow, withAlpha, type MaterialName } from '../tokens';
+import { glow, withAlpha, PANE_HALO_RING, type MaterialName, type PaneHalo, type PaneRim } from '../tokens';
 import { useDesignOverrides, useMaterials } from '../../lib/designOverrides';
 import { metricStyles, useThemeColors } from '../../lib/theme';
 import { BlurLayer, canBlur } from '../../lib/blur';
@@ -65,6 +65,23 @@ export type SurfaceProps = PropsWithChildren<{
   /** Which edges draw the hairline. The nav bar wants only its top edge. */
   border?: 'all' | 'top';
   /**
+   * 2026-09-20 (sitting 2, item 13) — THIS pane's own rim, in place of the
+   * material's: a colour, an alpha, and a width (1 unless `'hairline'`, one
+   * physical pixel). Dark glass only; light stays flat and ignores it. The
+   * values live in ui/tokens.ts `paneEdges`, never at a call site.
+   */
+  rim?: PaneRim;
+  /**
+   * The soft glow OUTSIDE the rim: `alphas.length` rings, each
+   * PANE_HALO_RING points, in `color` at that alpha, fading outward. Plain
+   * Views — no shadow, no blur — so a pane that moves every frame (the jobs
+   * sheet under a finger) keeps its frames; a shadow on a translucent view
+   * is re-rasterised on every frame its content changes. The rings sit
+   * outside this view's box: a parent that clips must leave them room (the
+   * peek sheet's frame does). Dark glass only.
+   */
+  halo?: PaneHalo;
+  /**
    * Layer 4: an outer glow in this colour, dark theme only. The alpha is the
    * shared surface-glow strength so the studio's glow dial moves every
    * glowing surface at once.
@@ -113,6 +130,8 @@ export function Surface({
   radius,
   corners,
   border = 'all',
+  rim,
+  halo: haloSpec,
   glowColor,
   children,
 }: SurfaceProps) {
@@ -129,7 +148,8 @@ export function Surface({
   const corner: ViewStyle = topOnly
     ? { borderTopLeftRadius: cornerRadius, borderTopRightRadius: cornerRadius }
     : { borderRadius: cornerRadius };
-  const hairline: ViewStyle = border === 'top' ? { borderTopWidth: 1 } : { borderWidth: 1 };
+  const rimWidth = rim?.width === 'hairline' ? StyleSheet.hairlineWidth : rim?.width ?? 1;
+  const hairline: ViewStyle = border === 'top' ? { borderTopWidth: rimWidth } : { borderWidth: rimWidth };
 
   const flat = reduceTransparency || !canBlur;
   // 2026-09-18 — WHICH RECIPE THIS THEME WEARS. Dark: the material itself.
@@ -143,7 +163,9 @@ export function Surface({
   const fill = glass
     ? {
         backgroundColor: withAlpha(glass.scrimColor, scrimAlpha),
-        borderColor: withAlpha(glass.borderColor, glass.borderAlpha),
+        // This pane's own rim when it names one (dark glass only), else the material's.
+        borderColor:
+          rim && isDark ? withAlpha(rim.color, rim.alpha) : withAlpha(glass.borderColor, glass.borderAlpha),
       }
     : { backgroundColor: colors.surface, borderColor: colors.border };
   const highlightAlpha = glass?.highlightAlpha ?? 0;
@@ -158,9 +180,34 @@ export function Surface({
     glowColor && isDark
       ? glow.halo(withAlpha(glowColor, overrides.glowAlpha ?? SURFACE_GLOW_ALPHA))
       : null;
+  // The glow rings, outside the rim, dark glass only: ring i sits
+  // (i + 1) rings out, with corners that grow by the same amount so the
+  // arcs stay concentric with the pane's.
+  const rings =
+    haloSpec && glass && isDark
+      ? haloSpec.alphas.map((ringAlpha, index) => {
+          const reach = PANE_HALO_RING * (index + 1);
+          const ringRadius = cornerRadius + reach;
+          const ringCorner: ViewStyle = topOnly
+            ? { borderTopLeftRadius: ringRadius, borderTopRightRadius: ringRadius }
+            : { borderRadius: ringRadius };
+          const ringEdge: ViewStyle =
+            border === 'top'
+              ? { top: -reach, left: -reach, right: -reach, height: reach + cornerRadius, borderTopWidth: PANE_HALO_RING }
+              : { top: -reach, left: -reach, right: -reach, bottom: -reach, borderWidth: PANE_HALO_RING };
+          return (
+            <View
+              key={index}
+              pointerEvents="none"
+              style={[styles.ring, ringCorner, ringEdge, { borderColor: withAlpha(haloSpec.color, ringAlpha) }]}
+            />
+          );
+        })
+      : null;
 
   return (
     <View style={[corner, hairline, fill, halo, style]}>
+      {rings}
       {/* RUN S3 (D11) — THE BLUR MOUNTS ONLY WHERE IT CAN BE SEEN. A material
           with no blur, or with an opaque scrim over it, renders an expo-blur
           view that nothing can show through: pure cost, zero pixels. The
@@ -210,4 +257,6 @@ const stylesFor = metricStyles(() => StyleSheet.create({
   // The specular top edge: 1pt, just under the hairline, inset by the radius
   // at render so it stops where the arcs begin.
   highlight: { position: 'absolute', top: 0, height: 1 },
+  // A glow ring: a bordered box outside the pane, no fill of its own.
+  ring: { position: 'absolute', backgroundColor: 'transparent' },
 }));

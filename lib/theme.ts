@@ -18,7 +18,8 @@ import {
 // 20/22) under an explicit name, since this file's own older `radius` scale
 // (8/12/16/24) already claims the size names; the VALUES of both live in
 // exactly one place.
-export { withAlpha, layout, controls, glow } from '../ui/tokens';
+export { withAlpha, layout, controls, glow, paneEdges, PANE_HALO_RING } from '../ui/tokens';
+export type { PaneRim, PaneHalo } from '../ui/tokens';
 export { radius as emeraldRadius } from '../ui/tokens';
 // The ONE reactive palette read (4D-4): re-exported here so screens can take
 // it from their standard import surface. The implementation lives in

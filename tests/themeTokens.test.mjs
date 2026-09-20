@@ -643,6 +643,26 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the 
   assert.deepEqual(materials.pane.sheen, { fromAlpha: 0.1, toAlpha: 0.04, color: brand.mint }, 'the mint-tinted sheen');
   assert.equal(materials.pane.fallbackScrimAlpha, 0.94);
   assert.deepEqual([materials.pane.radius, materials.pane.radiusTopOnly], [28, true], 'docked by default');
+  // 2026-09-20 (sitting 2, item 13): the panes' OWN edges, one table — the
+  // operator's picks from seven honest renders: the search pill and the Today
+  // chip option C (the dark emerald rim at .70 under a soft glow), the jobs
+  // sheet option B (the bright green at .60, the same glow), the Filters
+  // sheet the pane's rim as a hairline with no glow. Rims are never thicker
+  // than 1pt; the glow is rings of PANE_HALO_RING points, no shadow.
+  const { paneEdges, PANE_HALO_RING, dark } = await tokensModule;
+  assert.equal(PANE_HALO_RING, 2);
+  assert.deepEqual(paneEdges.search, {
+    rim: { color: dark.emerald, alpha: 0.7 },
+    halo: { color: dark.emerald, alphas: [0.12, 0.06, 0.03] },
+  });
+  assert.deepEqual(paneEdges.sheet, {
+    rim: { color: '#7DE7A4', alpha: 0.6 },
+    halo: { color: '#7DE7A4', alphas: [0.12, 0.06, 0.03] },
+  });
+  assert.deepEqual(paneEdges.filters, { rim: { color: brand.mint, alpha: 0.46, width: 'hairline' } });
+  for (const edge of Object.values(paneEdges)) {
+    assert.ok(edge.rim.width === undefined || edge.rim.width === 'hairline', 'a rim is 1pt or a hairline, never thicker');
+  }
   for (const name of ['chrome', 'sheet', 'menu', 'pane']) {
     assert.equal(materials[name].light, undefined, `${name} must stay flat in light — no light recipe`);
   }

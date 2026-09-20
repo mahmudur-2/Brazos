@@ -11,7 +11,7 @@ import {
   type MaterialName,
   type as typeScale,
 } from '../tokens';
-import { SCRIM_DARK_ALPHA, scrimInDark, themedStyles, useThemeColors } from '../../lib/theme';
+import { SCRIM_DARK_ALPHA, scrimInDark, themedStyles, useThemeColors, type PaneRim } from '../../lib/theme';
 import { useOverrideNumber, useOverrideString } from '../../lib/designOverrides';
 import { BlurLayer } from '../../lib/blur';
 import { Surface } from './Surface';
@@ -58,6 +58,9 @@ type SheetProps = PropsWithChildren<{
    * The header and footer hairlines are separate and unaffected.
    */
   edge?: 'all' | 'top';
+  /** The card's own rim in place of the material's (ui/tokens.ts `paneEdges`)
+   *  — the Filters sheet's hairline, 2026-09-20 sitting 2, item 13. */
+  rim?: PaneRim;
   /**
    * 2026-09-20 — A LAYER OVER THE WHOLE SHEET, inside this Modal: what a
    * popup anchored to a control in the scrolling content renders into.
@@ -80,6 +83,7 @@ export function Sheet({
   hairline,
   footer,
   edge = 'all',
+  rim,
   overlay,
   children,
 }: SheetProps) {
@@ -164,6 +168,7 @@ export function Sheet({
           corners="top"
           radius={topRadius}
           border={edge}
+          rim={rim}
           style={[
             styles.sheet,
             // Written as base + delta so the D8 fence's pinned expression

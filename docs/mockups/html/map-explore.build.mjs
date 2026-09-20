@@ -144,6 +144,13 @@ const THEMES = {
     // the liquid panes
     lqBlur: '30px',
     lqGlass: 'linear-gradient(125deg,rgba(3,24,16,.92),rgba(10,48,32,.84))', lqRim: 'rgba(170,235,200,.46)', lqRim2: 'rgba(255,255,255,.08)', lqSat: 2.1,
+    // 2026-09-20 (sitting 2, item 13) — the panes' OWN edges, the operator's picks: the search pill and the Today chip wear
+    // option C (the dark emerald #5FAE81 at .70 under three 2px rings .12/.06/.03), the jobs sheet option B (the bright
+    // green #7DE7A4 at .60, the same rings), the Filters sheet a hairline of the pane's rim and no glow. Rings are hard-
+    // edged here as in the app (plain Views, no shadow), so the page is honest to the phone.
+    edgeSearchRim: 'rgba(95,174,129,.70)', edgeSearchGlow: '0 0 0 2px rgba(95,174,129,.12),0 0 0 4px rgba(95,174,129,.06),0 0 0 6px rgba(95,174,129,.03),',
+    edgeSheetRim: 'rgba(125,231,164,.60)', edgeSheetGlow: '0 0 0 2px rgba(125,231,164,.12),0 0 0 4px rgba(125,231,164,.06),0 0 0 6px rgba(125,231,164,.03),',
+    edgeFiltersTop: '.5px',
     lqSpec: 'transparent', lqInner: 'rgba(132,223,170,.12)', lqSheen: 'rgba(150,235,190,.10)', lqSheen2: 'rgba(150,235,190,.04)',
     lqSheetGlass: 'linear-gradient(125deg,rgba(3,24,16,.93),rgba(10,48,32,.86))', lqRow: 'rgba(1,15,12,.50)', lqRowRim: 'rgba(183,203,186,.22)',
     lqChipRim: 'rgba(171,189,157,.39)', lqChipInk: '#edb65d', lqChipWeight: 600,
@@ -181,6 +188,8 @@ const THEMES = {
     // hairline, the app's card shadow - no gradient, no sheen, no edge, no blur
     lqBlur: null,
     lqGlass: '#FFFFFF', lqRim: '#DDE2DD', lqRim2: 'transparent',
+    // light stays flat: the panes' edges are the line hairline, no glow
+    edgeSearchRim: '#DDE2DD', edgeSearchGlow: '', edgeSheetRim: '#DDE2DD', edgeSheetGlow: '', edgeFiltersTop: '1px',
     lqSpec: 'transparent', lqInner: 'transparent', lqSheen: 'transparent', lqSheen2: 'transparent',
     lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F6F3EA', lqChipRim: 'transparent', lqChipInk: '#13201B', lqChipWeight: 500,
     lqSheetGlass: '#FFFFFF', lqRow: '#F9F3E7', lqRowRim: 'rgba(200,161,91,.26)',
@@ -350,7 +359,7 @@ ${FILTERS ? filtersCss(t) : ''}
 
 const filtersCss = (t) => `
   .fscrim{position:absolute;inset:0;background:${t.fScrim};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:${t.fPane};${t.lqBlur ? `backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});-webkit-backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});` : ''}border-top:1px solid ${t.lqRim};box-shadow:0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:${t.fPane};${t.lqBlur ? `backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});-webkit-backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});` : ''}border-top:${t.edgeFiltersTop} solid ${t.lqRim};box-shadow:0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
   .fsheet .grab{margin:0 auto 10px}
   .fhead{display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px;border-bottom:1px solid ${t.fHair}}
   .fhead h2{margin:0;font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
@@ -505,13 +514,13 @@ const filtersSheet = (st = {}) => {
 const panes = (t) => {
   const blur = t.lqBlur ? `backdrop-filter:blur(${t.lqBlur}) saturate(${t.lqSat ?? 1.9});-webkit-backdrop-filter:blur(${t.lqBlur}) saturate(${t.lqSat ?? 1.9});` : '';
   return `
-  .search,.chip{background:${t.lqGlass};${blur}border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -6px 14px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
+  .search,.chip{background:${t.lqGlass};${blur}border:1px solid ${t.edgeSearchRim};box-shadow:${t.edgeSearchGlow}inset 0 1px 0 ${t.lqSpec},inset 0 -6px 14px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
   .search::before,.chip::before,.search .dist::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 38%,transparent 68%,${t.lqSheen2} 100%);pointer-events:none}
   .chip{position:relative}
   .search>*,.chip>*{position:relative}
   .search .dist{position:relative;overflow:hidden;background:${t.lqChipFill};border:1px solid ${t.lqChipRim};color:${t.lqChipInk};font-weight:${t.lqChipWeight};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 0 0 .5px ${t.lqRim2}}
   .search .dist>*{position:relative}
-  .sheet{background:${t.lqSheetGlass};${blur}border:1px solid ${t.lqRim};box-shadow:inset 0 1px 0 ${t.lqSpec},inset 0 -8px 18px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
+  .sheet{background:${t.lqSheetGlass};${blur}border:1px solid ${t.edgeSheetRim};box-shadow:${t.edgeSheetGlow}inset 0 1px 0 ${t.lqSpec},inset 0 -8px 18px ${t.lqInner},inset 0 0 0 .5px ${t.lqRim2},${t.lqShadow};overflow:hidden}
   .sheet::before{content:'';position:absolute;inset:0;border-radius:inherit;background:linear-gradient(115deg,${t.lqSheen} 0%,transparent 34%,transparent 70%,${t.lqSheen2} 100%);pointer-events:none}
   .sheet>*{position:relative}
   .card{background:${t.lqRow};border:1px solid ${t.lqRowRim};box-shadow:inset 0 1px 1px #fff03}

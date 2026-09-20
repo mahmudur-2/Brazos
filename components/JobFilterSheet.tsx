@@ -37,6 +37,7 @@ import {
   type JobCategory,
 } from '../lib/jobs';
 import {
+  paneEdges,
   radius,
   spacing,
   themedStyles,
@@ -343,6 +344,7 @@ export function JobFilterSheet({
       material="pane"
       topRadius={SHEET_TOP_RADIUS}
       edge={SHEET_EDGE}
+      rim={paneEdges.filters.rim}
       hairline={isDark ? withAlpha(paneRim, SHEET_HAIRLINE_ALPHA) : undefined}
       footer={actions}
       overlay={
