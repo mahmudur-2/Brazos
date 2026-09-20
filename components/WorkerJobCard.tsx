@@ -18,6 +18,7 @@ import {
 import {
   arrivalWindowLabel,
   categoryAccent,
+  formatBidCountShort,
   formatBudget,
   JOB_CATEGORY_CHIP_LABELS,
   JOB_CATEGORY_ICONS,
@@ -28,9 +29,20 @@ import {
 import { formatDistanceMiles } from '../lib/discoveryFilter';
 import { scheduledDayLabel } from '../lib/jobFilters';
 import { neighbourhoodLabel } from '../lib/locationPrivacy';
-import { formatTimeAgo } from '../lib/time';
+import { formatTimeAgoShort } from '../lib/time';
 
+/**
+ * 2026-09-20 (sitting 2) — layout "a1" (docs/mockups/html/worker-results-card.html,
+ * the operator's pick from six layouts and three picture sizes): the picture
+ * is a SQUARE as tall as the text block beside it — measured, never a
+ * constant — so the card has no empty corner under it. THUMB_SIZE is only
+ * the floor it draws at until the text block has laid out. The pay block
+ * sits over the card's top-right; the title and the chip row keep clear of
+ * it, and the lines below run the full width beneath it.
+ */
 const THUMB_SIZE = 84;
+const PAY_CLEAR = 96;
+const META_GLYPH = 16;
 /** The peek card's round photo (the approved Map design: 52pt, gold ring). */
 const PEEK_PHOTO_SIZE = 52;
 /** The pay column over the row's top two lines: 56 wide, 6 of air before it. */
@@ -67,14 +79,17 @@ export function WorkerJobCard({
 }: {
   job: OpenJob;
   /** Undefined means not known yet (or phase38's batched RPC isn't deployed).
-   *  Both the bid-status line and Break the ice are omitted rather than
-   *  guessed at when this is undefined — see bidLabel below. */
+   *  Both the bid count in the facts line and Break the ice are omitted
+   *  rather than guessed at when this is undefined — see `facts` below. */
   bidCount?: number;
   onPress: () => void;
-  /** 'full' adds the "posted X ago" line — plus, since 4D-2, the distance
-   *  and arrival-window lines — for the spacious discovery surfaces (Worker
-   *  Results, the map's pin sheet). Home stays 'compact' (its own default)
-   *  to match the reference's exact field list there.
+  /** 'compact' and 'full' draw the SAME card since 2026-09-20 (sitting 2,
+   *  layout "a1" — the operator's "one card, one layout": Worker Home's
+   *  cards match Available Jobs): the title, the category chip, the location
+   *  on its own line, one line of facts (distance when real, the arrival
+   *  date, the bid count, the age), Break the ice, and a square picture as
+   *  tall as that text. The two names stay so callers need not change; only
+   *  `distanceMiles` (passed by the results list alone) tells them apart.
    *  'peek' (2026-09-19) is the approved Map design's row inside the jobs
    *  sheet: a round photo, one-line title, the short category chip beside
    *  the day word, the approximate location, EST. PAY and a chevron — the
@@ -98,11 +113,22 @@ export function WorkerJobCard({
   const thumbUrl = jobThumbnailUrl(job);
   const showImage = !!thumbUrl && !imageFailed;
 
-  // "So far" matches the reference's exact wording ("2 bids so far") without
-  // changing lib/jobs.ts's shared formatBidCount() — that string is also used
-  // on the poster's own views, which this card has no reason to touch.
-  const bidLabel =
-    bidCount == null ? null : bidCount === 0 ? 'No bids yet' : `${bidCount} ${bidCount === 1 ? 'bid' : 'bids'} so far`;
+  // The picture is as tall as the text block beside it (a1): measured from
+  // the block's own layout, floored at THUMB_SIZE until it has one.
+  const [infoHeight, setInfoHeight] = useState<number | null>(null);
+  const thumbSize = Math.max(THUMB_SIZE, Math.round(infoHeight ?? 0));
+
+  // The one line of facts under the location: the distance when it is real
+  // (server-computed, never a guess), the arrival date from the ONE shared
+  // formatter, the bid count and the age in their short spellings — joined
+  // by muted dots, never wrapping. The bid count is omitted, not guessed,
+  // when it is not known yet.
+  const facts = [
+    typeof distanceMiles === 'number' ? formatDistanceMiles(distanceMiles) : null,
+    arrivalWindowLabel(job),
+    bidCount == null ? null : formatBidCountShort(bidCount),
+    formatTimeAgoShort(job.created_at),
+  ].filter((part): part is string => !!part);
   // The actual zero-bid condition, not inferred from the label text — never
   // shown for a job's own poster, and never shown when the count isn't known.
   const showBreakIce = !isOwn && bidCount === 0;
@@ -141,7 +167,7 @@ export function WorkerJobCard({
       {showImage ? (
         <RemoteImage
           uri={thumbUrl}
-          style={[styles.thumb, isDark && styles.thumbDark]}
+          style={[styles.thumb, { width: thumbSize, height: thumbSize }, isDark && styles.thumbDark]}
           contentFit="cover"
           onError={() => setImageFailed(true)}
           accessible
@@ -150,23 +176,28 @@ export function WorkerJobCard({
       ) : (
         // Masters 12/13/43: with no uploaded photo the tile is the deep sage
         // square with a gold category glyph; light keeps the per-category
-        // accent pair.
+        // accent pair. The glyph scales with the tile (the mockup's 38%).
         <View
           style={[
             styles.thumb,
+            { width: thumbSize, height: thumbSize },
             styles.thumbFallback,
             isDark ? styles.thumbFallbackDark : { backgroundColor: accent.bg },
           ]}
         >
-          <Ionicons name={icon} size={26} color={isDark ? colors.gold : accent.icon} />
+          <Ionicons
+            name={icon}
+            size={Math.round(thumbSize * 0.38)}
+            color={isDark ? colors.gold : accent.icon}
+          />
         </View>
       )}
 
-      <View style={styles.info}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title} numberOfLines={1}>
-            {job.title}
-          </Text>
+      <View style={styles.info} onLayout={(event) => setInfoHeight(event.nativeEvent.layout.height)}>
+        <Text style={styles.title} numberOfLines={1}>
+          {job.title}
+        </Text>
+        <View style={styles.chipRow}>
           <Chip
             label={JOB_CATEGORY_LABELS[job.category] ?? job.category}
             variant="soft"
@@ -177,48 +208,27 @@ export function WorkerJobCard({
         </View>
 
         {/* Master 12: the meta rows read gold glyph + cream text; light keeps
-            the Heritage muted pair. */}
+            the Heritage muted pair. The location is its own line, full width
+            under the pay block. */}
         {job.location ? (
           <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={13} color={metaGlyph} />
+            <Ionicons name="location-outline" size={META_GLYPH} color={metaGlyph} />
             <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
               {job.location}
             </Text>
           </View>
         ) : null}
 
-        {variant === 'full' && typeof distanceMiles === 'number' ? (
+        {facts.length > 0 ? (
           <View style={styles.metaRow}>
-            <Ionicons name="navigate-outline" size={13} color={metaGlyph} />
+            <Ionicons name="calendar-outline" size={META_GLYPH} color={metaGlyph} />
             <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
-              {formatDistanceMiles(distanceMiles)}
-            </Text>
-          </View>
-        ) : null}
-
-        {variant === 'full' && arrivalWindowLabel(job) ? (
-          <View style={styles.metaRow}>
-            <Ionicons name="calendar-outline" size={13} color={metaGlyph} />
-            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
-              Arrive {arrivalWindowLabel(job)}
-            </Text>
-          </View>
-        ) : null}
-
-        {bidLabel ? (
-          <View style={styles.metaRow}>
-            <Ionicons name="people-outline" size={13} color={metaGlyph} />
-            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
-              {bidLabel}
-            </Text>
-          </View>
-        ) : null}
-
-        {variant === 'full' ? (
-          <View style={styles.metaRow}>
-            <Ionicons name="time-outline" size={13} color={metaGlyph} />
-            <Text style={[styles.metaText, isDark && styles.metaTextDark]} numberOfLines={1}>
-              Posted {formatTimeAgo(job.created_at)}
+              {facts.map((part, index) => (
+                <Text key={part}>
+                  {index > 0 ? <Text style={styles.factsDot}> · </Text> : null}
+                  {part}
+                </Text>
+              ))}
             </Text>
           </View>
         ) : null}
@@ -240,16 +250,6 @@ export function WorkerJobCard({
           {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
         </Text>
       </View>
-      {/* Master 43's compact feed card ends in a chevron; master 12's full
-          list card does not. One card, both drawings — the variant decides. */}
-      {variant === 'compact' ? (
-        <Ionicons
-          name="chevron-forward"
-          size={18}
-          color={colors.navInactive}
-          style={styles.chevron}
-        />
-      ) : null}
     </Pressable>
   );
 }
@@ -386,6 +386,17 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     padding: spacing.md,
     ...shadows.card,
   },
+  // The pay block rides over the card's top-right corner (a1); the title and
+  // the chip row keep PAY_CLEAR of it, the lines beneath run full width.
+  chipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2,
+    paddingRight: PAY_CLEAR,
+  },
+  factsDot: {
+    color: colors.textMuted,
+  },
   cardDark: {
     borderColor: colors.border,
   },
@@ -395,8 +406,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 12 rings the tile — photo or glyph — in the same gold hairline;
   // same box-parity arrangement as the card above.
   thumb: {
-    width: THUMB_SIZE,
-    height: THUMB_SIZE,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: 'transparent',
@@ -419,19 +428,13 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // Keeps content clear of the pay block regardless of title/chip length.
     minWidth: 0,
   },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: spacing.xs + 2,
-  },
   // Decision 9: a card title is display type. Master 12 draws these serif.
   title: {
-    flexShrink: 1,
     fontFamily: fonts.display,
     fontSize: 18,
     fontWeight: '700',
     color: colors.ink,
+    paddingRight: PAY_CLEAR,
   },
   categoryChip: {
     flexShrink: 0,
@@ -458,6 +461,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.gold,
   },
   payBlock: {
+    position: 'absolute',
+    top: spacing.md,
+    right: spacing.md,
     alignItems: 'flex-end',
     // Capped so a long title keeps most of the row rather than being
     // squeezed by "$1,250" at the bumped 26px size.
@@ -479,7 +485,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     color: colors.forest,
   },
   payValueDark: { color: colors.emerald },
-  chevron: { alignSelf: 'center' },
   // The peek row. Light: the page's cream ground under a gold hairline at a
   // quarter strength — the operator's "subtle, not too cream"; dark: the page
   // ink at half, ringed in the sage line. The category pill takes the same
@@ -587,13 +592,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     letterSpacing: 0.7,
     color: colors.textMuted,
   },
+  // The amount: `amountGold` in light (2026-09-20 sitting 2, the operator's
+  // brighter pick), `gold` in dark.
   peekPayValue: {
     fontFamily: fonts.display,
     fontSize: 26,
     lineHeight: 30,
     fontWeight: '700',
     letterSpacing: -0.5,
-    color: colors.goldDeep,
+    color: colors.amountGold,
   },
   peekPayValueDark: { color: colors.gold },
   skeletonLine: {
