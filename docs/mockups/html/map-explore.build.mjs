@@ -182,7 +182,7 @@ const THEMES = {
     lqBlur: null,
     lqGlass: '#FFFFFF', lqRim: '#DDE2DD', lqRim2: 'transparent',
     lqSpec: 'transparent', lqInner: 'transparent', lqSheen: 'transparent', lqSheen2: 'transparent',
-    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F9F3E7', lqChipRim: 'rgba(200,161,91,.26)', lqChipInk: '#13201B', lqChipWeight: 500,
+    lqShadow: '0 6px 22px rgba(52,83,59,.14)', lqChipFill: '#F6F3EA', lqChipRim: 'transparent', lqChipInk: '#13201B', lqChipWeight: 500,
     lqSheetGlass: '#FFFFFF', lqRow: '#F9F3E7', lqRowRim: 'rgba(200,161,91,.26)',
     lqLens: 'none', lqLensRim: 'transparent', lqLensGlow: 'rgba(19,32,27,.05)',
     // the Filters sheet, flat
@@ -283,7 +283,7 @@ const css = (t) => `
   .youhalo{position:absolute;width:72px;height:72px;border-radius:36px;background:${t.userHalo};border:.65px solid ${t.userHaloRim};box-shadow:inset 0 0 9px #18b1ff0b;transform:translate(-50%,-50%)}
   .youring{position:absolute;width:50px;height:50px;border-radius:25px;border:1px solid ${t.userRing};transform:translate(-50%,-50%)}
   /* the sheet */
-  .sheet{position:absolute;left:16px;right:16px;bottom:100px;border-radius:30px;padding:12px 22px 22px;display:flex;flex-direction:column;gap:14px}
+  .sheet{position:absolute;left:16px;right:16px;bottom:93px;border-radius:30px;padding:12px 22px 22px;display:flex;flex-direction:column;gap:14px}
   .grab{width:44px;height:4px;border-radius:2px;background:var(--muted);opacity:.45;margin:0 auto}
   .head{display:flex;align-items:flex-start;justify-content:space-between}
   .head h2{margin:0;font-size:30px;line-height:34px;font-weight:700;letter-spacing:-.5px;color:var(--ink)}
@@ -318,7 +318,10 @@ const css = (t) => `
   /* the open sheet takes the height its rows need, up to the line under the
      search pill (the operator's red line): 3 rows stop short, 5 rows cap and
      the list scrolls. bottom:100 is the nav bar plus the inset. */
-  .sheet.open{box-sizing:border-box;top:auto;bottom:100px;max-height:calc(${PHONE.h}px - 130px - 100px);overflow:hidden}
+  .sheet.open{box-sizing:border-box;top:auto;bottom:93px;max-height:calc(${PHONE.h}px - 130px - 93px);overflow:hidden}
+  /* the MINI stop (2026-09-20, sitting 2): tucked under the nav, the handle and the top half of the count line showing */
+  .sheet.mini{top:${PHONE.h - 93 - 48}px;bottom:auto;height:260px;overflow:hidden}
+  .sheet.mini ~ .nav{z-index:20}
   .sheet.open .list{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
   .view svg.down{transform:rotate(90deg)}
   .card .photo{width:52px;height:52px;border-radius:26px;background:${t.photoBg};overflow:hidden;flex:0 0 auto;border:1px solid ${t.photoRing};box-shadow:inset 0 1px 4px #ffffff13}
@@ -358,6 +361,9 @@ const filtersCss = (t) => `
   .fsec .lbl{font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
   .fsec .note{font-size:12.5px;color:var(--muted);margin-top:-2px}
   .chips-row{display:flex;flex-wrap:wrap;gap:5px}
+  /* 2026-09-20 (sitting 2): Distance, Minimum budget and When FILL their row — one rule */
+  .chips-row.fill{flex-wrap:nowrap}
+  .chips-row.fill .fchip{flex:1 1 auto;justify-content:center}
   .fchip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border-radius:17px;background:${t.fChip};border:1px solid ${t.fChipRim};color:${t.fChipInk};font-size:12.5px;font-weight:500;white-space:nowrap;letter-spacing:-.1px}
   .fchip.on{background:${t.fSel};border-color:${t.fSelRim};color:${t.fSelInk};font-weight:600}
   .fchip.skills{padding-left:11px}
@@ -476,12 +482,12 @@ const filtersSheet = (st = {}) => {
       <div class="fhead"><h2>Filters</h2><div class="done">Done</div></div>
       <div class="fbody">
         <div class="fsec"><div class="lbl">Distance</div>
-          <div class="chips-row"><div class="fchip any">Any</div><div class="fchip">2 mi</div><div class="fchip${on(picked.distance == null)}">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div>${customPill('distance', picked.distance != null ? fmtMiles(picked.distance) : null, distanceCurrent, 'right')}</div></div>
+          <div class="chips-row fill"><div class="fchip any">Any</div><div class="fchip">2 mi</div><div class="fchip${on(picked.distance == null)}">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div>${customPill('distance', picked.distance != null ? fmtMiles(picked.distance) : null, distanceCurrent, 'right')}</div></div>
         <div class="fsec"><div class="lbl">Minimum budget</div>
-          <div class="chips-row"><div class="fchip any${on(picked.budget == null)}">Any</div><div class="fchip">$25</div><div class="fchip">$50</div><div class="fchip">$100</div><div class="fchip">$250</div>${customPill('budget', picked.budget != null ? fmtDollars(picked.budget) : null, budgetCurrent, 'right')}</div>
+          <div class="chips-row fill"><div class="fchip any${on(picked.budget == null)}">Any</div><div class="fchip">$25</div><div class="fchip">$50</div><div class="fchip">$100</div><div class="fchip">$250</div>${customPill('budget', picked.budget != null ? fmtDollars(picked.budget) : null, budgetCurrent, 'right')}</div>
           <div class="note">Jobs with no budget set are always shown.</div></div>
         <div class="fsec"><div class="lbl">When</div>
-          <div class="chips-row"><div class="fchip any">Any</div><div class="fchip today${on(picked.date == null)}">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div>${customPill('date', picked.date != null ? fmtShort(DATE_VALUES[picked.date]) : null, dateCurrent, 'right up')}</div></div>
+          <div class="chips-row fill"><div class="fchip any">Any</div><div class="fchip today${on(picked.date == null)}">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div>${customPill('date', picked.date != null ? fmtShort(DATE_VALUES[picked.date]) : null, dateCurrent, 'right up')}</div></div>
         <div class="fsec"><div class="lbl">Categories</div>
           <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Best Match</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
           <div class="note">Nothing selected means every category.</div></div>
@@ -590,6 +596,7 @@ const CARDS = [
 const CARD_STATES = [
   { id: 'open3', label: '3 jobs — the sheet is as tall as its rows', rows: CARDS.slice(0, 3) },
   { id: 'open5', label: '6 jobs — capped under the search bar, the list scrolls', rows: CARDS },
+  { id: 'mini', label: 'MINI — swiped down: the handle and the top half of the count line above the bar', rows: CARDS.slice(0, 3), mini: true },
 ];
 /** Whether the chip and the day fit side by side in the body (about 138px at
  *  393pt with the 26px amount): the widths the fonts draw, estimated the way
@@ -660,7 +667,7 @@ ${pins}
 
     <div class="attrib">© Esri, HERE, Garmin, OpenStreetMap contributors</div>
 
-    <div class="sheet glass${CARD ? ' open' : ''}">
+    <div class="sheet glass${CARD ? (st.mini ? ' mini' : ' open') : ''}">
       <div class="grab"></div>
       <div class="head">
         <div>

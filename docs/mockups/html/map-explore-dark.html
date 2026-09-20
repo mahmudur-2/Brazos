@@ -63,7 +63,7 @@
   .youhalo{position:absolute;width:72px;height:72px;border-radius:36px;background:radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07));border:.65px solid #54b7ed28;box-shadow:inset 0 0 9px #18b1ff0b;transform:translate(-50%,-50%)}
   .youring{position:absolute;width:50px;height:50px;border-radius:25px;border:1px solid #2ba6f02b;transform:translate(-50%,-50%)}
   /* the sheet */
-  .sheet{position:absolute;left:16px;right:16px;bottom:100px;border-radius:30px;padding:12px 22px 22px;display:flex;flex-direction:column;gap:14px}
+  .sheet{position:absolute;left:16px;right:16px;bottom:93px;border-radius:30px;padding:12px 22px 22px;display:flex;flex-direction:column;gap:14px}
   .grab{width:44px;height:4px;border-radius:2px;background:var(--muted);opacity:.45;margin:0 auto}
   .head{display:flex;align-items:flex-start;justify-content:space-between}
   .head h2{margin:0;font-size:30px;line-height:34px;font-weight:700;letter-spacing:-.5px;color:var(--ink)}
@@ -98,7 +98,10 @@
   /* the open sheet takes the height its rows need, up to the line under the
      search pill (the operator's red line): 3 rows stop short, 5 rows cap and
      the list scrolls. bottom:100 is the nav bar plus the inset. */
-  .sheet.open{box-sizing:border-box;top:auto;bottom:100px;max-height:calc(852px - 130px - 100px);overflow:hidden}
+  .sheet.open{box-sizing:border-box;top:auto;bottom:93px;max-height:calc(852px - 130px - 93px);overflow:hidden}
+  /* the MINI stop (2026-09-20, sitting 2): tucked under the nav, the handle and the top half of the count line showing */
+  .sheet.mini{top:711px;bottom:auto;height:260px;overflow:hidden}
+  .sheet.mini ~ .nav{z-index:20}
   .sheet.open .list{display:flex;flex-direction:column;gap:10px;min-height:0;overflow:hidden}
   .view svg.down{transform:rotate(90deg)}
   .card .photo{width:52px;height:52px;border-radius:26px;background:#15362B;overflow:hidden;flex:0 0 auto;border:1px solid #edb65d;box-shadow:inset 0 1px 4px #ffffff13}

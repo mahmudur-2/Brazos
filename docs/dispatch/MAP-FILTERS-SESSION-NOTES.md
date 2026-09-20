@@ -7,6 +7,52 @@ render, or decided by the operator in this session; nothing is from memory. Mach
 
 ---
 
+## 0. SITTING 2 (2026-09-20, later the same day) — read this first
+
+The operator walked `7792aaf`, then ruled TWELVE items one by one against rendered
+options (HTML derived from the approved mockups, shot with Playwright, sent as PNGs),
+and had them built in ONE run. Everything below in §1 is superseded by this section;
+§2–§7 still hold.
+
+**Landed and pushed:** four docs commits of references (`ff463fe` glass D, `e59df85`
+inner line off, `a1d3e00` light gold c, `07bf48b` search pill a, `a4382bf` card a1),
+then three code commits — `5dfb096` feat(glass), `062d5a9` feat(map), `1f057dd`
+feat(card) — and the docs commit after them. `npm run verify`: **1380 pass, 0 fail**.
+The record: `docs/DECISIONS.md` 2026-09-20 (sitting 2), (1)–(8); `HANDOFF.md`.
+
+**The twelve, in one line each:** (1) light "Any" pill cream / no rim / ink; (2) the
+Filters sheet's rim on the top edge only; (3) Distance / Minimum budget / When pills
+fill the row; (4) Best Match = profile categories ∪ listed services, the note names
+the state; (5) the jobs sheet rests on the tab bar + a MINI stop on swipe-down (peek
+by default, always); (7) pane glass recipe D (richer green, mint sheen); (8) the inner
+top line off on every dark pane; (9) light "$50" `#C08F2E`; (10) search pill 62;
+(11) the chosen distance chip's clipped outline (whole-number heights); (12) the job
+card layout a1 everywhere (location line, one facts line, square picture as tall as
+the text).
+
+**The OTA was published at the end of the run** (the operator asked for it). **NOT
+YET WALKED.** The next chat starts by asking what they saw, item by item (the list in
+HANDOFF.md §Waiting on the operator), and especially: which Categories note sentence
+shows if Best Match is still absent; whether the "Any distance" outline is whole;
+whether the Legal link above the sheet reads right.
+
+**How the options were rendered** (the pattern to reuse): derive a page from the
+built mockup (`docs/mockups/html/map-explore-*.html`) by slicing ONE `.phone`
+block — KEEP its closing `</div>` (dropping it nests every phone inside the last and
+every tile renders the same; `.shots/harness-blur/check-nesting.mjs` proves 0 nested)
+— append a `<style>` of `.variant .selector{…}` overrides, shoot with
+`docs/mockups/html/shoot.mjs ../../../.shots/harness-blur/<page>.html`, and for
+side-by-side strips screenshot each phone as an ELEMENT (or clip in a single un-scrolled
+row at integer positions) and tile with pngjs at ONE width — the operator could not
+see 6pt steps in a 2400px composite; tight crops at 2x with labels inside the frame
+worked. Measure, never eyeball: pngjs mean colours (`measure-glass.mjs`), Playwright
+`getBoundingClientRect` (`measure-fill.mjs`, `measure-positions.mjs`).
+
+**The next run the operator named:** "redesign every single screen to match
+consistency and theme overall" — big; mockup first, options, their pick, then code.
+
+---
+
 ## 1. Where things stand (written at HEAD `603f56d`, pushed, tree clean)
 
 Trunk `mainexpo` moved `889d50e` → `603f56d` over two sittings: six commits, all pushed.
