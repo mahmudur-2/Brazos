@@ -15,6 +15,12 @@
  *    DISTANCE_FILTER_MIN to DISTANCE_FILTER_MAX, picked with the Map filter
  *    sheet's stepper, so the type widened from the preset union to a
  *    validated number.
+ *
+ * 2026-09-19, operator: the Custom pill offers DISTANCE_CUSTOM_VALUES — the
+ * list below, generated from the ruled steps — and the ceiling is 3,000
+ * miles. The server's jobs_within_radius() clamp rose to match in the same
+ * commit (supabase/migrations/20260930000500_radius_cap_3000.sql); before
+ * it, a radius past 50 was silently answered as 50.
  */
 
 /**
@@ -31,7 +37,22 @@ export const DISTANCE_FILTER_OPTIONS = [2, 5, 10, 25] as const;
 /** The custom stepper's bounds, whole miles inclusive. The presets sit
  *  inside them, so one validator covers both entry paths. */
 export const DISTANCE_FILTER_MIN = 1;
-export const DISTANCE_FILTER_MAX = 50;
+export const DISTANCE_FILTER_MAX = 3000;
+
+/**
+ * The Custom distance list (operator, 2026-09-19): 1 to 10 by 1, to 50 by
+ * 5, to 100 by 10, to 1,000 by 100, then by 1,000 to 3,000. Generated,
+ * never typed; every value passes isDistanceFilterMiles().
+ */
+export const DISTANCE_CUSTOM_VALUES: readonly number[] = (() => {
+  const out: number[] = [];
+  for (let m = 1; m <= 10; m += 1) out.push(m);
+  for (let m = 15; m <= 50; m += 5) out.push(m);
+  for (let m = 60; m <= 100; m += 10) out.push(m);
+  for (let m = 200; m <= 1000; m += 100) out.push(m);
+  for (let m = 2000; m <= 3000; m += 1000) out.push(m);
+  return out;
+})();
 
 export type DistanceFilterMiles = number;
 
@@ -64,7 +85,7 @@ export function distanceFilterStorageKey(userId: string): string {
 
 /** The chip caption for one option. */
 export function distanceChipLabel(value: DistanceFilterMiles | null): string {
-  return value === null ? 'Any distance' : `${value} mi`;
+  return value === null ? 'Any distance' : `${value.toLocaleString('en-US')} mi`;
 }
 
 /**

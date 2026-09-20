@@ -1,0 +1,228 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, join } from 'node:path';
+
+/**
+ * 2026-09-19 — THE WORKER FILTER'S RULES, EXECUTED.
+ *
+ * The operator ruled the five sorts, the date window, the Custom lists and
+ * the chip names on the Map mockups (docs/mockups/html/map-explore-filters-*).
+ * Each ruling is a sentence in docs/DECISIONS.md; each sentence is a test
+ * here, run against the real lib/jobFilters.ts and lib/discoveryFilter.ts.
+ */
+
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const read = (rel) => readFile(join(root, rel), 'utf8');
+
+const {
+  DEFAULT_JOB_FILTERS,
+  JOB_SORTS,
+  BUDGET_FILTER_MAX_CENTS,
+  BUDGET_FILTER_PRESETS_CENTS,
+  BUDGET_CUSTOM_VALUES_CENTS,
+  applyJobFilters,
+  completedByCategory,
+  customDateKeys,
+  dateWindowPreset,
+  localDateKeyAfter,
+  isDefaultJobFilters,
+  activeJobFilterCount,
+} = await import(pathToFileURL(join(root, 'lib/jobFilters.ts')).href);
+const { DISTANCE_CUSTOM_VALUES, DISTANCE_FILTER_MAX, DISTANCE_FILTER_OPTIONS, isDistanceFilterMiles, distanceChipLabel } =
+  await import(pathToFileURL(join(root, 'lib/discoveryFilter.ts')).href);
+// lib/jobs.ts reaches ui/tokens without an extension, which node's loader
+// refuses, so its two tables are read from the source (the way every other
+// fence reads it).
+const jobsSource = await read('lib/jobs.ts');
+const listOf = (name) => {
+  const block = new RegExp('export const ' + name + '[^=]*= \\[([^\\]]*)\\]').exec(jobsSource)?.[1] ?? '';
+  return [...block.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]);
+};
+const JOB_CATEGORIES = listOf('JOB_CATEGORIES');
+const JOB_CATEGORY_CHIP_ORDER = listOf('JOB_CATEGORY_CHIP_ORDER');
+const JOB_CATEGORY_CHIP_LABELS = Object.fromEntries(
+  [...(/export const JOB_CATEGORY_CHIP_LABELS[^{]*\{([^}]*)\}/.exec(jobsSource)?.[1] ?? '').matchAll(/(\w+): '([^']+)'/g)].map((m) => [m[1], m[2]]),
+);
+
+const job = (id, o = {}) => ({
+  id,
+  client_id: 'c',
+  title: id,
+  description: '',
+  category: o.category ?? 'other',
+  location: null,
+  budget_cents: o.budget_cents ?? null,
+  budget_min_cents: null,
+  budget_max_cents: o.budget_max_cents ?? null,
+  pricing_mode: 'open_bids',
+  scheduled_date: o.scheduled_date ?? null,
+  arrival_start_hour: null,
+  arrival_end_hour: null,
+  status: 'open',
+  created_at: o.created_at ?? '2026-09-10T00:00:00Z',
+  photos: [],
+  videos: [],
+  ...(o.distance_miles != null ? { distance_miles: o.distance_miles } : {}),
+});
+const ids = (rows) => rows.map((r) => r.id);
+
+// ---------------------------------------------------------------------------
+// The sorts
+// ---------------------------------------------------------------------------
+
+test('the sheet lists five sorts in the ruled order, Smart Match first and default', () => {
+  assert.deepEqual([...JOB_SORTS], ['smart', 'newest', 'pay', 'distance', 'bids']);
+  assert.equal(DEFAULT_JOB_FILTERS.sort, 'smart');
+  assert.equal(DEFAULT_JOB_FILTERS.scheduledUntil, null);
+  assert.equal(isDefaultJobFilters(DEFAULT_JOB_FILTERS), true);
+  assert.equal(activeJobFilterCount({ ...DEFAULT_JOB_FILTERS, sort: 'newest' }), 1, 'any other sort counts as a filter');
+});
+
+test('newest: dated jobs first, soonest first; then the undated, newest-posted first', () => {
+  const rows = [
+    job('undated-old', { created_at: '2026-09-01T00:00:00Z' }),
+    job('sat', { scheduled_date: '2026-09-26', created_at: '2026-09-02T00:00:00Z' }),
+    job('undated-new', { created_at: '2026-09-18T00:00:00Z' }),
+    job('mon', { scheduled_date: '2026-09-21', created_at: '2026-09-01T00:00:00Z' }),
+    job('mon-later-post', { scheduled_date: '2026-09-21', created_at: '2026-09-15T00:00:00Z' }),
+  ];
+  assert.deepEqual(ids(applyJobFilters(rows, { ...DEFAULT_JOB_FILTERS, sort: 'newest' })), [
+    'mon-later-post', 'mon', 'sat', 'undated-new', 'undated-old',
+  ]);
+});
+
+test('fewest bids: fewest live offers first, ties by distance, then the newest rule', () => {
+  const rows = [
+    job('busy-near', { distance_miles: 1 }),
+    job('quiet-far', { distance_miles: 9 }),
+    job('quiet-near', { distance_miles: 2 }),
+    job('quiet-unknown'),
+  ];
+  const offerCounts = { 'busy-near': 5, 'quiet-far': 0, 'quiet-near': 0 };
+  assert.deepEqual(ids(applyJobFilters(rows, { ...DEFAULT_JOB_FILTERS, sort: 'bids' }, { offerCounts })), [
+    'quiet-near', 'quiet-far', 'quiet-unknown', 'busy-near',
+  ]);
+  // Without counts every job ties at zero and the tie-breakers decide.
+  assert.deepEqual(ids(applyJobFilters(rows, { ...DEFAULT_JOB_FILTERS, sort: 'bids' })), [
+    'busy-near', 'quiet-near', 'quiet-far', 'quiet-unknown',
+  ]);
+});
+
+test('smart match: strongest categories first, then other skills, then the rest', () => {
+  const rows = [
+    job('other-near', { category: 'other', distance_miles: 0.5 }),
+    job('paint', { category: 'painting', distance_miles: 3 }),
+    job('clean-far', { category: 'cleaning', distance_miles: 8 }),
+    job('clean-near', { category: 'cleaning', distance_miles: 2 }),
+    job('assemble', { category: 'furniture_assembly', distance_miles: 6 }),
+  ];
+  const context = {
+    skills: new Set(['cleaning', 'furniture_assembly', 'painting']),
+    completedByCategory: { cleaning: 4, furniture_assembly: 1 },
+  };
+  assert.deepEqual(ids(applyJobFilters(rows, DEFAULT_JOB_FILTERS, context)), [
+    'clean-near', 'clean-far', // most completed, closest first inside
+    'assemble', // completed once
+    'paint', // a skill with no completions
+    'other-near', // not a skill, however close
+  ]);
+  // No context at all: Smart Match IS the newest rule.
+  const undated = [job('a', { created_at: '2026-09-01T00:00:00Z' }), job('b', { created_at: '2026-09-09T00:00:00Z' })];
+  assert.deepEqual(ids(applyJobFilters(undated, DEFAULT_JOB_FILTERS)), ['b', 'a']);
+});
+
+test('completedByCategory counts only jobs that reached completed', () => {
+  const counts = completedByCategory([
+    { category: 'cleaning', status: 'completed' },
+    { category: 'cleaning', status: 'completed' },
+    { category: 'cleaning', status: 'in_progress' },
+    { category: 'moving', status: 'completed' },
+  ]);
+  assert.deepEqual(counts, { cleaning: 2, moving: 1 });
+});
+
+// ---------------------------------------------------------------------------
+// The date window
+// ---------------------------------------------------------------------------
+
+test('a window keeps dated jobs inside it, inclusive, and never an undated one', () => {
+  const rows = [
+    job('fri', { scheduled_date: '2026-09-18' }),
+    job('sat', { scheduled_date: '2026-09-19' }),
+    job('thu', { scheduled_date: '2026-09-24' }),
+    job('next', { scheduled_date: '2026-09-25' }),
+    job('undated'),
+  ];
+  const week = { ...DEFAULT_JOB_FILTERS, scheduledOn: '2026-09-19', scheduledUntil: '2026-09-24' };
+  assert.deepEqual(ids(applyJobFilters(rows, week)).sort(), ['sat', 'thu']);
+  const oneDay = { ...DEFAULT_JOB_FILTERS, scheduledOn: '2026-09-24', scheduledUntil: null };
+  assert.deepEqual(ids(applyJobFilters(rows, oneDay)), ['thu']);
+});
+
+test('the When presets and the Custom date list are built from the caller’s day', () => {
+  const sat = new Date(2026, 8, 19);
+  assert.deepEqual(dateWindowPreset('today', sat), { scheduledOn: '2026-09-19', scheduledUntil: null });
+  assert.deepEqual(dateWindowPreset('tomorrow', sat), { scheduledOn: '2026-09-20', scheduledUntil: null });
+  assert.deepEqual(dateWindowPreset('week', sat), { scheduledOn: '2026-09-19', scheduledUntil: '2026-09-25' });
+  const keys = customDateKeys(sat);
+  assert.equal(keys.length, 30);
+  assert.equal(keys[0], '2026-09-20', 'the list starts tomorrow — Today and Tomorrow are pills');
+  assert.equal(keys[29], '2026-10-19');
+  assert.equal(localDateKeyAfter(new Date(2026, 11, 31), 1), '2027-01-01', 'crosses a year without a timezone');
+});
+
+// ---------------------------------------------------------------------------
+// The Custom lists and the chips
+// ---------------------------------------------------------------------------
+
+test('distance: the ruled steps, 1 to 3,000, every value a valid radius', () => {
+  const v = DISTANCE_CUSTOM_VALUES;
+  assert.equal(v.length, 34); // 10 + 8 + 5 + 9 + 2
+  assert.deepEqual(v.slice(0, 11), [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15]);
+  assert.deepEqual(v.filter((m) => m > 45 && m < 70), [50, 60]);
+  assert.deepEqual(v.filter((m) => m >= 100 && m <= 300), [100, 200, 300]);
+  assert.deepEqual(v.slice(-3), [1000, 2000, 3000]);
+  assert.equal(DISTANCE_FILTER_MAX, 3000);
+  for (const m of v) assert.ok(isDistanceFilterMiles(m), `${m} must validate`);
+  for (const m of DISTANCE_FILTER_OPTIONS) assert.ok(v.includes(m), `preset ${m} must be on the list`);
+  assert.equal(distanceChipLabel(3000), '3,000 mi');
+});
+
+test('budget: the ruled steps, $5 to $10,000', () => {
+  const dollars = BUDGET_CUSTOM_VALUES_CENTS.map((c) => c / 100);
+  assert.equal(dollars.length, 126); // 10 + 5 + 16 + 95
+  assert.deepEqual(dollars.slice(0, 3), [5, 10, 15]);
+  assert.deepEqual(dollars.filter((d) => d >= 45 && d <= 70), [45, 50, 60, 70]);
+  assert.deepEqual(dollars.filter((d) => d >= 100 && d <= 150), [100, 125, 150]);
+  assert.deepEqual(dollars.filter((d) => d >= 500 && d <= 700), [500, 600, 700]);
+  assert.equal(dollars[dollars.length - 1], 10_000);
+  assert.equal(BUDGET_FILTER_MAX_CENTS, 1_000_000);
+  assert.deepEqual([...BUDGET_FILTER_PRESETS_CENTS], [2_500, 5_000, 10_000, 25_000]);
+  for (const c of BUDGET_CUSTOM_VALUES_CENTS) assert.ok(Number.isInteger(c) && c <= BUDGET_FILTER_MAX_CENTS);
+});
+
+test('the chips name the eleven real categories, once each, in the ruled order', () => {
+  assert.deepEqual([...JOB_CATEGORY_CHIP_ORDER].sort(), [...JOB_CATEGORIES].sort(), 'every category, no extras');
+  assert.deepEqual(
+    JOB_CATEGORY_CHIP_ORDER.map((k) => JOB_CATEGORY_CHIP_LABELS[k]),
+    ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Handyman / Repairs', 'Yard work', 'Painting', 'Packing', 'Pet care', 'Errands', 'Other'],
+  );
+});
+
+// ---------------------------------------------------------------------------
+// The server keeps up
+// ---------------------------------------------------------------------------
+
+test('the radius RPC’s clamp rose to 3,000 in an additive migration that restates its grants', async () => {
+  const sql = await read('supabase/migrations/20260930000500_radius_cap_3000.sql');
+  assert.match(sql, /least\(greatest\(coalesce\(nullif\(p_radius_miles, 0\), 25\), 0\.5\), 3000\)/);
+  assert.match(sql, /CREATE OR REPLACE FUNCTION "public"\."jobs_within_radius"/);
+  assert.doesNotMatch(sql, /drop |rename |truncate |delete from/i, 'additive: nothing the pipeline’s destructive scan stops on');
+  assert.match(sql, /REVOKE ALL ON FUNCTION "public"\."jobs_within_radius"[^;]*FROM PUBLIC, anon;/);
+  assert.match(sql, /GRANT EXECUTE ON FUNCTION "public"\."jobs_within_radius"[^;]*TO authenticated;/);
+  assert.match(sql, /SECURITY DEFINER/);
+  // The client's ceiling and the server's clamp are one number.
+  assert.match(sql, new RegExp(`0\\.5\\), ${DISTANCE_FILTER_MAX}\\)`));
+});

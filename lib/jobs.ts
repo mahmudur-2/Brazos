@@ -48,6 +48,35 @@ export const JOB_CATEGORY_LABELS: Record<JobCategory, string> = {
 };
 
 /**
+ * The names the job FILTER's category chips wear (operator, 2026-09-19) —
+ * the eleven real categories, short. The "All services" entries in
+ * lib/skillCategories.ts are search shortcuts onto these (Electrical,
+ * Plumbing, Appliances, Pest Control and Drywall are all `handyman`; Junk
+ * Removal is `moving`; Gutters, Landscaping and Snow are `yard_work` …), so
+ * a chip per shortcut would promise a precision jobs are not posted with.
+ * Each chip here filters exactly the category it names.
+ */
+export const JOB_CATEGORY_CHIP_LABELS: Record<JobCategory, string> = {
+  furniture_assembly: 'Assembly',
+  moving: 'Moving',
+  cleaning: 'Cleaning',
+  tv_mounting: 'TV mounting',
+  handyman: 'Handyman / Repairs',
+  yard_work: 'Yard work',
+  painting: 'Painting',
+  packing: 'Packing',
+  dog_walking: 'Pet care',
+  errands: 'Errands',
+  other: 'Other',
+};
+
+/** The chips' order: the six quick services first, as on Home, then the rest. */
+export const JOB_CATEGORY_CHIP_ORDER: readonly JobCategory[] = [
+  'furniture_assembly', 'moving', 'cleaning', 'tv_mounting', 'handyman', 'yard_work',
+  'painting', 'packing', 'dog_walking', 'errands', 'other',
+];
+
+/**
  * Tier A (C7) — THE LAUNCH POSTING ALLOWLIST, additive only. A key listed
  * here STAYS in JOB_CATEGORIES and JOB_CATEGORY_LABELS (worker services,
  * browse, search chips, Home tiles and existing rows all read the shared map)

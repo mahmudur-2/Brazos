@@ -183,20 +183,23 @@ const {
 
 test('B3 · every preset is a valid radius, and the custom bounds hold', () => {
   assert.equal(DISTANCE_FILTER_MIN, 1);
-  assert.equal(DISTANCE_FILTER_MAX, 50);
+  // 2026-09-19: the ceiling is the Custom list's 3,000 (tests/jobFilterRules).
+  assert.equal(DISTANCE_FILTER_MAX, 3000);
   for (const option of DISTANCE_FILTER_OPTIONS) {
     assert.ok(isDistanceFilterMiles(option), `${option} must be a valid radius`);
   }
 });
 
 test('B3 · validation allow-lists whole miles in range, never a fake radius', () => {
-  for (const good of [1, 2, 37, 50]) assert.ok(isDistanceFilterMiles(good));
-  for (const bad of [0, -5, 51, 2.5, NaN, Infinity, '5', null, undefined]) {
+  // 2026-09-19: the ceiling is 3,000 (the Custom list's top), so 51 is a
+  // radius now and 3001 is the first fake one.
+  for (const good of [1, 2, 37, 50, 51, 3000]) assert.ok(isDistanceFilterMiles(good));
+  for (const bad of [0, -5, 3001, 2.5, NaN, Infinity, '5', null, undefined]) {
     assert.ok(!isDistanceFilterMiles(bad), `${String(bad)} must not be a radius`);
   }
   // The stepper's clamp lands every step back inside the range, whole miles.
   assert.equal(clampDistanceFilterMiles(0), 1);
-  assert.equal(clampDistanceFilterMiles(51), 50);
+  assert.equal(clampDistanceFilterMiles(3001), 3000);
   assert.equal(clampDistanceFilterMiles(9.6), 10);
   assert.equal(clampDistanceFilterMiles(25), 25);
 });
