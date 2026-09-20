@@ -326,6 +326,7 @@ const filtersCss = (t) => `
   .fchip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 10px;border-radius:17px;background:${t.fChip};border:1px solid ${t.fChipRim};color:${t.fChipInk};font-size:12.5px;font-weight:500;white-space:nowrap;letter-spacing:-.1px}
   .fchip.on{background:${t.fSel};border-color:${t.fSelRim};color:${t.fSelInk};font-weight:600}
   .fchip.skills{padding-left:11px}
+  .fchip.any{box-sizing:border-box;min-width:55px;justify-content:center}
   .fchip svg{width:15px;height:15px}
   .seg{display:flex;padding:3px;border-radius:14px;background:${t.fTrack};border:1px solid ${t.fChipRim}}
   .seg div{flex:1;text-align:center;height:34px;line-height:34px;border-radius:11px;font-size:14px;font-weight:500;color:${t.fChipInk}}
@@ -334,7 +335,7 @@ const filtersCss = (t) => `
   .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
   .fchip{position:relative}
   .fchip.open{z-index:6}
-  .popup{position:absolute;top:calc(100% + 6px);width:214px;padding:5px 0;border-radius:16px;background:${t.pPane};${t.lqBlur ? 'backdrop-filter:blur(25px) saturate(1.6);-webkit-backdrop-filter:blur(25px) saturate(1.6);' : ''}border:1px solid ${t.pRim};box-shadow:${t.pShadow};overflow:hidden;height:${POP_ROWS * ROW_H + 10}px;mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent)}
+  .popup{position:absolute;top:calc(100% + 6px);width:168px;padding:5px 0;border-radius:16px;background:${t.pPane};${t.lqBlur ? 'backdrop-filter:blur(25px) saturate(1.6);-webkit-backdrop-filter:blur(25px) saturate(1.6);' : ''}border:1px solid ${t.pRim};box-shadow:${t.pShadow};overflow:hidden;height:${POP_ROWS * ROW_H + 10}px;mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent)}
   .fchip.right .popup{right:0}
   .fchip.left .popup{left:0}
   .fchip.up .popup{top:auto;bottom:calc(100% + 6px)}
@@ -415,12 +416,12 @@ const filtersSheet = (st = {}) => {
       <div class="fhead"><h2>Filters</h2><div class="done">Done</div></div>
       <div class="fbody">
         <div class="fsec"><div class="lbl">Distance</div>
-          <div class="chips-row"><div class="fchip">Any</div><div class="fchip">2 mi</div><div class="fchip${on(picked.distance == null)}">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div>${customPill('distance', picked.distance != null ? fmtMiles(picked.distance) : null, distanceCurrent, 'right')}</div></div>
+          <div class="chips-row"><div class="fchip any">Any</div><div class="fchip">2 mi</div><div class="fchip${on(picked.distance == null)}">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div>${customPill('distance', picked.distance != null ? fmtMiles(picked.distance) : null, distanceCurrent, 'right')}</div></div>
         <div class="fsec"><div class="lbl">Minimum budget</div>
-          <div class="chips-row"><div class="fchip${on(picked.budget == null)}">Any</div><div class="fchip">$25</div><div class="fchip">$50</div><div class="fchip">$100</div><div class="fchip">$250</div>${customPill('budget', picked.budget != null ? fmtDollars(picked.budget) : null, budgetCurrent, 'right')}</div>
+          <div class="chips-row"><div class="fchip any${on(picked.budget == null)}">Any</div><div class="fchip">$25</div><div class="fchip">$50</div><div class="fchip">$100</div><div class="fchip">$250</div>${customPill('budget', picked.budget != null ? fmtDollars(picked.budget) : null, budgetCurrent, 'right')}</div>
           <div class="note">Jobs with no budget set are always shown.</div></div>
         <div class="fsec"><div class="lbl">When</div>
-          <div class="chips-row"><div class="fchip">Any</div><div class="fchip${on(picked.date == null)}">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div>${customPill('date', picked.date != null ? fmtShort(DATE_VALUES[picked.date]) : null, dateCurrent, 'right up')}</div></div>
+          <div class="chips-row"><div class="fchip any">Any</div><div class="fchip today${on(picked.date == null)}">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div>${customPill('date', picked.date != null ? fmtShort(DATE_VALUES[picked.date]) : null, dateCurrent, 'right up')}</div></div>
         <div class="fsec"><div class="lbl">Categories</div>
           <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Jobs I can do</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
           <div class="note">Nothing selected means every category.</div></div>
