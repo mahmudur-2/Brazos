@@ -60,7 +60,17 @@ glass only; the rings are plain Views outside the box, no shadow); `Sheet` passe
 `rim`; the peek sheet's frame grows by `PEEK_HALO_REACH` (6) on the top and sides.
 DECISIONS (9). Verify after it: 1380 / 0. Published as a second OTA.
 
-**NOT YET SEEN ON THE PHONE:** all three code commits, and item 13's. The OTA was published at the
+**THE OPERATOR WALKED AVAILABLE JOBS after the first OTA** and ruled the next run —
+three findings with one approved reference, `docs/mockups/html/worker-results-screen.html`:
+one card size (a constant 118 tile, the text block at least 118), the title and chip
+clearing the pay block by its MEASURED width + 8 (the full chip label unless it would
+not fit), and the list ending 16pt above the bar (a `useScrollClearance()` for every
+scrolling screen — the bar-footprint padding is a double count everywhere but the two
+Homes). NOT BUILT YET. The method, file by file, is `docs/dispatch/NEXT-RUN-2026-09-21.md`;
+DECISIONS (10).
+
+**NOT YET SEEN ON THE PHONE:** everything but Available Jobs — the map, the sheet, the
+Filters sheet, the light pill and gold, the search pill 62, item 13's edges. The OTA was published at the
 end of this run (the operator's "yes — publish at the end"); the operator opens the
 Beta twice and walks it (below).
 

@@ -9,6 +9,11 @@ render, or decided by the operator in this session; nothing is from memory. Mach
 
 ## 0. SITTING 2 (2026-09-20, later the same day) — read this first
 
+**NEWER: `docs/dispatch/NEXT-RUN-2026-09-21.md` supersedes this section** — it carries
+the operator's working rules in their own words, where things stand after item 13
+(`db3a47c`), and the next run (Available Jobs: one card size, measured clearance, the
+list's end) with its approved reference.
+
 The operator walked `7792aaf`, then ruled TWELVE items one by one against rendered
 options (HTML derived from the approved mockups, shot with Playwright, sent as PNGs),
 and had them built in ONE run. Everything below in §1 is superseded by this section;
