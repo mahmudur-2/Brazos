@@ -144,7 +144,7 @@ const THEMES = {
     // the liquid panes
     lqBlur: '30px',
     lqGlass: 'linear-gradient(125deg,rgba(3,24,16,.92),rgba(10,48,32,.84))', lqRim: 'rgba(170,235,200,.46)', lqRim2: 'rgba(255,255,255,.08)', lqSat: 2.1,
-    lqSpec: 'rgba(200,255,225,.30)', lqInner: 'rgba(132,223,170,.12)', lqSheen: 'rgba(150,235,190,.10)', lqSheen2: 'rgba(150,235,190,.04)',
+    lqSpec: 'transparent', lqInner: 'rgba(132,223,170,.12)', lqSheen: 'rgba(150,235,190,.10)', lqSheen2: 'rgba(150,235,190,.04)',
     lqSheetGlass: 'linear-gradient(125deg,rgba(3,24,16,.93),rgba(10,48,32,.86))', lqRow: 'rgba(1,15,12,.50)', lqRowRim: 'rgba(183,203,186,.22)',
     lqChipRim: 'rgba(171,189,157,.39)', lqChipInk: '#edb65d', lqChipWeight: 600,
     // the Filters sheet
