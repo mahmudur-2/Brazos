@@ -149,7 +149,10 @@ export function Surface({
   const highlightAlpha = glass?.highlightAlpha ?? 0;
   // The sheen is the dark recipe's alone (a light pane is flat by ruling),
   // and it draws only where the glass does — never over a fallback scrim.
+  // Its light is the spec's own colour — white unless the material says
+  // otherwise (the pane's is the brand mint since recipe "D", 2026-09-20).
   const sheen = isDark && !flat && spec.sheen ? spec.sheen : null;
+  const sheenColor = sheen?.color ?? colors.white;
 
   const halo =
     glowColor && isDark
@@ -176,7 +179,7 @@ export function Surface({
             StyleSheet.absoluteFill,
             corner,
             backgroundImageStyle(
-              `linear-gradient(115deg, ${withAlpha(colors.white, sheen.fromAlpha)} 0%, ${withAlpha(colors.white, 0)} 34%, ${withAlpha(colors.white, 0)} 70%, ${withAlpha(colors.white, sheen.toAlpha)} 100%)`
+              `linear-gradient(115deg, ${withAlpha(sheenColor, sheen.fromAlpha)} 0%, ${withAlpha(sheenColor, 0)} 34%, ${withAlpha(sheenColor, 0)} 70%, ${withAlpha(sheenColor, sheen.toAlpha)} 100%)`
             ),
           ]}
         />

@@ -24,6 +24,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useBidCounts } from '../hooks/useBidCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
+import { useWorkerSkills } from '../hooks/useWorkerSkills';
 import { alertAsync } from '../lib/dialog';
 import { openJobsPotential } from '../lib/earningsMath';
 import { userMessage } from '../lib/errorMessage';
@@ -121,10 +122,10 @@ export function WorkerHomeScreen() {
   const firstName = profile?.full_name?.trim().split(/\s+/)[0];
   const accepting = profile?.accepting_work ?? true;
 
-  const myCategories = useMemo(
-    () => new Set(profile?.categories ?? []),
-    [profile?.categories]
-  );
+  // The worker's skills — the ONE rule (hooks/useWorkerSkills.ts, 2026-09-20
+  // sitting 2): profile categories and listed services, so Home's skill
+  // matches agree with the map's Best Match and the results' Skill Matches.
+  const { skills: myCategories } = useWorkerSkills();
   const hasSkills = myCategories.size > 0;
   const skillMatchCount = useMemo(
     () => jobs.filter((job) => jobMatchesSkills(job, myCategories)).length,

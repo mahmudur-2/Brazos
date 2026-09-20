@@ -644,6 +644,17 @@ export const glow = {
  */
 const GLASS_SCRIM = '#071B15';
 
+/**
+ * 2026-09-20 (sitting 2) — THE PANE'S OWN INK, richer: the operator read the
+ * Beta's dark panes as under-saturated beside the reference and chose
+ * recipe "D" (docs/DECISIONS.md, that date, (1)): the mockup's base gradient
+ * rgba(3,24,16,.92) → rgba(10,48,32,.84) at 125°, which the phone cannot
+ * draw as a blur-saturated gradient, so the pane carries its mean here —
+ * rgb(6,36,24) — under a mint-tinted sheen. Every other material keeps
+ * GLASS_SCRIM. Consumed only through Surface, like GLASS_SCRIM.
+ */
+const PANE_SCRIM = '#062418';
+
 export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear' | 'pane';
 
 /**
@@ -694,14 +705,17 @@ export type MaterialSpec = {
   /** See LightGlassSpec. Absent: flat theme surface in light, as always. */
   light?: LightGlassSpec;
   /**
-   * 2026-09-20 — A DIAGONAL SHEEN over the scrim, dark only: white at
-   * `fromAlpha` in the top-left corner fading out by a third of the way,
-   * back in to `toAlpha` at the bottom-right — the approved Map design's
-   * "liquid" read (docs/mockups/html/map-explore-dark.html, its lqSheen /
-   * lqSheen2). Drawn by Surface as one gradient view between the blur and
-   * the content; absent on every material that predates it.
+   * 2026-09-20 — A DIAGONAL SHEEN over the scrim, dark only: `color` (white
+   * when absent) at `fromAlpha` in the top-left corner fading out by a third
+   * of the way, back in to `toAlpha` at the bottom-right — the approved Map
+   * design's "liquid" read (docs/mockups/html/map-explore-dark.html, its
+   * lqSheen / lqSheen2). Drawn by Surface as one gradient view between the
+   * blur and the content; absent on every material that predates it.
+   * Sitting 2 of that date: the pane's sheen is the brand mint, not white —
+   * recipe "D"'s tinted light, which is where the richness the operator
+   * asked for lives on a phone whose blur cannot saturate.
    */
-  sheen?: { fromAlpha: number; toAlpha: number };
+  sheen?: { fromAlpha: number; toAlpha: number; color?: string };
 };
 
 /**
@@ -792,27 +806,35 @@ export const materials: Record<MaterialName, MaterialSpec> = {
     },
   },
   // 2026-09-19 — PANE: the approved Map design's docked and floating panes
-  // (the jobs sheet on the map, the Filters sheet), from the operator's
-  // reference sheet and the liquid pass that followed it: the scrim ink at
-  // 0.90 over a blur of 30, the mint rim at 0.40 and the specular top edge at
-  // 0.30 — deeper than `sheet` (0.72) and far deeper than `clear` (0.40),
-  // so the page reads through only as a hint. No light block: light panes
-  // are flat white with the line hairline, as ruled ("no liquid glass in
-  // light"). Radius 28 on the top corners is the docked default; the map's
-  // floating pane passes its own.
+  // (the jobs sheet on the map, the Filters sheet, the search pill, the Today
+  // chip, the picker popover), from the operator's reference sheet and the
+  // liquid pass that followed it — deeper than `sheet` (0.72) and far deeper
+  // than `clear` (0.40), so the page reads through only as a hint. No light
+  // block: light panes are flat white with the line hairline, as ruled ("no
+  // liquid glass in light"). Radius 28 on the top corners is the docked
+  // default; the map's floating pane passes its own.
+  //
+  // 2026-09-20 (sitting 2), recipe "D" — RICHER, and RIM ONLY: the pane's own
+  // ink (PANE_SCRIM, the mockup gradient's mean) at 0.88, the mint rim at
+  // 0.46, the sheen the brand mint at 0.10 → 0.04 (was white 0.09 → 0.04),
+  // and NO specular edge: the 1pt bright line just inside the top stacked on
+  // the rim into a thick doubled band on the phone (the operator's red boxes
+  // on the search pill, the Today chip and the jobs sheet), and was removed
+  // from every pane at once — docs/DECISIONS.md 2026-09-20 (sitting 2), (1)
+  // and (4). The mockup's inner emerald glow rides as the sheen's bottom
+  // stop; nothing here draws a shadow (a rasterised shadow re-renders on
+  // every frame of the sheet's drag).
   pane: {
     blur: 30,
-    scrimColor: GLASS_SCRIM,
-    scrimAlpha: 0.9,
+    scrimColor: PANE_SCRIM,
+    scrimAlpha: 0.88,
     borderColor: brand.mint,
-    borderAlpha: 0.4,
+    borderAlpha: 0.46,
     fallbackScrimAlpha: 0.94,
     radius: 28,
     radiusTopOnly: true,
-    highlightAlpha: 0.3,
-    // The liquid cue the phone walk found missing (2026-09-20): the
-    // mockup's white sheen, 0.09 in the top-left corner to 0.04 bottom-right.
-    sheen: { fromAlpha: 0.09, toAlpha: 0.04 },
+    highlightAlpha: 0,
+    sheen: { fromAlpha: 0.1, toAlpha: 0.04, color: brand.mint },
   },
 };
 
@@ -1111,6 +1133,16 @@ export const constantAccents = {
    * ui/primitives/BottomNav.tsx.
    */
   goldDeep: '#A08149',
+  /**
+   * 2026-09-20 (sitting 2) — THE LIGHT AMOUNT GOLD: the peek row's "$50" in
+   * light, brighter than `goldDeep` because that one "doesn't pop" — option c
+   * of six golds the operator saw on the real card with their contrast on the
+   * cream (2.6:1 on #F6F3EA, under the 3:1 large-text line, chosen with that
+   * shown; docs/DECISIONS.md that date, (5)). A constant like `goldDeep`, for
+   * the same reason: light reaches it off the resolved palette; dark's amount
+   * is `gold` and never draws this. Only the peek row's amount wears it.
+   */
+  amountGold: '#C08F2E',
   /**
    * RUN H3 — THE APP'S CREAM, and the light Post-a-job pill's outline.
    *

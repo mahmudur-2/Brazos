@@ -431,7 +431,7 @@ export function jobThumbnailUrl(job: { photos?: string[] | null }): string | nul
  * Worker Home's "X match your skills" count and the results screen it opens
  * to, so the two can never disagree — see WorkerHomeScreen/WorkerResultsScreen.
  */
-export function jobMatchesSkills(job: { category: JobCategory }, categories: Set<string>): boolean {
+export function jobMatchesSkills(job: { category: JobCategory }, categories: ReadonlySet<string>): boolean {
   return categories.has(job.category);
 }
 
@@ -905,6 +905,15 @@ export async function fetchClientJobStats(clientId: string) {
 export function formatBidCount(count: number): string {
   if (count === 0) return 'No bids yet';
   return `${count} ${count === 1 ? 'bid' : 'bids'}`;
+}
+
+/**
+ * 2026-09-20 (sitting 2) — the same count, spelled for the job card's
+ * one-line facts: "No bids" / "1 bid" / "3 bids". The non-zero wording IS
+ * formatBidCount's; only the empty case drops its "yet".
+ */
+export function formatBidCountShort(count: number): string {
+  return count === 0 ? 'No bids' : formatBidCount(count);
 }
 
 /**

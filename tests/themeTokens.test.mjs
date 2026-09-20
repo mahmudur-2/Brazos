@@ -624,18 +624,23 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the 
     highlightAlpha: 0.95,
   });
   // PANE (2026-09-19, docs/mockups/html/map-explore-dark.html, the liquid
-  // pass the operator approved): the scrim ink at 0.90 over a blur of 30 —
-  // deeper than sheet, far deeper than clear, so the map reads through as a
-  // hint — the mint rim at 0.40, a specular top edge at 0.30, the docked
-  // radius by default, and NO light block: the operator ruled light flat
-  // ("no liquid glass on light mode"), so light panes render the surface
-  // under the line hairline through Surface's flat branch.
-  assert.equal(materials.pane.scrimColor, '#071B15');
+  // pass the operator approved; 2026-09-20 sitting 2, recipe "D" — richer,
+  // rim only): the pane's OWN ink — #062418, the mockup gradient's mean,
+  // not the shared glass scrim — at 0.88 over a blur of 30, deeper than
+  // sheet, far deeper than clear, so the map reads through as a hint; the
+  // mint rim at 0.46; NO specular top edge (it doubled the rim into a thick
+  // band on the phone — DECISIONS 2026-09-20 sitting 2, (4)); a MINT sheen
+  // 0.10 → 0.04; the docked radius by default; and NO light block: the
+  // operator ruled light flat ("no liquid glass on light mode"), so light
+  // panes render the surface under the line hairline through Surface's
+  // flat branch.
+  assert.equal(materials.pane.scrimColor, '#062418');
   assert.equal(materials.pane.blur, 30);
-  assert.equal(materials.pane.scrimAlpha, 0.9);
+  assert.equal(materials.pane.scrimAlpha, 0.88);
   assert.equal(materials.pane.borderColor, brand.mint);
-  assert.equal(materials.pane.borderAlpha, 0.4);
-  assert.equal(materials.pane.highlightAlpha, 0.3);
+  assert.equal(materials.pane.borderAlpha, 0.46);
+  assert.equal(materials.pane.highlightAlpha, 0, 'rim only — no inner top line on any pane');
+  assert.deepEqual(materials.pane.sheen, { fromAlpha: 0.1, toAlpha: 0.04, color: brand.mint }, 'the mint-tinted sheen');
   assert.equal(materials.pane.fallbackScrimAlpha, 0.94);
   assert.deepEqual([materials.pane.radius, materials.pane.radiusTopOnly], [28, true], 'docked by default');
   for (const name of ['chrome', 'sheet', 'menu', 'pane']) {

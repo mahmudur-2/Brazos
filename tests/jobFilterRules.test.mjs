@@ -316,7 +316,25 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   assert.match(sheet, /topRadius=\{SHEET_TOP_RADIUS\}/);
   assert.match(sheet, /hairline=\{isDark \? withAlpha\(paneRim, SHEET_HAIRLINE_ALPHA\) : undefined\}/);
   assert.match(sheet, /footer=\{actions\}/);
-  assert.match(sheet, /<Section label="When" scroll>/);
+  // 2026-09-20 (sitting 2): the rim rings the top edge only (the operator's
+  // "no outline on the sides / bottom"), the hairline at 0.20 with recipe D.
+  assert.match(sheet, /const SHEET_EDGE = 'top' as const;/);
+  assert.match(sheet, /const SHEET_HAIRLINE_ALPHA = 0\.2;/);
+  assert.match(sheet, /edge=\{SHEET_EDGE\}/);
+  // The same sitting: Distance, Minimum budget and When FILL their row (one
+  // rule — each pill keeps its label width, the spare room is shared, a row
+  // wider than the sheet scrolls, never wraps); Categories scrolls; Sort's one
+  // pill never grows.
+  assert.match(sheet, /<Section label="Distance" fill /);
+  assert.match(sheet, /<Section label="Minimum budget" fill /);
+  assert.match(sheet, /<Section label="When" fill>/);
+  assert.match(sheet, /<Section\s+label="Categories"[\s\S]*?\n\s*scroll\n\s*>/);
+  assert.match(sheet, /<Section label="Sort">/);
+  assert.match(sheet, /contentContainerStyle=\{\[styles\.scrollRowContent, fill && styles\.fillRowContent\]\}/);
+  assert.match(sheet, /fillRowContent: \{\s*flexGrow: 1,\s*\}/);
+  assert.match(sheet, /fillCell: \{\s*flexGrow: 1,\s*flexBasis: 'auto',\s*\}/);
+  // A fill row is the scrolling row (a horizontal ScrollView), never the wrap row.
+  assert.match(sheet, /\{scroll \|\| fill \? \(\s*<ScrollView\s+horizontal/);
   // The Show button is the mockup's capsule in the Post-a-job green.
   assert.match(sheet, /show: \{\s*flex: 1,\s*borderRadius: radius\.pill,\s*backgroundColor: colors\.postPillGreen,\s*\}/);
   // The note tells the worker why Best Match is absent.

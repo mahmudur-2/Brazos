@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Children, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from './Button';
@@ -11,6 +11,7 @@ import {
   type PopoverAnchor,
 } from './PickerPopover';
 import { useMaterials } from '../lib/designOverrides';
+import type { WorkerSkillsState } from '../lib/workerSkills';
 import { Sheet } from '../ui/primitives/Sheet';
 import {
   BUDGET_CUSTOM_VALUES_CENTS,
@@ -44,10 +45,14 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 
-/** The design's sheet: 28pt top corners, and its sage hairline at 0.18 in
- *  dark (the pane rim's own mint) where every other sheet draws `line`. */
+/** The design's sheet: 28pt top corners, and its sage hairline in dark (the
+ *  pane rim's own mint) where every other sheet draws `line` — 0.20 since
+ *  recipe "D" (2026-09-20, sitting 2). The rim rings the TOP EDGE ONLY: the
+ *  operator read the side rims and the bottom rim as excess on a docked
+ *  sheet (docs/DECISIONS.md that date, (2)). */
 const SHEET_TOP_RADIUS = 28;
-const SHEET_HAIRLINE_ALPHA = 0.18;
+const SHEET_HAIRLINE_ALPHA = 0.2;
+const SHEET_EDGE = 'top' as const;
 
 /**
  * THE FILTERS SHEET — the approved design (docs/mockups/html/map-explore-
@@ -98,6 +103,12 @@ export type JobFilterSheetProps = {
   distanceAvailable: boolean;
   /** The worker's advertised categories — the Best Match pill. */
   skills?: ReadonlySet<JobCategory>;
+  /**
+   * 2026-09-20 (sitting 2) — WHY the skills may be empty, so the Categories
+   * note can say so: still loading, the profile read failed, or genuinely
+   * nothing picked. Absent: treated as ready (the sheet's older callers).
+   */
+  skillsState?: WorkerSkillsState;
   /** How many jobs the draft would show, for the button; null when that
    *  cannot be known without a new read (a changed radius, say). */
   countFor?: (draft: JobFilterModel, distance: DistanceFilterMiles | null) => number | null;
@@ -142,6 +153,7 @@ export function JobFilterSheet({
   distance,
   distanceAvailable,
   skills,
+  skillsState = 'ready',
   countFor,
 }: JobFilterSheetProps) {
   const { palette: colors, isDark } = useThemeColors();
@@ -330,6 +342,7 @@ export function JobFilterSheet({
       title="Filters"
       material="pane"
       topRadius={SHEET_TOP_RADIUS}
+      edge={SHEET_EDGE}
       hairline={isDark ? withAlpha(paneRim, SHEET_HAIRLINE_ALPHA) : undefined}
       footer={actions}
       overlay={
@@ -343,7 +356,7 @@ export function JobFilterSheet({
     >
       <View style={styles.sections}>
         {distance ? (
-          <Section label="Distance" note={distance.available ? undefined : 'Location is off — the distance applies once it is on.'}>
+          <Section label="Distance" fill note={distance.available ? undefined : 'Location is off — the distance applies once it is on.'}>
             <Pill label="Any" on={draftDistance === null} onPress={() => setDraftDistance(null)} wide />
             {DISTANCE_FILTER_OPTIONS.map((miles) => (
               <Pill
@@ -364,7 +377,7 @@ export function JobFilterSheet({
           </Section>
         ) : null}
 
-        <Section label="Minimum budget" note="Jobs with no budget set are always shown.">
+        <Section label="Minimum budget" fill note="Jobs with no budget set are always shown.">
           <Pill
             label="Any"
             on={draft.minBudgetCents === null}
@@ -389,7 +402,7 @@ export function JobFilterSheet({
           </View>
         </Section>
 
-        <Section label="When" scroll>
+        <Section label="When" fill>
           <Pill
             label="Any"
             on={draft.scheduledOn === null}
@@ -422,11 +435,7 @@ export function JobFilterSheet({
 
         <Section
           label="Categories"
-          note={
-            skills && skills.size > 0
-              ? 'Nothing selected means every category.'
-              : 'Nothing selected means every category. Pick job categories on your profile to unlock Best Match.'
-          }
+          note={categoriesNote(skills, skillsState)}
           scroll
         >
           {skills && skills.size > 0 ? (
@@ -471,17 +480,45 @@ export function JobFilterSheet({
   );
 }
 
+/**
+ * The Categories note. Best Match present: the one line. Absent: the line
+ * plus WHY — the phone walk (2026-09-20) showed "Pick job categories…" on an
+ * account that had picked them, and a note that assumes the cause hides the
+ * cause. Exported for the fence.
+ */
+export function categoriesNote(
+  skills: ReadonlySet<JobCategory> | undefined,
+  state: WorkerSkillsState
+): string {
+  const base = 'Nothing selected means every category.';
+  if (skills && skills.size > 0) return base;
+  if (state === 'loading') return `${base} Loading your profile…`;
+  if (state === 'error') return `${base} Couldn't load your profile, so Best Match is off for now.`;
+  return `${base} Pick job categories on your profile to unlock Best Match.`;
+}
+
 /** A row of the sheet: its eyebrow, its pills, and an optional note under them. */
 function Section({
   label,
   note,
   scroll = false,
+  fill = false,
   children,
 }: {
   label: string;
   note?: string;
   /** One horizontal row that scrolls (the categories), rather than a wrap. */
   scroll?: boolean;
+  /**
+   * 2026-09-20 (sitting 2) — THE ROW FILLS ITS WIDTH: the same scrolling row,
+   * whose content is at least as wide as the row, with every pill in a cell
+   * that grows — each keeps its own label width and the spare room is shared
+   * equally, so Distance, Minimum budget and When reach the right edge. Wider
+   * than the row (a narrower phone, larger type) it scrolls sideways; it never
+   * wraps and never shrinks a pill. The operator's "sized accordingly so it
+   * fills up whole screen from side", one rule for the three rows.
+   */
+  fill?: boolean;
   children: ReactNode;
 }) {
   const { palette: colors } = useThemeColors();
@@ -489,14 +526,18 @@ function Section({
   return (
     <View style={styles.section}>
       <Text style={styles.sectionLabel}>{label.toUpperCase()}</Text>
-      {scroll ? (
+      {scroll || fill ? (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           style={styles.scrollRow}
-          contentContainerStyle={styles.scrollRowContent}
+          contentContainerStyle={[styles.scrollRowContent, fill && styles.fillRowContent]}
         >
-          {children}
+          {fill
+            ? Children.map(children, (child) =>
+                child == null ? null : <View style={styles.fillCell}>{child}</View>
+              )
+            : children}
         </ScrollView>
       ) : (
         <View style={styles.pillRow}>{children}</View>
@@ -588,6 +629,15 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       gap: spacing.xs + 1,
       paddingHorizontal: spacing.lg,
     },
+    // A fill row: the content is never narrower than the row, and each cell
+    // takes an equal share of what is left after every pill has its width.
+    fillRowContent: {
+      flexGrow: 1,
+    },
+    fillCell: {
+      flexGrow: 1,
+      flexBasis: 'auto',
+    },
     note: {
       fontSize: 12,
       color: colors.textMuted,
@@ -596,6 +646,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: spacing.xs + 2,
       height: 34,
       paddingHorizontal: spacing.sm + 2,

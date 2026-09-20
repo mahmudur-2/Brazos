@@ -11,7 +11,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useOfferCounts } from '../hooks/useOfferCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
-import { useProfile } from '../hooks/useProfile';
+import { useWorkerSkills } from '../hooks/useWorkerSkills';
 import { resolveCurrentPlace } from '../lib/geolocation';
 import { goBackOrHome } from '../lib/navigationRef';
 import { fetchJobsWithinRadius } from '../lib/hotspots';
@@ -26,7 +26,6 @@ import {
   type JobSortContext,
 } from '../lib/jobFilters';
 import {
-  JOB_CATEGORIES,
   JOB_CATEGORY_LABELS,
   jobMatchesSkills,
   type JobCategory,
@@ -94,7 +93,6 @@ export function WorkerResultsScreen() {
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
   const { user } = useAuth();
-  const { profile } = useProfile();
   const { jobs, loading: jobsLoading, error: jobsError, refresh } = useOpenJobs();
   // Pull-to-refresh is the recovery path for a failed load — before it, the
   // "Couldn't load jobs" empty state was a dead end with no retry affordance
@@ -102,23 +100,15 @@ export function WorkerResultsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const bidCounts = useOfferCounts(useMemo(() => jobs.map((j) => j.id), [jobs]));
 
-  const myCategories = useMemo(
-    () => new Set(profile?.categories ?? []),
-    [profile?.categories]
-  );
   // 2026-09-19 — THE SORT CONTEXT: the worker's skills as real categories,
   // their track record (completed jobs per category, from the jobs assigned
   // to them) and the live offer counts — what Smart Match and Fewest bids
   // rank by. The same three the map's sheet assembles, from the same reads.
-  const skills = useMemo(
-    () =>
-      new Set<JobCategory>(
-        [...myCategories].filter((c): c is JobCategory =>
-          (JOB_CATEGORIES as readonly string[]).includes(c)
-        )
-      ),
-    [myCategories]
-  );
+  // 2026-09-20 (sitting 2): the skills come from the ONE hook — profile
+  // categories and listed services, labels tolerated — and the Skill Matches
+  // mode filters by the same set, so the list and the sort never disagree.
+  const { skills, state: skillsState } = useWorkerSkills();
+  const myCategories: ReadonlySet<string> = skills;
   const { working } = useMyJobsHub();
   const trackRecord = useMemo(() => completedByCategory(working), [working]);
   const sortContext = useMemo<JobSortContext>(
@@ -485,6 +475,7 @@ export function WorkerResultsScreen() {
         }
         distanceAvailable={distanceAvailable}
         skills={skills}
+        skillsState={skillsState}
         countFor={(draft, draftDistance) =>
           draftDistance === (radius ?? null) ? applyJobFilters(base, draft, sortContext).length : null
         }

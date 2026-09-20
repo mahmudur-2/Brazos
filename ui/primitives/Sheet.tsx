@@ -50,6 +50,15 @@ type SheetProps = PropsWithChildren<{
    *  under its own hairline — the Filters sheet's Reset and Show. */
   footer?: ReactNode;
   /**
+   * 2026-09-20 (sitting 2) — WHICH EDGES OF THE CARD DRAW THE RIM. `'all'`,
+   * the default every other sheet keeps, rings the card; `'top'` draws the
+   * rim along the top edge alone (corners included) — the Filters sheet's,
+   * where the operator read the side rims and the bottom rim (the line at
+   * the very foot of the screen) as excess on a docked, edge-to-edge sheet.
+   * The header and footer hairlines are separate and unaffected.
+   */
+  edge?: 'all' | 'top';
+  /**
    * 2026-09-20 — A LAYER OVER THE WHOLE SHEET, inside this Modal: what a
    * popup anchored to a control in the scrolling content renders into.
    * Absolute, full-window, `box-none`, so it takes no touch of its own and
@@ -70,6 +79,7 @@ export function Sheet({
   topRadius: topRadiusProp,
   hairline,
   footer,
+  edge = 'all',
   overlay,
   children,
 }: SheetProps) {
@@ -153,6 +163,7 @@ export function Sheet({
           material={material}
           corners="top"
           radius={topRadius}
+          border={edge}
           style={[
             styles.sheet,
             // Written as base + delta so the D8 fence's pinned expression
