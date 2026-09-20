@@ -283,11 +283,15 @@ function functionBody(source, declaration) {
   return source.slice(start, end + 2);
 }
 
-/** Every surface emerald D6 converted, with the style keys it converted. */
+/** Every surface emerald D6 converted, with the style keys it converted.
+ *  components/JobFilterSheet.tsx LEFT this list on 2026-09-19: the approved
+ *  Filters design (docs/mockups/html/map-explore-filters-*) draws a chosen
+ *  pill as an emerald tint under an emerald rim in both themes, the
+ *  operator's own mockup and ruling — docs/DECISIONS.md 2026-09-19 records
+ *  it as that sheet's exception, and the sheet's own fence pins the tint. */
 const D6_SURFACES = [
   ['components/Chip.tsx', ['chosen.line', 'chosen.fill']],
   ['components/SegmentedControl.tsx', ['activeLabel']],
-  ['components/JobFilterSheet.tsx', ['chipActiveDark', 'radioActiveDark', 'sortLabelActiveDark']],
   ['components/PortfolioPicker.tsx', ['categoryChipSelectedDark']],
   ['components/PastWork.tsx', ['tabActiveDark', 'tabTextActiveDark']],
   ['components/ReportDialog.tsx', ['reasonSelectedDark', 'reasonTextSelectedDark']],

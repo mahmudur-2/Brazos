@@ -155,7 +155,7 @@ test('§10: SubmitBid refuses customer mode at the screen', async () => {
 
 test('the results list and the sheet share the one filter model', async () => {
   const results = await read('screens/WorkerResultsScreen.tsx');
-  assert.match(results, /applyJobFilters\(base, filters\)/);
+  assert.match(results, /applyJobFilters\(base, filters, sortContext\)/);
   assert.match(results, /JobFilterSheet/);
   const sheet = await read('components/JobFilterSheet.tsx');
   assert.match(sheet, /from '\.\.\/lib\/jobFilters'/);

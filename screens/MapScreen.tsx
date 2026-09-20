@@ -5,8 +5,8 @@ import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
-import { FilterSlider } from '../components/FilterSlider';
 import { HotspotMap } from '../components/HotspotMap';
+import { JobFilterSheet } from '../components/JobFilterSheet';
 import { PeekSheet } from '../components/PeekSheet';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { SearchBar } from '../ui/primitives/SearchBar';
@@ -15,8 +15,10 @@ import { Surface } from '../ui/primitives/Surface';
 import { useAuth } from '../hooks/useAuth';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useHotspots } from '../hooks/useHotspots';
+import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useOfferCounts } from '../hooks/useOfferCounts';
-import { JOB_CATEGORY_LABELS, formatBudget, type OpenJob } from '../lib/jobs';
+import { useProfile } from '../hooks/useProfile';
+import { JOB_CATEGORIES, JOB_CATEGORY_LABELS, type JobCategory, type OpenJob } from '../lib/jobs';
 import {
   cellsWithinMiles,
   fetchJobsWithinRadius,
@@ -28,18 +30,14 @@ import {
   type NearbyJob,
 } from '../lib/hotspots';
 import { clusterPoints, type ClusterPin } from '../lib/mapClustering';
+import { distanceChipLabel, type DistanceFilterMiles } from '../lib/discoveryFilter';
 import {
-  DISTANCE_FILTER_MAX,
-  distanceChipLabel,
-  type DistanceFilterMiles,
-} from '../lib/discoveryFilter';
-import {
-  BUDGET_FILTER_MAX_CENTS,
-  BUDGET_FILTER_STEP_CENTS,
   DEFAULT_JOB_FILTERS,
   applyJobFilters,
+  completedByCategory,
   localDateKey,
   type JobFilterModel,
+  type JobSortContext,
 } from '../lib/jobFilters';
 import { readDistanceFilter, writeDistanceFilter } from '../lib/discoveryFilterStorage';
 import { userMessage } from '../lib/errorMessage';
@@ -95,10 +93,22 @@ const MAP_SHEET_RADIUS = 30;
  * way the list is then narrowed by the SAME filter model the chip row sets,
  * and the count in the head is that list's length: derived, never a
  * stand-in, and absent while the list is on its way.
+ *
+ * THE SORT CONTEXT (2026-09-19) is assembled here and handed to
+ * applyJobFilters: the worker's skills (the profile), their track record
+ * (completed jobs per category, from the jobs assigned to them) and the
+ * live offer counts — what Smart Match and Fewest bids rank by. The Filters
+ * sheet is rendered from here as well, so "Show N jobs" can count against
+ * the very list the pane shows.
  */
 function MapJobsSheet({
+  visible,
   filters,
+  onFiltersChange,
+  filtersOpen,
+  onFiltersClose,
   radiusMiles,
+  onRadiusChange,
   userLoc,
   expandedHeight,
   open,
@@ -109,8 +119,15 @@ function MapJobsSheet({
   sheetPaddingX,
   sheetInset,
 }: {
+  /** False while the hotspots are loading or failed: the pane waits with
+   *  them, but the Filters sheet stays reachable from the distance pill. */
+  visible: boolean;
   filters: JobFilterModel;
+  onFiltersChange: (model: JobFilterModel) => void;
+  filtersOpen: boolean;
+  onFiltersClose: () => void;
   radiusMiles: DistanceFilterMiles | null;
+  onRadiusChange: (next: DistanceFilterMiles | null) => void;
   userLoc: { lat: number; lng: number } | null;
   expandedHeight: number;
   open: boolean;
@@ -124,6 +141,18 @@ function MapJobsSheet({
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   const feed = useOpenJobs();
+  const { profile } = useProfile();
+  const { working } = useMyJobsHub();
+  const skills = useMemo(
+    () =>
+      new Set<JobCategory>(
+        (profile?.categories ?? []).filter((c): c is JobCategory =>
+          (JOB_CATEGORIES as readonly string[]).includes(c)
+        )
+      ),
+    [profile?.categories]
+  );
+  const trackRecord = useMemo(() => completedByCategory(working), [working]);
   const withinRadius = radiusMiles != null && userLoc !== null;
   const nearbyKey = withinRadius ? `${radiusMiles}:${userLoc.lat}:${userLoc.lng}` : null;
   const [nearby, setNearby] = useState<{ key: string; rows: NearbyJob[] } | null>(null);
@@ -153,7 +182,15 @@ function MapJobsSheet({
       : feed.jobs;
   const errorText = withinRadius ? nearbyError : feed.error;
   const loading = source === null && errorText === null;
-  const jobs = useMemo(() => (source ? applyJobFilters(source, filters) : []), [source, filters]);
+  const offerCounts = useOfferCounts(useMemo(() => (source ?? []).map((job) => job.id), [source]));
+  const sortContext = useMemo<JobSortContext>(
+    () => ({ skills, completedByCategory: trackRecord, offerCounts }),
+    [skills, trackRecord, offerCounts]
+  );
+  const jobs = useMemo(
+    () => (source ? applyJobFilters(source, filters, sortContext) : []),
+    [source, filters, sortContext]
+  );
 
   const title = loading || errorText ? 'Open jobs' : `${jobs.length} open ${jobs.length === 1 ? 'job' : 'jobs'}`;
   // The reach the count was taken under, so "N open jobs" is never read as
@@ -167,39 +204,62 @@ function MapJobsSheet({
       : 'Any distance';
 
   return (
-    <PeekSheet
-      expandedHeight={expandedHeight}
-      open={open}
-      onOpenChange={onOpenChange}
-      title={title}
-      subtitleLead="Near you"
-      subtitle={subtitle}
-      data={jobs}
-      keyExtractor={(job) => job.id}
-      renderItem={(job) => <WorkerJobCard job={job} variant="peek" onPress={() => onOpenJob(job)} />}
-      loading={loading}
-      renderLoading={() => <WorkerJobCardSkeleton />}
-      empty={
-        <Text style={styles.sheetEmpty}>
-          {errorText ?? 'Nothing matches here yet — widen the distance or clear a filter.'}
-        </Text>
-      }
-      footer={
-        <Pressable
-          onPress={onSeeAll}
-          hitSlop={8}
-          style={({ pressed }) => [styles.seeAll, pressed && styles.pressed]}
-          accessibilityRole="button"
-          accessibilityLabel="Open the full list of jobs"
-        >
-          <Text style={[styles.seeAllText, isDark && styles.seeAllTextDark]}>Open the full list</Text>
-          <Ionicons name="chevron-forward" size={18} color={isDark ? colors.gold : colors.ink} />
-        </Pressable>
-      }
-      radius={sheetRadius}
-      paddingX={sheetPaddingX}
-      inset={sheetInset}
-    />
+    <>
+      {visible ? (
+      <PeekSheet
+        expandedHeight={expandedHeight}
+        open={open}
+        onOpenChange={onOpenChange}
+        title={title}
+        subtitleLead="Near you"
+        subtitle={subtitle}
+        data={jobs}
+        keyExtractor={(job) => job.id}
+        renderItem={(job) => <WorkerJobCard job={job} variant="peek" onPress={() => onOpenJob(job)} />}
+        loading={loading}
+        renderLoading={() => <WorkerJobCardSkeleton />}
+        empty={
+          <Text style={styles.sheetEmpty}>
+            {errorText ?? 'Nothing matches here yet — widen the distance or clear a filter.'}
+          </Text>
+        }
+        footer={
+          <Pressable
+            onPress={onSeeAll}
+            hitSlop={8}
+            style={({ pressed }) => [styles.seeAll, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Open the full list of jobs"
+          >
+            <Text style={[styles.seeAllText, isDark && styles.seeAllTextDark]}>Open the full list</Text>
+            <Ionicons name="chevron-forward" size={18} color={isDark ? colors.gold : colors.ink} />
+          </Pressable>
+        }
+        radius={sheetRadius}
+        paddingX={sheetPaddingX}
+        inset={sheetInset}
+      />
+      ) : null}
+      {/* THE FILTERS SHEET — the approved design, over the one filter model.
+          The distance rides through its own prop (its own storage path); the
+          button's count is honest: the list under the draft when the radius
+          is the applied one, and no number at all when a changed radius would
+          need a read this sheet has not made. */}
+      <JobFilterSheet
+        visible={filtersOpen}
+        onClose={onFiltersClose}
+        value={filters}
+        onApply={onFiltersChange}
+        distance={{ value: radiusMiles, onChange: onRadiusChange, available: userLoc !== null }}
+        distanceAvailable={withinRadius}
+        skills={skills}
+        countFor={(draft, draftDistance) =>
+          source && draftDistance === radiusMiles
+            ? applyJobFilters(source, draft, sortContext).length
+            : null
+        }
+      />
+    </>
   );
 }
 
@@ -314,7 +374,6 @@ export function MapScreen() {
 
   // A chosen radius is only applicable with a real position to measure from.
   const radiusApplied = isWorker && radiusMiles != null && userLoc !== null;
-  const radiusUnavailable = isWorker && radiusMiles != null && userLoc === null;
 
   const visibleCells = useMemo(() => {
     if (!radiusApplied || !userLoc || radiusMiles == null) return cells;
@@ -585,16 +644,21 @@ export function MapScreen() {
             guessed; absent while the hotspots are loading or failed, like
             the count it carries. Its foot opens the real results list —
             the sheet is a window on that list, not a second one. */}
-        {isWorker && !loading && !error && sheetExpandedHeight > 0 ? (
+        {isWorker && sheetExpandedHeight > 0 ? (
           <MapJobsSheet
+            visible={!loading && !error}
+            onSeeAll={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
             filters={jobFilters}
+            onFiltersChange={setJobFilters}
+            filtersOpen={filterOpen}
+            onFiltersClose={() => setFilterOpen(false)}
             radiusMiles={radiusMiles ?? null}
+            onRadiusChange={selectRadius}
             userLoc={userLoc}
             expandedHeight={sheetExpandedHeight}
             open={sheetOpen}
             onOpenChange={setSheetOpen}
             onOpenJob={(job) => navigation.navigate('JobDetail', { job })}
-            onSeeAll={() => navigateAcrossTabs('Home', 'WorkerResults', { mode: 'all' })}
             sheetRadius={sheetRadius}
             sheetPaddingX={sheetPaddingX}
             sheetInset={sheetInset}
@@ -664,60 +728,12 @@ export function MapScreen() {
           </View>
         )}
 
-        {/* THE FILTER SHEET — budget and distance as sliders since 2026-08-24,
-            where the distance half was a chip row plus a stepper. The chip
-            sheet that replaces it is the third commit of the 2026-09-19
-            sequence; until then the distance pill opens this.
-
-            NOTE WHAT DID NOT CHANGE. components/DistanceChips.tsx is
-            byte-untouched: it is shared with WorkerResults, whose contract is
-            fenced, and the map getting a slider is not a reason for that list
-            to lose its chips. Both controls still write through
-            readDistanceFilter / writeDistanceFilter — one filter vocabulary,
-            one persistence module — so a radius set by dragging here is the
-            same radius the chips there show.
-
-            ZERO IS "ANY" ON BOTH SLIDERS, and it is a control sentinel rather
-            than a value: DISTANCE_FILTER_MIN is 1 mile and a budget floor of
-            nothing is null, so both are converted at this boundary and neither
-            lib ever sees a zero it does not define. */}
-        <Sheet visible={filterOpen} onClose={() => setFilterOpen(false)} title="Filters">
-          {radiusMiles !== undefined ? (
-            <View style={styles.filterSheetBody}>
-              <FilterSlider
-                label="Minimum budget"
-                min={0}
-                max={BUDGET_FILTER_MAX_CENTS}
-                step={BUDGET_FILTER_STEP_CENTS}
-                value={jobFilters.minBudgetCents ?? 0}
-                onChange={(cents) =>
-                  setJobFilters((prev) => ({
-                    ...prev,
-                    minBudgetCents: cents === 0 ? null : cents,
-                  }))
-                }
-                // formatBudget, not a local money format — money is integer
-                // cents and it is formatted in exactly one place.
-                formatValue={(cents) => (cents === 0 ? 'Any budget' : `${formatBudget(cents)}+`)}
-                accessibilityLabel="Minimum budget"
-                footnote="Jobs with no budget set are always shown."
-              />
-              <FilterSlider
-                label="Distance"
-                min={0}
-                max={DISTANCE_FILTER_MAX}
-                step={1}
-                value={radiusMiles ?? 0}
-                onChange={(miles) => selectRadius(miles === 0 ? null : miles)}
-                formatValue={(miles) => distanceChipLabel(miles === 0 ? null : miles)}
-                accessibilityLabel="Distance"
-                footnote={
-                  radiusUnavailable ? 'Location is off — showing all areas.' : undefined
-                }
-              />
-            </View>
-          ) : null}
-        </Sheet>
+        {/* The Filters sheet is rendered by MapJobsSheet above (2026-09-19),
+            beside the list it counts against. The distance pill on the
+            search capsule opens it; components/DistanceChips.tsx stays
+            byte-untouched for WorkerResults, and both surfaces still write
+            the radius through readDistanceFilter / writeDistanceFilter — one
+            filter vocabulary, one persistence module. */}
 
         {/* Worker discovery: the tapped pin's jobs as photo-first cards. Cards
             open the market job detail inside this same Map stack. */}
@@ -890,9 +906,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   seeAllTextDark: {
     color: colors.gold,
-  },
-  filterSheetBody: {
-    gap: spacing.md,
   },
   // THE GROUND LAYER. Absolute rather than `flex: 1` so the tiles run behind
   // the search pill, behind the sheet and under the status bar — the whole

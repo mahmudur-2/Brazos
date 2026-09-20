@@ -8,6 +8,7 @@ import {
   spacing,
   withAlpha,
   type EmeraldPalette,
+  type MaterialName,
   type as typeScale,
 } from '../tokens';
 import { SCRIM_DARK_ALPHA, scrimInDark, themedStyles, useThemeColors } from '../../lib/theme';
@@ -36,6 +37,9 @@ type SheetProps = PropsWithChildren<{
   title?: string;
   /** Set false for a step the user must resolve with an explicit control. */
   dismissOnBackdropPress?: boolean;
+  /** The card's material. `sheet` is every dialog's; the Filters sheet
+   *  (2026-09-19) wears `pane`, the approved Map design's deeper glass. */
+  material?: MaterialName;
 }>;
 
 export function Sheet({
@@ -43,6 +47,7 @@ export function Sheet({
   onClose,
   title,
   dismissOnBackdropPress = true,
+  material = 'sheet',
   children,
 }: SheetProps) {
   const { emerald: colors, isDark } = useThemeColors();
@@ -119,7 +124,7 @@ export function Sheet({
             the material hairline. The backdrop above and every open/close
             mechanic are byte-identical. */}
         <Surface
-          material="sheet"
+          material={material}
           corners="top"
           radius={topRadius}
           style={[

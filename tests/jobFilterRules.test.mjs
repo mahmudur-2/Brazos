@@ -244,3 +244,84 @@ test('the day word is Today, Tomorrow, the short date, or nothing — in the loc
   assert.equal(scheduledDayLabel(dateWindowPreset('today', now).scheduledOn, now), 'Today');
   assert.equal(scheduledDayLabel(dateWindowPreset('tomorrow', now).scheduledOn, now), 'Tomorrow');
 });
+
+// ---------------------------------------------------------------------------
+// THE FILTERS SHEET (2026-09-19) — static: the approved design's rows are the
+// ruled values from lib, never a typed list, and the sheet's mechanics hold.
+// ---------------------------------------------------------------------------
+const stripComments = (source) =>
+  source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+
+test('the Filters sheet draws the five rows from the ruled lists, and every close applies the draft', async () => {
+  const sheet = stripComments(await read('components/JobFilterSheet.tsx'));
+  const popover = stripComments(await read('components/PickerPopover.tsx'));
+
+  // THE ROWS, in the design's order, each labelled as the design labels it.
+  const labels = [...sheet.matchAll(/<Section label="([^"]+)"/g)].map((m) => m[1]);
+  assert.deepEqual(labels, ['Distance', 'Minimum budget', 'When', 'Categories', 'Sort']);
+
+  // THE VALUES COME FROM LIB — presets and Custom lists alike — so a pill can
+  // never offer a number the filter or the server would not accept.
+  for (const name of [
+    'DISTANCE_FILTER_OPTIONS',
+    'DISTANCE_CUSTOM_VALUES',
+    'BUDGET_FILTER_PRESETS_CENTS',
+    'BUDGET_CUSTOM_VALUES_CENTS',
+    'customDateKeys',
+    'dateWindowPreset',
+    'JOB_CATEGORY_CHIP_ORDER',
+    'JOB_CATEGORY_CHIP_LABELS',
+    'JOB_SORTS',
+  ]) {
+    assert.ok(sheet.includes(name), `the sheet must read ${name} from lib`);
+  }
+  assert.doesNotMatch(sheet, /\[\s*2,\s*5,\s*10,\s*25\s*\]|2500|5000|10000/, 'no preset is typed into the sheet');
+  // Money through formatBudget only.
+  assert.match(sheet, /formatBudget\(cents\)/);
+  assert.doesNotMatch(sheet, /toFixed\(2\)|\$\$\{/);
+
+  // THE CUSTOM PILLS wear the value once one is picked, and open the popup.
+  assert.match(sheet, /label=\{distanceIsPreset \? 'Custom' : distanceChipLabel\(draftDistance\)\}/);
+  assert.match(sheet, /label=\{budgetIsPreset \? 'Custom' : formatBudget\(draft\.minBudgetCents\)\}/);
+  assert.match(sheet, /shortDate\(draft\.scheduledOn\)/);
+  assert.equal((sheet.match(/<PickerPopover/g) ?? []).length, 4, 'four popups: distance, budget, date, sort');
+  // The date and sort popups open upward, as the design draws them.
+  assert.equal((sheet.match(/direction="up"/g) ?? []).length, 2);
+  // The sort popup carries the five rules with their sentences.
+  for (const sort of JOB_SORTS) {
+    assert.ok(
+      new RegExp(sort + ": \\{ label: '[^']+', hint: '[^']+' \\}").test(sheet),
+      `the sheet must name the ${sort} sort with its sentence`
+    );
+  }
+  assert.match(sheet, /hint: 'Matches based on your skills'/);
+
+  // BEST MATCH is the worker's skills, exactly — every one of them and no other.
+  assert.match(sheet, /draft\.categories\.size === skills\.size &&\s*\[\.\.\.skills\]\.every\(\(category\) => draft\.categories\.has\(category\)\)/);
+  assert.match(sheet, /categories: bestMatchOn \? new Set<JobCategory>\(\) : new Set\(skills\)/);
+
+  // EVERY CLOSE APPLIES: Done and the backdrop go through the same function
+  // the button does, and the distance writes only when it changed.
+  assert.match(sheet, /<Sheet visible=\{visible\} onClose=\{applyAndClose\} title="Filters" material="pane">/);
+  assert.match(sheet, /<Button title=\{showTitle\} onPress=\{applyAndClose\}/);
+  assert.match(sheet, /if \(distance && draftDistance !== distance\.value\) distance\.onChange\(draftDistance\);/);
+  // The count is asked of the caller, and "Show jobs" stands in when unknown.
+  assert.match(sheet, /count === null \? 'Show jobs' : `Show \$\{count\} \$\{count === 1 \? 'job' : 'jobs'\}`/);
+
+  // THE SELECTED PILL is the emerald tint in both themes (the operator's
+  // exception to D6), and only colours fork between them.
+  assert.match(sheet, /pillOn: \{\s*backgroundColor: colors\.mint,\s*borderColor: colors\.secondaryBorder,\s*\}/);
+  assert.match(sheet, /pillOnDark: \{\s*backgroundColor: withAlpha\(colors\.emerald, 0\.16\),\s*borderColor: withAlpha\(colors\.emerald, 0\.48\),\s*\}/);
+  assert.match(sheet, /pillTextOn: \{\s*fontWeight: '600',\s*color: colors\.emerald,\s*\}/);
+
+  // THE POPUP is its own Modal over the sheet's, anchored in window
+  // coordinates, on the menu material, scrolled to the current value, moved
+  // by the native driver on DropMenu's own constants.
+  assert.match(sheet, /ref\.current\?\.measureInWindow\(\(x, y, width, height\) => \{/);
+  assert.match(popover, /<Modal visible transparent animationType="none"/);
+  assert.match(popover, /<Surface material="menu" radius=\{radius\.lg\}/);
+  assert.match(popover, /initialScrollIndex=\{initialIndex\}/);
+  assert.match(popover, /useNativeDriver: USE_NATIVE_DRIVER/);
+  assert.match(popover, /import \{ PANEL_SCALE_FROM, panelTravelFor \} from '\.\/DropMenu\.shared';/);
+  assert.match(popover, /name="checkmark"/);
+});

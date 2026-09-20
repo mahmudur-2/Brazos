@@ -293,19 +293,17 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   assert.match(map, /onPress=\{\(\) => setFilterOpen\(true\)\}/);
   assert.match(map, /radiusMiles != null \? distanceChipLabel\(radiusMiles\) : 'Any'/);
   assert.doesNotMatch(map, /squircle/, 'the header squircle is retired with the design');
-  // 3. The sheet is still the existing Sheet primitive, and since 2026-08-24
-  //    it holds BUDGET and DISTANCE as sliders instead of the chip row and the
-  //    stepper. Zero is the "any" sentinel on both, converted at this boundary
-  //    so neither lib ever receives a zero it does not define — a budget floor
-  //    of nothing is null, and DISTANCE_FILTER_MIN is one mile, not none.
-  assert.match(map, /<Sheet visible=\{filterOpen\}/);
-  assert.match(map, /<FilterSlider[\s\S]{0,400}?label="Minimum budget"/);
-  assert.match(map, /<FilterSlider[\s\S]{0,400}?label="Distance"/);
-  assert.match(map, /minBudgetCents: cents === 0 \? null : cents/);
-  assert.match(map, /selectRadius\(miles === 0 \? null : miles\)/);
-  // Money is formatted in exactly one place, and the map is not a second one.
-  assert.match(map, /formatBudget\(cents\)/);
-  assert.doesNotMatch(map, /toFixed\(2\)|\$\$\{/, 'money is formatted through formatBudget only');
+  // 3. The distance pill opens the SHARED Filters sheet (2026-09-19), which
+  //    replaced the map's own slider sheet: the radius rides through the
+  //    sheet's distance prop and the same selectRadius, the model through
+  //    the same setJobFilters, and the sheet counts its button against the
+  //    list the pane shows. Money is formatted in exactly one place, and the
+  //    map is not a second one.
+  assert.match(map, /<JobFilterSheet/);
+  assert.match(map, /distance=\{\{ value: radiusMiles, onChange: onRadiusChange, available: userLoc !== null \}\}/);
+  assert.match(map, /onRadiusChange=\{selectRadius\}/);
+  assert.match(map, /onFiltersChange=\{setJobFilters\}/);
+  assert.doesNotMatch(map, /FilterSlider|formatBudget|toFixed\(2\)|\$\$\{/, 'the slider is retired; the map formats no money of its own');
   // 4. The bottom of the screen is the jobs SHEET (components/PeekSheet):
   //    it peeks with the count, the reach and one row, and pulls up to the
   //    list the same rows make. The count is the list's own length; the
@@ -322,7 +320,7 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, t
   assert.doesNotMatch(map, /NEAR YOU|mapCard|cardEyebrow|footerBar|MapRestingJob|View list/);
   // The sheet is mounted only once the screen has measured the room it may
   // open into, and never while the hotspots are loading or failed.
-  assert.match(map, /isWorker && !loading && !error && sheetExpandedHeight > 0 \? \(/);
+  assert.match(map, /isWorker && sheetExpandedHeight > 0 \? \(\s*<MapJobsSheet\s*visible=\{!loading && !error\}/);
   assert.match(map, /rootHeight - insets\.top - headerHeight - sheetGap - sheetInset/);
 });
 
@@ -343,9 +341,9 @@ test('[static] B3 · both discovery surfaces render the shared chips and persist
     assert.match(screen, /writeDistanceFilter\(userId, next\)/);
   }
   assert.match(results, /<DistanceChips/, 'the results list still draws the shared chip row');
-  assert.match(map, /<FilterSlider/, 'the map draws the sheet slider');
+  assert.match(map, /<JobFilterSheet/, 'the map opens the shared Filters sheet');
   // 2026-09-19: the pill on the search capsule is the reach's readout, and
-  // it reads the same label function as the chips and the slider.
+  // it reads the same label function as the chips and the sheet.
   assert.match(map, /distanceChipLabel\(radiusMiles\)/);
   assert.doesNotMatch(
     map,
@@ -358,7 +356,8 @@ test('[static] B3 · both discovery surfaces render the shared chips and persist
   assert.match(chips, /DISTANCE_FILTER_OPTIONS/);
   assert.match(chips, /distanceChipLabel/);
   assert.match(map, /distanceChipLabel/);
-  assert.match(map, /max=\{DISTANCE_FILTER_MAX\}/);
+  // The sheet's Custom list and the clamp on the server are one ceiling.
+  assert.match(await read('components/JobFilterSheet.tsx'), /DISTANCE_CUSTOM_VALUES/);
 });
 
 // ---------------------------------------------------------------------------
@@ -534,8 +533,11 @@ test('[static] B3 · the nearby title tracks the applied radius and a dead locat
   assert.match(results, /`Jobs Within \$\{radius \?\? NEARBY_RADIUS_MILES\} Miles`/);
   // A chosen radius with no usable location keeps the full feed and says so.
   assert.match(results, /Location is off — showing jobs at any distance\./);
+  // 2026-09-19: the map's note moved with its filter sheet — the shared
+  // sheet's Distance row says it, and the pane's head says "Location off".
   const map = await read('screens/MapScreen.tsx');
-  assert.match(map, /Location is off — showing all areas\./);
+  assert.match(map, /: 'Location off'/);
+  assert.match(await read('components/JobFilterSheet.tsx'), /Location is off — the distance applies once it is on\./);
   // A user-chosen radius pins the search widening ladder.
   assert.match(results, /radiusActive\s*\?\s*\[radius as number\]\s*:\s*\[5, 10, 15\]/);
 });

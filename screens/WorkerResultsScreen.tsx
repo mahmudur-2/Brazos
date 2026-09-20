@@ -8,6 +8,7 @@ import { JobFilterSheet } from '../components/JobFilterSheet';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { WorkerJobCard, WorkerJobCardSkeleton } from '../components/WorkerJobCard';
 import { useAuth } from '../hooks/useAuth';
+import { useMyJobsHub } from '../hooks/useMyJobsHub';
 import { useOfferCounts } from '../hooks/useOfferCounts';
 import { useOpenJobs } from '../hooks/useOpenJobs';
 import { useProfile } from '../hooks/useProfile';
@@ -20,9 +21,12 @@ import {
   DEFAULT_JOB_FILTERS,
   activeJobFilterCount,
   applyJobFilters,
+  completedByCategory,
   type JobFilterModel,
+  type JobSortContext,
 } from '../lib/jobFilters';
 import {
+  JOB_CATEGORIES,
   JOB_CATEGORY_LABELS,
   jobMatchesSkills,
   type JobCategory,
@@ -101,6 +105,25 @@ export function WorkerResultsScreen() {
   const myCategories = useMemo(
     () => new Set(profile?.categories ?? []),
     [profile?.categories]
+  );
+  // 2026-09-19 — THE SORT CONTEXT: the worker's skills as real categories,
+  // their track record (completed jobs per category, from the jobs assigned
+  // to them) and the live offer counts — what Smart Match and Fewest bids
+  // rank by. The same three the map's sheet assembles, from the same reads.
+  const skills = useMemo(
+    () =>
+      new Set<JobCategory>(
+        [...myCategories].filter((c): c is JobCategory =>
+          (JOB_CATEGORIES as readonly string[]).includes(c)
+        )
+      ),
+    [myCategories]
+  );
+  const { working } = useMyJobsHub();
+  const trackRecord = useMemo(() => completedByCategory(working), [working]);
+  const sortContext = useMemo<JobSortContext>(
+    () => ({ skills, completedByCategory: trackRecord, offerCounts: bidCounts }),
+    [skills, trackRecord, bidCounts]
   );
 
   // 4D-2 B3 — the distance filter. `undefined` = still reading the persisted
@@ -251,7 +274,9 @@ export function WorkerResultsScreen() {
     radiusActive &&
     (geoState === 'denied' || geoState === 'unavailable');
 
-  const results = useMemo(() => {
+  // The mode's base set — before the filter model — kept apart so the
+  // Filters sheet can count what a draft would show against it.
+  const base = useMemo(() => {
     const radiusBase =
       radiusActive && !radiusUnavailable && geoState === 'ready' ? geoJobs : jobs;
     let base: OpenJob[];
@@ -276,18 +301,21 @@ export function WorkerResultsScreen() {
     } else {
       base = radiusBase;
     }
-    return applyJobFilters(base, filters);
+    return base;
   }, [
     params.mode,
     params.query,
     jobs,
     myCategories,
     geoJobs,
-    filters,
     radiusActive,
     radiusUnavailable,
     geoState,
   ]);
+  const results = useMemo(
+    () => applyJobFilters(base, filters, sortContext),
+    [base, filters, sortContext]
+  );
 
   const filterCount = activeJobFilterCount(filters);
 
@@ -439,12 +467,27 @@ export function WorkerResultsScreen() {
         />
       )}
 
+      {/* 2026-09-19 — the approved Filters sheet. The distance row writes
+          the same radius the chips above the list do, through the one
+          storage path; "nearby" arrives at its stated promise and keeps it,
+          so the row is offered on the other modes only. The count is honest:
+          the base set under the draft while the radius is the applied one,
+          and no number when a changed radius would need a read. */}
       <JobFilterSheet
         visible={filtersOpen}
         onClose={() => setFiltersOpen(false)}
         value={filters}
         onApply={setFilters}
+        distance={
+          params.mode === 'nearby'
+            ? undefined
+            : { value: radius ?? null, onChange: selectRadius, available: !radiusUnavailable }
+        }
         distanceAvailable={distanceAvailable}
+        skills={skills}
+        countFor={(draft, draftDistance) =>
+          draftDistance === (radius ?? null) ? applyJobFilters(base, draft, sortContext).length : null
+        }
       />
     </SafeAreaView>
   );

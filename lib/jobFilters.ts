@@ -96,8 +96,6 @@ export type JobSortContext = {
  * produce a figure the database would refuse.
  */
 export const BUDGET_FILTER_MAX_CENTS = 1_000_000;
-/** The map's slider step — retires with the slider when the chip sheet lands. */
-export const BUDGET_FILTER_STEP_CENTS = 2_500;
 /** The presets a filter row offers before Custom: Any · $25 · $50 · $100 · $250. */
 export const BUDGET_FILTER_PRESETS_CENTS: readonly number[] = [2_500, 5_000, 10_000, 25_000];
 /**
