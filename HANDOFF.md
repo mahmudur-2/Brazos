@@ -1,17 +1,48 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-19 (chat session, continuing the 2026-09-18/19 create-sheet sittings —
-the operator was present, approved the Map and Filters mockups moment by moment, and
-chose "One sitting, three commits" and "Draggable"; see docs/DECISIONS.md 2026-09-19,
-the last block).
+WRITTEN: 2026-09-20 (the same chat session as 2026-09-19's Map + Filters build — the
+operator walked it on the phone, sent screenshots, and ruled each fix; see
+docs/DECISIONS.md 2026-09-20, the last block, and 2026-09-19 before it).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
 
 ## What this session landed
 
-Three code commits on `mainexpo` over `889d50e` and its docs commit, plus the docs
-commit that carries this file. Each is revertible alone:
+**2026-09-20 — THE PHONE WALK'S FIXES: `7792aaf`**, one commit over `e127ebe`, plus the
+docs commit that carries this file. The operator walked `f2d7f1c` on the Beta:
+- The Custom popups showed the distance list under every pill and the whole screen
+  shifted green while one was up — four nested Modals. Fixed at the cause: the Sheet
+  primitive has an `overlay` slot (full-window, box-none, inside its own Modal) and
+  the Filters sheet renders ONE `PickerPopover` into it, fed by whichever pill opened
+  it; the popover has no Modal, wears the sheet's own `pane` glass, opens on the
+  current value. Sheet also gained `topRadius` / `hairline` / `footer` (Filters: 28,
+  sage in dark, pinned Reset + Show) and its ScrollView shrinks for the footer.
+- Filters: the When row scrolls sideways; "Show N jobs" is the Post-a-job-green
+  capsule; the Categories note says how to unlock Best Match when no skills are seen.
+- The peek row (`PeekRow` in WorkerJobCard, mockup `docs/mockups/html/peek-card-*`):
+  neighbourhood only (`neighbourhoodLabel`), day word Today / Tmrw / "Sep 2", beside
+  the chip when it fits (measured) else after the location, the pay column over the
+  top two lines with the 26pt amount centred, the location line full width.
+- The jobs sheet takes the height its rows need, capped under the SEARCH PILL
+  (`maxHeight`, the pill measured as a whole); the toggle hides when nothing lies
+  beyond the peek.
+- SearchBar `emphasis="ink"` (the map's bright field); the `pane` material's sheen.
+`npm run verify` after it: **1375 pass, 0 fail, exit 0**.
+
+**NOT YET SEEN ON THE PHONE:** `7792aaf` itself — the operator's next walk (below).
+
+**STILL OPEN FROM THE WALK:** the Best Match chip did not appear although the operator
+says the profile lists job categories. The new note under Categories is the
+diagnostic: if it shows "Pick job categories…" with categories set, `useProfile`'s
+`categories` read (or its filter to the ten `JOB_CATEGORIES` keys — custom-typed
+categories do not count) is the bug. The pins were not flagged; the dark map's other
+findings arrived as the four fixed above.
+
+---
+
+The 2026-09-19 build, three code commits over `889d50e` and its docs commit. Each is
+revertible alone:
 
 - `da82f33` — **feat(filters): the worker filter's rules** — the brain, no screen
   change. `lib/jobFilters.ts`: `JobSort` = smart | newest | pay | distance | bids
@@ -66,9 +97,10 @@ sheet (a tapped cluster's cards) is untouched.
 **WHAT THE FILTERS SHEET IS NOW** (`f2d7f1c`): `ui/primitives/Sheet` wearing `pane`,
 five rows of 34pt pills — Distance (when the caller passes `distance`), Minimum budget,
 When, Categories (Best Match + eleven, one scrolling row), Sort ("Sort by <rule>") — a
-Reset and "Show N jobs" / "Show jobs". Custom pills open `PickerPopover` (its own
-transparent Modal, `measureInWindow`-anchored, `menu` material, six rows, tick on the
-current value; When and Sort open upward). Every close applies the draft.
+Reset and "Show N jobs" / "Show jobs" pinned as the sheet's footer. Custom pills open
+ONE `PickerPopover` in the Sheet's `overlay` (no Modal — 2026-09-20; `measureInWindow`-
+anchored, `pane` glass under the menu rim, six rows, tick on the current value; When
+and Sort open upward). Every close applies the draft.
 
 **THE MOTION** (`PeekSheet`): the pane is laid out at its OPEN height inside a
 same-size clip and slides by `translateY`; closed = open height − measured peek. Fast
@@ -82,8 +114,9 @@ the fast path is what runs.
 
 - **Five materials now**: `chrome | sheet | menu | clear | pane`. `pane` = ink 0.90,
   blur 30, mint rim 0.40, highlight 0.30, fallback 0.94, radius 28 top-only, no light
-  block. `tests/themeTokens` pins it; `tests/designStudio` enumerates it; its dials are
-  live in Blur & Material.
+  block, and (2026-09-20) a `sheen` — white 0.09 → 0.04 diagonal, dark only, the one
+  material with one. `tests/themeTokens` pins it; `tests/designStudio` enumerates it;
+  its dials are live in Blur & Material.
 - **The pin tokens are three per palette** (`pinTop`, `pinBottom`, `pinGlyph`), by
   reference in `lib/theme.ts`. Gold on a pin means SELECTED.
 - **The map's distance state is `radiusMiles`**; the `themeRadius` alias is gone.
@@ -107,6 +140,13 @@ the fast path is what runs.
   sheet passes `pane`. No other dialog moved.
 - **Stale comments still owed** (unchanged): `scripts/shots.mjs` lines 387-390. (The
   `MAP_SEARCH_HEIGHT` note is gone with the rewrite.)
+- **A popup over a sheet renders into the Sheet's `overlay`** — never a second Modal.
+  `tests/jobFilterRules` pins `PickerPopover` Modal-free.
+- **The peek row measures whether the day fits beside the chip** (`dayFits`), renders
+  the day unseen until it has, and clips its body. Do not replace the measure with a
+  character estimate; the fonts differ from the mockup's.
+- **`scheduledDayLabel` is short now** (Tmrw, "Sep 2"); the Filters date popup keeps its
+  own long form (`longDate` in JobFilterSheet).
 
 ### The fences this session touched, and how
 
@@ -139,21 +179,21 @@ the fast path is what runs.
 
 ## Waiting on the operator
 
-- **The phone.** `npm run update:preview`, then the worker Map: the pill, the chip,
-  the pins (a cluster's badge; a tapped pin's gold ring), the sheet's pull and tap, the
-  peek row, the list, "Open the full list"; then the Filters sheet from the distance
-  pill — each Custom popup (Distance and Budget below their pills, When and Sort above),
-  Best Match, Reset, the count on the button; then the same sheet from WorkerResults'
-  filter control. Light mode: every pane flat white. Dark: the glass at 0.90 — the
-  `pane` dials are live if it reads heavy.
+- **The phone, again.** `npm run update:preview`, then: the four Custom popups (each
+  its own list, no colour shift while open, opened on the ticked value; When and Sort
+  upward); the Filters head hairline and corners, the pinned Reset / Show capsule, the
+  When row scrolling; the peek rows (neighbourhood only, "Tmrw" / "Sep 2", nothing over
+  the pay, the amount centred); the sheet's height with the real job count (stops at
+  its rows, caps under the search pill); the bright search field; the pane's sheen in
+  dark. And whether the Categories note says "Pick job categories…" — see STILL OPEN.
 - **Staging**: the Actions tab for the `da82f33` push (the migration) and this push
   (no migration, no function — verify only).
-- **Revert lines:** `git revert f2d7f1c` (the Filters sheet; the slider returns),
-  `git revert f462224` (the Map screen), `git revert da82f33` (the brain — the other
-  two depend on it).
-- The push: `npm run verify` exited 0 in this session after `f2d7f1c`, so the one
+- **Revert lines:** `git revert 7792aaf` (the walk's fixes), then `git revert f2d7f1c`
+  (the Filters sheet; the slider returns), `git revert f462224` (the Map screen),
+  `git revert da82f33` (the brain — the other two depend on it).
+- The push: `npm run verify` exited 0 in this session after `7792aaf`, so the one
   permitted push — flag-free `git push origin mainexpo` — runs after the docs commit
-  (result in the session report).
+  (result in the session report). No migration, no function: verify only.
 
 ## Open gates
 
