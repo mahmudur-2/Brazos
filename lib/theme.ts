@@ -106,6 +106,10 @@ export const colors = {
   taskCardLitTop: emeraldLight.taskCardLitTop,
   taskCardLitBottom: emeraldLight.taskCardLitBottom,
   taskCardEdge: emeraldLight.taskCardEdge,
+  /** 2026-09-19 — the map pin's shades, by reference to ui/tokens.ts. */
+  pinTop: emeraldLight.pinTop,
+  pinBottom: emeraldLight.pinBottom,
+  pinGlyph: emeraldLight.pinGlyph,
   /** The task card's field ring, by reference to ui/tokens.ts: the green-grey
    *  secondary border (light #CBE0D7, dark #2F5140) that the HTML mockup's
    *  .field rule draws. Exposed 2026-09-18 because Home needed it and this
@@ -216,6 +220,9 @@ export const darkColors: ColorPalette = {
   taskCardLitTop: emeraldDark.taskCardLitTop,
   taskCardLitBottom: emeraldDark.taskCardLitBottom,
   taskCardEdge: emeraldDark.taskCardEdge,
+  pinTop: emeraldDark.pinTop,
+  pinBottom: emeraldDark.pinBottom,
+  pinGlyph: emeraldDark.pinGlyph,
   secondaryBorder: emeraldDark.secondaryBorder,
 
   text: '#F1EDE1',

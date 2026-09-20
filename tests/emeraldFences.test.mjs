@@ -2035,27 +2035,34 @@ test('home(9) fence: nothing on the customer Home stack links to Map', () => {
 });
 
 // ---------------------------------------------------------------------------
-// THE MAP SCREEN'S CHROME FLOATS — 2026-08-23, operator instruction.
+// THE MAP SCREEN'S CHROME FLOATS — 2026-08-23, operator instruction; redrawn
+// 2026-09-19 to the approved Map design (docs/mockups/html/map-explore-*).
 //
 // The screen had been three stacked panels: an opaque header slab, the map,
 // an opaque bottom band. Two of those are gone. The map is the GROUND, filling
-// the screen absolutely, and the title and the count row ride on it as inset,
-// rounded, translucent capsules.
+// the screen absolutely, and the chrome rides on it as inset, rounded panes:
+// since 2026-09-19 one glass search pill, one chip and the floating jobs
+// sheet, every one of them wearing the `pane` MATERIAL rather than a
+// withAlpha slab of its own — liquid glass in dark, and flat white in light
+// by the operator's ruling ("no liquid glass on light mode"), which is why
+// translucency is asserted through the material and not through a number
+// in this file.
 //
-// WHY IT NEEDS A FENCE. This is the third pass over this screen's chrome
-// (2026-08-22 removed the header CARD and the footer CARD; this one removes
-// the slabs those left behind), and each pass has been a reduction that a
-// later run could plausibly read as a missing background and "fix". The two
-// properties that must not silently revert are the LAYERING (the map behind
-// both) and the TRANSLUCENCY (no opaque ground behind either).
+// WHY IT NEEDS A FENCE. This is the fourth pass over this screen's chrome
+// (2026-08-22 removed the header CARD and the footer CARD; 2026-08-23 the
+// slabs those left behind; 2026-09-19 the capsules), and each pass has been
+// a reduction that a later run could plausibly read as a missing background
+// and "fix". The two properties that must not silently revert are the
+// LAYERING (the map behind everything) and the GROUND (no pane names a fill
+// of its own — the material is the one place a pane's ground is defined).
 // ---------------------------------------------------------------------------
-test('map(1) fence: the map is the ground and the chrome floats on it, translucent', () => {
+test('map(1) fence: the map is the ground and the chrome floats on it, on the pane material', () => {
   const map = stripComments(read('screens/MapScreen.tsx'));
   const flat = flatten(read('screens/MapScreen.tsx'));
 
   // THE LAYERING. The map is absolutely positioned — not a `flex: 1` panel
-  // between two rows — so its bounds extend behind the header, behind the
-  // bottom row and under the status bar. The retired wrapper must not return.
+  // between two rows — so its bounds extend behind the search pill, behind
+  // the sheet and under the status bar. The retired wrapper must not return.
   assert.match(
     flat,
     /mapLayer: \{ \.\.\.StyleSheet\.absoluteFillObject,/,
@@ -2063,71 +2070,38 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
   );
   assert.doesNotMatch(flat, /mapWrap/, 'the flex-panel map wrapper is retired');
   // The map is rendered from the ground layer, and the chrome layer sits over
-  // it without swallowing the pans and taps the map needs.
+  // it without swallowing the pans and taps the map needs — the header block
+  // included, so a tap between the pill and the chip reaches the tiles.
   assert.match(flat, /<View style=\{styles\.mapLayer\}> <HotspotMap/);
   assert.match(
     flat,
     /<SafeAreaView style=\{styles\.safe\} edges=\{\['top'\]\} pointerEvents="box-none">/,
     'the chrome layer must be box-none or the map stops panning'
   );
-  assert.match(flat, /<View style=\{styles\.mapSpacer\} pointerEvents="none" \/>/);
+  assert.match(flat, /<View style=\{styles\.headerBlock\} onLayout=\{onHeaderLayout\} pointerEvents="box-none">/);
 
-  // NO OPAQUE GROUND BEHIND EITHER ELEMENT. Both capsules take the page
-  // ground through withAlpha, and neither may name a flat palette fill.
-  //
-  // 2026-08-24 — TWO ALPHAS NOW, RE-DERIVED, not one lowered. The number was
-  // never a taste value: 0.82 was what a 26pt display title needed with
-  // nothing between it and an arbitrary tile. The header's title is gone,
-  // replaced by a SearchBar, and every child of that capsule now brings its
-  // own opaque field — so no type touches the header's ground and it can be
-  // glass. The bottom row still sets its count, its subtitle and "View list"
-  // directly on its own ground, in SMALLER type than the title the old floor
-  // was derived for, so it keeps a real floor and only comes down as far as
-  // that allows. The header being MORE transparent than the bottom row is the
-  // fence, not an accident: if they ever converge, one of them is wrong.
-  const GLASS = [
-    ['headerWrap', 'the header', '0\\.55', 'map\\.headerWrap\\.radius'],
-    ['footerBar', 'the bottom row', '0\\.72', 'map\\.footerBar\\.radius'],
-  ];
-  for (const [key, label, alpha, cornerDial] of GLASS) {
-    const style = new RegExp(`${key}: \{([^}]*)\}`).exec(flat.replace(/\{ width: 0, height: 3 \}/g, ''));
-    assert.ok(style, `${label} must keep a plain, readable style object`);
-    assert.match(
-      style[1],
-      new RegExp(`backgroundColor: withAlpha\\(colors\\.background, ${alpha}\\)`),
-      `${label} must let the tiles through at its own derived floor — an opaque fill is a slab`
-    );
-    assert.match(
-      style[1],
-      /marginHorizontal: spacing\.md/,
-      `${label} must be INSET, or it is a full-width band however transparent it is`
-    );
-    // RUN T2 (C11) put each capsule's corner on its own screen dial, so the
-    // token is named at the WEARER and no longer inside the style block.
-    // `radius.xl` is still the value and still the only one — the alias exists
-    // because the distance filter's own `radius` state shadows the token
-    // inside the component. Only the address moved.
-    assert.match(
-      flat,
-      new RegExp(`useDialNumber\\('${cornerDial}'\\) \\?\\? themeRadius\\.xl`),
-      `${label} must be a capsule, not an edge-to-edge strip`,
-    );
-    assert.match(flat, /const themeRadius = radius;/, 'the alias must stay the token itself');
-    assert.match(style[1], /borderWidth: 1, borderColor: colors\.border/, `${label} needs its hairline over busy tiles`);
-  }
-  // THE ORDERING, as arithmetic rather than as two independent constants: the
-  // capsule that still carries bare type must be the less transparent of the
-  // two, whatever either number becomes.
-  const alphaOf = (key) =>
-    Number(
-      new RegExp(`${key}: \{[^}]*backgroundColor: withAlpha\\(colors\\.background, ([0-9.]+)\\)`)
-        .exec(flat)[1]
-    );
-  assert.ok(
-    alphaOf('footerBar') > alphaOf('headerWrap'),
-    'the row that sets type on its own ground must back it more heavily than the row that does not'
+  // NO PANE NAMES ITS OWN GROUND. The search pill, the chip and the customer
+  // count capsule are `pane` Surfaces; the field inside the pill hands its
+  // ground to the pill; and the retired slabs — the header wrap, the footer
+  // bar and their withAlpha floors — do not come back under any name.
+  assert.match(flat, /<Surface material="pane" radius=\{searchRadius\} corners="all" style=\{styles\.searchPill\}>/);
+  assert.match(flat, /<Surface material="pane" radius=\{MAP_CHIP_RADIUS\} corners="all"/);
+  assert.match(flat, /<Surface material="pane" radius=\{sheetRadius\} corners="all" style=\{\[styles\.countCapsule,/);
+  assert.match(
+    flat,
+    /searchField: \{ minHeight: MAP_SEARCH_HEIGHT - 2, backgroundColor: 'transparent', borderColor: 'transparent',/,
+    'the field inside the pill must paint nothing of its own'
   );
-  // The chrome layer itself paints nothing: every pixel is the map or a capsule.
+  assert.doesNotMatch(flat, /searchPill: \{[^}]*backgroundColor/, 'the pill takes its ground from the material');
+  assert.doesNotMatch(flat, /headerWrap|footerBar|withAlpha\(colors\.background/, 'the slabs stay retired');
+  // The sheet is the shared PeekSheet, which wears the same material; this
+  // screen hands it the design's corner, padding and inset through dials.
+  assert.match(flat, /<PeekSheet/);
+  assert.match(flat, /useDialNumber\('map\.sheet\.radius'\) \?\? MAP_SHEET_RADIUS/);
+  assert.match(flat, /useDialNumber\('map\.searchPill\.radius'\) \?\? MAP_SEARCH_RADIUS/);
+  const sheet = flatten(read('components/PeekSheet.shared.tsx'));
+  assert.match(sheet, /<Surface material="pane" radius=\{radius\} corners="all"/);
+  // The chrome layer itself paints nothing: every pixel is the map or a pane.
   assert.match(flat, /safe: \{ flex: 1, backgroundColor: 'transparent',? \}/);
   // And the screen still has ONE opaque ground, under the map — not behind
   // the chrome — so no frame paints the platform's white before tiles land.
@@ -2137,12 +2111,11 @@ test('map(1) fence: the map is the ground and the chrome floats on it, transluce
   // screen. The 26pt "Find Jobs Near You" display title is GONE as of
   // 2026-08-24 — it named the screen the user had already chosen to be on, and
   // it was the single largest thing the header capsule had to hold legible
-  // over live tiles. The shared SearchBar is what the capsule carries now, and
-  // its absence is asserted so the title cannot drift back and quietly put the
-  // header's alpha back under a contrast obligation it no longer has.
+  // over live tiles. The shared SearchBar is what the pill carries now, under
+  // the design's own placeholder, and the count lives in the sheet's head.
   assert.doesNotMatch(map, /Find Jobs Near You/, 'the display title is retired, not hidden');
-  assert.match(map, /<SearchBar/, 'the header capsule carries the shared search field');
-  assert.match(map, /placeholder="Find nearby jobs"/);
+  assert.match(map, /<SearchBar/, 'the search pill carries the shared search field');
+  assert.match(map, /placeholder="Explore nearby jobs"/);
   assert.match(map, /\{visibleJobCount\} open \{visibleJobCount === 1 \? 'job' : 'jobs'\}/);
 });
 

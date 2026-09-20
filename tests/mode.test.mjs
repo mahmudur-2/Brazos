@@ -238,10 +238,12 @@ test('the shared Map tab offers the worker job list only in worker mode', () => 
     'the mode question is asked once and read from `isWorker` everywhere else'
   );
   for (const gated of [
-    // The distance control, in the header capsule beside the search field.
-    /\{isWorker \? \(\s*<Pressable\s*\n\s*onPress=\{\(\) => setFilterOpen\(true\)\}/,
+    // The distance pill, riding inside the search capsule (its `trailing`).
+    /isWorker \? \(\s*<Pressable\s*\n\s*onPress=\{\(\) => setFilterOpen\(true\)\}/,
     // The filter chip row under it.
     /\{isWorker \? \(\s*<View style=\{styles\.chipRow\}>/,
+    // The jobs sheet, which lists the worker's open feed.
+    /\{isWorker && !loading && !error && sheetExpandedHeight > 0 \? \(\s*<MapJobsSheet/,
     // The search pill's dispatch, gated at the handler AND at the call site.
     /onSubmit=\{isWorker \? submitSearch : undefined\}/,
     /function submitSearch\(\) \{[\s\S]{0,400}?if \(!isWorker\) return;/,

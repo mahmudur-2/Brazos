@@ -27,9 +27,11 @@ const stripComments = (source) =>
 //   2. THE PALETTE KEEPS THE INVERSION. dark.forest is the deep green and
 //      dark.gold the metal, and they can never silently re-merge.
 //
-// The HotspotMap per-theme pin assertion is carried over unchanged from the
-// 4D-4 suite — it still pins the code as it stands; the 3a map restyle will
-// update it when the pin adopts master 33's gold ring.
+// The HotspotMap pin assertion was carried over from the 4D-4 suite until
+// 2026-09-19, when the pin became the approved Map design's teardrop
+// (docs/mockups/html/map-explore-*): a head lit between the two pin tokens
+// with the emerald stroke, gold reserved for the SELECTED pin's ring. The
+// fence below pins that drawing.
 // ===========================================================================
 
 const SOURCE_DIRS = ['screens', 'components', 'ui'];
@@ -213,22 +215,42 @@ function enclosingObject(source, index) {
   return null;
 }
 
-test('[static] the HotspotMap pin is master 33: forest fill, ONE gold hairline, cream count', () => {
+test('[static] the HotspotMap pin is the approved teardrop: pin tokens, emerald stroke, gold only when selected', () => {
   const source = stripComments(read('components/HotspotMap.native.tsx'));
-  // Golden master 33 rings the pin in gold. The per-theme split this carried
-  // under palette v1 existed because forest WAS the gold primary there, so a
-  // gold hairline vanished into its own fill; v2 restored forest to a deep
-  // green (guarded distinct below), which makes one rule correct in both.
-  const badge = enclosingObject(source, source.indexOf('minWidth: 40'));
-  assert.match(badge, /backgroundColor: colors\.forest/);
-  assert.match(badge, /borderColor: colors\.gold/);
-  const tail = enclosingObject(source, source.indexOf('marginTop: -5'));
-  assert.match(tail, /backgroundColor: colors\.forest/);
-  assert.match(tail, /borderColor: colors\.gold/);
-  // No per-theme override survives, in either direction.
-  assert.doesNotMatch(source, /pinBadgeLight|pinBadgeDark|pinTailLight|pinTailDark/);
-  // The count itself already sat on onForest — that stays.
+  // A named style's object: enclosingObject walks back from a point INSIDE
+  // the braces, so the index steps past the name and its opening brace.
+  const styleObject = (name) => {
+    const at = source.indexOf(`${name}: {`);
+    assert.ok(at >= 0, `HotspotMap.native must keep a ${name} style`);
+    return enclosingObject(source, at + name.length + 3);
+  };
+  // THE HEAD AND THE TAIL are cut from the same fill — the pin's own bottom
+  // token — under the same emerald stroke. The lit gradient rides on the head
+  // through litBetween, from pinTop to pinBottom, flat in light.
+  const head = styleObject('pinHead');
+  assert.match(head, /backgroundColor: colors\.pinBottom/);
+  assert.match(head, /borderColor: colors\.emerald/);
+  const tail = styleObject('pinTail');
+  assert.match(tail, /backgroundColor: colors\.pinBottom/);
+  assert.match(tail, /borderColor: colors\.emerald/);
+  assert.match(source, /litBetween\(\{ top: colors\.pinTop, bottom: colors\.pinBottom, flat: !isDark \}\)/);
+  // GOLD IS THE SELECTED RING, and only that: the resting pin never wears it.
+  assert.doesNotMatch(head, /colors\.gold/);
+  assert.doesNotMatch(tail, /colors\.gold/);
+  assert.match(styleObject('pinHeadSelected'), /borderColor: colors\.gold/);
+  assert.match(styleObject('pinWrapSelected'), /shadowColor: colors\.gold/);
+  // The briefcase is drawn in the glyph token — Views, never an icon font,
+  // because the marker is captured once (tracksViewChanges false).
+  for (const part of ['briefHandle', 'briefBody', 'briefClasp']) {
+    assert.match(styleObject(part), /colors\.pinGlyph/);
+  }
+  assert.doesNotMatch(source, /<Ionicons[^>]*name="briefcase/, 'no icon font inside a Marker');
+  // No per-theme override survives, in either direction: the two greens are
+  // TOKENS, resolved per palette in ui/tokens.ts, not a fork in the component.
+  assert.doesNotMatch(source, /pinHeadLight|pinHeadDark|pinTailLight|pinTailDark/);
+  // The count sits on onForest, and only clusters carry one.
   assert.match(source, /pinCount: \{\s*color: colors\.onForest/);
+  assert.match(source, /pin\.count > 1 \? \(/);
 });
 
 // ===========================================================================

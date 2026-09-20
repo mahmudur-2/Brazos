@@ -126,9 +126,18 @@ test('[static] B1 · the native map renders pins when provided and suppresses th
   assert.match(map, /regionRef\.current = region;/);
   assert.match(map, /onRegionChangeComplete\?\.\(region\);/);
   // Pin badges are Text counts, not icon glyphs — safe with
-  // tracksViewChanges={false} (no icon-font capture race).
+  // tracksViewChanges={false} (no icon-font capture race). 2026-09-19: the
+  // briefcase is drawn from Views for the same reason.
   assert.match(map, /tracksViewChanges={false}/);
   assert.match(map, /{pin\.count}/);
+  const marker = map.slice(map.indexOf('<Marker'), map.indexOf('</Marker>'));
+  assert.ok(marker.length > 0, 'the pin Marker must still be there to inspect');
+  assert.doesNotMatch(marker, /<Ionicons/, 'nothing inside a Marker may depend on an icon font');
+  // The selected pin and the locate button are the two props the approved
+  // design added; both default off so every other caller is untouched.
+  assert.match(map, /selectedPinKey = null,/);
+  assert.match(map, /hideLocateButton = false,/);
+  assert.match(map, /showsMyLocationButton=\{perm === 'granted' && !hideLocateButton\}/);
 });
 
 test('[static] B1 · MapScreen: worker mode clusters cells into pins and opens the card sheet; customer keeps the glow drill-down', async () => {
@@ -155,10 +164,12 @@ test('[static] B1 · the shared props stay optional so the frozen web map ignore
   assert.match(hotspots, /onSelectPin\?:/);
   assert.match(hotspots, /onRegionChangeComplete\?:/);
   assert.match(hotspots, /onUserLocation\?:/);
+  assert.match(hotspots, /selectedPinKey\?: string \| null;/);
+  assert.match(hotspots, /hideLocateButton\?: boolean;/);
   // The frozen web implementation is byte-untouched by 4D-2 — it must not
   // even mention the new props.
   const webMap = await read('components/HotspotMap.web.tsx');
-  assert.doesNotMatch(webMap, /onSelectPin|onRegionChangeComplete|onUserLocation/);
+  assert.doesNotMatch(webMap, /onSelectPin|onRegionChangeComplete|onUserLocation|selectedPinKey|hideLocateButton/);
 });
 
 // ---------------------------------------------------------------------------
@@ -265,8 +276,9 @@ test('[static] B2 · the no-photo state is the category-glyph tile, never stock 
   assert.doesNotMatch(stripComments(card), /https?:\/\//);
 });
 
-test('[static] the Map screen structure holds: no header card, sheet-filtered, compact bottom row', async () => {
-  // 2026-08-22 restructure, each half pinned:
+test('[static] the Map screen structure holds: no header card, sheet-filtered, the jobs sheet peeks', async () => {
+  // 2026-08-22 restructure, each half pinned; 2026-09-19 redrawn to the
+  // approved Map design, and re-pinned here:
   const map = stripComments(await read('screens/MapScreen.tsx'));
   // 1. The "MAP DISCOVERY / Open jobs on the map" card is gone — and since
   //    2026-08-23 the map does not merely fill BETWEEN the title and the
@@ -274,12 +286,13 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, c
   //    is emeraldFences' map(1) fence). The tier legend that rode in the
   //    card went with it.
   assert.doesNotMatch(map, /MAP DISCOVERY|Open jobs on the map|HOTSPOT_TIERS/);
-  // 2. The header's right control opens the distance sheet (it no longer
-  //    navigates) and carries the active distance as a label when a radius
-  //    is applied.
+  // 2. The distance pill on the search capsule opens the filter sheet (it
+  //    never navigates) and ALWAYS carries the reach — the active radius
+  //    through the one label function, or "Any". The squircle it replaced
+  //    is retired.
   assert.match(map, /onPress=\{\(\) => setFilterOpen\(true\)\}/);
-  assert.match(map, /radius != null && styles\.squircleLabeled/);
-  assert.match(map, /\{`\$\{radius\} mi`\}/);
+  assert.match(map, /radiusMiles != null \? distanceChipLabel\(radiusMiles\) : 'Any'/);
+  assert.doesNotMatch(map, /squircle/, 'the header squircle is retired with the design');
   // 3. The sheet is still the existing Sheet primitive, and since 2026-08-24
   //    it holds BUDGET and DISTANCE as sliders instead of the chip row and the
   //    stepper. Zero is the "any" sentinel on both, converted at this boundary
@@ -293,27 +306,24 @@ test('[static] the Map screen structure holds: no header card, sheet-filtered, c
   // Money is formatted in exactly one place, and the map is not a second one.
   assert.match(map, /formatBudget\(cents\)/);
   assert.doesNotMatch(map, /toFixed\(2\)|\$\$\{/, 'money is formatted through formatBudget only');
-  // 4. The bottom row is the count and "View list", plus the radius subtitle
-  //    and ONE resting card since 2026-08-24. Never the old card slab, and
-  //    never a second list: "View list" already opens the real one.
-  assert.match(map, /styles\.footerBar/);
-  assert.match(map, /styles\.footerCount/);
-  assert.match(map, /styles\.footerSubtitle/);
-  assert.match(map, /<MapRestingJob/);
-  assert.match(map, /`Near you · Within \$\{radius\} \$\{radius === 1 \? 'mile' : 'miles'\}`/);
-  assert.doesNotMatch(map, /NEAR YOU|mapCard|cardEyebrow/);
-  // ONE card, not a feed. A `.map(` over jobs inside the footer would be the
-  // in-sheet list the dispatch put out of scope.
-  assert.match(
-    stripComments(await read('screens/MapScreen.tsx')),
-    /applyJobFilters\(jobs, filters\)\[0\] \?\? null/,
-    'the resting slot takes the first match, not a list of them'
-  );
-  assert.match(
-    map,
-    /footerBar: \{[^}]*backgroundColor: withAlpha\(colors\.background, 0\.72\)/s,
-    'the bottom row floats on the map at its own re-derived floor — the opaque band stays retired'
-  );
+  // 4. The bottom of the screen is the jobs SHEET (components/PeekSheet):
+  //    it peeks with the count, the reach and one row, and pulls up to the
+  //    list the same rows make. The count is the list's own length; the
+  //    reach names what the list was taken under — the radius through the
+  //    server read when a position exists, the feed otherwise — and the old
+  //    footer bar, resting card and "View list" are retired. The sheet's
+  //    foot still opens the real results list rather than growing one.
+  assert.match(map, /<PeekSheet/);
+  assert.match(map, /variant="peek"/);
+  assert.match(map, /fetchJobsWithinRadius\(userLoc\.lat, userLoc\.lng, radiusMiles\)/);
+  assert.match(map, /\$\{jobs\.length\} open \$\{jobs\.length === 1 \? 'job' : 'jobs'\}/);
+  assert.match(map, /`Within \$\{radiusMiles\} \$\{radiusMiles === 1 \? 'mile' : 'miles'\}`/);
+  assert.match(map, /subtitleLead="Near you"/);
+  assert.doesNotMatch(map, /NEAR YOU|mapCard|cardEyebrow|footerBar|MapRestingJob|View list/);
+  // The sheet is mounted only once the screen has measured the room it may
+  // open into, and never while the hotspots are loading or failed.
+  assert.match(map, /isWorker && !loading && !error && sheetExpandedHeight > 0 \? \(/);
+  assert.match(map, /rootHeight - insets\.top - headerHeight - sheetGap - sheetInset/);
 });
 
 test('[static] B3 · both discovery surfaces render the shared chips and persist through the one storage module', async () => {
@@ -334,6 +344,9 @@ test('[static] B3 · both discovery surfaces render the shared chips and persist
   }
   assert.match(results, /<DistanceChips/, 'the results list still draws the shared chip row');
   assert.match(map, /<FilterSlider/, 'the map draws the sheet slider');
+  // 2026-09-19: the pill on the search capsule is the reach's readout, and
+  // it reads the same label function as the chips and the slider.
+  assert.match(map, /distanceChipLabel\(radiusMiles\)/);
   assert.doesNotMatch(
     map,
     /DISTANCE_FILTER_OPTIONS|distanceFilterStorageKey/,

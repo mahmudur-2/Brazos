@@ -590,7 +590,9 @@ const overWhite = (hex, alpha) => {
 test('G1 materials: the table is as dispatched, worn from one scrim ink and the brand mint', async () => {
   const { materials, brand } = await tokensModule;
   // 2026-09-18: 'clear' is the fourth — the [+] create sheet's pane.
-  assert.deepEqual(Object.keys(materials), ['chrome', 'sheet', 'menu', 'clear']);
+  // 2026-09-19: 'pane' is the fifth — the approved Map design's jobs and
+  // Filters panes, asserted below.
+  assert.deepEqual(Object.keys(materials), ['chrome', 'sheet', 'menu', 'clear', 'pane']);
   for (const [name, expected] of Object.entries(MATERIALS_AS_DISPATCHED)) {
     for (const [key, value] of Object.entries(expected)) {
       assert.equal(materials[name][key], value, `materials.${name}.${key} moved off the dispatched value`);
@@ -621,7 +623,22 @@ test('G1 materials: the table is as dispatched, worn from one scrim ink and the 
     fallbackScrimAlpha: 0.96,
     highlightAlpha: 0.95,
   });
-  for (const name of ['chrome', 'sheet', 'menu']) {
+  // PANE (2026-09-19, docs/mockups/html/map-explore-dark.html, the liquid
+  // pass the operator approved): the scrim ink at 0.90 over a blur of 30 —
+  // deeper than sheet, far deeper than clear, so the map reads through as a
+  // hint — the mint rim at 0.40, a specular top edge at 0.30, the docked
+  // radius by default, and NO light block: the operator ruled light flat
+  // ("no liquid glass on light mode"), so light panes render the surface
+  // under the line hairline through Surface's flat branch.
+  assert.equal(materials.pane.scrimColor, '#071B15');
+  assert.equal(materials.pane.blur, 30);
+  assert.equal(materials.pane.scrimAlpha, 0.9);
+  assert.equal(materials.pane.borderColor, brand.mint);
+  assert.equal(materials.pane.borderAlpha, 0.4);
+  assert.equal(materials.pane.highlightAlpha, 0.3);
+  assert.equal(materials.pane.fallbackScrimAlpha, 0.94);
+  assert.deepEqual([materials.pane.radius, materials.pane.radiusTopOnly], [28, true], 'docked by default');
+  for (const name of ['chrome', 'sheet', 'menu', 'pane']) {
     assert.equal(materials[name].light, undefined, `${name} must stay flat in light — no light recipe`);
   }
 });

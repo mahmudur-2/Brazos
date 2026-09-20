@@ -118,6 +118,13 @@ export const colors = {
   taskCardLitBottom: '#FFFFFF',
   /** The card's 1pt edge. Light: `line`. */
   taskCardEdge: '#DDE2DD',
+  /** 2026-09-19 — the map pin, from the approved Map design's reference
+   *  sheet (its --pin-top / --pin-bottom / --pin-ink): the head is lit from
+   *  `pinTop` to `pinBottom`, the briefcase drawn in `pinGlyph`. Light:
+   *  a white-to-mint head with a forest glyph. */
+  pinTop: '#F9FDF4',
+  pinBottom: '#E4F2DF',
+  pinGlyph: '#426D48',
 } as const;
 
 export type ColorToken = keyof typeof colors;
@@ -181,6 +188,10 @@ export const dark = {
   taskCardLitTop: '#15362B',
   taskCardLitBottom: '#0B2019',
   taskCardEdge: '#27473A',
+  // 2026-09-19 — the map pin's dark shades, the reference sheet's own.
+  pinTop: '#224634',
+  pinBottom: '#06180F',
+  pinGlyph: '#EEE4C4',
 } as const satisfies Record<ColorToken, string>;
 
 export { withAlpha } from './colorAlpha';
@@ -633,7 +644,7 @@ export const glow = {
  */
 const GLASS_SCRIM = '#071B15';
 
-export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear';
+export type MaterialName = 'chrome' | 'sheet' | 'menu' | 'clear' | 'pane';
 
 /**
  * 2026-09-18 — A LIGHT-THEME GLASS RECIPE. Surface's light path has always
@@ -685,9 +696,10 @@ export type MaterialSpec = {
 };
 
 /**
- * Four materials, as data. chrome is the nav bar's wear; sheet is the docked
+ * Five materials, as data. chrome is the nav bar's wear; sheet is the docked
  * and floating dialog surfaces; menu is the densest glass, for anchored
- * popovers; clear is the [+] create sheet's see-through pane (2026-09-18).
+ * popovers; clear is the [+] create sheet's see-through pane (2026-09-18);
+ * pane is the Map design's jobs and Filters sheets (2026-09-19).
  * Consumed ONLY through ui/primitives/Surface.tsx, and tunable live through
  * lib/designOverrides.ts (RUN G1 C2) — these are the launch defaults.
  */
@@ -769,6 +781,26 @@ export const materials: Record<MaterialName, MaterialSpec> = {
       fallbackScrimAlpha: 0.96,
       highlightAlpha: 0.95,
     },
+  },
+  // 2026-09-19 — PANE: the approved Map design's docked and floating panes
+  // (the jobs sheet on the map, the Filters sheet), from the operator's
+  // reference sheet and the liquid pass that followed it: the scrim ink at
+  // 0.90 over a blur of 30, the mint rim at 0.40 and the specular top edge at
+  // 0.30 — deeper than `sheet` (0.72) and far deeper than `clear` (0.40),
+  // so the page reads through only as a hint. No light block: light panes
+  // are flat white with the line hairline, as ruled ("no liquid glass in
+  // light"). Radius 28 on the top corners is the docked default; the map's
+  // floating pane passes its own.
+  pane: {
+    blur: 30,
+    scrimColor: GLASS_SCRIM,
+    scrimAlpha: 0.9,
+    borderColor: brand.mint,
+    borderAlpha: 0.4,
+    fallbackScrimAlpha: 0.94,
+    radius: 28,
+    radiusTopOnly: true,
+    highlightAlpha: 0.3,
   },
 };
 

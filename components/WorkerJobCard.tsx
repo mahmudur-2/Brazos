@@ -12,21 +12,26 @@ import {
   spacing,
   themedStyles,
   useThemeColors,
+  withAlpha,
   type ColorPalette,
 } from '../lib/theme';
 import {
   arrivalWindowLabel,
   categoryAccent,
   formatBudget,
+  JOB_CATEGORY_CHIP_LABELS,
   JOB_CATEGORY_ICONS,
   JOB_CATEGORY_LABELS,
   jobThumbnailUrl,
   type OpenJob,
 } from '../lib/jobs';
 import { formatDistanceMiles } from '../lib/discoveryFilter';
+import { scheduledDayLabel } from '../lib/jobFilters';
 import { formatTimeAgo } from '../lib/time';
 
 const THUMB_SIZE = 84;
+/** The peek card's round photo (the approved Map design: 52pt, gold ring). */
+const PEEK_PHOTO_SIZE = 52;
 
 /**
  * A job as a worker evaluating it sees it: what the work is, roughly where,
@@ -65,8 +70,12 @@ export function WorkerJobCard({
   /** 'full' adds the "posted X ago" line — plus, since 4D-2, the distance
    *  and arrival-window lines — for the spacious discovery surfaces (Worker
    *  Results, the map's pin sheet). Home stays 'compact' (its own default)
-   *  to match the reference's exact field list there. */
-  variant?: 'compact' | 'full';
+   *  to match the reference's exact field list there.
+   *  'peek' (2026-09-19) is the approved Map design's row inside the jobs
+   *  sheet: a round photo, one-line title, the short category chip beside
+   *  the day word, the approximate location, EST. PAY and a chevron — the
+   *  operator's own field list for that surface. */
+  variant?: 'compact' | 'full' | 'peek';
   /** Server-computed distance (jobs_within_radius' half-mile-snapped
    *  `distance_miles`) — never a client guess at a job's coordinates, which
    *  stay unreadable in `job_locations`. Null/undefined means unknown and
@@ -93,6 +102,72 @@ export function WorkerJobCard({
   // The actual zero-bid condition, not inferred from the label text — never
   // shown for a job's own poster, and never shown when the count isn't known.
   const showBreakIce = !isOwn && bidCount === 0;
+
+  // 2026-09-19 — THE PEEK ROW (docs/mockups/html/map-explore-*.html). Its own
+  // drawing rather than a re-dressing of the compact card: the photo is a
+  // ring, the title is one line, the category is the SHORT chip name and the
+  // day sits beside it as a word, and the pay reads gold. Only colours differ
+  // between the themes; every number is shared. The day word comes from
+  // lib/jobFilters (Today / Tomorrow / the short date), so the card and the
+  // When filter agree on what "today" means.
+  if (variant === 'peek') {
+    const day = scheduledDayLabel(job.scheduled_date, new Date());
+    return (
+      <Pressable
+        onPress={onPress}
+        style={({ pressed }) => [styles.peek, isDark && styles.peekDark, pressed && styles.cardPressed]}
+        accessibilityRole="button"
+        accessibilityLabel={job.title}
+      >
+        {showImage ? (
+          <RemoteImage
+            uri={thumbUrl}
+            style={styles.peekPhoto}
+            contentFit="cover"
+            onError={() => setImageFailed(true)}
+            accessible
+            accessibilityLabel={`Photo for ${job.title}`}
+          />
+        ) : (
+          <View style={[styles.peekPhoto, styles.thumbFallback]}>
+            <Ionicons name={icon} size={22} color={isDark ? colors.gold : accent.icon} />
+          </View>
+        )}
+        <View style={styles.peekBody}>
+          <Text style={styles.peekTitle} numberOfLines={1}>
+            {job.title}
+          </Text>
+          <View style={styles.peekMeta}>
+            <View style={[styles.peekCategory, isDark && styles.peekCategoryDark]}>
+              <Text style={styles.peekCategoryText} numberOfLines={1}>
+                {JOB_CATEGORY_CHIP_LABELS[job.category] ?? job.category}
+              </Text>
+            </View>
+            {day ? (
+              <Text style={styles.peekDay} numberOfLines={1}>
+                {day}
+              </Text>
+            ) : null}
+          </View>
+          {job.location ? (
+            <View style={styles.peekLocation}>
+              <Ionicons name="location-outline" size={16} color={colors.emerald} />
+              <Text style={styles.peekLocationText} numberOfLines={1}>
+                {job.location}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.peekPay}>
+          <Text style={styles.peekPayCaption}>EST. PAY</Text>
+          <Text style={[styles.peekPayValue, isDark && styles.peekPayValueDark]} numberOfLines={1}>
+            {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.navInactive} />
+      </Pressable>
+    );
+  }
 
   return (
     <Pressable
@@ -350,6 +425,101 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   payValueDark: { color: colors.emerald },
   chevron: { alignSelf: 'center' },
+  // The peek row. Light: the page's cream ground under a gold hairline at a
+  // quarter strength — the operator's "subtle, not too cream"; dark: the page
+  // ink at half, ringed in the sage line. The category pill takes the same
+  // rim, so the row and its chip read as one material.
+  peek: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.md - 1,
+    paddingLeft: spacing.md - 1,
+    paddingRight: spacing.md,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.gold, 0.26),
+    backgroundColor: colors.background,
+  },
+  peekDark: {
+    borderColor: colors.mint2,
+    backgroundColor: withAlpha(colors.background, 0.5),
+  },
+  peekPhoto: {
+    width: PEEK_PHOTO_SIZE,
+    height: PEEK_PHOTO_SIZE,
+    borderRadius: PEEK_PHOTO_SIZE / 2,
+    borderWidth: 1,
+    borderColor: colors.gold,
+    backgroundColor: colors.mint,
+    overflow: 'hidden',
+  },
+  peekBody: {
+    flex: 1,
+    minWidth: 0,
+    gap: spacing.xs + 1,
+  },
+  peekTitle: {
+    fontFamily: fonts.display,
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+    color: colors.ink,
+  },
+  peekMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 1,
+  },
+  peekCategory: {
+    height: 23,
+    paddingHorizontal: spacing.sm + 2,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: withAlpha(colors.gold, 0.26),
+    backgroundColor: withAlpha(colors.emerald, 0.1),
+    justifyContent: 'center',
+  },
+  peekCategoryDark: {
+    borderColor: colors.mint2,
+  },
+  peekCategoryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.emerald,
+  },
+  peekDay: {
+    fontSize: 14,
+    color: colors.emerald,
+  },
+  peekLocation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 1,
+  },
+  peekLocationText: {
+    flexShrink: 1,
+    fontSize: 13,
+    color: colors.textMuted,
+  },
+  peekPay: {
+    alignItems: 'flex-end',
+  },
+  peekPayCaption: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.7,
+    color: colors.textMuted,
+  },
+  peekPayValue: {
+    fontFamily: fonts.display,
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+    color: colors.goldDeep,
+  },
+  peekPayValueDark: { color: colors.gold },
   skeletonLine: {
     height: 13,
     borderRadius: radius.sm,

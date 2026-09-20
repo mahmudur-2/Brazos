@@ -13,6 +13,7 @@ import {
 } from '../lib/hotspots';
 import { permissionOutcome, trackIntent } from '../lib/observability/analytics';
 import { radius, spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
+import { litBetween } from '../ui/primitives/LitSurface';
 
 type PermState = 'loading' | 'granted' | 'denied' | 'skipped';
 
@@ -33,6 +34,8 @@ export function HotspotMap({
   onSelectPin,
   onRegionChangeComplete,
   onUserLocation,
+  selectedPinKey = null,
+  hideLocateButton = false,
 }: HotspotMapProps) {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
@@ -188,7 +191,7 @@ export function HotspotMap({
         style={StyleSheet.absoluteFill}
         initialRegion={regionRef.current}
         showsUserLocation={perm === 'granted'}
-        showsMyLocationButton={perm === 'granted'}
+        showsMyLocationButton={perm === 'granted' && !hideLocateButton}
         toolbarEnabled={false}
         // Apple Maps (MapKit) — no Google provider is configured, so
         // customMapStyle would be Google-only and inert here. Tiles follow
@@ -202,9 +205,16 @@ export function HotspotMap({
         }}
       >
         {pins !== undefined
-          ? pins.map((pin) => (
+          ? pins.map((pin) => {
+              const selected = selectedPinKey === pin.key;
+              return (
               <Marker
-                key={pin.key}
+                // The selected state is IN THE KEY: the marker is captured
+                // once (tracksViewChanges false, below), so a pin that
+                // merely re-rendered with the gold ring would keep showing
+                // its old capture. Remounting the one pin whose state
+                // changed is one fresh capture, not a per-frame one.
+                key={`${pin.key}:${selected ? 'selected' : 'resting'}`}
                 coordinate={{ latitude: pin.lat, longitude: pin.lng }}
                 onPress={() => onSelectPin?.(pin)}
                 anchor={{ x: 0.5, y: 1 }}
@@ -215,14 +225,38 @@ export function HotspotMap({
                 tracksViewChanges={false}
                 accessibilityLabel={`${pin.count} open ${pin.count === 1 ? 'job' : 'jobs'} here`}
               >
-                <View style={styles.pinWrap}>
-                  <View style={styles.pinBadge}>
-                    <Text style={styles.pinCount}>{pin.count}</Text>
+                {/* 2026-09-19 — THE APPROVED PIN (docs/mockups/html/map-explore-*):
+                    a teardrop lit top-to-bottom in the pin tokens, a green
+                    stroke, a cream briefcase, and a count badge only where
+                    the cluster holds more than one job. The selected pin
+                    wears the gold ring and its glow. EVERYTHING IS A VIEW:
+                    no icon font, because the marker is captured once
+                    (tracksViewChanges false) and a glyph that has not loaded
+                    at capture time would be captured as nothing — the
+                    briefcase is a body and a handle, drawn. */}
+                <View style={[styles.pinWrap, selected && styles.pinWrapSelected]}>
+                  <View
+                    style={[
+                      styles.pinHead,
+                      litBetween({ top: colors.pinTop, bottom: colors.pinBottom, flat: !isDark }),
+                      selected && styles.pinHeadSelected,
+                    ]}
+                  >
+                    <View style={styles.briefHandle} />
+                    <View style={styles.briefBody}>
+                      <View style={styles.briefClasp} />
+                    </View>
                   </View>
-                  <View style={styles.pinTail} />
+                  <View style={[styles.pinTail, selected && styles.pinTailSelected]} />
+                  {pin.count > 1 ? (
+                    <View style={styles.pinCountBadge}>
+                      <Text style={styles.pinCount}>{pin.count}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </Marker>
-            ))
+              );
+            })
           : cells.flatMap((cell) => {
           const tier = tierForCount(cell.job_count);
           if (!tier) return [];
@@ -363,39 +397,85 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   pinWrap: {
     alignItems: 'center',
+    paddingTop: 4,
+    paddingHorizontal: 6,
   },
-  // A count badge on a teardrop-ish stem (reference: Discover_Map_Dark's
-  // briefcase pins) — forest fill, gold hairline, cream count. Diameter stays
-  // over the 44pt touch floor via the Marker's own hit area plus the tail.
-  pinBadge: {
-    minWidth: 40,
+  // 2026-09-19 — the approved teardrop: a 40pt head lit from `pinTop` to
+  // `pinBottom` (ui/tokens.ts, the design's own two greens per theme) with
+  // the emerald stroke, over a tail cut from the same fill. The head stays
+  // over the 44pt touch floor with the Marker's own hit area plus the tail.
+  pinHead: {
+    width: 40,
     height: 40,
-    borderRadius: radius.pill,
-    paddingHorizontal: spacing.sm,
-    backgroundColor: colors.forest,
-    borderWidth: 1.5,
-    // Master 33 rings the pin in GOLD, and Prestige v2 restored `forest` to a
-    // deep green, so the per-theme split this carried under v1 (where forest
-    // WAS the gold primary and a gold hairline vanished into its own fill) no
-    // longer has a reason to exist. One rule, both palettes.
-    borderColor: colors.gold,
+    borderRadius: 20,
+    backgroundColor: colors.pinBottom,
+    borderWidth: 2,
+    borderColor: colors.emerald,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 1,
+  },
+  pinTail: {
+    width: 12,
+    height: 12,
+    marginTop: -7,
+    backgroundColor: colors.pinBottom,
+    borderBottomWidth: 2,
+    borderRightWidth: 2,
+    borderColor: colors.emerald,
+    transform: [{ rotate: '45deg' }],
+  },
+  // The selected pin: the gold ring and its glow (the design's selected state).
+  pinWrapSelected: {
+    shadowColor: colors.gold,
+    shadowOpacity: 0.7,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  pinHeadSelected: { borderColor: colors.gold, borderWidth: 2.5 },
+  pinTailSelected: { borderColor: colors.gold, borderBottomWidth: 2.5, borderRightWidth: 2.5 },
+  // The briefcase, drawn: a handle over a body with a clasp line.
+  briefHandle: {
+    width: 8,
+    height: 5,
+    borderWidth: 1.8,
+    borderBottomWidth: 0,
+    borderColor: colors.pinGlyph,
+    borderTopLeftRadius: 3,
+    borderTopRightRadius: 3,
+  },
+  briefBody: {
+    width: 18,
+    height: 12,
+    borderRadius: 3,
+    borderWidth: 1.8,
+    borderColor: colors.pinGlyph,
+    marginTop: -1,
+    justifyContent: 'center',
+  },
+  briefClasp: { height: 1.8, backgroundColor: colors.pinGlyph },
+  // The count badge, top-right, only on clusters.
+  pinCountBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 20,
+    height: 20,
+    paddingHorizontal: 5,
+    borderRadius: 10,
+    backgroundColor: colors.emerald,
+    borderWidth: 1.5,
+    borderColor: colors.pinBottom,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
   },
   pinCount: {
     color: colors.onForest,
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 15,
   },
-  pinTail: {
-    width: 10,
-    height: 10,
-    marginTop: -5,
-    backgroundColor: colors.forest,
-    borderBottomWidth: 1.5,
-    borderRightWidth: 1.5,
-    borderColor: colors.gold,
-    transform: [{ rotate: '45deg' }],
-  },
+
   }),
 );

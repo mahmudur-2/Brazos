@@ -226,3 +226,21 @@ test('the radius RPC’s clamp rose to 3,000 in an additive migration that resta
   // The client's ceiling and the server's clamp are one number.
   assert.match(sql, new RegExp(`0\\.5\\), ${DISTANCE_FILTER_MAX}\\)`));
 });
+
+// ---------------------------------------------------------------------------
+// The card's day word (2026-09-19, the Map design's "Assembly · Today").
+// ---------------------------------------------------------------------------
+const { scheduledDayLabel, localDateKey } = await import(pathToFileURL(join(root, 'lib/jobFilters.ts')).href);
+
+test('the day word is Today, Tomorrow, the short date, or nothing — in the local calendar', () => {
+  const now = new Date(2026, 8, 19, 22, 30); // late evening, so UTC would already be the 20th
+  assert.equal(scheduledDayLabel(localDateKey(now), now), 'Today');
+  assert.equal(scheduledDayLabel(localDateKeyAfter(now, 1), now), 'Tomorrow');
+  assert.equal(scheduledDayLabel('2026-09-26', now), 'Sat, Sep 26');
+  // No date is no word — never a guess — and a malformed key is treated the same.
+  assert.equal(scheduledDayLabel(null, now), null);
+  assert.equal(scheduledDayLabel('not-a-date', now), null);
+  // The word and the Today filter agree on what today is: the same key function.
+  assert.equal(scheduledDayLabel(dateWindowPreset('today', now).scheduledOn, now), 'Today');
+  assert.equal(scheduledDayLabel(dateWindowPreset('tomorrow', now).scheduledOn, now), 'Tomorrow');
+});

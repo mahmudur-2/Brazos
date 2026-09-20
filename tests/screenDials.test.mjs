@@ -203,13 +203,15 @@ const SCREENS = [
     prefix: 'map',
     scale: 'theme',
     dials: [
-      // `themeRadius` is `radius` from lib/theme under an alias: the distance
-      // filter's own `radius` state shadows the token inside the component, so
-      // the fallback cannot name it directly. Same binding, same scale.
-      { key: 'map.headerWrap.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'themeRadius.xl' },
-      { key: 'map.footerBar.radius', drew: 24, parent: 'theme.radius.xl', fallback: 'themeRadius.xl' },
-      { key: 'map.footerBar.paddingX', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
-      { key: 'map.squircle.size', drew: 40, parent: null, fallback: '40' },
+      // 2026-09-19 — the approved Map design's numbers: the search pill's
+      // capsule corner and the jobs sheet's corner are the design's own
+      // constants; the sheet's padding and inset sit on the theme scale.
+      // (The old `themeRadius` alias is gone with the state it dodged: the
+      // distance filter is `radiusMiles` now, so the token keeps its name.)
+      { key: 'map.searchPill.radius', drew: 28, parent: null, fallback: 'MAP_SEARCH_RADIUS' },
+      { key: 'map.sheet.radius', drew: 30, parent: null, fallback: 'MAP_SHEET_RADIUS' },
+      { key: 'map.sheet.paddingX', drew: 24, parent: 'theme.spacing.xl', fallback: 'spacing.xl' },
+      { key: 'map.sheet.inset', drew: 16, parent: 'theme.spacing.lg', fallback: 'spacing.lg' },
     ],
   },
   {

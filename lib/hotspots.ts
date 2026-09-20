@@ -150,6 +150,13 @@ export type HotspotMapProps = {
    *  granted and a fix acquired). Never fires otherwise — an absent location
    *  stays unknown, it is never guessed. */
   onUserLocation?: (location: { lat: number; lng: number }) => void;
+  /** 2026-09-19: the pin the sheet is open on — drawn in the gold ring with
+   *  its glow (the approved Map design). Native only; web ignores it. */
+  selectedPinKey?: string | null;
+  /** 2026-09-19: the approved design carries no locate button over the map
+   *  (the search capsule and the sheet are the only chrome). Default false
+   *  keeps every other caller as it was. Native only. */
+  hideLocateButton?: boolean;
 };
 
 /**

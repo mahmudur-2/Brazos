@@ -253,11 +253,25 @@ test('[executed] Today filters on the scheduled date, in the caller’s own cale
   assert.equal(isDefaultJobFilters(DEFAULT_JOB_FILTERS), true);
 });
 
-test('[static] the map chip row is Today and Nearby — and the two absences are decisions', async () => {
+test('[static] the map chip row is Today alone — and the three absences are decisions', async () => {
   const map = stripComments(await read('screens/MapScreen.tsx'));
 
-  assert.match(map, /label="Today"/);
-  assert.match(map, /label="Nearby"/);
+  // 2026-09-19: ONE chip, drawn on the pane material rather than through the
+  // Chip primitive so it can be glass in dark and flat in light; its selected
+  // treatment is still the app's one — selectedInDark's gold line in dark,
+  // the forest fill in light.
+  assert.match(map, /name="calendar-outline"/);
+  assert.match(map, /\{\s*todayOn \? 'Showing jobs scheduled for today' : 'Show only jobs scheduled for today'\s*\}/);
+  assert.match(map, /\{ backgroundColor: chosen\.fill, borderColor: chosen\.line \}/);
+  assert.match(map, /chipShellSelected: \{\s*backgroundColor: colors\.forest,\s*borderColor: colors\.forest,/);
+  // NEARBY IS ABSENT since the approved design: the distance pill on the
+  // search capsule IS the radius — one control for one fact — so a second
+  // toggle over the same radius would be the parallel vocabulary the chip
+  // row is forbidden to create. The radius still writes through the one
+  // storage path.
+  assert.doesNotMatch(map, /label="Nearby"|nearbyOn|toggleNearby/, 'no second control over the radius');
+  assert.doesNotMatch(map, /\bnearbyOnly\b|\bisNearby\b/, 'no second nearby vocabulary');
+  assert.match(map, /writeDistanceFilter\(userId, next\)/);
 
   // HOURLY IS ABSENT BECAUSE THE COLUMN IS. `jobs` has no hourly-versus-fixed
   // field; the only `price_unit` in the schema is on `worker_services`
@@ -299,13 +313,6 @@ test('[static] the map chip row is Today and Nearby — and the two absences are
   // app deliberately, and multiple fences enforce its absence. Asserted here
   // too, at the one surface a chip row could reintroduce it.
   assert.doesNotMatch(map, /Verified|verified/, 'verification vocabulary does not come back as a chip');
-
-  // NEARBY IS THE EXISTING RADIUS, not a second boolean. It writes through the
-  // one storage path, at the app's standing promise, so the chip and the
-  // slider and the results list's chips are all the same fact.
-  assert.match(map, /const nearbyOn = radius === NEARBY_RADIUS_MILES;/);
-  assert.match(map, /selectRadius\(nearbyOn \? null : NEARBY_RADIUS_MILES\)/);
-  assert.doesNotMatch(map, /\bnearbyOnly\b|\bisNearby\b/, 'no second nearby vocabulary');
 
   // TODAY IS THE SHARED MODEL, not a screen-local predicate.
   assert.match(map, /scheduledOn: prev\.scheduledOn == null \? todayKey : null/);

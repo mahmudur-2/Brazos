@@ -1024,6 +1024,17 @@ const SIBLINGS = [
     shared: 'components/SuccessMark.shared.tsx',
     needs: 'reanimated',
   },
+  {
+    // 2026-09-19 — the map's floating jobs pane, pulled up by a finger. A
+    // pull is a swipe by another name, so it asks the swipe row's question:
+    // a recogniser AND worklets, and either absent takes the tap-to-open
+    // fallback on the same translateY.
+    name: 'PeekSheet',
+    fallback: 'components/PeekSheet.tsx',
+    fast: 'components/PeekSheet.motion120.tsx',
+    shared: 'components/PeekSheet.shared.tsx',
+    needs: 'gestures',
+  },
 ];
 
 test('[executed] every sibling is taken when its native is present and skipped when it is absent', () => {
@@ -1149,6 +1160,52 @@ test('[static] the DropMenu fast path matches its fallback where a user can tell
   // concession the fallback makes, by the same rule.
   assert.match(fast, /if \(reducedMotion\) \{/);
   assert.match(fast, /progress\.value = visible \? 1 : 0;/);
+});
+
+test('[static] the peek sheet slides by a transform on both drivers, and the fallback can still open', () => {
+  // 2026-09-19 — the map's floating jobs pane. THE PROPERTY: the pane is laid
+  // out once at its open height and moves by translateY, so nothing is
+  // re-laid-out per frame — the fast path follows the finger on the UI
+  // thread and the fallback rides the native driver. A `height` in either
+  // animated style would be the layout-per-frame this suite forbids above.
+  const fallback = stripComments(read('components/PeekSheet.tsx'));
+  const fast = stripComments(read('components/PeekSheet.motion120.tsx'));
+  const shared = stripComments(read('components/PeekSheet.shared.tsx'));
+
+  // The fallback: core Animated.spring on the shared constants, native driver,
+  // a translateY — and the head is a button, so a build without gestures
+  // opens the list by a tap rather than not at all.
+  assert.match(fallback, /Animated\.spring\(y, \{\s*toValue: target,\s*useNativeDriver: USE_NATIVE_DRIVER,\s*\.\.\.SHEET_SPRING,/);
+  assert.match(fallback, /transform: \[\{ translateY: y \}\]/);
+  assert.doesNotMatch(fallback, /height: y\b|\bheight: metrics/, 'the fallback must not animate the layout');
+  assert.match(fallback, /gestures: canSwipe\(\) && canWorklet\(\), reanimated: canWorklet\(\)/);
+  assert.match(shared, /<Pressable\s+onPress=\{toggle\}/, 'the head is a button on both drivers');
+  assert.match(shared, /const toggle = \(\) => onOpenChange\(!open\);/);
+
+  // The fast path: the pan is on the HEAD (the shared seam), the update is a
+  // worklet clamped between the rubber and the rest position, the release
+  // springs on the UI thread and only then reports through runOnJS.
+  assert.match(fast, /wrapHead=\{\(head\) => <GestureDetector gesture=\{pan\}>\{head\}<\/GestureDetector>\}/);
+  assert.match(fast, /y\.value = Math\.min\(closed\.value, Math\.max\(-OVERDRAG, next\)\);/);
+  assert.match(fast, /y\.value = withSpring\(shouldOpen \? 0 : closed\.value, SPRING\);\s*runOnJS\(settle\)\(shouldOpen\);/);
+  assert.match(fast, /transform: \[\{ translateY: y\.value \}\]/);
+  assert.doesNotMatch(fast, /height: y\.value/, 'the fast path must not animate the layout');
+  // A release that already sprang must not be sprung again by the render it
+  // causes — the guard exists, and it is consulted before the effect springs.
+  assert.match(fast, /if \(settledByGesture\.current\) \{\s*settledByGesture\.current = false;\s*return;\s*\}/);
+
+  // The shared arithmetic: closed is the open height minus the measured
+  // peek, the frame clips at the open size and takes no touch of its own.
+  assert.match(shared, /const closedOffset = ready \? Math\.max\(0, expandedHeight - peekHeight\) : 0;/);
+  assert.match(shared, /const peekHeight = ready \? 1 \+ headHeight \+ firstHeight \+ paneBottom\(\) : 0;/);
+  assert.match(shared, /pointerEvents="box-none"/);
+  assert.match(shared, /frame: \{\s*position: 'absolute',\s*overflow: 'hidden',/);
+  // The list is the peek: its first row reports the height the peek shows,
+  // and it cannot scroll under a finger until the pane is open.
+  assert.match(shared, /onLayout=\{index === 0 \? onFirstLayout : undefined\}/);
+  assert.match(shared, /scrollEnabled=\{open\}/);
+  // ONE spring for both drivers, spelled once.
+  assert.match(shared, /export const SHEET_SPRING = \{ damping: \d+, stiffness: \d+, mass: [\d.]+ \} as const;/);
 });
 
 test('[static] the swipe surface needs BOTH natives, which is what consumes canWorklet', () => {
@@ -2051,6 +2108,7 @@ test('[static] every call inside every worklet body is worklet-callable', () => 
       'components/DropMenu.motion120.tsx',
       'components/FilterSlider.motion120.tsx',
       'components/KeyboardRisingColumn.motion120.tsx',
+      'components/PeekSheet.motion120.tsx',
       'components/SuccessMark.motion120.tsx',
       'components/SwipeableRow.motion120.tsx',
     ],

@@ -352,8 +352,9 @@ test('registry: defaults mirror the token surfaces value by value', async () => 
   const ctx = await contextFor();
   const byKey = new Map(schema.STUDIO_REGISTRY.map((entry) => [entry.key, entry]));
 
-  // 2026-09-18: 'clear' — the [+] create sheet's pane — is the fourth.
-  for (const material of ['chrome', 'sheet', 'menu', 'clear']) {
+  // 2026-09-18: 'clear' — the [+] create sheet's pane — is the fourth;
+  // 2026-09-19: 'pane' — the Map design's jobs and Filters panes — the fifth.
+  for (const material of ['chrome', 'sheet', 'menu', 'clear', 'pane']) {
     for (const prop of ['blur', 'scrimAlpha', 'borderAlpha', 'fallbackScrimAlpha']) {
       const entry = byKey.get(`material.${material}.${prop}`);
       assert.ok(entry, `material.${material}.${prop} must be in the registry`);
@@ -458,6 +459,7 @@ test('[static] the panel renders from the registry — zero hand-wired rows, no 
     /'sheet'/,
     /'menu'/,
     /'clear'/,
+    /'pane'/,
   ]) {
     assert.doesNotMatch(panel, banned, `the panel hand-wires a token: ${banned}`);
   }
@@ -1249,7 +1251,7 @@ test('sheet and menu dials: defaults mirror the shipped values, and the wearers 
 
   // The material colour dials joined the Blur & Material category (C7):
   // fill/tint and hairline colour per material, defaulting to the table.
-  for (const material of ['chrome', 'sheet', 'menu', 'clear']) {
+  for (const material of ['chrome', 'sheet', 'menu', 'clear', 'pane']) {
     assert.equal(
       byKey.get(`material.${material}.scrimColor`).defaultValue(ctx),
       tokens.materials[material].scrimColor,
