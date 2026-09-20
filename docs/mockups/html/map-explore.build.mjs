@@ -397,14 +397,13 @@ const STATES = [
   { id: 'sort-bids', label: '15 · Sort picked — Fewest bids', picked: { sort: 'bids' } },
 ];
 
-// The categories as the operator named them for the filter (2026-09-19): the
-// six quick services, then the "All services" list with these shortenings -
-// Handyman & General Repairs -> Handyman / Repairs (Drywall Repair folds into
-// it), Electrical (light fixtures, outlets) -> Electrical, Picture & Shelf
-// Hanging -> Hanging, Carpet & Upholstery Cleaning -> Upholstery (so it does
-// not double the quick "Cleaning"), Personal Assistant / Errands -> Errands,
-// Packing & Unpacking -> Packing; every other title as it is in the app.
-const CATEGORIES = ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Plumbing', 'Yard work', 'Handyman / Repairs', 'Electrical', 'Interior Painting', 'Appliance Installation', 'Junk Removal', 'Hanging', 'Pressure Washing', 'Gutter Cleaning', 'Upholstery', 'Window Washing', 'Pest Control', 'Home Organization', 'Landscaping & Gardening', 'Snow Removal', 'Pet Sitting & Dog Walking', 'Errands', 'Packing'];
+// The categories (operator, 2026-09-19): the app's ELEVEN real job
+// categories - the ones jobs are posted under - with friendly names. The
+// "All services" entries are search shortcuts onto these (Electrical,
+// Plumbing, Appliances, Pest Control and Drywall are all handyman; Junk
+// Removal is moving; and so on), so a chip per shortcut would promise a
+// precision the data does not have. Each chip here filters exactly what it says.
+const CATEGORIES = ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Handyman / Repairs', 'Yard work', 'Painting', 'Packing', 'Pet care', 'Errands', 'Other'];
 const MY_SKILLS = new Set(['Assembly', 'Moving', 'TV mounting']);
 
 const filtersSheet = (st = {}) => {
