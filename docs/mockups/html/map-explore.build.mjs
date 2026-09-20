@@ -176,7 +176,7 @@ const THEMES = {
     badgeGrad: 'linear-gradient(140deg,#dcecd9,#a0c4a6)', badgeInk: '#254f30', badgeRing: '#77bc8b',
     userDot: '#0b9eff', userDotRing: '#d6dce0', userHalo: 'radial-gradient(circle,rgba(5,128,241,.20),rgba(26,128,211,.06) 63%,rgba(58,168,255,.07))', userHaloRim: '#54b7ed28', userRing: '#2ba6f02b',
     cardFill: 'rgba(255,255,255,.59)', cardRim: 'rgba(56,97,65,.22)', photoBg: '#E5F1EC', photoRing: '#a77824', glyphInk: '#238658',
-    viewList: '#13201B', estLabel: '#637569', estPay: '#a77824', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
+    viewList: '#13201B', estLabel: '#637569', estPay: '#C08F2E', catFill: 'rgba(35,134,88,.08)', catRim: 'rgba(56,97,65,.22)',
     // the flat panes (operator, 2026-09-19): plain white, the app's line
     // hairline, the app's card shadow - no gradient, no sheen, no edge, no blur
     lqBlur: null,
