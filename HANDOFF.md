@@ -1,154 +1,159 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-19 (chat session, continuing 2026-09-18's — the operator was present
-and decided on renders; see docs/DECISIONS.md 2026-09-18 second block and 2026-09-19).
+WRITTEN: 2026-09-19 (chat session, continuing the 2026-09-18/19 create-sheet sittings —
+the operator was present, approved the Map and Filters mockups moment by moment, and
+chose "One sitting, three commits" and "Draggable"; see docs/DECISIONS.md 2026-09-19,
+the last block).
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
 
 ## What this session landed
 
-Six commits on `mainexpo` over two sittings, on top of `c797a94`; the first three
-(`158d057`, `830a6e3`, `011f745`) are the create sheet itself and its docs, recorded in
-the previous HANDOFF (now history in git, summarised below); the last three are this
-sitting's:
+Three code commits on `mainexpo` over `889d50e` and its docs commit, plus the docs
+commit that carries this file. Each is revertible alone:
 
-- `0030dd4` — **fix(create): the sheet's rows match the mockup.** `components/CreateSheet.tsx`,
-  `navigation/CustomerRoot.tsx`, `tests/emeraldFences.test.mjs` (home(17)'s hint pin, a
-  constant). No hairline above the first action row; chevrons and the "confirms first"
-  hint in the cream at 35% / 45% (dark) and `navInactive` / `textMuted` (light); the
-  plus drawn as two 2pt bars (`PlusGlyph`) so `CreateSheetItem.icon` is optional and a
-  `primary` row draws its own; row hairlines 6%, the switch row's 10%, the switch disc's
-  ring `secondaryBorder` / cream 12%.
-- `f3ef985` — **feat(harness): the web export blurs — every glass render is honest.**
-  `lib/blur.tsx` (a web branch: a colourless `View` with `backdrop-filter: blur(px)`,
-  `px = intensity × 0.5`; `canBlur` true on web; the vendor ternary untouched),
-  `ui/primitives/Surface.tsx` (`flat = reduceTransparency || !canBlur`),
-  `tests/blurBoundary.test.mjs` (the boundary test renamed and extended, every prior
-  assertion verbatim; ONE new test — `backdrop-filter` only in the boundary — so the
-  suite is **1362**).
-- `6634c9d` — docs (this file, `docs/DECISIONS.md` 2026-09-19 entries (1) and (2)).
-- `889d50e` — **fix(create): the Post-a-job disc is the "2 List" one** — a 40pt rounded
-  square, radius 12, solid `postPillGreen`, the white plus at 14 × 2.5, both themes;
-  `components/CreateSheet.tsx` only (the operator's pick after seeing the phone;
-  `docs/DECISIONS.md` 2026-09-19 entry (3)).
-- the docs commit for that (this file, DECISIONS).
+- `da82f33` — **feat(filters): the worker filter's rules** — the brain, no screen
+  change. `lib/jobFilters.ts`: `JobSort` = smart | newest | pay | distance | bids
+  (`JOB_SORTS`, Smart Match default), `JobSortContext` (skills, completedByCategory,
+  offerCounts), `scheduledUntil` (the window), `dateWindowPreset`, `customDateKeys`,
+  `BUDGET_CUSTOM_VALUES_CENTS` (126), `BUDGET_FILTER_PRESETS_CENTS`,
+  `completedByCategory`; `lib/discoveryFilter.ts`: `DISTANCE_CUSTOM_VALUES` (34),
+  `DISTANCE_FILTER_MAX` 3000; `lib/jobs.ts`: `JOB_CATEGORY_CHIP_LABELS` / `_ORDER`;
+  `supabase/migrations/20260930000500_radius_cap_3000.sql` (the clamp 50 → 3000,
+  additive, ACL restated); `tests/jobFilterRules.test.mjs` (new, executes every rule).
+  Pushed at the time; verify 1373.
+- `f462224` — **feat(map): the approved Map screen.** `ui/tokens.ts` (pin tokens
+  `pinTop` / `pinBottom` / `pinGlyph` per palette; the fifth material `pane`),
+  `lib/theme.ts`, `ui/designStudioSchema.ts` (the material's dials; the map's four new
+  dials replacing the four capsule dials), `components/HotspotMap.native.tsx` (the
+  teardrop pin, drawn from Views; selection in the Marker key), `lib/hotspots.ts`
+  (`selectedPinKey`, `hideLocateButton`), `components/PeekSheet{,.shared,.motion120}.tsx`
+  (new — the draggable jobs pane), `components/WorkerJobCard.tsx` (`variant="peek"`),
+  `lib/jobFilters.ts` (`scheduledDayLabel`), `screens/MapScreen.tsx` (rewritten chrome),
+  eleven fences. Verify 1375.
+- `f2d7f1c` — **feat(filters): the approved Filters sheet.** `components/JobFilterSheet.tsx`
+  (rebuilt), `components/PickerPopover.tsx` (new), `ui/primitives/Sheet.tsx` (optional
+  `material` prop, default unchanged), `screens/MapScreen.tsx` (the shared sheet
+  replaces the slider sheet; the sort context wired), `screens/WorkerResultsScreen.tsx`
+  (the sheet's new props; the sort context; `base` kept apart for the count),
+  `lib/jobFilters.ts` (`BUDGET_FILTER_STEP_CENTS` gone), `components/FilterSlider*`
+  DELETED (three files), six fences. Verify 1374.
 
-`npm run verify` after every code commit: **1362 pass, 0 fail, exit 0**. The verify
-before the last docs commit is in the session report.
+`npm run verify` after every code commit: **exit 0, 0 fail** (1373 / 1375 / 1374 — the
+count moved as the slider's three fences left and the sheet's and the sheet-fence's
+tests arrived).
 
-**SEEN ON THE PHONE (operator, 2026-09-19):** "it looks good" — the docked glass sheet
-after the OTA, dark; the one change asked for was the disc above.
+**NOT SEEN ON THE PHONE.** Nothing in this session was rendered: the shots harness
+has no Map target (external tile hosts fail its escape assertion — docs/GATES.md Gate 2
+box 2 lists why), and the Filters sheet and the popover are unrendered by it too. The
+operator's review is the next step (below).
 
-**WHAT THE CREATE SHEET IS NOW** (`830a6e3` + `0030dd4`): `components/CreateSheet.tsx`,
-mounted by `CustomerRoot.tsx` where `<ActionSheet>` was (ActionSheet untouched, still
-the chat / inbox / profile menus). A docked `Modal` (`slide`), a scrim-only backdrop at
-the fenced strengths (`withAlpha(colors.text, 0.35)` light, `scrimInDark(background)`
-dark — 0.55, the operator's choice over the mockup's 0.30), then ONE
-`<Surface material="clear" corners="top">`: the 36×4 handle; "What do you need?"
-(17/22/600); the **Needs you** card (a child inside the Modal — `useMyJobsHub()` +
-`attentionItems()` on mount, the first item, hidden while loading / on error / when
-empty; tap → `onOpenJob`); three action rows from `items` (**Post a job** primary — the "2 List" disc, a
-40pt solid `postPillGreen` rounded square with the white two-bar plus — **Hire again**,
-**My jobs**), 12 + 34 + 12 on 6% hairlines (the primary row 12 + 40 + 12), none above
-the first; **Switch to Worker** set apart under a 10% hairline, ringed disc, hint
-"confirms first", `disabled={switching}`. Labels are the accessibility labels; the E2E
-walk's "Create" → "What do you need?" → "My jobs" is untouched and lands in the harness.
+**WHAT THE MAP IS NOW** (`f462224` + `f2d7f1c`): the map is the ground; the chrome is
+three `pane` Surfaces — the search pill (56pt / 28, the SearchBar with its ground
+handed over; placeholder "Explore nearby jobs"; the distance pill in `trailing`, always
+"N mi" or "Any", opening the Filters sheet), the Today chip (42 / 21; chosen: the gold
+line in dark, forest fill in light), and the jobs sheet (`PeekSheet`, corner 30, inset
+16, side padding 24 — all four dialled). The sheet peeks with the grab, "N open jobs",
+"Near you • Within N miles | Any distance | Location off", "View ›", and one peek row;
+pulled up (or tapped) it lists the same rows and ends in "Open the full list ›" →
+WorkerResults `mode: 'all'`. Its list is `jobs_within_radius` when a radius is applied
+with a position, the open feed otherwise, then `applyJobFilters(source, filters,
+{ skills, completedByCategory, offerCounts })`. The customer map keeps its glow cells,
+the CellJobs card and the locate button, and gets a `pane` count capsule. The pin
+sheet (a tapped cluster's cards) is untouched.
 
-**THE MATERIAL** (`ui/tokens.ts`): `MaterialName` = `chrome | sheet | menu | clear`.
-`materials.clear`: blur 60, `GLASS_SCRIM` at 0.40, rim `colors.surface` (white) at 0.14,
-`highlightAlpha` 0.22, fallback 0.92, radius 28 top-only, plus its `light` block
-(`LightGlassSpec`, "L2 Frost"): blur 50, white 0.72, rim white 0.85, highlight 0.95,
-fallback 0.96. Only `clear` carries a light block; `tests/themeTokens` pins that the
-other three do not. Surface resolves one recipe per theme (`glass = isDark ? spec :
-spec.light ?? null`) and draws the 1pt highlight inset by the corner radius.
+**WHAT THE FILTERS SHEET IS NOW** (`f2d7f1c`): `ui/primitives/Sheet` wearing `pane`,
+five rows of 34pt pills — Distance (when the caller passes `distance`), Minimum budget,
+When, Categories (Best Match + eleven, one scrolling row), Sort ("Sort by <rule>") — a
+Reset and "Show N jobs" / "Show jobs". Custom pills open `PickerPopover` (its own
+transparent Modal, `measureInWindow`-anchored, `menu` material, six rows, tick on the
+current value; When and Sort open upward). Every close applies the draft.
 
-**THE HARNESS NOW SHOWS GLASS.** Web draws the blur with CSS; every glass material
-renders at its REAL mix in the harness. PROVEN over the whole registry — 82 targets
-rendered twice from fresh exports at the same HEAD (`.shots/harness-blur/before-*`,
-`after-*`, `diff.mjs`, `jitter.mjs`): 75 byte-identical (every Home, every target that
-draws no `BlurLayer` and wears no `Surface` — the services sheets and the budget dialog
-are their own cards); `customer-create-sheet-{dark,light}` moved in rows 534..851
-exactly; four worker targets moved by 8–27 px at 1–4/255 (jitter); and
-`worker-results-jobs-light` by one 9×12 location glyph one pixel higher, on a screen
-with no Surface and no BlurLayer — not this change's, recorded.
-
-**THE PILL** (`830a6e3`): customer Home's "Switch to Worker" is gone with its five
-styles, `switchToWorker()`, the `useMode()` read, the sans-ladder rung and the
-`home.modeSwitch.paddingX` dial + registry row; the switch is the sheet's bottom row.
-Worker Home untouched. On the four customer-Home renders the only changed pixels were
-the pill's footprint (x 70..372, y 11..54).
+**THE MOTION** (`PeekSheet`): the pane is laid out at its OPEN height inside a
+same-size clip and slides by `translateY`; closed = open height − measured peek. Fast
+path: a Pan on the head block, worklet update clamped `[-OVERDRAG, closed]`, release
+springs on the UI thread then `runOnJS(settle)`; fallback: `Animated.spring` on
+`USE_NATIVE_DRIVER`, the head a button. Neither animates a layout; `tests/motion120`
+pins it. On the Beta binary (`d2ccc7f`, which carries reanimated + gesture-handler)
+the fast path is what runs.
 
 ## What a following run must know
 
-- **A glass surface can be judged from a render now.** `BlurLayer` on web is a CSS
-  `backdrop-filter`; only the vendor is short-circuited there. If a render of a
-  sheet, menu or dialog looks different from before, that is the blur arriving — the
-  services sheets and the budget dialog did NOT move because they wear no Surface and
-  draw no BlurLayer (their own cards).
-- **`canBlur` now means "the vendor on native, CSS on web".** Surface's fallback
-  (`fallbackScrimAlpha`) applies for Reduce Transparency and for a binary without the
-  module, nowhere else.
-- **The only targets that render a `BlurLayer` are the create sheet's** (the pane's own
-  blur). No target opens an ActionSheet, a `ui/primitives/Sheet`, an AmountPrompt or a
-  ConfirmDialog, so their MOTION1 backdrop blur (12px on web now) is unrendered by the
-  harness; adding such a target is a registry entry.
-- **The label weights differ between the mockup and the harness on Windows** (Arial vs
-  Segoe UI); on the phone both are SF Pro. Do not chase it.
-- **The mode switch has ONE customer-side home: the sheet's bottom row.** home(17)
-  (re-pointed) and `tests/mode.test.mjs` pin it, and pin Worker Home's pill staying.
-- **`homeModeRing` is orphaned** in both palettes — the cleanup run's, beside
-  `navBar.gold` and `navBar.glyphColorDark`.
-- **Needs-you fetches on every open** (one batched hub read). If its arrival reads as a
-  pop-in on the phone, the alternative the operator declined for now is a shared
-  provider so Home and the sheet read one cache.
-- **The rim is white, not mint — deliberately**; `tests/themeTokens` pins the exception.
-- **Stale comments still owed** (unchanged): `screens/MapScreen.tsx` `MAP_SEARCH_HEIGHT`
-  docblock (Home's field is 44, the map's 56 is a step OVER it); `scripts/shots.mjs`
-  lines 387-390.
+- **Five materials now**: `chrome | sheet | menu | clear | pane`. `pane` = ink 0.90,
+  blur 30, mint rim 0.40, highlight 0.30, fallback 0.94, radius 28 top-only, no light
+  block. `tests/themeTokens` pins it; `tests/designStudio` enumerates it; its dials are
+  live in Blur & Material.
+- **The pin tokens are three per palette** (`pinTop`, `pinBottom`, `pinGlyph`), by
+  reference in `lib/theme.ts`. Gold on a pin means SELECTED.
+- **The map's distance state is `radiusMiles`**; the `themeRadius` alias is gone.
+- **`WorkerJobCard` has three variants**: compact, full, peek. Peek reads
+  `JOB_CATEGORY_CHIP_LABELS` and `scheduledDayLabel`.
+- **`useMyJobsHub()` is now mounted by the map's sheet child and by WorkerResults**
+  (for `completedByCategory`). It is the same batched hub read My Jobs and the create
+  sheet's Needs-you make; if it reads as cost on the phone, a shared provider is the
+  alternative the create-sheet HANDOFF already named.
+- **A changed radius has no count**: the sheet's button says "Show jobs" until the
+  radius is applied and a read has answered. Deliberate, not a bug.
+- **The migration is unproven locally.** Docker was off; `supabase db reset` /
+  `db test` did not run this sitting. The staging pipeline (verify → migrate → deploy)
+  applied it on the `da82f33` push — confirm in the Actions tab if a Custom radius past
+  50 answers as 50.
+- **FilterSlider is gone and fenced gone** (`tests/motion120`, "the filter slider is
+  retired"). Do not rebuild a slider; the Custom lists were the ruling.
+- **JobFilterSheet is the D6 exception** (emerald selection, both themes) — it left
+  `tests/goldOnForest`'s D6 roster with a note; DECISIONS 2026-09-19 (3) is the record.
+- **The Sheet primitive's `material` prop defaults to `sheet`**; only the Filters
+  sheet passes `pane`. No other dialog moved.
+- **Stale comments still owed** (unchanged): `scripts/shots.mjs` lines 387-390. (The
+  `MAP_SEARCH_HEIGHT` note is gone with the rewrite.)
 
 ### The fences this session touched, and how
 
 | File | What moved |
 |-|-|
-| `tests/blurBoundary.test.mjs` | The boundary test RENAMED ("renders the vendor, a colourless CSS blur on web, or nothing — and the vendor never runs on web"); every prior assertion verbatim (the vendor ternary, `load()`'s one call site, `if (!BlurView) return null;`, no `backgroundColor`); pins ADDED for the web branch's exact shape, `canBlur`, `WEB_PX_PER_INTENSITY = 0.5`, and "no tint on the CSS branch". ONE NEW TEST: `backdrop-filter` named only in `lib/blur.tsx` (suite 1361 → 1362). |
-| `tests/emeraldFences.test.mjs` | home(17): the hint pin `<Text style={styles.hint}>` → `style={[styles.hint, isDark && styles.hintDark]}` (a constant). |
-| From `830a6e3` (previous sitting) | `themeTokens` (material keys + clear's pins), `designStudio` (material enumerations, the panel's banned names, the Surface blur-mount expression reading `glass`), `screenDials` (the dial row), `goldOnForest` (the new file in the scrim roster and the home-indicator pin) — constants; `emeraldFences` home(17)/home(19), `mode.test`, `customerCore` — re-pointed on the operator's decision. |
-
-Read and found not to move this sitting: `tests/designStudio.test.mjs` (its Surface
-pins read `glass`, unchanged), `tests/layout.test.mjs` and `tests/emeraldFences` (the
-"blur layer paints no ground" pins — still true), `tests/blurBoundary`'s other three
-tests, `tests/mode.test.mjs`, `tests/goldOnForest.test.mjs`, `tests/shotHarness.test.mjs`.
+| `tests/jobFilterRules.test.mjs` | NEW in `da82f33` (eleven executed rules); `f462224` adds the day word; `f2d7f1c` adds the sheet/popover static fence. |
+| `tests/workerDiscovery.test.mjs` | Ceiling 50 → 3000 (`da82f33`); the pins fence (Views only in a Marker, the two new props), the structure fence rewritten to the sheet, the B3 fences to the shared sheet, the dead-location note's new home. |
+| `tests/discovery.test.mjs` | The chip row: Today alone, Nearby's absence a decision; `applyJobFilters(base, filters, sortContext)`. |
+| `tests/emeraldFences.test.mjs` | map(1) rewritten: the ground through the `pane` material, the retired slabs, the placeholder. |
+| `tests/mode.test.mjs` | The gated controls: the distance pill in `trailing`, the chip row, the sheet child. |
+| `tests/goldOnForest.test.mjs` | The pin fence rewritten (pin tokens, emerald stroke, gold = selected); JobFilterSheet off the D6 roster. |
+| `tests/screenDials.test.mjs` | The Map table: the four new dials. |
+| `tests/themeTokens.test.mjs`, `tests/designStudio.test.mjs` | The fifth material. |
+| `tests/motion120.test.mjs` | PeekSheet in SIBLINGS and the worklet roster; a new transform fence; the slider block replaced by its retirement fence. |
+| `tests/crossTabNavigation.test.mjs` | Unchanged and green: two dispatches, both gated. |
 
 ## What is blocked
 
-- **Image `Read`s** stay refused by `.claude/hooks/evidence-guard.ps1`; this session
-  looked at renders through the desktop browser pane on `file://` URLs (open to a chat
-  session, closed to a run). Every claim above is also scripted
-  (`.shots/harness-blur/*.mjs` over `tests/pngGeometry.mjs`).
+- **Image `Read`s** stay refused by `.claude/hooks/evidence-guard.ps1`; no render was
+  made this sitting (no Map target in the harness).
 - **The Write tool cannot reach the plan file or the memory directory**
-  (`GUARD-PATH-ESCAPE`). Scratch files live under `.shots/harness-blur/`.
-- **Long Bash heredocs are unreliable in this harness** (a `\\` collapses to `\`;
-  bodies with unbalanced quotes fail to parse). Patch scripts were written with the
-  Write tool under `.shots/` and run with `node <file>`; `node -e` is refused.
+  (`GUARD-PATH-ESCAPE`). Scratch and patch scripts live under `.shots/harness-blur/`.
+- **Bash heredocs are unreliable in this harness** (a `\\` collapses to `\`; bodies
+  with quotes fail to parse) — every patch script and message file was written with the
+  Write tool; `node -e` is refused; `git config` reads are refused (GUARD-GIT).
+- **`lib/hotspots.ts` is CRLF in the working copy** while most files are LF; the patch
+  helper normalises per file. Git normalises on commit.
 - **The co-author trailer cannot appear in a Bash command's text** — all commits by
   `git commit -F <file>`.
 
 ## Waiting on the operator
 
-- **The phone.** `npm run update:preview`, then two launches. Device facts the harness
-  still cannot show: expo-blur's own dark tint under the 40% pane (it may read heavier
-  than the CSS blur — the `clear` material's dials are live in the design studio's
-  Blur & Material category; bake what lands); the Needs-you card (needs a job waiting
-  on the customer); the confirm from the sheet's Switch row; the slide.
-- **The renders**: `.shots/harness-blur/after-customer-create-sheet-{dark,light}.png`
-  beside `docs/mockups/html/create-sheet-decide.html`'s G1S and L2 frames.
-- **Revert lines:** `git revert 889d50e` (the solid disc), `git revert f3ef985` (the
-  harness blur), `git revert 0030dd4` (the row fixes), `git revert 830a6e3` (the sheet
-  and the pill, together).
-- The push: `npm run verify` exited 0 in this session, so the one permitted push —
-  flag-free `git push origin mainexpo` — was run after the docs commit (result in the
-  session report). Staging's pipeline has no work here: no migration, no edge function.
+- **The phone.** `npm run update:preview`, then the worker Map: the pill, the chip,
+  the pins (a cluster's badge; a tapped pin's gold ring), the sheet's pull and tap, the
+  peek row, the list, "Open the full list"; then the Filters sheet from the distance
+  pill — each Custom popup (Distance and Budget below their pills, When and Sort above),
+  Best Match, Reset, the count on the button; then the same sheet from WorkerResults'
+  filter control. Light mode: every pane flat white. Dark: the glass at 0.90 — the
+  `pane` dials are live if it reads heavy.
+- **Staging**: the Actions tab for the `da82f33` push (the migration) and this push
+  (no migration, no function — verify only).
+- **Revert lines:** `git revert f2d7f1c` (the Filters sheet; the slider returns),
+  `git revert f462224` (the Map screen), `git revert da82f33` (the brain — the other
+  two depend on it).
+- The push: `npm run verify` exited 0 in this session after `f2d7f1c`, so the one
+  permitted push — flag-free `git push origin mainexpo` — runs after the docs commit
+  (result in the session report).
 
 ## Open gates
 
