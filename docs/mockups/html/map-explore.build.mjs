@@ -371,11 +371,11 @@ const fmtShort = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'nu
 const ROW_H = 44, POP_ROWS = 6;
 // THE SORTS (operator, 2026-09-19), each with the rule the app will implement.
 const SORTS = [
+  { key: 'smart', label: 'Smart Match', hint: 'Matches based on your skills' },
   { key: 'newest', label: 'Newest', hint: 'Soonest job date first, then newest posted' },
   { key: 'pay', label: 'Highest budget', hint: 'Best pay first' },
-  { key: 'distance', label: 'Closest', hint: 'Least travel first' },
+  { key: 'distance', label: 'Distance', hint: 'Least travel first' },
   { key: 'bids', label: 'Fewest bids', hint: 'Least competition, then closest' },
-  { key: 'smart', label: 'Smart Match', hint: 'Your strongest categories first, then your other skills' },
 ];
 
 // THE MOMENTS: what each frame of the gallery shows.
@@ -393,11 +393,18 @@ const STATES = [
   { id: 'date-mid', label: '11 · Date custom — into October', open: 'date', at: 13 },
   { id: 'date-picked', label: '12 · Date picked — Sep 27', picked: { date: 7 } },
   { id: 'sort-open', label: '13 · Sort by — the five options', open: 'sort', at: 0 },
-  { id: 'sort-smart', label: '14 · Sort picked — Smart Match', picked: { sort: 'smart' } },
+  { id: 'sort-newest', label: '14 · Sort picked — Newest', picked: { sort: 'newest' } },
   { id: 'sort-bids', label: '15 · Sort picked — Fewest bids', picked: { sort: 'bids' } },
 ];
 
-const CATEGORIES = ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Plumbing', 'Yard work', 'Repairs', 'Electrical', 'Painting', 'Appliances', 'Junk removal', 'Shelf hanging', 'Pressure washing', 'Gutters', 'Carpet cleaning', 'Windows', 'Pest control', 'Organizing', 'Landscaping', 'Snow removal', 'Pet sitting', 'Errands', 'Packing', 'Drywall', 'Other'];
+// The categories as the operator named them for the filter (2026-09-19): the
+// six quick services, then the "All services" list with these shortenings -
+// Handyman & General Repairs -> Handyman / Repairs (Drywall Repair folds into
+// it), Electrical (light fixtures, outlets) -> Electrical, Picture & Shelf
+// Hanging -> Hanging, Carpet & Upholstery Cleaning -> Upholstery (so it does
+// not double the quick "Cleaning"), Personal Assistant / Errands -> Errands,
+// Packing & Unpacking -> Packing; every other title as it is in the app.
+const CATEGORIES = ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Plumbing', 'Yard work', 'Handyman / Repairs', 'Electrical', 'Interior Painting', 'Appliance Installation', 'Junk Removal', 'Hanging', 'Pressure Washing', 'Gutter Cleaning', 'Upholstery', 'Window Washing', 'Pest Control', 'Home Organization', 'Landscaping & Gardening', 'Snow Removal', 'Pet Sitting & Dog Walking', 'Errands', 'Packing'];
 const MY_SKILLS = new Set(['Assembly', 'Moving', 'TV mounting']);
 
 const filtersSheet = (st = {}) => {
@@ -442,10 +449,10 @@ const filtersSheet = (st = {}) => {
         <div class="fsec"><div class="lbl">When</div>
           <div class="chips-row"><div class="fchip any">Any</div><div class="fchip today${on(picked.date == null)}">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div>${customPill('date', picked.date != null ? fmtShort(DATE_VALUES[picked.date]) : null, dateCurrent, 'right up')}</div></div>
         <div class="fsec"><div class="lbl">Categories</div>
-          <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Jobs I can do</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
+          <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Best Match</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
           <div class="note">Nothing selected means every category.</div></div>
         <div class="fsec"><div class="lbl">Sort</div>
-          <div class="chips-row">${(() => { const cur = SORTS.find((o) => o.key === (picked.sort ?? 'newest')); const isOpen = open === 'sort'; return `<div class="fchip sortpill on${isOpen ? ' open' : ''} left up"><span class="dim">Sort by</span>${cur.label}<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>${isOpen ? popup('sort', 0, cur.key) : ''}</div>`; })()}</div></div>
+          <div class="chips-row">${(() => { const cur = SORTS.find((o) => o.key === (picked.sort ?? 'smart')); const isOpen = open === 'sort'; return `<div class="fchip sortpill on${isOpen ? ' open' : ''} left up"><span class="dim">Sort by</span>${cur.label}<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>${isOpen ? popup('sort', 0, cur.key) : ''}</div>`; })()}</div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
     </div>`;
