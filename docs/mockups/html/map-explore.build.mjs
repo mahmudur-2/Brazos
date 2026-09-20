@@ -160,7 +160,9 @@ const THEMES = {
     fSel: 'rgba(132,223,170,.16)', fSelRim: 'rgba(132,223,170,.48)', fSelInk: '#84dfaa',
     fDone: '#edb65d', fTrack: 'rgba(255,255,255,.05)', fPrimary: '#0D6B52', fPrimaryInk: '#F1EDE1', fPrimaryLift: 'rgba(95,174,129,.18)',
     // the popup: the app's menu material (ui/tokens.ts materials.menu: the scrim ink at .82, the mint hairline at .14, radius 16)
-    pPane: 'rgba(7,27,21,.90)', pRim: 'rgba(229,241,236,.14)', pShadow: '0 14px 34px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.10)', pHair: 'rgba(183,203,186,.10)',
+    // 2026-09-20 (sitting 3): at the menu material's own .82 (was .90) with NO inner top line — the app's menu draws none —
+    // so the popup is what the phone draws; pBar is iOS's own indicator, approximately (white style on dark glass).
+    pPane: 'rgba(7,27,21,.82)', pRim: 'rgba(229,241,236,.14)', pShadow: '0 14px 34px rgba(0,0,0,.55)', pHair: 'rgba(183,203,186,.10)', pBar: 'rgba(255,255,255,.5)',
     pInk: '#e5e8e5', pOnInk: '#84dfaa', pCal: '#a1aaa4',
     lqShadow: '0 12px 30px rgba(0,0,0,.48)', lqChipFill: 'rgba(132,223,170,.10)',
     lqLens: 'linear-gradient(160deg,rgba(132,223,170,.22),rgba(132,223,170,.06))', lqLensRim: 'rgba(170,235,200,.38)', lqLensGlow: 'rgba(73,196,129,.22)',
@@ -200,7 +202,7 @@ const THEMES = {
     fSel: '#E5F1EC', fSelRim: '#CBE0D7', fSelInk: '#0D6B52',
     fDone: '#0D6B52', fTrack: '#F1F3F1', fPrimary: '#0D6B52', fPrimaryInk: '#FFFFFF', fPrimaryLift: 'transparent',
     // the popup, flat: the surface, the line hairline, the raised shadow
-    pPane: '#FFFFFF', pRim: '#DDE2DD', pShadow: '0 14px 34px rgba(19,32,27,.18)', pHair: '#EEF1EC',
+    pPane: '#FFFFFF', pRim: '#DDE2DD', pShadow: '0 14px 34px rgba(19,32,27,.18)', pHair: '#EEF1EC', pBar: 'rgba(0,0,0,.4)',
     pInk: '#13201B', pOnInk: '#0D6B52', pCal: '#6E7771',
   },
 };
@@ -359,7 +361,7 @@ ${FILTERS ? filtersCss(t) : ''}
 
 const filtersCss = (t) => `
   .fscrim{position:absolute;inset:0;background:${t.fScrim};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:${t.fPane};${t.lqBlur ? `backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});-webkit-backdrop-filter:blur(30px) saturate(${t.lqSat ?? 1.9});` : ''}border-top:${t.edgeFiltersTop} solid ${t.lqRim};box-shadow:0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
+  .fsheet{position:absolute;left:0;right:0;bottom:0;border-radius:28px 28px 0 0;background:${t.fPane};${t.lqBlur ? 'backdrop-filter:blur(30px);-webkit-backdrop-filter:blur(30px);' : ''}border-top:${t.edgeFiltersTop} solid ${t.lqRim};box-shadow:0 -10px 40px rgba(0,0,0,.35);padding:10px 0 0;display:flex;flex-direction:column;overflow:hidden}
   .fsheet .grab{margin:0 auto 10px}
   .fhead{display:flex;align-items:center;justify-content:space-between;padding:0 20px 14px;border-bottom:1px solid ${t.fHair}}
   .fhead h2{margin:0;font-size:24px;line-height:28px;font-weight:700;letter-spacing:-.4px;color:var(--ink)}
@@ -381,8 +383,9 @@ const filtersCss = (t) => `
   .fchip.sortpill{padding-right:9px;gap:5px}
   .fchip.sortpill .dim{color:var(--muted);font-weight:500;margin-right:1px}
   .fchip.sortpill .caret{width:14px;height:14px;color:${t.fSelInk};opacity:.85}
-  .popup.sort{width:262px;mask-image:none;-webkit-mask-image:none}
-  .popup.sort .prow{height:52px;padding:0 14px 0 10px}
+  .popup.sort{width:262px}
+  .popup.sort .prow{height:52px;padding:0 14px 0 10px;justify-content:flex-start;text-align:left}
+  .popup.sort .prow .tick{position:static;margin-top:0}
   .prow .two{display:flex;flex-direction:column;gap:1px;line-height:1.15}
   .prow .two b{font-weight:600;font-size:15px}
   .prow.on .two b{color:${t.pOnInk}}
@@ -391,15 +394,20 @@ const filtersCss = (t) => `
   .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
   .fchip{position:relative}
   .fchip.open{z-index:6}
-  .popup{position:absolute;top:calc(100% + 6px);width:168px;padding:5px 0;border-radius:16px;background:${t.pPane};${t.lqBlur ? 'backdrop-filter:blur(25px) saturate(1.6);-webkit-backdrop-filter:blur(25px) saturate(1.6);' : ''}border:1px solid ${t.pRim};box-shadow:${t.pShadow};overflow:hidden;height:${POP_ROWS * ROW_H + 10}px;mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent);-webkit-mask-image:linear-gradient(180deg,transparent,#000 12%,#000 88%,transparent)}
+  /* 2026-09-20 (sitting 3): FLAT — the menu material, no end fade (the app draws none), the blur without saturate(); the
+     date popup ${DATE_POP_W} so "Wed, Sep 23" and its calendar sit ≥ 10pt clear of the tick, measured; iOS's bar as ::after */
+  .popup{position:absolute;top:calc(100% + 6px);width:168px;padding:5px 0;border-radius:16px;background:${t.pPane};${t.lqBlur ? 'backdrop-filter:blur(25px);-webkit-backdrop-filter:blur(25px);' : ''}border:1px solid ${t.pRim};box-shadow:${t.pShadow};overflow:hidden;height:${POP_ROWS * ROW_H + 10}px}
+  .popup.date{width:${DATE_POP_W}px}
+  .popup::after{content:'';position:absolute;right:3px;width:3px;border-radius:1.5px;background:${t.pBar};top:var(--barTop);height:var(--barLen)}
+  .popup.sort::after{display:none}
   .fchip.right .popup{right:0}
   .fchip.left .popup{left:0}
   .fchip.up .popup{top:auto;bottom:calc(100% + 6px)}
   .plist{display:flex;flex-direction:column}
-  .prow{display:flex;align-items:center;gap:8px;height:${ROW_H}px;padding:0 14px 0 10px;font-size:15px;font-weight:500;color:${t.pInk};border-top:1px solid ${t.pHair};white-space:nowrap}
+  .prow{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:${ROW_H}px;padding:0 28px;text-align:center;font-size:15px;font-weight:500;color:${t.pInk};border-top:1px solid ${t.pHair};white-space:nowrap}
   .prow:first-child{border-top:0}
   .prow.on{color:${t.pOnInk};font-weight:600}
-  .prow .tick{width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:${t.pOnInk}}
+  .prow .tick{position:absolute;left:10px;top:50%;margin-top:-9px;width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:${t.pOnInk}}
   .prow .tick svg{width:16px;height:16px}
   .prow .cal{display:inline-flex;align-items:flex-end;justify-content:center;width:20px;height:20px;border-radius:5px;border:1.4px solid ${t.pCal};position:relative;margin-right:2px;flex:0 0 auto}
   .prow .cal::before{content:'';position:absolute;left:-1.4px;right:-1.4px;top:-1.4px;height:5px;border-radius:5px 5px 0 0;background:${t.pCal}}
@@ -419,10 +427,20 @@ const fmtDollars = (d) => `$${d.toLocaleString('en-US')}`;
 const fmtDate = (d) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 const fmtShort = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 const ROW_H = 44, POP_ROWS = 6;
+// 2026-09-20 (sitting 3): the date popup's width — the one list whose centred rows need more than 168.
+const DATE_POP_W = 192;
+/** iOS's bar for `n` rows showing `visible`, scrolled to row `start`: 3pt wide, inset 3, at least 36 long, inside the
+ *  panel's ends — approximately, as iOS draws it; the app turns the real one on. */
+const barStyle = (n, visible, start, rowH) => {
+  const inset = 6, track = visible * rowH + 10 - inset * 2;
+  const thumb = Math.max(36, Math.round((visible / n) * track));
+  const maxStart = Math.max(1, n - visible);
+  return `--barTop:${inset + Math.round((Math.min(start, maxStart) / maxStart) * (track - thumb))}px;--barLen:${thumb}px`;
+};
 // THE SORTS (operator, 2026-09-19), each with the rule the app will implement.
 const SORTS = [
   { key: 'smart', label: 'Smart Match', hint: 'Matches based on your skills' },
-  { key: 'newest', label: 'Newest', hint: 'Soonest job date first, then newest posted' },
+  { key: 'newest', label: 'Newest', hint: 'Soonest job date first' },
   { key: 'pay', label: 'Highest budget', hint: 'Best pay first' },
   { key: 'distance', label: 'Distance', hint: 'Least travel first' },
   { key: 'bids', label: 'Fewest bids', hint: 'Least competition, then closest' },
@@ -472,7 +490,8 @@ const filtersSheet = (st = {}) => {
     const start = Math.max(0, Math.min(at, rows.length - visible));
     const list = rows.map((r) => `<div class="prow${r.key === current ? ' on' : ''}"><span class="tick">${r.key === current ? checkSvg : ''}</span>${r.html}</div>`).join('');
     const rowH = kind === 'sort' ? 52 : ROW_H;
-    return `<div class="popup ${kind}" style="height:${visible * rowH + 10}px"><div class="plist" style="margin-top:-${start * rowH}px">${list}</div></div>`;
+    const bar = kind === 'sort' ? '' : `;${barStyle(rows.length, visible, start, rowH)}`;
+    return `<div class="popup ${kind}" style="height:${visible * rowH + 10}px${bar}"><div class="plist" style="margin-top:-${start * rowH}px">${list}</div></div>`;
   };
   /** A Custom pill: its label is the picked value when there is one. */
   const customPill = (kind, label, current, anchor) => {

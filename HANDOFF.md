@@ -1,16 +1,39 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-20, sitting 2 (the chat that followed the phone walk of `7792aaf`;
-the operator sent screenshots, ruled twelve items one by one against rendered
-options, then had them built in one run — docs/DECISIONS.md 2026-09-20 (sitting 2),
-(1)–(8)).
+WRITTEN: 2026-09-20, sitting 3 (the chat after `c59d2aa`: the operator listed the
+issues for one big run — the Filters sheet's colours and its popups, from phone
+screenshots beside the mockup — and approved the fixes as HTML; docs only, no app
+code moved — docs/DECISIONS.md 2026-09-20 (sitting 3), (1)–(6)). Sitting 2's record
+follows it below, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
 
 ## What this session landed
 
-**THE TWELVE-ITEM RUN — three code commits over `a4382bf`**, each revertible alone,
+**SITTING 3 — THE FILTERS SHEET'S COLOURS AND ITS POPUPS, RULED AND REFERENCED (docs
+only).** The operator sent the live dark Filters sheet beside the mockup ("warmer",
+chosen pills "very dim") and asked for: the mockup's gradient copied accurately, a
+scroll bar in the popups (iOS's own, subtle), no gradient on the popups, the values
+centred — questions first, then HTML mockups, then the list. Answered (asked): dark
+only for the colours, centring and the bar in light too; the sweep on the Filters
+sheet ONLY; the tick stays at the left edge; the built-in bar; Sort stays left; the
+Newest hint loses ", then newest posted". THE CAUSE, read from the code: the pane's
+near-white mint sheen (.10 → .04 over #062418 @.88) lifts the green into grey-olive —
+the reference measures rgb(5,27,19) at the sheet's top-left, the app's numbers
+rgb(30,57,46); and the chosen pills wear `dark.emerald` #5FAE81 where the mockup wears
+#84dfaa at the same alphas. LANDED: `docs/mockups/html/map-explore.build.mjs`
+(`--filters`): popups at the app's menu numbers (.82, no inner line, no end fade),
+rows centred with the tick pinned left (Sort left), the date popup 192, iOS's bar in
+the open moments, the Filters blur without `saturate()`, the shorter hint;
+`map-explore-filters-{dark,light}.html` regenerated; NEW `filters-fix.build.mjs` →
+`filters-fix-dark.html` (NOW beside FIXED, derived from the gallery). Measured in the
+pages (Playwright): 15 + 15 + 2 phones, 0 nested; every centred row's content ≥ 10pt
+clear of the tick; the bar and no mask on every open popup. DECISIONS (1)–(6);
+the run list `docs/dispatch/NEXT-RUN-2026-09-21.md` "PART TWO", items 4–9 with the
+reference's sampled colours. NOT BUILT: nothing in the app moved this sitting.
+
+**SITTING 2 — THE TWELVE-ITEM RUN — three code commits over `a4382bf`**, each revertible alone,
 then this docs commit (the regenerated mockups, DECISIONS (8), this file, the session
 notes). `npm run verify` after the last code commit: **1380 pass, 0 fail, exit 0**
 (five new tests in `tests/workerSkills.test.mjs`).
@@ -83,6 +106,15 @@ Available Jobs card WAS rendered by the harness (`node scripts/shots.mjs --build
 its rim (dark), at the mockup's padding.
 
 ## What a following run must know
+
+- **The next run is ONE big run: Available Jobs 1–3 then the Filters 4–9**, both in
+  `docs/dispatch/NEXT-RUN-2026-09-21.md`, each with its approved HTML reference. The
+  operator's rule from sitting 3: the HTML IS the reference the loop measures against —
+  build the harness target, sample beside named texts, compare to the numbers in that
+  file, iterate on alphas only. Nothing is judged by eye.
+- **`filters-fix.build.mjs` depends on the gallery**: run `map-explore.build.mjs --filters`
+  first; it slices the gallery's first slot. NOW's CSS in it is the app's numbers at
+  `c59d2aa` — update it when the app changes, or it lies.
 
 - **The pane material is recipe D and rim-only.** `highlightAlpha` 0 on `pane`;
   `sheen: { fromAlpha: 0.1, toAlpha: 0.04, color: brand.mint }`; `scrimColor`
@@ -157,6 +189,8 @@ its rim (dark), at the mockup's padding.
 
 ## Waiting on the operator
 
+- **Nothing new to walk from sitting 3** (docs only). The big run comes next, on the
+  operator's dispatch — model opus, effort max, "careful surgical implementation".
 - **The phone.** Open the Beta twice. Then, item by item: (1) light "Any" pill cream /
   no rim / black; (2) dark Filters sheet — one line on the top edge only, no shine
   line, no side or bottom lines; (3) Distance / Minimum budget / When pills reaching
