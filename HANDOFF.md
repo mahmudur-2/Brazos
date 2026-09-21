@@ -1,15 +1,60 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the sign-in chat, latest: BOTH SIGN-IN SCREENS FROM THE PHONE —
-"Brazos", Continue riding the keyboard, the iOS back circle, the phone screen given the
-email pick; code `2993ee0`, verify 1393/0, pushed and published by OTA — the ids in its
-section, the first below. The email sign-in's first ship (`9085cc5`), the WebP run's record,
-the Welcome-from-the-phone record, the shipped build's, the restored build's, the mode
-switch's, the Lux drawing run's, the eighteen-item run's and the two sittings before it
-follow, unchanged.
+WRITTEN: 2026-09-21 (the sign-in chat, latest: SIGN-IN FROM THE PHONE AGAIN — Continue on
+top and flush on the keyboard, the "Instead" pill under it, no "Go"; code `b0e54d4`, verify
+1393/0, pushed and published by OTA — the ids in its section, the first below. The two
+sign-in ships before it (`2993ee0`, `9085cc5`), the WebP run's record, the
+Welcome-from-the-phone record, the shipped build's, the restored build's, the mode switch's,
+the Lux drawing run's, the eighteen-item run's and the two sittings before it follow,
+unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
+
+## SIGN-IN, FROM THE PHONE AGAIN — Continue on top and on the keyboard, the "Instead" pill under it, no "Go" (2026-09-21, the sign-in chat, latest); `b0e54d4`, OTA `f4a996f5` live on preview
+
+**What just happened.** On the `2993ee0` OTA the operator sent four screenshots: the phone
+screen with the number pad up showed a floating "Go" pill (iOS's return key for a number
+pad whose field asks for `returnKeyType="go"`); the email screen with the keyboard up showed
+Continue 12 above the keyboard; both screens at rest showed the "Instead" pill ABOVE
+Continue (the (21) layout had left the route in the scroll, bottom-pinned, over the footer).
+"get rid of the go … don't add space between keyboard and the continue button … for both
+screens continue should always be on top, not the instead pills … fix and push again".
+DECISIONS 22. All three done, pushed and published under the standing word.
+
+**The change (`b0e54d4`).** Both screens: BOTH controls are the scaffold's pinned footer —
+Continue on top, the "Instead" route under it, 12 between (`styles.footer`); the scroll holds
+only the copy and the form (its least air above the footer 32). `AuthScaffold
+footerBelowLead` (the 12 + 58 the footer stacks under its lead) joins the inset, the resting
+gap and the column's COLUMN_BOTTOM_PADDING in the KeyboardRisingColumn's `insetBelow`, so
+the rise lands CONTINUE's bottom edge on the keyboard and the route goes under it; the
+shared `riseFor` is untouched. The phone field asks for no return key (and no
+`onSubmitEditing`) — Continue on the keyboard is the way onward; the email screen's text
+keyboard keeps its real return key. Pages regenerated: the footer holds both; the keyboard
+frames rise 208 / 163 so Continue's bottom sits on a 336 keyboard / a 291 number pad
+(516 / 561) with the route under it.
+
+**Proven by the loop** (`.shots/lux/signin-compare.mjs`, both screens, light): Continue
+666–724 and the route 736–794 on the pages' boxes; the fields, the back disc and the copy
+unchanged; copy 0.4 % / 0.6 % differing, fields 0.7 % / 0.2 %, actions 2.0 % / 1.5 %, the gap
+0.0 %; the keyboard frames' geometry by script (`.shots/lux/kbframe-signin.mjs`). NOT
+provable here: the ride, the flush landing and the absent "Go" — the operator's walk. The
+evidence guard blocked image reads in this run: every check is a script's.
+
+**Verify, push, OTA.** `npm run verify` lint clean, 1393 / 0 (`.shots/lux/verify-signin3.txt`).
+Pushed `af1572b..616fb92` (`b0e54d4` code, `616fb92` DECISIONS 22). `npm run update:preview`
+→ branch `preview`, runtime `1.0.0`, update group `f4a996f5-5310-48e9-bda0-2100ad91cf94`,
+iOS update `01a0c625-6216-755a-8354-f8a30ea0be8d`; dashboard
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/f4a996f5-5310-48e9-bda0-2100ad91cf94`.
+Open the Beta twice to pull it.
+
+**The operator's walk, both screens:** at rest Continue above the "Instead" pill; tap the
+field — Continue rides up and stops ON the keyboard with no gap, the pill disappears under
+the keyboard, the copy and field lift a touch; the number pad shows no "Go"; dismiss —
+everything returns. **Left standing:** `screens/CreateAccountScreen.tsx`'s phone field still
+asks for "go" and floats the same pill (not asked; one screen at a time); the B on both
+Create-account screens; no "Forgot password?". The tree's unrelated dirt untouched (the Fable
+pages, `lux.build.mjs`, `index.html`, the Lux chat's ideas pages).
 
 ## BOTH SIGN-IN SCREENS, FROM THE PHONE — "Brazos", Continue rides the keyboard, the back circle, the phone screen matched (2026-09-21, the sign-in chat, latest); `2993ee0`, OTA `971f0ac0` live on preview
 
