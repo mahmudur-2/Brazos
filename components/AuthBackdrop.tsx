@@ -24,6 +24,22 @@ import { useThemeColors, withAlpha } from '../lib/theme';
 
 export type AuthBackdropVariant = 'full' | 'soft';
 
+/**
+ * 2026-09-21 — `full` IS THE SHIPPED WELCOME PAGE'S CORNER (docs/mockups/html/
+ * lux/welcome-ship.html): five circles about one centre 1.221 widths across
+ * and 0.047 heights above the frame, radii from 0.331 of the width in steps
+ * of 0.0763, each a 1-pt gold hairline one step fainter than the one inside
+ * it. Nothing else: the page has no wash disc and no mid-band sweep. The same
+ * geometry and alphas in both themes; only the gold is the palette's.
+ */
+const WELCOME_CORNER = {
+  cx: 1.221,
+  cy: -0.047,
+  radius: 0.3308,
+  step: 0.0763,
+  alphas: [0.36, 0.3, 0.24, 0.18, 0.12],
+} as const;
+
 type Ring = {
   size: number;
   /** Centre of the circle, in points from the top-left of the screen. */
@@ -104,6 +120,15 @@ export function AuthBackdrop({
     : { cx: width * 1.04, cy: -height * 0.05, base: width * 0.42, step: width * 0.16, count: 3, wash: width * 0.75 };
 
   const rings = useMemo<Ring[]>(() => {
+    if (full) {
+      return WELCOME_CORNER.alphas.map((alpha, i) => ({
+        // + 2: the page's circle is a content box with its 1-pt border outside.
+        size: (WELCOME_CORNER.radius + WELCOME_CORNER.step * i) * width * 2 + 2,
+        cx: width * WELCOME_CORNER.cx,
+        cy: height * WELCOME_CORNER.cy,
+        color: withAlpha(palette.authGold, alpha),
+      }));
+    }
     const list = contour(
       anchor.cx,
       anchor.cy,
@@ -130,6 +155,7 @@ export function AuthBackdrop({
     anchor.step,
     full,
     height,
+    palette.authGold,
     strokes,
     width,
   ]);
@@ -137,7 +163,10 @@ export function AuthBackdrop({
   return (
     <View style={styles.root}>
       {/* One soft fill under the corner cluster. Depth, not another line —
-          without it the corner reads as wireframe rather than as artwork. */}
+          without it the corner reads as wireframe rather than as artwork.
+          Welcome's page carries its own haze in the scaffold's ground, so
+          `full` draws none. */}
+      {full ? null : (
       <View
         style={{
           position: 'absolute',
@@ -149,6 +178,7 @@ export function AuthBackdrop({
           backgroundColor: strokes.wash,
         }}
       />
+      )}
 
       {rings.map((ring, i) => (
         <View
@@ -160,7 +190,9 @@ export function AuthBackdrop({
             width: ring.size,
             height: ring.size,
             borderRadius: ring.size / 2,
-            borderWidth: StyleSheet.hairlineWidth * 2,
+            // The page's arcs are 1 pt; the form screens' contour keeps its
+            // two-hairline stroke.
+            borderWidth: full ? 1 : StyleSheet.hairlineWidth * 2,
             borderColor: ring.color,
           }}
         />

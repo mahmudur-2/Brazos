@@ -235,8 +235,25 @@ test('[static] dark palette is compile-checked against ColorToken', async () => 
 /** The only right-hand sides a `fontFamily:` may carry anywhere in the tree. */
 const ALLOWED_FONT_FAMILY = /^(fonts\.display\b|fonts\.body\b|undefined\b)/;
 
-/** The one serif role's token, permitted in the one screen file only. */
+/** The one serif role's token, permitted in the hero screens only. */
 const HERO_FONT_FAMILY = /^fonts\.displayHero\b/;
+
+/**
+ * Where the hero face may be named, and how many times in each file.
+ *
+ * 2026-09-21 — TWO SITES, BY THE OPERATOR'S RULING (DECISIONS 18): the
+ * customer Home's hero title, as since 2026-08-23, and the Welcome page's
+ * headline — the shipped Welcome page (docs/mockups/html/lux/welcome-ship.html)
+ * draws "Get it done. / Work with / confidence." in Georgia 44/47, and the
+ * operator, asked whether to widen this rule to it, said yes. Still ONE role
+ * — the hero headline of a screen — on two screens; still the platform face,
+ * still no file, still no loader, and every other claim below holds. A third
+ * site, or a second naming in either file, fails here.
+ */
+const HERO_SITES = new Map([
+  ['screens/HomeScreen.tsx', 1],
+  ['screens/WelcomeScreen.tsx', 1],
+]);
 
 /** Family names that are serifs. Applied to font-family positions only — the
  *  word "serif" is legitimate in prose, in HomeScreen's cap-height ladder, and
@@ -295,7 +312,7 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
 
   // --- half three: every fontFamily: in the tree, derived by scanning ------
   const offenders = [];
-  let heroSites = 0;
+  const heroSites = new Map();
   const sources = await filesUnder([
     'components', 'dev-tools', 'hooks', 'lib', 'modes', 'navigation', 'screens', 'ui',
   ]);
@@ -304,10 +321,10 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
     for (const match of source.matchAll(/fontFamily:\s*/g)) {
       const rhs = source.slice(match.index + match[0].length, match.index + match[0].length + 80);
       if (HERO_FONT_FAMILY.test(rhs)) {
-        if (path === 'screens/HomeScreen.tsx') {
-          heroSites += 1;
+        if (HERO_SITES.has(path)) {
+          heroSites.set(path, (heroSites.get(path) ?? 0) + 1);
         } else {
-          offenders.push(`${path}: fontFamily: fonts.displayHero outside the hero screen`);
+          offenders.push(`${path}: fontFamily: fonts.displayHero outside the hero screens`);
         }
         continue;
       }
@@ -347,11 +364,18 @@ test('one-serif fence: the hero role alone is Georgia, and nothing else is a ser
     assert.doesNotMatch(source, /useFonts|expo-font/, `${path} must not load a font`);
   }
   assert.deepEqual(offenders, []);
-  assert.equal(
-    heroSites,
-    1,
-    `fonts.displayHero must be named by exactly ONE style — the hero title — not ${heroSites}`
+  assert.deepEqual(
+    [...heroSites.entries()].sort(),
+    [...HERO_SITES.entries()].sort(),
+    `fonts.displayHero must be named by exactly ONE style in each hero screen — saw ${JSON.stringify([...heroSites.entries()])}`
   );
+  // The Welcome headline, like Home's, carries its cut as a value: a platform
+  // face renders at regular without one.
+  const welcomeSource = stripComments(await read('screens/WelcomeScreen.tsx'));
+  const welcomeHeadline = /headline: \{([^}]*)\}/.exec(welcomeSource.replace(/\s+/g, ' '));
+  assert.ok(welcomeHeadline, 'the Welcome headline style must stay a plain object');
+  assert.match(welcomeHeadline[1], /fontFamily: fonts\.displayHero/);
+  assert.match(welcomeHeadline[1], /fontWeight: '700'/, 'the Welcome headline names its cut');
 
   // --- half four: the asset tree and the loader ----------------------------
   const assets = await readdir(join(repoRoot, 'assets'), { withFileTypes: true, recursive: true });

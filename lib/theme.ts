@@ -113,6 +113,25 @@ export const colors = {
   pinGlyph: emeraldLight.pinGlyph,
   /** 2026-09-21 — the Filters sheet's chosen green, by reference (light: the emerald). */
   emeraldBright: emeraldLight.emeraldBright,
+  /** 2026-09-21 — the shipped Welcome page's auth roles, by reference to the
+   *  ONE definition in ui/tokens.ts (light: the Heritage ink, muted, emerald
+   *  and gold, the ivory ground flat, the forest CTA, the pale mint disc). */
+  authInk: emeraldLight.authInk,
+  authMuted: emeraldLight.authMuted,
+  authAccent: emeraldLight.authAccent,
+  authGold: emeraldLight.authGold,
+  authGlintCore: emeraldLight.authGlintCore,
+  authGlintHalo: emeraldLight.authGlintHalo,
+  authBadgeFill: emeraldLight.authBadgeFill,
+  authShade: emeraldLight.authShade,
+  authGroundTop: emeraldLight.authGroundTop,
+  authGroundMid: emeraldLight.authGroundMid,
+  authGroundBottom: emeraldLight.authGroundBottom,
+  heroDiscTop: emeraldLight.heroDiscTop,
+  heroDiscMid: emeraldLight.heroDiscMid,
+  heroDiscBottom: emeraldLight.heroDiscBottom,
+  authCtaTop: emeraldLight.authCtaTop,
+  authCtaBottom: emeraldLight.authCtaBottom,
   /** The task card's field ring, by reference to ui/tokens.ts: the green-grey
    *  secondary border (light #CBE0D7, dark #2F5140) that the HTML mockup's
    *  .field rule draws. Exposed 2026-09-18 because Home needed it and this
@@ -228,6 +247,23 @@ export const darkColors: ColorPalette = {
   pinGlyph: emeraldDark.pinGlyph,
   emeraldBright: emeraldDark.emeraldBright,
   secondaryBorder: emeraldDark.secondaryBorder,
+  // 2026-09-21 — the shipped Welcome page's auth roles, by reference to ui/tokens.ts.
+  authInk: emeraldDark.authInk,
+  authMuted: emeraldDark.authMuted,
+  authAccent: emeraldDark.authAccent,
+  authGold: emeraldDark.authGold,
+  authGlintCore: emeraldDark.authGlintCore,
+  authGlintHalo: emeraldDark.authGlintHalo,
+  authBadgeFill: emeraldDark.authBadgeFill,
+  authShade: emeraldDark.authShade,
+  authGroundTop: emeraldDark.authGroundTop,
+  authGroundMid: emeraldDark.authGroundMid,
+  authGroundBottom: emeraldDark.authGroundBottom,
+  heroDiscTop: emeraldDark.heroDiscTop,
+  heroDiscMid: emeraldDark.heroDiscMid,
+  heroDiscBottom: emeraldDark.heroDiscBottom,
+  authCtaTop: emeraldDark.authCtaTop,
+  authCtaBottom: emeraldDark.authCtaBottom,
 
   text: '#F1EDE1',
   textMuted: '#93A096',

@@ -7,12 +7,38 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
-import { authSurface, fonts, useThemeColors } from '../lib/theme';
+import { authSurface, fonts, useThemeColors, withAlpha } from '../lib/theme';
+import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 import { AuthBackdrop, type AuthBackdropVariant } from './AuthBackdrop';
+
+/**
+ * 2026-09-21 — THE GROUND OF THE SHIPPED WELCOME PAGE (docs/mockups/html/lux/
+ * welcome-ship.html, and -light): four layers, the page's own numbers.
+ *
+ *   base    dark: linear-gradient(165deg, authGroundTop 0%, authGroundMid 55%,
+ *           authGroundBottom 100%); light: the three stops are the ivory bg,
+ *           so nothing is drawn over the flat surface.
+ *   glow    a radial ellipse 72% × 46% of the screen, centred at (50%, 36%),
+ *           the accent from .18 (dark) / .07 (light) to nothing at 70 %.
+ *   corner  a 300-pt circle centred on the top-right corner, the gold from
+ *           .13 (dark) / .16 (light) to nothing.
+ *   foot    from the 62 % mark to the bottom, the shade to .26 (dark) / .07.
+ *
+ * Every one is a View with a gradient — the way every lit surface here is
+ * drawn — and the ellipse and the circle are sized Views with a
+ * `closest-side` gradient, so no renderer has to understand an explicit
+ * radial size. Both themes draw all four; only the alphas differ.
+ */
+const GROUND = {
+  glow: { rx: 0.72, ry: 0.46, cx: 0.5, cy: 0.36, dark: 0.18, light: 0.07, fade: 70 },
+  corner: { radius: 300, dark: 0.13, light: 0.16 },
+  foot: { from: 62, dark: 0.26, light: 0.07 },
+} as const;
 
 type AuthScaffoldProps = PropsWithChildren<{
   /** Small centred navigation title, as in the reference's .topbar. */
@@ -36,6 +62,12 @@ type AuthScaffoldProps = PropsWithChildren<{
    * other auth screen still gets.
    */
   themed?: boolean;
+  /**
+   * The shipped Welcome page's ground — see GROUND above. Welcome alone
+   * passes it; the form screens keep the flat surface until their own pages
+   * are approved. Requires `themed`.
+   */
+  ground?: boolean;
 }>;
 
 /**
@@ -56,11 +88,25 @@ export function AuthScaffold({
   onBack,
   backdrop,
   themed = false,
+  ground = false,
   children,
 }: AuthScaffoldProps) {
   const showTopBar = Boolean(title || onBack);
   const { palette, isDark } = useThemeColors();
+  const { width, height } = useWindowDimensions();
   const surface = authSurface(palette, isDark);
+  const lit = ground && themed;
+  const groundBase =
+    lit && isDark
+      ? backgroundImageStyle(
+          `linear-gradient(165deg, ${palette.authGroundTop} 0%, ${palette.authGroundMid} 55%, ${palette.authGroundBottom} 100%)`
+        )
+      : undefined;
+  const glowW = width * GROUND.glow.rx * 2;
+  const glowH = height * GROUND.glow.ry * 2;
+  const glowAlpha = isDark ? GROUND.glow.dark : GROUND.glow.light;
+  const cornerAlpha = isDark ? GROUND.corner.dark : GROUND.corner.light;
+  const footAlpha = isDark ? GROUND.foot.dark : GROUND.foot.light;
   // Masters 3 and 4 draw the back chevron gold and the bar title in the serif;
   // untouched screens keep the ink chevron and the sans title.
   const chevronColor = themed ? surface.accent : authColors.ink;
@@ -69,8 +115,51 @@ export function AuthScaffold({
     // The ivory fill and the artwork live outside the safe area, so the art
     // runs to the physical edges of the screen rather than stopping at the
     // status bar inset.
-    <View style={[styles.root, themed && { backgroundColor: surface.bg }]}>
+    <View style={[styles.root, themed && { backgroundColor: surface.bg }, groundBase]}>
+      {lit ? (
+        <View style={styles.layer} pointerEvents="none">
+          <View
+            style={[
+              {
+                position: 'absolute',
+                width: glowW,
+                height: glowH,
+                left: width * GROUND.glow.cx - glowW / 2,
+                top: height * GROUND.glow.cy - glowH / 2,
+              },
+              backgroundImageStyle(
+                `radial-gradient(ellipse closest-side at 50% 50%, ${withAlpha(palette.authAccent, glowAlpha)} 0%, ${withAlpha(palette.authAccent, 0)} ${GROUND.glow.fade}%)`
+              ),
+            ]}
+          />
+          <View
+            style={[
+              {
+                position: 'absolute',
+                width: GROUND.corner.radius * 2,
+                height: GROUND.corner.radius * 2,
+                right: -GROUND.corner.radius,
+                top: -GROUND.corner.radius,
+              },
+              backgroundImageStyle(
+                `radial-gradient(circle closest-side at 50% 50%, ${withAlpha(palette.authGold, cornerAlpha)} 0%, ${withAlpha(palette.authGold, 0)} 100%)`
+              ),
+            ]}
+          />
+        </View>
+      ) : null}
       {backdrop ? <AuthBackdrop variant={backdrop} themed={themed} /> : null}
+      {lit ? (
+        <View
+          style={[
+            styles.layer,
+            backgroundImageStyle(
+              `linear-gradient(180deg, ${withAlpha(palette.authShade, 0)} ${GROUND.foot.from}%, ${withAlpha(palette.authShade, footAlpha)} 100%)`
+            ),
+          ]}
+          pointerEvents="none"
+        />
+      ) : null}
 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
         <KeyboardAvoidingView
@@ -136,6 +225,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: authColors.bg,
+  },
+  layer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
   },
   safe: {
     flex: 1,

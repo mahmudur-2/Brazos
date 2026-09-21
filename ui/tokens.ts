@@ -137,6 +137,36 @@ export const colors = {
    * pin that green.
    */
   emeraldBright: '#0D6B52',
+  /**
+   * 2026-09-21 — THE WELCOME PAGE AS SHIPPED (docs/mockups/html/lux/
+   * welcome-ship.html and welcome-ship-light.html, the operator's pick with
+   * the rim glint; DECISIONS 18): the auth surface's roles, one value per
+   * palette, so the screen can be matched to its page in BOTH themes from
+   * tokens alone. Dark carries the page's own hexes (the Emerald Lux Glass
+   * ink, muted, mint accent and gold — which differ from the in-app dark
+   * `ink`/`gold` by a few levels, deliberately: the auth flow is the one
+   * surface on its own palette, lib/authTheme.ts); light carries the light
+   * page's: the Heritage ink, muted, emerald and gold, the ivory ground
+   * (flat — three equal stops), the forest CTA (two equal stops), the pale
+   * mint disc. The gradients are gated on the theme where a stop pair is
+   * equal (`litBetween` flat), never on a colour fork in a screen.
+   */
+  authInk: '#13201B',
+  authMuted: '#6E7771',
+  authAccent: '#0D6B52',
+  authGold: '#C8A15B',
+  authGlintCore: '#FFF6DE',
+  authGlintHalo: '#E8C98C',
+  authBadgeFill: '#FFFFFF',
+  authShade: '#10261D',
+  authGroundTop: '#F6F3EA',
+  authGroundMid: '#F6F3EA',
+  authGroundBottom: '#F6F3EA',
+  heroDiscTop: '#F6F9F4',
+  heroDiscMid: '#DEEBE1',
+  heroDiscBottom: '#CDDCCF',
+  authCtaTop: '#064C3B',
+  authCtaBottom: '#064C3B',
 } as const;
 
 export type ColorToken = keyof typeof colors;
@@ -207,6 +237,28 @@ export const dark = {
   // 2026-09-21 — the Filters sheet's chosen green, the approved mockup's own
   // (--emerald there); see the `colors` block above for the roles.
   emeraldBright: '#84DFAA',
+  // 2026-09-21 — the shipped Welcome page's own numbers (welcome-ship.html):
+  // the Emerald Lux Glass ink, muted, accent and gold; the glint's cream core
+  // (its halo IS the gold); the badge glass; black as the shade; the Lux
+  // ground (#062421 → #0A1A17 → #07110F, the one ground the lux README
+  // names); the lit disc's three stops; the hero CTA's two. See the `colors`
+  // block above for the roles.
+  authInk: '#F3F1E8',
+  authMuted: '#A9B8B1',
+  authAccent: '#7EE2B4',
+  authGold: '#E9C170',
+  authGlintCore: '#FFE9B0',
+  authGlintHalo: '#E9C170',
+  authBadgeFill: '#0A2822',
+  authShade: '#000000',
+  authGroundTop: '#062421',
+  authGroundMid: '#0A1A17',
+  authGroundBottom: '#07110F',
+  heroDiscTop: '#19553F',
+  heroDiscMid: '#0F3B30',
+  heroDiscBottom: '#0A2A23',
+  authCtaTop: '#1C503F',
+  authCtaBottom: '#0E3229',
 } as const satisfies Record<ColorToken, string>;
 
 export { withAlpha } from './colorAlpha';

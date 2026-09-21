@@ -1,14 +1,37 @@
-import { useRef } from 'react';
+import { useRef, type ComponentProps, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Animated,
   Pressable,
   StyleSheet,
   Text,
+  View,
+  type ViewStyle,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { authColors, authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
-import { authSurface, fonts, useThemeColors } from '../lib/theme';
+import { authSurface, fonts, useThemeColors, withAlpha } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { litBetween } from '../ui/primitives/LitSurface';
+
+/**
+ * 2026-09-21 — THE SHIPPED WELCOME PAGE'S CONTROLS (docs/mockups/html/lux/
+ * welcome-ship.html and -light), the page's own numbers: the glyph 22, the
+ * chevron 18 at 18 from the right edge, the hairline the gold at .62, the
+ * lead's specular edge white at .14, its depth 12/30 in the shade (.35 dark,
+ * the forest at .22 light) plus a 6/26 gold under-glow at .10; the text
+ * link's chevron 16.
+ */
+const HERO = {
+  glyph: 22,
+  chevron: 18,
+  chevronInset: 18,
+  linkChevron: 16,
+  hairlineAlpha: 0.62,
+  specularAlpha: 0.14,
+  shadeAlpha: { dark: 0.35, light: 0.22 },
+  glowAlpha: 0.1,
+} as const;
 
 // Restrained press feedback: enough to register as a physical control, not
 // enough to read as a bounce. 100ms in, 120ms back.
@@ -36,6 +59,23 @@ type AuthButtonProps = {
    * control it has always been.
    */
   themed?: boolean;
+  /**
+   * The shipped Welcome page's dress (HERO above). Every one is optional and
+   * absent changes nothing, so the other auth screens keep their control.
+   *
+   * `hero`: the page's boxed control — 58 tall at radius 22, the gold
+   * hairline, the 17/600 label; on a ghost, the page's TEXT LINK instead (44
+   * tall, no box, 16/600). `lit`: the lead action's fill between the two
+   * `authCta*` stops (flat forest in light) with its specular edge and depth.
+   * `icon`: a leading glyph, centred with the label as one group.
+   * `chevron`: the trailing chevron. `light`: a layer drawn UNDER the label
+   * — the rim light — which brings its own clip and cover.
+   */
+  hero?: boolean;
+  lit?: boolean;
+  icon?: ComponentProps<typeof Ionicons>['name'];
+  chevron?: boolean;
+  light?: ReactNode;
 };
 
 /**
@@ -57,11 +97,17 @@ export function AuthButton({
   disabled = false,
   accessibilityHint,
   themed = false,
+  hero = false,
+  lit = false,
+  icon,
+  chevron = false,
+  light,
 }: AuthButtonProps) {
   const scale = useRef(new Animated.Value(1)).current;
   const { palette, isDark } = useThemeColors();
   const isDisabled = disabled || loading;
   const isGhost = variant === 'ghost';
+  const isLink = hero && isGhost;
 
   // Decision 3, resolved for this surface. Dark: `primary` is the STANDARD
   // control (surface fill, gold hairline, cream serif label) because no auth
@@ -83,6 +129,42 @@ export function AuthButton({
         borderColor: surface.line,
       }
     : null;
+
+  // THE HERO DRESS, in both themes from the auth roles. The lead (lit): the
+  // page's fill, the ink (cream in dark, white in light) and gold glyphs. The
+  // outlined second: no fill, the gold hairline, the label gold in dark and
+  // forest in light — as are its glyphs. The link: the same ink as the second,
+  // no box. Nothing here is read unless `hero` is set.
+  const heroInk = lit
+    ? isDark
+      ? palette.authInk
+      : authColors.onDark
+    : isDark
+      ? palette.authGold
+      : authColors.forest;
+  const heroGlyph = lit ? palette.authGold : heroInk;
+  const heroShape: ViewStyle | null = hero
+    ? isLink
+      ? styles.heroLink
+      : {
+          height: authSizes.heroButton,
+          borderRadius: authRadius.heroButton,
+          borderColor: withAlpha(palette.authGold, HERO.hairlineAlpha),
+          backgroundColor: lit ? palette.authCtaBottom : 'transparent',
+          paddingHorizontal: 0,
+        }
+    : null;
+  const heroFill = hero && lit ? litBetween({ top: palette.authCtaTop, bottom: palette.authCtaBottom, flat: !isDark }) : undefined;
+  const heroDepth: ViewStyle | null =
+    hero && lit
+      ? {
+          boxShadow:
+            `inset 0 1px 0 ${withAlpha(palette.white, HERO.specularAlpha)}, ` +
+            `0 12px 30px ${isDark ? withAlpha(palette.black, HERO.shadeAlpha.dark) : withAlpha(palette.forest, HERO.shadeAlpha.light)}, ` +
+            `0 6px 26px ${withAlpha(palette.authGold, HERO.glowAlpha)}`,
+        }
+      : null;
+  const labelTint = hero ? heroInk : tint;
 
   const animate = (to: number, duration: number) =>
     Animated.timing(scale, {
@@ -106,28 +188,59 @@ export function AuthButton({
           styles.base,
           isGhost ? styles.ghost : styles.primary,
           themedShape,
+          heroShape,
+          heroFill,
+          heroDepth,
           // Dimmed, but still clearly the same control — the reference's
           // hierarchy has to survive the disabled state.
           isDisabled && styles.disabled,
         ]}
       >
+        {light ?? null}
         {loading ? (
-          <ActivityIndicator color={tint} />
+          <ActivityIndicator color={labelTint} />
         ) : (
-          <Text
-            style={[
-              styles.label,
-              weight === 'semibold' && styles.labelSemibold,
-              // Decision 9's serif button label, applied only where the
-              // conversion reaches: the untouched auth screens keep the sans.
-              themed && styles.labelSerif,
-              { color: tint },
-            ]}
-            numberOfLines={1}
-          >
-            {title}
-          </Text>
+          (() => {
+            const label = (
+              <Text
+                style={[
+                  styles.label,
+                  weight === 'semibold' && styles.labelSemibold,
+                  // Decision 9's serif button label, applied only where the
+                  // conversion reaches: the untouched auth screens keep the sans.
+                  themed && styles.labelSerif,
+                  hero && (isLink ? styles.linkLabel : styles.heroLabel),
+                  { color: labelTint },
+                ]}
+                numberOfLines={1}
+              >
+                {title}
+              </Text>
+            );
+            // The link carries its chevron inline; a button with a glyph takes
+            // the row; the plain label stays the Pressable's direct child,
+            // exactly as before.
+            if (isLink) {
+              return (
+                <View style={styles.linkRow}>
+                  {label}
+                  {chevron ? <Ionicons name="chevron-forward" size={HERO.linkChevron} color={heroGlyph} /> : null}
+                </View>
+              );
+            }
+            return icon ? (
+              <View style={styles.group}>
+                <Ionicons name={icon} size={HERO.glyph} color={heroGlyph} />
+                {label}
+              </View>
+            ) : (
+              label
+            );
+          })()
         )}
+        {chevron && !isLink ? (
+          <Ionicons name="chevron-forward" size={HERO.chevron} color={heroGlyph} style={styles.chevron} />
+        ) : null}
       </Pressable>
     </Animated.View>
   );
@@ -162,5 +275,36 @@ const styles = StyleSheet.create({
   labelSerif: {
     fontFamily: fonts.display,
     fontSize: 19,
+  },
+  // 2026-09-21 — the shipped Welcome page's controls.
+  heroLabel: {
+    ...authType.heroButton,
+    fontFamily: fonts.display,
+  },
+  heroLink: {
+    height: authSizes.heroLink,
+    marginTop: -3,
+    borderRadius: 0,
+    borderColor: 'transparent',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+  },
+  linkLabel: {
+    ...authType.heroLink,
+    fontFamily: fonts.display,
+  },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  group: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: authSpacing.md,
+  },
+  chevron: {
+    position: 'absolute',
+    right: HERO.chevronInset,
   },
 });

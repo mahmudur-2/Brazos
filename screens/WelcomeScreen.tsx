@@ -1,27 +1,18 @@
-import { useEffect, useRef } from 'react';
-import {
-  Animated,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, Text, View, type ViewStyle } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AuthButton } from '../components/AuthButton';
 import { AuthScaffold } from '../components/AuthScaffold';
+import { RimLight } from '../components/RimLight';
 import { useReducedMotion } from '../hooks/useReducedMotion';
-import { authColors, authRadius, authShadows, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import { useLaunchComplete } from '../lib/launchContext';
 import type { AuthStackNavigation } from '../lib/navigation';
-import {
-  authSurface,
-  fonts,
-  themedStyles,
-  useThemeColors,
-  type ColorPalette,
-} from '../lib/theme';
+import { fonts, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../lib/theme';
 import { USE_NATIVE_DRIVER } from '../lib/motion';
+import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 
 // One driver, 500ms, with each element reading a different slice of it. That
 // produces the reference's short stagger without five timers to keep in sync,
@@ -29,9 +20,6 @@ import { USE_NATIVE_DRIVER } from '../lib/motion';
 // hit-testable from the first frame regardless of their opacity.
 const ENTRANCE_MS = 500;
 const REDUCED_ENTRANCE_MS = 160;
-
-/** Trust-badge glyph, sized to sit on the cap height of the 13pt badge label. */
-const BADGE_ICON = 15;
 
 /** [start, end] within the 0..1 driver, in the order things should arrive. */
 const STAGGER = {
@@ -46,31 +34,92 @@ const STAGGER = {
 } as const;
 
 /**
- * The welcome artwork ring: the reference's
- * `linear-gradient(145deg, --mint2, #F2E5CB)` rebuilt from four offset discs
- * clipped to a circle, since no gradient package is installed.
+ * THE SHIPPED WELCOME PAGE (docs/mockups/html/lux/welcome-ship.html and
+ * welcome-ship-light.html, 2026-09-21 — the operator's pick, the reference
+ * composition on the Emerald Lux Glass ground with the rim glint on the lead
+ * action; DECISIONS 18). This screen is matched to those pages region by
+ * region, and every number below is the page's own, measured on its 393 × 852
+ * frame. The app draws the page's art in a 353 × 300 canvas at the top of the
+ * content column (the page's 20-pt gutter), scaled down only on a narrower
+ * phone; the corner arcs are the scaffold's backdrop; the ground and its
+ * light layers are the scaffold's `ground`.
  *
- * Master 2 replaces that warm sand sweep with overlapping translucent deep
- * greens, so the layers are now a function of the resolved palette. The light
- * arrangement is the same four stops it always was, with the one raw literal
- * it carried replaced by the pale-sage token that matched it.
+ * HOW A DISC IS LIT. Exactly as the page draws it: one radial fill from the
+ * three `heroDisc*` stops, a crisp inset rim light along the top-right edge
+ * (the front disc along its lower-right too), a soft inset glow behind it, a
+ * deep shadow under the disc, and a faint outer glow — all `boxShadow`, which
+ * React Native draws natively on the New Architecture this app runs on.
  */
-function ringLayersFor(colors: ColorPalette, isDark: boolean) {
-  if (isDark) {
-    return [
-      { offset: 0, color: colors.forest, opacity: 0.9 },
-      { offset: 0.16, color: colors.mint, opacity: 0.85 },
-      { offset: 0.32, color: colors.mint2, opacity: 0.5 },
-      { offset: 0.48, color: colors.forest, opacity: 0.55 },
-    ];
-  }
-  return [
-    { offset: 0, color: colors.mint2, opacity: 1 },
-    { offset: 0.16, color: colors.primarySoft, opacity: 0.8 },
-    { offset: 0.32, color: authColors.sandMint, opacity: 0.8 },
-    { offset: 0.48, color: authColors.sand, opacity: 0.9 },
-  ];
-}
+const ART = {
+  width: 353,
+  height: 300,
+  /** The art's top edge, from the top of the screen — the page's 60. */
+  top: 60,
+  /**
+   * The ring and the discs, OUTER sizes: the page writes each as a content
+   * box with a 1-pt border outside it (216 + 2), and React Native's box is
+   * the border box — so the page's 216 is 218 here, its 248 is 250, and the
+   * badges' 40 is 42. The positions are the outer edges in both.
+   */
+  ghost: { left: 46, top: 8, size: 250, alpha: { dark: 0.1, light: 0.18 } },
+  discs: [
+    { key: 'back', left: 62, top: 24, size: 218 },
+    { key: 'mid', left: 98, top: 71, size: 202 },
+    { key: 'front', left: 127, top: 111, size: 174 },
+  ],
+  discOutline: { dark: 0.2, light: 0.3 },
+  /** The three badges' positions; their labels are written where they render. */
+  badges: {
+    a: { left: 11, top: 65, rotate: '-5deg' },
+    b: { left: 188, top: 143, rotate: '5deg' },
+    c: { left: 75, top: 246, rotate: undefined },
+  },
+  badge: {
+    glyph: 16,
+    gap: 7,
+    paddingLeft: 11,
+    paddingRight: 13,
+    fill: { dark: 0.86, light: 0.96 },
+    hairline: 0.5,
+    specular: { dark: 0.16, light: 0.85 },
+    shade: { dark: 0.35, light: 0.1 },
+  },
+} as const;
+
+/**
+ * The discs' shadows, per theme, as the pages write them:
+ * [offsetX, offsetY, blur, role, alpha, inset?].
+ */
+type Shadow = readonly [number, number, number, 'accent' | 'gold' | 'shade', number, boolean?];
+const DISC_SHADOWS: Record<'back' | 'mid' | 'front', { dark: readonly Shadow[]; light: readonly Shadow[] }> = {
+  back: {
+    dark: [[-1.5, 1.5, 0, 'accent', 0.55, true], [-4, 4, 14, 'accent', 0.2, true], [0, 26, 50, 'shade', 0.45], [0, 0, 60, 'accent', 0.1]],
+    light: [[-1.5, 1.5, 0, 'accent', 0.38, true], [-4, 4, 14, 'accent', 0.14, true], [0, 26, 50, 'shade', 0.18], [0, 0, 60, 'accent', 0.08]],
+  },
+  mid: {
+    dark: [[-1.5, 1.5, 0, 'gold', 0.62, true], [-4, 4, 12, 'gold', 0.2, true], [0, 26, 50, 'shade', 0.45]],
+    light: [[-1.5, 1.5, 0, 'gold', 0.7, true], [-4, 4, 12, 'gold', 0.24, true], [0, 26, 50, 'shade', 0.18]],
+  },
+  front: {
+    dark: [[-1.5, 1, 0, 'gold', 0.72, true], [-4, 3, 12, 'gold', 0.22, true], [-1, -2.5, 0, 'gold', 0.55, true], [-3, -6, 12, 'gold', 0.24, true], [0, 26, 50, 'shade', 0.45], [0, 0, 46, 'gold', 0.1]],
+    light: [[-1.5, 1, 0, 'gold', 0.8, true], [-4, 3, 12, 'gold', 0.26, true], [-1, -2.5, 0, 'gold', 0.62, true], [-3, -6, 12, 'gold', 0.26, true], [0, 26, 50, 'shade', 0.18], [0, 0, 46, 'gold', 0.14]],
+  },
+};
+
+/** The copy block and the actions, the page's own distances. */
+const LAYOUT = {
+  /** The page's copy and actions sit 11 inside the 20-pt gutter (left 31). */
+  inset: 11,
+  /** The eyebrow's line box begins 28 under the art (388 on the page). */
+  eyebrowGap: 28,
+  headlineGap: 9,
+  bodyGap: 12,
+  /** The actions end 49 above the bottom of the screen. */
+  actionsBottom: 49,
+  actionsGap: 11,
+  /** The headline's shadow, dark only: 0 2 22 at .35. */
+  headlineShadow: { alpha: 0.35, offset: 2, radius: 22 },
+} as const;
 
 type EntranceTransform =
   | { rotate: string }
@@ -79,13 +128,15 @@ type EntranceTransform =
 
 export function WelcomeScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
-  const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   const launchComplete = useLaunchComplete();
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  const surface = authSurface(colors, isDark);
-  const ringLayers = ringLayersFor(colors, isDark);
+  // The art box's own width: the page's canvas is 353 wide, and on a narrower
+  // phone the whole canvas scales down from its top-left corner.
+  const [artWidth, setArtWidth] = useState<number>(ART.width);
+  const artScale = Math.min(1, artWidth / ART.width);
 
   const enter = useRef(new Animated.Value(0)).current;
 
@@ -132,116 +183,169 @@ export function WelcomeScreen() {
     return { opacity: between(0, 1), transform };
   }
 
-  // The reference art block is 300 of an 844pt viewport. Bounded rather than
-  // purely proportional so it can't swallow a short screen or balloon on a
-  // tall one.
-  const artHeight = Math.max(180, Math.min(300, height * 0.34));
-  const ringSize = Math.min(220, artHeight * 0.74);
+  const theme = isDark ? 'dark' : 'light';
+  const role = (name: Shadow[3]) =>
+    name === 'accent' ? colors.authAccent : name === 'gold' ? colors.authGold : colors.authShade;
+  const shadowsFor = (key: keyof typeof DISC_SHADOWS): ViewStyle => ({
+    boxShadow: DISC_SHADOWS[key][theme]
+      .map(([x, y, blur, name, alpha, inset]) => `${inset ? 'inset ' : ''}${x}px ${y}px ${blur}px ${withAlpha(role(name), alpha)}`)
+      .join(', '),
+  });
+  const discFill = backgroundImageStyle(
+    `radial-gradient(circle at 36% 30%, ${colors.heroDiscTop} 0%, ${colors.heroDiscMid} 50%, ${colors.heroDiscBottom} 100%)`
+  );
+  const badgeSurface: ViewStyle = {
+    backgroundColor: withAlpha(colors.authBadgeFill, ART.badge.fill[theme]),
+    borderColor: withAlpha(colors.authGold, ART.badge.hairline),
+    boxShadow: `inset 0 1px 0 ${withAlpha(colors.white, ART.badge.specular[theme])}, 0 10px 30px ${withAlpha(colors.authShade, ART.badge.shade[theme])}`,
+  };
+  // The shadow's geometry is on the shared style; only its colour forks — the
+  // page draws it in dark and not in light (alpha 0), a colour translation.
+  const headlineShadow = {
+    textShadowColor: withAlpha(colors.authShade, isDark ? LAYOUT.headlineShadow.alpha : 0),
+  };
+
+  const rimLight = <RimLight radius={authRadius.heroButton} />;
 
   return (
-    <AuthScaffold backdrop="full" themed>
-      <View style={[styles.art, { height: artHeight }]}>
-        <Animated.View
-          style={[
-            styles.ring,
-            {
-              width: ringSize,
-              height: ringSize,
-              borderRadius: ringSize / 2,
-              top: artHeight * 0.12,
-            },
-            step(STAGGER.art, { lift: 0, scaleFrom: 0.92 }),
-          ]}
-        >
-          {ringLayers.map((layer) => (
+    <AuthScaffold backdrop="full" themed ground>
+      <View
+        style={[
+          styles.art,
+          { marginTop: Math.max(0, ART.top - insets.top), height: ART.height * artScale },
+        ]}
+        onLayout={(event) => setArtWidth(event.nativeEvent.layout.width)}
+      >
+        {/* The static scale on its own View: a transform further along a style
+            array replaces the whole array, so the entrance below gets one of
+            its own inside it. */}
+        <View style={[styles.canvas, { transform: [{ scale: artScale }] }]}>
+        <Animated.View style={[StyleSheet.absoluteFill, step(STAGGER.art, { lift: 0, scaleFrom: 0.92 })]}>
+          <View
+            style={[
+              styles.ring,
+              {
+                left: ART.ghost.left,
+                top: ART.ghost.top,
+                width: ART.ghost.size,
+                height: ART.ghost.size,
+                borderRadius: ART.ghost.size / 2,
+                borderColor: withAlpha(colors.authGold, ART.ghost.alpha[theme]),
+              },
+            ]}
+          />
+          {ART.discs.map((disc) => (
             <View
-              key={layer.offset}
-              style={{
-                position: 'absolute',
-                width: ringSize,
-                height: ringSize,
-                borderRadius: ringSize / 2,
-                left: ringSize * layer.offset,
-                top: ringSize * layer.offset,
-                backgroundColor: layer.color,
-                opacity: layer.opacity,
-              }}
+              key={disc.key}
+              style={[
+                styles.disc,
+                discFill,
+                {
+                  left: disc.left,
+                  top: disc.top,
+                  width: disc.size,
+                  height: disc.size,
+                  borderRadius: disc.size / 2,
+                  borderColor: withAlpha(colors.authGold, ART.discOutline[theme]),
+                },
+                shadowsFor(disc.key),
+              ]}
             />
           ))}
+          <Animated.View
+            style={[
+              styles.badge,
+              badgeSurface,
+              { left: ART.badges.a.left, top: ART.badges.a.top },
+              step(STAGGER.badgeA, { rotate: ART.badges.a.rotate }),
+            ]}
+          >
+            <Ionicons name="shield-checkmark" size={ART.badge.glyph} color={colors.authGold} />
+            <Text style={styles.badgeText}>Local workers</Text>
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.badge,
+              badgeSurface,
+              { left: ART.badges.b.left, top: ART.badges.b.top },
+              step(STAGGER.badgeB, { rotate: ART.badges.b.rotate }),
+            ]}
+          >
+            <Ionicons name="lock-closed" size={ART.badge.glyph} color={colors.authGold} />
+            <Text style={styles.badgeText}>Protected payment</Text>
+          </Animated.View>
+          <Animated.View
+            style={[
+              styles.badge,
+              badgeSurface,
+              { left: ART.badges.c.left, top: ART.badges.c.top },
+              step(STAGGER.badgeC, { rotate: ART.badges.c.rotate }),
+            ]}
+          >
+            <Ionicons name="location" size={ART.badge.glyph} color={colors.authGold} />
+            <Text style={styles.badgeText}>Local jobs</Text>
+          </Animated.View>
         </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.badge,
-            { borderColor: surface.line },
-            styles.badgeA,
-            { top: artHeight * 0.23 },
-            step(STAGGER.badgeA, { rotate: '-7deg' }),
-          ]}
-        >
-          <Ionicons name="shield-checkmark" size={BADGE_ICON} color={surface.accent} />
-          <Text style={styles.badgeText}>Local workers</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.badge,
-            { borderColor: surface.line },
-            styles.badgeB,
-            { top: artHeight * 0.47 },
-            step(STAGGER.badgeB, { rotate: '8deg' }),
-          ]}
-        >
-          <Ionicons name="lock-closed" size={BADGE_ICON} color={surface.accent} />
-          <Text style={styles.badgeText}>Protected payment</Text>
-        </Animated.View>
-
-        <Animated.View
-          style={[
-            styles.badge,
-            { borderColor: surface.line },
-            styles.badgeC,
-            { top: artHeight * 0.75 },
-            step(STAGGER.badgeC),
-          ]}
-        >
-          <Ionicons name="location" size={BADGE_ICON} color={surface.accent} />
-          <Text style={styles.badgeText}>Local jobs</Text>
-        </Animated.View>
+        </View>
       </View>
 
-      {/* Eyebrow law: a structural section label is gold in dark, and the
-          Heritage emerald in light. */}
-      <Animated.Text
-        style={[styles.eyebrow, { color: surface.accent }, step(STAGGER.eyebrow, { lift: 8 })]}
-      >
-        BRAZOS MARKETPLACE
-      </Animated.Text>
-      <Animated.Text
-        style={[styles.headline, step(STAGGER.headline)]}
-        maxFontSizeMultiplier={1.5}
-      >
-        {'Get it done.\nWork with\nconfidence.'}
-      </Animated.Text>
-      <Animated.Text style={[styles.body, step(STAGGER.body)]}>
-        Hire trusted local help or find nearby work from one account.
-      </Animated.Text>
+      <View style={styles.copy}>
+        {/* Eyebrow law: a structural section label is gold in dark, and the
+            Heritage emerald in light — the auth accent carries both. */}
+        <Animated.Text style={[styles.eyebrow, step(STAGGER.eyebrow, { lift: 8 })]}>
+          BRAZOS MARKETPLACE
+        </Animated.Text>
+        {/* Two tones, as the page draws it: the first line in the ink, the
+            promise in the accent. One Text, in the platform serif (the one
+            serif role, widened to this headline — DECISIONS 18), so the lines
+            wrap and scale as one. */}
+        <Animated.Text
+          style={[styles.headline, headlineShadow, step(STAGGER.headline)]}
+          maxFontSizeMultiplier={1.5}
+        >
+          {'Get it done.\n'}
+          <Text style={{ color: colors.authAccent }}>{'Work with\nconfidence.'}</Text>
+        </Animated.Text>
+        <Animated.Text style={[styles.body, step(STAGGER.body)]}>
+          Hire trusted local help or find nearby work from one account.
+        </Animated.Text>
+      </View>
 
       {/* marginTop:'auto' inside AuthScaffold's growing content block, so the
           actions sit against the bottom on a tall screen and scroll into
-          reach on a short one. The reference's terms/privacy line is gone
-          entirely; the space it held has been folded into this padding rather
-          than left as a hole. */}
-      <Animated.View style={[styles.actions, step(STAGGER.actions)]}>
+          reach on a short one; they end 49 above the screen's bottom edge,
+          as on the page, whatever the inset.
+
+          THE ORDER IS A RULE, not a taste: email leads because phone auth
+          resolves to `disabled` on every non-development build
+          (lib/phoneAuth/mode.ts; tests/firstSession.test.mjs n5), and the
+          operator ruled 2026-09-21: three actions, email first with the
+          glint. The lead is the lit one and carries the rim light; phone is
+          the outlined button; sign-in is the page's text link. */}
+      <Animated.View
+        style={[
+          styles.actions,
+          { paddingBottom: Math.max(0, LAYOUT.actionsBottom - insets.bottom) },
+          step(STAGGER.actions),
+        ]}
+      >
         <AuthButton
           title="Continue with email"
           themed
+          hero
+          lit
+          icon="mail-outline"
+          chevron
           onPress={() => navigation.navigate('EmailCreateAccount')}
           accessibilityHint="Create an account with your email"
+          light={rimLight}
         />
         <AuthButton
           title="Continue with phone"
           themed
+          hero
+          icon="phone-portrait-outline"
+          chevron
           onPress={() => navigation.navigate('CreateAccount')}
           accessibilityHint="Create an account with your phone number"
         />
@@ -249,6 +353,8 @@ export function WelcomeScreen() {
           title="I already have an account"
           variant="ghost"
           themed
+          hero
+          chevron
           onPress={() => navigation.navigate('SignIn')}
           accessibilityHint="Sign in to an existing account"
         />
@@ -261,64 +367,72 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
   art: {
     width: '100%',
-    marginTop: authSpacing.xs,
     // The decorative pieces are absolutely positioned, but only ever inside
     // this bounded box — no part of the screen is laid out by coordinates.
     position: 'relative',
     pointerEvents: 'none',
   },
+  canvas: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    width: ART.width,
+    height: ART.height,
+    transformOrigin: 'top left',
+  },
   ring: {
     position: 'absolute',
-    left: '18.6%',
-    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  disc: {
+    position: 'absolute',
+    borderWidth: 1,
+    // The flat base under the radial fill — the shadow's shape, and the disc
+    // itself wherever a renderer draws no gradient.
+    backgroundColor: colors.heroDiscBottom,
   },
   badge: {
     position: 'absolute',
+    height: authSizes.heroBadge,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
-    backgroundColor: colors.surface,
+    gap: ART.badge.gap,
     borderWidth: 1,
-    borderRadius: authRadius.chip,
-    paddingLeft: 12,
-    paddingRight: 14,
-    paddingVertical: 10,
-    ...authShadows.card,
-  },
-  badgeA: {
-    left: '4%',
-  },
-  badgeB: {
-    right: '1%',
-  },
-  badgeC: {
-    left: '23%',
+    borderRadius: authRadius.heroBadge,
+    paddingLeft: ART.badge.paddingLeft,
+    paddingRight: ART.badge.paddingRight,
   },
   badgeText: {
-    ...authType.badge,
-    color: colors.ink,
+    ...authType.heroBadge,
+    color: colors.authInk,
+  },
+  copy: {
+    paddingHorizontal: LAYOUT.inset,
   },
   eyebrow: {
-    ...authType.eyebrow,
-    marginTop: authSpacing.lg,
+    ...authType.heroEyebrow,
+    marginTop: LAYOUT.eyebrowGap,
+    color: colors.authAccent,
   },
-  // Master 2 carries the set's largest display, in the serif.
   headline: {
-    ...authType.display,
-    fontFamily: fonts.display,
-    color: colors.ink,
-    marginTop: authSpacing.sm,
+    ...authType.heroDisplay,
+    fontFamily: fonts.displayHero,
+    fontWeight: '700',
+    color: colors.authInk,
+    marginTop: LAYOUT.headlineGap,
+    textShadowOffset: { width: 0, height: LAYOUT.headlineShadow.offset },
+    textShadowRadius: LAYOUT.headlineShadow.radius,
   },
   body: {
-    ...authType.body,
-    color: colors.textMuted,
-    marginTop: authSpacing.md,
+    ...authType.heroBody,
+    color: colors.authMuted,
+    marginTop: LAYOUT.bodyGap,
   },
   actions: {
     marginTop: 'auto',
-    paddingTop: authSpacing.xl,
-    paddingBottom: authSpacing.lg,
-    gap: authSpacing.md,
+    paddingHorizontal: LAYOUT.inset,
+    paddingTop: authSpacing.md,
+    gap: LAYOUT.actionsGap,
   },
   }),
 );

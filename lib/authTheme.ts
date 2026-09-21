@@ -81,6 +81,10 @@ export const authRadius = {
   iconButton: 14,
   /** .otp span 14 -> 16, to stay proportional to the taller cell below. */
   otpCell: 16,
+  /** 2026-09-21 — the shipped Welcome page's controls (docs/mockups/html/lux/
+   *  welcome-ship.html): the two boxed actions at radius 22, the badges at 20. */
+  heroButton: 22,
+  heroBadge: 20,
 } as const;
 
 export const authSpacing = {
@@ -101,6 +105,11 @@ export const authSpacing = {
 export const authSizes = {
   /** .btn height 38 -> 54. */
   button: 54,
+  /** The shipped Welcome page's boxed actions, its text link, its badges. */
+  heroButton: 58,
+  heroLink: 44,
+  /** 42, not 40: the page's badge is a 40 content box inside a 1-pt border. */
+  heroBadge: 42,
   /** .field-value min-height 42 -> 54. */
   field: 54,
   /** .icon-btn 38 -> 44. */
@@ -161,6 +170,17 @@ export const authType = {
   wordmark: { fontSize: 30, letterSpacing: 6 },
   /** .launch p — ref 12 */
   tagline: { fontSize: 14, letterSpacing: 0.2 },
+  // 2026-09-21 — the shipped Welcome page's type (welcome-ship.html), measured
+  // there: the eyebrow 13/700 tracked 2 on a 17 line; the display 44/47 tracked
+  // −0.6 (the platform serif, weight 700 — the face is named at the call site);
+  // the body 16/22; the boxed actions' label 17/600; the text link 16/600;
+  // the badge 13/600 tracked 0.1.
+  heroEyebrow: { fontSize: 13, fontWeight: '700', letterSpacing: 2, lineHeight: 17 },
+  heroDisplay: { fontSize: 44, fontWeight: '700', lineHeight: 47, letterSpacing: -0.6 },
+  heroBody: { fontSize: 16, lineHeight: 22 },
+  heroButton: { fontSize: 17, fontWeight: '600' },
+  heroLink: { fontSize: 16, fontWeight: '600' },
+  heroBadge: { fontSize: 13, fontWeight: '600', letterSpacing: 0.1 },
 } as const;
 
 /** --shadow: 0 10px 28px rgba(16,38,29,.08), plus the softer .art-card lift. */
