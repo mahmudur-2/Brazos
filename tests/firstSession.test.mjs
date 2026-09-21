@@ -23,32 +23,35 @@ function authButtons(source) {
 }
 
 // ---------------------------------------------------------------------------
-// STEP 1 — Welcome leads with the path that works in the shipped build.
-// Phone sign-up resolves to `disabled` outside development
-// (lib/phoneAuth/mode.ts), so the email route is the first button; phone stays
-// as the second option with nothing hidden; sign-in is unchanged.
+// STEP 1 — Welcome's order. Phone sign-up resolves to `disabled` outside
+// development (lib/phoneAuth/mode.ts), and from 2026-09-04 that put the email
+// route first. 2026-09-21, ON THE OPERATOR'S RULING from the shipped screen
+// (DECISIONS 19: "make Continue with phone the top one"), PHONE LEADS — the
+// design's lead action, lit, carrying the rim light — and email is the second
+// option with nothing hidden; the phone screen carries the switched-off notice
+// and "Use Email Instead" until SMS is provisioned. Sign-in is unchanged.
 // ---------------------------------------------------------------------------
 
-test('n5 · Welcome leads with Continue with email; phone stays second; sign-in unchanged', () => {
+test('n5 · Welcome leads with Continue with phone (the operator\'s ruling); email stays second; sign-in unchanged', () => {
   const welcome = code('screens/WelcomeScreen.tsx');
   const actionsAt = welcome.indexOf('styles.actions');
   assert.ok(actionsAt > -1, 'the Welcome actions block is gone');
   const buttons = authButtons(welcome.slice(actionsAt));
   assert.equal(buttons.length, 3, 'the actions block holds exactly three AuthButtons');
 
-  // FIRST: email, primary treatment, to the registered EmailCreateAccount route.
-  assert.match(buttons[0], /title="Continue with email"/);
-  assert.match(buttons[0], /navigation\.navigate\('EmailCreateAccount'\)/);
-  assert.match(buttons[0], /accessibilityHint="Create an account with your email"/);
+  // FIRST: phone, primary treatment, to CreateAccount — the operator's ruling.
+  assert.match(buttons[0], /title="Continue with phone"/);
+  assert.match(buttons[0], /navigation\.navigate\('CreateAccount'\)/);
+  assert.match(buttons[0], /accessibilityHint="Create an account with your phone number"/);
   assert.match(buttons[0], /\bthemed\b/);
-  assert.doesNotMatch(buttons[0], /variant=/, 'the email button is the primary treatment');
+  assert.doesNotMatch(buttons[0], /variant=/, 'the phone button is the primary treatment');
 
-  // SECOND: phone, still present, same treatment as before, still to CreateAccount.
-  assert.match(buttons[1], /title="Continue with phone"/);
-  assert.match(buttons[1], /navigation\.navigate\('CreateAccount'\)/);
-  assert.match(buttons[1], /accessibilityHint="Create an account with your phone number"/);
+  // SECOND: email, still present, primary treatment, to the registered EmailCreateAccount route.
+  assert.match(buttons[1], /title="Continue with email"/);
+  assert.match(buttons[1], /navigation\.navigate\('EmailCreateAccount'\)/);
+  assert.match(buttons[1], /accessibilityHint="Create an account with your email"/);
   assert.match(buttons[1], /\bthemed\b/);
-  assert.doesNotMatch(buttons[1], /variant=/, 'the phone button is neither hidden nor demoted');
+  assert.doesNotMatch(buttons[1], /variant=/, 'the email button is neither hidden nor demoted');
 
   // THIRD: unchanged.
   assert.match(buttons[2], /title="I already have an account"/);

@@ -12,11 +12,12 @@ import test from 'node:test';
 //
 // What this file holds the build to, so none of it can drift:
 //
-//   1. THE LEAD ACTION IS EMAIL, AND THE LIGHT IS ON THE LEAD ACTION. Phone
-//      auth resolves to `disabled` on every non-development build
-//      (lib/phoneAuth/mode.ts), which is why tests/firstSession.test.mjs n5
-//      keeps email first and phone second, undemoted; the operator ruled
-//      three actions, email first with the glint.
+//   1. THE LEAD ACTION IS PHONE, AND THE LIGHT IS ON THE LEAD ACTION — the
+//      operator's ruling from the shipped screen (2026-09-21, DECISIONS 19),
+//      recorded in tests/firstSession.test.mjs n5; email is second, undemoted.
+//      Phone auth resolves to `disabled` on every non-development build
+//      (lib/phoneAuth/mode.ts) — the phone screen shows the notice and "Use
+//      Email Instead" until SMS is provisioned.
 //   2. ONE PATH, TWO DRIVERS. `rimPoint` in RimLight.shared.tsx is the lap —
 //      a 'worklet' the reanimated sibling computes per frame and the native
 //      driver samples once — and it is EXECUTED here: closed, continuous,
@@ -159,18 +160,18 @@ test('[static] the Welcome screen is the ship page: its numbers, its wiring, the
   const actionsAt = welcome.indexOf('styles.actions');
   const buttons = [...welcome.slice(actionsAt).matchAll(/<AuthButton\b([\s\S]*?)\/>/g)].map((m) => m[1]);
   assert.equal(buttons.length, 3);
-  // The lead: email, lit, with the glyph, the chevron and the light.
-  assert.match(buttons[0], /title="Continue with email"/);
+  // The lead: phone (the operator's ruling, DECISIONS 19), lit, with the glyph, the chevron and the light.
+  assert.match(buttons[0], /title="Continue with phone"/);
   assert.match(buttons[0], /\bhero\b/);
   assert.match(buttons[0], /\blit\b/);
-  assert.match(buttons[0], /icon="mail-outline"/);
+  assert.match(buttons[0], /icon="phone-portrait-outline"/);
   assert.match(buttons[0], /\bchevron\b/);
   assert.match(buttons[0], /light=\{rimLight\}/);
   assert.match(welcome, /const rimLight = <RimLight radius=\{authRadius\.heroButton\} \/>;/);
-  // Phone: the same shape and glyph treatment, NOT lit and without the light.
-  assert.match(buttons[1], /title="Continue with phone"/);
+  // Email: the same shape and glyph treatment, NOT lit and without the light.
+  assert.match(buttons[1], /title="Continue with email"/);
   assert.match(buttons[1], /\bhero\b/);
-  assert.match(buttons[1], /icon="phone-portrait-outline"/);
+  assert.match(buttons[1], /icon="mail-outline"/);
   assert.doesNotMatch(buttons[1], /\blit\b/);
   assert.doesNotMatch(buttons[1], /light=/);
   // Sign-in: the ghost as the page's text link, with the chevron.
@@ -186,7 +187,7 @@ test('[static] the Welcome screen is the ship page: its numbers, its wiring, the
   assert.match(welcome, /\{ key: 'mid', left: 98, top: 71, size: 202 \}/);
   assert.match(welcome, /\{ key: 'front', left: 127, top: 111, size: 174 \}/);
   assert.match(welcome, /a: \{ left: 11, top: 65, rotate: '-5deg' \},\s*b: \{ left: 188, top: 143, rotate: '5deg' \},\s*c: \{ left: 75, top: 246, rotate: undefined \},/);
-  assert.match(welcome, /inset: 11,\s*eyebrowGap: 28,\s*headlineGap: 9,\s*bodyGap: 12,\s*actionsBottom: 49,\s*actionsGap: 11,/);
+  assert.match(welcome, /inset: 11,\s*eyebrowGap: 14,\s*headlineGap: 9,\s*bodyGap: 12,\s*actionsBottom: 49,\s*actionsGap: 11,/);
   // The two-tone headline in the serif, the eyebrow and body on the roles.
   assert.match(welcome, /\{'Get it done\.\\n'\}\s*<Text style=\{\{ color: colors\.authAccent \}\}>\{'Work with\\nconfidence\.'\}<\/Text>/);
   assert.match(welcome, /fontFamily: fonts\.displayHero,\s*fontWeight: '700',\s*color: colors\.authInk,/);

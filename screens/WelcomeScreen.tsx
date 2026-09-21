@@ -110,8 +110,8 @@ const DISC_SHADOWS: Record<'back' | 'mid' | 'front', { dark: readonly Shadow[]; 
 const LAYOUT = {
   /** The page's copy and actions sit 11 inside the 20-pt gutter (left 31). */
   inset: 11,
-  /** The eyebrow's line box begins 28 under the art (388 on the page). */
-  eyebrowGap: 28,
+  /** The eyebrow's line box begins 14 under the art box (374 on the page; 26 under the last badge). */
+  eyebrowGap: 14,
   headlineGap: 9,
   bodyGap: 12,
   /** The actions end 49 above the bottom of the screen. */
@@ -316,12 +316,13 @@ export function WelcomeScreen() {
           reach on a short one; they end 49 above the screen's bottom edge,
           as on the page, whatever the inset.
 
-          THE ORDER IS A RULE, not a taste: email leads because phone auth
-          resolves to `disabled` on every non-development build
-          (lib/phoneAuth/mode.ts; tests/firstSession.test.mjs n5), and the
-          operator ruled 2026-09-21: three actions, email first with the
-          glint. The lead is the lit one and carries the rim light; phone is
-          the outlined button; sign-in is the page's text link. */}
+          THE ORDER IS THE OPERATOR'S (2026-09-21, from the shipped screen:
+          "make Continue with phone the top one" — DECISIONS 19,
+          tests/firstSession.test.mjs n5): phone leads, lit, carrying the rim
+          light; email is the outlined second; sign-in is the page's text
+          link. Phone auth resolves to `disabled` on every non-development
+          build (lib/phoneAuth/mode.ts), so on the Beta the phone screen shows
+          the notice and "Use Email Instead" until SMS is provisioned. */}
       <Animated.View
         style={[
           styles.actions,
@@ -330,24 +331,24 @@ export function WelcomeScreen() {
         ]}
       >
         <AuthButton
-          title="Continue with email"
-          themed
-          hero
-          lit
-          icon="mail-outline"
-          chevron
-          onPress={() => navigation.navigate('EmailCreateAccount')}
-          accessibilityHint="Create an account with your email"
-          light={rimLight}
-        />
-        <AuthButton
           title="Continue with phone"
           themed
           hero
+          lit
           icon="phone-portrait-outline"
           chevron
           onPress={() => navigation.navigate('CreateAccount')}
           accessibilityHint="Create an account with your phone number"
+          light={rimLight}
+        />
+        <AuthButton
+          title="Continue with email"
+          themed
+          hero
+          icon="mail-outline"
+          chevron
+          onPress={() => navigation.navigate('EmailCreateAccount')}
+          accessibilityHint="Create an account with your email"
         />
         <AuthButton
           title="I already have an account"

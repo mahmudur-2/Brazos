@@ -18,9 +18,10 @@ import { litBetween } from '../ui/primitives/LitSurface';
  * 2026-09-21 — THE SHIPPED WELCOME PAGE'S CONTROLS (docs/mockups/html/lux/
  * welcome-ship.html and -light), the page's own numbers: the glyph 22, the
  * chevron 18 at 18 from the right edge, the hairline the gold at .62, the
- * lead's specular edge white at .14, its depth 12/30 in the shade (.35 dark,
- * the forest at .22 light) plus a 6/26 gold under-glow at .10; the text
- * link's chevron 16.
+ * lead's specular edge white at .14 in both themes, and — in DARK ONLY — its
+ * depth 12/30 in the shade at .35 plus a 6/26 gold under-glow at .10. Light
+ * draws the lead flat, so the two boxed actions read identical in size (the
+ * operator, on the phone, 2026-09-21); the text link's chevron 16.
  */
 const HERO = {
   glyph: 22,
@@ -29,7 +30,7 @@ const HERO = {
   linkChevron: 16,
   hairlineAlpha: 0.62,
   specularAlpha: 0.14,
-  shadeAlpha: { dark: 0.35, light: 0.22 },
+  shadeAlpha: 0.35,
   glowAlpha: 0.1,
 } as const;
 
@@ -158,10 +159,11 @@ export function AuthButton({
   const heroDepth: ViewStyle | null =
     hero && lit
       ? {
-          boxShadow:
-            `inset 0 1px 0 ${withAlpha(palette.white, HERO.specularAlpha)}, ` +
-            `0 12px 30px ${isDark ? withAlpha(palette.black, HERO.shadeAlpha.dark) : withAlpha(palette.forest, HERO.shadeAlpha.light)}, ` +
-            `0 6px 26px ${withAlpha(palette.authGold, HERO.glowAlpha)}`,
+          boxShadow: isDark
+            ? `inset 0 1px 0 ${withAlpha(palette.white, HERO.specularAlpha)}, ` +
+              `0 12px 30px ${withAlpha(palette.authShade, HERO.shadeAlpha)}, ` +
+              `0 6px 26px ${withAlpha(palette.authGold, HERO.glowAlpha)}`
+            : `inset 0 1px 0 ${withAlpha(palette.white, HERO.specularAlpha)}`,
         }
       : null;
   const labelTint = hero ? heroInk : tint;
