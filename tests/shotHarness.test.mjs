@@ -411,8 +411,13 @@ test('the auth and setup targets are listed, both schemes, and reach their trees
   const code = codeOnly(await read('scripts/shots.mjs'));
   assert.match(code, /session: shot\.session !== false,/);
   assert.match(code, /setup: shot\.setup !== false,/);
-  assert.match(code, /function seedPage\(\{ mode, url, key, sessionKey, userId, session, setup \}\)/);
-  assert.match(code, /if \(!session\) return;/);
+  // 2026-09-21: `design` joins the seed — a candidate override set the page
+  // applies at load (the `--design` flag; the dark rebuild's directions as
+  // real renders). It is set BEFORE the session check, so a signed-out
+  // target renders under it too, and it never touches the three keys.
+  assert.match(code, /function seedPage\(\{ mode, url, key, sessionKey, userId, session, setup, design \}\)/);
+  assert.match(code, /if \(design\) globalThis\.__BRAZOS_DESIGN_OVERRIDES__ = design;\s*if \(!session\) return;/);
+  assert.match(code, /const design = designFile \? JSON\.parse\(readFileSync\(designFile, 'utf8'\)\) : null;/);
   assert.match(code, /if \(setup\) \{\s*window\.localStorage\.setItem\(\s*`brazos\.setup\.v1\.\$\{userId\}`/);
 
   // Every locator the auth recipes introduce is a string the app renders —

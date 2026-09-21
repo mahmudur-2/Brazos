@@ -1,0 +1,51 @@
+{
+  "materials": {
+    "pane": {
+      "scrimAlpha": 0.92,
+      "borderColor": "#C9D3CE",
+      "borderAlpha": 0.3
+    },
+    "sheet": {
+      "scrimAlpha": 0.8,
+      "borderColor": "#C9D3CE",
+      "borderAlpha": 0.2
+    },
+    "menu": {
+      "scrimAlpha": 0.88,
+      "borderColor": "#C9D3CE",
+      "borderAlpha": 0.2
+    }
+  },
+  "palette": {
+    "dark": {
+      "app.border": "#2A3430",
+      "app.homeHairline": "#2A3430",
+      "emerald.line": "#2A3430",
+      "app.background": "#0A1411",
+      "app.homeBackground": "#0A1411",
+      "emerald.bg": "#0A1411",
+      "app.surface": "#12201B",
+      "emerald.surface": "#12201B",
+      "app.primarySoft": "#15241E",
+      "app.mint": "#15241E",
+      "emerald.mint": "#15241E",
+      "app.mint2": "#2E3F38",
+      "emerald.mint2": "#2E3F38",
+      "app.secondaryBorder": "#324740",
+      "emerald.secondaryBorder": "#324740",
+      "app.taskCardEdge": "#2A3430",
+      "emerald.taskCardEdge": "#2A3430",
+      "app.neutralBg": "#1C2622",
+      "app.textMuted": "#9AA5A0",
+      "app.homeSlate": "#9AA5A0",
+      "emerald.muted": "#9AA5A0",
+      "app.navInactive": "#7F8A85",
+      "emerald.navInactive": "#7F8A85",
+      "app.emerald": "#6BBF8E",
+      "emerald.emerald": "#6BBF8E",
+      "app.success": "#6BBF8E",
+      "app.gold": "#D9AE5C",
+      "emerald.gold": "#D9AE5C"
+    }
+  }
+}

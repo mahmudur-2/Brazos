@@ -1,0 +1,10 @@
+{
+  "materials": {},
+  "palette": {
+    "dark": {
+      "app.border": "#3F3A2D",
+      "app.homeHairline": "#3F3A2D",
+      "emerald.line": "#3F3A2D"
+    }
+  }
+}

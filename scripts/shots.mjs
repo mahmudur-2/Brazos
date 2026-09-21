@@ -342,6 +342,14 @@ function projectColumns(row, select) {
 //                the toggle writes through update_my_profile, whose empty
 //                stubbed answer would replace the whole profile (name
 //                included) instead of flipping one field. RUN figma-extract.
+//
+// FLAGS (2026-09-21): `--design <file.json>` renders every selected target
+// under that override set — a lib/designOverrides.ts DesignOverrides object
+// (materials, palette.dark['app.*' | 'emerald.*'], …), seeded as a global the
+// bundle reads at load — and `--suffix <x>` writes the PNGs as
+// `<name><x>.png` so a direction's renders sit beside the baseline's. The
+// app's look never changes: the seed is the harness page's alone.
+//
 //   landmarks    optional. Texts whose bounding boxes are written beside the
 //                PNG as `<name>.landmarks.json` (the LAST exact match of
 //                each — a sheet over a screen renders later in the DOM than
@@ -1073,8 +1081,10 @@ function serve(dir) {
  * writes the session and the mode key but not the setup record, so it lands
  * on Setup. The runtime configuration is supplied either way.
  */
-function seedPage({ mode, url, key, sessionKey, userId, session, setup }) {
+function seedPage({ mode, url, key, sessionKey, userId, session, setup, design }) {
   globalThis.__BRAZOS_CONFIG__ = { SUPABASE_URL: url, SUPABASE_KEY: key };
+  // 2026-09-21: a candidate design, applied by lib/designOverrides.ts at load.
+  if (design) globalThis.__BRAZOS_DESIGN_OVERRIDES__ = design;
   if (!session) return;
 
   const now = Math.floor(Date.now() / 1000);
@@ -1344,8 +1354,15 @@ async function assertGuarantees(page, name) {
 
 async function main() {
   const argv = process.argv.slice(2);
+  // `--only` takes a substring, or several separated by commas (2026-09-21).
   const only = argv.includes('--only') ? argv[argv.indexOf('--only') + 1] : null;
-  const selected = only ? TARGETS.filter((target) => target.name.includes(only)) : TARGETS;
+  const wanted = only ? only.split(',').filter(Boolean) : null;
+  const selected = wanted ? TARGETS.filter((target) => wanted.some((part) => target.name.includes(part))) : TARGETS;
+  // 2026-09-21: a candidate design (see FLAGS above) and the suffix its PNGs take.
+  const designFile = argv.includes('--design') ? argv[argv.indexOf('--design') + 1] : null;
+  const design = designFile ? JSON.parse(readFileSync(designFile, 'utf8')) : null;
+  const suffix = argv.includes('--suffix') ? argv[argv.indexOf('--suffix') + 1] : '';
+  if (suffix && !/^[\w.-]+$/.test(suffix)) throw new Error(`--suffix ${suffix}: letters, digits, . _ - only`);
 
   if (argv.includes('--list')) {
     for (const target of TARGETS) console.log(target.name);
@@ -1422,6 +1439,7 @@ async function main() {
         // the registry entry exactly the way `jobs` is above.
         session: shot.session !== false,
         setup: shot.setup !== false,
+        design,
       });
 
       const page = await context.newPage();
@@ -1439,7 +1457,7 @@ async function main() {
         await document.fonts?.ready;
       });
 
-      const file = join(shotsDir, `${shot.name}.png`);
+      const file = join(shotsDir, `${shot.name}${suffix}.png`);
       await page.screenshot({ path: file, animations: 'disabled' });
       if (shot.landmarks) {
         // After the shutter: the boxes of the named texts, for the loop.
@@ -1447,7 +1465,7 @@ async function main() {
         for (const text of shot.landmarks) {
           boxes[text] = await page.getByText(text, { exact: true }).last().boundingBox();
         }
-        writeFileSync(join(shotsDir, `${shot.name}.landmarks.json`), JSON.stringify(boxes, null, 2));
+        writeFileSync(join(shotsDir, `${shot.name}${suffix}.landmarks.json`), JSON.stringify(boxes, null, 2));
       }
       await assertGuarantees(page, shot.name);
       console.log(

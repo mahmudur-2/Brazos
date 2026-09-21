@@ -100,7 +100,23 @@ type StoreState = {
   studioOpen: boolean;
 };
 
-let state: StoreState = { overrides: EMPTY_DESIGN_OVERRIDES, studioOpen: false };
+/**
+ * 2026-09-21 — THE HARNESS SEED. `node scripts/shots.mjs --design <file>`
+ * renders the app under a candidate override set — the dark rebuild's
+ * directions, rendered as REAL screens rather than mockups — by setting this
+ * global before the bundle loads; it is applied here exactly as the studio's
+ * dials are, through the one override layer. Web only by construction (the
+ * harness is the one place the global exists; no native code sets it), and
+ * in memory only, like every other override. With no global the state is
+ * EMPTY_DESIGN_OVERRIDES itself — the byte-identical launch the fence holds.
+ */
+function seededOverrides(): DesignOverrides {
+  const seed = (globalThis as { __BRAZOS_DESIGN_OVERRIDES__?: unknown }).__BRAZOS_DESIGN_OVERRIDES__;
+  if (!seed || typeof seed !== 'object') return EMPTY_DESIGN_OVERRIDES;
+  return { ...EMPTY_DESIGN_OVERRIDES, ...(seed as Partial<DesignOverrides>) };
+}
+
+let state: StoreState = { overrides: seededOverrides(), studioOpen: false };
 const listeners = new Set<() => void>();
 
 /** T1 (C1) — the metric generation. 0 means "nothing has ever been dialled",
@@ -113,7 +129,6 @@ let metricsGen = 0;
 export type PaletteOverridesSlice = Pick<DesignOverrides, 'gold' | 'cardFill' | 'palette'>;
 
 const EMPTY_PALETTE_SLICE: PaletteOverridesSlice = {};
-let paletteSlice: PaletteOverridesSlice = EMPTY_PALETTE_SLICE;
 
 function computePaletteSlice(overrides: DesignOverrides): PaletteOverridesSlice {
   if (overrides.gold == null && overrides.cardFill == null && overrides.palette == null) {
@@ -121,6 +136,9 @@ function computePaletteSlice(overrides: DesignOverrides): PaletteOverridesSlice 
   }
   return { gold: overrides.gold, cardFill: overrides.cardFill, palette: overrides.palette };
 }
+
+// The seed's palette, if any, is the first slice; empty otherwise (identity).
+let paletteSlice: PaletteOverridesSlice = computePaletteSlice(state.overrides);
 
 function emit(): void {
   for (const listener of [...listeners]) listener();

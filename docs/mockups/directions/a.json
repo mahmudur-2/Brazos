@@ -1,0 +1,15 @@
+{
+  "materials": {},
+  "palette": {
+    "dark": {
+      "app.border": "#2C3C36",
+      "app.homeHairline": "#2C3C36",
+      "emerald.line": "#2C3C36",
+      "app.surface": "#0E2119",
+      "emerald.surface": "#0E2119",
+      "app.taskCardEdge": "#2C3C36",
+      "emerald.taskCardEdge": "#2C3C36",
+      "app.neutralBg": "#1A2A24"
+    }
+  }
+}
