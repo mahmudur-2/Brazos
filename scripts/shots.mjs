@@ -424,9 +424,25 @@ const TO_ACCOUNT_SAFETY = [
   { expect: 'Log out' },
 ];
 
+const HOME_LANDMARKS = [
+  'Mahmudur',
+  'Take a task\noff your plate',
+  'Describe it.\nHire help.\nGet it handled.',
+  'What do you need done?',
+  'Post a job ›',
+  'Popular services',
+  'Assembly',
+  'Your jobs',
+  "You haven't posted any jobs yet",
+];
+
 const TARGETS = [
-  { name: 'customer-home-dark', mode: 'customer', colorScheme: 'dark', wait: 'Take a task' },
-  { name: 'customer-home-light', mode: 'customer', colorScheme: 'light', wait: 'Take a task' },
+  // 2026-09-21: the landmarks are the Home loop's — the greeting's name, the
+  // headline and the sub-copy (their full strings, newlines included), the
+  // card's title and pill, the two section titles, the first tile's label,
+  // the empty row's title — against docs/mockups/html/home-redesign.html.
+  { name: 'customer-home-dark', mode: 'customer', colorScheme: 'dark', wait: 'Take a task', landmarks: HOME_LANDMARKS },
+  { name: 'customer-home-light', mode: 'customer', colorScheme: 'light', wait: 'Take a task', landmarks: HOME_LANDMARKS },
   // Worker Home in its OFFLINE state — the profile fixture's `accepting_work:
   // false` — and its empty feed. The ONLINE and populated states are their
   // own entries (RUN figma-extract, at the end of the registry). The wait is

@@ -123,13 +123,17 @@ export type JobFilterSheetProps = {
   countFor?: (draft: JobFilterModel, distance: DistanceFilterMiles | null) => number | null;
 };
 
-/** The five sorts as the sheet names them, with the rule each follows. */
-export const JOB_SORT_LABELS: Record<JobSort, { label: string; hint: string }> = {
+/** The six sorts as the sheet names them, with the rule each follows.
+ *  `pill` is what the Sort pill wears once that sort is picked, when it is
+ *  not the row's own label; `muted` draws the row grey — the Reset row
+ *  (2026-09-20 sitting 3, DECISIONS (7)): "Sort by Latest added", asked. */
+export const JOB_SORT_LABELS: Record<JobSort, { label: string; hint: string; pill?: string; muted?: boolean }> = {
   smart: { label: 'Smart Match', hint: 'Matches based on your skills' },
-  newest: { label: 'Newest', hint: 'Soonest job date first, then newest posted' },
+  newest: { label: 'Newest', hint: 'Earliest jobs first' },
   pay: { label: 'Highest budget', hint: 'Best pay first' },
   distance: { label: 'Distance', hint: 'Least travel first' },
   bids: { label: 'Fewest bids', hint: 'Least competition, then closest' },
+  reset: { label: 'Reset', hint: 'Latest added first', pill: 'Latest added', muted: true },
 };
 
 /** The sort popup: wider, and taller rows for the two-line entries. */
@@ -266,6 +270,7 @@ export function JobFilterSheet({
         ? 'Needs your location to measure'
         : JOB_SORT_LABELS[sort].hint,
     disabled: sort === 'distance' && !distanceAvailable,
+    muted: JOB_SORT_LABELS[sort].muted,
   }));
 
   // THE ONE POPUP: its list, its tick, its direction and shape all follow
@@ -482,7 +487,7 @@ export function JobFilterSheet({
         <Section label="Sort">
           <View ref={sortRef} collapsable={false}>
             <Pill
-              label={sortNow.label}
+              label={sortNow.pill ?? sortNow.label}
               on
               dimLead="Sort by"
               trailing={<Ionicons name="chevron-down" size={14} color={colors.emeraldBright} />}

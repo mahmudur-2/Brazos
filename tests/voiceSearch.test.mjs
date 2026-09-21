@@ -726,11 +726,15 @@ test('[static] voice text arrives through onChangeText and no second write path 
   // typed text does not auto-submit, so neither may voice.
   assert.equal(searchBarCode.match(/beginSession\(/g)?.length, 1);
   assert.doesNotMatch(searchBarCode, /onSubmit\(\)/);
+  // 2026-09-21: a fourth reading — the magnifier the mic becomes once the
+  // field has text (`micBecomesSearch`) is a Pressable whose onPress IS the
+  // same onSubmit; still never called from inside this file.
   assert.equal(
     (searchBarCode.match(/\bonSubmit\b/g) ?? []).length,
-    3,
-    'onSubmit appears as prop type, destructure, and onSubmitEditing only'
+    4,
+    'onSubmit appears as prop type, destructure, onSubmitEditing and the magnifier\'s onPress only'
   );
+  assert.match(searchBarCode, /onPress=\{onSubmit\}/);
   // Still fully controlled: no internal copy of the query text exists.
   assert.doesNotMatch(searchBarCode, /useState<string>|useState\(''\)|useState\(value\)/);
 });
@@ -764,7 +768,13 @@ test('[static] interim text is presentation-only: painted while live, never thro
 test('[static] the mic renders only when the boundary reports available, absent otherwise', () => {
   assert.match(searchBarCode, /const \[voiceReady, setVoiceReady\] = useState\(false\)/);
   assert.match(searchBarCode, /availability\.status === 'available'/);
-  assert.match(searchBarCode, /\{voiceReady && !disableVoiceSearch \? \(/);
+  // 2026-09-21: the mic's slot shows the magnifier instead once a
+  // `micBecomesSearch` field has text and no session is listening (so a
+  // dictation can still be stopped by its own tap); the mic's own condition
+  // is unchanged behind it.
+  assert.match(searchBarCode, /\{micBecomesSearch && value\.length > 0 && !listening \? \(/);
+  assert.match(searchBarCode, /\) : voiceReady && !disableVoiceSearch \? \(/);
+  assert.match(searchBarCode, /micBecomesSearch = false,/);
   // Unavailable means ABSENT: no disabled state, no ghost, no banner.
   assert.doesNotMatch(searchBarCode, /disabled=|ghost|unavailable/i);
 });
@@ -950,16 +960,26 @@ test("[static] customer Home's trailing magnifier submits — same contract as t
   // fires submitSearch. Only the glyph name moved. And because the magnifier
   // now sits at the field's trailing end, the field omits SearchBar's leading
   // one (`disableLeadingIcon`) so the field does not draw two.
+  //
+  // 2026-09-21 — RE-POINTED AGAIN, on operator instruction (DECISIONS
+  // 2026-09-20 sitting 3, (8)): the field draws ONE trailing control — the
+  // mic while it is empty, the magnifier once it has text — so the screen's
+  // own trailing slot (the divider and the second button) is gone and the
+  // magnifier lives in SearchBar under `micBecomesSearch`. The CLAIM holds:
+  // the magnifier is a Pressable firing the same submitSearch the keyboard
+  // return fires (SearchBar's onSubmit), with the same role and label.
   const code = stripCommentsForScan(read('screens/HomeScreen.tsx'));
   assert.match(code, /onSubmit=\{submitSearch\}/);
-  const trailing = /trailing=\{([\s\S]*?)\n\s*\}\n\s*\/>/.exec(code);
-  assert.ok(trailing, 'the customer search bar must keep its trailing slot');
-  assert.match(trailing[1], /<Pressable/, 'the magnifier must be pressable, not decoration');
-  assert.match(trailing[1], /onPress=\{submitSearch\}/);
-  assert.match(trailing[1], /name="search"/);
-  assert.match(trailing[1], /accessibilityRole="button"/);
-  assert.match(trailing[1], /accessibilityLabel="Search"/);
-  assert.match(code, /disableLeadingIcon\s/, 'one magnifier in the field, at its trailing end');
+  assert.match(code, /disableLeadingIcon\s+micBecomesSearch\s/, 'the mic becomes the magnifier; no leading glyph');
+  assert.doesNotMatch(code, /trailing=\{/, 'the divider and the second button are gone from the field');
+  assert.doesNotMatch(code, /searchDivider|searchGoPressed/);
+  const magnifier = /\{micBecomesSearch && value\.length > 0 && !listening \? \(([\s\S]*?)\) : voiceReady/.exec(searchBarCode);
+  assert.ok(magnifier, 'SearchBar draws the magnifier in the mic\'s slot');
+  assert.match(magnifier[1], /<Pressable/, 'the magnifier must be pressable, not decoration');
+  assert.match(magnifier[1], /onPress=\{onSubmit\}/);
+  assert.match(magnifier[1], /name="search" size=\{20\} color=\{colors\.navInactive\}/);
+  assert.match(magnifier[1], /accessibilityRole="button"/);
+  assert.match(magnifier[1], /accessibilityLabel="Search"/);
   // The guard that makes empty a no-op lives in submitSearch itself.
   assert.match(code, /const trimmed = query\.trim\(\);\s*if \(!trimmed\) return;/);
 });

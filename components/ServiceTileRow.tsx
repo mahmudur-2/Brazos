@@ -1,4 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { HOME_SERVICE_TILES } from '../lib/skillCategories';
 import { useModePerspective } from '../modes';
@@ -12,13 +13,24 @@ import {
 } from '../lib/theme';
 
 /**
- * The square each tile draws its glyph in — docs/mockups/html/home-redesign.html's
- * `.tile-box` (68x68). Exported so the fences can price the row's geometry
- * off the same number the row draws.
+ * 2026-09-21 — FOUR WHOLE TILES FILL THE ROW AND NOTHING PEEKS (the operator:
+ * "make them big enough so all 4 fit perfectly... I shouldn't see half of
+ * Plumb.. icon"; docs/mockups/html/home-redesign.html `.tiles`, DECISIONS
+ * 2026-09-20 sitting 3, (8)). The tile is MEASURED from the row's own
+ * width — `tileSizeFor(rowWidth, gap)` — never a constant: (width − 3 gaps)
+ * / 4, with the gap equal to the gutter, so the fifth tile begins exactly at the
+ * screen's edge (at a 16 gap a whole-tile row leaves the fifth peeking 4pt,
+ * which the operator ruled out). 73.25 on a 393 phone; TILE_FLOOR is only
+ * what the row draws at until it has laid out. The rest scroll sideways.
+ * Exported so the fences price the row's geometry off the same arithmetic.
  */
-export const TILE_SIZE = 68;
-/** The glyph inside the square (the mockup's 28). */
-const TILE_ICON_SIZE = 28;
+export const TILES_ACROSS = 4;
+export const TILE_FLOOR = 68;
+export function tileSizeFor(rowWidth: number, gap: number): number {
+  return (rowWidth - (TILES_ACROSS - 1) * gap) / TILES_ACROSS;
+}
+/** The glyph inside the square (the mockup's 30 at the bigger tile). */
+const TILE_ICON_SIZE = 30;
 /**
  * The heading's size — the customer Home's own section-title rung
  * (screens/HomeScreen.tsx `sectionTitle`, serifSize(30) = 20), so "Popular
@@ -64,15 +76,14 @@ type ServiceTileRowProps = {
  * a tile calls the screen's existing category search, and "Other" opens the
  * screen's existing sheet, whose rows call the same search.
  *
- * GEOMETRY, from the mockup's `.tiles` / `.tile` / `.tile-box` rules: tile
- * 68x68 at radius.md (14), 16 between tiles, the screen's own padding as the
- * side inset, a 28 glyph in `emerald` on `mint`, a 13/16 label in the muted
- * ink centred under the box, two lines allowed. On a 393pt screen that is
- * four tiles fully visible and the fifth cut in half — 20 + 4 x 84 = 356
- * from the left edge, 37 of its 68 on screen — which is what makes the slide
- * obvious without an affordance. The row snaps a tile at a time: the
- * interval is one tile plus its gap, aligned to the start, so every rest
- * position puts a tile on the screen's column. react-native-web drops the
+ * GEOMETRY, from the mockup's `.tiles` / `.tile` / `.tile-box` rules: a
+ * square tile at radius.md (14), the gutter's own step between tiles and as
+ * the side inset, a 30 glyph in `emerald` on `mint`, a 13/16 label in the
+ * muted ink centred under the box, two lines allowed. 2026-09-21: FOUR WHOLE
+ * TILES fill the row (see tileSizeFor above) and nothing peeks — the rest
+ * scroll. The row snaps a tile at a time: the interval is one tile plus its
+ * gap, aligned to the start, so every rest position puts a tile on the
+ * screen's column. react-native-web drops the
  * snap props (its ScrollView forwards only the props it knows) and keeps the
  * scroll, so the harness renders the same rest position as native.
  *
@@ -92,9 +103,15 @@ export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTil
     perspective === 'worker'
       ? `Find ${label.toLowerCase()} jobs`
       : `Find ${label.toLowerCase()} help`;
-  // One tile's pitch: its box plus the gap after it. Read at render, so the
-  // snap follows the live spacing scale the stylesheet draws the gap from.
-  const pitch = TILE_SIZE + spacing.lg;
+  // The gap IS the gutter — the screen's own inset, by construction, so the
+  // fifth tile begins exactly at the screen's edge; the tile is whatever four
+  // of them and three gaps make of the row's measured width.
+  const gap = inset;
+  const [rowWidth, setRowWidth] = useState<number | null>(null);
+  const tile = rowWidth === null ? TILE_FLOOR : tileSizeFor(rowWidth, gap);
+  const onRowLayout = (event: LayoutChangeEvent) => setRowWidth(event.nativeEvent.layout.width - inset * 2);
+  // One tile's pitch: its box plus the gap after it.
+  const pitch = tile + gap;
 
   return (
     <View style={styles.block}>
@@ -114,7 +131,8 @@ export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTil
         // takes the row to the screen edges and the content padding puts the
         // first tile back on the column. Both are the screen's own number.
         style={{ marginHorizontal: -inset }}
-        contentContainerStyle={[styles.row, { paddingHorizontal: inset }]}
+        onLayout={onRowLayout}
+        contentContainerStyle={[styles.row, { paddingHorizontal: inset, gap }]}
       >
         {HOME_SERVICE_TILES.map((service) => (
           <Pressable
@@ -122,13 +140,13 @@ export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTil
             // label is what makes a tile unique — the same rule the sheet uses.
             key={service.label}
             onPress={() => onSelect(service.key)}
-            style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+            style={({ pressed }) => [styles.tile, { width: tile }, pressed && styles.tilePressed]}
             accessibilityRole="button"
             // The screen reader gets the full name; the tile draws the short one.
             accessibilityLabel={service.label}
             accessibilityHint={hintFor(service.label)}
           >
-            <View style={styles.box}>
+            <View style={[styles.box, { width: tile, height: tile }]}>
               <Ionicons name={service.icon} size={TILE_ICON_SIZE} color={colors.emerald} />
             </View>
             <Text style={styles.label} numberOfLines={2}>
@@ -138,12 +156,12 @@ export function ServiceTileRow({ inset, onSelect, onOther, heading }: ServiceTil
         ))}
         <Pressable
           onPress={onOther}
-          style={({ pressed }) => [styles.tile, pressed && styles.tilePressed]}
+          style={({ pressed }) => [styles.tile, { width: tile }, pressed && styles.tilePressed]}
           accessibilityRole="button"
           accessibilityLabel="Other services"
           accessibilityHint="Opens the full list of services"
         >
-          <View style={styles.box}>
+          <View style={[styles.box, { width: tile, height: tile }]}>
             <Ionicons name="ellipsis-horizontal" size={TILE_ICON_SIZE} color={colors.emerald} />
           </View>
           <Text style={styles.label} numberOfLines={2}>
@@ -167,15 +185,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
       fontWeight: '700',
       color: colors.ink,
     },
-    row: { flexDirection: 'row', gap: spacing.lg },
+    // The gap is set at render: the gutter itself, which is what makes four
+    // whole tiles end exactly at the screen's edge.
+    row: { flexDirection: 'row' },
     // A tile is its box and its label, centred; the 6 between them is the
     // mockup's, spelled off the scale the way components/Chip.tsx spells its
     // own 6 (`spacing.xs + 2`). Box plus label clears the 44pt touch floor.
-    tile: { width: TILE_SIZE, alignItems: 'center', gap: spacing.xs + 2 },
+    // The width is set at render from the row's measurement.
+    tile: { alignItems: 'center', gap: spacing.xs + 2 },
     tilePressed: { opacity: 0.85 },
     box: {
-      width: TILE_SIZE,
-      height: TILE_SIZE,
       borderRadius: emeraldRadius.md,
       alignItems: 'center',
       justifyContent: 'center',

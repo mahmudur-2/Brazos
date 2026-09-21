@@ -94,6 +94,17 @@ type SearchBarProps = {
    * walk found too dim against the map. Home keeps the default.
    */
   emphasis?: 'muted' | 'ink';
+  /**
+   * 2026-09-21 — ONE trailing control (the customer Home's field): the mic
+   * while the field is empty, the magnifier once it has text — and no voice
+   * session is listening, so a dictation can still be stopped by its own
+   * tap — whose tap runs `onSubmit`. Replaces that field's mic | divider |
+   * magnifier pair (DECISIONS 2026-09-20 sitting 3, (8): "remove the
+   * magnifying button... the voice icon changes to magnifying as soon as I
+   * start typing"). Default false: every other caller keeps its mic and its
+   * own `trailing`, as before.
+   */
+  micBecomesSearch?: boolean;
 };
 
 export function SearchBar({
@@ -110,6 +121,7 @@ export function SearchBar({
   autoCorrect = false,
   disableClear = false,
   trailing,
+  micBecomesSearch = false,
   disableLeadingIcon = false,
   emphasis = 'muted',
 }: SearchBarProps) {
@@ -325,7 +337,19 @@ export function SearchBar({
           </Pressable>
         </Animated.View>
       ) : null}
-      {voiceReady && !disableVoiceSearch ? (
+      {micBecomesSearch && value.length > 0 && !listening ? (
+        // The mic's slot, the mic's size and colour: the field reads as one
+        // quiet control whichever glyph it shows.
+        <Pressable
+          onPress={onSubmit}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Search"
+          style={styles.mic}
+        >
+          <Ionicons name="search" size={20} color={colors.navInactive} />
+        </Pressable>
+      ) : voiceReady && !disableVoiceSearch ? (
         <Animated.View style={micPress.style}>
           <Pressable
             // Tap-to-talk: one tap starts the bounded session, a second stops

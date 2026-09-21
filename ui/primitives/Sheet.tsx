@@ -179,7 +179,12 @@ export function Sheet({
             // Written as base + delta so the D8 fence's pinned expression
             // (inset + spacing.lg) survives verbatim; the dial replaces the
             // spacing.lg portion and the default delta is zero.
-            { paddingBottom: insets.bottom + spacing.lg + (footerPad - spacing.lg) },
+            // 2026-09-21: a FOOTER brings its own air — with one, the sheet keeps
+            // only the safe inset below it, so the button sits centred between
+            // the footer's divider and the home indicator (22 above it, 21 to
+            // the bar's top; DECISIONS 2026-09-20 sitting 3, (7)). Without one,
+            // the padding is what it has always been.
+            { paddingBottom: insets.bottom + (footer ? 0 : spacing.lg) + (footerPad - spacing.lg) },
             maxHeightPct != null ? { maxHeight: `${maxHeightPct}%` as `${number}%` } : null,
             handleAbove != null ? { paddingTop: handleAbove } : null,
           ]}
@@ -297,7 +302,8 @@ const stylesFor = themedStyles((colors: EmeraldPalette) =>
   },
   footer: {
     paddingHorizontal: layout.screenGutter,
-    paddingTop: spacing.md + 2,
+    // 22 — the button centred between the divider and the home indicator.
+    paddingTop: spacing.xl + 2,
     borderTopWidth: 1,
     borderTopColor: colors.line,
   },

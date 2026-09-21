@@ -33,15 +33,19 @@ test('Home Design Studio defaults preserve the current Home geometry and control
     // is the size the operator approved in that column.
     'heroFontSize: 33',
     'screenPadding: 20',
-    'sectionGap: 20',
+    // 2026-09-21: 20 -> 24 — the one rhythm between the customer Home's blocks
+    // (docs/mockups/html/home-redesign.html; DECISIONS 2026-09-20 sitting 3, (8)).
+    'sectionGap: 24',
     // 70 -> 65 in the same pass; searchRadius stays 35 and is no longer half
     // the height, which is deliberate and is why they are two settings.
     // 2026-09-18: 65 -> 44 and 35 -> 17 — the field moved inside the task
     // card (docs/mockups/html/home-redesign.html `.field`: 44 tall, radius
     // 17). Two constants moved; the fence's claim — the studio launches at
     // the geometry the screen ships — is unchanged.
-    'searchHeight: 44',
-    'searchRadius: 17',
+    // 2026-09-21: 44 -> 56 and 17 -> 20 — the operator's pick b on the
+    // reference ("way too small"), the corner one notch up.
+    'searchHeight: 56',
+    'searchRadius: 20',
     'ctaHeight: 48',
     'ctaRadius: 24',
     // 2026-09-17: `jobCardRadius: 20` left this list with the setting. It

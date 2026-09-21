@@ -25,10 +25,15 @@ import type { JobCategory, OpenJob } from './jobs';
  *  - distance: closest first; rows without a distance last.
  *  - bids:     fewest live offers first; ties broken by distance, then the
  *              `newest` rule.
+ *  - reset:    the latest job ADDED first and nothing else — the feed's own
+ *              order, no date, no skill, no distance (the operator's
+ *              "Reset" row, 2026-09-20 sitting 3: "sorts by latest job added
+ *              nothing else"). Last in the list, drawn grey; the pill wears
+ *              "Latest added" once it is picked. Smart Match stays the default.
  */
-export type JobSort = 'smart' | 'newest' | 'pay' | 'distance' | 'bids';
+export type JobSort = 'smart' | 'newest' | 'pay' | 'distance' | 'bids' | 'reset';
 
-export const JOB_SORTS: readonly JobSort[] = ['smart', 'newest', 'pay', 'distance', 'bids'];
+export const JOB_SORTS: readonly JobSort[] = ['smart', 'newest', 'pay', 'distance', 'bids', 'reset'];
 
 export type JobFilterModel = {
   /** Empty set = every category. */
@@ -279,6 +284,9 @@ export function applyJobFilters<T extends OpenJob>(
     const counts = context.offerCounts ?? {};
     const countOf = (job: T) => counts[job.id] ?? 0;
     out.sort((a, b) => countOf(a) - countOf(b) || compareDistance(a, b) || compareNewest(a, b));
+  } else if (model.sort === 'reset') {
+    // The feed's own order: newest-posted first, and nothing else.
+    out.sort((a, b) => createdMs(b) - createdMs(a));
   } else if (model.sort === 'smart') {
     const skills = context.skills ?? new Set<JobCategory>();
     const done = context.completedByCategory ?? {};

@@ -446,11 +446,16 @@ test('[static] the creation sheet clears the home indicator', () => {
   const createSheet = stripComments(read('components/CreateSheet.tsx'));
   assert.match(createSheet, /const insets = useSafeAreaInsets\(\);/);
   assert.match(createSheet, /\{ paddingBottom: insets\.bottom \+ spacing\.lg \}/);
+  // 2026-09-21: a sheet WITH a footer keeps only the safe inset below it —
+  // the footer brings its own air (22 above its button), so the button sits
+  // centred between the divider and the home indicator (DECISIONS 2026-09-20
+  // sitting 3, (7)). Without a footer the reservation is exactly what it was.
   assert.match(
     stripComments(read('ui/primitives/Sheet.tsx')),
-    /paddingBottom: insets\.bottom \+ spacing\.lg/,
-    'the two sheets must reserve the inset the same way'
+    /paddingBottom: insets\.bottom \+ \(footer \? 0 : spacing\.lg\)/,
+    'the two sheets must reserve the inset the same way; a footer supplies its own air'
   );
+  assert.match(stripComments(read('ui/primitives/Sheet.tsx')), /footer: \{\s*paddingHorizontal: layout\.screenGutter,\s*paddingTop: spacing\.xl \+ 2,/);
   // The ground that was showing through is painted, in one place, for both trees.
   assert.match(
     stripComments(read('navigation/ModeShell.tsx')),

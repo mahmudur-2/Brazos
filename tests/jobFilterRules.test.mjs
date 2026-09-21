@@ -72,8 +72,10 @@ const ids = (rows) => rows.map((r) => r.id);
 // The sorts
 // ---------------------------------------------------------------------------
 
-test('the sheet lists five sorts in the ruled order, Smart Match first and default', () => {
-  assert.deepEqual([...JOB_SORTS], ['smart', 'newest', 'pay', 'distance', 'bids']);
+test('the sheet lists six sorts in the ruled order, Smart Match first and default, Reset last', () => {
+  // 2026-09-21: 'reset' — the latest job added first and nothing else — is
+  // the sixth and last (DECISIONS 2026-09-20 sitting 3, (7)).
+  assert.deepEqual([...JOB_SORTS], ['smart', 'newest', 'pay', 'distance', 'bids', 'reset']);
   assert.equal(DEFAULT_JOB_FILTERS.sort, 'smart');
   assert.equal(DEFAULT_JOB_FILTERS.scheduledUntil, null);
   assert.equal(isDefaultJobFilters(DEFAULT_JOB_FILTERS), true);
@@ -90,6 +92,17 @@ test('newest: dated jobs first, soonest first; then the undated, newest-posted f
   ];
   assert.deepEqual(ids(applyJobFilters(rows, { ...DEFAULT_JOB_FILTERS, sort: 'newest' })), [
     'mon-later-post', 'mon', 'sat', 'undated-new', 'undated-old',
+  ]);
+});
+
+test('reset: the latest job added first and nothing else — no date, no skill, no distance', () => {
+  const rows = [
+    job('dated-soon', { scheduled_date: '2026-09-21', created_at: '2026-09-01T00:00:00Z', distance_miles: 0.5 }),
+    job('newest-posted', { created_at: '2026-09-18T00:00:00Z', distance_miles: 40 }),
+    job('middle', { scheduled_date: '2026-10-30', created_at: '2026-09-10T00:00:00Z' }),
+  ];
+  assert.deepEqual(ids(applyJobFilters(rows, { ...DEFAULT_JOB_FILTERS, sort: 'reset' })), [
+    'newest-posted', 'middle', 'dated-soon',
   ]);
 });
 
@@ -339,14 +352,23 @@ test('the Filters sheet draws the five rows from the ruled lists, and every clos
   assert.match(sheet, /show: \{\s*flex: 1,\s*borderRadius: radius\.pill,\s*backgroundColor: colors\.postPillGreen,\s*\}/);
   // The note tells the worker why Best Match is absent.
   assert.match(sheet, /Pick job categories on your profile to unlock Best Match\./);
-  // The sort popup carries the five rules with their sentences.
+  // The sort popup carries the six rules with their sentences; Reset alone
+  // carries a pill wording and is drawn grey.
   for (const sort of JOB_SORTS) {
     assert.ok(
-      new RegExp(sort + ": \\{ label: '[^']+', hint: '[^']+' \\}").test(sheet),
+      new RegExp(sort + ": \\{ label: '[^']+', hint: '[^']+'(, pill: '[^']+', muted: true)? \\}").test(sheet),
       `the sheet must name the ${sort} sort with its sentence`
     );
   }
   assert.match(sheet, /hint: 'Matches based on your skills'/);
+  // 2026-09-21: the Newest hint, shortened twice on the operator's crops; the
+  // Reset row: grey, "Latest added first", the pill "Sort by Latest added".
+  assert.match(sheet, /newest: \{ label: 'Newest', hint: 'Earliest jobs first' \}/);
+  assert.match(sheet, /reset: \{ label: 'Reset', hint: 'Latest added first', pill: 'Latest added', muted: true \}/);
+  assert.match(sheet, /label=\{sortNow\.pill \?\? sortNow\.label\}/);
+  assert.match(sheet, /muted: JOB_SORT_LABELS\[sort\]\.muted,/);
+  assert.match(popover, /item\.muted && styles\.labelMuted/);
+  assert.match(popover, /labelMuted: \{\s*fontWeight: '500',\s*color: colors\.textMuted,\s*\}/);
 
   // BEST MATCH is the worker's skills, exactly — every one of them and no other.
   assert.match(sheet, /draft\.categories\.size === skills\.size &&\s*\[\.\.\.skills\]\.every\(\(category\) => draft\.categories\.has\(category\)\)/);

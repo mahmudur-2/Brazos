@@ -82,6 +82,9 @@ export type PickerOption<V> = {
   dayNumber?: number;
   /** Rendered dimmed and inert, with `hint` saying why. */
   disabled?: boolean;
+  /** Drawn grey — a row that clears rather than chooses (the Sort popup's
+   *  Reset). Ticked, its tick is still the chosen green; the label stays grey. */
+  muted?: boolean;
 };
 
 /** Where the pill is, in window points — from `measureInWindow`. */
@@ -266,7 +269,10 @@ export function PickerPopover<V>({
                     </View>
                   ) : null}
                   <View style={centred ? styles.textCentred : styles.text}>
-                    <Text style={[styles.label, centred && styles.centredType, on && styles.labelOn]} numberOfLines={1}>
+                    <Text
+                      style={[styles.label, centred && styles.centredType, on && styles.labelOn, item.muted && styles.labelMuted]}
+                      numberOfLines={1}
+                    >
                       {item.label}
                     </Text>
                     {item.hint ? (
@@ -353,6 +359,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     labelOn: {
       fontWeight: '600',
       color: colors.emeraldBright,
+    },
+    // After labelOn, so a muted row stays grey even when it is the one ticked.
+    labelMuted: {
+      fontWeight: '500',
+      color: colors.textMuted,
     },
     hint: {
       fontSize: 12,

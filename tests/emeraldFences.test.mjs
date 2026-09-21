@@ -528,14 +528,13 @@ test('home(2) fence: the task card holds the title, the field and the pill, and 
   // leading glyph, because the magnifier is its trailing submit.
   assert.match(inside, /placeholder="Describe your task\.\.\."/);
   assert.match(inside, /onSubmit=\{submitSearch\}/);
-  assert.match(inside, /autoCapitalize="sentences" autoCorrect disableLeadingIcon/);
+  assert.match(inside, /autoCapitalize="sentences" autoCorrect disableLeadingIcon micBecomesSearch/);
   assert.match(inside, /\{ minHeight: design\.searchHeight, borderRadius: design\.searchRadius \}/);
-  // 2026-09-18, later the same day: the magnifier takes the mic's own size and
-  // colour (20, navInactive) so the field reads as one quiet control — the
-  // operator's call against the HTML mockup, where the gold was the old bar's
-  // accent. Same slot, same press, same label; only the glyph's two constants.
-  assert.match(inside, /<Ionicons name="search" size=\{20\} color=\{colors\.navInactive\} \/>/);
-  assert.equal((inside.match(/name="search"/g) ?? []).length, 1, 'one magnifier in the field');
+  // 2026-09-21: the field's ONE trailing control is SearchBar's — the mic,
+  // which becomes the magnifier once text is typed (tests/voiceSearch pins
+  // its size, colour, press and label). The card draws no magnifier of its
+  // own, so the field can never show two.
+  assert.equal((inside.match(/name="search"/g) ?? []).length, 0, 'no magnifier drawn by the card itself');
   // The pill is the live one, moved: its style, its recipe, its label.
   assert.match(inside, /styles\.heroButton, isDark && styles\.heroButtonDark,/);
   assert.match(inside, /onPress=\{\(\) => startJobDraft\(\)\}/);
@@ -802,33 +801,39 @@ test('home(4) fence: the atmosphere sits behind both homes and never scrolls', (
 // table and the studio's defaults — and priced against the 393pt viewport
 // every render here is taken in.
 // ---------------------------------------------------------------------------
-test('home(24) fence: four service tiles fit on the screen and the fifth is cut', () => {
+// 2026-09-21 — RE-POINTED, on operator instruction (DECISIONS 2026-09-20
+// sitting 3, (8)): FOUR WHOLE TILES fill the row and NOTHING peeks — "I
+// shouldn't see half of Plumb.. icon". The tile is measured from the row's
+// width (components/ServiceTileRow.tsx tileSizeFor), the gap equals the
+// gutter, so the fifth tile begins exactly at the screen's edge. The sum is
+// priced here at the harness width the way the old cut-in-half sum was.
+test('home(24) fence: four whole service tiles fill the row and nothing peeks', () => {
   const flat = flatten(read('screens/HomeScreen.tsx'));
   const rowSource = flatten(read('components/ServiceTileRow.tsx'));
   const padding = Number(/screenPadding: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
 
-  const tile = Number(/export const TILE_SIZE = (\d+);/.exec(rowSource)?.[1]);
-  assert.ok(tile > 0, 'the tile is a plain number in the component');
-  // The gap is the live lg step; its shipped value is the token table's.
-  assert.match(rowSource, /row: \{ flexDirection: 'row', gap: spacing\.lg \}/);
-  const themeSpacing = /export const THEME_SPACING_DEFAULTS = \{([^}]*)\}/.exec(read('ui/tokens.ts'))[1];
-  const gap = Number(/\blg: (\d+)/.exec(themeSpacing)[1]);
-  assert.match(rowSource, /width: TILE_SIZE, height: TILE_SIZE, borderRadius: emeraldRadius\.md,/);
+  // The tile is the row's width less three gaps, over four — arithmetic in
+  // the component, applied at render from the measured row, never a constant.
+  assert.match(rowSource, /export const TILES_ACROSS = 4;/);
+  assert.match(rowSource, /return \(rowWidth - \(TILES_ACROSS - 1\) \* gap\) \/ TILES_ACROSS;/);
+  assert.match(rowSource, /const tile = rowWidth === null \? TILE_FLOOR : tileSizeFor\(rowWidth, gap\);/);
+  assert.match(rowSource, /setRowWidth\(event\.nativeEvent\.layout\.width - inset \* 2\)/);
+  assert.match(rowSource, /\{ width: tile, height: tile \}/);
+  assert.doesNotMatch(rowSource, /TILE_SIZE/, 'the constant square is gone');
+  // The gap IS the gutter, by construction — the screen's inset, set at render.
+  assert.match(rowSource, /const gap = inset;/);
+  assert.match(rowSource, /\{ paddingHorizontal: inset, gap \}/);
+  assert.match(rowSource, /row: \{ flexDirection: 'row' \}/);
+  const gap = padding;
+  assert.match(rowSource, /borderRadius: emeraldRadius\.md,/);
   assert.match(flat, /<ServiceTileRow heading="Popular services" inset=\{design\.screenPadding\}/);
 
   const SCREEN = 393;
+  const tile = (SCREEN - 2 * padding - 3 * gap) / 4;
   const fourth = padding + 4 * tile + 3 * gap;
-  assert.ok(fourth <= SCREEN, `four tiles need ${fourth}pt of ${SCREEN}; the mockup shows four whole`);
+  assert.equal(fourth, SCREEN - padding, `four tiles end at the gutter: ${fourth} of ${SCREEN}`);
   const fifthStart = padding + 4 * (tile + gap);
-  const fifthVisible = SCREEN - fifthStart;
-  assert.ok(
-    fifthVisible > 0 && fifthVisible < tile,
-    `the fifth tile shows ${fifthVisible}pt of ${tile}; the mockup cuts it, not whole and not absent`
-  );
-  assert.ok(
-    Math.abs(fifthVisible / tile - 0.5) <= 0.15,
-    `the fifth tile is ${Math.round((100 * fifthVisible) / tile)}% visible; the mockup cuts it in half`
-  );
+  assert.ok(fifthStart >= SCREEN, `the fifth tile starts at ${fifthStart}, on or past the edge — nothing peeks`);
 
   // The chip-row styles must not come back to the screen — one geometry, in
   // the component, for both Homes.
@@ -860,10 +865,18 @@ test('home(24) fence: four service tiles fit on the screen and the fifth is cut'
   const card = /taskCard: \{([^}]*)\}/.exec(flat);
   assert.ok(card, 'the task card keeps a plain style object');
   assert.doesNotMatch(card[1], /margin/, 'the card carries no margin — sectionGap and the hero’s own padding place it');
-  assert.match(flat, /intro: \{ position: 'relative', minHeight: 160, paddingBottom: spacing\.sm \}/);
-  const sm = Number(/\bsm: (\d+)/.exec(themeSpacing)[1]);
+  // 2026-09-21: the hero's own padding is gone, so sub-copy to card is
+  // `sectionGap` alone — the reference's ONE rhythm of 24 between the blocks
+  // (docs/mockups/html/home-redesign.html; DECISIONS 2026-09-20 sitting 3, (8)).
+  assert.match(flat, /intro: \{ position: 'relative', minHeight: 160 \}/);
   const sectionGap = Number(/sectionGap: (\d+)/.exec(read('lib/homeDesignStudio.tsx'))[1]);
-  assert.equal(sectionGap + sm, 28, 'hero to card is the mockup’s 28: sectionGap plus the hero’s sm padding');
+  assert.equal(sectionGap, 24, 'sub-copy to card is the reference’s 24: sectionGap alone');
+  // …and the greeting to the headline is the same 24: introCopy's 8 plus the
+  // headline's own 16.
+  const themeSpacing = /export const THEME_SPACING_DEFAULTS = \{([^}]*)\}/.exec(read('ui/tokens.ts'))[1];
+  const introGap = Number(/\bsm: (\d+)/.exec(themeSpacing)[1]);
+  const headlineTop = Number(/headline: \{ marginTop: (\d+),/.exec(flat)?.[1]);
+  assert.equal(introGap + headlineTop, 24, 'greeting to headline is the same 24');
   assert.ok(
     !/gap: design\.sectionGap \+/.test(flat),
     'the rhythm is per-section; sectionGap stays the one number the studio shows'
@@ -916,14 +929,15 @@ test('home(25) fence: the task card’s height is the mockup’s, term by term',
     'every term of the card’s height must stay a plain number'
   );
 
+  // 2026-09-21: the field is 56 (was 44), so the sum is 192 — the reference's
+  // 186 with the pill's 48 for its 44 and the border inside the box.
   const height = 2 * border + 2 * padding + titleLine + gap + field + gap + cta;
-  assert.equal(height, 180, `the task card stacks to ${height}pt; the mockup's card is 180 in this app's terms`);
+  assert.equal(height, 192, `the task card stacks to ${height}pt; the reference's card is 192 in this app's terms`);
 
-  // The two studio terms are the mockup's own, and the field is exactly the
-  // touch floor — a smaller field is the one move this sum would not catch as
-  // a sum, so it is pinned by name.
-  assert.equal(field, 44, 'the field is the mockup’s 44 — CLAUDE.md’s touch floor, exactly');
-  assert.equal(Number(/searchRadius: (\d+)/.exec(studio)?.[1]), 17, 'at the mockup’s 17 radius');
+  // The two studio terms are the reference's own, and the field is pinned by
+  // name — a smaller field is the one move this sum would not catch as a sum.
+  assert.equal(field, 56, 'the field is the reference’s 56 — the operator’s pick b');
+  assert.equal(Number(/searchRadius: (\d+)/.exec(studio)?.[1]), 20, 'at the reference’s 20 radius, one notch up from 17');
   assert.equal(cta, 48, 'the pill’s 48 did not move');
   assert.equal(Number(/ctaRadius: (\d+)/.exec(studio)?.[1]), 24, 'nor its 24 radius');
 });
@@ -971,9 +985,13 @@ test('home(26) fence: the first job section lands on master 44’s own gap below
   // and the 20pt serif title is centred in it.
   const HEADER_LEAD_TO_CAP = 14;
   const inkGap = sectionGap + margin + HEADER_LEAD_TO_CAP;
+  // 2026-09-21: the reference's rhythm — 24 from the tile labels to the
+  // heading's 26pt line box, whose cap sits 5 into it: 29 to the ink. Master
+  // 44's 28.4 is history (DECISIONS 2026-09-20 sitting 3, (8)).
+  assert.equal(margin, -9, 'the corrective margin, re-tuned to the reference');
   assert.ok(
-    Math.abs(inkGap - 28.4) <= 2,
-    `the card's bottom edge to the first section heading is ${inkGap}pt; master 44 measures 28.4`
+    Math.abs(inkGap - 29) <= 1,
+    `the tile labels to the first section heading is ${inkGap}pt to the ink; the reference measures 29`
   );
   assert.doesNotMatch(flat, /sectionDark/, 'one section rhythm for both themes');
 });
@@ -993,7 +1011,8 @@ test('home(19) fence: the Home screens carry no mode-conditional layout — only
   // The hero's FACE is the one serif role (D5 third note — see the
   // themeTokens one-serif fence, which owns that boundary); its geometry is
   // parity's, shared by both themes.
-  assert.match(home, /headline: \{ marginTop: 30, fontFamily: fonts\.displayHero,/);
+  // 2026-09-21: 30 -> 16 — with introCopy's 8, the one rhythm of 24.
+  assert.match(home, /headline: \{ marginTop: 16, fontFamily: fonts\.displayHero,/);
   assert.doesNotMatch(home, /headlineDark|heroSubtitleDark|sectionTitleDark/);
   assert.match(home, /heroSubtitle: \{ maxWidth: '73%', marginTop: 10, fontSize: 14,/);
   assert.match(home, /heroButtonText: \{ fontFamily: fonts\.display, fontSize: 24, fontWeight: '700', color: colors\.onForest \}/);
@@ -1296,10 +1315,12 @@ test('home(16) fence: one serif ladder, measured off master 44', () => {
       'of column, so it wraps to a third line. Master 44 sets the headline on exactly two'
   );
   // And exactly two: the break is the operator's own, and nothing else may add one.
+  // 2026-09-21: the period is gone (DECISIONS 2026-09-20 sitting 3, (8)); the
+  // measured 210.0 at 30pt was for the line WITH it, so it stays a safe bound.
   assert.match(
     flat,
-    /Take a task\{'\\n'\}off your plate\./,
-    "master 44's headline is two lines, broken after 'task' by the operator"
+    /Take a task\{'\\n'\}off your plate\s*<\/Text>/,
+    "the headline is two lines, broken after 'task' by the operator, with no period"
   );
   assert.ok(
     hero <= ladder('heroHeadline'),

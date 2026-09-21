@@ -556,13 +556,15 @@ export function HomeScreen() {
                 ]}
                 maxFontSizeMultiplier={1.25}
               >
-                Take a task{'\n'}off your plate.
+                Take a task{'\n'}off your plate
               </Text>
-              {/* 2026-09-17: the break after "Hire help." is EXPLICIT, the way
-                  the headline's is — operator decision, not a wrap the 73%
-                  column happens to produce. One string, so both themes. */}
+              {/* 2026-09-17: the breaks are EXPLICIT, the way the headline's is —
+                  operator decision, not a wrap the 73% column happens to
+                  produce. 2026-09-21: THREE lines, one sentence each, and the
+                  headline lost its period (DECISIONS 2026-09-20 sitting 3, (8)).
+                  One string, so both themes. */}
               <Text style={styles.heroSubtitle} maxFontSizeMultiplier={1.3}>
-                Describe it. Hire help.{'\n'}Get it handled.
+                Describe it.{'\n'}Hire help.{'\n'}Get it handled.
               </Text>
             </View>
           </View>
@@ -602,12 +604,15 @@ export function HomeScreen() {
             {/* The shared SearchBar (Prestige 1a), the SAME instance this
                 screen has always had — value, onChangeText, submitSearch, the
                 sentence posture — now inside the card at the card's own
-                44/17 (lib/homeDesignStudio.tsx). The mic is the REAL voice
+                56/20 (lib/homeDesignStudio.tsx). The mic is the REAL voice
                 search, rendered by SearchBar itself only when the on-device
-                boundary is available; nothing about voice changes. The
-                leading glyph is omitted here and only here, because the
-                magnifier lives at the trailing end of this field — it IS the
-                submit — and two of them in one field would be two. */}
+                boundary is available; nothing about voice changes. 2026-09-21:
+                ONE trailing control — the mic while the field is empty, the
+                magnifier once it has text (`micBecomesSearch`, whose tap is
+                the same submitSearch the keyboard return fires); the divider
+                and the second button are gone (DECISIONS 2026-09-20 sitting
+                3, (8)). The leading glyph is omitted here and only here, so
+                the field never draws two magnifiers. */}
             <SearchBar
               value={query}
               onChangeText={setQuery}
@@ -616,35 +621,12 @@ export function HomeScreen() {
               autoCapitalize="sentences"
               autoCorrect
               disableLeadingIcon
+              micBecomesSearch
               style={[
                 styles.searchField,
                 isDark && styles.searchFieldDark,
                 { minHeight: design.searchHeight, borderRadius: design.searchRadius },
               ]}
-              trailing={
-                <>
-                  <View style={styles.searchDivider} />
-                  {/* The submit affordance, not decoration: same submitSearch()
-                      the keyboard return fires, and an empty query is a no-op
-                      inside it. 2026-09-18: the glyph is the magnifier where
-                      it was the gold arrow — same slot, same press, same label.
-                      Later the same day (operator, against the HTML mockup):
-                      it takes the mic's own size and colour, 20 in navInactive,
-                      so the field reads as ONE quiet control — the gold was the
-                      old bar's accent, not this card's. hitSlop keeps the tap
-                      target. The worker Home arrow carries the same contract
-                      (tests/voiceSearch.test.mjs pins both). */}
-                  <Pressable
-                    onPress={submitSearch}
-                    hitSlop={12}
-                    style={({ pressed }) => pressed && styles.searchGoPressed}
-                    accessibilityRole="button"
-                    accessibilityLabel="Search"
-                  >
-                    <Ionicons name="search" size={20} color={colors.navInactive} />
-                  </Pressable>
-                </>
-              }
             />
 
             {/* THE LIVE PILL, MOVED, NOT REDESIGNED: the same styles.heroButton,
@@ -856,7 +838,7 @@ export function HomeScreen() {
                 {/* ONE line, and it is only ever drawn when the customer's own
                     read came back with nothing at all — so it is true whenever
                     it is on screen (tests/copyTruth, tests/copyHonesty). */}
-                <Text style={styles.emptyTitle}>No jobs have been posted yet</Text>
+                <Text style={styles.emptyTitle}>You haven't posted any jobs yet</Text>
               </View>
             )}
           </Animated.View>
@@ -924,7 +906,9 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   //
   // Worker Home needs no equivalent: its content container declares no ground.
   contentOverAtmosphere: { backgroundColor: 'transparent' },
-  intro: { position: 'relative', minHeight: 160, paddingBottom: spacing.sm },
+  // 2026-09-21: no paddingBottom — the rhythm is `sectionGap` (24) alone, so
+  // the sub-copy to the card is the same 24 as every other block gap.
+  intro: { position: 'relative', minHeight: 160 },
   introCopy: { position: 'relative', zIndex: 1, gap: spacing.sm },
   introTopLine: {
     flexDirection: 'row',
@@ -973,8 +957,12 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // the top of this file), so the studio's 33pt already fits the column the
   // hero artwork leaves. The face changing is that fence becoming accurate,
   // not that fence coming under strain.
+  // 2026-09-21: 30 -> 16, so the greeting to the headline is introCopy's 8
+  // plus this = the one rhythm of 24 (was 38 against 28 under the sub-copy —
+  // the operator's finding; DECISIONS 2026-09-20 sitting 3, (8)). The master-
+  // 44 derivation above is history: the rhythm is the reference's now.
   headline: {
-    marginTop: 30,
+    marginTop: 16,
     fontFamily: fonts.displayHero,
     fontWeight: '700',
     letterSpacing: -0.3,
@@ -1062,8 +1050,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     backgroundColor: colors.surface,
   },
   searchFieldDark: { backgroundColor: colors.mint },
-  searchDivider: { width: 1, height: 20, backgroundColor: colors.secondaryBorder },
-  searchGoPressed: { opacity: 0.7 },
   // 2026-09-17: serviceRows / serviceRow / serviceChip / compactServiceChip /
   // goldOutlineChip / otherChip — home(24)'s two-row chip geometry, held
   // byte-identical to worker Home's — were removed with the chips they laid
@@ -1177,7 +1163,11 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // -6 is deliberately NOT re-tuned against the row's label baseline; it is
   // the same corrective margin, on the same header row, and moving it would
   // be a spacing decision this change did not make.
-  section: { gap: 12, marginTop: -6 },
+  // 2026-09-21: -9, re-tuned to the reference's rhythm — 24 from the tile
+  // labels to the "Your jobs" heading's line box, which the 44pt header row
+  // centres the 20pt title in (14 from the row's top to the cap, the cap 5
+  // into the reference's 26 line box): 24 + (-9) + 14 = 29 to the ink.
+  section: { gap: 12, marginTop: -9 },
   // The name is a leftover and is kept deliberately: BOTH job sections wear
   // this row — "Needs your attention" (untouched by the 2026-09-17 change) and
   // "Your jobs" — so renaming it would edit the attention block for no pixel.
