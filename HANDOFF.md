@@ -52,7 +52,7 @@ OTA. DECISIONS (15).
   the one owner, transform/opacity only, reduced motion never travels, the sheets
   required by nothing.
 
-**Not walked on the phone.** The OTA is published on the operator's word (below); they
+**Not walked on the phone.** THE OTA IS LIVE on the preview channel (asked: "Yes, publish"): update group `2b439b2e-3e43-4189-a3d7-bac9e6e1b9b1`, iOS update `01a0c2c0-6c7b-7d6d-8336-e9b277464a5d`, commit `cc4889f`; dashboard `https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/2b439b2e-3e43-4189-a3d7-bac9e6e1b9b1`. The operator
 open the Beta twice and switch modes both ways: the pane should never rest, the new
 home should already be there when it clears, the capsule should drop, hold and leave on
 its own, and the customer's [+] sheet / the worker's Profile row must stay disabled only
