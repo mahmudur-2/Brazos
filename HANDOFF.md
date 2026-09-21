@@ -1,19 +1,77 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the run that applied the eighteen-item list — Available Jobs,
-the Filters sheet and its popups, the Sort popup, the customer Home, the ground +
-hero — from this chat, opus at max; docs/DECISIONS.md 2026-09-20 (sitting 3), (13)).
-The two sitting-3 docs rounds and sitting 2's record follow below, unchanged.
+WRITTEN: 2026-09-21 (the Lux drawing run — every remaining screen drawn as an Emerald
+Lux Glass page, docs only, from a new chat on Opus 5 at max). The record of the run
+that applied the eighteen-item list (the same date, earlier) and the two sittings
+before it follow below, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
 
-> **AFTER THE RUN, THE SAME CHAT (2026-09-21): the dark rebuild's direction was chosen —
-> B, Emerald Lux Glass — and NOTHING was applied.** The next chat draws every remaining
-> screen as a Lux page: read `docs/dispatch/LUX-HANDOVER.md`, then
-> `docs/mockups/html/lux/README.md` and `SCREENS.md`. DECISIONS (14). The harness gained
-> `--design <file>` (a candidate token table rendered as real screens) and a comma list
-> for `--only`.
+## THE LUX DRAWING RUN (2026-09-21) — all 67 screens are pages; NOTHING is applied
+
+**What exists now.** `docs/mockups/html/lux/lux-<key>.html` for every row of
+`docs/mockups/html/lux/SCREENS.md` (67 screens, 84 frames — a screen that scrolls
+carries a second frame, `lux-<key>-2`, shifted to end exactly at the bar; the Filters
+popups, the chat menus, the portfolio steps and the amount/confirm pair are one frame
+each), all from `lux.build.mjs`, all opened by `docs/mockups/html/lux/index.html`.
+The review sheets the operator sees are `.shots/mockups/lux-sheet-b<batch>-<n>.png`
+(gitignored, 23 of them) and the singles `lux-<key>.png` beside them.
+
+**What the operator said, and where the loop stands.** Batches 1 and 2 (23 screens):
+**"Yes, all of them"**, asked one batch at a time per the handover's loop. Then, before
+batch 3: *"Build all of the batches til 6, without my permission, I'll be stepping away
+… just NO IMPLEMENTATION IN THE ACTUAL REPO ALL I WANT IS MOCKUP … save them in the repo
+somewhere and I will come back and say what to change"* — so batches 3–6 (44 screens)
+were drawn without a pause and AWAIT THEIR REVIEW. They also ruled Fable 5.1 reserved
+for hard accuracy or layout calls only and gave leave to switch models when needed; no
+call arose and Fable was not used. Ultracode and the Agent tool stay refused on this
+machine; one hand drew every page.
+
+**How every page was proven (measured, never viewed — image Reads are refused).** Per
+page: the source screen read and its controls listed; the column measured against the
+bar or the sticky bar (`.shots/lux/measure.mjs`, the pattern of
+`.shots/harness-blur/redesign/measure.mjs`); every clipped or squeezed text flagged
+(`.shots/lux/clipcheck.mjs` — only the source's own one-line ellipses remain); and
+every string the source draws asserted present in the page (`.shots/lux/controls.mjs`,
+green on all 67). The whole set was rebuilt from scratch in one run at the end
+(`node docs/mockups/html/lux/lux.build.mjs`, no key), then `npm run verify`: 1381
+pass, 0 fail, before each of the six pushes.
+
+**Commits, one per batch, all pushed to `mainexpo`:** `c34aa75` batch 1, `cce4c50`
+batch 2, `bf370b3` batch 3, `64fa0b6` batch 4, `c18921f` batch 5, `97adab3` batch 6
+(the full rebuild + index), then this docs commit. Every one is docs under
+`docs/mockups/html/lux/` — no app file moved. Revert: `git revert` any of them; each
+stands alone.
+
+**Corrections and additions made on the way, for the reviewer to know:** Worker Home
+and Available Jobs (approved in the previous sitting) were re-barred with the WORKER
+bar (Home · Map · My Jobs · Inbox · Profile) the README specifies — they had carried
+the customer's [+] bar. `SCREENS.md`'s `post-live` source was corrected to
+`PostJobScreen`'s success overlay (not `JobConfirmedScreen`). The README's honesty
+rules now name the added fixtures: the sample worker (Sam Okafor), a second sample
+bidder (Priya Natarajan), the sample job's two bids and its one funded payment at the
+fee schedule's 7.5% ($110 agreed → $118.25 charged → $101.75 to the worker), and the
+customer map's tiles (the approved worker-map stand-in). No rating, review, completed-
+job count or balance was invented anywhere — a worker reads "New worker" / "No reviews
+yet", and Earnings sums the one sample row.
+
+**Two rulings are the operator's on return:** (1) batch 6 is drawn in Lux — whether
+the auth flow keeps its own emerald/ivory palette (`lib/authTheme.ts`) is theirs;
+(2) reviews and the worker's profile are drawn with no reputation, by the README's
+rule — say "draw sample reviews" to see that layout.
+
+**What the next chat does.** Read the operator's changes per screen; remake only those
+(README §Working loop; a remake is a render function edit, `lux.build.mjs <key>`,
+`shoot.mjs`, the three checks, a sheet); then ask "plan the rebuild, or park it?" —
+applying anything is a NEW plan (tokens → primitives → screens) and never a step of
+the review. The seven Fable comparison pastes in `docs/dispatch/LUX-HANDOVER.md` stay
+optional.
+
+> **BEFORE THIS RUN, THE SAME DATE: the dark rebuild's direction was chosen —
+> B, Emerald Lux Glass — and NOTHING was applied.** The harness gained `--design <file>`
+> (a candidate token table rendered as real screens) and a comma list for `--only`.
+> DECISIONS (14). What follows is that run's record, unchanged.
 
 ## What this session landed
 
@@ -300,6 +358,11 @@ its rim (dark), at the mockup's padding.
 
 ## Waiting on the operator
 
+- **THE LUX PAGES (this run): the review of batches 3–6** — 44 screens drawn under the
+  standing "build all batches" instruction — and the two rulings above (the auth
+  palette; sample reviews or none). Open `docs/mockups/html/lux/index.html`, or the
+  sheets `.shots/mockups/lux-sheet-b3-1.png` … `b6-3.png`. Say what to change per
+  screen; nothing is applied until a rebuild plan is asked for.
 - **The phone — open the Beta twice, then walk, item by item:** (1) Available Jobs —
   every card the same height with the same square picture; long titles no longer
   losing room to the price; "Packing/Unpacking" whole; the list ending 16pt above the

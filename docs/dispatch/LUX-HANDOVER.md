@@ -1,5 +1,21 @@
 # Handover — the Emerald Lux Glass pages (written 2026-09-21, for the next chat)
 
+> **STATE AFTER THE DRAWING RUN (2026-09-21, later the same day): ALL 67 SCREENS ARE
+> DRAWN.** Batches 1 and 2 were approved by the operator ("Yes, all of them"); batches
+> 3–6 were drawn under their standing instruction to build every batch without pausing
+> ("Build all of the batches til 6, without my permission … just NO IMPLEMENTATION IN
+> THE ACTUAL REPO") and await their review. `docs/mockups/html/lux/index.html` opens
+> every page; `SCREENS.md` is fully ticked with each batch's notes; the review sheets
+> are `.shots/mockups/lux-sheet-b<batch>-<n>.png` (gitignored, on the operator's
+> machine). What the next chat does: read the operator's changes per screen, remake
+> only those (the loop below, step 3), then ask "plan the rebuild, or park it?" —
+> applying anything is a NEW plan (tokens → primitives → screens). Fable was NOT used:
+> the operator asked for it to be reserved for hard accuracy or layout calls, and none
+> arose; the seven pastes below remain optional. Two rulings are theirs on return:
+> whether the auth flow (batch 6) keeps its own emerald/ivory palette or takes Lux,
+> and whether the reviews and worker-profile pages should show a populated (sample)
+> reputation — they are drawn with none, by the README's honesty rule.
+
 Read this, then `docs/mockups/html/lux/README.md` (the system) and
 `docs/mockups/html/lux/SCREENS.md` (the checklist). Machine state is git's — this
 was written at the end of the sitting that landed the eighteen-item run

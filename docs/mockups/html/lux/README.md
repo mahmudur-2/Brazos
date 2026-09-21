@@ -106,15 +106,21 @@ card; a job detail's photo bleeds full width under a glass facts panel.
   adds a second, `lux-<screen>-2`, the same column shifted up by `frames[1]` so the
   rest is seen; the sheet captions it "(scrolled)".
 
-## Working loop (for the chat that draws the rest)
+## Working loop (how every page was drawn, and how a remake goes)
 
 1. Read the screen's source (`screens/<Name>Screen.tsx` and the components it
    renders) and list every control and state.
 2. Add a render function to `lux.build.mjs` from the primitives; add the key to
-   `SCREENS`; run `node docs/mockups/html/lux/lux.build.mjs <key>`.
+   `SCREENS`; run `node docs/mockups/html/lux/lux.build.mjs <key>` (no key
+   rebuilds all 67 and `index.html`, the one page that links every screen).
 3. `node docs/mockups/html/shoot.mjs lux/lux-<key>.html` → `.shots/mockups/lux-<key>.png`.
-4. Measure before sending: no overflow past the nav or the sticky bar, nothing
-   wider than the frame but the rails (the pattern is
-   `.shots/harness-blur/redesign/measure.mjs`).
+4. Measure before sending: no overflow past the nav or the sticky bar except a
+   scrolling screen's first frame (its `-2` frame must end AT the bar), nothing
+   wider than the frame but the rails; no clipped text but a deliberate one-line
+   ellipsis; every string the source draws present in the page. The gitignored
+   scratch under `.shots/lux/` holds the three checks as they were run —
+   `measure.mjs`, `clipcheck.mjs`, `controls.mjs` (the per-screen string lists)
+   — and `sheets.mjs`, which composes the review sheets; re-create from the
+   pattern if the folder is gone.
 5. Send the batch as a sheet (three or four phones across, captions inside) and
    the `file:///` paths; tick the row in `SCREENS.md`.
