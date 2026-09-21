@@ -167,7 +167,13 @@
   .prow .two b{font-weight:600;font-size:15px}
   .prow.on .two b{color:#84dfaa}
   .prow .two small{font-size:11.5px;font-weight:400;color:var(--muted);letter-spacing:0}
-  .ffoot{display:flex;align-items:center;gap:14px;padding:14px 20px 34px;border-top:1px solid rgba(183,203,186,.20)}
+  /* 2026-09-20 (sitting 3): 22 above the button, the 34 safe inset below — 21 to the home indicator's top — so the
+     button reads centred between the divider and the bar (was 14 / 37 on the phone); the bar is drawn to show it */
+  .ffoot{display:flex;align-items:center;gap:14px;padding:22px 20px 34px;border-top:1px solid rgba(183,203,186,.20)}
+  .fhome{position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:rgba(255,255,255,.9)}
+  /* the Reset row: grey, last — "sorts by latest job added, nothing else"; ticked, its label stays grey */
+  .prow.muted .two b,.prow.muted .two small{color:var(--muted)}
+  .prow.muted .two b{font-weight:500}
   .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
   .fchip{position:relative}
   .fchip.open{z-index:6}
@@ -181,7 +187,7 @@
   .fchip.left .popup{left:0}
   .fchip.up .popup{top:auto;bottom:calc(100% + 6px)}
   .plist{display:flex;flex-direction:column}
-  .prow{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 28px;text-align:center;font-size:15px;font-weight:500;color:#e5e8e5;border-top:1px solid rgba(183,203,186,.10);white-space:nowrap}
+  .prow{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 28px;text-align:center;font-size:15px;font-weight:500;color:#e5e8e5;border-top:1px solid rgba(255,255,255,.10);white-space:nowrap}
   .prow:first-child{border-top:0}
   .prow.on{color:#84dfaa;font-weight:600}
   .prow .tick{position:absolute;left:10px;top:50%;margin-top:-9px;width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#84dfaa}
@@ -357,6 +363,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">2 · Distance custom — 1 to 10</div>
@@ -483,6 +490,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">3 · Distance custom — 50s to 100s</div>
@@ -609,6 +617,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">4 · Distance custom — 1,000 to 3,000</div>
@@ -735,6 +744,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">5 · Distance picked — 35 mi</div>
@@ -861,6 +871,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">6 · Budget custom — $5 to $50</div>
@@ -987,6 +998,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">7 · Budget custom — $125 to $250</div>
@@ -1113,6 +1125,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">8 · Budget custom — $800 and up</div>
@@ -1239,6 +1252,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">9 · Budget picked — $175</div>
@@ -1365,6 +1379,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">10 · Date custom — from tomorrow</div>
@@ -1491,6 +1506,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">11 · Date custom — into October</div>
@@ -1617,6 +1633,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">12 · Date picked — Sep 27</div>
@@ -1743,6 +1760,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">13 · Sort by — the five options</div>
@@ -1866,9 +1884,10 @@
           <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Best Match</div><div class="fchip on">Assembly</div><div class="fchip on">Moving</div><div class="fchip">Cleaning</div><div class="fchip on">TV mounting</div><div class="fchip">Handyman / Repairs</div><div class="fchip">Yard work</div><div class="fchip">Painting</div><div class="fchip">Packing</div><div class="fchip">Pet care</div><div class="fchip">Errands</div><div class="fchip">Other</div></div>
           <div class="note">Nothing selected means every category.</div></div>
         <div class="fsec"><div class="lbl">Sort</div>
-          <div class="chips-row"><div class="fchip sortpill on open left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><div class="popup sort" style="height:270px"><div class="plist" style="margin-top:-0px"><div class="prow on"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="two"><b>Smart Match</b><small>Matches based on your skills</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Newest</b><small>Soonest job date first</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Highest budget</b><small>Best pay first</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Distance</b><small>Least travel first</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Fewest bids</b><small>Least competition, then closest</small></span></div></div></div></div></div></div>
+          <div class="chips-row"><div class="fchip sortpill on open left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg><div class="popup sort" style="height:322px"><div class="plist" style="margin-top:-0px"><div class="prow on"><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg></span><span class="two"><b>Smart Match</b><small>Matches based on your skills</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Newest</b><small>Earliest jobs first</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Highest budget</b><small>Best pay first</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Distance</b><small>Least travel first</small></span></div><div class="prow"><span class="tick"></span><span class="two"><b>Fewest bids</b><small>Least competition, then closest</small></span></div><div class="prow muted"><span class="tick"></span><span class="two"><b>Reset</b><small>Latest added first</small></span></div></div></div></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">14 · Sort picked — Newest</div>
@@ -1995,6 +2014,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Newest<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 <div class="slot"><div class="slot-label">15 · Sort picked — Fewest bids</div>
@@ -2121,6 +2141,134 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Fewest bids<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
+    </div>
+  </div></div>
+<div class="slot"><div class="slot-label">16 · Sort picked — Reset (Latest added)</div>
+  <div class="phone" data-shot="filters-sort-reset-dark">
+    <div class="map">
+<div class="tile t0" style="left:-125.51px;top:-88.81px"></div>
+<div class="tile t1" style="left:74.17px;top:-88.81px"></div>
+<div class="tile t2" style="left:273.85px;top:-88.81px"></div>
+<div class="tile t3" style="left:-125.51px;top:110.87px"></div>
+<div class="tile t4" style="left:74.17px;top:110.87px"></div>
+<div class="tile t5" style="left:273.85px;top:110.87px"></div>
+<div class="tile t6" style="left:-125.51px;top:310.55px"></div>
+<div class="tile t7" style="left:74.17px;top:310.55px"></div>
+<div class="tile t8" style="left:273.85px;top:310.55px"></div>
+<div class="tile t9" style="left:-125.51px;top:510.23px"></div>
+<div class="tile t10" style="left:74.17px;top:510.23px"></div>
+<div class="tile t11" style="left:273.85px;top:510.23px"></div>
+<div class="tile t12" style="left:-125.51px;top:709.91px"></div>
+<div class="tile t13" style="left:74.17px;top:709.91px"></div>
+<div class="tile t14" style="left:273.85px;top:709.91px"></div>
+      <div class="tint"></div>
+<div class="park" style="left:40px;top:296px;width:170px;height:130px"></div>
+<div class="park" style="left:118px;top:250px;width:96px;height:70px"></div>
+<div class="park" style="left:176px;top:560px;width:120px;height:86px"></div>
+<div class="park" style="left:360px;top:600px;width:130px;height:90px"></div>
+      <div class="topfade"></div>
+    </div>
+<div class="road" style="left:250px;top:200px;--r:0deg">Church Ave</div>
+<div class="road" style="left:130px;top:392px;--r:-74deg">Flatbush Ave</div>
+<div class="road" style="left:238px;top:236px;--r:0deg">Linden Blvd</div>
+<div class="road" style="left:318px;top:408px;--r:-90deg">Nostrand Ave</div>
+<div class="road" style="left:126px;top:480px;--r:-90deg">Ocean Ave</div>
+<div class="road" style="left:300px;top:548px;--r:-32deg">Kings Hwy</div>
+<div class="nlabel" style="left:296px;top:168px">CROWN<br>HEIGHTS</div>
+<div class="nlabel" style="left:62px;top:206px">PROSPECT<br>HEIGHTS</div>
+<div class="nlabel" style="left:348px;top:322px">REMSEN<br>VILLAGE</div>
+<div class="nlabel" style="left:84px;top:336px">FLATBUSH</div>
+<div class="nlabel big" style="left:186px;top:354px">BROOKLYN</div>
+<div class="nlabel" style="left:342px;top:468px">FARRAGUT</div>
+<div class="nlabel" style="left:60px;top:444px">KENSINGTON</div>
+<div class="nlabel" style="left:330px;top:582px">FLATLANDS</div>
+<div class="nlabel" style="left:92px;top:592px">MIDWOOD</div>
+<div class="poi park" style="left:100px;top:238px"><i><svg><use href="#i-tree"/></svg></i><span>Brooklyn Botanic Garden</span></div>
+<div class="poi park" style="left:70px;top:296px"><i><svg><use href="#i-tree"/></svg></i><span>Prospect Park</span></div>
+<div class="poi hosp" style="left:196px;top:268px"><i><svg><use href="#i-cross"/></svg></i><span>Kings County Hospital Center</span></div>
+<div class="poi edu" style="left:176px;top:562px"><i><svg><use href="#i-cap"/></svg></i><span>Brooklyn College CUNY</span></div>
+
+    <div class="youhalo" style="left:204px;top:394px"></div>
+    <div class="youring" style="left:204px;top:394px"></div>
+<div class="pin" style="left:169px;top:216px"><svg class="body" viewBox="0 0 46 60"><defs><linearGradient id="p90f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#224634"/><stop offset=".52" stop-color="#06180f"/><stop offset="1" stop-color="#0a2418"/></linearGradient><linearGradient id="p90s" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#a0dba5"/><stop offset=".6" stop-color="#53a969"/><stop offset="1" stop-color="#478a56"/></linearGradient></defs><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="url(#p90f)" stroke="url(#p90s)" stroke-width="2"/></svg><svg class="glyph"><use href="#i-briefcase"/></svg></div>
+<div class="pin" style="left:308px;top:254px"><svg class="body" viewBox="0 0 46 60"><defs><linearGradient id="p91f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#224634"/><stop offset=".52" stop-color="#06180f"/><stop offset="1" stop-color="#0a2418"/></linearGradient><linearGradient id="p91s" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#a0dba5"/><stop offset=".6" stop-color="#53a969"/><stop offset="1" stop-color="#478a56"/></linearGradient></defs><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="url(#p91f)" stroke="url(#p91s)" stroke-width="2"/></svg><svg class="glyph"><use href="#i-briefcase"/></svg><div class="count">2</div></div>
+<div class="pin" style="left:273px;top:350px"><svg class="body" viewBox="0 0 46 60"><defs><linearGradient id="p92f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#224634"/><stop offset=".52" stop-color="#06180f"/><stop offset="1" stop-color="#0a2418"/></linearGradient><linearGradient id="p92s" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#a0dba5"/><stop offset=".6" stop-color="#53a969"/><stop offset="1" stop-color="#478a56"/></linearGradient></defs><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="url(#p92f)" stroke="url(#p92s)" stroke-width="2"/></svg><svg class="glyph"><use href="#i-briefcase"/></svg></div>
+<div class="selglow" style="left:243px;top:466px"></div><div class="pin sel" style="left:243px;top:448px"><svg class="body" viewBox="0 0 46 60"><defs><linearGradient id="p93f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#224634"/><stop offset=".52" stop-color="#06180f"/><stop offset="1" stop-color="#0a2418"/></linearGradient><linearGradient id="p93s" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#a0dba5"/><stop offset=".6" stop-color="#53a969"/><stop offset="1" stop-color="#478a56"/></linearGradient></defs><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="url(#p93f)" stroke="url(#p93s)" stroke-width="2.6"/></svg><svg class="glyph"><use href="#i-briefcase"/></svg></div><div class="seldot" style="left:243px;top:464px"></div>
+<div class="pin" style="left:275px;top:516px"><svg class="body" viewBox="0 0 46 60"><defs><linearGradient id="p94f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#224634"/><stop offset=".52" stop-color="#06180f"/><stop offset="1" stop-color="#0a2418"/></linearGradient><linearGradient id="p94s" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#a0dba5"/><stop offset=".6" stop-color="#53a969"/><stop offset="1" stop-color="#478a56"/></linearGradient></defs><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="url(#p94f)" stroke="url(#p94s)" stroke-width="2"/></svg><svg class="glyph"><use href="#i-briefcase"/></svg></div>
+<div class="pin" style="left:90px;top:530px"><svg class="body" viewBox="0 0 46 60"><defs><linearGradient id="p95f" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#224634"/><stop offset=".52" stop-color="#06180f"/><stop offset="1" stop-color="#0a2418"/></linearGradient><linearGradient id="p95s" x1="0" y1="0" x2=".7" y2="1"><stop stop-color="#a0dba5"/><stop offset=".6" stop-color="#53a969"/><stop offset="1" stop-color="#478a56"/></linearGradient></defs><path d="M23 2.5C12.2 2.5 3.5 11 3.5 21.6c0 14 19.5 35.9 19.5 35.9s19.5-21.9 19.5-35.9C42.5 11 33.8 2.5 23 2.5z" fill="url(#p95f)" stroke="url(#p95s)" stroke-width="2"/></svg><svg class="glyph"><use href="#i-briefcase"/></svg><div class="count">3</div></div>
+    <div class="you" style="left:204px;top:394px"></div>
+
+    <div class="status">
+      <div class="time">9:41 <svg viewBox="0 0 24 24"><use href="#i-arrow"/></svg></div>
+      <div class="right">
+        <div class="bars"><i></i><i></i><i></i><i></i></div>
+        <svg class="wifi" viewBox="0 0 16 12" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"><path d="M1.5 4.2a10 10 0 0 1 13 0"/><path d="M4 6.9a6.2 6.2 0 0 1 8 0"/><path d="M6.4 9.4a2.6 2.6 0 0 1 3.2 0"/></svg>
+        <div class="batt">36</div>
+      </div>
+    </div>
+
+    <div class="search glass">
+      <svg class="mag"><use href="#i-search"/></svg>
+      <div class="ph">Explore nearby jobs</div>
+      <svg class="mic"><use href="#i-mic"/></svg>
+      <div class="dist"><svg><use href="#i-sliders"/></svg>5 mi</div>
+    </div>
+    <div class="chips">
+      <div class="chip glass"><svg><use href="#i-calendar"/></svg>Today</div>
+    </div>
+
+    <div class="attrib">© Esri, HERE, Garmin, OpenStreetMap contributors</div>
+
+    <div class="sheet glass">
+      <div class="grab"></div>
+      <div class="head">
+        <div>
+          <h2>6 open jobs</h2>
+          <div class="sub">Near you <i></i> Within 5 miles</div>
+        </div>
+        <div class="view">View <svg><use href="#i-chev"/></svg></div>
+      </div>
+      <div class="card">
+        <div class="photo"><i class="photoimg"></i></div>
+        <div class="body">
+          <div class="title">Furniture Assembly</div>
+          <div class="meta"><span class="cat">Assembly</span><span>Today</span></div>
+          <div class="loc"><svg><use href="#i-loc"/></svg>Flatbush</div>
+          <div class="est"><div class="lbl">EST. PAY</div><div class="amt">$60</div></div>
+        </div>
+        <svg class="chev"><use href="#i-chev"/></svg>
+      </div>
+    </div>
+
+    <div class="nav">
+      <div class="item"><svg><use href="#i-home"/></svg><span>Home</span></div>
+      <div class="item active"><svg><use href="#i-pin"/></svg><span>Map</span></div>
+      <div class="item"><svg><use href="#i-briefcase"/></svg><span>My Jobs</span></div>
+      <div class="item"><svg><use href="#i-chat"/></svg><span>Inbox</span></div>
+      <div class="item"><svg><use href="#i-person"/></svg><span>Profile</span></div>
+    </div>
+
+    <div class="fscrim"></div>
+    <div class="fsheet">
+      <div class="grab"></div>
+      <div class="fhead"><h2>Filters</h2><div class="done">Done</div></div>
+      <div class="fbody">
+        <div class="fsec"><div class="lbl">Distance</div>
+          <div class="chips-row fill"><div class="fchip any">Any</div><div class="fchip">2 mi</div><div class="fchip on">5 mi</div><div class="fchip">10 mi</div><div class="fchip">25 mi</div><div class="fchip custom right">Custom</div></div></div>
+        <div class="fsec"><div class="lbl">Minimum budget</div>
+          <div class="chips-row fill"><div class="fchip any on">Any</div><div class="fchip">$25</div><div class="fchip">$50</div><div class="fchip">$100</div><div class="fchip">$250</div><div class="fchip custom right">Custom</div></div>
+          <div class="note">Jobs with no budget set are always shown.</div></div>
+        <div class="fsec"><div class="lbl">When</div>
+          <div class="chips-row fill"><div class="fchip any">Any</div><div class="fchip today on">Today</div><div class="fchip">Tomorrow</div><div class="fchip">This week</div><div class="fchip custom right up">Custom</div></div></div>
+        <div class="fsec"><div class="lbl">Categories</div>
+          <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Best Match</div><div class="fchip on">Assembly</div><div class="fchip on">Moving</div><div class="fchip">Cleaning</div><div class="fchip on">TV mounting</div><div class="fchip">Handyman / Repairs</div><div class="fchip">Yard work</div><div class="fchip">Painting</div><div class="fchip">Packing</div><div class="fchip">Pet care</div><div class="fchip">Errands</div><div class="fchip">Other</div></div>
+          <div class="note">Nothing selected means every category.</div></div>
+        <div class="fsec"><div class="lbl">Sort</div>
+          <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Latest added<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
+      </div>
+      <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 </div>

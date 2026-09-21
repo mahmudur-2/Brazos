@@ -162,7 +162,7 @@ const THEMES = {
     // the popup: the app's menu material (ui/tokens.ts materials.menu: the scrim ink at .82, the mint hairline at .14, radius 16)
     // 2026-09-20 (sitting 3): at the menu material's own .82 (was .90) with NO inner top line — the app's menu draws none —
     // so the popup is what the phone draws; pBar is iOS's own indicator, approximately (white style on dark glass).
-    pPane: 'rgba(7,27,21,.82)', pRim: 'rgba(229,241,236,.14)', pShadow: '0 14px 34px rgba(0,0,0,.55)', pHair: 'rgba(183,203,186,.10)', pBar: 'rgba(255,255,255,.5)',
+    pPane: 'rgba(7,27,21,.82)', pRim: 'rgba(229,241,236,.14)', pShadow: '0 14px 34px rgba(0,0,0,.55)', pHair: 'rgba(255,255,255,.10)', pBar: 'rgba(255,255,255,.5)', fHome: 'rgba(255,255,255,.9)',
     pInk: '#e5e8e5', pOnInk: '#84dfaa', pCal: '#a1aaa4',
     lqShadow: '0 12px 30px rgba(0,0,0,.48)', lqChipFill: 'rgba(132,223,170,.10)',
     lqLens: 'linear-gradient(160deg,rgba(132,223,170,.22),rgba(132,223,170,.06))', lqLensRim: 'rgba(170,235,200,.38)', lqLensGlow: 'rgba(73,196,129,.22)',
@@ -202,7 +202,7 @@ const THEMES = {
     fSel: '#E5F1EC', fSelRim: '#CBE0D7', fSelInk: '#0D6B52',
     fDone: '#0D6B52', fTrack: '#F1F3F1', fPrimary: '#0D6B52', fPrimaryInk: '#FFFFFF', fPrimaryLift: 'transparent',
     // the popup, flat: the surface, the line hairline, the raised shadow
-    pPane: '#FFFFFF', pRim: '#DDE2DD', pShadow: '0 14px 34px rgba(19,32,27,.18)', pHair: '#EEF1EC', pBar: 'rgba(0,0,0,.4)',
+    pPane: '#FFFFFF', pRim: '#DDE2DD', pShadow: '0 14px 34px rgba(19,32,27,.18)', pHair: '#EEF1EC', pBar: 'rgba(0,0,0,.4)', fHome: 'rgba(0,0,0,.85)',
     pInk: '#13201B', pOnInk: '#0D6B52', pCal: '#6E7771',
   },
 };
@@ -390,7 +390,13 @@ const filtersCss = (t) => `
   .prow .two b{font-weight:600;font-size:15px}
   .prow.on .two b{color:${t.pOnInk}}
   .prow .two small{font-size:11.5px;font-weight:400;color:var(--muted);letter-spacing:0}
-  .ffoot{display:flex;align-items:center;gap:14px;padding:14px 20px 34px;border-top:1px solid ${t.fHair}}
+  /* 2026-09-20 (sitting 3): 22 above the button, the 34 safe inset below — 21 to the home indicator's top — so the
+     button reads centred between the divider and the bar (was 14 / 37 on the phone); the bar is drawn to show it */
+  .ffoot{display:flex;align-items:center;gap:14px;padding:22px 20px 34px;border-top:1px solid ${t.fHair}}
+  .fhome{position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:${t.fHome}}
+  /* the Reset row: grey, last — "sorts by latest job added, nothing else"; ticked, its label stays grey */
+  .prow.muted .two b,.prow.muted .two small{color:var(--muted)}
+  .prow.muted .two b{font-weight:500}
   .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
   .fchip{position:relative}
   .fchip.open{z-index:6}
@@ -440,10 +446,13 @@ const barStyle = (n, visible, start, rowH) => {
 // THE SORTS (operator, 2026-09-19), each with the rule the app will implement.
 const SORTS = [
   { key: 'smart', label: 'Smart Match', hint: 'Matches based on your skills' },
-  { key: 'newest', label: 'Newest', hint: 'Soonest job date first' },
+  { key: 'newest', label: 'Newest', hint: 'Earliest jobs first' },
   { key: 'pay', label: 'Highest budget', hint: 'Best pay first' },
   { key: 'distance', label: 'Distance', hint: 'Least travel first' },
   { key: 'bids', label: 'Fewest bids', hint: 'Least competition, then closest' },
+  // 2026-09-20 (sitting 3): the operator's "Reset" — latest job added first and nothing else; grey, last; the pill
+  // wears "Latest added" once it is picked (asked: "Sort by Latest added").
+  { key: 'reset', label: 'Reset', pill: 'Latest added', hint: 'Latest added first', muted: true },
 ];
 
 // THE MOMENTS: what each frame of the gallery shows.
@@ -463,6 +472,7 @@ const STATES = [
   { id: 'sort-open', label: '13 · Sort by — the five options', open: 'sort', at: 0 },
   { id: 'sort-newest', label: '14 · Sort picked — Newest', picked: { sort: 'newest' } },
   { id: 'sort-bids', label: '15 · Sort picked — Fewest bids', picked: { sort: 'bids' } },
+  { id: 'sort-reset', label: '16 · Sort picked — Reset (Latest added)', picked: { sort: 'reset' } },
 ];
 
 // The categories (operator, 2026-09-19): the app's ELEVEN real job
@@ -484,11 +494,11 @@ const filtersSheet = (st = {}) => {
     let rows;
     if (kind === 'distance') rows = DISTANCE_VALUES.map((m) => ({ key: m, html: fmtMiles(m) }));
     else if (kind === 'budget') rows = BUDGET_VALUES.map((d) => ({ key: d, html: fmtDollars(d) }));
-    else if (kind === 'sort') rows = SORTS.map((o) => ({ key: o.key, html: `<span class="two"><b>${o.label}</b><small>${o.hint}</small></span>` }));
+    else if (kind === 'sort') rows = SORTS.map((o) => ({ key: o.key, muted: o.muted, html: `<span class="two"><b>${o.label}</b><small>${o.hint}</small></span>` }));
     else rows = DATE_VALUES.map((d, i) => ({ key: i, html: `<span class="cal"><i>${d.getDate()}</i></span>${fmtDate(d)}` }));
     const visible = kind === 'sort' ? SORTS.length : kind === 'date' ? POP_ROWS - 1 : POP_ROWS;
     const start = Math.max(0, Math.min(at, rows.length - visible));
-    const list = rows.map((r) => `<div class="prow${r.key === current ? ' on' : ''}"><span class="tick">${r.key === current ? checkSvg : ''}</span>${r.html}</div>`).join('');
+    const list = rows.map((r) => `<div class="prow${r.key === current ? ' on' : ''}${r.muted ? ' muted' : ''}"><span class="tick">${r.key === current ? checkSvg : ''}</span>${r.html}</div>`).join('');
     const rowH = kind === 'sort' ? 52 : ROW_H;
     const bar = kind === 'sort' ? '' : `;${barStyle(rows.length, visible, start, rowH)}`;
     return `<div class="popup ${kind}" style="height:${visible * rowH + 10}px${bar}"><div class="plist" style="margin-top:-${start * rowH}px">${list}</div></div>`;
@@ -520,9 +530,10 @@ const filtersSheet = (st = {}) => {
           <div class="chips-row scroll"><div class="fchip on skills"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>Best Match</div>${CATEGORIES.map((c) => `<div class="fchip${MY_SKILLS.has(c) ? ' on' : ''}">${c}</div>`).join('')}</div>
           <div class="note">Nothing selected means every category.</div></div>
         <div class="fsec"><div class="lbl">Sort</div>
-          <div class="chips-row">${(() => { const cur = SORTS.find((o) => o.key === (picked.sort ?? 'smart')); const isOpen = open === 'sort'; return `<div class="fchip sortpill on${isOpen ? ' open' : ''} left up"><span class="dim">Sort by</span>${cur.label}<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>${isOpen ? popup('sort', 0, cur.key) : ''}</div>`; })()}</div></div>
+          <div class="chips-row">${(() => { const cur = SORTS.find((o) => o.key === (picked.sort ?? 'smart')); const isOpen = open === 'sort'; return `<div class="fchip sortpill on${isOpen ? ' open' : ''} left up"><span class="dim">Sort by</span>${cur.pill ?? cur.label}<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>${isOpen ? popup('sort', 0, cur.key) : ''}</div>`; })()}</div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>`;
 };
 

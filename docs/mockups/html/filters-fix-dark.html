@@ -167,7 +167,13 @@
   .prow .two b{font-weight:600;font-size:15px}
   .prow.on .two b{color:#84dfaa}
   .prow .two small{font-size:11.5px;font-weight:400;color:var(--muted);letter-spacing:0}
-  .ffoot{display:flex;align-items:center;gap:14px;padding:14px 20px 34px;border-top:1px solid rgba(183,203,186,.20)}
+  /* 2026-09-20 (sitting 3): 22 above the button, the 34 safe inset below — 21 to the home indicator's top — so the
+     button reads centred between the divider and the bar (was 14 / 37 on the phone); the bar is drawn to show it */
+  .ffoot{display:flex;align-items:center;gap:14px;padding:22px 20px 34px;border-top:1px solid rgba(183,203,186,.20)}
+  .fhome{position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:rgba(255,255,255,.9)}
+  /* the Reset row: grey, last — "sorts by latest job added, nothing else"; ticked, its label stays grey */
+  .prow.muted .two b,.prow.muted .two small{color:var(--muted)}
+  .prow.muted .two b{font-weight:500}
   .ffoot .reset{font-size:16px;font-weight:600;color:var(--muted);padding:0 6px}
   .fchip{position:relative}
   .fchip.open{z-index:6}
@@ -181,7 +187,7 @@
   .fchip.left .popup{left:0}
   .fchip.up .popup{top:auto;bottom:calc(100% + 6px)}
   .plist{display:flex;flex-direction:column}
-  .prow{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 28px;text-align:center;font-size:15px;font-weight:500;color:#e5e8e5;border-top:1px solid rgba(183,203,186,.10);white-space:nowrap}
+  .prow{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 28px;text-align:center;font-size:15px;font-weight:500;color:#e5e8e5;border-top:1px solid rgba(255,255,255,.10);white-space:nowrap}
   .prow:first-child{border-top:0}
   .prow.on{color:#84dfaa;font-weight:600}
   .prow .tick{position:absolute;left:10px;top:50%;margin-top:-9px;width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:#84dfaa}
@@ -367,6 +373,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 
@@ -494,6 +501,7 @@
           <div class="chips-row"><div class="fchip sortpill on left up"><span class="dim">Sort by</span>Smart Match<svg class="caret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></div></div></div>
       </div>
       <div class="ffoot"><div class="reset">Reset</div><div class="show">Show 6 jobs</div></div>
+      <div class="fhome"></div>
     </div>
   </div></div>
 

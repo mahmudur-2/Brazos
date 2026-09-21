@@ -144,14 +144,17 @@ function filterRow(type, cur, prev, bpp, out) {
 }
 
 /**
- * Encodes an RGB pixel buffer (3 bytes per pixel, row-major) as a PNG.
+ * Encodes an RGB pixel buffer (3 bytes per pixel, row-major) as a PNG — or,
+ * with `bpp: 4` (2026-09-20, scripts/home-ground-blend.mjs's feathered hero),
+ * an RGBA one as colour type 6. The default is the RGB path this file has
+ * always written, byte for byte.
  *
  * The filter for each row is chosen by the minimum-sum-of-absolute-differences
  * heuristic the PNG specification itself recommends: the filtered bytes are
  * read as signed and the type with the smallest total magnitude wins.
  */
-export function encodePng({ width, height, pixels }) {
-  const bpp = 3;
+export function encodePng({ width, height, pixels, bpp = 3 }) {
+  if (bpp !== 3 && bpp !== 4) throw new Error(`encodePng: bpp must be 3 or 4, got ${bpp}`);
   const stride = width * bpp;
   if (pixels.length !== height * stride) {
     throw new Error(`encodePng: expected ${height * stride} bytes, got ${pixels.length}`);
@@ -161,7 +164,7 @@ export function encodePng({ width, height, pixels }) {
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // colour type: RGB, no alpha
+  ihdr[9] = bpp === 4 ? 6 : 2; // colour type: RGB (2), or RGBA (6) for bpp 4
   ihdr[10] = 0; // compression: deflate
   ihdr[11] = 0; // filter: adaptive
   ihdr[12] = 0; // interlace: none

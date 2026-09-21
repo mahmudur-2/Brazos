@@ -33,6 +33,20 @@ clear of the tick; the bar and no mask on every open popup. DECISIONS (1)–(6);
 the run list `docs/dispatch/NEXT-RUN-2026-09-21.md` "PART TWO", items 4–9 with the
 reference's sampled colours. NOT BUILT: nothing in the app moved this sitting.
 
+**SITTING 3, SECOND ROUND — the Sort popup again, the customer Home, the ground + hero.**
+The operator sent four more screenshots. LANDED (docs + one tracked script, no app code):
+the Filters gallery's sixteen moments (the grey Reset row → "Sort by Latest added", "Earliest
+jobs first", light-grey dividers, the footer centred over a drawn home indicator);
+`docs/mockups/html/home-redesign.html` re-cut to the operator's list (rhythm 24, field 56
+r20 with the mic alone, four whole tiles at gap 20, the copy) and made honest — it draws
+the app's ground raster and the hero as `<img>`s, no CSS mask; the ground + hero blend
+(pick c: the hero feathered in its file, the ground pooled to the photo's night under it)
+with its transform `scripts/home-ground-blend.mjs` on the repo's own PNG codec
+(`scripts/atmosphere-tune.mjs` `encodePng` gained `bpp: 4`, self-test green). Measured in
+the pages: 32 + 2 phones, 0 nested; field 56 r20; tiles 73.25, four whole, none peeking;
+every gap 24; the seam ≤ 2 levels. DECISIONS (7)–(12); the run list's PART THREE, items
+10–18. `--apply` has NOT been run: the assets are unchanged until the run.
+
 **SITTING 2 — THE TWELVE-ITEM RUN — three code commits over `a4382bf`**, each revertible alone,
 then this docs commit (the regenerated mockups, DECISIONS (8), this file, the session
 notes). `npm run verify` after the last code commit: **1380 pass, 0 fail, exit 0**
@@ -112,6 +126,9 @@ its rim (dark), at the mockup's padding.
   operator's rule from sitting 3: the HTML IS the reference the loop measures against —
   build the harness target, sample beside named texts, compare to the numbers in that
   file, iterate on alphas only. Nothing is judged by eye.
+- **`scripts/home-ground-blend.mjs --apply` rewrites two assets and is guarded by a marker** —
+  run it exactly once in the run, then re-measure the raster fences (item 17). The reference
+  already shows its result; the app does not yet.
 - **`filters-fix.build.mjs` depends on the gallery**: run `map-explore.build.mjs --filters`
   first; it slices the gallery's first slot. NOW's CSS in it is the app's numbers at
   `c59d2aa` — update it when the app changes, or it lies.
