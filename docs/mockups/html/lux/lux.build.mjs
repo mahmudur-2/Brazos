@@ -373,6 +373,47 @@ const SYSTEM_CSS = `
 .switch.on{background:var(--acc);border-color:transparent}
 .switch.on i{left:auto;right:3px;background:var(--accInk)}
 .btn2.off{color:var(--muted);border-color:rgba(200,255,230,.10)}
+/* --- batch 4 additions: the inbox row, bubbles, the composer, menus, the report dialog --- */
+.pillrow{display:flex;gap:8px}
+.pillrow .p{height:32px;padding:0 14px;border-radius:16px;display:flex;align-items:center;font-size:13px;font-weight:700;color:var(--muted);background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.12)}
+.pillrow .p.on{background:var(--acc);color:var(--accInk);border-color:transparent}
+.msgs{display:flex;flex-direction:column;gap:10px}
+.bub{max-width:78%;padding:10px 14px 8px;border-radius:20px;font-size:15px;line-height:20px;color:var(--ink);display:flex;flex-direction:column;gap:4px}
+.bub.them{align-self:flex-start;background:rgba(12,44,38,.62);border:1px solid rgba(200,255,230,.16);border-bottom-left-radius:6px;backdrop-filter:blur(18px)}
+.bub.me{align-self:flex-end;background:linear-gradient(135deg,rgba(141,240,192,.28),rgba(79,197,140,.22));border:1px solid rgba(126,226,180,.35);border-bottom-right-radius:6px}
+.bub .ft{display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;color:var(--muted)}
+.bub .ft svg{width:14px;height:14px}
+.bub .ft .tk{display:flex;margin-left:2px}
+.bub .ft .tk svg + svg{margin-left:-8px}
+.wave{display:flex;align-items:center;gap:2px;height:28px}
+.wave i{display:block;width:3px;border-radius:2px;background:var(--acc)}
+.play{width:32px;height:32px;border-radius:16px;background:var(--acc);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.play svg{width:16px;height:16px;color:var(--accInk)}
+.doc{display:flex;align-items:center;gap:10px;padding:2px 0}
+.doc .ico{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.doc .ico svg{width:20px;height:20px;color:var(--acc)}
+.composer{position:absolute;left:0;right:0;bottom:84px;padding:10px 16px 12px;display:flex;align-items:center;gap:12px;background:rgba(5,24,20,.72);border-top:1px solid rgba(200,255,230,.16);backdrop-filter:blur(24px)}
+.composer svg{width:26px;height:26px;color:var(--acc);flex:0 0 auto}
+.composer .in{flex:1;min-height:44px;padding:11px 16px;border-radius:22px;font-size:15px;line-height:20px}
+.jobdiv{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;font-weight:600}
+.jobdiv i{flex:1;height:1px;background:rgba(200,255,230,.12)}
+.jobdiv span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%}
+.menu{position:absolute;right:20px;top:106px;width:230px;padding:6px 0;border-radius:18px;background:rgba(9,36,31,.94);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 16px 40px rgba(0,0,0,.5);backdrop-filter:blur(24px)}
+.menu .r{height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;font-size:15px;color:var(--ink)}
+.menu .r svg{width:20px;height:20px;color:var(--acc)}
+.asheet{position:absolute;left:16px;right:16px;bottom:24px;padding:8px 0 0;border-radius:22px;background:rgba(9,36,31,.94);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 16px 40px rgba(0,0,0,.5);backdrop-filter:blur(24px)}
+.asheet .hd{padding:10px 18px 12px;text-align:center;border-bottom:1px solid rgba(200,255,230,.10)}
+.asheet .r{height:50px;display:flex;align-items:center;gap:12px;padding:0 18px;font-size:16px;color:var(--ink)}
+.asheet .r svg{width:20px;height:20px;color:var(--acc)}
+.asheet .r.bad{color:#F0A0A0}
+.asheet .r.bad svg{color:#F0A0A0}
+.asheet .cancel{height:52px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--acc);border-top:1px solid rgba(200,255,230,.10)}
+.radio{width:22px;height:22px;border-radius:11px;border:1.5px solid rgba(200,255,230,.3);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.radio.on{border-color:var(--acc)}
+.radio.on i{width:12px;height:12px;border-radius:6px;background:var(--acc);display:block}
+.nrow{display:flex;gap:12px;align-items:flex-start;padding:12px 14px}
+.nrow + .nrow{border-top:1px solid rgba(200,255,230,.10)}
+.dot{width:9px;height:9px;border-radius:5px;background:var(--acc);flex:0 0 auto;margin-top:6px;box-shadow:0 0 10px rgba(126,226,180,.6)}
 `;
 
 const base = `
@@ -988,6 +1029,68 @@ const pricing = (scroll = 0) => `
       <div class="btn2 off">Add service</div></div>
   `, 16)}${workerNav('Profile')}`;
 
+// ---------------------------------------------------------------------------
+// BATCH 4 — messaging (SCREENS.md). The one conversation the sample job opened.
+// ---------------------------------------------------------------------------
+const PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>';
+const ticks = (read) => `<span class="tk">${icS('i-check', 14, read ? 'var(--gold)' : 'var(--muted)')}${read ? icS('i-check', 14, 'var(--gold)') : ''}</span>`;
+/** One conversation row (components/ConversationRow.tsx): the face, the job line, the name, the preview, the age, the unread dot. */
+const convoRow = (unread = true) => `<div class="card" style="padding:12px 14px;display:flex;gap:12px;align-items:center"><div class="avatar" style="width:52px;height:52px;border-radius:26px;font-size:18px;border-width:1.5px">${WORKER.initials}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${DETAIL.title}</span><span class="title" style="font-size:16px">${WORKER.name}</span><span style="font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">On my way — 15 minutes out.</span></div><div class="stack" style="gap:6px;align-items:flex-end"><span class="muted" style="font-size:12px">20m</span>${unread ? '<div class="dot" style="margin-top:0"></div>' : ''}</div></div>`;
+/** Messages (screens/MessagesInboxScreen.tsx): the filter pills, the one conversation, the Hidden Chats row. */
+const inbox = () => `
+  <div class="body" style="gap:16px">
+    <div class="h2 serif" style="font-size:30px;line-height:34px">Messages</div>
+    <div class="pillrow hrow" style="margin:0 -20px;padding:0 20px;gap:8px">${['All', 'Unread', 'Archived', 'Requests', 'Support'].map((l, i) => `<span class="p${i === 0 ? ' on' : ''}">${l}</span>`).join('')}</div>
+    ${convoRow()}
+    <div style="display:flex;align-items:center;justify-content:center;gap:6px;padding:8px">${icS('i-lock', 16, 'var(--muted)')}<span class="muted" style="font-size:14px;font-weight:600">Hidden Chats</span></div>
+  </div>${nav('Inbox')}`;
+
+/** The chat's header: the face, the serif name, the job under it, the overflow dots. */
+const chatHeader = () => `<div class="hdr"><div class="circle">${ic('i-back')}</div><div class="avatar" style="width:34px;height:34px;border-radius:17px;font-size:13px;border-width:1.5px">${WORKER.initials}</div><div class="stack" style="gap:0;flex:1;min-width:0"><div class="t serif" style="font-size:22px;line-height:26px">${WORKER.name}</div><span class="sub">${DETAIL.title}</span></div>${icS('i-dots', 22, 'var(--acc)')}</div>`;
+/** The thread: the accepted offer's event card, then text, a photo, a voice note, a document, a live location, each in its bubble. */
+const thread = () => `
+    <div class="jobdiv"><i></i><span>${DETAIL.title}</span><i></i></div>
+    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;align-self:stretch"><span class="eyebrow">Offer accepted</span><div class="between"><span class="title" style="font-size:15px">${DETAIL.title}</span><span class="money" style="font-size:20px">${PAY.agreed}</span></div><span class="muted" style="font-size:12px">2h ago</span><span class="muted" style="font-size:13px;line-height:18px">This job is now assigned and has moved into your job timeline.</span><span class="link" style="font-size:13px">Tap to view the job</span></div>
+    <div class="bub them">Hi Mahmudur — confirming Saturday morning. I’ll bring a second Allen set.<div class="ft">9:12 AM</div></div>
+    <div class="bub me">Perfect. The boxes are in the living room, buzzer is 3B.<div class="ft">9:14 AM ${ticks(true)}</div></div>
+    <div class="bub them" style="padding:6px 6px 8px"><div class="thumb" style="width:200px;height:150px;border-radius:14px">${photo()}</div><div class="ft" style="padding-right:8px">9:20 AM</div></div>
+    <div class="bub me" style="min-width:200px"><div style="display:flex;align-items:center;gap:10px"><div class="play">${PLAY}</div><div class="wave">${[6, 12, 18, 10, 22, 14, 8, 20, 16, 10, 24, 12, 6, 18, 10].map((h) => `<i style="height:${h}px"></i>`).join('')}</div><span class="muted" style="font-size:12px">0:12</span></div><div class="ft">9:21 AM ${ticks(false)}</div></div>
+    <div class="bub them"><div class="doc"><div class="ico">${ic('i-images')}</div><div class="stack" style="gap:1px"><span style="font-size:14px;font-weight:600">parts-list.pdf</span><span class="muted" style="font-size:12px">240 KB</span></div></div><div class="ft">9:24 AM</div></div>
+    <div class="card" style="padding:12px 14px;display:flex;gap:12px;align-items:center;align-self:flex-start;max-width:86%"><div class="well sm">${ic('i-send')}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title" style="font-size:15px">${WORKER.first}’s live location</span><span class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Flatbush · 40.6412, -73.9578</span></div><span class="chip">14m</span></div>`;
+/** Chat (screens/ChatScreen.tsx with components/ChatComposer.tsx): scrolled to its end, the composer's three zones above the bar. */
+const chat = (scroll = 0) => `
+  <div class="body" style="gap:0">${chatHeader()}</div>
+  ${scroller(116, 152, scroll, thread(), 10)}
+  <div class="composer">${ic('i-plus')}<div class="in ph"><span>Message…</span></div>${ic('i-mic')}</div>${nav('Inbox')}`;
+
+/** The three menus: the chat's overflow (components/DropMenu.tsx), the message long-press sheet, the inbox row's long-press sheet (components/ActionSheet.tsx). */
+const chatMenu = (which = 'overflow') => which === 'overflow'
+  ? `${chat(CHAT_END)}<div class="scrim" style="background:rgba(3,14,12,.35)"></div><div class="menu">${[['i-people', 'Hire Again'], ['i-staro', 'Rating / Reviews'], ['i-bookmark', 'Save Worker'], ['i-bell', 'Mute'], ['i-share', 'Share Profile'], ['i-person', 'View Profile']].map(([i, l]) => `<div class="r">${ic(i)}${l}</div>`).join('')}</div>`
+  : which === 'message'
+    ? `${chat(CHAT_END)}<div class="scrim"></div><div class="asheet"><div class="hd"><span class="title" style="font-size:15px">Message</span></div>${[['i-sparkles', 'React'], ['i-back', 'Reply'], ['i-images', 'Copy']].map(([i, l]) => `<div class="r">${ic(i)}${l}</div>`).join('')}<div class="r bad">${ic('i-close')}Unsend</div><div class="cancel">Cancel</div></div><div class="home-bar"></div>`
+    : `${inbox()}<div class="scrim"></div><div class="asheet"><div class="hd"><div class="stack" style="gap:2px;align-items:center"><span class="title" style="font-size:16px">${WORKER.name}</span><span class="muted" style="font-size:13px">Manage this conversation</span></div></div>${[['i-bell', 'Mute'], ['i-alert', 'Block'], ['i-flash', 'Report'], ['i-dots', 'More']].map(([i, l]) => `<div class="r">${ic(i)}${l}</div>`).join('')}<div class="cancel">Cancel</div></div><div class="home-bar"></div>`;
+
+/** Hidden Chats (screens/HiddenChatsScreen.tsx): unlocked for this visit, nothing hidden. */
+const hidden = () => `
+  <div class="body" style="gap:20px;bottom:100px">
+    ${header2('Hidden Chats', 'Unlocked for this visit')}
+    <div style="margin:auto 0">${emptyCard('i-lock', '', 'Nothing hidden', 'Conversations you mark as hidden appear here.')}</div>
+  </div>${nav('Inbox')}`;
+
+/** Notifications (screens/NotificationsScreen.tsx): the unread count, Mark all read, one row per real event. */
+const feed = () => `
+  <div class="body" style="gap:0"><div class="hdr"><div class="circle">${ic('i-back')}</div><div class="stack" style="gap:0;flex:1;min-width:0"><div class="t serif" style="font-size:24px;line-height:28px">Notifications</div><span class="sub">2 unread</span></div><span class="link">Mark all read</span></div></div>
+  ${scroller(116, 84, 0, `<div class="card" style="padding:4px 0">${[['i-briefcase', `New bid on ${DETAIL.title}`, 'Sam Okafor bid $110.00', '2h ago', true], ['i-briefcase', `New bid on ${DETAIL.title}`, 'Priya Natarajan bid $120.00', '4h ago', true], ['i-chat', 'Sam Okafor', 'On my way — 15 minutes out.', '20m ago', false], ['i-checkcircle', 'Job marked complete', `Sam Okafor finished ${DETAIL.title}.`, '1d ago', false]].map(([i, t, b, m, u]) => `<div class="nrow"><div class="well sm">${ic(i)}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${u ? '' : 'font-weight:600'}">${t}</span><span class="muted lines2" style="font-size:13px;line-height:18px">${b}</span><span class="muted" style="font-size:12px">${m}</span></div>${u ? '<div class="dot"></div>' : ''}</div>`).join('')}</div>`, 14)}${nav('Profile')}`;
+
+/** The Report dialog (components/ReportDialog.tsx) over Messages: the reasons, the detail, the block toggle, Send report beside Cancel. */
+const report = () => `${inbox()}<div class="scrim"></div>
+  <div class="card dialog" style="gap:12px;padding:20px"><div class="h2 serif" style="font-size:24px;line-height:28px">Report ${WORKER.name}</div><p class="muted" style="font-size:13px;line-height:18px;margin-top:-6px">This goes to the Brazos team. They won't be told who reported them.</p>
+    <div class="stack" style="gap:2px">${['No-show', 'Unsafe', 'Harassment', 'Scam / non-payment', 'Other'].map((l, i) => `<div style="display:flex;align-items:center;gap:12px;height:38px"><div class="radio${i === 3 ? ' on' : ''}">${i === 3 ? '<i></i>' : ''}</div><span style="font-size:15px;color:var(--ink)">${l}</span></div>`).join('')}</div>
+    ${fld('What happened? (optional)', 'Add any detail that would help us review this…', { ph: true, multi: true })}
+    <div style="display:flex;gap:12px;align-items:flex-start"><div class="stack" style="gap:2px;flex:1"><span style="font-size:15px;font-weight:700;color:var(--ink)">Also block this person</span><span class="muted" style="font-size:12px;line-height:16px">They won't be able to message you. You can undo this later from the conversation.</span></div><div class="switch"><i></i></div></div>
+    <div style="display:flex;gap:10px"><div class="cta" style="flex:1;height:48px;font-size:16px">Send report</div><div class="btn2" style="flex:1;height:48px;font-size:16px">Cancel</div></div></div>`;
+const CHAT_END = 273;
+
 const SCREENS = {
   home: { label: 'Customer Home', render: home },
   whome: { label: 'Worker Home', render: whome },
@@ -1032,6 +1135,13 @@ const SCREENS = {
   earnings: { label: 'Earnings', render: earnings },
   payouts: { label: 'Payouts', render: payouts },
   pricing: { label: 'Services & availability', render: pricing, frames: [0, 201] },
+  // batch 4 — messaging
+  inbox: { label: 'Messages (Inbox)', render: inbox },
+  chat: { label: 'Chat', render: chat, frames: [CHAT_END] },
+  'chat-menu': { label: 'The chat menus', render: chatMenu, frames: ['overflow', 'message', 'inbox'], frameLabels: [' (the overflow menu)', ' (a message held)', ' (a conversation held)'] },
+  hidden: { label: 'Hidden Chats', render: hidden },
+  feed: { label: 'Notifications', render: feed },
+  report: { label: 'The Report dialog', render: report },
 };
 
 // ---------------------------------------------------------------------------

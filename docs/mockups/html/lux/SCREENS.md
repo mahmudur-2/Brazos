@@ -61,16 +61,16 @@ photograph the LIVE screen, for the side-by-side.
 | payouts | Payouts | screens/PayoutsScreen.tsx | — | done |
 | pricing | Services & availability | screens/ServicesPricingScreen.tsx | customer-services-pricing | done |
 
-## Batch 4 — messaging
+## Batch 4 — messaging (drawn 2026-09-21 under the same standing instruction; `lux-chat` is scrolled to its end; the menus are `lux-chat-menu` (overflow), `-2` (a message held), `-3` (a conversation held))
 
 | key | screen | source | harness target | status |
 |-|-|-|-|-|
-| inbox | Inbox | screens/MessagesInboxScreen.tsx | customer-inbox, worker-inbox | todo |
-| chat | Chat (text · photo · voice · document · live location · ticks) | screens/ChatScreen.tsx, components/ChatComposer.tsx | — | todo |
-| chat-menu | The long-press sheet and the overflow menu | components/ActionSheet.tsx, components/DropMenu.tsx | — | todo |
-| hidden | Hidden chats | screens/HiddenChatsScreen.tsx | — | todo |
-| feed | Notification feed | screens/NotificationsScreen.tsx | customer-notification-feed | todo |
-| report | Report dialog | components/ReportDialog.tsx | — | todo |
+| inbox | Inbox | screens/MessagesInboxScreen.tsx | customer-inbox, worker-inbox | done |
+| chat | Chat (text · photo · voice · document · live location · ticks) | screens/ChatScreen.tsx, components/ChatComposer.tsx | — | done |
+| chat-menu | The long-press sheet and the overflow menu | components/ActionSheet.tsx, components/DropMenu.tsx | — | done |
+| hidden | Hidden chats | screens/HiddenChatsScreen.tsx | — | done |
+| feed | Notification feed | screens/NotificationsScreen.tsx | customer-notification-feed | done |
+| report | Report dialog | components/ReportDialog.tsx | — | done |
 
 ## Batch 5 — profile and settings
 
