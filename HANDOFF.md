@@ -8,6 +8,13 @@ The two sitting-3 docs rounds and sitting 2's record follow below, unchanged.
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
 
+> **AFTER THE RUN, THE SAME CHAT (2026-09-21): the dark rebuild's direction was chosen —
+> B, Emerald Lux Glass — and NOTHING was applied.** The next chat draws every remaining
+> screen as a Lux page: read `docs/dispatch/LUX-HANDOVER.md`, then
+> `docs/mockups/html/lux/README.md` and `SCREENS.md`. DECISIONS (14). The harness gained
+> `--design <file>` (a candidate token table rendered as real screens) and a comma list
+> for `--only`.
+
 ## What this session landed
 
 **THE EIGHTEEN-ITEM RUN — four code commits over `1cdacc9`**, each revertible alone,
