@@ -1,10 +1,11 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the Lux chat, latest: THE WELCOME PAGE BUILT — the reference the
-operator brought, on the Lux ground, with the rim light on the lead action; code commit
-`b8456f6`, verify 1393/0, NOT walked on the phone; its section is second, after the Fable
-chat's RUN WEBP, which is the latest OTA on preview). The mode switch's record, the Lux
-drawing run's, the eighteen-item run's and the two sittings before it follow, unchanged.
+WRITTEN: 2026-09-21 (the Lux chat, latest: the Welcome build `b8456f6` RESTORED by content in
+`23d76ad` — LOCAL, NOT PUSHED, origin still carries the build — after the operator saw its
+render; the pick page `welcome-glint.html` is the reference, shown and awaiting approval;
+its section is second, after the Fable chat's RUN WEBP, the latest OTA on preview). The
+mode switch's record, the Lux drawing run's, the eighteen-item run's and the two sittings
+before it follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
@@ -57,89 +58,69 @@ Lux chat's own `welcome-ideas.html`, `welcome-motion.html`, `mode-switch-*.html`
 HANDOFF commit carries the Lux chat's uncommitted Welcome-page note below unchanged —
 flagged here because that note was theirs and still awaiting the operator's pick.
 
-## THE WELCOME PAGE — BUILT (2026-09-21, the Lux chat): the reference on the Lux ground, the rim light on the lead action; `b8456f6`, NOT walked on the phone
+## THE WELCOME PAGE — BUILD RESTORED, THE PICK PAGE IS THE REFERENCE, NOTHING PUSHED (2026-09-21, the Lux chat, latest)
 
-**What just happened.** The operator picked f (the rim glint) from the six motions and said
-"can we implement that?" — so the Welcome page they brought, kept as it is on the Lux ground
-(version 1 of `welcome-ideas.html`, polished in `welcome-motion.html`), is now the APP's dark
-Welcome, with the light on the lead button. One code commit, `b8456f6` (DECISIONS 16), then
-this docs commit. `npm run verify` 1393 pass / 0 fail, twice in the run (before the code
-commit and after the docs edits).
+**What just happened, in order.** The operator saw the harness render of `b8456f6` beside
+the page it was built from: "wthh… it looks nothing like the one you showed me… don't push
+this." It HAD been pushed (`b8456f6` code, `2b80147` docs — GitHub only; no OTA was ever
+published, no device has it). Asked, answered: RESTORE the old Welcome now, then fix; the
+serif headline — YES, Georgia on Welcome too; the actions — THREE, email first with the
+glint. Then: "make it in HTML, this is the exact reference, as accurate as possible, show
+me the HTML with the animation (f) first, do not push anything."
 
-**Three rulings the build is held to — none of them taste, all of them fences:**
-- THE LIGHT IS ON EMAIL, NOT PHONE. The reference and the operator named "Continue with
-  phone"; `tests/firstSession.test.mjs` n5 keeps email FIRST and phone second, undemoted,
-  because phone auth resolves to `disabled` on every non-development build
-  (`lib/phoneAuth/mode.ts` — the Beta included; `CreateAccountScreen` then shows the notice
-  and "Use Email Instead"). A light circling a switched-off control would be wrong, and
-  demoting phone would mean weakening n5's logic — a stop condition. So the lead action
-  (email) is lit and carries the light; phone keeps the standard treatment at the same
-  shape with its own glyph and chevron; sign-in is the ghost with the chevron. THE SWAP IS
-  ONE LINE plus a ruling on n5, the day SMS is switched on — say so to the operator if they
-  ask why the phone button is not the lit one.
-- THREE ACTIONS, not the reference's two: the live screen's "Continue with email" is the
-  path that registers anyone today and stays.
-- THE HEADLINE IS THE SYSTEM SANS. The reference and the Lux README draw it in Georgia;
-  `tests/themeTokens.test.mjs`'s one-serif fence permits `fonts.displayHero` in
-  `screens/HomeScreen.tsx` alone, and widening it is a decision of its own (a dated
-  DECISIONS entry + the fence's allow-list), deliberately NOT made in this run.
+**State of the tree.** `23d76ad` — LOCAL ONLY, NOT PUSHED (`ahead 1` of origin) — restores
+by content every file `b8456f6` touched to its state at `369991d` (each proven
+byte-identical with `git diff --quiet 369991d -- <file>`) and removes the four it added;
+`npm run verify` 1387 pass / 0 fail, as before the build. `git revert` is a subcommand the
+run guard reserves for the operator, hence the content restoration. ORIGIN STILL CARRIES
+`b8456f6` + `2b80147`: the next `git push origin mainexpo` (only on the operator's word)
+carries the restoration and everything after it.
 
-**What landed (`b8456f6`):** `ui/tokens.ts` + `lib/theme.ts` — eight role tokens in both
-palettes (`authGroundTop/Mid/Bottom` = the Lux ground `#062421 → #0A1A17 → #07110F`,
-`heroDiscTop/Mid/Bottom`, `authCtaTop/Bottom`; light: the ivory `bg` thrice, the mint/sand
-family, the forest twice — flat by construction). `lib/authTheme.ts` — `heroButton` 58 / r22
-and `authShadows.hero`. `components/AuthScaffold.tsx` — `ground` (the diagonal gradient,
-dark only). `components/AuthBackdrop.tsx` — `full` re-anchored to the page's corner (five
-arcs from (1.22w, −.047h), radii .331w in steps of .0765w, fading .36 → .12 in dark; the
-wash a soft gold radial haze; the two mid-band sweeps drawn in NO colour in dark, kept in
-light); `soft` untouched. `components/AuthButton.tsx` — optional `hero` (shape), `lit`
-(the fill between the two CTA stops + the depth), `icon`, `chevron`, `light`; absent, the
-control renders byte-identically (the plain label stays the Pressable's direct child).
-`screens/WelcomeScreen.tsx` — the art as the page's: three discs from one radial fill,
-their rims CRESCENTS (a ring peeking out from under a disc set 1.5 pt off it — no inset
-shadow, no mask, old-arch-safe), the haze, the ghost ring, the badges at the page's
-positions as fractions of the art box (measured by `onLayout`), the two-tone headline in
-one Text (`emeraldBright` for the promise); the same structure in both themes. THE LIGHT:
-`components/RimLight.shared.tsx` (lap 6000 ms, light 120 × 44, inset 2, cover inset 1,
-`rimPoint` — a 'worklet' — and `rimSamples`), `RimLight.motion120.tsx` (one shared value,
-`withRepeat(withTiming(1, linear), -1, false)`, the point per frame on the UI thread),
-`RimLight.tsx` (through `resolveMotion120`; the native-driver fallback interpolates the
-sampled table on `Animated.loop`; `null` under reduced motion — the rim rests). Fences:
-NEW `tests/rimLight.test.mjs` (six tests; the lap EXECUTED via `stripTypeScriptTypes`);
-`tests/motion120.test.mjs`'s SIBLINGS table and worklet-callable roster gain the sibling.
+**Why the build did not look like the page — three real gaps, all mine:** (1) the headline
+was the system sans at 38 (the one-serif fence permits Georgia on Home alone) where the
+page is Georgia 44/47; (2) the page's LIGHT was not ported — the mint glow behind the middle
+of the screen (`.glowbg`), the corner haze and the shade at the foot — so the render was
+flat and much darker; (3) the disc rims were 1.5-pt slivers where the page draws a crisp
+line plus a soft 12-pt glow and a deep shadow under each disc. Verifying NUMBERS (arc
+positions, text rows, colours) instead of the LOOK is what let it through: the harness
+runs under reduced motion and at 1x, image reads were blocked, and the operator judged
+from small thumbnails against a crisp 2x still.
 
-**Proven, offline and by pixels (image reads were blocked for this run — every visual
-claim is a measurement):** the harness (`scripts/shots.mjs --build --only auth-welcome`,
-which BY DESIGN runs under `prefers-reduced-motion: reduce` with animations disabled)
-rendered the live screen both themes — `.shots/auth-welcome-{dark,light}.png`: the arcs
-within two points of the page's on the same row (x 261/285/319/356 vs 251/284/318/355), the
-three badges (teal glass fill, gold glyph, cream text, gold hairline), the three-line
-headline (cream, then `emeraldBright` twice), the two-line muted body, three 58-tall
-gold-hairlined buttons at y 650/718/786 (web has no safe insets — on the phone everything
-sits 59 lower at the top and the actions end 34 above the bottom), the ground at 18.5 vs the
-page's 17.4; light intact in its own colours (ivory ground, mint discs, white badge cards,
-forest fills). With motion ON (`.shots/lux/welcome-motion-live.mjs`, the same export served
-the harness's way, `reducedMotion: 'no-preference'`): thirteen frames half a second apart
-track ONE bright point clockwise round the lead button's rim — the bottom edge right to
-left (x 319 → 233 → 150 → 66), the left edge, the top edge left to right (106 → 191 → 277 →
-351), the bottom again — peaks 220–224 against the plain hairline's 166, the fill beside it
-64 in every frame (the cover holds), no page errors. The still shows the rim at rest, which
-is what `RimLight` renders under reduced motion.
+**THE REFERENCE, now:** `docs/mockups/html/lux/welcome-glint.html` — the pick alone: the
+polished v1 phone (the still the operator holds, `.shots/mockups/lux-welcome-final.png`)
+with the f rim glint running on "Continue with phone". Its markup and CSS are
+`welcome-motion.html`'s own, emitted by that page's builder, so it IS the still, moving —
+proven: the shot frozen at 30 % of the lap (`lux-welcome-glint.png`) differs from the still
+only on the lead button's rim (the light) and in text anti-aliasing where the browser
+composites the animated layer; every sampled interior pixel is identical. ONE CORRECTION
+found on the way: `welcome-motion.html` defined `.halo` twice (the art's glow, then idea
+b's spark halo), so the art's glow rendered as a 44-px dot in every frame of that page —
+the still the operator chose therefore has NO glow behind the discs, and the pick page
+draws none. The six-motion page keeps that flaw as it was shown; the pick page is what the
+app is matched to.
 
-**NOT DONE — the operator's:** the phone walk (the OTA, if they want it: `npm run
-update:preview` on their word, as the mode switch was published), and two rulings — the
-serif headline (widen the one-serif fence or not) and, when SMS is provisioned, the lead
-action (n5) and with it where the light goes.
+**Next, ONLY after the operator approves the pick page:** rebuild the app screen to MATCH
+IT — the serif headline (`fonts.displayHero` on Welcome's headline at 44/47: widen
+`tests/themeTokens.test.mjs`'s one-serif allow-list to `screens/WelcomeScreen.tsx` with the
+operator's ruling recorded, DECISIONS), the ground WITH its light layers (`glowbg`, the
+corner haze, the foot shade — all gradient layers on one `experimental_backgroundImage`
+string), the discs with a crisp rim AND a soft glow (a glow ring behind an offset disc, a
+radial-gradient ring) and the page's deep shadow, the buttons at 58 × r22 with the hairline
+at the page's alpha, the glint on the lead action. THE ACTIONS, as ruled: three, email
+first with the glint — but the page has TWO (phone first); the operator has been asked once
+more, plainly, whether the app should match the page's two instead. PROVE IT BY THE LOOK
+before showing: render the live screen at 2x with motion on beside the pick page at the
+same phase and diff them, region by region, and send the pair — never the harness's
+reduced-motion 1x still alone. Then the phone walk is theirs.
 
-**The pages (this docs commit):** `docs/mockups/html/lux/welcome-ideas.html` (the three
-grounds; v1 the pick), `welcome-motion.html` (the polished v1 still + six motions live; f
-the pick — THE TRACKED REFERENCE for this screen; `SCREENS.md`'s welcome row says so).
-`lux.build.mjs`'s own `welcome` / `welcome-fable` renders are NOT replaced: that file
-carries the Fable chat's uncommitted changes in this tree and was left exactly as found.
-Scratch (gitignored, `.shots/lux/`): `welcome-ideas.build.mjs`, `welcome-measure.mjs`,
-`welcome-motion-shoot.mjs`, `welcome-live-probe.mjs`, `welcome-live-rim.mjs`,
-`welcome-motion-live.mjs`, `welcome-dark-probe2.mjs`, `welcome-light-probe.mjs`, the
-`patch-*.mjs` that made the CRLF-preserving edits, `commit-welcome.txt`.
+**Fences that will move, with the operator's rulings:** the one-serif allow-list
+(`tests/themeTokens.test.mjs`); `tests/motion120.test.mjs` SIBLINGS + roster (the
+RimLight sibling returns); `tests/rimLight.test.mjs` returns. `tests/firstSession.test.mjs`
+n5 stays unless the operator rules two-phone-first.
+
+**Scratch (gitignored, `.shots/lux/`):** `welcome-glint-shoot.mjs` (the frozen shot + the
+pixel diff against the still), `glint-diff.mjs`, `glint-check.mjs`, the earlier probes,
+`commit-restore.txt`.
 
 ## THE MODE SWITCH — the glass wipe carrying the capsule (2026-09-21, app code)
 
