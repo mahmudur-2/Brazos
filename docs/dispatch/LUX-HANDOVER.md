@@ -46,6 +46,37 @@ Run batch by batch without waiting to be told:
 
 One question per round. Nothing is applied to the app at any point.
 
+## Models (the operator's settings, 2026-09-21)
+
+- **This loop runs on Opus 5 at effort max.** Ultracode (multi-agent) is NOT available on
+  this machine — the guard refuses the Agent tool — and one hand drawing every page is
+  what keeps a design system consistent, so Opus max is the best there is here.
+- **The Fable comparison set — exactly seven screens, no more.** The operator wants to see
+  whether **Fable 5.1** (model id `claude-fable-5-1` — 5.1 specifically, never "Fable 5"
+  or any other model) at **effort xhigh ("extra"), not max**, draws the customers' most-
+  seen screens better than Opus. It must NOT run in this chat (the second model would
+  copy the first's page from context — no fair comparison); it runs in its own chat, one
+  paste per screen, fresh each time.
+
+  The seven: **home** (Customer Home), **post-review** (Post a job · Review and publish),
+  **compare** (Compare bids), **cjob** (the client's job detail), **chat** (Chat),
+  **checkout** (Checkout), **review-tip** (Review and tip).
+
+  What THIS chat does when it draws one of the seven: draw its own page as usual, then
+  hand the operator this paste (fill in the key) —
+
+  > Model: Fable 5.1 (`claude-fable-5-1`), effort xhigh. Read
+  > `docs/dispatch/LUX-HANDOVER.md`, `docs/mockups/html/lux/README.md` and the screen's
+  > source named in `SCREENS.md`. Draw ONLY the screen `<key>` as a Lux page, every control
+  > kept, into `docs/mockups/html/lux/lux-<key>-fable.html` (a render function in
+  > `lux.build.mjs` named `<key>_fable`, data-shot `lux-<key>-fable`). Do not open
+  > `lux-<key>.html`. Shoot it, measure it, send the PNG. Draw nothing else.
+
+  When the Fable page exists, this chat puts the two on ONE sheet (Opus | Fable, captions
+  inside, `.shots/mockups/lux-<key>-vs.png`) and asks which reads better. The answer is
+  recorded in `SCREENS.md`'s row; the loop itself never leaves Opus, and Fable never
+  draws an eighth screen unless the operator names it.
+
 ## The build loop, exactly
 
 ```
