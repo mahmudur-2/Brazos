@@ -104,9 +104,13 @@ hero screens, exactly once each, DECISIONS 18), `tests/motion120.test.mjs` (SIBL
 worklet-callable roster gain RimLight), `tests/rimLight.test.mjs` (rewritten for the ship
 pages). `tests/firstSession` n5, `copyTruth`, `shotHarness` untouched and green.
 
-**Pushed and shipped:** see the two lines the run appends below this section after the push
-and the OTA; if they are missing, the run stopped before them and the operator pushes
-(`git push origin mainexpo`) and publishes (`npm run update:preview`) by hand.
+**PUSHED:** `git push origin mainexpo` — `2b80147..585d242` (the restoration `23d76ad`, the two
+pick pages, the code `7f10dd5`, the docs `585d242`), after `npm run verify` 1393 / 0 in the
+same run. **THE OTA IS LIVE on the preview channel** (`npm run update:preview`, as the operator
+asked — "ship both to phone right now"): update group `df6cc228-85aa-4bea-8a00-e66cd0b05718`,
+iOS update `01a0c5cd-3c24-7f7d-8e5d-704238fda038`, runtime 1.0.0, commit `585d242`; dashboard
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/df6cc228-85aa-4bea-8a00-e66cd0b05718`.
+The export went to the gitignored `dist/`; nothing tracked moved.
 
 **Not walked on the phone.** The operator walks Welcome in both appearances: the arcs from
 the corner, the three lit discs, the badges, the serif headline, the glint circling the email
