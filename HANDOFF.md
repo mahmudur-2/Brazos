@@ -1,13 +1,82 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the Lux chat, latest: WELCOME FROM THE PHONE — phone leads with the
-glint, the copy lifted, the light lead flat; code `b4f7332`, verify 1393/0, pushed and
-published by OTA — the ids in its section, the first below. The shipped build's record, the
-restored build's, the mode switch's, the Lux drawing run's, the eighteen-item run's and the two
-sittings before it follow, unchanged.
+WRITTEN: 2026-09-21 (the sign-in chat, latest: THE EMAIL SIGN-IN FROM THE PHONE — the B
+removed, the Welcome's type and controls, "Sign in" kept on top; code `9085cc5`, verify
+1393/0, pushed and published by OTA — the ids in its section, the first below. The WebP
+run's record, the Welcome-from-the-phone record, the shipped build's, the restored build's,
+the mode switch's, the Lux drawing run's, the eighteen-item run's and the two sittings before
+it follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
+
+## THE EMAIL SIGN-IN, FROM THE PHONE — the B removed, the Welcome's type and controls (2026-09-21, the sign-in chat, latest); `9085cc5`, OTA `68b2388f` live on preview
+
+**What just happened.** The operator, holding the shipped LIGHT email sign-in screen
+(`screens/EmailSignInScreen.tsx`): "remove the B and overall show me a html of how a better
+sign in page looks like, without changing too much". Options first, per the standing loop:
+`docs/mockups/html/lux/signin-ideas.html` — NOW (the shipped screen, honest to its source)
+and six steps a–f, each adding ONE thing with the mark gone (a the B removed; b + the
+Welcome's serif headline; c + the bar's duplicate "Sign in" dropped, the eyebrow tracked as
+the Welcome's; d + the Welcome's controls; e + the Welcome's ground and arcs; f + the
+password eye), shot to `.shots/mockups/lux-signin-idea-{now,a..f}.png` and a two-row sheet.
+THE PICK: "make it d", then, from a crop of the bar, "also add the sign in on top" — d with
+the bar title kept. Before the pick was sent the operator circled the field icons ("make sure
+the icons aren't in weird places"): the ideas page's icon class collided with its intro
+paragraph's `.lead` (margin 0 24px 18px), so every glyph sat 24 in and 9 high — measured,
+renamed `.glyph`, re-shot (icon 14 in from the field edge, the text 12 after: 15 / 47 from
+the field's outer edge, the app's own numbers). DECISIONS 20.
+
+**The reference.** `docs/mockups/html/lux/signin-ship-light.html` (`data-shot`
+`lux-signin-ship-light`): the eyebrow 13/700 tracked 2 on a 17 line at 142; the headline
+Georgia 34/38 tracked −.4 at 167–205; the body 16/24 at 213–261; the fields 54 at radius 14 at
+307 and 399; Continue lit at 666–724 (58, radius 22, the gold hairline at .62, the specular
+edge, the 17/600 label, the gold chevron 18 at 18 from the right); the phone route outlined at
+736–794 with the phone glyph 22 and the forest chevron; the actions end 58 above the bottom
+(24 above the 34 inset), 12 between them; the bar ("Sign in" 21/600, the emerald chevron) and
+the soft teal contour as shipped. Light only — the operator's phone and pick were light; dark
+follows from the same components' dark roles (the harness's dark render draws the lit lead in
+the `authCta*` shade, the outlined second on the ground, no mark).
+
+**The app (`9085cc5`).** `screens/EmailSignInScreen.tsx`: `BrandLogo` gone (and the
+`authSizes` import with it); the eyebrow `authType.heroEyebrow`; the headline the new
+`authType.heroTitle` (`lib/authTheme.ts`: 34/38, −0.4, 700) in `fonts.displayHero`; the two
+`AuthButton`s `themed hero lit chevron` and `themed hero icon="phone-portrait-outline"
+chevron` — `hero` without `lit`, NOT `ghost`, because a ghost hero is the Welcome's text link
+and the page draws a box; `popTo('SignIn')`, `disabled={loading}`, the hint and the copy
+unchanged. `tests/themeTokens.test.mjs` HERO_SITES names this screen as the ONE serif role's
+third site — expected constants only. Every fence that reads the screen still holds
+(`themeResolution`, `authPhone`, `phoneOtp`, `copyTruth` …).
+
+**Proven by the loop** (`.shots/lux/signin-compare.mjs`, gitignored, after `node
+scripts/shots.mjs --build --only auth-email-signin`; the app rendered at 393 × 764 — the web
+export has neither the 54 status inset nor the 34 home inset — and shifted 54 into the page's
+frame): the eyebrow 142–159, the headline 167–205, the body 213–261, the field wrappers
+307–361 and 399–453, the phone button 736–794 — `=` the page's boxes to the pixel; the Continue
+label centred at 684–706 in its 666–724 box; the bar title's box 66–94 against the page's
+67–93 (the native line height, same centre). Pixel regions: bar 2.0 % differing, contour
+3.8 % (the .67-px rings' anti-aliasing), copy 0.4 %, fields 0.7 %, gap 0.0 %, actions 2.1 %
+(the label rows and the glyph column — the Welcome loop's floor). Stills:
+`.shots/signin-app-light.png`, `.shots/signin-page-signin-ship-light.png`,
+`.shots/auth-email-signin-{light,dark}.png`. The evidence guard blocked image reads in this
+run, so every check above is a script's number, none an eye's.
+
+**Verify, push, OTA.** `npm run verify` lint clean, 1393 pass / 0 fail (`.shots/lux/
+verify-signin1.txt`). Pushed `dfdce36..9fb8d11` (`9085cc5` code, `9fb8d11` DECISIONS 20).
+`npm run update:preview` → branch `preview`, runtime `1.0.0`, update group
+`68b2388f-8b19-407c-999e-a5a0cdefaaab`, iOS update `01a0c603-06fe-79cd-96a8-b6a2cbb6661f`,
+2 bundles, no new assets (45 reused); dashboard
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/68b2388f-8b19-407c-999e-a5a0cdefaaab`.
+Open the Beta twice to pull it. NOT walked on the phone — that check is the operator's: the
+email sign-in in both appearances (the headline's serif cut, the two boxed actions, the field
+glyphs), reached from Welcome → "I already have an account" → "Use Email Instead".
+
+**Left standing, on purpose.** The B mark on the phone Sign-in and both Create-account screens
+(this decision is one screen; their turn is a separate pick). No "Forgot password?" — the app
+has none; a new control is a feature for BACKLOG if asked. Not taken from the ideas page: e's
+ground and arcs, f's eye. The tree's unrelated dirt is untouched: `lux.build.mjs`,
+`index.html` and the nine `lux-*-fable.html` pages (the Fable chat's, uncommitted by its
+instruction), plus the Lux chat's own ideas pages.
 
 ## RUN WEBP COMPLETED (2026-09-21, the Fable chat) — the four mounted prestige rasters ship as WebP; OTA `b962496b` live on preview
 
