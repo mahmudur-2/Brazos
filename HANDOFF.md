@@ -1,11 +1,10 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the Lux chat, latest: the Welcome build `b8456f6` RESTORED by content in
-`23d76ad` — LOCAL, NOT PUSHED, origin still carries the build — after the operator saw its
-render; the pick page `welcome-glint.html` is the reference, shown and awaiting approval;
-its section is second, after the Fable chat's RUN WEBP, the latest OTA on preview). The
-mode switch's record, the Lux drawing run's, the eighteen-item run's and the two sittings
-before it follow, unchanged.
+WRITTEN: 2026-09-21 (the Lux chat, latest: THE WELCOME PAGE SHIPPED — both themes, matched
+to its two approved pages by a render loop; code `7f10dd5`, verify 1393/0; the push and
+the OTA recorded at the end of its section; NOT walked on the phone. Its section is second,
+after the Fable chat's RUN WEBP). The restored build's record, the mode switch's, the Lux
+drawing run's, the eighteen-item run's and the two sittings before it follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
@@ -57,6 +56,61 @@ and `index.html` (the Fable pages). Untracked: the nine `lux-*-fable.html` pages
 Lux chat's own `welcome-ideas.html`, `welcome-motion.html`, `mode-switch-*.html`. This
 HANDOFF commit carries the Lux chat's uncommitted Welcome-page note below unchanged —
 flagged here because that note was theirs and still awaiting the operator's pick.
+
+## THE WELCOME PAGE — SHIPPED, both themes, matched to its pages by a render loop (2026-09-21, the Lux chat, latest); `7f10dd5`
+
+**What just happened.** After the build of `b8456f6` was refused and restored (`23d76ad`, the
+section below), the operator approved the dark pick page ("HTML looks good so far") and its
+light counterpart ("oh yes looks very good"), then: "ship both to phone right now — carefully,
+in a loop where you go back and forth within the HTMLs and then implement once it's perfect,
+then auto push". Done, in that order: THE SHIP PAGES (`docs/mockups/html/lux/welcome-ship.html`
+and `-light.html`, derived from the approved pages by `.shots/lux/make-ship-pages.mjs` — every
+approved thing kept, the one forced change being three actions: email lit with the glint,
+phone outlined, "I already have an account" the Lux text link; the art at 60 / 300 tall with
+its contents lifted 15, the copy at 385, the actions ending at the approved 803), then THE APP
+(`7f10dd5`), then THE LOOP until only text anti-aliasing differed, then `npm run verify` 1393 /
+0, then the push and the OTA (see the end of this section for their state).
+
+**What the app is now (`7f10dd5`; DECISIONS 18 has every number):** sixteen auth roles in
+both palettes (`ui/tokens.ts` + `lib/theme.ts`; dark = the pages' Lux hexes, light = the light
+page's, gradients flat in light by construction); `lib/authTheme.ts` `heroButton` 58 / r22,
+`heroLink` 44, `heroBadge` 42, the `hero*` type; `AuthScaffold ground` (the base + the glow,
+the corner haze, the foot shade, both themes); `AuthBackdrop full` = the page's five arcs alone
+(`soft` untouched); `AuthButton` `hero` / `lit` / `icon` / `chevron` / `light` (absent-inert;
+the ghost hero is the text link); `WelcomeScreen` = the page's art in a 353 × 300 canvas, the
+discs with the pages' inset rims / glows / shadows as `boxShadow` from the roles, the badges,
+the SERIF two-tone headline (`fonts.displayHero` 44/47 — the one-serif fence widened to the
+two hero screens by the operator's ruling), the copy at the page's distances, the actions
+ending 49 above the bottom whatever the inset; `RimLight.{shared,motion120,}.tsx` (the glint,
+the pages' stops per theme). BORDER-BOX LESSON, load-bearing for any future page match: the
+pages are CSS content-box, React Native is border-box — every bordered size is +2 in the app
+(discs 218 / 202 / 174, ghost ring 250, badges 42, the arcs' diameters +2); this is what took
+the art from 5.6 % differing to 0.6 %.
+
+**Proven by the loop (`.shots/lux/ship-compare.mjs`; run after `node scripts/shots.mjs --build
+--only auth-welcome`):** the live screen from the harness's export, both themes, 2x, reduced
+motion (the rim at rest) beside each ship page with its glint hidden — element boxes and a
+pixel diff per region. Final pass: the headline, body and all three action boxes ON the page's
+pixels; arcs 1.1 % / 0.1 % differing (dark / light), art 0.6 % / 0.4 %, copy 0.4 % / 0.2 %,
+actions 2.2 % / 2.2 % (`ship-rows.mjs`: exactly the label rows and the glyph column — text
+anti-aliasing, and Ionicons where the page draws SVG at the same size and place), ground
+0.0 %. Motion on (`welcome-motion-live.mjs dark|light`): the glint circles the lead button
+clockwise, peaks 217–233 against the resting hairline's 142 / 125, the fill constant, no page
+errors. The stills are `.shots/ship-app-{dark,light}.png` beside `.shots/ship-page-*.png`.
+Image reads were blocked for this run; every claim above is a measurement.
+
+**Fences moved, with their reasons in place:** `tests/themeTokens.test.mjs` (HERO_SITES — two
+hero screens, exactly once each, DECISIONS 18), `tests/motion120.test.mjs` (SIBLINGS + the
+worklet-callable roster gain RimLight), `tests/rimLight.test.mjs` (rewritten for the ship
+pages). `tests/firstSession` n5, `copyTruth`, `shotHarness` untouched and green.
+
+**Pushed and shipped:** see the two lines the run appends below this section after the push
+and the OTA; if they are missing, the run stopped before them and the operator pushes
+(`git push origin mainexpo`) and publishes (`npm run update:preview`) by hand.
+
+**Not walked on the phone.** The operator walks Welcome in both appearances: the arcs from
+the corner, the three lit discs, the badges, the serif headline, the glint circling the email
+button once every six seconds, the phone button, the sign-in link — and the entrance stagger.
 
 ## THE WELCOME PAGE — BUILD RESTORED, THE PICK PAGE IS THE REFERENCE, NOTHING PUSHED (2026-09-21, the Lux chat, latest)
 

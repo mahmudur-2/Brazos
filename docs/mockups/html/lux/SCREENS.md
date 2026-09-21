@@ -93,7 +93,7 @@ photograph the LIVE screen, for the side-by-side.
 | key | screen | source | harness target | status |
 |-|-|-|-|-|
 | launch | Launch | screens/LaunchScreen.tsx | — | done |
-| welcome | Welcome | screens/WelcomeScreen.tsx | auth-welcome | done — SUPERSEDED 2026-09-21 by the operator's pick, `welcome-motion.html` (the reference composition on the Lux ground, the rim light), and APPLIED to the app that day (DECISIONS 16) |
+| welcome | Welcome | screens/WelcomeScreen.tsx | auth-welcome | done — SHIPPED 2026-09-21 to `welcome-ship.html` / `welcome-ship-light.html` (the operator's pick, both themes, the rim glint on the lead action; approved as `welcome-glint*.html`), APPLIED to the app and matched by the render loop (DECISIONS 18) |
 | signin | Sign in (phone) | screens/SignInScreen.tsx | auth-signin | done |
 | email-signin | Sign in (email) | screens/EmailSignInScreen.tsx | auth-email-signin | done |
 | create-account | Create account (phone) | screens/CreateAccountScreen.tsx | auth-create-account | done |
