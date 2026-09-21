@@ -339,11 +339,13 @@ test('4D-6 left column: shared eyebrow, serif status word beside the toggle, pul
   assert.match(code, /disabled=\{savingAvailability \|\| !profile\}/);
   // RUN GROUND1 (C3) added the clearance hook to this import: the nav pill is
   // out of layout flow on this route now, so the screen reserves its footprint
-  // itself. The assertion this line makes is unchanged — the shared Toggle and
-  // SearchBar come from ui/primitives, not from a local re-implementation.
+  // itself. 2026-09-21: the hook is useScrollClearance — by route, the bar's
+  // footprint on the two homes and one spacing step everywhere else. The
+  // assertion this line makes is unchanged — the shared Toggle and SearchBar
+  // come from ui/primitives, not from a local re-implementation.
   assert.match(
     code,
-    /import \{ SearchBar, Toggle, useFloatingNavClearance \} from '\.\.\/ui\/primitives'/
+    /import \{ SearchBar, Toggle, useScrollClearance \} from '\.\.\/ui\/primitives'/
   );
   assert.match(code, /<Toggle\b/);
   assert.doesNotMatch(code, /<Switch\b/);
@@ -650,7 +652,7 @@ test('D5: every notification preference uses the same shared toggle', async () =
   // notification preferences — so none of them may be a hand-rolled switch
   // with its own state colours.
   const prefs = stripComments(await read('screens/NotificationSettingsScreen.tsx'));
-  assert.match(prefs, /import \{ Toggle, useFloatingNavClearance \} from '\.\.\/ui\/primitives';/);
+  assert.match(prefs, /import \{ Toggle, useScrollClearance \} from '\.\.\/ui\/primitives';/);
   assert.doesNotMatch(prefs, /<Switch\b/, 'no screen may reintroduce the native Switch');
   // The five rows are ONE <Toggle> mapped over the preference list, which is
   // why they cannot drift from each other in the first place.

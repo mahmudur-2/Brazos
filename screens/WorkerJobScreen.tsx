@@ -56,7 +56,7 @@ import {
 import { fetchOpenJobDispute } from '../lib/disputes';
 import { JOB_LIFECYCLE_LABELS, deriveJobLifecycle } from '../lib/jobLifecycle';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 import {
   deleteJobPhoto,
   rejectionForPickedVideo,
@@ -107,7 +107,7 @@ export function WorkerJobScreen() {
   const iconCircleSize = useDialNumber('workerJob.iconCircle.size') ?? 44;
   const photoHeight = useDialNumber('workerJob.photo.height') ?? 180;
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'WorkerJob'>>();
   const { user } = useAuth();

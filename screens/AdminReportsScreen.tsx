@@ -26,14 +26,14 @@ import {
   type AdminReport,
 } from '../lib/moderation';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 import { formatTimeAgo } from '../lib/time';
 
 export function AdminReportsScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

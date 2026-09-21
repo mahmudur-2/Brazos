@@ -3,7 +3,7 @@ import { RemoteImage } from '../../components/RemoteImage';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { PINNED_FOOTER_BOTTOM_PADDING, useFloatingNavClearance } from '../primitives';
+import { PINNED_FOOTER_BOTTOM_PADDING, useScrollClearance } from '../primitives';
 import { layout, radius, spacing, type EmeraldPalette, type as typeScale } from '../tokens';
 import { themedStyles, useThemeColors } from '../../lib/theme';
 import { useOverrideNumber } from '../../lib/designOverrides';
@@ -62,7 +62,7 @@ export function DetailScreen({
   // emerald(3): whichever of the two bottom elements is last on screen takes
   // the pill's real footprint — the action bar when there is one, otherwise
   // the scroller.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   // RUN S2 (C9) — the layout dials, live across every template screen.
   const pagePadDial = useOverrideNumber('layout.pagePadding');
   const topPadDial = useOverrideNumber('layout.contentTopPad');

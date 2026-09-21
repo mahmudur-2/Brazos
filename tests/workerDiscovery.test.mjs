@@ -273,11 +273,36 @@ test('[static] B2 · the full worker card carries distance and the arrival windo
   );
   assert.doesNotMatch(card, /variant === 'full' &&/, 'no full-only rows remain — one layout');
   assert.doesNotMatch(card, /so far|Posted \{|Arrive \{/, 'the long spellings are gone from the card');
-  assert.match(card, /onLayout=\{\(event\) => setInfoHeight\(event\.nativeEvent\.layout\.height\)\}/);
-  assert.match(card, /const thumbSize = Math\.max\(THUMB_SIZE, Math\.round\(infoHeight \?\? 0\)\);/);
-  assert.match(card, /\{ width: thumbSize, height: thumbSize \}/);
+  // 2026-09-21 — ONE CARD SIZE (docs/mockups/html/worker-results-screen.html,
+  // DECISIONS 2026-09-20 sitting 2, (10)): the picture is a CONSTANT square
+  // — 120 in the app's border-box, the reference's 118 fill inside its 1pt
+  // rim — and the text block at least as tall, so a four-line card matches a
+  // five-line one at 146; the measured-square pattern is gone with its state.
+  assert.match(card, /const THUMB_SIZE = 120;/);
+  assert.match(card, /thumb: \{\s*width: THUMB_SIZE,\s*height: THUMB_SIZE,/);
+  assert.match(card, /minHeight: THUMB_SIZE,/);
+  assert.doesNotMatch(card, /setInfoHeight|thumbSize/, 'the picture is a constant square, never measured from the text');
+  assert.match(card, /size=\{Math\.round\(THUMB_SIZE \* 0\.38\)\}/);
+  // THE CLEARANCE IS MEASURED: the pay block reports its width, the title and
+  // the chip row keep that plus PAY_AIR of it, PAY_CLEAR only until it has.
   assert.match(card, /payBlock: \{\s*position: 'absolute',\s*top: spacing\.md,\s*right: spacing\.md,/);
   assert.match(card, /const PAY_CLEAR = 96;/);
+  assert.match(card, /const PAY_AIR = 8;/);
+  assert.match(card, /const payClear = payWidth === null \? PAY_CLEAR : Math\.round\(payWidth\) \+ PAY_AIR;/);
+  assert.match(card, /<View style=\{styles\.payBlock\} onLayout=\{\(event\) => setPayWidth\(event\.nativeEvent\.layout\.width\)\}>/);
+  assert.match(card, /style=\{\[styles\.title, \{ paddingRight: payClear \}\]\}/);
+  assert.match(card, /style=\{\[styles\.chipRow, \{ paddingRight: payClear \}\]\} onLayout=\{onChipRowLayout\}/);
+  assert.doesNotMatch(card, /paddingRight: PAY_CLEAR,/, 'no fixed clearance in the stylesheet');
+  // THE CHIP KEEPS ITS FULL LABEL when it fits, the short name only when it
+  // would not — decided from the chip's own layout at the full label, unseen
+  // until decided; never a character estimate.
+  assert.match(card, /label=\{fullFits === false \? shortLabel : fullLabel\}/);
+  assert.match(card, /const fullLabel = JOB_CATEGORY_LABELS\[job\.category\] \?\? job\.category;/);
+  assert.match(card, /const shortLabel = JOB_CATEGORY_CHIP_LABELS\[job\.category\] \?\? job\.category;/);
+  assert.match(card, /setFullFits\(chipWidth <= chipRowWidth - payClear\);/);
+  assert.match(card, /fullFits === null && styles\.chipUnmeasured/);
+  assert.match(card, /chipUnmeasured: \{\s*opacity: 0,\s*\}/);
+  assert.doesNotMatch(card, /\.length \* \d|charWidth/, 'the fit is measured, not estimated from characters');
   assert.match(card, /const META_GLYPH = 16;/);
   // The short labels are the shared formatters' — no second copy of the rule.
   const [jobs, time] = await Promise.all([read('lib/jobs.ts'), read('lib/time.ts')]);

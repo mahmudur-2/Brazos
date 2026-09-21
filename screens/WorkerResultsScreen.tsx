@@ -44,7 +44,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 // The value now lives in lib/discoveryFilter.ts (4D-2) so lib modules can
 // read it without importing a screen; re-exported here because
@@ -89,7 +89,7 @@ export function WorkerResultsScreen() {
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint. Masters 12 and 13 are this
   // screen, and the last job card was ending under the bar.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const navigation = useNavigation<WorkerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerHomeStackParamList, 'WorkerResults'>>();
   const { user } = useAuth();

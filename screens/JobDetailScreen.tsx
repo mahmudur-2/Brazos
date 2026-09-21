@@ -89,7 +89,7 @@ import {
   withAlpha,
   type ColorPalette,
 } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 /**
  * The worker's take on this job — "$45–$54" / "$54" — comes from
@@ -123,7 +123,7 @@ export function JobDetailScreen() {
   // of a second ivory runs under the bar. See lib/shellGround.tsx.
   useShellGround('homeBackground');
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   // The shared meta-glyph rule (prestige 3c, WorkerJobCard): gold in dark,
   // Heritage muted in light.
   const metaGlyph = isDark ? colors.gold : colors.textMuted;

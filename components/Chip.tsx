@@ -3,6 +3,7 @@ import {
   StyleSheet,
   Text,
   View,
+  type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -59,6 +60,10 @@ type ChipProps = {
    *  44pt touch minimum that every tappable chip still keeps. */
   size?: 'sm' | 'md';
   style?: StyleProp<ViewStyle>;
+  /** 2026-09-21: the chip's own layout, for a caller that must decide
+   *  something from its measured width (the worker card's full-or-short
+   *  category label). Forwarded to the outer view, whichever kind it is. */
+  onLayout?: (event: LayoutChangeEvent) => void;
   accessibilityLabel?: string;
   accessibilityHint?: string;
 };
@@ -72,6 +77,7 @@ export function Chip({
   variant = 'default',
   size = 'md',
   style,
+  onLayout,
   accessibilityLabel,
   accessibilityHint,
 }: ChipProps) {
@@ -183,11 +189,12 @@ export function Chip({
   // A tag with no handler is a label, not a button. Rendering it as a
   // Pressable would put a focusable, screen-reader-announced control on screen
   // that does nothing when activated.
-  if (!onPress) return <View style={shape}>{content}</View>;
+  if (!onPress) return <View style={shape} onLayout={onLayout}>{content}</View>;
 
   return (
     <Pressable
       onPress={onPress}
+      onLayout={onLayout}
       style={({ pressed }) => [...shape, pressed && styles.pressed]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}

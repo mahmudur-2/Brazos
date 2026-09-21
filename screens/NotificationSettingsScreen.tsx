@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../components/Card';
 import { ScreenHeader } from '../components/ScreenHeader';
 import { SegmentedControl } from '../components/SegmentedControl';
-import { Toggle, useFloatingNavClearance } from '../ui/primitives';
+import { Toggle, useScrollClearance } from '../ui/primitives';
 import { useAuth } from '../hooks/useAuth';
 import { useProfile } from '../hooks/useProfile';
 import { alertAsync } from '../lib/dialog';
@@ -66,7 +66,7 @@ export function NotificationSettingsScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const { user } = useAuth();
   const { profile } = useProfile();
 

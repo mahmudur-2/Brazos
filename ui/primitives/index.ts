@@ -138,6 +138,7 @@ export {
   TAB_BAR_CONTENT_HEIGHT,
   TAB_BAR_FLOAT_MARGIN,
   useFloatingNavClearance,
+  useScrollClearance,
   WORKER_BAR_TABS,
   type BottomNavTabKey,
 } from './BottomNav';

@@ -22,7 +22,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 /**
  * Golden master 41 — the profile hub's account & safety page.
@@ -38,7 +38,7 @@ export function AccountSafetyScreen() {
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint. See ProfileDetailsScreen —
   // same hub, same defect.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const navigation = useNavigation<ProfileStackNavigation>();
   const { logout } = useAuth();
   const { profile } = useProfile();

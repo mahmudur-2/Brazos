@@ -13,7 +13,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 import { THEME_PREFERENCES, type ThemePreference } from '../lib/themePreference';
 import { setDesignStudioOpen, useDesignStudioOpen } from '../lib/designOverrides';
 import { designStudioAvailable } from '../lib/designStudioGate';
@@ -51,7 +51,7 @@ export function AppearanceScreen() {
   const { palette, isDark, preference, setPreference } = useThemeColors();
   const styles = stylesFor(palette);
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   // RUN G1 (C3): the design studio's toggle — the panel itself floats over
   // the whole app from navigation/ModeShell.tsx, so it survives leaving this
   // screen and can tune any surface. RUN S2 (C1): PERMANENT and

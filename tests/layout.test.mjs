@@ -405,13 +405,26 @@ test('every tab-contained scroll surface clears the floating pill', async () => 
     'screens/WorkerSearchScreen.tsx',
   ];
 
+  // 2026-09-21 — THE SECOND DOUBLE COUNT. Since G1 (C3) the bar is out of the
+  // layout flow on the TWO HOMES ONLY; everywhere else it is laid out beneath
+  // the screen, so a scroller padded with the bar's whole footprint ended
+  // ~104pt above the bar (Available Jobs, the operator's finding — DECISIONS
+  // 2026-09-20 sitting 2, (10)). Every scrolling surface now reads
+  // useScrollClearance(): the footprint on a home route, one spacing step
+  // elsewhere, decided by NavigationRouteContext. Chat is the one exception
+  // below — its keyboard rise subtracts the real footprint.
+  const keepsFootprint = new Set(['screens/ChatScreen.tsx']);
   for (const path of surfaces) {
     const source = await read(path);
+    const hook = keepsFootprint.has(path) ? 'useFloatingNavClearance' : 'useScrollClearance';
     assert.match(
       source,
-      /useFloatingNavClearance\(\)/,
-      `${path} must take its bottom clearance from the shared hook`
+      new RegExp(`${hook}\\(\\)`),
+      `${path} must take its bottom clearance from ${hook}()`
     );
+    if (!keepsFootprint.has(path)) {
+      assert.doesNotMatch(source, /useFloatingNavClearance/, `${path} pads a scroller with the bar's footprint — the double count`);
+    }
     // Applied directly, OR handed to the shared rising column — 2026-08-23,
     // when chat's keyboard rise moved into components/KeyboardRisingColumn.tsx
     // so a reanimated build could track the keyboard instead of imitating its
@@ -543,9 +556,17 @@ test('a PINNED footer takes its own padding, never the scroll clearance', async 
     );
   }
 
-  // The hook itself is untouched — scrolling surfaces still need it, and
+  // The hook itself is untouched — chat and the studio panel still need it, and
   // home(7) explicitly does not retire it or reintroduce a static token.
   assert.match(bottomNav, /export function useFloatingNavClearance\(\): number \{/);
+  // 2026-09-21: the scroller's own hook sits beside it — by route, from the
+  // context (never useRoute(), which throws outside a navigator), the
+  // footprint on the two atmosphere homes and spacing.lg read at use time.
+  assert.match(
+    bottomNav,
+    /export function useScrollClearance\(\): number \{\s*const route = useContext\(NavigationRouteContext\);\s*const inset = useNavInset\(\);\s*return route && ATMOSPHERE_HOME_ROUTES\.has\(route\.name\) \? inset : spacing\.lg;\s*\}/
+  );
+  assert.match(await read('ui/primitives/index.ts'), /useScrollClearance,/);
   assert.doesNotMatch(
     await read('ui/tokens.ts'),
     /floatingNavClearance/,

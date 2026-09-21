@@ -1,9 +1,9 @@
-import type { ComponentProps } from 'react';
+import { useContext, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabNavigationOptions } from '@react-navigation/bottom-tabs';
-import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
-import { glow, layout, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
+import { NavigationRouteContext, getFocusedRouteNameFromRoute } from '@react-navigation/native';
+import { glow, layout, spacing, themedStyles, useThemeColors, withAlpha, type ColorPalette } from '../../lib/theme';
 import { navBar } from '../tokens';
 import { tap } from '../../lib/haptics';
 import {
@@ -279,6 +279,36 @@ export function bottomNavHeight(insetBottom: number): number {
  */
 export function useFloatingNavClearance(): number {
   return useNavInset();
+}
+
+/**
+ * 2026-09-21 — WHAT A SCROLLING SURFACE PADS ITS END WITH, by where it is.
+ *
+ * THE DOUBLE COUNT, THE SECOND TIME. `useFloatingNavClearance()` reserves the
+ * bar's whole footprint (~104pt on a notched iPhone) under scrolling content,
+ * which was right when the bar floated over every screen. Since RUN G1 (C3)
+ * the bar is out of the layout flow on the TWO HOMES ONLY (`isAtmosphereHome-
+ * Route`, `position: 'absolute'`); everywhere else it is laid out IN the tab
+ * row beneath the screen, so the scroller already ends at the bar's top edge
+ * and the footprint padding sat on top of that as a hand's width of dead
+ * space — the operator's finding on Available Jobs (docs/DECISIONS.md
+ * 2026-09-20 sitting 2, (10): "the list ends 16pt above the bar").
+ *
+ * So the answer is by ROUTE: on a home, the bar's footprint (the content does
+ * pass under it there); anywhere else, one ordinary spacing step. The route
+ * is read from `NavigationRouteContext` directly rather than `useRoute()`, so
+ * a surface rendered outside a navigator (the catalog, a fixture) gets the
+ * small padding instead of a throw. `spacing.lg` is read at use time, like
+ * every metric, so the studio's spacing dial still moves it.
+ *
+ * `useFloatingNavClearance()` is untouched: chat's keyboard rise subtracts
+ * the footprint and the design studio's panel sits over it — those two want
+ * the bar's real box, not a scroller's padding.
+ */
+export function useScrollClearance(): number {
+  const route = useContext(NavigationRouteContext);
+  const inset = useNavInset();
+  return route && ATMOSPHERE_HOME_ROUTES.has(route.name) ? inset : spacing.lg;
 }
 
 /**

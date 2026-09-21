@@ -47,7 +47,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { litFill, SearchBar, useFloatingNavClearance } from '../ui/primitives';
+import { litFill, SearchBar, useScrollClearance } from '../ui/primitives';
 import { litBetween } from '../ui/primitives/LitSurface';
 
 // lit(3) — THE PILL'S ALPHA IS A MEASUREMENT, NOT A PREFERENCE.
@@ -343,7 +343,7 @@ export function HomeScreen() {
   // height plus the margin that floats it, which grows to the home-indicator
   // inset. `layout.floatingNavClearance` was a flat 68 that could not see the
   // inset; it was deleted and must not come back.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
 
   // MOTION1 (C2): the three sections below the greeting arrive in reading
   // order. The hook returns a STYLE, so each of these rides the node the

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { PropsWithChildren, ReactNode } from 'react';
 import { ScreenHeader } from '../../components/ScreenHeader';
-import { PINNED_FOOTER_BOTTOM_PADDING, StepHeader, useFloatingNavClearance } from '../primitives';
+import { PINNED_FOOTER_BOTTOM_PADDING, StepHeader, useScrollClearance } from '../primitives';
 import {
   controls,
   layout,
@@ -98,7 +98,7 @@ export function FormScreen({
   // emerald(3): the pill's real footprint, read from the device rather than
   // from a flat token. Whichever of the two bottom elements is last on screen
   // takes it — the footer when there is one, the scroller when there is not.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
 
   return (
     <SafeAreaView style={styles.safe} edges={insideTabs ? ['top'] : ['top', 'bottom']}>

@@ -9,7 +9,7 @@ import { goBackOrHome } from '../lib/navigationRef';
 import { maybePromptForPush } from '../lib/pushNotifications';
 import type { SubmitBidRouteParamList } from '../lib/navigation';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 /**
  * Screen 52 — Submit Bid (worker). The OfferComposer's marketplace-bid entry,
@@ -25,7 +25,7 @@ export function SubmitBidScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const navigation = useNavigation();
   const { params } = useRoute<RouteProp<SubmitBidRouteParamList, 'SubmitBid'>>();
   const { mode } = useMode();

@@ -20,7 +20,7 @@ import type { OpenJob } from '../lib/jobs';
 import type { MapStackNavigation, MapStackParamList } from '../lib/navigation';
 import { supabase } from '../lib/supabase';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 const REFRESH_DEBOUNCE_MS = 1500;
 
@@ -28,7 +28,7 @@ export function CellJobsScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const navigation = useNavigation<MapStackNavigation>();
   const { params } = useRoute<RouteProp<MapStackParamList, 'CellJobs'>>();
   const [jobs, setJobs] = useState<OpenJob[]>([]);

@@ -34,14 +34,34 @@ import { formatTimeAgoShort } from '../lib/time';
 /**
  * 2026-09-20 (sitting 2) — layout "a1" (docs/mockups/html/worker-results-card.html,
  * the operator's pick from six layouts and three picture sizes): the picture
- * is a SQUARE as tall as the text block beside it — measured, never a
- * constant — so the card has no empty corner under it. THUMB_SIZE is only
- * the floor it draws at until the text block has laid out. The pay block
- * sits over the card's top-right; the title and the chip row keep clear of
- * it, and the lines below run the full width beneath it.
+ * is a SQUARE beside the text block, the pay block sits over the card's
+ * top-right, the title and the chip row keep clear of it, and the lines
+ * below run the full width beneath it.
+ *
+ * 2026-09-21 — ONE CARD SIZE (docs/mockups/html/worker-results-screen.html,
+ * the operator's approved FIXED phones; DECISIONS 2026-09-20 sitting 2, (10)):
+ * the picture is a CONSTANT square — 120 here, which is the reference's 118
+ * fill inside its 1pt rim (React Native sizes the border in; the page does
+ * not) — and the text block is at least as tall, so a four-line card (a job
+ * with bids has no Break the ice) is the same height as a five-line one, 146
+ * with the card's padding and rim, and every picture is the same size —
+ * "the entire section one size". It was a measured square as tall as the
+ * text, which made the cards two heights.
+ *
+ * THE PAY BLOCK'S CLEARANCE IS MEASURED. The title and the chip row keep
+ * clear of the pay block by its own laid-out width plus PAY_AIR, not a fixed
+ * 96 — "$50" is half the width "$1,250" is, and the title had been losing
+ * that room to a guess. PAY_CLEAR is only the first frame's fallback, before
+ * the block reports its width. And THE CHIP KEEPS ITS FULL LABEL when it
+ * fits beside that clearance — "Packing/Unpacking" whole — falling back to
+ * the short name (JOB_CATEGORY_CHIP_LABELS, the map row's) only when the full
+ * one would not; decided from the chip's own layout at the full label, the
+ * PeekRow `dayFits` pattern below, unseen until decided. Never a character
+ * estimate.
  */
-const THUMB_SIZE = 84;
+const THUMB_SIZE = 120;
 const PAY_CLEAR = 96;
+const PAY_AIR = 8;
 const META_GLYPH = 16;
 /** The peek card's round photo (the approved Map design: 52pt, gold ring). */
 const PEEK_PHOTO_SIZE = 52;
@@ -113,10 +133,30 @@ export function WorkerJobCard({
   const thumbUrl = jobThumbnailUrl(job);
   const showImage = !!thumbUrl && !imageFailed;
 
-  // The picture is as tall as the text block beside it (a1): measured from
-  // the block's own layout, floored at THUMB_SIZE until it has one.
-  const [infoHeight, setInfoHeight] = useState<number | null>(null);
-  const thumbSize = Math.max(THUMB_SIZE, Math.round(infoHeight ?? 0));
+  // The pay block's clearance: its measured width plus PAY_AIR, PAY_CLEAR
+  // until it has laid out.
+  const [payWidth, setPayWidth] = useState<number | null>(null);
+  const payClear = payWidth === null ? PAY_CLEAR : Math.round(payWidth) + PAY_AIR;
+  // Does the full category label fit beside that clearance? Unknown until
+  // the chip has laid out at the full label with the pay block measured;
+  // re-asked when the job's category or the clearance changes.
+  const fullLabel = JOB_CATEGORY_LABELS[job.category] ?? job.category;
+  const shortLabel = JOB_CATEGORY_CHIP_LABELS[job.category] ?? job.category;
+  const [fullFits, setFullFits] = useState<boolean | null>(null);
+  const [chipRowWidth, setChipRowWidth] = useState<number | null>(null);
+  const [chipWidth, setChipWidth] = useState<number | null>(null);
+  useEffect(() => {
+    setFullFits(null);
+    setChipWidth(null);
+  }, [fullLabel, payClear]);
+  useEffect(() => {
+    if (fullFits !== null || payWidth === null || chipRowWidth === null || chipWidth === null) return;
+    setFullFits(chipWidth <= chipRowWidth - payClear);
+  }, [fullFits, payWidth, chipRowWidth, chipWidth, payClear]);
+  const onChipRowLayout = (event: LayoutChangeEvent) => setChipRowWidth(event.nativeEvent.layout.width);
+  const onChipLayout = (event: LayoutChangeEvent) => {
+    if (fullFits === null) setChipWidth(event.nativeEvent.layout.width);
+  };
 
   // The one line of facts under the location: the distance when it is real
   // (server-computed, never a guess), the arrival date from the ONE shared
@@ -167,7 +207,7 @@ export function WorkerJobCard({
       {showImage ? (
         <RemoteImage
           uri={thumbUrl}
-          style={[styles.thumb, { width: thumbSize, height: thumbSize }, isDark && styles.thumbDark]}
+          style={[styles.thumb, isDark && styles.thumbDark]}
           contentFit="cover"
           onError={() => setImageFailed(true)}
           accessible
@@ -180,29 +220,29 @@ export function WorkerJobCard({
         <View
           style={[
             styles.thumb,
-            { width: thumbSize, height: thumbSize },
             styles.thumbFallback,
             isDark ? styles.thumbFallbackDark : { backgroundColor: accent.bg },
           ]}
         >
           <Ionicons
             name={icon}
-            size={Math.round(thumbSize * 0.38)}
+            size={Math.round(THUMB_SIZE * 0.38)}
             color={isDark ? colors.gold : accent.icon}
           />
         </View>
       )}
 
-      <View style={styles.info} onLayout={(event) => setInfoHeight(event.nativeEvent.layout.height)}>
-        <Text style={styles.title} numberOfLines={1}>
+      <View style={styles.info}>
+        <Text style={[styles.title, { paddingRight: payClear }]} numberOfLines={1}>
           {job.title}
         </Text>
-        <View style={styles.chipRow}>
+        <View style={[styles.chipRow, { paddingRight: payClear }]} onLayout={onChipRowLayout}>
           <Chip
-            label={JOB_CATEGORY_LABELS[job.category] ?? job.category}
+            label={fullFits === false ? shortLabel : fullLabel}
             variant="soft"
             size="sm"
-            style={styles.categoryChip}
+            style={[styles.categoryChip, fullFits === null && styles.chipUnmeasured]}
+            onLayout={onChipLayout}
           />
           {isOwn ? <Chip label="Your job" variant="soft" size="sm" /> : null}
         </View>
@@ -244,7 +284,7 @@ export function WorkerJobCard({
       {/* Eyebrow law: EST. PAY is a structural label (gold), the figure is a
           money value (emerald) — the B-4 split between masters 12/43 green
           and 13 gold resolves to green everywhere. */}
-      <View style={styles.payBlock}>
+      <View style={styles.payBlock} onLayout={(event) => setPayWidth(event.nativeEvent.layout.width)}>
         <Text style={[styles.payCaption, isDark && styles.payCaptionDark]}>EST. PAY</Text>
         <Text style={[styles.payValue, isDark && styles.payValueDark]} numberOfLines={1}>
           {job.budget_cents != null ? formatBudget(job.budget_cents) : 'Open'}
@@ -387,12 +427,16 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...shadows.card,
   },
   // The pay block rides over the card's top-right corner (a1); the title and
-  // the chip row keep PAY_CLEAR of it, the lines beneath run full width.
+  // the chip row keep its MEASURED width + PAY_AIR of it (applied at the call
+  // site), the lines beneath run full width.
   chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs + 2,
-    paddingRight: PAY_CLEAR,
+  },
+  // The chip at the full label, before the fit is decided: laid out, unseen.
+  chipUnmeasured: {
+    opacity: 0,
   },
   factsDot: {
     color: colors.textMuted,
@@ -406,6 +450,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   // Master 12 rings the tile — photo or glyph — in the same gold hairline;
   // same box-parity arrangement as the card above.
   thumb: {
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
     borderRadius: radius.md,
     borderWidth: 1,
     borderColor: 'transparent',
@@ -427,6 +473,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     gap: spacing.xs,
     // Keeps content clear of the pay block regardless of title/chip length.
     minWidth: 0,
+    // One card size: never shorter than the picture beside it.
+    minHeight: THUMB_SIZE,
   },
   // Decision 9: a card title is display type. Master 12 draws these serif.
   title: {
@@ -434,7 +482,6 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     fontSize: 18,
     fontWeight: '700',
     color: colors.ink,
-    paddingRight: PAY_CLEAR,
   },
   categoryChip: {
     flexShrink: 0,

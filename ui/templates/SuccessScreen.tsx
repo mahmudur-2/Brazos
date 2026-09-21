@@ -2,7 +2,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, type ComponentProps, type ReactNode } from 'react';
-import { useFloatingNavClearance } from '../primitives';
+import { useScrollClearance } from '../primitives';
 import {
   controls,
   layout,
@@ -111,7 +111,7 @@ export function SuccessScreen({
 }: SuccessScreenProps) {
   const { emerald: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
 
   // MOTION1 (C2) — THE SUCCESS SURFACE ARRIVES IN ORDER, AND CONFIRMS ONCE.
   //

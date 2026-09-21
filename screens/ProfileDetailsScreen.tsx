@@ -25,7 +25,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 const LANGUAGE_LABELS: Record<string, string> = { en: 'English', es: 'Español' };
 
@@ -55,7 +55,7 @@ export function ProfileDetailsScreen() {
   // geometry plus this device's home-indicator inset. Overrides the static
   // paddingBottom in styles.content, which was 24 against a pill that occupies
   // 82-104.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const navigation = useNavigation<ProfileStackNavigation>();
   const { user } = useAuth();
   const { profile } = useProfile();

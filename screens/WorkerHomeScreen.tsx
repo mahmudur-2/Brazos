@@ -47,7 +47,7 @@ import {
   type ColorPalette,
 } from '../lib/theme';
 import { useDialNumber } from '../lib/designOverrides';
-import { SearchBar, Toggle, useFloatingNavClearance } from '../ui/primitives';
+import { SearchBar, Toggle, useScrollClearance } from '../ui/primitives';
 import { NEARBY_RADIUS_MILES } from './WorkerResultsScreen';
 
 // Master 43's hero crop, mounted in BOTH themes since the 2026-08-22 parity
@@ -102,7 +102,7 @@ export function WorkerHomeScreen() {
   // edge instead of stopping at a band above the bar. The pill's footprint is
   // no longer reserved by the column, so it is reserved here — DERIVED from the
   // bar's own height plus the margin that floats it, never a static token.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   // Forest is a near-black deep green in the v2 dark palette, so a forest
   // glyph on a dark surface is invisible paint. Two resolved accents instead:
   // `accent` is the interactive green the masters draw, `glyph` the cream
@@ -598,7 +598,7 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     // bottom inset here was a visible dead strip above the pill. RUN GROUND1
     // (C3) took the pill out of flow on this route so the atmosphere could
     // reach the screen's bottom edge, which means the reservation is now owed
-    // — and it is applied at the call site from useFloatingNavClearance(),
+    // — and it is applied at the call site from useScrollClearance(),
     // because it depends on the device inset and this object cannot see one.
     paddingBottom: 0,
   },

@@ -52,7 +52,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 /**
  * Read-only view of another user's profile — the public face of a worker's
@@ -68,7 +68,7 @@ export function WorkerProfileScreen() {
   const { palette: colors, isDark } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   // PostJob is registered alongside WorkerProfile in every stack that can
   // reach this screen, so the offer button below can push it from any of them.
   // (tests/crossTabNavigation.test.mjs executes that claim per stack — it was

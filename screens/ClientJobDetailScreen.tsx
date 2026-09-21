@@ -49,7 +49,7 @@ import { paymentsMode } from '../lib/adapters/payments';
 import { fetchRemoteConfig } from '../lib/remoteConfig';
 import { DISPUTE_REASON_LABELS, fetchOpenJobDispute, type JobDispute } from '../lib/disputes';
 import { MoneyText } from '../ui/primitives/MoneyText';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 import { alertAsync } from '../lib/dialog';
 import { userMessage } from '../lib/errorMessage';
 import { goBackOrHome } from '../lib/navigationRef';
@@ -104,7 +104,7 @@ export function ClientJobDetailScreen() {
   const iconCircleSize = useDialNumber('clientJobDetail.iconCircle.size') ?? 36;
   // emerald(3): the floating pill's real footprint. This is the "Job & bids"
   // surface the device pass caught scrolling under it.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const emeraldColors = emeraldColorsFor(colors);
   const navigation = useNavigation<MyJobsStackNavigation>();
   const { params } = useRoute<RouteProp<MyJobsStackParamList, 'ClientJobDetail'>>();

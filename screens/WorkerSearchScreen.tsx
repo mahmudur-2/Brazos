@@ -67,7 +67,7 @@ import {
   useThemeColors,
   type ColorPalette,
 } from '../lib/theme';
-import { SearchBar, useFloatingNavClearance } from '../ui/primitives';
+import { SearchBar, useScrollClearance } from '../ui/primitives';
 
 /** Tiles offered before anything has been typed: the whole shared skill list,
  *  in its own order. It was the first six, which left four categories able to
@@ -98,7 +98,7 @@ export function WorkerSearchScreen() {
   const chipRowGap = useDialNumber('workerSearch.chipRow.gap') ?? spacing.sm;
   // emerald(3): the floating pill's real footprint. This is the Discover tab's
   // root since emerald(1), so it is now a first-screen surface.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const EMERALD_PALETTE = emeraldColorsFor(colors);
   const navigation = useNavigation<CustomerHomeStackNavigation>();
   const { params } = useRoute<RouteProp<WorkerSearchRouteParamList, 'WorkerSearch'>>();

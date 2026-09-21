@@ -7,7 +7,7 @@ import { LEGAL_DOCUMENTS } from '../lib/legal';
 import { goBackOrHome } from '../lib/navigationRef';
 import type { LegalDocumentRouteParamList } from '../lib/navigation';
 import { spacing, themedStyles, useThemeColors, type ColorPalette } from '../lib/theme';
-import { useFloatingNavClearance } from '../ui/primitives';
+import { useScrollClearance } from '../ui/primitives';
 
 /**
  * Read-only view of one legal document, reachable from Profile at any time —
@@ -18,7 +18,7 @@ export function LegalDocumentScreen() {
   const { palette: colors } = useThemeColors();
   const styles = stylesFor(colors);
   // emerald(3): the floating pill's real footprint.
-  const navClearance = useFloatingNavClearance();
+  const navClearance = useScrollClearance();
   const route = useRoute<RouteProp<LegalDocumentRouteParamList, 'LegalDocument'>>();
   // route.params.document is typed as 'terms' | 'privacy', but the value
   // still comes from outside this screen's control (a deep link, or a stale
