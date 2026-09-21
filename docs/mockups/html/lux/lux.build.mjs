@@ -348,6 +348,31 @@ const SYSTEM_CSS = `
 .map .tile{position:absolute;width:${256 * 0.78}px;height:${256 * 0.78}px;background-size:100% 100%;filter:brightness(2.15) contrast(1.85) brightness(0.62)}
 .heat{position:absolute;width:120px;height:120px;border-radius:60px;background:radial-gradient(circle,rgba(79,168,232,.55) 0%,rgba(79,168,232,.22) 42%,rgba(79,168,232,0) 70%);transform:translate(-50%,-50%);pointer-events:none}
 .legal{position:absolute;left:12px;font-size:10px;color:rgba(255,255,255,.55)}
+/* --- batch 3 additions: the Filters sheet, its popups, the checklist, the buckets --- */
+.fillrow{display:flex;gap:6px}
+.fillrow .chip.f{flex:1;justify-content:center;padding:0 4px;min-width:0}
+.fillrow .chip.f.wide{flex:1.2}
+.pop{position:absolute;width:168px;border-radius:18px;background:rgba(9,36,31,.94);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 16px 40px rgba(0,0,0,.5);backdrop-filter:blur(24px);overflow:hidden;padding:4px 0}
+.pop .r{height:44px;display:flex;align-items:center;padding:0 12px;gap:8px;font-size:15px;color:var(--ink)}
+.pop .r + .r{border-top:1px solid rgba(200,255,230,.10)}
+.pop .r .tk{width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:var(--acc)}
+.pop .r .tk svg{width:16px;height:16px}
+.pop .r .c{flex:1;text-align:center;padding-right:26px}
+.pop .r.on .c,.pop .r.on .l{color:var(--acc);font-weight:700}
+.pop .r .cal{width:22px;height:24px;border-radius:5px;border:1.5px solid rgba(200,255,230,.35);border-top-width:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--ink);flex:0 0 auto}
+.pop .r .h{font-size:12px;color:var(--muted)}
+.pop .r.muted .l{color:var(--muted)}
+.cb{width:24px;height:24px;border-radius:7px;border:1.5px solid rgba(200,255,230,.3);display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:var(--accInk)}
+.cb.on{background:var(--acc);border-color:transparent}
+.cb svg{width:14px;height:14px}
+.strike{text-decoration:line-through;color:var(--muted)}
+.bucket{flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:4px;border-radius:18px}
+.bucket .amt{font-size:18px;font-weight:800;color:var(--gold);white-space:nowrap}
+.bucket .k{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+.bucket .n{font-size:11px;color:var(--muted);line-height:14px}
+.switch.on{background:var(--acc);border-color:transparent}
+.switch.on i{left:auto;right:3px;background:var(--accInk)}
+.btn2.off{color:var(--muted);border-color:rgba(200,255,230,.10)}
 `;
 
 const base = `
@@ -459,7 +484,7 @@ const whome = () => `
     <div class="field">${ic('i-search')}<span style="flex:1">Find jobs near you</span>${ic('i-sliders')}</div>
     <div class="stack" style="gap:10px"><div class="between"><span class="eyebrow">Jobs near you</span><span class="link">View all</span></div>
       ${JOBS.slice(0, 2).map((j) => `<div class="card jobrow" style="align-items:center"><div class="thumb" style="width:64px;height:64px">${ic(j.icon)}</div><div class="stack" style="flex:1;gap:4px"><span class="title lines2">${j.title}</span><span class="meta">${ic('i-pin')}${j.hood} · ${j.when}</span></div><span class="money" style="font-size:20px">${j.pay}</span></div>`).join('')}</div>
-  </div>${nav('Home')}`;
+  </div>${workerNav('Home')}`;
 
 const whomeC = () => `
   <div class="body" style="gap:20px">
@@ -482,7 +507,7 @@ const jobs = () => `
     <div class="between"><div class="stack"><span class="eyebrow">Near you</span><div class="h2 serif" style="font-size:30px;line-height:34px">Available jobs</div></div><div class="circle">${ic('i-sliders')}</div></div>
     <div class="seg"><div class="p on">Any</div><div class="p">2 mi</div><div class="p">5 mi</div><div class="p">10 mi</div><div class="p">25 mi</div></div>
     ${JOBS.slice(0, 3).map((j, i) => `<div class="card jobrow"><div class="thumb">${i === 2 ? `<img src="${photoSrc()}">` : ic(j.icon)}</div><div class="stack" style="flex:1;gap:6px;min-width:0"><div class="between" style="align-items:flex-start"><span class="chip">${j.cat}</span><div class="stack" style="gap:0;align-items:flex-end"><span class="eyebrow" style="font-size:9.5px">Est. pay</span><span class="money" style="font-size:22px;line-height:24px">${j.pay}</span></div></div><span class="title lines2">${j.title}</span><span class="meta">${ic('i-pin')}${j.hood} · ${j.when} · ${j.bids}</span></div></div>`).join('')}
-  </div>${nav('Home')}`;
+  </div>${workerNav('Home')}`;
 
 const jobsC = () => `
   <div class="body" style="gap:16px">
@@ -826,6 +851,143 @@ const cmap = async () => {
   ${nav('')}`;
 };
 
+// ---------------------------------------------------------------------------
+// BATCH 3 — worker (SCREENS.md). The worker's side of the same sample job.
+// ---------------------------------------------------------------------------
+const CLIENT = 'Mahmudur Rahman';
+/** The Filters sheet (components/JobFilterSheet.tsx) over Available Jobs; `pop` names the popup open over it, if any. */
+const filters = (pop = '') => {
+  const section = (label, pills, note = '', scroll = false) => `<div class="stack" style="gap:8px"><span class="eyebrow" style="color:var(--muted)">${label}</span>${scroll ? `<div class="hrow" style="gap:6px;margin:0 -20px;padding:0 20px">${pills}</div>` : `<div class="fillrow">${pills}</div>`}${note ? `<span class="muted" style="font-size:12px;line-height:16px">${note}</span>` : ''}</div>`;
+  const pill = (l, on = false, cls = '') => `<span class="chip f${on ? ' on' : ''}${cls ? ' ' + cls : ''}">${l}</span>`;
+  const popup = pop === 'distance'
+    ? `<div class="pop" style="right:20px;top:411px">${['4 mi', '5 mi', '6 mi', '7 mi', '8 mi'].map((v, i) => `<div class="r${i === 1 ? ' on' : ''}"><span class="tk">${i === 1 ? ic('i-check') : ''}</span><span class="c">${v}</span></div>`).join('')}</div>`
+    : pop === 'budget'
+      ? `<div class="pop" style="right:20px;top:482px">${['$40', '$45', '$50', '$60', '$70'].map((v, i) => `<div class="r${i === 2 ? ' on' : ''}"><span class="tk">${i === 2 ? ic('i-check') : ''}</span><span class="c">${v}</span></div>`).join('')}</div>`
+      : pop === 'date'
+        ? `<div class="pop" style="right:20px;top:299px;width:192px">${[['Wed, Sep 23', 23], ['Thu, Sep 24', 24], ['Fri, Sep 25', 25], ['Sat, Sep 26', 26], ['Sun, Sep 27', 27]].map(([v, d], i) => `<div class="r${i === 3 ? ' on' : ''}"><span class="tk">${i === 3 ? ic('i-check') : ''}</span><span class="cal">${d}</span><span class="c" style="padding-right:0;text-align:left">${v}</span></div>`).join('')}</div>`
+        : pop === 'sort'
+          ? `<div class="pop" style="left:20px;bottom:153px;width:262px">${[['Smart Match', 'Matches based on your skills', true], ['Newest', 'Earliest jobs first'], ['Highest budget', 'Best pay first'], ['Distance', 'Least travel first'], ['Fewest bids', 'Least competition, then closest'], ['Reset', 'Latest added first', false, true]].map(([l, h, on, muted]) => `<div class="r${on ? ' on' : ''}${muted ? ' muted' : ''}" style="height:52px"><span class="tk">${on ? ic('i-check') : ''}</span><div class="stack" style="gap:1px"><span class="l" style="font-size:15px">${l}</span><span class="h">${h}</span></div></div>`).join('')}</div>`
+          : '';
+  return `${jobs()}<div class="scrim"></div>
+  <div class="sheet" style="padding:10px 20px 0;gap:0"><div class="grab"></div><div class="h2 serif" style="font-size:24px;line-height:28px;margin-bottom:16px">Filters</div>
+    <div class="stack" style="gap:16px;flex:1;min-height:0">
+      ${section('Distance', pill('Any', true, 'wide') + ['2 mi', '5 mi', '10 mi', '25 mi'].map((l) => pill(l)).join('') + pill(pop === 'distance' ? '5 mi' : 'Custom', pop === 'distance'))}
+      ${section('Minimum budget', pill('Any', pop !== 'budget', 'wide') + ['$25', '$50', '$100', '$250'].map((l) => pill(l)).join('') + pill(pop === 'budget' ? '$50' : 'Custom', pop === 'budget'), 'Jobs with no budget set are always shown.')}
+      ${section('When', pill('Any', pop !== 'date', 'wide') + ['Today', 'Tomorrow', 'This week'].map((l) => pill(l)).join('') + pill(pop === 'date' ? 'Sep 26' : 'Custom', pop === 'date'))}
+      ${section('Categories', pill(`${icS('i-check', 15, 'var(--acc)')}Best Match`) + ['Assembly', 'Moving', 'Cleaning', 'TV mounting', 'Handyman / Repairs', 'Yard work', 'Painting', 'Packing', 'Pet care', 'Errands', 'Other'].map((l) => pill(l)).join(''), 'Nothing selected means every category.', true)}
+      <div class="stack" style="gap:8px"><span class="eyebrow" style="color:var(--muted)">Sort</span><div><span class="chip f on" style="background:rgba(126,226,180,.14);color:var(--acc);border-color:rgba(126,226,180,.45)"><span style="color:var(--muted);font-weight:600">Sort by</span>&nbsp;Smart Match${icS('i-chev', 14, 'var(--acc)')}</span></div></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;padding:14px 0 34px;border-top:1px solid rgba(200,255,230,.10);margin-top:14px"><span class="muted" style="font-size:15px;font-weight:600;width:64px">Reset</span><div class="cta" style="flex:1">Show 4 jobs</div></div></div>${popup}<div class="home-bar"></div>`;
+};
+
+/** Submit a bid (screens/SubmitBidScreen.tsx over components/OfferComposer.tsx, bid mode): the context, the amount, the take, the pitch, the availability chips, the consequence, Send. Scrolls: two frames. */
+const submit = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Submit a bid')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:6px"><span class="eyebrow">You’re bidding on</span><div class="h2 serif" style="font-size:22px;line-height:26px">${DETAIL.title}</div><span class="muted" style="font-size:13px">${POST.cat} · ${DETAIL.hood}</span><span style="font-size:14px;font-weight:700;color:var(--ink);margin-top:4px">Customer’s budget: <span class="money">${DETAIL.pay}</span></span></div>
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${fld('Your bid (USD)', '110')}<span class="muted" style="font-size:13px;margin-top:-4px">You receive <span class="money">$101.75</span> after the fee</span>${fld('Pitch', BIDS[0].pitch, { multi: true })}</div>
+    <div class="stack" style="gap:10px"><span class="lbl">When can you start</span><div class="wrap">${chipF('Today', '')}${chipF('Tomorrow', '')}${chipF('Pick a day', '')}</div></div>
+    <div class="stack" style="gap:10px"><span class="lbl">How long</span><div class="wrap">${['Under 1h', '1-2h', '2-4h', '4h+'].map((l) => chipF(l, '', l === '2-4h')).join('')}</div></div>
+    <div style="display:flex;gap:10px;align-items:flex-start">${icS('i-alert', 18, 'var(--muted)')}<span class="muted" style="font-size:13px;line-height:19px">Sends your bid to the customer. You can withdraw it any time before it’s accepted, and it expires on its own after 7 days.</span></div>
+    <div class="cta">Send bid</div>
+  `, 16)}${workerNav('Home')}`;
+
+/** Bid sent (screens/BidSentScreen.tsx on the SuccessScreen template): the mark, the receipt, the two actions. */
+const bidSent = () => `
+  <div class="body" style="gap:18px;align-items:center;text-align:center;top:84px">
+    <div class="mark">${ic('i-check')}</div>
+    <div class="stack" style="gap:8px;align-items:center"><div class="h1 serif" style="font-size:30px;line-height:34px">Bid sent</div><p class="muted" style="font-size:15px;line-height:21px;max-width:330px">The customer can now compare your bid with others and open your profile from it. You’ll hear the moment they respond.</p></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:6px;align-self:stretch"><span class="muted lines2" style="font-size:14px;line-height:19px">${DETAIL.title}</span><span class="money" style="font-size:34px;line-height:38px">${BIDS[0].amount}</span><p class="muted" style="font-size:13px;line-height:18px;margin-top:4px">You can withdraw this bid from the job screen any time before it’s accepted. If the customer doesn’t respond within 7 days it expires on its own.</p></div>
+    <div class="stack" style="gap:10px;align-self:stretch"><div class="cta">View in My Jobs</div><div class="btn2">Keep browsing</div></div>
+  </div>${workerNav('Home')}`;
+
+/** Your Job (screens/WorkerJobScreen.tsx), assigned: the job, the progress, the protected payment with its breakdown, Message, the arrival card, Start job. Scrolls: three frames. */
+const wjob = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Your Job')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><div style="display:flex;gap:12px;align-items:flex-start"><div class="well sm" style="width:44px;height:44px;border-radius:22px">${ic('i-wrench')}</div><div class="stack" style="gap:3px;flex:1;min-width:0"><span class="title lines2">${DETAIL.title}</span><span class="muted" style="font-size:13px">${POST.cat} · ${DETAIL.hood}</span></div><span class="chip">Assigned</span></div><div class="divider"></div><div class="between"><span class="money" style="font-size:26px">${PAY.agreed}</span><span class="muted" style="font-size:14px">for ${CLIENT}</span></div></div>
+    <div class="card" style="padding:18px 18px 14px"><div class="steps" style="gap:10px">${[['Assigned', 'done on'], ['In progress', ''], ['Completed', '']].map(([l, s]) => `<div class="st ${s}"><i></i><span style="font-size:12px">${l}</span></div>`).join('')}</div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:6px;position:relative"><div style="position:absolute;right:16px;top:16px" class="well">${ic('i-shield')}</div><span class="eyebrow">Payment protected</span><span class="money" style="font-size:28px;line-height:32px">$101.75</span><span class="muted" style="font-size:13px">Funds held in protection</span><p class="muted" style="font-size:14px;line-height:20px;margin-top:6px">${CLIENT} placed the funds in protection. They’re released only after the finished work is approved.</p><div class="card2" style="padding:4px 14px;margin-top:8px;border-radius:16px">${kv('Customer paid', PAY.total)}${kv('Brazos Protection', '$16.50')}${kv('You receive', '$101.75', 'total money')}</div></div>
+    <div class="btn2">${ic('i-chat')}Message ${CLIENT}</div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div class="h2 serif" style="font-size:22px;line-height:26px">Confirmed</div><p class="muted" style="font-size:14px;line-height:20px">Let ${CLIENT} know you’re on the way and when you arrive — two simple status taps, no location tracking.</p><div class="btn2" style="height:46px;font-size:15px">Route &amp; arrival</div><div class="btn2" style="height:46px;font-size:15px">Work checklist</div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div class="h2 serif" style="font-size:22px;line-height:26px">Ready to start?</div><p class="muted" style="font-size:14px;line-height:20px">Mark the job in progress when you begin the work.</p><div class="cta">Start job</div></div>
+  `, 16)}${workerNav('My Jobs')}`;
+
+/** Work checklist (screens/WorkChecklistScreen.tsx on the FormScreen template): the count, the steps with their boxes and removes, the new-step field and Add step pinned. */
+const checklist = () => `
+  <div class="body" style="gap:0">${header2('Work checklist', DETAIL.title)}</div>
+  ${scroller(116, 214, 0, `
+    <span class="sect">2 of 4 done</span>
+    <div class="card list">${[['Unbox both pieces and check the parts list', true], ['Assemble the sofa frame', true], ['Fit the cushions and level the feet', false], ['Take the packaging down to the van', false]].map(([l, d]) => `<div class="row" style="padding:14px 16px;gap:12px"><div class="cb${d ? ' on' : ''}">${d ? ic('i-check') : ''}</div><span style="flex:1;font-size:15px;line-height:20px;color:var(--ink)" class="${d ? 'strike' : ''}">${l}</span>${icS('i-close', 18, 'var(--muted)')}</div>`).join('')}</div>
+  `, 14)}
+  <div class="sticky abovenav" style="display:flex;flex-direction:column;gap:10px"><div class="in ph" style="min-height:48px;padding:12px 16px"><span>e.g. Mow the back yard</span></div><div class="cta" style="opacity:.55;box-shadow:none">Add step</div></div>${workerNav('My Jobs')}`;
+
+/** Route & arrival (screens/RouteArrivalScreen.tsx): where things stand, getting there, the two declarations, I’m on my way pinned. */
+const route = () => `
+  <div class="body" style="gap:0">${header2('Route &amp; arrival', DETAIL.title)}</div>
+  ${scroller(116, 160, 0, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:6px"><span class="eyebrow">Where things stand</span><div class="h2 serif" style="font-size:24px;line-height:28px">Confirmed</div><p class="muted" style="font-size:14px;line-height:20px">Your status updates are simple declarations — nothing tracks your location. The customer sees exactly the two taps below, nothing more.</p></div>
+    <div class="stack" style="gap:10px"><span class="sect">Getting there</span><div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:14px"><div style="display:flex;gap:12px;align-items:flex-start">${icS('i-pin', 20, 'var(--acc)')}<div class="stack" style="gap:2px"><span style="font-size:15px;color:var(--ink)">2410 Emmons Ave, Apt 3B</span><span class="muted" style="font-size:12px;line-height:16px">Exact address — shared with you because you were hired.</span></div></div><div style="display:flex;gap:12px;align-items:flex-start">${icS('i-clock', 20, 'var(--acc)')}<div class="stack" style="gap:2px"><span style="font-size:15px;color:var(--ink)">${POST.timing}</span><span class="muted" style="font-size:12px;line-height:16px">The arrival window the customer asked for.</span></div></div></div></div>
+    <div class="stack" style="gap:10px"><span class="sect">Your status</span><div class="card list">${['On my way', 'Arrived'].map((l) => `<div class="row" style="padding:14px 16px;gap:12px"><div class="cb"></div><span style="flex:1;font-size:16px;font-weight:600;color:var(--ink)">${l}</span></div>`).join('')}</div></div>
+  `, 16)}
+  <div class="sticky abovenav"><div class="cta">I’m on my way</div></div>${workerNav('My Jobs')}`;
+
+/** The worker's map (screens/MapScreen.tsx, worker mode, over the approved map design): the pill with its distance control, the Today chip, the jobs sheet peeking on the bar. */
+const wmap = async () => {
+  const tiles = await mapLayer();
+  const cells = [[40.6415, -73.9330], [40.6860, -73.9440], [40.6690, -73.9440], [40.6770, -73.9670]].map(([lat, lng]) => mapPoint(lat, lng));
+  const j = JOBS[0];
+  return `<style>${tiles.css}</style><div class="map">${tiles.html}${cells.map((p) => `<div class="heat" style="left:${p.x.toFixed(1)}px;top:${p.y.toFixed(1)}px"></div>`).join('')}<div style="position:absolute;left:0;right:0;top:0;height:120px;background:linear-gradient(180deg,rgba(6,36,33,.75),rgba(6,36,33,0))"></div></div>
+  <div style="position:absolute;left:20px;right:20px;top:64px;padding-right:8px" class="field">${ic('i-search')}<span style="flex:1;color:var(--ink)">Explore nearby jobs</span>${ic('i-mic')}<span class="chip f" style="height:36px;border-radius:18px">${ic('i-sliders')}Any</span></div>
+  <div style="position:absolute;left:20px;top:130px"><span class="chip f" style="height:36px;border-radius:18px;background:rgba(9,36,31,.8);backdrop-filter:blur(12px)">${ic('i-calendar')}Today</span></div>
+  <span class="legal" style="bottom:${84 + 174 + 8}px">Legal</span>
+  <div class="card" style="position:absolute;left:12px;right:12px;bottom:84px;border-radius:22px 22px 0 0;border-bottom:0;padding:8px 16px 12px;display:flex;flex-direction:column;gap:10px"><div class="grab" style="margin-bottom:2px"></div><div class="between"><div class="stack" style="gap:2px"><span class="h2 serif" style="font-size:22px;line-height:26px">4 open jobs</span><span class="muted" style="font-size:13px">Near you · Any distance</span></div><span class="link" style="display:flex;align-items:center;gap:2px">View${icS('i-chev', 18, 'var(--acc)')}</span></div>
+    <div class="card2 jobrow" style="padding:10px;gap:12px;border-radius:16px"><div class="thumb" style="width:64px;height:64px">${ic(j.icon)}</div><div class="stack" style="flex:1;gap:4px;min-width:0"><span class="title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${j.title}</span><span class="meta"><span class="chip" style="height:22px;font-size:11px">${j.cat}</span>${j.when}</span><span class="meta">${ic('i-pin')}${j.hood}</span></div><div class="stack" style="gap:0;align-items:flex-end"><span class="eyebrow" style="font-size:9.5px">Est. pay</span><span class="money" style="font-size:20px;line-height:22px">${j.pay}</span></div></div></div>
+  ${workerNav('Map')}`;
+};
+
+/** My Jobs (screens/MyJobsHubScreen.tsx), the worker's Active tab: the job you're working and your pending bid. */
+const wmyjobs = () => `
+  <div class="body" style="gap:0"><div style="display:flex;gap:14px;align-items:center"><div class="well" style="width:48px;height:48px;border-radius:16px">${ic('i-briefcase')}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="eyebrow">Your work</span><div class="h2 serif" style="font-size:26px;line-height:30px">My jobs</div><span class="muted" style="font-size:13px;line-height:17px">Work you accepted and bids awaiting a response.</span></div></div></div>
+  ${scroller(150, 84, 0, `
+    <div class="seg3"><div class="o on">Active</div><div class="o">Review</div><div class="o">Closed</div></div>
+    <div class="stack" style="gap:12px"><div style="display:flex;align-items:center;gap:8px"><span class="sect">You’re working</span><span class="badge">1</span></div>
+      <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px"><div class="between"><span class="chip">Assigned</span><span class="muted" style="font-size:12px">2h ago</span></div><div style="display:flex;gap:12px;align-items:center"><div class="thumb" style="width:56px;height:56px">${photo()}</div><div class="stack" style="gap:3px;flex:1;min-width:0"><span class="title lines2">${DETAIL.title}</span><span class="muted" style="font-size:13px">${POST.cat} · ${DETAIL.hood}</span><span class="muted" style="font-size:13px">Client · ${CLIENT}</span></div></div><div class="between" style="align-items:flex-end"><span class="money" style="font-size:20px">${PAY.agreed}</span><div class="stack" style="gap:2px;align-items:flex-end"><span class="link" style="font-size:13px;display:flex;align-items:center;gap:4px">${icS('i-arrow', 14, 'var(--acc)')}Mark en route when you head out</span><span class="muted" style="font-size:12px">View details</span></div></div></div></div>
+    <div class="stack" style="gap:12px"><div style="display:flex;align-items:center;gap:8px"><span class="sect">Pending bids</span><span class="badge">1</span></div>
+      <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:12px"><div class="between"><span class="chip">Pending</span><span class="muted" style="font-size:12px">${JOBS[1].age}</span></div><div style="display:flex;gap:12px;align-items:center"><div class="thumb" style="width:56px;height:56px">${ic(JOBS[1].icon)}</div><div class="stack" style="gap:3px;flex:1;min-width:0"><span class="title lines2">${JOBS[1].title}</span><span class="muted" style="font-size:13px">${JOBS[1].cat} · ${JOBS[1].hood}, Brooklyn, NY</span><span class="muted" style="font-size:13px">Client · ${CLIENT}</span></div></div><div class="between" style="align-items:flex-end"><div class="stack" style="gap:0"><span class="muted" style="font-size:11px">Your bid:</span><span class="money" style="font-size:20px">$95</span></div><div class="stack" style="gap:2px;align-items:flex-end"><span class="link" style="font-size:13px;display:flex;align-items:center;gap:4px">${icS('i-arrow', 14, 'var(--acc)')}Awaiting response</span><span class="muted" style="font-size:12px">View details</span></div></div></div></div>
+  `, 16)}${workerNav('My Jobs')}`;
+
+/** Earnings (screens/EarningsScreen.tsx): the three buckets, the fee line, the ledger, the payouts CTA pinned — every figure a sum over the one sample row. */
+const earnings = () => `
+  <div class="body" style="gap:0">${header2('Earnings', 'Every figure is a sum over your ledger rows')}</div>
+  ${scroller(116, 160, 0, `
+    <div style="display:flex;gap:8px">${[['i-shield', 'Pending', '$101.75', 'Held in protection'], ['i-card', 'Available', '$0.00', 'Released to you'], ['i-share', 'Transferred', '$0.00', 'Transferred to you']].map(([i, k, a, n]) => `<div class="card bucket"><div class="well sm" style="width:28px;height:28px;border-radius:14px">${icS(i, 14, 'var(--acc)')}</div><span class="k">${k}</span><span class="amt">${a}</span><span class="n">${n}</span></div>`).join('')}</div>
+    <div style="display:flex;gap:10px;align-items:flex-start">${icS('i-images', 16, 'var(--muted)')}<span class="muted" style="font-size:13px;line-height:18px">Platform fees on these rows: $8.25. Every figure here is a sum over the ledger rows below, nothing else.</span></div>
+    <div class="stack" style="gap:10px"><span class="sect">Ledger</span><div class="card" style="padding:14px 18px;display:flex;justify-content:space-between;align-items:center;gap:12px"><div class="stack" style="gap:3px;flex:1;min-width:0"><span class="title" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${DETAIL.title}</span><span class="muted" style="font-size:12px">Approved — payout on its way</span></div><span class="money" style="font-size:18px;white-space:nowrap">$101.75</span></div></div>
+  `, 16)}
+  <div class="sticky abovenav"><div class="cta">Set up payouts${icS('i-chev', 18, 'var(--accInk)')}</div></div>${workerNav('Profile')}`;
+
+/** Payouts (screens/PayoutsScreen.tsx), status none: the state, the waiting notice, how payouts work, Set up payouts pinned; Refresh in the header. */
+const payouts = () => `
+  <div class="body" style="gap:0"><div class="hdr"><div class="circle">${ic('i-back')}</div><div class="stack" style="gap:0;flex:1;min-width:0"><div class="t serif" style="font-size:24px;line-height:28px">Payouts</div><span class="sub">Where approved payments land</span></div><div class="circle">${ic('i-swap')}</div></div></div>
+  ${scroller(116, 160, 0, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div style="display:flex;gap:12px;align-items:center"><div class="well sm">${ic('i-card')}</div><div class="stack" style="gap:2px"><span class="eyebrow">Payout status</span><span class="title">Payouts aren’t set up yet</span></div></div><p class="muted" style="font-size:14px;line-height:20px">Set up payouts to receive what you earn. It’s a short setup in your browser, and you’re brought back here when it’s done.</p></div>
+    <div class="card" style="padding:14px 16px;display:flex;gap:10px;align-items:flex-start">${icS('i-alert', 18, 'var(--muted)')}<span class="muted" style="font-size:13px;line-height:18px">An approved payment is waiting on your payout setup before it can be sent to you.</span></div>
+    <div class="stack" style="gap:10px"><span class="sect">How payouts work</span><div class="card" style="padding:14px 18px;display:flex;flex-direction:column;gap:12px">${[['i-share', 'Set up once', 'a short setup with the payment provider, in your browser. You come straight back here when it’s done.'], ['i-checkcircle', 'Approved payments transfer on their own', 'when a customer approves your finished work, the payment is released and transferred to you on the provider’s schedule.'], ['i-card', 'No cash-out step', 'there is nothing to trigger. Earnings shows each payment as held, released and transferred as it happens.']].map(([i, s, t]) => `<div style="display:flex;gap:12px;align-items:flex-start">${icS(i, 20, 'var(--acc)')}<p class="muted" style="font-size:13px;line-height:18px"><b style="color:var(--ink)">${s}</b> — ${t}</p></div>`).join('')}</div></div>
+  `, 16)}
+  <div class="sticky abovenav"><div class="cta">Set up payouts</div></div>${workerNav('Profile')}`;
+
+/** Services & availability (screens/ServicesPricingScreen.tsx): the toggle and its note, your services, Add a service with its price mode and category pills. Scrolls: two frames. */
+const pricing = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Services &amp; availability')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><div style="display:flex;gap:12px;align-items:flex-start"><div class="stack" style="gap:4px;flex:1"><div class="h2 serif" style="font-size:22px;line-height:26px">Taking new work</div><span class="muted" style="font-size:13px;line-height:18px">Shown on your public profile. Turning it off doesn’t block offers — it just tells customers what to expect.</span></div><div class="switch on"><i></i></div></div><div class="in" style="min-height:48px;padding:12px 16px;font-size:15px"><span style="flex:1">${WORKER.note}</span></div></div>
+    <div class="stack" style="gap:10px"><span class="sect">Your services</span><div class="card list">${[['Flat-pack furniture assembly', 'Furniture Assembly · $60 flat'], ['TV mounting', 'TV/Furniture Mounting · $45/hr']].map(([t, m]) => `<div class="row" style="padding:12px 16px;gap:12px"><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title" style="font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t}</span><span class="muted" style="font-size:12px">${m}</span></div>${icS('i-eyeoff', 20, 'var(--acc)')}${icS('i-close', 20, 'var(--muted)')}</div>`).join('')}</div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><div class="h2 serif" style="font-size:22px;line-height:26px">Add a service</div><div class="in ph" style="min-height:48px;padding:12px 16px;font-size:15px"><span>e.g. Standard lawn mow &amp; edge</span></div><div class="seg2"><div class="o on">Flat price</div><div class="o">Ask me</div></div><div style="display:flex;gap:8px"><div class="in ph" style="flex:1;min-height:48px;padding:12px 16px;font-size:15px"><span>Price in dollars</span></div><span class="chip f" style="height:48px;border-radius:16px;padding:0 16px;font-size:14px">flat</span></div>
+      <div class="wrap">${POSTABLE.map(([l]) => chipF(l, '', l === POST.cat)).join('')}</div>
+      <div class="btn2 off">Add service</div></div>
+  `, 16)}${workerNav('Profile')}`;
+
 const SCREENS = {
   home: { label: 'Customer Home', render: home },
   whome: { label: 'Worker Home', render: whome },
@@ -857,6 +1019,19 @@ const SCREENS = {
   'review-tip': { label: 'Review & tip', render: reviewTip, frames: [0, 135] },
   cell: { label: 'Jobs in this zone', render: cell },
   cmap: { label: 'Map (customer)', render: cmap },
+  // batch 3 — worker
+  filters: { label: 'The Filters sheet', render: filters },
+  'filters-pop': { label: 'The Filters popups', render: filters, frames: ['distance', 'budget', 'date', 'sort'], frameLabels: [' (distance)', ' (budget)', ' (date)', ' (sort)'] },
+  submit: { label: 'Submit a bid', render: submit, frames: [0, 85] },
+  'bid-sent': { label: 'Bid sent', render: bidSent },
+  wjob: { label: 'Your Job (worker, assigned)', render: wjob, frames: [0, 466] },
+  checklist: { label: 'Work checklist', render: checklist },
+  route: { label: 'Route & arrival', render: route },
+  wmap: { label: 'Map (worker) + the jobs sheet', render: wmap },
+  wmyjobs: { label: 'My Jobs (worker)', render: wmyjobs },
+  earnings: { label: 'Earnings', render: earnings },
+  payouts: { label: 'Payouts', render: payouts },
+  pricing: { label: 'Services & availability', render: pricing, frames: [0, 201] },
 };
 
 // ---------------------------------------------------------------------------
@@ -871,7 +1046,7 @@ for (const key of wanted) {
   const frames = s.frames ?? [0];
   const slots = [];
   for (const [i, scroll] of frames.entries()) {
-    slots.push(`<div class="slot"><div class="slot-label">Emerald Lux Glass — ${s.label}${i ? ' (scrolled)' : ''}</div><div class="phone" data-shot="lux-${key}${i ? `-${i + 1}` : ''}">${status()}${await s.render(scroll)}</div></div>`);
+    slots.push(`<div class="slot"><div class="slot-label">Emerald Lux Glass — ${s.label}${s.frameLabels?.[i] ?? (i ? ' (scrolled)' : '')}</div><div class="phone" data-shot="lux-${key}${i ? `-${i + 1}` : ''}">${status()}${await s.render(scroll)}</div></div>`);
   }
   const body = slots.join('');
   const photoCss = body.includes('class="pimg"') ? `.pimg{background-image:url("${photoSrc()}")}` : '';

@@ -41,25 +41,25 @@ photograph the LIVE screen, for the side-by-side.
 | cell | Cell jobs (map drill-down) | screens/CellJobsScreen.tsx | — | done |
 | cmap | Map (customer) | screens/MapScreen.tsx | — (no target: tile hosts) | done |
 
-## Batch 3 — worker
+## Batch 3 — worker (drawn 2026-09-21 under the operator's standing "build all batches" instruction; scrolled frames: `lux-submit-2`, `lux-wjob-2`, `lux-pricing-2`; the four popups are `lux-filters-pop` … `-4`; Worker Home and Available Jobs re-barred with the worker bar)
 
 | key | screen | source | harness target | status |
 |-|-|-|-|-|
 | whome | Worker Home | screens/WorkerHomeScreen.tsx | worker-home-jobs, worker-home-online | done |
 | jobs | Available Jobs | screens/WorkerResultsScreen.tsx | worker-results-jobs | done |
-| filters | The Filters sheet | components/JobFilterSheet.tsx | worker-results-filters | todo (the approved gallery `map-explore-filters-dark.html` is the base) |
-| filters-pop | Its popups (distance · budget · date · sort) | components/PickerPopover.tsx | worker-results-filters-budget | todo |
+| filters | The Filters sheet | components/JobFilterSheet.tsx | worker-results-filters | done |
+| filters-pop | Its popups (distance · budget · date · sort) | components/PickerPopover.tsx | worker-results-filters-budget | done |
 | detail | Job detail (worker) | screens/JobDetailScreen.tsx | — | done |
-| submit | Submit Bid | screens/SubmitBidScreen.tsx, components/OfferComposer.tsx | worker-submit-bid | todo |
-| bid-sent | Bid sent | screens/BidSentScreen.tsx | — | todo |
-| wjob | The worker's job (assigned) | screens/WorkerJobScreen.tsx | — | todo |
-| checklist | Work checklist | screens/WorkChecklistScreen.tsx | — | todo |
-| route | Route and arrival | screens/RouteArrivalScreen.tsx | — | todo |
-| wmap | Map (worker) + the jobs sheet | screens/MapScreen.tsx, components/PeekSheet.tsx | — (`map-explore-dark.html` is the base) | todo |
-| wmyjobs | My Jobs hub (worker) | screens/MyJobsHubScreen.tsx | worker-myjobs | todo |
-| earnings | Earnings | screens/EarningsScreen.tsx | customer-earnings | todo |
-| payouts | Payouts | screens/PayoutsScreen.tsx | — | todo |
-| pricing | Services & availability | screens/ServicesPricingScreen.tsx | customer-services-pricing | todo |
+| submit | Submit Bid | screens/SubmitBidScreen.tsx, components/OfferComposer.tsx | worker-submit-bid | done |
+| bid-sent | Bid sent | screens/BidSentScreen.tsx | — | done |
+| wjob | The worker's job (assigned) | screens/WorkerJobScreen.tsx | — | done |
+| checklist | Work checklist | screens/WorkChecklistScreen.tsx | — | done |
+| route | Route and arrival | screens/RouteArrivalScreen.tsx | — | done |
+| wmap | Map (worker) + the jobs sheet | screens/MapScreen.tsx, components/PeekSheet.tsx | — (`map-explore-dark.html` is the base) | done |
+| wmyjobs | My Jobs hub (worker) | screens/MyJobsHubScreen.tsx | worker-myjobs | done |
+| earnings | Earnings | screens/EarningsScreen.tsx | customer-earnings | done |
+| payouts | Payouts | screens/PayoutsScreen.tsx | — | done |
+| pricing | Services & availability | screens/ServicesPricingScreen.tsx | customer-services-pricing | done |
 
 ## Batch 4 — messaging
 
