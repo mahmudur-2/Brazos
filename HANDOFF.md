@@ -1,12 +1,123 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the Lux chat, later the same day: the mode switch rebuilt as the
-glass wipe carrying the capsule — the one APP change of this chat, after the 67 Lux
-pages below were drawn as docs). The Lux drawing run's record, the eighteen-item
-run's and the two sittings before it follow, unchanged.
+WRITTEN: 2026-09-21 (the Fable chat, latest: RUN WEBP — the four mounted prestige rasters ship as WebP, pushed and live on the preview channel by OTA; see the first section. Before it, the Lux chat, latest: the Welcome page — version 1 picked and polished, six
+button motions drawn live, awaiting the operator's pick — no app change, no commit). The mode
+switch's record, the Lux drawing run's, the eighteen-item run's and the two sittings
+before it follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
+
+## RUN WEBP COMPLETED (2026-09-21, the Fable chat) — the four mounted prestige rasters ship as WebP; OTA `b962496b` live on preview
+
+**What changed (commit `0dcdd58`, pushed to `mainexpo`; CI verify runs on the push).** The
+four rasters the app mounts — `hero_armchair_customer`, `hero_armchair_customer_light`,
+`hero_toolbox_worker`, `home-atmosphere-dark` — are required as `.webp` (q90, alpha kept,
+encoded with Chromium's libwebp through Playwright, so NO new dependency): 165 → 21 KB,
+150 → 19 KB, 1,448 → 234 KB, 3,729 → 94 KB; 5.9 MB of PNG to 0.5 MB, measured at 36–45 dB
+PSNR against the PNGs (mean error 1–2 points per channel out of 255). The PNG masters
+STAY on disk beside them: `tests/themeResolution.test.mjs` measures each bake on the
+master (`scripts/atmosphere-tune.mjs`, `home-ground-blend.mjs` and the mockup builders
+read them too). `brazos_b_drape.png` is mounted by nothing and is untouched.
+
+**The fence, read carefully (the one thing the operator should review).** The BAKED_ART
+roster now keys the `.webp` mounts, each naming its PNG `master`; a new `rosterBytes()`
+proves the WebP exists, is RIFF/WEBP, and is exactly the master's size (`webpDims()`
+reads VP8X / VP8L / VP8 headers), THEN the unchanged alpha sweep measures the master's
+bytes as it always did. Nothing was loosened: every prior assertion still runs on real
+alpha samples; the indirection was added, not a check removed. The three other pins
+(`workerHome`, `emeraldFences` home(4), `postJobPublish`'s light-hero gate) take the
+new filename only. `npm run verify`: lint clean, 1387 tests pass.
+
+**The OTA.** `npm run update:preview` → branch `preview`, runtime `1.0.0`, update group
+`b962496b-83d0-43d0-85de-6d740d9a5df8`, iOS update `01a0c2da-c0f3-7fdc-a1e0-51e54cfff423`,
+4 new assets uploaded (47 reused). Dashboard:
+https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/b962496b-83d0-43d0-85de-6d740d9a5df8.
+NOT yet walked on a device — that check is the operator's: Customer Home's hero and
+atmosphere, Worker Home's toolbox, both themes, after the Beta build pulls the update.
+`dist/` is unchanged by git's account after the export.
+
+**Why this and not a drawing.** The operator asked whether the hero could be redrawn in
+CSS/SVG to shrink the app; a four-round measured attempt (`.shots/vector/`, gitignored)
+reached 95% mean-colour match and was judged "not even close" by eye, as predicted —
+vector cannot carry velvet, brass or leaves. Parked. WebP keeps the photo and takes
+91% of the bytes; the tooling is `.shots/webp/` (convert / compare.html / emit /
+patch-tests), gitignored.
+
+**Also from this chat, docs only, UNCOMMITTED by instruction:** the nine Fable Lux pages
+(`docs/mockups/html/lux/lux-<key>-fable.html` for home, post-review, compare, cjob, chat,
+checkout, review-tip, welcome, signin; their render functions appended to
+`lux.build.mjs`, `index.html` rebuilt to 76 screens; the Lux chat composes the
+Opus-vs-Fable sheets and records the operator's pick in `SCREENS.md`).
+
+**Tree at the end of this run.** Modified, uncommitted: `docs/mockups/html/lux/lux.build.mjs`
+and `index.html` (the Fable pages). Untracked: the nine `lux-*-fable.html` pages, and the
+Lux chat's own `welcome-ideas.html`, `welcome-motion.html`, `mode-switch-*.html`. This
+HANDOFF commit carries the Lux chat's uncommitted Welcome-page note below unchanged —
+flagged here because that note was theirs and still awaiting the operator's pick.
+
+## THE WELCOME PAGE — version 1 picked and polished; six button motions awaiting a pick (2026-09-21, docs only, untracked)
+
+**The ask, in three turns.** (1) A reference Welcome composition the operator likes
+"everything about" — three stacked discs lit from the top-right, a sweep of thin gold
+arcs from the corner, three floating gold-lined badges, the gold eyebrow, a two-tone
+serif headline, two gold-lined actions with a leading glyph and a trailing chevron —
+but "not how dark everything is and the colors". A first pass that re-imagined it six
+ways (mint lines, the Lux CTA, three actions) was refused: "changed too much … keep
+everything same, brighter vibe like the emerald glass lux, maybe change background".
+(2) The reference kept as it is, on the Lux ground at three brightnesses — the operator
+picked **1, the standard Lux ground**. (3) "Do its final touches / polish it … then add
+the golden animations that slowly circle around the continue with phone button, or
+give me all of the animations that look nice and I will pick (smoothness 120hz feel)."
+
+**What exists (UNTRACKED, like `mode-switch-ideas.html` beside it):**
+- `docs/mockups/html/lux/welcome-ideas.html` — the three grounds (`lux-welcome-v1`
+  … `v3`); v1 is the pick. Kept as the record of that choice.
+- `docs/mockups/html/lux/welcome-motion.html` — THE CURRENT PAGE. The polished v1 at
+  full size (`data-shot="lux-welcome-final"`), then six phones (`lux-welcome-fx-a` …
+  `-f`), each looping one candidate motion on "Continue with phone", with a Slow
+  motion ×4 toggle and Replay. The polish against v1: a warm gold haze in the corner
+  the arcs come from; a faint gold outer glow on the front disc and a mint one on the
+  back; a shade over the lowest third of the ground so the gold hairlines sit on
+  something; a soft gold under-glow on the primary button; the primary's fill and the
+  rim-effect cover are opaque (`#1C503F → #0E3229`) so nothing bleeds through a cover.
+  The six motions, every one transform + opacity on one layer: **a** Comet (a soft
+  elongated light gliding along the inside of the rim, clipped, one lap 6 s); **b**
+  Spark on the rim (a bright point on the hairline with a halo and a lagging trail,
+  unclipped, 5 s); **c** Border beam (an oversized gold band rotating under a cover
+  View painted with the fill, so only the hairline shows it — a sweep, two sides at
+  once, 5 s); **d** Sheen (a diagonal highlight crossing the fill, 1.3 s every 4.2 s);
+  **e** Breathing rim (a second rim View with the glow, opacity 0→1→0, 3.2 s); **f**
+  Rim glint (the comet under the cover, so one point of the hairline travels lit —
+  the ask exactly, 6 s). The path-followers (a, b, f) are Web Animations from a
+  rounded-rectangle parametrisation at 240 samples (the button's border box 331×58,
+  radius 22); the page's `roundedRectPath` is the function the app's worklet would
+  carry. Gold is still a line here (the auth flow's palette, `lib/authTheme.ts` — the
+  operator's ruling, flagged). Copy: the screen's own except the reference's two
+  actions (the live screen also has "Continue with email").
+- Stills: `.shots/mockups/lux-welcome-final.png` (the polished still) and
+  `lux-welcome-fx-<letter>.png` (each motion frozen mid-lap), the sheet
+  `lux-sheet-welcome-motion.png`; the earlier `lux-welcome-v1..3.png` and
+  `lux-sheet-welcome.png`. Generator and checks, gitignored: `.shots/lux/welcome-ideas.build.mjs`
+  (the three grounds), `welcome-measure.mjs`, `welcome-motion-shoot.mjs` (freezes every
+  animation at a chosen phase by `currentTime`, shoots at 393×852 with the grid's zoom
+  removed AND the cells widened — a phone shot at full size inside a 262-px cell was
+  overlapped by its neighbour from x = 284, which cost one wrong reading — then proves
+  from the PNGs: the comet and the spark lit at the path's own point, the rim lit at
+  the glint's x for f, c's rim lit with the fill row identical to the still, d's sheen
+  mid-crossing, e's rim at peak; the button's glyph+label group centred to 0.0 px and
+  the label unclipped in every frame). Image reads were blocked for this run (evidence
+  guard): every visual claim above is a measurement, not a look.
+
+**Next.** The operator picks a letter (or a pairing — d or e sit well under f). Then:
+the pick alone on the page (as `mode-switch-wipe-capsule.html` was to its ideas page),
+the render function `welcome` in `lux.build.mjs` replaced by this composition (the
+tracked reference; `welcome-fable` retires), `screens/WelcomeScreen.tsx` matched to it
+with a ruling first on the third action, and the light as `RimLight.shared.tsx` /
+`.motion120.tsx` / `.tsx` through `resolveMotion120` (one shared value, the path in
+the worklet, the native-driver fallback, reduced motion a no-op), fenced in
+`tests/motion120.test.mjs` and a new `tests/rimLight.test.mjs`. No verify was run:
+nothing under `npm run verify` reads a mockup page.
 
 ## THE MODE SWITCH — the glass wipe carrying the capsule (2026-09-21, app code)
 
