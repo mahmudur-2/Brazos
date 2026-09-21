@@ -6,16 +6,19 @@
 <!-- Hand-written (not from lux.build.mjs): THE SHIP PAGE — derived from welcome-glint.html
      by .shots/lux/make-ship-pages.mjs. Everything the operator approved is kept —
      the art, the copy, the buttons' shape and dress, the rim glint — with the one
-     change the app's rule forces: THREE actions, email first (lib/phoneAuth/mode.ts
-     resolves phone auth to `disabled` on every non-development build, so
-     tests/firstSession.test.mjs n5 keeps "Continue with email" first and "Continue
-     with phone" second, undemoted; the operator ruled 2026-09-21: three, email
-     first with the glint). The lead is lit and carries the light; phone is the
-     outlined button; "I already have an account" is the Lux text link. To fit,
-     the art box sits 10 higher (top 60) and is 300 tall with its contents lifted
-     15, the copy sits 46 higher (top 385), and the actions END where they were
-     approved — 49 above the bottom. THIS is the page screens/WelcomeScreen.tsx is
-     matched to, region by region. The original, as approved, is welcome-glint.html.
+     change the app's rule forces: THREE actions. Their order is the operator's,
+     from the phone (2026-09-21, on the shipped screen): "make Continue with phone
+     the top one" — so PHONE leads, lit, with the glyph, the chevron and the light;
+     email is the outlined second; "I already have an account" is the Lux text
+     link. (Phone sign-in resolves to disabled on every non-development build,
+     lib/phoneAuth/mode.ts; the phone screen shows the notice and "Use Email
+     Instead" until SMS is provisioned — the operator's call, recorded in
+     tests/firstSession.test.mjs n5 and DECISIONS 19.) To fit, the art box sits 10
+     higher (top 60) and is 300 tall with its contents lifted 15; the copy sits at
+     371 ("move it a little higher": the eyebrow 26 under the last badge, the body
+     27 above the actions); the actions END where they were approved — 49 above
+     the bottom. THIS is the page screens/WelcomeScreen.tsx is matched to, region
+     by region. The original, as approved, is welcome-glint.html.
       THE PICK, alone. The Welcome page the
      operator chose on 2026-09-21 — version 1 of welcome-ideas.html (the reference
      composition on the Emerald Lux Glass ground), polished as welcome-motion.html's
@@ -68,7 +71,7 @@
   .badge{position:absolute;display:flex;align-items:center;gap:7px;height:40px;padding:0 13px 0 11px;border-radius:20px;background:rgba(10,40,34,.86);border:1px solid rgba(233,193,112,.50);box-shadow:inset 0 1px 0 var(--spec),0 10px 30px rgba(0,0,0,.35);font-size:13px;font-weight:600;color:var(--ink);white-space:nowrap;letter-spacing:.1px}
   .badge svg{width:16px;height:16px;color:var(--gold)}
   /* the copy */
-  .copy{position:absolute;left:31px;right:31px;top:385px}
+  .copy{position:absolute;left:31px;right:31px;top:371px}
   .eyebrow{font-size:13px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
   .h1{margin-top:8px;font-family:Georgia,"Times New Roman",serif;font-size:44px;line-height:47px;font-weight:700;letter-spacing:-.6px;color:var(--ink);text-shadow:0 2px 22px rgba(0,0,0,.35)}
   .h1 em{font-style:normal;color:var(--acc)}
@@ -112,8 +115,8 @@
       <div class="badge" style="left:31px;top:65px;transform:rotate(-5deg)"><svg><use href="#i-shield"/></svg>Local workers</div>
       <div class="badge" style="left:208px;top:143px;transform:rotate(5deg)"><svg><use href="#i-lock"/></svg>Protected payment</div>
       <div class="badge" style="left:95px;top:246px"><svg><use href="#i-pin"/></svg>Local jobs</div></div><div class="foot"></div><div class="copy"><span class="eyebrow">Brazos marketplace</span><div class="h1">Get it done.<br><em>Work with<br>confidence.</em></div><p class="sub">Hire trusted local help or find nearby work from one account.</p></div><div class="actions">
-      <div class="btn primary"><div class="fx clip"><div class="mover glint" data-path="f"></div><div class="cover"></div></div><svg><use href="#i-mail"/></svg><span class="l">Continue with email</span><svg class="c"><use href="#i-chev"/></svg></div>
-      <div class="btn secondary"><svg><use href="#i-phone"/></svg><span class="l">Continue with phone</span><svg class="c"><use href="#i-chev"/></svg></div>
+      <div class="btn primary"><div class="fx clip"><div class="mover glint" data-path="f"></div><div class="cover"></div></div><svg><use href="#i-phone"/></svg><span class="l">Continue with phone</span><svg class="c"><use href="#i-chev"/></svg></div>
+      <div class="btn secondary"><svg><use href="#i-mail"/></svg><span class="l">Continue with email</span><svg class="c"><use href="#i-chev"/></svg></div>
       <div class="link">I already have an account<svg><use href="#i-chev"/></svg></div></div><div class="home-bar"></div></div>
 </div>
 <script>

@@ -1,10 +1,10 @@
 # HANDOFF — current operational context
 
-WRITTEN: 2026-09-21 (the Lux chat, latest: THE WELCOME PAGE SHIPPED — both themes, matched
-to its two approved pages by a render loop; code `7f10dd5`, verify 1393/0; the push and
-the OTA recorded at the end of its section; NOT walked on the phone. Its section is second,
-after the Fable chat's RUN WEBP). The restored build's record, the mode switch's, the Lux
-drawing run's, the eighteen-item run's and the two sittings before it follow, unchanged.
+WRITTEN: 2026-09-21 (the Lux chat, latest: WELCOME FROM THE PHONE — phone leads with the
+glint, the copy lifted, the light lead flat; code `b4f7332`, verify 1393/0, pushed and
+published by OTA — the ids in its section, the first below. The shipped build's record, the
+restored build's, the mode switch's, the Lux drawing run's, the eighteen-item run's and the two
+sittings before it follow, unchanged.
 
 Rewritten as the last act of every run. Read it before naming what is blocked or
 what just happened.
@@ -56,6 +56,24 @@ and `index.html` (the Fable pages). Untracked: the nine `lux-*-fable.html` pages
 Lux chat's own `welcome-ideas.html`, `welcome-motion.html`, `mode-switch-*.html`. This
 HANDOFF commit carries the Lux chat's uncommitted Welcome-page note below unchanged —
 flagged here because that note was theirs and still awaiting the operator's pick.
+
+## WELCOME, FROM THE PHONE — phone leads, the copy lifted, the light lead flat (2026-09-21, the Lux chat, latest); `b4f7332`
+
+**What just happened.** The operator saw the shipped screen on the phone in both appearances
+(it matched the pages) and asked for three things: "Continue with phone" on top, the copy a
+little higher with consistent spacing, and the two boxed buttons identical in size (light).
+The ship pages were changed first and approved, then the app: PHONE is the lead action (lit,
+the glyph, the chevron, the rim light), email the outlined second, sign-in the text link — the
+operator's ruling, reversing (17)'s email-first, recorded in `tests/firstSession.test.mjs` n5
+with the still-true reason (phone auth is disabled outside development; the phone screen shows
+the notice and "Use Email Instead" until SMS is provisioned); the eyebrow at 374 (26 under the
+last badge, the body 27 above the actions, which still end at 803); the lit lead's depth is
+DARK-ONLY — in light both boxed actions are flat but for the specular edge, so they read the
+same size. DECISIONS 19. The loop's numbers are unchanged (art ≤ 0.6 %, ground 0.0 %, the
+actions' 2.2 % the label rows). `npm run verify` 1393 / 0. Pages: `welcome-ship.html`,
+`welcome-ship-light.html` (the copy at 371, phone first), `welcome-glint-light.html` (the
+flat lead). PUSHED AND PUBLISHED — the ids follow this paragraph once the run has them; if
+absent, the operator pushes and runs `npm run update:preview` by hand.
 
 ## THE WELCOME PAGE — SHIPPED, both themes, matched to its pages by a render loop (2026-09-21, the Lux chat, latest); `7f10dd5`
 
