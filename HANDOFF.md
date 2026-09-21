@@ -72,8 +72,11 @@ DARK-ONLY — in light both boxed actions are flat but for the specular edge, so
 same size. DECISIONS 19. The loop's numbers are unchanged (art ≤ 0.6 %, ground 0.0 %, the
 actions' 2.2 % the label rows). `npm run verify` 1393 / 0. Pages: `welcome-ship.html`,
 `welcome-ship-light.html` (the copy at 371, phone first), `welcome-glint-light.html` (the
-flat lead). PUSHED AND PUBLISHED — the ids follow this paragraph once the run has them; if
-absent, the operator pushes and runs `npm run update:preview` by hand.
+flat lead). PUSHED (`9ad665e..0c48ded`, after verify 1393 / 0) AND PUBLISHED — **THE OTA IS LIVE on the
+preview channel**: update group `82a49dcd-7650-47d8-8a83-0b573938425c`, iOS update
+`01a0c5d9-d7ed-7b9f-bcf9-c8a0bd4683ed`, commit `0c48ded`; dashboard
+`https://expo.dev/accounts/mah_r2/projects/BRAZOS/updates/82a49dcd-7650-47d8-8a83-0b573938425c`.
+Open the Beta twice to pull it. Not walked on the phone since this change.
 
 ## THE WELCOME PAGE — SHIPPED, both themes, matched to its pages by a render loop (2026-09-21, the Lux chat, latest); `7f10dd5`
 
