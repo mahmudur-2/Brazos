@@ -86,7 +86,7 @@ positions, text rows, colours) instead of the LOOK is what let it through: the h
 runs under reduced motion and at 1x, image reads were blocked, and the operator judged
 from small thumbnails against a crisp 2x still.
 
-**THE REFERENCE, now:** `docs/mockups/html/lux/welcome-glint.html` — the pick alone: the
+**THE REFERENCE, now (APPROVED by the operator: "HTML looks good so far"):** `docs/mockups/html/lux/welcome-glint.html`, and its LIGHT counterpart `welcome-glint-light.html` (asked for next: "how would the light mode version look? be very accurate") — derived from the dark page by `.shots/lux/make-glint-light.mjs`, geometry identical to 0.1 px across all 49 elements (`glint-light-check.mjs`), every colour mapped to the app's light tokens: ivory `bg` #F6F3EA flat, white badge cards on the light card shadow, pale mint disc spheres (an emerald rim on the back one, gold on the front two), the eyebrow EMERALD (the eyebrow law), the headline ink then emerald, the forest #064C3B CTA with a white label and gold glyph/chevron, the secondary in forest on a gold hairline, the light gold #C8A15B for arcs, rims and hairlines; the glint cream-cored over the forest rim. Its still: `.shots/mockups/lux-welcome-glint-light.png`. Awaiting the operator's word on the light page. THE DARK PAGE: — the pick alone: the
 polished v1 phone (the still the operator holds, `.shots/mockups/lux-welcome-final.png`)
 with the f rim glint running on "Continue with phone". Its markup and CSS are
 `welcome-motion.html`'s own, emitted by that page's builder, so it IS the still, moving —
