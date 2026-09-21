@@ -30,7 +30,23 @@ Then a rebuild plan (tokens → primitives → screens, measured against these p
 - End of every run: commit by explicit path, `git push origin mainexpo` alone after
   `npm run verify` is green, ONE push notification, HANDOFF.md rewritten last.
 
-## The loop, exactly
+## The review loop — autonomous, one question at a time (the operator's ask, 2026-09-21)
+
+Run batch by batch without waiting to be told:
+
+1. Draw the batch (`SCREENS.md`), measure, send the sheets.
+2. `AskUserQuestion`: **"Happy with these?"** — options: "Yes, all of them (Recommended)",
+   "Changes" (they type what, per screen — read the free text), "No — redo the batch".
+3. Remake only what they flagged, send again, ask again, until "yes".
+4. `AskUserQuestion`: **"Move to batch N+1?"** — "Yes (Recommended)" / "Pause here". On yes, go
+   straight to step 1 for the next batch. Tick the rows in `SCREENS.md` as each batch is
+   approved; commit by path and push at the end of every batch (docs only).
+5. After batch 6: **"Seen all 67 — plan the rebuild, or park it?"** Applying anything is a
+   NEW plan (tokens → primitives → screens), never a step of this loop.
+
+One question per round. Nothing is applied to the app at any point.
+
+## The build loop, exactly
 
 ```
 node docs/mockups/html/lux/lux.build.mjs <key>[,<key>…]     # one HTML per screen
