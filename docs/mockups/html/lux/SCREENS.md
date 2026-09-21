@@ -72,21 +72,21 @@ photograph the LIVE screen, for the side-by-side.
 | feed | Notification feed | screens/NotificationsScreen.tsx | customer-notification-feed | done |
 | report | Report dialog | components/ReportDialog.tsx | — | done |
 
-## Batch 5 — profile and settings
+## Batch 5 — profile and settings (drawn 2026-09-21 under the same standing instruction; scrolled frames: `lux-details-2`, `lux-safety-2`, `lux-notif-2`, `lux-delete-2`, `lux-legal-2`; `lux-portfolio-2` is the detail step)
 
 | key | screen | source | harness target | status |
 |-|-|-|-|-|
 | profile | Profile hub | screens/ProfileScreen.tsx | customer-profile, worker-profile | done |
-| details | Profile details | screens/ProfileDetailsScreen.tsx | customer-profile-details | todo |
-| safety | Account and safety | screens/AccountSafetyScreen.tsx | customer-account-safety | todo |
-| notif | Notification settings | screens/NotificationSettingsScreen.tsx | customer-notification-settings | todo |
-| appearance | Appearance | screens/AppearanceScreen.tsx | customer-appearance | todo |
-| payment | Payment methods | screens/PaymentMethodsScreen.tsx | customer-payment-methods | todo |
-| saved | Saved & past workers | screens/SavedWorkersScreen.tsx | customer-saved-workers | todo |
-| delete | Delete account | screens/DeleteAccountScreen.tsx | customer-delete-account | todo |
-| legal | Legal document | screens/LegalDocumentScreen.tsx | customer-legal-terms | todo |
-| admin | Admin reports | screens/AdminReportsScreen.tsx | — | todo |
-| portfolio | Portfolio picker | components/PortfolioPicker.tsx | — | todo |
+| details | Profile details | screens/ProfileDetailsScreen.tsx | customer-profile-details | done |
+| safety | Account and safety | screens/AccountSafetyScreen.tsx | customer-account-safety | done |
+| notif | Notification settings | screens/NotificationSettingsScreen.tsx | customer-notification-settings | done |
+| appearance | Appearance | screens/AppearanceScreen.tsx | customer-appearance | done |
+| payment | Payment methods | screens/PaymentMethodsScreen.tsx | customer-payment-methods | done |
+| saved | Saved & past workers | screens/SavedWorkersScreen.tsx | customer-saved-workers | done |
+| delete | Delete account | screens/DeleteAccountScreen.tsx | customer-delete-account | done |
+| legal | Legal document | screens/LegalDocumentScreen.tsx | customer-legal-terms | done |
+| admin | Admin reports | screens/AdminReportsScreen.tsx | — | done |
+| portfolio | Portfolio picker | components/PortfolioPicker.tsx | — | done |
 
 ## Batch 6 — auth and launch
 

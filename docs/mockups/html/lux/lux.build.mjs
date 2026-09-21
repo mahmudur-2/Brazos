@@ -1091,6 +1091,114 @@ const report = () => `${inbox()}<div class="scrim"></div>
     <div style="display:flex;gap:10px"><div class="cta" style="flex:1;height:48px;font-size:16px">Send report</div><div class="btn2" style="flex:1;height:48px;font-size:16px">Cancel</div></div></div>`;
 const CHAT_END = 273;
 
+// ---------------------------------------------------------------------------
+// BATCH 5 — profile and settings (SCREENS.md). The operator's own account.
+// ---------------------------------------------------------------------------
+/** A settings row: the glyph in a well, the label and its sub-line, the chevron. */
+const setRow = (icon, label, sub = '', trailing = '') => `<div class="row" style="padding:14px 16px;gap:12px"><div class="well sm">${ic(icon)}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title" style="font-size:16px">${label}</span>${sub ? `<span class="muted" style="font-size:13px;line-height:17px">${sub}</span>` : ''}</div>${trailing || icS('i-chev', 18, 'var(--muted)')}</div>`;
+/** A checked line in a card (Payment methods, Delete account). */
+const line = (t) => `<div style="display:flex;gap:10px;align-items:flex-start">${icS('i-checkcircle', 18, 'var(--acc)')}<span class="muted" style="font-size:14px;line-height:20px">${t}</span></div>`;
+
+/** Profile details (screens/ProfileDetailsScreen.tsx): the identity, the shared-identity card with Edit profile, the categories, PROOF OF WORK. Scrolls: two frames. */
+const details = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Profile')}</div>
+  ${scroller(116, 84, scroll, `
+    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center"><div class="avatar" style="width:96px;height:96px;border-radius:48px;font-size:32px">MR</div><div class="h2 serif" style="font-size:26px;line-height:30px">Mahmudur Rahman</div><span class="muted" style="font-size:14px">mdmahmudurrahman2@gmail.com</span><span class="muted" style="font-size:13px">Member since August 2026</span></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:14px"><div style="display:flex;gap:12px;align-items:center"><div class="well sm">${ic('i-person')}</div><div class="stack" style="gap:2px;flex:1"><span class="eyebrow">Shared identity</span><span class="title">Profile details</span></div><span class="chip f" style="height:32px">${ic('i-pencil')}Edit profile</span></div>
+      <div class="list" style="margin:0 -18px">${[['i-person', 'Full name', 'Mahmudur Rahman'], ['i-chat', 'Phone number', 'Not set', true], ['i-window', 'Language', 'English'], ['i-images', 'Bio', 'No bio yet', true]].map(([i, k, v, m]) => `<div class="row" style="padding:10px 18px;gap:12px"><div class="well sm" style="width:30px;height:30px;border-radius:15px">${icS(i, 15, 'var(--acc)')}</div><span class="muted" style="font-size:14px;width:110px">${k}</span><span style="flex:1;text-align:right;font-size:14px;color:${m ? 'var(--muted)' : 'var(--ink)'};font-weight:600">${v}</span></div>`).join('')}</div>
+      <div class="stack" style="gap:8px"><span class="eyebrow">Job categories</span><div class="wrap"><span class="chip">Furniture Assembly</span><span class="chip">TV/Furniture Mounting</span></div></div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:14px"><div style="display:flex;gap:12px;align-items:center"><div class="well sm">${ic('i-briefcase')}</div><div class="stack" style="gap:2px;flex:1"><span class="eyebrow">Proof of work</span><span class="title">Past work</span></div></div><div class="add" style="padding:16px;display:flex;gap:12px;align-items:center;justify-content:flex-start;text-align:left"><div class="well sm">${ic('i-image')}</div><span class="muted" style="font-size:14px;line-height:19px">Feature photos from jobs you’ve finished to show clients your work.</span></div></div>
+  `, 16)}${nav('Profile')}`;
+
+/** Account and safety (screens/AccountSafetyScreen.tsx): the hero, four rows, the safety principle, Log out, Delete account, the note. Scrolls: two frames. */
+const safety = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Profile')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px;position:relative"><div style="position:absolute;right:18px;top:18px" class="well">${ic('i-shield')}</div><span class="eyebrow">Account &amp; safety</span><div class="h2 serif" style="font-size:26px;line-height:30px;padding-right:64px">Private by default.</div><span class="muted" style="font-size:14px;line-height:20px">Control payment, legal and account actions from one protected place.</span></div>
+    <div class="card list">${setRow('i-card', 'Payment methods', 'No stored cards · entered at checkout.')}${setRow('i-moon', 'Appearance', 'Light, dark, or follow the system.')}${setRow('i-images', 'Terms of Service', 'Read the current agreement.')}${setRow('i-lock', 'Privacy Policy', 'How your data is protected.')}</div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px"><div class="well sm">${ic('i-shield')}</div><span class="eyebrow">Safety principle</span><div class="h2 serif" style="font-size:22px;line-height:26px">One identity, two modes.</div><span class="muted" style="font-size:14px;line-height:20px">Switching between customer and worker changes the dashboard — not your account, reviews or protected job history.</span></div>
+    <div class="btn2">${ic('i-share')}Log out</div>
+    <div class="btn2" style="color:#F0A0A0;border-color:rgba(240,160,160,.35)">${ic('i-trash')}Delete account</div>
+    <div style="display:flex;gap:10px;align-items:flex-start">${icS('i-alert', 18, 'var(--muted)')}<span class="muted" style="font-size:13px;line-height:18px">Deletion is permanent. Active jobs and unsettled payments must be resolved first.</span></div>
+  `, 16)}${nav('Profile')}`;
+
+/** Notification settings (screens/NotificationSettingsScreen.tsx): the five switches, how far is nearby, the categories note, the footnote. Scrolls: two frames. */
+const notif = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Notifications')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card list">${[['Messages', 'New messages in any conversation.'], ['Bids on my jobs', 'When someone bids on a job you posted, and when a rival bid lands on a job you bid on.'], ['Job updates', 'Assignments, completed work, and reviews you receive.'], ['Hire Again requests', 'Direct hire offers, counter-offers, and their outcomes.'], ['New jobs nearby', 'New jobs posted near you in the categories on your profile.']].map(([l, h]) => `<div class="row" style="padding:14px 16px;gap:12px;align-items:flex-start"><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title" style="font-size:16px">${l}</span><span class="muted" style="font-size:13px;line-height:17px">${h}</span></div><div class="switch on"><i></i></div></div>`).join('')}</div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><span class="sect">How far is “nearby”?</span><div class="seg3">${['1 mi', '3 mi', '5 mi', '10 mi'].map((l, i) => `<div class="o${i === 2 ? ' on' : ''}">${l}</div>`).join('')}</div><span class="muted" style="font-size:13px;line-height:18px">Measured from the location you last set here (not set yet).</span><span class="link" style="font-size:14px">Update my location</span><div class="stack" style="gap:6px;margin-top:4px"><span class="sect">Categories</span><span class="muted" style="font-size:13px;line-height:18px">You'll only be told about: Furniture Assembly, TV/Furniture Mounting. Change these under Job categories on your profile.</span></div></div>
+    <span class="muted" style="font-size:12px;line-height:17px;padding:0 4px">Muted conversations and blocked users never send notifications, whatever these switches say.</span>
+  `, 16)}${nav('Profile')}`;
+
+/** Appearance (screens/AppearanceScreen.tsx): the theme choice, the design studio switch. */
+const appearance = () => `
+  <div class="body" style="gap:16px">
+    ${header('Appearance')}
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:12px"><span class="eyebrow">Theme</span><div class="list" style="margin:0 -18px">${['System', 'Light', 'Dark'].map((l, i) => `<div class="row" style="padding:12px 18px;gap:12px"><div class="radio${i === 2 ? ' on' : ''}">${i === 2 ? '<i></i>' : ''}</div><span style="flex:1;font-size:16px;color:var(--ink)">${l}</span></div>`).join('')}</div></div>
+    <div class="card" style="padding:16px 18px;display:flex;align-items:center;gap:12px"><div class="well sm">${ic('i-sliders')}</div><span class="title" style="flex:1;font-size:16px">Design studio</span><span class="muted" style="font-size:14px;font-weight:600">Off</span><div class="switch"><i></i></div></div>
+  </div>${nav('Profile')}`;
+
+/** Payment methods (screens/PaymentMethodsScreen.tsx, the card path): protection, the mode, the funding source. */
+const payment = () => `
+  <div class="body" style="gap:0">${header('Payment methods')}</div>
+  ${scroller(116, 84, 0, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px"><span class="eyebrow">Payment protection</span><div class="h2 serif" style="font-size:26px;line-height:30px">Honest by design.</div><span class="muted" style="font-size:14px;line-height:20px">Your card is charged only when you protect a payment, and the funds stay held until you approve the finished work.</span></div>
+    <div class="card" style="padding:16px 18px;display:flex;gap:12px;align-items:flex-start"><div class="well sm">${ic('i-card')}</div><div class="stack" style="gap:4px;flex:1"><span class="title">Card payments</span><span class="muted" style="font-size:13px;line-height:18px">Cards are taken through the provider’s secure payment sheet at checkout. Brazos never sees your card number.</span></div></div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:8px"><span class="eyebrow">Funding source</span><div class="h2 serif" style="font-size:22px;line-height:26px">No stored payment methods</div><span class="muted" style="font-size:14px;line-height:20px">Brazos doesn’t store your card. You enter it in the provider’s secure payment sheet at checkout, and any saved card lives with the provider, not in this app.</span></div>
+  `, 16)}${nav('Profile')}`;
+
+/** Saved & past workers (screens/SavedWorkersScreen.tsx): the leaf divider, the saved worker, the one who worked for you before. */
+const saved = () => `
+  <div class="body" style="gap:0">${header('Saved &amp; past workers')}</div>
+  ${scroller(116, 84, 0, `
+    <div style="display:flex;align-items:center;gap:12px;padding:0 20px"><i style="flex:1;height:1px;background:rgba(200,255,230,.12)"></i>${icS('i-leaf', 18, 'var(--acc)')}<i style="flex:1;height:1px;background:rgba(200,255,230,.12)"></i></div>
+    <div class="stack" style="gap:10px"><span class="sect">Saved</span><div class="card" style="padding:12px 14px;display:flex;gap:12px;align-items:center"><div class="avatar" style="width:44px;height:44px;border-radius:22px;font-size:16px;border-width:1.5px">${WORKER2.initials}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title" style="font-size:16px">${WORKER2.name}</span><span class="muted" style="font-size:13px">No reviews yet</span></div><span class="chip f" style="height:34px;padding:0 16px">Hire</span>${icS('i-bookmark', 20, 'var(--acc)')}</div></div>
+    <div class="stack" style="gap:10px"><span class="sect">Worked for you before</span><div class="card" style="padding:12px 14px;display:flex;gap:12px;align-items:center"><div class="avatar" style="width:44px;height:44px;border-radius:22px;font-size:16px;border-width:1.5px">${WORKER.initials}</div><div class="stack" style="gap:2px;flex:1;min-width:0"><span class="title" style="font-size:16px">${WORKER.name}</span><span class="muted" style="font-size:13px">No reviews yet</span></div><span class="chip f" style="height:34px;padding:0 16px">Hire</span></div></div>
+  `, 16)}${nav('Profile')}`;
+
+/** Delete account (screens/DeleteAccountScreen.tsx on the FormScreen template): what is removed, what is kept, the DELETE confirmation, the disabled destructive button. Scrolls: two frames. */
+const del = (scroll = 0) => `
+  <div class="body" style="gap:0">${header2('Delete account', 'Permanent. Please read this first.')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div class="h2 serif" style="font-size:22px;line-height:26px">What is removed</div>${['Your name, phone number, photo, bio and categories.', 'Your services, availability and portfolio.', 'Your saved workers, notification settings and this device’s push registration.', 'Your open job postings. Any job still taking offers is cancelled when the account is deleted — it does not stay on the marketplace without you.', 'Your sign-in. You will not be able to sign back in with this account.'].map(line).join('')}</div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div class="h2 serif" style="font-size:22px;line-height:26px">What is kept, and why</div>${['Reviews you wrote and reviews you received stay on the marketplace. They are attributed to “Deleted user” — removing them would rewrite other people’s reputation.', 'Payment records are kept for tax and legal reasons, but they no longer identify you.', 'Messages and jobs stay in the other person’s history, under “Deleted user”.'].map(line).join('')}</div>
+    <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:10px"><div class="h2 serif" style="font-size:22px;line-height:26px">Confirm</div><span class="muted" style="font-size:14px;line-height:20px">Type DELETE to enable the button below.</span>${fld('Type DELETE', 'DELETE', { ph: true })}</div>
+    <div class="btn2 off" style="border-color:rgba(240,160,160,.2);color:rgba(240,160,160,.5)">${ic('i-trash')}Delete my account</div>
+  `, 16)}${nav('Profile')}`;
+
+/** A legal document (screens/LegalDocumentScreen.tsx): the Terms, read as Markdown, the version at the end. Scrolls: two frames. */
+const legal = (scroll = 0) => `
+  <div class="body" style="gap:0">${header('Terms of Service')}</div>
+  ${scroller(116, 84, scroll, `
+    <div class="h1 serif" style="font-size:28px;line-height:32px">Brazos Terms of Service</div>
+    <div class="card" style="padding:14px 16px;display:flex;flex-direction:column;gap:6px;border-color:rgba(233,193,112,.35)"><span class="title" style="font-size:16px">⚠️ Working draft — pending legal review</span><span class="muted" style="font-size:13px;line-height:18px">This document is an unreviewed first draft written to get the product's obligations on paper. It is NOT final legal text, it has NOT been reviewed by a licensed attorney, and it should NOT be relied on as legal advice or as an enforceable agreement in its current form. It must be reviewed and revised by qualified counsel before Brazos is offered to the public.</span></div>
+    <span class="muted" style="font-size:13px">Last updated: 26 July 2026</span>
+    <div class="h2 serif" style="font-size:22px;line-height:26px">1. What Brazos is</div>
+    <p style="font-size:15px;line-height:22px;color:var(--ink)">Brazos is a listing and communication platform. It lets people who need short-term local work done ("Clients") post jobs, and lets people willing to do that work ("Workers") find those jobs, bid on them, and message the Client about them. Many users are both at different times.</p>
+    <p style="font-size:15px;line-height:22px;color:var(--ink)">Brazos provides the software. Brazos does not provide the services listed on it. Every job is an agreement between a Client and a Worker directly.</p>
+    <div class="h2 serif" style="font-size:22px;line-height:26px">2. Who may use Brazos</div>
+    <p style="font-size:15px;line-height:22px;color:var(--ink)">You must be at least 18 years old and legally able to enter into contracts where you live. You must provide accurate registration details, including a real name and a working phone number, and keep them accurate.</p>
+    <p style="font-size:15px;line-height:22px;color:var(--ink)">One account per person. You are responsible for everything done through your account, and for keeping your password secure.</p>
+    <span class="muted" style="font-size:12px">Version 2026-07-26-draft1</span>
+  `, 14)}${nav('Profile')}`;
+
+/** Admin reports (screens/AdminReportsScreen.tsx), the moderator's queue: one open report with its three actions. */
+const admin = () => `
+  <div class="body" style="gap:0">${header2('Reports', 'Moderation queue')}</div>
+  ${scroller(116, 84, 0, `
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:10px"><div class="between"><span class="title">${WORKER2.name}</span><span class="chip">Open</span></div><span class="muted" style="font-size:13px">Reported by ${CLIENT} · Scam / non-payment · 3h ago</span><span class="muted" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${JOBS[1].title}</span><p style="font-size:14px;line-height:20px;color:var(--ink)">“Asked to be paid outside the app before starting.”</p><div style="display:flex;gap:8px"><div class="btn2" style="flex:1;height:42px;font-size:14px;color:#F0A0A0;border-color:rgba(240,160,160,.35)">Ban user</div><div class="btn2" style="flex:1;height:42px;font-size:14px">Dismiss</div></div></div>
+    ${emptyCard('i-shield', '', 'Nothing to review', 'New reports from users will show up here.')}
+  `, 16)}${nav('Profile')}`;
+
+/** Feature past work (components/PortfolioPicker.tsx): the grid of completion photos, then the detail step over it. */
+const portfolio = (step = 'grid') => `
+  <div class="body" style="gap:14px">
+    <div class="between"><div class="h2 serif" style="font-size:26px;line-height:30px">Feature past work</div><div class="circle" style="width:36px;height:36px">${ic('i-close')}</div></div>
+    <span class="muted" style="font-size:13px;line-height:18px"><b style="color:var(--ink)">0/20</b> featured · tap a photo to add it, tap a featured one (checkmark) to edit or remove it</span>
+    <div style="display:flex;flex-wrap:wrap;gap:12px"><div class="stack" style="gap:4px;width:166px"><div class="thumb" style="width:166px;height:124px">${photo()}</div><span class="eyebrow" style="font-size:10px">Furniture Assembly</span><span class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${DETAIL.title}</span></div></div>
+  </div>${step === 'detail' ? `<div class="scrim"></div><div class="sheet" style="padding:16px 20px 34px;gap:12px"><div class="between"><div class="h2 serif" style="font-size:22px;line-height:26px">Feature this photo</div>${icS('i-close', 22, 'var(--muted)')}</div><div class="thumb" style="width:100%;height:150px;border-radius:16px">${photo()}</div><span class="lbl">Category</span><div class="wrap">${POSTABLE.map(([l, i]) => chipF(l, i, l === POST.cat)).join('')}</div><span class="lbl">What did this job involve?</span><span class="muted" style="font-size:13px;line-height:18px;margin-top:-6px">A real sentence or two — this is what clients read to judge your work.</span><div class="in ph multi" style="min-height:72px"><span>e.g. Rebuilt a 20ft cedar fence panel by panel after storm damage, including new posts set in concrete.</span></div><span class="muted" style="font-size:12px;margin-top:-6px">10 more characters needed</span><div style="display:flex;gap:10px"><div class="btn2" style="flex:1;height:48px;font-size:15px">Cancel</div><div class="btn2 off" style="flex:1;height:48px;font-size:15px">Add to portfolio</div></div></div><div class="home-bar"></div>` : `<div class="home-bar"></div>`}`;
+
 const SCREENS = {
   home: { label: 'Customer Home', render: home },
   whome: { label: 'Worker Home', render: whome },
@@ -1142,6 +1250,17 @@ const SCREENS = {
   hidden: { label: 'Hidden Chats', render: hidden },
   feed: { label: 'Notifications', render: feed },
   report: { label: 'The Report dialog', render: report },
+  // batch 5 — profile and settings
+  details: { label: 'Profile details', render: details, frames: [0, 90] },
+  safety: { label: 'Account and safety', render: safety, frames: [0, 191] },
+  notif: { label: 'Notification settings', render: notif, frames: [0, 145] },
+  appearance: { label: 'Appearance', render: appearance },
+  payment: { label: 'Payment methods', render: payment },
+  saved: { label: 'Saved & past workers', render: saved },
+  delete: { label: 'Delete account', render: del, frames: [0, 217] },
+  legal: { label: 'Legal document (Terms)', render: legal, frames: [0, 149] },
+  admin: { label: 'Admin reports', render: admin },
+  portfolio: { label: 'Feature past work', render: portfolio, frames: ['grid', 'detail'], frameLabels: ['', ' (a photo picked)'] },
 };
 
 // ---------------------------------------------------------------------------
