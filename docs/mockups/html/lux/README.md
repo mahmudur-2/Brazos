@@ -89,12 +89,17 @@ card; a job detail's photo bleeds full width under a glass facts panel.
   has a material (`ui/tokens.ts` materials), `-webkit-mask` only where the app's
   file carries that edge (the feathered heroes).
 - The app's copy, verbatim (read the screen's source). The harness's four seeded
-  jobs (`scripts/shots.mjs` SEEDED_JOBS) and the mockup's sample detail job are the
-  only invented rows; no ratings, no reviews, no fake balances.
+  jobs (`scripts/shots.mjs` SEEDED_JOBS), the mockup's sample detail job and — for
+  the one screen that is somebody else's profile — the mockup's sample worker
+  (`lux.build.mjs` WORKER: a name, a bio, categories, listed services) are the only
+  invented rows; no ratings, no reviews, no completed-job counts, no fake balances.
 - Every control the live screen has is on the page; "cleaner" means laid out
   better, never fewer features.
-- One `.phone[data-shot="lux-<screen>"]` per page; labels inside the frame when a
-  page shows more than one state.
+- One screen per page, `.phone[data-shot="lux-<screen>"]`; labels inside the frame
+  when a page shows more than one state. A screen that scrolls past the bar keeps
+  its first frame honest (the column clipped at the bar, exactly as a phone) and
+  adds a second, `lux-<screen>-2`, the same column shifted up by `frames[1]` so the
+  rest is seen; the sheet captions it "(scrolled)".
 
 ## Working loop (for the chat that draws the rest)
 

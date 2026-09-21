@@ -7,22 +7,22 @@ every row: read the source, keep every control, lay it out the Lux way
 (`README.md`). Harness target names are the `scripts/shots.mjs` entries that
 photograph the LIVE screen, for the side-by-side.
 
-## Batch 1 — customer core
+## Batch 1 — customer core (approved 2026-09-21, "Yes, all of them"; a screen that scrolls has a second frame — `lux-wprofile-2`, `lux-post-review-2`)
 
 | key | screen | source | harness target | status |
 |-|-|-|-|-|
 | home | Customer Home | screens/HomeScreen.tsx | customer-home-jobs | done |
-| discover | Discover (worker search) | screens/WorkerSearchScreen.tsx | customer-discover, workersearch-category | todo |
-| wprofile | A worker's public profile | screens/WorkerProfileScreen.tsx, PublicProfileScreen.tsx | — | todo |
-| reviews | Profile reviews | screens/ProfileReviewsScreen.tsx | — | todo |
-| post-what | Post a job · 1 What needs doing | screens/PostJobScreen.tsx | — (the media step is postjob-media) | todo |
-| post-media | Post a job · 2 Media | screens/PostJobScreen.tsx | postjob-media | todo |
-| post-where | Post a job · 3 Where and when | screens/PostJobScreen.tsx | postjob-location | todo |
-| post-review | Post a job · 4 Review and publish | screens/PostJobScreen.tsx | postjob-review | todo |
-| post-budget | The Edit Budget dialog | components/EditBudgetDialog.tsx | postjob-budget-dialog | todo |
-| post-live | Your job is live | screens/JobConfirmedScreen.tsx | postjob-published | todo |
-| create | The [+] Create sheet | components/CreateSheet.tsx | customer-create-sheet | todo |
-| services | The All services sheet | components/ServicePickerSheet.tsx | customer-services-sheet | todo |
+| discover | Discover (worker search) | screens/WorkerSearchScreen.tsx | customer-discover, workersearch-category | done |
+| wprofile | A worker's public profile | screens/WorkerProfileScreen.tsx, PublicProfileScreen.tsx | — | done |
+| reviews | Profile reviews | screens/ProfileReviewsScreen.tsx | — | done |
+| post-what | Post a job · 1 What needs doing | screens/PostJobScreen.tsx | — (the media step is postjob-media) | done |
+| post-media | Post a job · 2 Media | screens/PostJobScreen.tsx | postjob-media | done |
+| post-where | Post a job · 3 Where and when | screens/PostJobScreen.tsx | postjob-location | done |
+| post-review | Post a job · 4 Review and publish | screens/PostJobScreen.tsx | postjob-review | done |
+| post-budget | The Edit Budget dialog | components/EditBudgetDialog.tsx | postjob-budget-dialog | done |
+| post-live | Your job is live | screens/PostJobScreen.tsx (its success overlay), ui/templates/SuccessScreen.tsx | postjob-published | done |
+| create | The [+] Create sheet | components/CreateSheet.tsx | customer-create-sheet | done |
+| services | The All services sheet | components/ServicePickerSheet.tsx | customer-services-sheet | done |
 
 ## Batch 2 — customer jobs
 
