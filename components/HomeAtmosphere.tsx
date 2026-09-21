@@ -55,11 +55,19 @@ const HOME_ATMOSPHERE = require('../assets/prestige/home-atmosphere-dark.png');
  * luma over four corner boxes of 10% of each dimension (129x280), against one
  * 129x280 box centred in the frame.
  *
- *   corners   4.55 / 4.68 / 3.16 / 4.97   mean 4.34
+ *   corners   4.55 / 4.67 / 3.16 / 4.97   mean 4.34
  *   centre    21.87
  *   lift      5.04x
- *   frame     mean 11.10, min 0.11, max 53.24
- *   banding   14 plateaus longer than 8px down the centre column
+ *   frame     mean 10.44, min 0.11, max 53.24
+ *   banding   29 plateaus longer than 8px down the centre column
+ *
+ * (Re-measured 2026-09-21 after scripts/home-ground-blend.mjs --apply: the
+ * corners and the centre are untouched; the frame mean fell 11.10 → 10.44
+ * and the plateaus rose 14 → 29 because the POOL — the ground pulled to the
+ * hero's own night under the hero's box, falling off over 90pt, so the photo
+ * and the room read as one scene (DECISIONS 2026-09-20 sitting 3, (9)) —
+ * sits inside the frame's upper right and its smooth falloff crosses the
+ * centre column. Same 1290x2796, still colour type 2, no alpha.)
  *
  * So: a real vignette, and dark throughout. Master 44's own ground is not flat
  * either (its side gutters run 0.0 to 6.4 rather than sitting on one value),

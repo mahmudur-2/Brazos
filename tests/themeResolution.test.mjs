@@ -440,10 +440,21 @@ const BAKED_ART = {
   // black rectangle onto the ivory ground on a light device, and the operator
   // supplied a light composition to sit opposite it. So this is the dark half
   // of a per-theme pair again — which is what `gate` has always meant — and
-  // screens/HomeScreen.tsx mounts it behind an isDark ternary once more. The
-  // bake is untouched: still the same 400x351 'baked-trimmed' file, byte for
-  // byte, and still measured by the sweep below.
-  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-trimmed', gate: true },
+  // screens/HomeScreen.tsx mounts it behind an isDark ternary once more.
+  //
+  // 2026-09-21 — THE BAKE MOVES: 'baked-trimmed' → 'baked-feathered', by
+  // scripts/home-ground-blend.mjs --apply (run once; its marker refuses a
+  // second pass). The operator asked for the ground and this photo to read
+  // as ONE scene, and chose, from four honest renders, the hero FEATHERED in
+  // its file — the ellipse the approved Home mockup faked with a CSS mask,
+  // multiplied into the alpha, because the phone cannot mask an Image — over
+  // the ground pooled to the photo's own night (DECISIONS 2026-09-20 sitting
+  // 3, (9)). Still 400x351 RGBA; the trim's 2881 zero samples are joined by
+  // the feather's corners, 41% of the frame is partial now, and the interior
+  // is solid: the same word its light counterpart earned below, for the same
+  // measured reason, so the two files are one bake at last. Still gated —
+  // still the dark half of the pair.
+  'assets/prestige/hero_armchair_customer.png': { bake: 'baked-feathered', gate: true },
   // The LIGHT half of that pair, installed by the operator and MEASURED here
   // rather than assumed to mirror the dark one — it is not the same bake.
   //

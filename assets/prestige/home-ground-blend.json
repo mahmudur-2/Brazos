@@ -1,0 +1,33 @@
+{
+  "date": "2026-09-21",
+  "pool": {
+    "tone": [
+      2,
+      6,
+      6
+    ],
+    "strength": 0.85,
+    "reach": 90
+  },
+  "heroBox": {
+    "x0": 222,
+    "y0": 137,
+    "x1": 406,
+    "y1": 299
+  },
+  "feather": {
+    "cx": 0.6,
+    "cy": 0.48,
+    "rx": 0.82,
+    "ry": 0.88,
+    "solid": 0.5
+  },
+  "input": {
+    "ground": "208261bacf7e43aa",
+    "hero": "3b6b3eb16c102415"
+  },
+  "output": {
+    "ground": "b70899af069b0cdc",
+    "hero": "9ebe7d58d958c962"
+  }
+}
