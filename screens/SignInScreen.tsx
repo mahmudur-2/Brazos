@@ -6,7 +6,7 @@ import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { PhoneNumberInput } from '../components/PhoneNumberInput';
 import { useAuth } from '../hooks/useAuth';
-import { authSpacing, authType } from '../lib/authTheme';
+import { authSizes, authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
@@ -58,12 +58,14 @@ import { phoneAuth } from '../lib/phoneAuth';
  * signin-phone-ship-light.html; DECISIONS 21 — "make the changes we talked
  * about to sign in screen for With phone, not just email"): the B gone; the
  * eyebrow and the headline the Welcome's (`heroEyebrow`, the serif
- * `heroTitle` in `fonts.displayHero`), "Brazos" in the headline; Continue the
- * scaffold's pinned FOOTER, riding the keyboard and stopping 12 above it,
- * the column lifting 24 while the keyboard is up; the email route the
- * outlined second with its glyph, in the scroll, 12 above the footer at
- * rest; the back control the iOS circle with its press. The bar, the soft
- * contour, the copy and the phone field did not move.
+ * `heroTitle` in `fonts.displayHero`), "Brazos" in the headline; BOTH
+ * controls the scaffold's pinned FOOTER — Continue on top, the email route
+ * outlined under it with its glyph — riding the keyboard until Continue sits
+ * flush on it (the email route going under; DECISIONS 22), the column
+ * lifting 24 while the keyboard is up; the phone field asks for no return
+ * key, so iOS floats no "Go" pill over its number pad; the back control the
+ * iOS circle with its press. The bar, the soft contour, the copy and the
+ * phone field did not move.
  */
 export function SignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
@@ -127,19 +129,35 @@ export function SignInScreen() {
     setNotice(result.message);
   }
 
-  // The ship page's lead control, pinned by the scaffold: lit, the gold
-  // chevron; it rides the keyboard (see AuthScaffold's `footer`).
+  // The ship page's two controls, pinned by the scaffold (see its `footer`):
+  // Continue ON TOP — lit, the gold chevron — and the email route under it,
+  // outlined with its glyph (`hero` without `lit`, not `ghost`, because a
+  // ghost hero is the Welcome's text link and the page draws a box). The
+  // footer rides the keyboard until Continue sits flush on it; the email
+  // route goes under the keyboard while the number is being typed.
   const footer = (
-    <AuthButton
-      title="Continue"
-      themed
-      hero
-      lit
-      chevron
-      onPress={handleContinue}
-      loading={loading}
-      accessibilityHint="Send a verification code to this phone number"
-    />
+    <View style={styles.footer}>
+      <AuthButton
+        title="Continue"
+        themed
+        hero
+        lit
+        chevron
+        onPress={handleContinue}
+        loading={loading}
+        accessibilityHint="Send a verification code to this phone number"
+      />
+      <AuthButton
+        title="Use Email Instead"
+        themed
+        hero
+        icon="mail-outline"
+        chevron
+        onPress={() => navigation.navigate('EmailSignIn')}
+        disabled={loading}
+        accessibilityHint="Sign in with your email address and password"
+      />
+    </View>
   );
 
   return (
@@ -149,6 +167,7 @@ export function SignInScreen() {
       backdrop="soft"
       lift={authSpacing.xl}
       footer={footer}
+      footerBelowLead={FOOTER_BELOW_LEAD}
       themed
     >
       <View style={styles.body}>
@@ -182,43 +201,31 @@ export function SignInScreen() {
             }}
             error={phoneError}
             editable={!loading}
-            returnKeyType="go"
-            onSubmitEditing={handleContinue}
+            // No return key. The number pad has none of its own, and asking
+            // for one ("go") made iOS float a "Go" pill over the keyboard —
+            // the operator's "get rid of the go" (DECISIONS 22). Continue,
+            // pinned on the keyboard, is the way onward.
           />
 
           {notice ? <AuthNotice tone="info">{notice}</AuthNotice> : null}
-        </View>
-
-        {/* The ship page's second control: the email route, outlined with
-            its glyph — `hero` without `lit`, not `ghost`, because a ghost
-            hero is the Welcome's text link and the page draws a box. It stays
-            in the scroll, 12 above the pinned Continue at rest, and the
-            keyboard covers it while the number is being typed. */}
-        <View style={styles.actions}>
-          <AuthButton
-            title="Use Email Instead"
-            themed
-            hero
-            icon="mail-outline"
-            chevron
-            onPress={() => navigation.navigate('EmailSignIn')}
-            disabled={loading}
-            accessibilityHint="Sign in with your email address and password"
-          />
         </View>
       </View>
     </AuthScaffold>
   );
 }
 
+/** The footer under its lead: the 12 gap and the email route — what goes
+ *  under the keyboard when Continue lands on it. */
+const FOOTER_BELOW_LEAD = authSpacing.md + authSizes.heroButton;
+
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  // The bottom padding is the 12 between the email route and the pinned
-  // Continue, which the scaffold's footer draws just below this column.
+  // The bottom padding is the least air between the field and the pinned
+  // footer on a short phone — the 32 the actions block used to bring.
   body: {
     flexGrow: 1,
     paddingTop: authSpacing.sm,
-    paddingBottom: authSpacing.md,
+    paddingBottom: authSpacing.xxl,
   },
   // Colour comes from surface.accent at render — emerald in light, gold in
   // dark, exactly as master 3's sibling does it. The measure is the Welcome's
@@ -250,9 +257,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
   },
   // marginTop:'auto' — the extra height on a tall phone becomes space between
   // the field and the CTAs rather than a gap under them.
-  actions: {
-    marginTop: 'auto',
-    paddingTop: authSpacing.xxl,
+  // The pinned pair: Continue, 12, the email route.
+  footer: {
     gap: authSpacing.md,
   },
   }),

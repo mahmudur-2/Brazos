@@ -7,7 +7,7 @@ import { AuthField } from '../components/AuthField';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
 import { useAuth } from '../hooks/useAuth';
-import { authRadius, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
@@ -50,12 +50,13 @@ import { isValidEmail } from '../lib/validation';
  * lit with the chevron, the phone route outlined with its glyph. The bar, the
  * soft contour, the copy and the fields did not move.
  *
- * 2026-09-21, from the phone (DECISIONS 21): "Brazos", not "BRAZOS", in the
- * headline; Continue is the scaffold's FOOTER — pinned, riding the keyboard
- * frame for frame and stopping 12 above it — while the column LIFTS 24 (the
- * air between the bar and the eyebrow) so the button clears the password
- * field on every phone; the back control is the iOS circle with its press.
- * The phone route stays in the scroll, 12 above the footer at rest.
+ * 2026-09-21, from the phone (DECISIONS 21, then 22): "Brazos", not "BRAZOS",
+ * in the headline; BOTH controls are the scaffold's FOOTER — Continue on top,
+ * the phone route under it — pinned and riding the keyboard frame for frame
+ * until Continue sits flush on it (the phone route going under), while the
+ * column LIFTS 24 (the air between the bar and the eyebrow) so the button
+ * clears the password field on every phone; the back control is the iOS
+ * circle with its press.
  */
 export function EmailSignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
@@ -100,10 +101,30 @@ export function EmailSignInScreen() {
     if (error) setFormError(error.message);
   }
 
-  // The ship page's lead control, pinned by the scaffold: lit, the gold
-  // chevron; it rides the keyboard (see AuthScaffold's `footer`).
+  // The ship page's two controls, pinned by the scaffold (see its `footer`):
+  // Continue ON TOP — lit, the gold chevron — and the phone route under it,
+  // outlined with its glyph (`hero` without `lit`, not `ghost`, because a
+  // ghost hero is the Welcome's text link and the page draws a box). The
+  // footer rides the keyboard until Continue sits flush on it; the phone
+  // route goes under the keyboard while a field is being typed in.
   const footer = (
-    <AuthButton title="Continue" themed hero lit chevron onPress={handleContinue} loading={loading} />
+    <View style={styles.footer}>
+      <AuthButton title="Continue" themed hero lit chevron onPress={handleContinue} loading={loading} />
+      <AuthButton
+        title="Use Phone Number Instead"
+        themed
+        hero
+        icon="phone-portrait-outline"
+        chevron
+        // popTo(), not navigate(): React Navigation 7 changed navigate() to
+        // push when the target isn't the current route, which would stack a
+        // second SignIn on top of the one the user came from and throw away
+        // the number they had already typed. popTo returns to that instance.
+        onPress={() => navigation.popTo('SignIn')}
+        disabled={loading}
+        accessibilityHint="Go back to signing in with your phone number"
+      />
+    </View>
   );
 
   return (
@@ -113,6 +134,7 @@ export function EmailSignInScreen() {
       backdrop="soft"
       lift={authSpacing.xl}
       footer={footer}
+      footerBelowLead={FOOTER_BELOW_LEAD}
       themed
     >
       <View style={styles.body}>
@@ -182,41 +204,23 @@ export function EmailSignInScreen() {
             </View>
           ) : null}
         </View>
-
-        {/* The ship page's second control: the phone route, outlined with its
-            glyph — `hero` without `lit`, not `ghost`, because a ghost hero is
-            the Welcome's text link and the page draws a box. It stays in the
-            scroll, 12 above the pinned Continue at rest, and the keyboard
-            covers it while a field is being typed in. */}
-        <View style={styles.actions}>
-          <AuthButton
-            title="Use Phone Number Instead"
-            themed
-            hero
-            icon="phone-portrait-outline"
-            chevron
-            // popTo(), not navigate(): React Navigation 7 changed navigate() to
-            // push when the target isn't the current route, which would stack a
-            // second SignIn on top of the one the user came from and throw away
-            // the number they had already typed. popTo returns to that instance.
-            onPress={() => navigation.popTo('SignIn')}
-            disabled={loading}
-            accessibilityHint="Go back to signing in with your phone number"
-          />
-        </View>
       </View>
     </AuthScaffold>
   );
 }
 
+/** The footer under its lead: the 12 gap and the phone route — what goes
+ *  under the keyboard when Continue lands on it. */
+const FOOTER_BELOW_LEAD = authSpacing.md + authSizes.heroButton;
+
 const stylesFor = themedStyles((colors: ColorPalette) =>
   StyleSheet.create({
-  // The bottom padding is the 12 between the phone route and the pinned
-  // Continue, which the scaffold's footer draws just below this column.
+  // The bottom padding is the least air between the form and the pinned
+  // footer on a short phone — the 32 the actions block used to bring.
   body: {
     flexGrow: 1,
     paddingTop: authSpacing.sm,
-    paddingBottom: authSpacing.md,
+    paddingBottom: authSpacing.xxl,
   },
   // Colour comes from surface.accent at render — emerald in light, gold in
   // dark, exactly as master 4's sibling does it. The measure is the Welcome's
@@ -258,9 +262,8 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     ...authType.note,
     color: colors.danger,
   },
-  actions: {
-    marginTop: 'auto',
-    paddingTop: authSpacing.xxl,
+  // The pinned pair: Continue, 12, the phone route.
+  footer: {
     gap: authSpacing.md,
   },
   }),

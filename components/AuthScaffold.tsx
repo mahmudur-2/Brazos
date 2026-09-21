@@ -19,9 +19,10 @@ import { authSurface, fonts, useThemeColors, withAlpha } from '../lib/theme';
 import { backgroundImageStyle } from '../ui/primitives/LitSurface';
 import { AuthBackdrop, type AuthBackdropVariant } from './AuthBackdrop';
 import { KeyboardRisingColumn } from './KeyboardRisingColumn';
+import { COLUMN_BOTTOM_PADDING } from './KeyboardRisingColumn.shared';
 
 /**
- * 2026-09-21 — THE KEYBOARD, on the sign-in pages (DECISIONS 21).
+ * 2026-09-21 — THE KEYBOARD, on the sign-in pages (DECISIONS 21, 22).
  *
  * `lift` is spent over the keyboard's first LIFT_OVER points of travel, so the
  * column has finished moving before the keyboard has — the keyboard's own
@@ -31,9 +32,12 @@ import { KeyboardRisingColumn } from './KeyboardRisingColumn';
  * inset), so the lift always completes.
  *
  * The footer rests FOOTER_REST_GAP above the safe inset plus the column's own
- * COLUMN_BOTTOM_PADDING — 12 + 12, the 24 the body's padding gives the scroll
- * content — and rises by the keyboard's height less both the inset and this
- * gap, which lands its padded edge exactly on the keyboard.
+ * COLUMN_BOTTOM_PADDING — 12 + 12, the 24 the body's padding once gave the
+ * scroll content. Risen, its LEAD control's bottom edge sits ON the keyboard
+ * (DECISIONS 22: "don't add space between keyboard and the continue
+ * button"): the rise is the keyboard's height less the inset, both gaps, and
+ * `footerBelowLead` — whatever the footer stacks under its lead, which goes
+ * under the keyboard.
  */
 const LIFT_OVER = 200;
 const FOOTER_REST_GAP = authSpacing.md;
@@ -174,12 +178,20 @@ type AuthScaffoldProps = PropsWithChildren<{
    * THE KEYBOARD through KeyboardRisingColumn — the seam Chat's composer
    * uses: the keyboard's live frame on the UI thread where the binary can
    * track it, the native-driver imitation with the system's own duration
-   * otherwise — landing 12 above the keyboard. The scroll content is left
-   * alone: no KeyboardAvoidingView padding runs while a footer is present, so
-   * nothing re-lays out per frame; the scroll keeps iOS's own keyboard inset
-   * so a field can still be reached on a phone too short for all of it.
+   * otherwise — its lead control landing ON the keyboard. The scroll content
+   * is left alone: no KeyboardAvoidingView padding runs while a footer is
+   * present, so nothing re-lays out per frame; the scroll keeps iOS's own
+   * keyboard inset so a field can still be reached on a phone too short for
+   * all of it.
    */
   footer?: ReactNode;
+  /**
+   * What the footer stacks BELOW its lead control (points) — the sign-in
+   * pages' 12 gap and their 58 "Instead" route. The rise stops with the
+   * lead's bottom edge on the keyboard, so this much goes under it; absent,
+   * the footer's padded edge lands on the keyboard instead.
+   */
+  footerBelowLead?: number;
   /**
    * How far the scroll column lifts (points) while the keyboard is up, so the
    * footer keeps clear of the last field — spent from the air above the
@@ -210,6 +222,7 @@ export function AuthScaffold({
   themed = false,
   ground = false,
   footer,
+  footerBelowLead = 0,
   lift = 0,
   children,
 }: AuthScaffoldProps) {
@@ -357,7 +370,14 @@ export function AuthScaffold({
           {footer ? (
             <View style={styles.footerOuter}>
               <KeyboardRisingColumn
-                insetBelow={insets.bottom + FOOTER_REST_GAP}
+                // Everything already between the lead's bottom edge and the
+                // screen's: the inset, the resting gap, the column's own
+                // padding, and what the footer stacks under the lead. The
+                // keyboard covers all of it once up, so the rise subtracts it
+                // and the lead lands flush on the keyboard.
+                insetBelow={
+                  insets.bottom + FOOTER_REST_GAP + COLUMN_BOTTOM_PADDING + footerBelowLead
+                }
                 style={styles.footer}
               >
                 {footer}
