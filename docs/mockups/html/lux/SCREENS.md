@@ -88,21 +88,21 @@ photograph the LIVE screen, for the side-by-side.
 | admin | Admin reports | screens/AdminReportsScreen.tsx | — | done |
 | portfolio | Portfolio picker | components/PortfolioPicker.tsx | — | done |
 
-## Batch 6 — auth and launch
+## Batch 6 — auth and launch (drawn 2026-09-21 in Lux under the same standing instruction — whether the auth flow keeps its own emerald/ivory palette is the operator's ruling on return; `lux-amount` is the counter prompt, `lux-amount-2` the mode-switch confirm)
 
 | key | screen | source | harness target | status |
 |-|-|-|-|-|
-| launch | Launch | screens/LaunchScreen.tsx | — | todo |
-| welcome | Welcome | screens/WelcomeScreen.tsx | auth-welcome | todo |
-| signin | Sign in (phone) | screens/SignInScreen.tsx | auth-signin | todo |
-| email-signin | Sign in (email) | screens/EmailSignInScreen.tsx | auth-email-signin | todo |
-| create-account | Create account (phone) | screens/CreateAccountScreen.tsx | auth-create-account | todo |
-| email-create | Create account (email) | screens/EmailCreateAccountScreen.tsx | auth-email-create-account | todo |
-| verify | Verify phone | screens/VerifyPhoneScreen.tsx | — | todo |
-| setup | Setup | screens/SetupScreen.tsx | auth-setup | todo |
-| legal-gate | The legal gate | screens/LegalGateScreen.tsx | — | todo |
-| mode-switch | The mode-switch overlay | components/ModeTransitionOverlay.tsx | — | todo |
-| amount | Amount prompt · Confirm dialog | components/AmountPrompt.tsx, components/ConfirmDialog.tsx | — | todo |
+| launch | Launch | screens/LaunchScreen.tsx | — | done |
+| welcome | Welcome | screens/WelcomeScreen.tsx | auth-welcome | done |
+| signin | Sign in (phone) | screens/SignInScreen.tsx | auth-signin | done |
+| email-signin | Sign in (email) | screens/EmailSignInScreen.tsx | auth-email-signin | done |
+| create-account | Create account (phone) | screens/CreateAccountScreen.tsx | auth-create-account | done |
+| email-create | Create account (email) | screens/EmailCreateAccountScreen.tsx | auth-email-create-account | done |
+| verify | Verify phone | screens/VerifyPhoneScreen.tsx | — | done |
+| setup | Setup | screens/SetupScreen.tsx | auth-setup | done |
+| legal-gate | The legal gate | screens/LegalGateScreen.tsx | — | done |
+| mode-switch | The mode-switch overlay | components/ModeTransitionOverlay.tsx | — | done |
+| amount | Amount prompt · Confirm dialog | components/AmountPrompt.tsx, components/ConfirmDialog.tsx | — | done |
 
 Not screens (containers, no page of their own): `screens/AuthFlow.tsx`,
 `screens/OnboardingFlow.tsx`, `dev-tools/`. The auth flow renders on its own

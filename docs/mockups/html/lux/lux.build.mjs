@@ -30,6 +30,17 @@ const asset = (name) => `data:image/png;base64,${readFileSync(join(root, 'assets
 // the repository's own codec, so the page that carries it stays small.
 let photoUri, toolboxUri;
 const photoSrc = () => (photoUri ??= asset('hero_armchair_customer.png'));
+/** A brand PNG (assets/brand/) resampled to its slot at 2x through the repository's own codec, read once. */
+const brandCache = new Map();
+const brandSrc = (name, w, h) => {
+  const key = `${name}:${w}x${h}`;
+  if (!brandCache.has(key)) {
+    const img = decode(join(root, 'assets', 'brand', name));
+    const small = resample(img, w, h);
+    brandCache.set(key, `data:image/png;base64,${encodePng({ width: small.width, height: small.height, pixels: small.pixels, bpp: small.bpp }).toString('base64')}`);
+  }
+  return brandCache.get(key);
+};
 const toolboxSrc = () => {
   if (!toolboxUri) {
     const img = decode(join(root, 'assets', 'prestige', 'hero_toolbox_worker.png'));
@@ -414,6 +425,18 @@ const SYSTEM_CSS = `
 .nrow{display:flex;gap:12px;align-items:flex-start;padding:12px 14px}
 .nrow + .nrow{border-top:1px solid rgba(200,255,230,.10)}
 .dot{width:9px;height:9px;border-radius:5px;background:var(--acc);flex:0 0 auto;margin-top:6px;box-shadow:0 0 10px rgba(126,226,180,.6)}
+/* --- batch 6 additions: the launch glow, the wordmark, the auth form, the OTP boxes --- */
+.glowbg{position:absolute;inset:0;background:radial-gradient(ellipse 70% 45% at 50% 42%,rgba(126,226,180,.16),rgba(126,226,180,0) 70%)}
+.wordmark{font-size:34px;font-weight:800;letter-spacing:8px;color:var(--gold);text-indent:8px}
+.mark{border-radius:28px;box-shadow:0 18px 40px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08)}
+.ghost{height:52px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--acc)}
+.otp{display:flex;gap:8px}
+.otp i{flex:1;height:56px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.12);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:24px;font-weight:700;color:var(--ink)}
+.otp i.cur{border-color:var(--acc);box-shadow:0 0 0 3px rgba(126,226,180,.18)}
+.choice{flex:1;padding:16px 14px;display:flex;flex-direction:column;gap:8px;border-radius:18px;border:1px solid var(--rim);background:var(--glass);box-shadow:inset 0 1px 0 var(--spec)}
+.choice.on{border-color:var(--acc);background:rgba(126,226,180,.12)}
+.choice svg{width:24px;height:24px;color:var(--acc)}
+.overlayart{position:absolute;left:0;right:0;bottom:0;width:393px;display:block}
 `;
 
 const base = `
@@ -1199,6 +1222,94 @@ const portfolio = (step = 'grid') => `
     <div style="display:flex;flex-wrap:wrap;gap:12px"><div class="stack" style="gap:4px;width:166px"><div class="thumb" style="width:166px;height:124px">${photo()}</div><span class="eyebrow" style="font-size:10px">Furniture Assembly</span><span class="muted" style="font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${DETAIL.title}</span></div></div>
   </div>${step === 'detail' ? `<div class="scrim"></div><div class="sheet" style="padding:16px 20px 34px;gap:12px"><div class="between"><div class="h2 serif" style="font-size:22px;line-height:26px">Feature this photo</div>${icS('i-close', 22, 'var(--muted)')}</div><div class="thumb" style="width:100%;height:150px;border-radius:16px">${photo()}</div><span class="lbl">Category</span><div class="wrap">${POSTABLE.map(([l, i]) => chipF(l, i, l === POST.cat)).join('')}</div><span class="lbl">What did this job involve?</span><span class="muted" style="font-size:13px;line-height:18px;margin-top:-6px">A real sentence or two — this is what clients read to judge your work.</span><div class="in ph multi" style="min-height:72px"><span>e.g. Rebuilt a 20ft cedar fence panel by panel after storm damage, including new posts set in concrete.</span></div><span class="muted" style="font-size:12px;margin-top:-6px">10 more characters needed</span><div style="display:flex;gap:10px"><div class="btn2" style="flex:1;height:48px;font-size:15px">Cancel</div><div class="btn2 off" style="flex:1;height:48px;font-size:15px">Add to portfolio</div></div></div><div class="home-bar"></div>` : `<div class="home-bar"></div>`}`;
 
+// ---------------------------------------------------------------------------
+// BATCH 6 — auth and launch (SCREENS.md). Drawn in Lux; whether the auth flow
+// keeps its own emerald/ivory palette is the operator's ruling.
+// ---------------------------------------------------------------------------
+const logo = (size) => `<img class="mark" src="${brandSrc('brazos-b-leaf.png', size * 2, size * 2)}" style="width:${size}px;height:${size}px;border-radius:${Math.round(size * 0.26)}px" alt="">`;
+/** The auth scaffold: the back disc and the small title, then the mark, the eyebrow, the serif title and the subtitle. */
+const authTop = (title, eyebrow, h, sub, back = true) => `<div class="hdr" style="min-height:36px">${back ? `<div class="circle" style="width:36px;height:36px">${ic('i-back')}</div>` : ''}<span class="title" style="font-size:15px">${title}</span></div>
+    <div class="stack" style="gap:8px;margin-top:2px">${logo(56)}<span class="eyebrow" style="margin-top:6px">${eyebrow}</span><div class="h1 serif" style="font-size:30px;line-height:34px">${h}</div><span class="muted" style="font-size:15px;line-height:21px">${sub}</span></div>`;
+const phoneField = () => `<div class="fld"><span class="lbl">Phone number</span><div class="in ph" style="padding:0 16px;gap:10px"><span style="color:var(--ink);flex:0 0 auto;display:flex;align-items:center;gap:6px;font-weight:600">🇺🇸 +1${icS('i-chev', 14, 'var(--muted)')}</span><i style="width:1px;height:24px;background:rgba(200,255,230,.14)"></i><span style="flex:1">347 320 0610</span></div></div>`;
+const privacyRow = () => `<div class="card" style="padding:14px 16px;display:flex;gap:12px;align-items:center">${icS('i-shield', 20, 'var(--acc)')}<span class="muted" style="font-size:14px;line-height:19px">Your number stays private until a job is confirmed.</span></div>`;
+
+/** Launch (screens/LaunchScreen.tsx): the mark, the gold wordmark, the tagline, on the ground with its glow. */
+const launch = () => `<div class="glowbg"></div>
+  <div style="position:absolute;left:0;right:0;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px"><img class="mark" src="${brandSrc('app-icon-b-leaf.png', 208, 208)}" style="width:104px;height:104px;border-radius:24px" alt=""><span class="wordmark">BRAZOS</span><span class="muted" style="font-size:16px;margin-top:-10px">Any Task, Handled.</span></div>`;
+
+/** Welcome (screens/WelcomeScreen.tsx): the three badges, the eyebrow, the headline, the three ways in. */
+const welcome = () => `<div class="glowbg"></div>
+  <div class="body" style="gap:22px;top:80px;bottom:34px">
+    <div style="display:flex;justify-content:center">${logo(72)}</div>
+    <div class="wrap" style="justify-content:center">${['Local workers', 'Protected payment', 'Local jobs'].map((l) => `<span class="chip">${l}</span>`).join('')}</div>
+    <div class="stack" style="gap:10px"><span class="eyebrow">Brazos marketplace</span><div class="h1 serif" style="font-size:38px;line-height:42px">Get it done.<br>Work with<br>confidence.</div><span class="muted" style="font-size:16px;line-height:22px">Hire trusted local help or find nearby work from one account.</span></div>
+    <div class="stack" style="gap:10px;margin-top:auto"><div class="cta">Continue with email</div><div class="btn2">Continue with phone</div><div class="ghost">I already have an account</div></div>
+  </div>`;
+
+/** Sign in with a phone (screens/SignInScreen.tsx). */
+const signin = () => `<div class="body" style="gap:22px;bottom:34px">
+    ${authTop('Sign in', 'Welcome back', 'Sign in to BRAZOS', 'Use the phone number connected to your account.')}
+    <div class="card" style="padding:16px">${phoneField()}</div>
+    <div class="stack" style="gap:8px;margin-top:auto"><div class="cta">Continue</div><div class="ghost">Use Email Instead</div></div>
+  </div>`;
+
+/** Sign in with an email (screens/EmailSignInScreen.tsx). */
+const emailSignin = () => `<div class="body" style="gap:22px;bottom:34px">
+    ${authTop('Sign in', 'Welcome back', 'Sign in to BRAZOS', 'Use the email and password connected to your account.')}
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${fld('Email', 'you@example.com', { ph: true })}${fld('Password', '••••••••', { ph: true })}</div>
+    <div class="stack" style="gap:8px;margin-top:auto"><div class="cta">Continue</div><div class="ghost">Use Phone Number Instead</div></div>
+  </div>`;
+
+/** Create an account with a phone (screens/CreateAccountScreen.tsx). */
+const createAccount = () => `<div class="body" style="gap:18px;bottom:34px">
+    ${authTop('Create account', 'Create account', 'One account. Two ways to use it.', 'You can hire help and accept work. Your home screens change with your current mode.')}
+    <div class="card" style="padding:16px;display:flex;flex-direction:column;gap:12px">${fld('Full name', 'Carlos Reyes', { ph: true })}${phoneField()}</div>
+    ${privacyRow()}
+    <div class="stack" style="gap:8px;margin-top:auto"><div class="cta">Create account</div><div class="ghost">Use Email Instead</div></div>
+  </div>`;
+
+/** Create an account with an email (screens/EmailCreateAccountScreen.tsx). */
+const emailCreate = () => `<div class="body" style="gap:12px;bottom:34px">
+    ${authTop('Create account', 'Create account', 'Sign up with your email', 'One account. You can hire help and accept work from the same profile.')}
+    <div class="card" style="padding:14px;display:flex;flex-direction:column;gap:10px">${fld('Full name', 'Carlos Reyes', { ph: true })}${fld('Email', 'you@example.com', { ph: true })}${fld('Password', '••••••••', { ph: true })}</div>
+    ${privacyRow()}
+    <div class="stack" style="gap:8px;margin-top:auto"><div class="cta">Create account</div><div class="ghost">Use Phone Number Instead</div></div>
+  </div>`;
+
+/** Verify phone (screens/VerifyPhoneScreen.tsx): the six boxes, Verify and continue, the resend countdown. */
+const verify = () => `<div class="body" style="gap:22px;bottom:34px">
+    ${authTop('Verify phone', 'Verify your number', 'Enter the 6-digit code', 'Sent to +1 ••• ••• 0610')}
+    <div class="otp"><i>4</i><i>8</i><i>2</i><i class="cur"></i><i></i><i></i></div>
+    <div class="stack" style="gap:12px;margin-top:auto;align-items:center"><div class="cta" style="align-self:stretch">Verify and continue</div><span class="muted" style="font-size:14px;font-weight:600">Resend code in 0:42</span></div>
+  </div>`;
+
+/** Setup (screens/SetupScreen.tsx): Terms & Privacy, the starting mode, Finish setup, Sign out. */
+const setup = () => `<div class="body" style="gap:18px;bottom:34px">
+    <div class="stack" style="gap:8px"><span class="title" style="font-size:15px">Setup</span><span class="eyebrow" style="margin-top:10px">Final setup</span><div class="h1 serif" style="font-size:30px;line-height:34px">Set up your experience</div><span class="muted" style="font-size:15px">These choices can be changed later.</span></div>
+    <div class="card list">${setRow('i-images', 'Terms &amp; Privacy', 'Review both documents to continue')}</div>
+    <div class="stack" style="gap:10px"><span class="sect">Start in</span><div style="display:flex;gap:10px"><div class="choice on">${ic('i-search')}<div class="stack" style="gap:2px"><span class="title" style="font-size:16px">Hire help</span><span class="muted" style="font-size:13px">Customer mode</span></div></div><div class="choice">${ic('i-briefcase')}<div class="stack" style="gap:2px"><span class="title" style="font-size:16px">Find work</span><span class="muted" style="font-size:13px">Worker mode</span></div></div></div></div>
+    <span class="muted" style="font-size:13px;text-align:center">Review Terms &amp; Privacy to finish setup.</span>
+    <div class="stack" style="gap:8px;margin-top:auto"><div class="cta" style="opacity:.55;box-shadow:none">Finish setup</div><div class="ghost" style="color:var(--muted)">Sign out</div></div>
+  </div>`;
+
+/** The legal gate (screens/LegalGateScreen.tsx): the two documents' status, the open document, the agreement, Agree and continue. */
+const legalGate = () => `<div class="body" style="gap:14px;bottom:34px">
+    <div class="stack" style="gap:6px"><span class="eyebrow">Before you start</span><div class="h1 serif" style="font-size:30px;line-height:34px">Terms &amp; Privacy</div><span class="muted" style="font-size:14px;line-height:19px">Read both documents to the end, then confirm below.</span></div>
+    <div class="card list">${setRow('i-images', 'Terms of Service', 'Reviewed', icS('i-checkcircle', 24, 'var(--acc)'))}${setRow('i-lock', 'Privacy Policy', 'Scroll to the end to continue')}</div>
+    <div class="card" style="padding:16px 18px;display:flex;flex-direction:column;gap:8px;flex:1;min-height:0;overflow:hidden"><div class="h2 serif" style="font-size:22px;line-height:26px">Brazos Privacy Policy</div><span class="title" style="font-size:14px">⚠️ Working draft — pending legal review</span><p class="muted" style="font-size:13px;line-height:18px">This document is an unreviewed first draft written to describe accurately what the app does with your data. It is NOT final legal text and has NOT been reviewed by a licensed attorney. It must be reviewed and revised by qualified counsel before Brazos is offered to the public.</p><span class="muted" style="font-size:12px">Last updated: 26 July 2026</span><span class="title" style="font-size:15px">1. Who this covers</span><p class="muted" style="font-size:13px;line-height:18px">This policy covers the Brazos mobile app. Brazos is operated from the United States and intended for use there.</p><span class="title" style="font-size:15px">2. What we collect</span><span class="muted" style="font-size:12px;text-align:center;margin-top:auto">Scroll to the end to continue</span></div>
+    <span class="muted" style="font-size:13px;text-align:center">Review both documents to enable agreement.</span>
+    <div style="display:flex;gap:12px;align-items:flex-start"><div class="cb"></div><span class="muted" style="font-size:14px;line-height:19px">I have read and agree to the Terms of Service and Privacy Policy.</span></div>
+    <div class="stack" style="gap:8px"><div class="cta" style="opacity:.55;box-shadow:none">Agree and continue</div><div class="ghost" style="color:var(--muted)">Sign out</div></div>
+  </div>`;
+
+/** The mode-switch overlay (components/ModeTransitionOverlay.tsx): the app's own transition artwork rising over the dimmed screen. */
+const modeSwitch = () => `${home()}<div class="scrim" style="background:rgba(3,14,12,.55)"></div><img class="overlayart" src="${brandSrc('transition-worker.png', 786, 870)}" alt="">`;
+
+/** The amount prompt (components/AmountPrompt.tsx) and the confirm dialog (components/ConfirmDialog.tsx), one frame each over the chat and over Home. */
+const amount = (which = 'amount') => which === 'amount'
+  ? `${chat(CHAT_END)}<div class="scrim"></div><div class="card dialog"><div class="h2 serif" style="font-size:24px;line-height:28px">Counter offer</div><p class="muted" style="font-size:14px;line-height:20px;margin-top:-6px">Currently ${BIDS[0].amount}. Propose a different amount.</p><div class="in" style="height:56px;gap:6px"><span class="money" style="font-size:22px">$</span><span class="money" style="font-size:22px">100</span></div><div style="display:flex;gap:10px"><div class="btn2" style="flex:1">Cancel</div><div class="cta" style="flex:1">Send counter</div></div></div>`
+  : `${home()}<div class="scrim"></div><div class="card dialog"><div class="h2 serif" style="font-size:24px;line-height:28px">Switch to Worker Mode?</div><p class="muted" style="font-size:14px;line-height:20px;margin-top:-6px">You’ll see the jobs you can bid on. The jobs you’ve posted stay exactly where they are — switch back any time.</p><div class="stack" style="gap:10px"><div class="cta">Switch</div><div class="btn2">Stay in Customer</div></div></div>`;
+
 const SCREENS = {
   home: { label: 'Customer Home', render: home },
   whome: { label: 'Worker Home', render: whome },
@@ -1261,6 +1372,18 @@ const SCREENS = {
   legal: { label: 'Legal document (Terms)', render: legal, frames: [0, 149] },
   admin: { label: 'Admin reports', render: admin },
   portfolio: { label: 'Feature past work', render: portfolio, frames: ['grid', 'detail'], frameLabels: ['', ' (a photo picked)'] },
+  // batch 6 — auth and launch
+  launch: { label: 'Launch', render: launch },
+  welcome: { label: 'Welcome', render: welcome },
+  signin: { label: 'Sign in (phone)', render: signin },
+  'email-signin': { label: 'Sign in (email)', render: emailSignin },
+  'create-account': { label: 'Create account (phone)', render: createAccount },
+  'email-create': { label: 'Create account (email)', render: emailCreate },
+  verify: { label: 'Verify phone', render: verify },
+  setup: { label: 'Setup', render: setup },
+  'legal-gate': { label: 'The legal gate', render: legalGate },
+  'mode-switch': { label: 'The mode-switch overlay', render: modeSwitch },
+  amount: { label: 'Amount prompt · Confirm dialog', render: amount, frames: ['amount', 'confirm'], frameLabels: [' (the amount prompt)', ' (the confirm dialog)'] },
 };
 
 // ---------------------------------------------------------------------------
@@ -1286,3 +1409,22 @@ for (const key of wanted) {
   writeFileSync(file, html);
   console.log(`wrote lux-${key}.html (${Math.round(html.length / 1024)} KB)`);
 }
+
+// The index: one link per screen, in SCREENS.md's batches, so the whole set
+// opens from one file. Rewritten on every run, whatever subset was built.
+const BATCHES = [
+  ['Batch 1 — customer core', ['home', 'discover', 'wprofile', 'reviews', 'post-what', 'post-media', 'post-where', 'post-review', 'post-budget', 'post-live', 'create', 'services']],
+  ['Batch 2 — customer jobs', ['myjobs', 'cjob', 'compare', 'bid', 'counter', 'checkout', 'confirmed', 'track', 'approve', 'review-tip', 'cell', 'cmap']],
+  ['Batch 3 — worker', ['whome', 'jobs', 'filters', 'filters-pop', 'detail', 'submit', 'bid-sent', 'wjob', 'checklist', 'route', 'wmap', 'wmyjobs', 'earnings', 'payouts', 'pricing']],
+  ['Batch 4 — messaging', ['inbox', 'chat', 'chat-menu', 'hidden', 'feed', 'report']],
+  ['Batch 5 — profile and settings', ['profile', 'details', 'safety', 'notif', 'appearance', 'payment', 'saved', 'delete', 'legal', 'admin', 'portfolio']],
+  ['Batch 6 — auth and launch', ['launch', 'welcome', 'signin', 'email-signin', 'create-account', 'email-create', 'verify', 'setup', 'legal-gate', 'mode-switch', 'amount']],
+];
+const index = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>BRAZOS — Emerald Lux Glass — every screen</title>
+<!-- Generated by docs/mockups/html/lux/lux.build.mjs. The system is README.md beside it; the checklist is SCREENS.md. -->
+<style>body{margin:0;background:#0d0d0d;color:#ddd;font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:28px 32px}h1{font-size:24px;margin:0 0 6px}p{color:#9aa39e;margin:0 0 24px;font-size:14px}h2{font-size:15px;color:#E9C170;letter-spacing:1.4px;text-transform:uppercase;margin:26px 0 10px}ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}a{display:inline-block;padding:8px 14px;border-radius:18px;background:rgba(12,44,38,.6);border:1px solid rgba(200,255,230,.2);color:#F3F1E8;text-decoration:none;font-size:14px}a:hover{background:rgba(126,226,180,.16)}a span{color:#9aa39e;font-size:12px;margin-left:6px}</style></head>
+<body><h1>Emerald Lux Glass — every screen</h1><p>${Object.keys(SCREENS).length} screens, one page each, from lux.build.mjs. Nothing here is applied to the app.</p>
+${BATCHES.map(([title, keys]) => `<h2>${title}</h2><ul>${keys.map((k) => `<li><a href="lux-${k}.html">${SCREENS[k].label}<span>${k}${(SCREENS[k].frames?.length ?? 1) > 1 ? ` · ${SCREENS[k].frames.length} frames` : ''}</span></a></li>`).join('')}</ul>`).join('')}
+</body></html>`;
+writeFileSync(join(here, 'index.html'), index);
+console.log(`wrote index.html (${Object.keys(SCREENS).length} screens)`);

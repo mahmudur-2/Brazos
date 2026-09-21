@@ -167,6 +167,84 @@
 .map .tile{position:absolute;width:199.68px;height:199.68px;background-size:100% 100%;filter:brightness(2.15) contrast(1.85) brightness(0.62)}
 .heat{position:absolute;width:120px;height:120px;border-radius:60px;background:radial-gradient(circle,rgba(79,168,232,.55) 0%,rgba(79,168,232,.22) 42%,rgba(79,168,232,0) 70%);transform:translate(-50%,-50%);pointer-events:none}
 .legal{position:absolute;left:12px;font-size:10px;color:rgba(255,255,255,.55)}
+/* --- batch 3 additions: the Filters sheet, its popups, the checklist, the buckets --- */
+.fillrow{display:flex;gap:6px}
+.fillrow .chip.f{flex:1;justify-content:center;padding:0 4px;min-width:0}
+.fillrow .chip.f.wide{flex:1.2}
+.pop{position:absolute;width:168px;border-radius:18px;background:rgba(9,36,31,.94);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 16px 40px rgba(0,0,0,.5);backdrop-filter:blur(24px);overflow:hidden;padding:4px 0}
+.pop .r{height:44px;display:flex;align-items:center;padding:0 12px;gap:8px;font-size:15px;color:var(--ink)}
+.pop .r + .r{border-top:1px solid rgba(200,255,230,.10)}
+.pop .r .tk{width:18px;height:18px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:var(--acc)}
+.pop .r .tk svg{width:16px;height:16px}
+.pop .r .c{flex:1;text-align:center;padding-right:26px}
+.pop .r.on .c,.pop .r.on .l{color:var(--acc);font-weight:700}
+.pop .r .cal{width:22px;height:24px;border-radius:5px;border:1.5px solid rgba(200,255,230,.35);border-top-width:5px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:var(--ink);flex:0 0 auto}
+.pop .r .h{font-size:12px;color:var(--muted)}
+.pop .r.muted .l{color:var(--muted)}
+.cb{width:24px;height:24px;border-radius:7px;border:1.5px solid rgba(200,255,230,.3);display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:var(--accInk)}
+.cb.on{background:var(--acc);border-color:transparent}
+.cb svg{width:14px;height:14px}
+.strike{text-decoration:line-through;color:var(--muted)}
+.bucket{flex:1;padding:12px 10px;display:flex;flex-direction:column;gap:4px;border-radius:18px}
+.bucket .amt{font-size:18px;font-weight:800;color:var(--gold);white-space:nowrap}
+.bucket .k{font-size:10px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+.bucket .n{font-size:11px;color:var(--muted);line-height:14px}
+.switch.on{background:var(--acc);border-color:transparent}
+.switch.on i{left:auto;right:3px;background:var(--accInk)}
+.btn2.off{color:var(--muted);border-color:rgba(200,255,230,.10)}
+/* --- batch 4 additions: the inbox row, bubbles, the composer, menus, the report dialog --- */
+.pillrow{display:flex;gap:8px}
+.pillrow .p{height:32px;padding:0 14px;border-radius:16px;display:flex;align-items:center;font-size:13px;font-weight:700;color:var(--muted);background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.12)}
+.pillrow .p.on{background:var(--acc);color:var(--accInk);border-color:transparent}
+.msgs{display:flex;flex-direction:column;gap:10px}
+.bub{max-width:78%;padding:10px 14px 8px;border-radius:20px;font-size:15px;line-height:20px;color:var(--ink);display:flex;flex-direction:column;gap:4px}
+.bub.them{align-self:flex-start;background:rgba(12,44,38,.62);border:1px solid rgba(200,255,230,.16);border-bottom-left-radius:6px;backdrop-filter:blur(18px)}
+.bub.me{align-self:flex-end;background:linear-gradient(135deg,rgba(141,240,192,.28),rgba(79,197,140,.22));border:1px solid rgba(126,226,180,.35);border-bottom-right-radius:6px}
+.bub .ft{display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:11px;color:var(--muted)}
+.bub .ft svg{width:14px;height:14px}
+.bub .ft .tk{display:flex;margin-left:2px}
+.bub .ft .tk svg + svg{margin-left:-8px}
+.wave{display:flex;align-items:center;gap:2px;height:28px}
+.wave i{display:block;width:3px;border-radius:2px;background:var(--acc)}
+.play{width:32px;height:32px;border-radius:16px;background:var(--acc);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.play svg{width:16px;height:16px;color:var(--accInk)}
+.doc{display:flex;align-items:center;gap:10px;padding:2px 0}
+.doc .ico{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.08);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.doc .ico svg{width:20px;height:20px;color:var(--acc)}
+.composer{position:absolute;left:0;right:0;bottom:84px;padding:10px 16px 12px;display:flex;align-items:center;gap:12px;background:rgba(5,24,20,.72);border-top:1px solid rgba(200,255,230,.16);backdrop-filter:blur(24px)}
+.composer svg{width:26px;height:26px;color:var(--acc);flex:0 0 auto}
+.composer .in{flex:1;min-height:44px;padding:11px 16px;border-radius:22px;font-size:15px;line-height:20px}
+.jobdiv{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:12px;font-weight:600}
+.jobdiv i{flex:1;height:1px;background:rgba(200,255,230,.12)}
+.jobdiv span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70%}
+.menu{position:absolute;right:20px;top:106px;width:230px;padding:6px 0;border-radius:18px;background:rgba(9,36,31,.94);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 16px 40px rgba(0,0,0,.5);backdrop-filter:blur(24px)}
+.menu .r{height:46px;display:flex;align-items:center;gap:12px;padding:0 16px;font-size:15px;color:var(--ink)}
+.menu .r svg{width:20px;height:20px;color:var(--acc)}
+.asheet{position:absolute;left:16px;right:16px;bottom:24px;padding:8px 0 0;border-radius:22px;background:rgba(9,36,31,.94);border:1px solid var(--rim);box-shadow:inset 0 1px 0 var(--spec),0 16px 40px rgba(0,0,0,.5);backdrop-filter:blur(24px)}
+.asheet .hd{padding:10px 18px 12px;text-align:center;border-bottom:1px solid rgba(200,255,230,.10)}
+.asheet .r{height:50px;display:flex;align-items:center;gap:12px;padding:0 18px;font-size:16px;color:var(--ink)}
+.asheet .r svg{width:20px;height:20px;color:var(--acc)}
+.asheet .r.bad{color:#F0A0A0}
+.asheet .r.bad svg{color:#F0A0A0}
+.asheet .cancel{height:52px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--acc);border-top:1px solid rgba(200,255,230,.10)}
+.radio{width:22px;height:22px;border-radius:11px;border:1.5px solid rgba(200,255,230,.3);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+.radio.on{border-color:var(--acc)}
+.radio.on i{width:12px;height:12px;border-radius:6px;background:var(--acc);display:block}
+.nrow{display:flex;gap:12px;align-items:flex-start;padding:12px 14px}
+.nrow + .nrow{border-top:1px solid rgba(200,255,230,.10)}
+.dot{width:9px;height:9px;border-radius:5px;background:var(--acc);flex:0 0 auto;margin-top:6px;box-shadow:0 0 10px rgba(126,226,180,.6)}
+/* --- batch 6 additions: the launch glow, the wordmark, the auth form, the OTP boxes --- */
+.glowbg{position:absolute;inset:0;background:radial-gradient(ellipse 70% 45% at 50% 42%,rgba(126,226,180,.16),rgba(126,226,180,0) 70%)}
+.wordmark{font-size:34px;font-weight:800;letter-spacing:8px;color:var(--gold);text-indent:8px}
+.mark{border-radius:28px;box-shadow:0 18px 40px rgba(0,0,0,.45),0 0 0 1px rgba(255,255,255,.08)}
+.ghost{height:52px;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--acc)}
+.otp{display:flex;gap:8px}
+.otp i{flex:1;height:56px;border-radius:14px;background:rgba(255,255,255,.06);border:1px solid rgba(200,255,230,.12);display:flex;align-items:center;justify-content:center;font-style:normal;font-size:24px;font-weight:700;color:var(--ink)}
+.otp i.cur{border-color:var(--acc);box-shadow:0 0 0 3px rgba(126,226,180,.18)}
+.choice{flex:1;padding:16px 14px;display:flex;flex-direction:column;gap:8px;border-radius:18px;border:1px solid var(--rim);background:var(--glass);box-shadow:inset 0 1px 0 var(--spec)}
+.choice.on{border-color:var(--acc);background:rgba(126,226,180,.12)}
+.choice svg{width:24px;height:24px;color:var(--acc)}
+.overlayart{position:absolute;left:0;right:0;bottom:0;width:393px;display:block}
 </style></head><body><svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
 <symbol id="i-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="10.5" cy="10.5" r="7"/><path d="m20 20-4.2-4.2"/></symbol>
 <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0"/><path d="M12 17.5V21M9 21h6"/></symbol>
