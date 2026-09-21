@@ -247,12 +247,19 @@ const HERO_FONT_FAMILY = /^fonts\.displayHero\b/;
  * draws "Get it done. / Work with / confidence." in Georgia 44/47, and the
  * operator, asked whether to widen this rule to it, said yes. Still ONE role
  * — the hero headline of a screen — on two screens; still the platform face,
- * still no file, still no loader, and every other claim below holds. A third
- * site, or a second naming in either file, fails here.
+ * still no file, still no loader, and every other claim below holds. A site
+ * not named here, or a second naming in any of these files, fails here.
+ *
+ * 2026-09-21, later — A THIRD SITE, BY THE OPERATOR'S PICK (DECISIONS 20):
+ * the email Sign-in screen's headline, "Sign in to BRAZOS", drawn by its ship
+ * page (docs/mockups/html/lux/signin-ship-light.html) in the Welcome's serif
+ * at the form size, Georgia 34/38 — chosen from the ideas page that day
+ * ("make it d"). Same role, same face, same file-less rule.
  */
 const HERO_SITES = new Map([
   ['screens/HomeScreen.tsx', 1],
   ['screens/WelcomeScreen.tsx', 1],
+  ['screens/EmailSignInScreen.tsx', 1],
 ]);
 
 /** Family names that are serifs. Applied to font-family positions only — the

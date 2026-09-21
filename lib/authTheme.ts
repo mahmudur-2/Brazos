@@ -181,6 +181,10 @@ export const authType = {
   heroButton: { fontSize: 17, fontWeight: '600' },
   heroLink: { fontSize: 16, fontWeight: '600' },
   heroBadge: { fontSize: 13, fontWeight: '600', letterSpacing: 0.1 },
+  // 2026-09-21 — the shipped Sign-in page's headline (docs/mockups/html/lux/
+  // signin-ship-light.html): the Welcome's serif at the form size, 34/38
+  // tracked −0.4, weight 700 — the face is named at the call site.
+  heroTitle: { fontSize: 34, fontWeight: '700', lineHeight: 38, letterSpacing: -0.4 },
 } as const;
 
 /** --shadow: 0 10px 28px rgba(16,38,29,.08), plus the softer .art-card lift. */

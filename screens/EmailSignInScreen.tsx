@@ -6,9 +6,8 @@ import { AuthButton } from '../components/AuthButton';
 import { AuthField } from '../components/AuthField';
 import { AuthNotice } from '../components/AuthNotice';
 import { AuthScaffold } from '../components/AuthScaffold';
-import { BrandLogo } from '../components/BrandLogo';
 import { useAuth } from '../hooks/useAuth';
-import { authRadius, authSizes, authSpacing, authType } from '../lib/authTheme';
+import { authRadius, authSpacing, authType } from '../lib/authTheme';
 import {
   authSurface,
   fonts,
@@ -40,7 +39,16 @@ import { isValidEmail } from '../lib/validation';
  *
  * NOT taken from sibling 4: its password visibility toggle. That is an
  * interaction, not a treatment, and adding one here would be building a
- * feature under a paint commit. Logged for the operator instead.
+ * feature under a paint commit. Logged for the operator instead — and offered
+ * again as step f of the 2026-09-21 ideas page; the operator chose d.
+ *
+ * 2026-09-21 — MATCHED TO ITS SHIP PAGE (docs/mockups/html/lux/
+ * signin-ship-light.html, the operator's pick from signin-ideas.html: step d
+ * with the bar's "Sign in" kept). The B mark is gone; the eyebrow and the
+ * headline are the Welcome's (`heroEyebrow`, and the serif `heroTitle` in
+ * `fonts.displayHero`); the two actions are the Welcome's controls — Continue
+ * lit with the chevron, the phone route outlined with its glyph. The bar, the
+ * soft contour, the copy and the fields did not move.
  */
 export function EmailSignInScreen() {
   const navigation = useNavigation<AuthStackNavigation>();
@@ -88,8 +96,6 @@ export function EmailSignInScreen() {
   return (
     <AuthScaffold title="Sign in" onBack={() => navigation.goBack()} backdrop="soft" themed>
       <View style={styles.body}>
-        <BrandLogo size={authSizes.logoAuth} />
-
         <Text style={[styles.eyebrow, { color: surface.accent }]}>WELCOME BACK</Text>
         <Text style={styles.title} maxFontSizeMultiplier={1.5}>
           Sign in to BRAZOS
@@ -157,12 +163,26 @@ export function EmailSignInScreen() {
           ) : null}
         </View>
 
+        {/* The ship page's controls: Continue is the lead (lit, the gold
+            chevron); the phone route is the outlined second with its glyph —
+            `hero` without `lit`, not `ghost`, because a ghost hero is the
+            Welcome's text link and the page draws a box. */}
         <View style={styles.actions}>
-          <AuthButton title="Continue" themed onPress={handleContinue} loading={loading} />
+          <AuthButton
+            title="Continue"
+            themed
+            hero
+            lit
+            chevron
+            onPress={handleContinue}
+            loading={loading}
+          />
           <AuthButton
             title="Use Phone Number Instead"
-            variant="ghost"
             themed
+            hero
+            icon="phone-portrait-outline"
+            chevron
             // popTo(), not navigate(): React Navigation 7 changed navigate() to
             // push when the target isn't the current route, which would stack a
             // second SignIn on top of the one the user came from and throw away
@@ -185,15 +205,18 @@ const stylesFor = themedStyles((colors: ColorPalette) =>
     paddingBottom: authSpacing.xl,
   },
   // Colour comes from surface.accent at render — emerald in light, gold in
-  // dark, exactly as master 4's sibling does it.
+  // dark, exactly as master 4's sibling does it. The measure is the Welcome's
+  // (13/700 tracked 2 on a 17 line), from the ship page.
   eyebrow: {
-    ...authType.eyebrow,
+    ...authType.heroEyebrow,
     marginTop: authSpacing.xl,
   },
-  // Sibling 4's display headline is the serif.
+  // The ship page's headline: the Welcome's serif at the form size (34/38),
+  // the ONE serif role — the fence in tests/themeTokens.test.mjs names this
+  // screen as its third site.
   title: {
-    ...authType.title,
-    fontFamily: fonts.display,
+    ...authType.heroTitle,
+    fontFamily: fonts.displayHero,
     color: colors.ink,
     marginTop: authSpacing.sm,
   },
